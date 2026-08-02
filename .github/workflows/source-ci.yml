@@ -99,5 +99,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build pytest
 
+      - name: Install gator_command from source (editable)
+        # test_packaging.py::TestCLIDispatch imports gator_command and
+        # runs `python -m gator_command.cli`; the package must be on
+        # sys.path. Editable install is fine for CI -- these tests
+        # exercise the source layout, not wheel-install shape.
+        run: python -m pip install -e .
+
       - name: Run packaging suite (wheel build + installed-CLI smoke)
         run: python -m pytest tests/test_packaging.py -v
