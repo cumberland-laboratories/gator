@@ -1,15 +1,6 @@
-<!--
-================================================================
-ARCHITECT REVIEW REQUIRED -- do not publish without edits.
-Reason: Contains 'Revenue via strategic acquisition' language on lines ~29 and ~202. Curate to remove private strategic revenue-strategy framing before the monorepo goes public. The rest of the roadmap (400+ lines of Done/Building/Considering/Deferred items) is contributor-relevant and should stay.
-This banner MUST be removed once the review is complete.
-Ported by scripts/monorepo-bootstrap.py during Phase 3b-3-B.
-================================================================
--->
-
 # Roadmap
 
-Updated 2026-08-02. Priority-ordered within each track.
+Updated 2026-08-02 (post-cutover). Priority-ordered within each track.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
@@ -17,25 +8,22 @@ Updated 2026-08-02. Priority-ordered within each track.
 
 ## Product
 
-One product: **Gator** — Git-native governance for AI-assisted engineering. Ships as `pipx install gator-command`. Open source under **Apache License 2.0** (see [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE); the MIT → Apache 2.0 flip landed in Phase 3c, 2026-08-01). Now at v2.4.5.
+One product: **Gator** — Git-native governance for AI-assisted engineering. Ships as `pipx install gator-command`. Open source under **Apache License 2.0** (see [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE); the MIT → Apache 2.0 flip landed in Phase 3c, 2026-08-01). Now at **v2.5.1**, published from the new public monorepo `github.com/cumberland-laboratories/gator`.
 
-Gator includes local repo governance, pre-commit enforcement, dashboard, CLI, and gator loop. **Enterprise capabilities** (API-first fleet management, session evidence, audit reporting, centralized policy) are an optional layer — same codebase, activated by configuration. Monorepo convergence planned.
+Gator includes local repo governance, pre-commit enforcement, dashboard, CLI, and gator loop. **Enterprise capabilities** (API-first fleet management, session evidence, audit reporting, centralized policy) are an optional layer — same codebase, activated by configuration. Monorepo convergence complete (Phase 3b-3, 2026-08-02).
 
 ## Current Priority
 
-**Three priorities, in order:**
+**Two priorities, in order** (monorepo convergence — the previous #3 — shipped on 2026-08-02):
 
 1. **Gator: ridiculously easy to install and use.** The product must be frictionless from first install through daily use. Dashboard-first UX, one-command install, zero-config governance. Every rough edge in the install/onboard/update flow is a priority bug.
 
 2. **Gator Loop: smooth the rough edges.** The loop works end-to-end — all 12 subcommands shipped including `wait`, `pause`, `interject`, `end`, and round-versioned artifacts. What remains is better Dashboard integration (events timeline rendering, session summary card) and protocol refinements from real-world usage. The loop is the first multi-agent governance primitive — it needs polish before broader adoption.
 
-3. **Monorepo convergence.** Merge Gator and Enterprise into one public GitHub repo. Simplifies contribution, CI, and release. The product boundary (Individual wheel vs Enterprise deployment) stays; the repo boundary goes.
-
 ## Strategic Direction
 
-- **Open source distribution** (Apache 2.0) for both Desktop and Enterprise
+- **Open source distribution** (Apache 2.0) for both the core CLI and Enterprise capabilities
 - **Maximum developer adoption** through frictionless installation
-- **Revenue via strategic acquisition** (M&A / acqui-hire by DevSecOps players)
 - **Dashboard-first product surface** — CLI commands become internal implementation details
 - **Multi-agent governance** — gator loop as the foundation for governed AI collaboration
 
@@ -122,7 +110,7 @@ Shipped in v2.1.0: `wait`, `pause`, `interject`, `end`, round-versioned artifact
 | 3 | **Loop protocol refinement** | Considering | Update protocol and artifact formats based on live trial learnings |
 | 4 | **Auto-trigger update after migration** | Considering | `--migrate-layout` could auto-run `gator update` to refresh scripts |
 
-### Building — Priority 3: Monorepo Convergence
+### Done — Monorepo Convergence *(shipped 2026-08-02 as v2.5.1)*
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -135,7 +123,7 @@ Shipped in v2.1.0: `wait`, `pause`, `interject`, `end`, round-versioned artifact
 | 5c | **Phase 3c — Apache 2.0 mechanical migration** | Done | LICENSE flipped MIT → Apache 2.0 (canonical text); new NOTICE at repo root; `pyproject.toml` `license = "Apache-2.0"` + `License :: OSI Approved :: Apache Software License` classifier; `README.md` + `PYPI_README.md` license references updated; `docs/how-gator-works.md` retired the "Gator Individual/Enterprise" as-products phrasing per Decision A; `constitution.md` + `src/gator_command/templates/gator-starter/constitution.md` glossary refreshed to name Gator as one product with Enterprise as an optional capability; `CONTRIBUTING.md` refreshed with Apache 2.0 inbound-license statement, DCO sign-off requirement, and SPDX source-header policy. Wheel METADATA verified: `License: Apache-2.0`, both LICENSE and NOTICE ship in `dist-info/licenses/`. Provenance sweep (Track E) deferred as a follow-on. 2026-08-01. [Checklist](artifacts/2026-07-18-apache-2-mechanical-migration-checklist.md) |
 | 6 | **Phase 4 — Selective Enterprise port** | Done (substrate) | 4a: shared snippet infrastructure ported (`record_commit_and_emit_snippet` et al., `phase_cleanup` guarded emit, Decision B amended). 4b-substrate: `gator_core.is_enterprise_active(gator_dir)` canonical fail-closed reader; `gator-session-block.py` ships. 4c-A: real setup/status/disconnect local-marker commands with credentials-before-marker ordering. 4c-B: `setup --install-hooks` MACHINE-scoped vendor SessionStart install (originally `enterprise_vendor_hooks.py`; moved to enterprise-cli in 4e). 4c-C-1: MACHINE-scoped credential store (chmod 600 on POSIX; moved to enterprise-cli in 4e). 4c-C-2: HTTP client with typed exceptions; real `sync` + `audit` grounded in enterprise-mvp `app/routes/` (stdlib client deleted in 4e; enterprise-cli's httpx client is the sole one going forward). 4d-substrate: server-side Migration 008 tracked — adds `transcript_session_id VARCHAR(255) NULL` column to `commits`, completes the client → server pipe for the snippet field 4a already emits. |
 | 6e | **Phase 4e — Enterprise consolidation** | Done | Per Architect direction 2026-08-02 ("we should have ALL the prototype enterprise code in the enterprise/ folder ... we should not leave pieces behind in gator-command at all"): bulk-ported the full `enterprise/` tree from enterprise-mvp (114 files: `app/` FastAPI service including `routes/crypto.py` envelope encryption, `enterprise-cli/` gator_enterprise_cli package including all client-side commands, full Alembic 001-008 migration chain, `tests/`, `docs/`, deployment scaffolding). Moved `enterprise_credentials.py` and `enterprise_vendor_hooks.py` from `src/gator_command/scripts/` into `enterprise/enterprise-cli/gator_enterprise_cli/`; deleted `enterprise_client.py` (the enterprise-cli package's httpx-based `client.py` is authoritative). Refactored `src/gator_command/scripts/gator-enterprise.py` from mixed real/stub dispatcher into a THIN backwards-compat dispatcher that imports `gator_enterprise_cli` and delegates — or prints `[gator-enterprise-unavailable]` + exits 69 (EX_UNAVAILABLE) if the enterprise-cli package isn't installed. Updated `pyproject.toml` to drop the three `enterprise_*.py` entries from `package-data`. Moved tests: `test_enterprise_credentials.py` → `enterprise/tests/test_credentials.py`, `test_enterprise_vendor_hooks.py` → `enterprise/tests/test_vendor_hooks.py`. Shrunk `test_gator_enterprise.py` from 47 tests to ~15 covering only the thin dispatcher. Pruned `test_packaging.py` — deleted 3 end-to-end round-trip tests, added `test_gator_enterprise_all_verbs_exit_unavailable_in_base_install` and `test_wheel_does_not_ship_enterprise_cli_modules` as regression guards. Charter `scripts-enterprise.md` restructured for new tree; INDEX row expanded. Cutover plan artifact updated with Phase 4e addendum. Enterprise integration polish (single-pipx-command install of enterprise-cli, httpx/urllib client reconciliation, envelope encryption UX, green enterprise test suite) is explicitly deferred as post-cutover work per Architect. |
-| 7 | **Phase 3b-3 — Public monorepo bootstrap + GitHub Option B cutover** | Building | 3b-3-recon shipped 2026-08-02: [tree-map + sub-phase plan](artifacts/2026-08-02-monorepo-cutover-plan-and-tree-map.md) — enumerates include/exclude sets, designs the target root `.gator/` layout, records Architect direction that `enterprise/` IS present in the initial monorepo (doesn't need to fully work), sequences 3b-3-A (staging skeleton via `scripts/monorepo-bootstrap.py`) through 3b-3-D (GitHub cutover, Architect-driven). Open questions listed in the artifact for Architect review before 3b-3-A begins. Staging location: `C:/Users/curator/code2/gator-monorepo-staging`. |
+| 7 | **Phase 3b-3 — Public monorepo bootstrap + GitHub cutover** | Done (2026-08-02) | Full sub-phase sequence executed: 3b-3-recon [tree-map + sub-phase plan](artifacts/2026-08-02-monorepo-cutover-plan-and-tree-map.md); 3b-3-A staging skeleton via `scripts/monorepo-bootstrap.py`; 3b-3-B `.gator/` scaffold with `EXCLUDE_KNOWLEDGE_FILES` + `PATH_REWRITES`; 3b-3-C validation via `scripts/monorepo-validate.py` (9 checks, baselined stale-path gates for Codex Finding 2 both categories); 3b-3-D GitHub cutover (legacy repo renamed to `-legacy-pre-monorepo` + archived + private; fresh `cumberland-laboratories/gator` created public+Apache; local dirs swapped; Genesis commit force-pushed). Codex Finding 1 (enterprise dispatcher catch-all masking real failures) fixed with three-ordered-check pre-delegation pattern. First monorepo release **v2.5.1** shipped to production PyPI 2026-08-02 via the release-candidate → promote-to-pypi OIDC pipeline (v2.5.0 skipped due to TestPyPI filename-permanence policy after RC iteration). |
 | 8 | **Phase 5 — Source-tree normalization (optional)** | Deferred | Only if packaging/import pain later justifies collapsing `enterprise/` into `src/gator_command/enterprise/`. |
 
 ### Considering
@@ -208,7 +196,7 @@ This keeps Enterprise as a feature of Gator, not a separate product. Same instal
 
 -> [Mission](mission.md) — what we're building and why
 -> [Product split](artifacts/2026-06-22-gator-individual-vs-enterprise-product-split.md) — boundary decision
--> [Business model](../inbox.md) — open source + strategic acquisition direction
+-> [Mission](mission.md) — long-form product framing
 -> [Monorepo convergence plan](artifacts/2026-07-16-monorepo-convergence-plan.md) — merge assessment + execution plan
 -> [Loop usability plan](artifacts/2026-07-27-loop-usability-implementation-plan.md) — wait, artifacts, dashboard visibility
 -> [Architect authority plan](artifacts/2026-07-26-architect-loop-authority-plan.md) — pause, interject, end
