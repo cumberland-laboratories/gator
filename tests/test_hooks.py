@@ -186,6 +186,13 @@ class TestPlanHookUpdates:
         plan = update.plan_hook_updates(gator_dir, tmp_path)
         assert plan == []
 
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="Uses patch.object(os, 'name', 'nt') to reach Windows code paths "
+               "that then call Path(...); on non-Windows, pathlib refuses to "
+               "instantiate WindowsPath with NotImplementedError. Windows CI "
+               "matrix cell covers this behavior natively without the mock.",
+    )
     def test_windows_config_drift_planned_as_update(self, mock_gator_repo):
         """Windows treats stale core.hooksPath as an update even if files match."""
         repo_root, gator_dir = mock_gator_repo
@@ -246,6 +253,13 @@ class TestInstallGitHooks:
         assert content.startswith(update._hook_shebang())
         assert r'r"C:/Program Files/Python313/python.exe"' in content
 
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="Uses patch.object(os, 'name', 'nt') to reach Windows code paths "
+               "that then call Path(...); on non-Windows, pathlib refuses to "
+               "instantiate WindowsPath with NotImplementedError. Windows CI "
+               "matrix cell covers this behavior natively without the mock.",
+    )
     def test_windows_installs_into_managed_hook_dir(self, mock_gator_repo):
         """Windows installs into .git/gator-hooks and sets core.hooksPath."""
         repo_root, gator_dir = mock_gator_repo
@@ -265,6 +279,13 @@ class TestInstallGitHooks:
         for name in ("pre-commit", "commit-msg", "post-commit"):
             assert (repo_root / ".git" / "gator-hooks" / name).exists()
 
+    @pytest.mark.skipif(
+        os.name != "nt",
+        reason="Uses patch.object(os, 'name', 'nt') to reach Windows code paths "
+               "that then call Path(...); on non-Windows, pathlib refuses to "
+               "instantiate WindowsPath with NotImplementedError. Windows CI "
+               "matrix cell covers this behavior natively without the mock.",
+    )
     def test_probe_dirs_include_legacy_fallback_on_windows(self, tmp_path):
         """Windows probes managed hooks first, then legacy .git/hooks."""
         repo_root = tmp_path
