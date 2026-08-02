@@ -4,7 +4,7 @@
   "architect": "alan-gillette",
   "agent": "claude-opus-4-7",
   "intent": "Source CI: install gator_command before packaging tests; fix change_type enum",
-  "change_type": "bugfix",
+  "change_type": "fix",
   "significance": "routine",
   "charter_changed": false,
   "decision_tags": [
