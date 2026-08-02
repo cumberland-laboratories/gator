@@ -2,7 +2,9 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
-## [2.5.0] — 2026-08-02
+## [2.5.1] — 2026-08-02
+
+**Note on the version jump from 2.4.5 to 2.5.1**: 2.5.0 was published to TestPyPI during the cutover pipeline validation. TestPyPI enforces a permanent no-filename-reuse policy — once `gator_command-2.5.0-py3-none-any.whl` was uploaded (even after deletion), that filename cannot be reused. Rather than skip TestPyPI validation for the production publish, we bumped the version to 2.5.1 and re-ran the full pipeline. 2.5.0 is not, and will not be, published to production PyPI. The next contentful release will be 2.5.1 or higher.
 
 ### Changed
 
