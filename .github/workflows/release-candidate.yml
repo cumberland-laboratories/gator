@@ -215,14 +215,20 @@ jobs:
           # --pre allows PEP 440 pre-release versions like `2.4.5rc1`.
           python -m venv .venv-smoke
           if [ "$RUNNER_OS" = "Windows" ]; then
-            venv_pip=".venv-smoke/Scripts/pip"
+            venv_python=".venv-smoke/Scripts/python"
             venv_gator=".venv-smoke/Scripts/gator"
           else
-            venv_pip=".venv-smoke/bin/pip"
+            venv_python=".venv-smoke/bin/python"
             venv_gator=".venv-smoke/bin/gator"
           fi
-          $venv_pip install --upgrade pip
-          $venv_pip install \
+          # Use `python -m pip` (NOT the pip.exe shim) for the self-upgrade
+          # step -- on Windows, modern pip refuses to upgrade itself when
+          # invoked through the .exe shim because it can't overwrite the
+          # running executable. `python -m pip install --upgrade pip` works
+          # cross-platform. Install step below can safely use `pip` (installs
+          # a DIFFERENT package, no self-modification issue).
+          $venv_python -m pip install --upgrade pip
+          $venv_python -m pip install \
             --index-url https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ \
             --pre \
