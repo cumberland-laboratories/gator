@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-6",
+  "intent": "Unify session ledger + snippet pipeline: canonical record_commit_and_emit_snippet",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-ledger",
+    "snippet-pipeline",
+    "codex-review"
+  ],
+  "commit": "559b936c8e2c408d3e0d4f41e6bd3b4380c5c569",
+  "short_commit": "559b936",
+  "snippet_id": "snippet-559b936c8e2c4",
+  "session_group_key": "anthropic:a31a7a5b-cb79-4a5d-85c8-0b577e58708a",
+  "repo": "gator-command",
+  "branch": "enterprise-mvp",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-07-16T02:11:45Z",
+  "ended_at": "2026-07-16T02:47:18Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6[1m]",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/enterprise-service.md",
+    ".gator/scripts/gator-pre-commit.py"
+  ],
+  "notes": [
+    "Fixed Codex review finding 1",
+    "Fixed Codex review finding 2"
+  ],
+  "transcript_session_id": "a31a7a5b-cb79-4a5d-85c8-0b577e58708a",
+  "transcript_ref": null
+}

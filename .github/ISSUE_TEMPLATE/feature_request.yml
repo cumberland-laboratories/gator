@@ -1,0 +1,64 @@
+name: Feature Request
+description: Suggest an improvement or new capability
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature ideas welcome. The most actionable requests describe the *problem* first — what you're trying to accomplish and why it's hard today — before proposing a solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation from your own workflow. Concrete examples beat abstract descriptions.
+      placeholder: "e.g. When I onboard a new agent to an existing repo, it re-derives the same architectural understanding every session because there's no persistent hand-off."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: What would "solved" look like from your perspective? User-facing behavior first, implementation second (if at all).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface would this touch?
+      description: Rough scope — helps triage. Select all that fit.
+      multiple: true
+      options:
+        - CLI (gator ...)
+        - Dashboard
+        - Charters / enforcer
+        - Templates (gator-starter)
+        - Documentation
+        - Gator Loop
+        - Session archaeology
+        - Not sure / cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: What other approaches — including workarounds you're using today — have you thought about?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Screenshots, links to related issues, prior art from other tools, whatever helps.
+
+  - type: checkboxes
+    id: pre-flight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and this isn't already proposed.
+          required: true

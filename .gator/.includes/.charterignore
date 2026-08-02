@@ -1,0 +1,53 @@
+# .charterignore — files and directories excluded from charter work.
+# Uses gitignore-style glob patterns. Lines starting with # are comments.
+# This file lives at .gator/.charterignore
+
+# Tests
+tests/
+test/
+__tests__/
+*_test.py
+*_test.go
+*_test.js
+**/*_spec.rb
+**/conftest.py
+
+# Build and vendor
+dist/
+build/
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+
+# Generated / minified
+**/*.min.js
+**/*.min.css
+**/*.generated.*
+
+# Config and metadata (not production logic)
+setup.py
+setup.cfg
+pyproject.toml
+package.json
+package-lock.json
+tsconfig.json
+Makefile
+Dockerfile
+docker-compose.yml
+*.toml
+*.ini
+*.cfg
+
+# Documentation (charters cover code, not docs)
+docs/
+*.md
+
+# IDE and environment
+.vscode/
+.idea/
+.env
+.env.*
+
+# Gator internals
+.gator/

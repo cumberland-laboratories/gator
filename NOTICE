@@ -1,0 +1,25 @@
+Gator
+Copyright 2026 Cumberland Laboratories, Inc.
+
+This product is licensed under the Apache License, Version 2.0.
+A copy of the license is available in the LICENSE file at the root
+of this repository, or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Attribution:
+
+  Portions of this software were developed by Cumberland Laboratories,
+  Inc. as part of the Gator project — Git-native governance for
+  AI-assisted engineering.
+
+  The project ships with vendored assets (logos, favicons, generated
+  banner images) authored for Gator; these carry no separate license
+  and are covered by the same Apache 2.0 grant as the rest of the
+  work.
+
+Third-party attributions (if any) are recorded in this NOTICE file
+as bundled or embedded content is added. A one-time provenance
+review is planned as part of the initial Apache monorepo bootstrap
+(see gator-command/artifacts/2026-07-18-apache-2-mechanical-migration-checklist.md,
+Track E).

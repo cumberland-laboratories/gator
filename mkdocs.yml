@@ -1,0 +1,64 @@
+site_name: Gator
+site_description: AI-assisted engineering governance — local-first, git-native, model-neutral.
+site_url: https://cumberland-laboratories.github.io/gator/
+repo_url: https://github.com/cumberland-laboratories/gator
+repo_name: cumberland-laboratories/gator
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: getting-started.md
+    - Installation: installation.md
+    - Upgrade & Versioning: upgrade.md
+  - Concepts:
+    - Governance Model: governance-model.md
+    - Threat Model: threat-model.md
+    - Fleet Governance: fleet-governance.md
+    - Session Archaeology: session-archaeology.md
+    - Audit & Compliance: audit-compliance.md
+    - Architecture: architecture.md
+  - Reference:
+    - Command Reference: command-reference.md
+    - Charter Schema v1: charter-schema-v1.md
+    - Charter Formation Process: charter-formation-process.md
+  - Audiences:
+    - For Engineers: for-engineers.md
+    - For Engineering Directors: for-directors.md
+    - For Leadership: for-leadership.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - tables
+
+## Versioned docs via mike — enable when publishing pipeline is built
+# extra:
+#   version:
+#     provider: mike

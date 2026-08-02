@@ -1,0 +1,7 @@
+#!/bin/bash
+# Gator post-commit hook — resets commit_draft.md after successful commit.
+# Installed by the Gator installer. Do not edit manually.
+#
+# Cleanup now runs in Python so the shell wrapper stays minimal.
+
+python .gator/scripts/gator-pre-commit.py --phase cleanup

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cumberlandlaboratories.com/schemas/gator-session-snippet-v2.json",
+  "title": "gator-session-snippet-v2",
+  "description": "Per-commit session snippet emitted to .gator/session-snippets/*.json by the base Gator post-commit path (record_commit_and_emit_snippet in precommit_session.py). Consumed by the Enterprise session-block pipeline and by the Dashboard audit view. This is shared Desktop infrastructure — not gated behind Enterprise configuration. Schema is additive: new optional fields may appear in future emissions without a version bump; removing or changing a required field IS a version bump.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema",
+    "type",
+    "commit",
+    "short_commit",
+    "snippet_id",
+    "repo",
+    "branch",
+    "commit_index",
+    "started_at",
+    "ended_at",
+    "machine_id",
+    "machine_label",
+    "files_touched"
+  ],
+  "properties": {
+    "schema": {
+      "const": "gator-session-snippet-v2",
+      "description": "Schema version discriminator. Bump the trailing digit for breaking changes."
+    },
+    "type": {
+      "const": "session_snippet"
+    },
+    "architect": {
+      "type": "string",
+      "description": "Human operator identity (from Gator-Architect trailer, formerly Gator-PI)."
+    },
+    "agent": {
+      "type": "string",
+      "description": "AI agent identifier (vendor,model or canonical vendor name)."
+    },
+    "intent": {
+      "type": "string",
+      "description": "One-line intent statement from commit_draft.md message field."
+    },
+    "change_type": {
+      "type": "string",
+      "enum": ["feature", "fix", "refactor", "docs", "test", "release", "maintenance", "review", "governance", ""],
+      "description": "Semantic change type from Gator's own vocabulary (not Conventional Commits). Empty string permitted. Adding a new value requires updating this enum in the same commit."
+    },
+    "significance": {
+      "type": "string",
+      "enum": ["low", "minor", "routine", "notable", "high", "critical", ""],
+      "description": "Significance tier from commit_draft frontmatter. Empty string permitted."
+    },
+    "charter_changed": {
+      "type": ["boolean", "string"],
+      "description": "Whether a charter was updated. Boolean canonical; string values (\"yes\"/\"no\"/\"override-skip\"/\"\") accepted for legacy trailer values and explicit-override sentinels."
+    },
+    "decision_tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Decision tags from commit_draft frontmatter."
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Full 40-char SHA-1 commit hash."
+    },
+    "short_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,13}$",
+      "description": "Short commit hash (typically 7 chars)."
+    },
+    "snippet_id": {
+      "type": "string",
+      "pattern": "^snippet-[0-9a-f]{13}$",
+      "description": "Snippet identifier: literal 'snippet-' followed by first 13 chars of commit hash."
+    },
+    "session_group_key": {
+      "type": ["string", "null"],
+      "description": "Session grouping key: '{vendor}:{transcript_session_id}'. Null when no active vendor session detected."
+    },
+    "repo": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Repository directory name."
+    },
+    "branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Git branch at time of commit."
+    },
+    "commit_index": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-indexed position of this commit within its session group."
+    },
+    "previous_commit_in_session": {
+      "type": ["string", "null"],
+      "description": "Full SHA of the previous commit in the same session group, or null if first."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when the session group began."
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of this commit."
+    },
+    "vendor_inferred": {
+      "type": ["string", "null"],
+      "description": "Vendor (anthropic, openai, google, cursor, ...) inferred from the active session or trailer. Null when unknown."
+    },
+    "model_inferred": {
+      "type": ["string", "null"],
+      "description": "Model identifier (e.g. 'claude-opus-4-6[1m]'). Bracketed suffix flags context-window mode."
+    },
+    "machine_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "36-char UUID from ~/.gator/machine-id."
+    },
+    "machine_label": {
+      "type": "string",
+      "description": "Human-readable machine label (default: hostname, PI-editable)."
+    },
+    "files_touched": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repo-relative paths modified in this commit."
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Session Change Log bullets from commit_draft.md body."
+    },
+    "transcript_session_id": {
+      "type": ["string", "null"],
+      "description": "Vendor-native session identifier (Claude Code session UUID, Codex conversation ID, etc.). Null when no active vendor session detected."
+    },
+    "transcript_ref": {
+      "type": "null",
+      "description": "Never populated in committed snippets. Local transcript paths are not committed to git. Field reserved for post-commit enrichment layers."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Optional alias emitted by some code paths for transcript_session_id. New consumers should prefer transcript_session_id."
+    },
+    "files_touched_source": {
+      "type": "string",
+      "enum": ["git-diff", "status-json", "trailer", ""],
+      "description": "Optional provenance tag naming which upstream source populated files_touched."
+    }
+  }
+}

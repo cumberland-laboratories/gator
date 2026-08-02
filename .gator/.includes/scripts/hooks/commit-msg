@@ -1,0 +1,5 @@
+#!/bin/bash
+# Gator commit-msg hook — appends Gator-* trailers to the commit message.
+# Installed by the Gator installer. Do not edit manually.
+
+python .gator/scripts/gator-pre-commit.py --phase trailers "$1"

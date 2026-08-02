@@ -1,0 +1,61 @@
+# Vault — sensitive material and large files that must not be committed.
+# Gitignored in every repo shape: command post, fleet repo, deployed repo.
+gator-command/vault/
+.gator/vault/
+
+# IDE and editor settings
+.vscode/
+
+# Workstation-specific Claude Code permissions
+.claude/settings.local.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Pytest temp directory (project-local to avoid Windows permission issues)
+.pytest_tmp/
+.pytest_cache/
+Userscuratorpytest-temp/
+
+# Ephemeral hook artifacts — written and cleared each commit cycle, cause merge conflicts
+.gator/commit_draft.md
+.gator/commit_issues.md
+.gator/whiteboard.md
+.gator/status.json
+gator-command/commit_draft.md
+
+# Override request/approval artifacts — ephemeral, written by pre-commit hook and gator-approve
+.gator/override-request.json
+.gator/override-approved.json
+
+# Rolling active session logs are local working artifacts until explicitly finalized.
+.gator/sessions/_active/
+
+# Dashboard settings (machine-local, mode + UI prefs)
+gator-command/scripts/dashboard-settings.json
+
+# Machine-local product source hint
+.gator/product-source.json
+
+# Vendor session identity (written by SessionStart hook, machine-local)
+.gator/active-vendor-session.json
+
+# Session blocks — local-only transcript evidence (compressed)
+.gator/session-blocks/
+
+# Python packaging build artifacts
+dist/
+build/
+*.egg-info/
+src/*.egg-info/
+
+# Scratch/test directories
+tmp/
+
+# Local agent companion — personal notes/skills (machine-local)
+AGENTS.local.md
+# Local agent companion — personal notes/skills (machine-local)
+CLAUDE.local.md
+# Local agent companion — personal notes/skills (machine-local)
+GEMINI.local.md

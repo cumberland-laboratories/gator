@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gator Enterprise — Technical Blueprint</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --orange: #f0883e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+h1 { font-size: 2.2rem; margin-bottom: 0.5rem; color: var(--accent); }
+h2 { font-size: 1.6rem; margin: 2.5rem 0 1rem; color: var(--green); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+h3 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; color: var(--purple); }
+p { margin: 0.5rem 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: var(--surface); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+pre { background: var(--surface); padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; border: 1px solid var(--border); font-size: 0.85rem; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+th, td { padding: 0.6rem 0.8rem; text-align: left; border: 1px solid var(--border); }
+th { background: var(--surface); color: var(--accent); font-weight: 600; }
+tr:nth-child(even) { background: rgba(22, 27, 34, 0.5); }
+.subtitle { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem; }
+.diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-x: auto;
+  white-space: pre;
+}
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-right: 0.3rem;
+}
+.badge-green { background: rgba(63,185,80,0.2); color: var(--green); }
+.badge-yellow { background: rgba(210,153,34,0.2); color: var(--yellow); }
+.badge-red { background: rgba(248,81,73,0.2); color: var(--red); }
+.badge-blue { background: rgba(88,166,255,0.2); color: var(--accent); }
+.badge-purple { background: rgba(188,140,255,0.2); color: var(--purple); }
+.callout {
+  background: var(--surface);
+  border-left: 4px solid var(--accent);
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+  border-radius: 0 8px 8px 0;
+}
+.callout-warn { border-left-color: var(--yellow); }
+.callout-danger { border-left-color: var(--red); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin: 1rem 0; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem;
+}
+.card h4 { color: var(--accent); margin-bottom: 0.5rem; }
+.endpoint { font-family: monospace; font-size: 0.85rem; }
+.method { font-weight: 700; }
+.method-get { color: var(--green); }
+.method-post { color: var(--orange); }
+.method-delete { color: var(--red); }
+.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; }
+.toc ol { padding-left: 1.5rem; }
+.toc li { margin: 0.3rem 0; }
+.separator { border: none; border-top: 1px solid var(--border); margin: 3rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Gator Enterprise</h1>
+<p class="subtitle">Technical Blueprint — Git-native governance control plane for AI-assisted engineering</p>
+<p><span class="badge badge-green">v0.1.0</span> <span class="badge badge-blue">E1–E6 Complete</span> <span class="badge badge-purple">Deployed on Fly.io</span></p>
+
+<nav class="toc">
+<strong>Contents</strong>
+<ol>
+<li><a href="#overview">System Overview</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#data-flow">Data Flow</a></li>
+<li><a href="#policy-engine">Policy Engine</a></li>
+<li><a href="#compliance">Compliance State Machine</a></li>
+<li><a href="#api">API Reference</a></li>
+<li><a href="#cli">Operator CLI</a></li>
+<li><a href="#deployment">Deployment</a></li>
+<li><a href="#operations">Operations &amp; Observability</a></li>
+<li><a href="#getting-started">Getting Started</a></li>
+</ol>
+</nav>
+
+<hr class="separator">
+
+<h2 id="overview">1. System Overview</h2>
+
+<p>Gator Enterprise is the organizational control plane for AI-assisted engineering governance. It answers: <em>"Can you prove the AI understood the module, and did a human verify that understanding before the change?"</em></p>
+
+<p>It does this by:</p>
+<ul style="padding-left: 1.5rem; margin: 0.5rem 0;">
+<li>Ingesting Git commits from connected repositories via GitHub webhooks</li>
+<li>Extracting governance evidence from each commit (trailers, charters, status.json)</li>
+<li>Comparing evidence against organizational policies (drift detection)</li>
+<li>Projecting fleet-wide compliance status through read-model views</li>
+<li>Providing operator access via REST API and CLI</li>
+</ul>
+
+<div class="callout">
+<strong>Key principle:</strong> Enterprise is deterministic — no AI in the control plane. Evidence comes from Git, reports come through the API. All analysis is rule-based comparison, not inference.
+</div>
+
+<hr class="separator">
+
+<h2 id="architecture">2. Architecture</h2>
+
+<div class="diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        GATOR ENTERPRISE SYSTEM                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐     ┌──────────────────────────────────────────────────┐  │
+│  │   GitHub     │────▶│  FastAPI Service (gunicorn + uvicorn)            │  │
+│  │   Webhooks   │     │                                                  │  │
+│  └──────────────┘     │  ┌────────────┐  ┌───────────┐  ┌────────────┐  │  │
+│                       │  │  Routes     │  │  Services │  │  Models    │  │  │
+│  ┌──────────────┐     │  │  ─────────  │  │  ───────  │  │  ──────   │  │  │
+│  │  Operator    │────▶│  │  health    │  │  sync     │  │  Commit   │  │  │
+│  │  CLI         │     │  │  webhooks  │  │  evidence │  │  Obs.     │  │  │
+│  └──────────────┘     │  │  repos     │  │  drift    │  │  Policy   │  │  │
+│                       │  │  policies  │  │  policy   │  │  Rollout  │  │  │
+│  ┌──────────────┐     │  │  reports   │  │  report   │  │  Drift    │  │  │
+│  │  Dashboard   │────▶│  │  views/*   │  │  reads/*  │  │  Report   │  │  │
+│  │  Frontend    │     │  └────────────┘  └───────────┘  └────────────┘  │  │
+│  └──────────────┘     └──────────────────────────┬───────────────────────┘  │
+│                                                  │                          │
+│                       ┌──────────────────────────▼───────────────────────┐  │
+│                       │  PostgreSQL                                      │  │
+│                       │  ─────────────────────────────────────────────   │  │
+│                       │  organizations │ commits      │ policies        │  │
+│                       │  api_tokens    │ observations │ policy_versions │  │
+│                       │  repositories  │ drift_finds  │ policy_targets  │  │
+│                       │  git_providers │ report_snaps │ policy_rollouts │  │
+│                       │  ingest_jobs   │ audit_log    │ sync_runs       │  │
+│                       └──────────────────────────────────────────────────┘  │
+│                                                  ▲                          │
+│                       ┌──────────────────────────┴───────────────────────┐  │
+│                       │  Background Worker                               │  │
+│                       │  ─────────────────────────────────────────────   │  │
+│                       │  Job queue (SELECT FOR UPDATE SKIP LOCKED)       │  │
+│                       │  Job types:                                      │  │
+│                       │    register_commit_metadata                      │  │
+│                       │    extract_commit_observation                    │  │
+│                       │    evaluate_drift                                │  │
+│                       │    generate_report                               │  │
+│                       │    sync_repo_inventory                           │  │
+│                       └──────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>Stack</h3>
+<table>
+<tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+<tr><td>API</td><td>FastAPI 0.139+</td><td>HTTP endpoints, dependency injection, OpenAPI docs</td></tr>
+<tr><td>Server</td><td>gunicorn + uvicorn workers</td><td>Production ASGI server</td></tr>
+<tr><td>Database</td><td>PostgreSQL (Fly.io managed)</td><td>All state, job queue, audit trail</td></tr>
+<tr><td>ORM</td><td>SQLAlchemy 2.0+</td><td>Models, queries, migrations</td></tr>
+<tr><td>Migrations</td><td>Alembic</td><td>Schema versioning</td></tr>
+<tr><td>Worker</td><td>Custom (Postgres-backed queue)</td><td>Background job processing</td></tr>
+<tr><td>Logging</td><td>structlog</td><td>Structured JSON logging</td></tr>
+<tr><td>Deployment</td><td>Fly.io (Docker)</td><td>Dev deployment; production is systemd</td></tr>
+<tr><td>CLI</td><td>argparse + httpx</td><td>Operator terminal surface</td></tr>
+</table>
+
+<hr class="separator">
+
+<h2 id="data-flow">3. Data Flow</h2>
+
+<p>The core pipeline is a chain of automated steps triggered by Git activity:</p>
+
+<div class="diagram">
+GitHub Push Event
+      │
+      ▼
+┌─────────────────┐     Webhook signature verification (HMAC-SHA256)
+│  POST /webhooks │────▶ Resolve provider from installation_id
+│  /github        │     Create ingest job: register_commit_metadata
+└─────────────────┘
+      │
+      ▼ (Worker picks up job)
+┌─────────────────┐
+│  register_      │────▶ Create Commit record (idempotent — dedup by SHA)
+│  commit_        │     Auto-enqueue: extract_commit_observation
+│  metadata       │
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│  extract_       │────▶ Fetch governance artifacts from repo via provider API:
+│  commit_        │       • .gator/status.json (presence + hash)
+│  observation    │       • .gator/constitution.md (presence)
+│                 │       • .gator/charters/*.md (count + names)
+│                 │       • Commit message trailers (Gator-*)
+│                 │     Store as CommitObservation
+│                 │     Auto-enqueue: evaluate_drift
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│  evaluate_      │────▶ For each active policy targeting this repo:
+│  drift          │       Compare observation against policy requirements
+│                 │       Upsert PolicyDriftFinding per check
+│                 │       Severity: aligned | drift
+└─────────────────┘
+      │
+      ▼
+┌─────────────────┐
+│  E5 Views       │────▶ Fleet summary, repo detail, policy compliance,
+│  (on-demand     │     timeline — all read live from the tables above.
+│   reads)        │     No lag, no materialization delay.
+└─────────────────┘
+</div>
+
+<div class="callout">
+<strong>Auto-chaining:</strong> Each job automatically enqueues the next step. A single GitHub push event triggers the entire pipeline without manual intervention: commit → observation → drift → live in views.
+</div>
+
+<h3>Reconciliation</h3>
+<p>In addition to webhook-driven ingest, the worker runs periodic reconciliation on a configurable interval. This catches commits that arrive while webhooks are down, and syncs the full repository inventory from the provider API.</p>
+
+<hr class="separator">
+
+<h2 id="policy-engine">4. Policy Engine</h2>
+
+<p>Policies define what governance requirements a repository must meet. They are versioned, targeted, and rolled out deterministically.</p>
+
+<div class="diagram">
+Create Policy (draft)
+      │
+      ▼
+Create Version(s) — immutable after creation
+      │            content: JSON governance rules
+      │            content_hash: SHA-256 fingerprint
+      ▼
+Activate Version ─────▶ Deactivates previous active version
+      │                 Creates PolicyRollout (pending) for each target repo
+      │                 Enqueues drift re-evaluation
+      ▼
+Add Targets ──────────▶ Associates repos with policy
+      │                 Creates rollouts if active version exists
+      ▼
+Rollout State Machine:
+      ┌───────────────────────────────────────┐
+      │  pending ──▶ applied                  │
+      │         ──▶ failed                    │
+      │         ──▶ superseded (newer version)│
+      │                                       │
+      │  applied ──▶ outdated (newer activated)│
+      └───────────────────────────────────────┘
+</div>
+
+<h3>Policy Content</h3>
+<p>A policy version's <code>content</code> is a JSON object defining governance checks. Current supported checks:</p>
+<table>
+<tr><th>Check Name</th><th>What It Verifies</th></tr>
+<tr><td><code>charter_required</code></td><td>At least one charter file exists in .gator/charters/</td></tr>
+<tr><td><code>status_json_required</code></td><td>.gator/status.json is present and valid</td></tr>
+<tr><td><code>trailers_required</code></td><td>Commit message contains Gator-* governance trailers</td></tr>
+</table>
+
+<h3>Invariants</h3>
+<ul style="padding-left: 1.5rem;">
+<li>Versions are immutable — content and content_hash never change after creation</li>
+<li>At most one active version per policy (enforced by partial unique index)</li>
+<li>Activation is idempotent</li>
+<li>Non-terminal rollouts (pending, applied): at most one per (policy, repo) pair</li>
+<li>Supersession is explicit — new activation supersedes existing pending rollouts</li>
+</ul>
+
+<hr class="separator">
+
+<h2 id="compliance">5. Compliance State Machine</h2>
+
+<p>Every repository is classified into one of six compliance states. This is the core abstraction for fleet visibility.</p>
+
+<div class="diagram">
+Evaluation Precedence (first match wins):
+
+  1. Any rollout in FAILED state?       ──▶  <span style="color: #f85149; font-weight: bold;">FAILED</span>
+  2. Any rollout in PENDING state?       ──▶  <span style="color: #d29922; font-weight: bold;">PENDING</span>
+  3. Observation after max(applied_at)?
+     ├── No observation after rollout    ──▶  <span style="color: #8b949e; font-weight: bold;">UNKNOWN</span>
+     ├── Has drift findings (severity=drift) ──▶  <span style="color: #f0883e; font-weight: bold;">DRIFTING</span>
+     └── No drift findings               ──▶  <span style="color: #3fb950; font-weight: bold;">ALIGNED</span>
+  4. No active policy targets?           ──▶  <span style="color: #8b949e; font-weight: bold;">UNGOVERNED</span>
+</div>
+
+<div class="grid">
+<div class="card">
+<h4><span class="badge badge-green">ALIGNED</span></h4>
+<p>Policy applied, observation exists from a commit after rollout, zero drift findings. The intended state.</p>
+</div>
+<div class="card">
+<h4><span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:12px;font-size:0.75rem;font-weight:600;background:rgba(240,136,62,0.2);color:#f0883e;">DRIFTING</span></h4>
+<p>Policy applied, observation exists, but one or more governance checks failed. Needs attention.</p>
+</div>
+<div class="card">
+<h4><span class="badge badge-yellow">PENDING</span></h4>
+<p>Policy targeted but rollout not yet applied. Compliance cannot be assessed. Expected to resolve.</p>
+</div>
+<div class="card">
+<h4><span class="badge badge-red">FAILED</span></h4>
+<p>Rollout application failed. Operational issue — requires operator intervention.</p>
+</div>
+<div class="card">
+<h4><span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:12px;font-size:0.75rem;font-weight:600;background:rgba(139,148,158,0.2);color:#8b949e;">UNKNOWN</span></h4>
+<p>Policy applied but no commits observed since. Waiting for new activity.</p>
+</div>
+<div class="card">
+<h4><span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:12px;font-size:0.75rem;font-weight:600;background:rgba(139,148,158,0.2);color:#8b949e;">UNGOVERNED</span></h4>
+<p>No active policy targets. The repo is tracked but not subject to any policy.</p>
+</div>
+</div>
+
+<div class="callout callout-warn">
+<strong>Critical invariant:</strong> Observations are only considered if the commit happened AFTER the latest rollout's <code>applied_at</code> timestamp. Pre-rollout evidence does not count. This prevents a repo from appearing "aligned" when the policy hasn't actually been tested against new activity.
+</div>
+
+<hr class="separator">
+
+<h2 id="api">6. API Reference</h2>
+
+<p>33 endpoints organized by domain. All authenticated endpoints return consistent error envelopes and are rate-limited.</p>
+
+<h3>Error Envelope (all errors)</h3>
+<pre><code>{
+  "error": {
+    "code": "not_found",
+    "message": "Repository not found"
+  },
+  "request_id": "dea64e1e-7ba9-4c60-a701-aa841d6e3140"
+}</code></pre>
+
+<h3>Authentication</h3>
+<p>Bearer token in <code>Authorization</code> header. Tokens are SHA-256 hashed and stored. Every request includes <code>X-Request-ID</code> in the response.</p>
+<pre><code>curl -H "Authorization: Bearer &lt;token&gt;" https://gator-enterprise-dev.fly.dev/api/v1/views/fleet</code></pre>
+
+<h3>Endpoints by Domain</h3>
+
+<table>
+<tr><th>Method</th><th>Path</th><th>Purpose</th><th>Phase</th></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/healthz</td><td>Liveness check</td><td>E1</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/readyz</td><td>Readiness (DB connectivity)</td><td>E1</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/tokens/me</td><td>Current token identity</td><td>E1</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/webhooks/github</td><td>GitHub webhook receiver</td><td>E2</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/repos</td><td>List tracked repos</td><td>E2</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/repos/{id}/refresh</td><td>Manual repo refresh</td><td>E2</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/repos/{id}/policies</td><td>Policies targeting a repo</td><td>E3</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/providers/{id}/reconcile</td><td>Full provider reconciliation</td><td>E2</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/policies</td><td>Create policy</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies</td><td>List policies</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies/{id}</td><td>Policy detail</td><td>E3</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/policies/{id}/versions</td><td>Create version</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies/{id}/versions</td><td>List versions</td><td>E3</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/policies/{id}/activate/{vid}</td><td>Activate version</td><td>E3</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/policies/{id}/targets</td><td>Add target repos</td><td>E3</td></tr>
+<tr><td><span class="method method-delete">DEL</span></td><td class="endpoint">/api/v1/policies/{id}/targets/{rid}</td><td>Remove target</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies/{id}/targets</td><td>List targets</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies/{id}/rollouts</td><td>Rollout state</td><td>E3</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/repos/{id}/observations</td><td>Commit observations</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/commits/{id}/observation</td><td>Single observation</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/repos/{id}/drift</td><td>Repo drift findings</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/policies/{id}/drift</td><td>Policy drift findings</td><td>E4</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/reports/repos/{id}</td><td>Trigger repo report</td><td>E4</td></tr>
+<tr><td><span class="method method-post">POST</span></td><td class="endpoint">/api/v1/reports/policies/{id}</td><td>Trigger policy report</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/reports/runs</td><td>Report run history</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/reports/snapshots/{id}</td><td>Report snapshot</td><td>E4</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/fleet</td><td>Fleet summary + compliance</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/fleet/repos</td><td>Fleet repo list (paginated)</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/repos/{id}</td><td>Repo governance profile</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/repos/{id}/activity</td><td>Model commit activity</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/policies/{id}</td><td>Policy compliance view</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/timeline</td><td>Audit event stream</td><td>E5</td></tr>
+<tr><td><span class="method method-get">GET</span></td><td class="endpoint">/api/v1/views/org</td><td>Org/tenant health</td><td>E5</td></tr>
+</table>
+
+<h3>Rate Limiting</h3>
+<table>
+<tr><th>Bucket</th><th>Limit</th><th>Applies To</th></tr>
+<tr><td><code>views.timeline</code></td><td>30 req/min per token</td><td>GET /api/v1/views/timeline</td></tr>
+<tr><td><code>views.default</code></td><td>120 req/min per token</td><td>All other GET endpoints</td></tr>
+<tr><td><code>writes.default</code></td><td>60 req/min per token</td><td>All POST/DELETE endpoints</td></tr>
+</table>
+<p>Exceeded → <code>429</code> with <code>Retry-After</code> header. Per-app-instance (not distributed).</p>
+
+<hr class="separator">
+
+<h2 id="cli">7. Operator CLI</h2>
+
+<p>The <code>gator-enterprise</code> CLI is a pure HTTP client — no shared runtime with the service.</p>
+
+<pre><code>pip install -e enterprise/enterprise-cli/
+
+export GATOR_ENTERPRISE_URL=https://gator-enterprise-dev.fly.dev
+export GATOR_ENTERPRISE_TOKEN=your-token-here</code></pre>
+
+<h3>Commands</h3>
+<pre><code># Identity
+gator-enterprise auth whoami
+
+# Repositories
+gator-enterprise repos list
+gator-enterprise repos refresh &lt;repo-id&gt;
+gator-enterprise repos policies &lt;repo-id&gt;
+
+# Providers
+gator-enterprise providers list
+gator-enterprise providers reconcile &lt;provider-id&gt;
+
+# Policies
+gator-enterprise policies list
+gator-enterprise policies get &lt;policy-id&gt;
+
+# Reports
+gator-enterprise reports runs
+
+# All commands support --json for machine-readable output
+gator-enterprise repos list --json</code></pre>
+
+<hr class="separator">
+
+<h2 id="deployment">8. Deployment</h2>
+
+<h3>Fly.io Dev Environment</h3>
+<pre><code># From enterprise/ directory:
+fly deploy
+
+# What happens:
+# 1. Docker image built (python:3.11-slim + requirements.txt)
+# 2. Release command: alembic upgrade head (runs migrations)
+# 3. Rolling deploy of api + worker processes
+# 4. Health check on /healthz</code></pre>
+
+<h3>fly.toml Configuration</h3>
+<pre><code>app = "gator-enterprise-dev"
+primary_region = "iad"
+
+[processes]
+  api = "gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
+  worker = "python -m app.worker"
+
+[deploy]
+  release_command = "alembic upgrade head"
+
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+  processes = ["api"]
+
+  [[services.http_checks]]
+    path = "/healthz"
+    interval = 10000
+    timeout = 2000</code></pre>
+
+<h3>Production Deployment (Target)</h3>
+<p>Customer-hosted Linux VM + systemd + reverse proxy. Not SaaS.</p>
+<pre><code># Systemd units:
+# gator-enterprise-api.service  → gunicorn
+# gator-enterprise-worker.service → python -m app.worker
+
+# Environment:
+# DATABASE_URL=postgresql://...
+# APP_ENV=production
+# GITHUB_WEBHOOK_SECRET=...
+# (optional) WORKER_POLL_INTERVAL=2
+# (optional) RECONCILIATION_INTERVAL=3600</code></pre>
+
+<h3>Database Schema</h3>
+<p>4 Alembic migrations, 17 tables:</p>
+<pre><code>001_initial_schema.py       → organizations, commits, api_tokens, ingest_jobs, audit_log, evidence_blocks
+002_provider_integration.py → git_providers, repositories, provider_sync_runs
+003_policy_engine.py        → policies, policy_versions, policy_targets, policy_rollouts
+004_evidence_and_reporting.py → commit_observations, policy_drift_findings, report_runs, report_snapshots</code></pre>
+
+<hr class="separator">
+
+<h2 id="operations">9. Operations &amp; Observability</h2>
+
+<h3>Structured Logging</h3>
+<p>All logs are structured JSON in production (console in dev). Every API request emits one log event:</p>
+<pre><code>{
+  "event": "http.request",
+  "method": "GET",
+  "path": "/api/v1/views/fleet",
+  "status": 200,
+  "duration_ms": 18.3,
+  "request_id": "abc-123",
+  "org_id": "org-uuid",
+  "token_id": "token-uuid",
+  "timestamp": "2026-07-11T18:30:00Z"
+}</code></pre>
+
+<p>Worker jobs emit structured events per job:</p>
+<pre><code>{
+  "event": "worker.job_completed",
+  "job_id": "job-uuid",
+  "job_type": "extract_commit_observation",
+  "org_id": "org-uuid",
+  "duration_ms": 45.2,
+  "timestamp": "2026-07-11T18:30:01Z"
+}</code></pre>
+
+<h3>Health Checks</h3>
+<table>
+<tr><th>Endpoint</th><th>Purpose</th><th>Checks</th></tr>
+<tr><td><code>GET /healthz</code></td><td>Liveness</td><td>Process is up, returns version + env</td></tr>
+<tr><td><code>GET /readyz</code></td><td>Readiness</td><td>Database connectivity (SELECT 1)</td></tr>
+</table>
+
+<h3>Job Queue Monitoring</h3>
+<p>The <code>GET /api/v1/views/org</code> endpoint returns job queue health:</p>
+<pre><code>"jobs": {
+  "pending": 2,
+  "failed_last_24h": 0,
+  "completed_last_24h": 47,
+  "oldest_pending": "2026-07-11T18:25:00Z"
+}</code></pre>
+
+<h3>Troubleshooting</h3>
+<table>
+<tr><th>Symptom</th><th>Check</th><th>Fix</th></tr>
+<tr><td>Repos not appearing</td><td>Provider status in /views/org</td><td>Run <code>providers reconcile &lt;id&gt;</code></td></tr>
+<tr><td>Observations stuck</td><td>Pending jobs count</td><td>Check worker logs for errors, restart worker</td></tr>
+<tr><td>Repo shows "unknown"</td><td>No commits since policy applied</td><td>Push a commit to the repo — pipeline will run</td></tr>
+<tr><td>Repo shows "failed"</td><td>Rollout failed</td><td>Check rollout error via /policies/{id}/rollouts</td></tr>
+<tr><td>429 rate limited</td><td>Client hitting too fast</td><td>Respect Retry-After header, add backoff</td></tr>
+</table>
+
+<hr class="separator">
+
+<h2 id="getting-started">10. Getting Started</h2>
+
+<h3>Prerequisites</h3>
+<ul style="padding-left: 1.5rem;">
+<li>Python 3.11+</li>
+<li>PostgreSQL instance (Fly.io Postgres, or local)</li>
+<li>GitHub App with webhook configured (for commit ingest)</li>
+</ul>
+
+<h3>First-Time Setup</h3>
+<pre><code># 1. Clone and install
+cd enterprise
+pip install -r requirements.txt
+
+# 2. Set environment
+export DATABASE_URL=postgresql://user:pass@host/dbname
+export APP_ENV=dev
+export GITHUB_WEBHOOK_SECRET=your-secret
+
+# 3. Run migrations
+alembic upgrade head
+
+# 4. Bootstrap org + admin token
+python -m app.admin bootstrap
+# → Prints raw admin token (save it!)
+
+# 5. Start API
+uvicorn app.main:app --reload
+
+# 6. Start worker (separate terminal)
+python -m app.worker
+
+# 7. Register GitHub provider
+python -m app.admin register-provider \
+  --type github \
+  --config '{"app_id": "123", "installation_id": "456"}'</code></pre>
+
+<h3>First Policy</h3>
+<pre><code># Create a policy
+curl -X POST $URL/api/v1/policies \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name": "Charter Required", "slug": "charter-required"}'
+
+# Create a version with governance rules
+curl -X POST $URL/api/v1/policies/$POLICY_ID/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"content": {"checks": ["charter_required", "trailers_required"]}, "notes": "Initial policy"}'
+
+# Activate the version
+curl -X POST $URL/api/v1/policies/$POLICY_ID/activate/$VERSION_ID \
+  -H "Authorization: Bearer $TOKEN"
+
+# Target repos
+curl -X POST $URL/api/v1/policies/$POLICY_ID/targets \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"repository_ids": ["repo-uuid-1", "repo-uuid-2"]}'
+
+# Check fleet status
+gator-enterprise auth whoami
+gator-enterprise repos list
+gator-enterprise policies list</code></pre>
+
+<h3>Verify the Pipeline</h3>
+<pre><code># Push a commit to a targeted repo, then:
+curl -H "Authorization: Bearer $TOKEN" $URL/api/v1/views/fleet | python -m json.tool
+
+# You should see the repo transition from "pending" or "unknown"
+# to "aligned" or "drifting" depending on governance state.</code></pre>
+
+<hr class="separator">
+
+<footer style="color: var(--text-muted); margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem;">
+<p>Gator Enterprise v0.1.0 — Cumberland Laboratories, 2026</p>
+<p>E1–E6 shipped July 5–11, 2026. 5,900+ lines across 60+ files. 59 tests. Deployed on Fly.io.</p>
+<p>Generated by Claude Opus 4.6 — July 11, 2026</p>
+</footer>
+
+</body>
+</html>

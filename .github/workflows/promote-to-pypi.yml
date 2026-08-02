@@ -1,0 +1,264 @@
+# Workflow C — Promote to PyPI
+#
+# Approval-gated publication of a release-candidate wheel to production
+# PyPI. Third workflow in the release topology (see
+# gator-command/artifacts/2026-07-27-public-release-pipeline-design.md
+# and gator-command/charters/release-pipeline.md).
+#
+# WIRED BUT DISABLED (2026-08-01, Architect direction):
+#
+#   The workflow's steps are complete, but every job is gated behind
+#   `vars.RELEASE_PIPELINE_ENABLED == 'true'`. Set that repository
+#   variable to enable. This is a hard kill switch that no accidental
+#   dispatch can bypass.
+#
+# HARD PROMISE — no rebuild:
+#
+#   This workflow MUST NOT run `python -m build` or any equivalent
+#   step. The wheel published to PyPI is the byte-identical artifact
+#   produced by Workflow B (release candidate) and validated by its
+#   TestPyPI smoke tests. Rebuilding here defeats the whole purpose
+#   of artifact promotion. Adding a build step is a governance
+#   violation, not a bug fix.
+#
+# PREREQUISITES for enabling:
+#
+#   1. Workflow B (release candidate) exists and produces uploadable
+#      artifacts (blocked on public monorepo cutover; tracked as 3b-3).
+#   2. PyPI Trusted Publisher configured for this repo + this workflow
+#      + this environment. See:
+#      https://docs.pypi.org/trusted-publishers/
+#      Configuration values:
+#        Owner:          cumberland-laboratories (or the future org)
+#        Repo:           gator-command  (or the future monorepo)
+#        Workflow name:  promote-to-pypi.yml
+#        Environment:    pypi-production
+#   3. `pypi-production` protected environment created in GitHub with
+#      at least one required reviewer. Deployment approvals block the
+#      publish job until a human approves.
+#   4. `RELEASE_PIPELINE_ENABLED` repository variable set to `true`.
+
+name: Promote to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc_version:
+        description: 'Release candidate version to promote (e.g. v2.4.5-rc1). Must exactly match the tag Workflow B built.'
+        required: true
+        type: string
+      workflow_b_run_id:
+        description: 'Workflow B run ID that produced the candidate artifact. Copy from the RC PR or the Actions tab.'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "publish" to confirm production PyPI publish. Any other value refuses.'
+        required: true
+        type: string
+
+# Repo access is read-only at the workflow level. OIDC id-token is
+# elevated only inside the `publish` job that actually needs it — a
+# `permissions:` block at the job level overrides this.
+permissions:
+  contents: read
+
+# Only one promotion per rc_version at a time. Do not cancel in
+# progress — a half-published PyPI upload should not be interrupted.
+concurrency:
+  group: promote-${{ inputs.rc_version }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: publication kill switch
+    runs-on: ubuntu-latest
+    # Repo variable `RELEASE_PIPELINE_ENABLED` acts as a hard kill
+    # switch. When absent or not exactly the string 'true', every job
+    # in this workflow is skipped. Flip via repo Settings → Variables.
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    steps:
+      - name: Verify confirmation phrase
+        run: |
+          if [ "${{ inputs.confirm }}" != "publish" ]; then
+            echo "::error::Confirmation phrase must be exactly 'publish' (got: '${{ inputs.confirm }}')."
+            exit 1
+          fi
+          echo "Confirmation OK. Proceeding to fetch candidate artifact for ${{ inputs.rc_version }}."
+
+      - name: Verify RC version shape
+        run: |
+          if ! echo "${{ inputs.rc_version }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$'; then
+            echo "::error::rc_version must match pattern vX.Y.Z-rcN (got: '${{ inputs.rc_version }}')."
+            exit 1
+          fi
+
+  fetch-candidate:
+    name: fetch candidate artifact from Workflow B
+    needs: [gate]
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    # `gh run download` reads actions data — needs actions:read on top
+    # of the workflow-level contents:read. Scoped to this job only.
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      # The exact package version string parsed out of the wheel
+      # filename (PEP 427). Consumed by `post-verify` so it installs
+      # precisely what was published — no assumptions about "the
+      # RC tag drops rcN and becomes the final version." Whatever
+      # Workflow B built is what gets published and what post-verify
+      # tests.
+      wheel_version: ${{ steps.extract.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Downloads the artifact Workflow B (release-candidate.yml)
+      # uploaded from its build-candidate job. Artifact-name coupling
+      # contract: B uploads `candidate-wheel-${{ github.ref_name }}`
+      # (tag name); C fetches `candidate-wheel-${{ inputs.rc_version }}`
+      # (operator types the tag). Same string.
+      #
+      # Fails cleanly if the run ID is wrong, if the artifact doesn't
+      # exist, or if the artifact has expired (B's upload retains
+      # 90 days).
+      #
+      # No manual-upload fallback exists in this workflow. If a promote
+      # is needed against a wheel that Workflow B did not produce (e.g.
+      # a hotfix built manually), implement the fallback as its own
+      # change (add a wheel_url input, download it, verify checksum
+      # against a signed source) rather than bolting in an unaudited
+      # artifact — provenance is the whole point of the promotion chain.
+      - name: Download candidate wheel from Workflow B run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh run download "${{ inputs.workflow_b_run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name "candidate-wheel-${{ inputs.rc_version }}" \
+            --dir dist/
+
+      - name: Verify exactly one wheel present
+        run: |
+          # Guard the shape of what B produced before we depend on it.
+          if ! ls dist/ 2>/dev/null | grep -q "^gator_command-.*-py3-none-any\.whl$"; then
+            echo "::error::No wheel found in dist/. Fetch step likely failed."
+            exit 1
+          fi
+          count=$(ls -1 dist/gator_command-*-py3-none-any.whl | wc -l)
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected exactly one wheel, found $count."
+            exit 1
+          fi
+
+      - name: Extract package version from wheel filename
+        id: extract
+        run: |
+          # PEP 427 wheel filename: {name}-{version}-{python}-{abi}-{platform}.whl
+          # Example: gator_command-2.4.5rc1-py3-none-any.whl → version=2.4.5rc1
+          # PEP 440 versions don't contain '-' (only '.' and letters), so a
+          # simple field split on '-' is safe.
+          wheel_name=$(basename "$(ls dist/gator_command-*-py3-none-any.whl)")
+          version=$(echo "$wheel_name" | sed -E 's/^gator_command-([^-]+)-py3-none-any\.whl$/\1/')
+          if [ "$version" = "$wheel_name" ]; then
+            echo "::error::Failed to parse version from wheel filename: $wheel_name"
+            exit 1
+          fi
+          echo "Candidate artifact: $wheel_name"
+          echo "Extracted package version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Upload candidate for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    name: publish to production PyPI (OIDC trusted publisher)
+    needs: [fetch-candidate]
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    # Protected environment: PyPI-publish approval gate. Configure
+    # required reviewers on the `pypi-production` environment in repo
+    # settings. Approval is the human-in-the-loop stop before the
+    # production registry is touched.
+    environment:
+      name: pypi-production
+      url: https://pypi.org/project/gator-command/
+    permissions:
+      contents: read
+      # OIDC token for PyPI Trusted Publisher exchange. Scoped to this
+      # job only; other jobs in this workflow keep contents:read.
+      id-token: write
+    steps:
+      - name: Download candidate wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-wheel
+          path: dist/
+
+      - name: Guard — refuse to run if dist/ contains anything but the one wheel
+        run: |
+          count=$(ls -1 dist/*.whl 2>/dev/null | wc -l)
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected exactly one wheel in dist/, found $count. Refusing to publish."
+            ls -la dist/ || true
+            exit 1
+          fi
+          echo "OK — one wheel in dist/, ready to publish:"
+          ls -la dist/
+
+      - name: Publish to PyPI (OIDC trusted publisher)
+        # PyPA's official publish action performs the OIDC token
+        # exchange with PyPI and uploads the wheel via twine internally.
+        # No static PyPI token is stored in the repo — the trusted
+        # publisher relationship is configured on PyPI's side and
+        # keyed to (repo, workflow, environment).
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          verify-metadata: true
+          # Do NOT set `password` or `user` — that would fall back to
+          # static-token auth and defeat OIDC. If you find yourself
+          # adding those, the trusted publisher config on PyPI's side
+          # is missing or wrong.
+
+  post-verify:
+    name: fresh-env install from production PyPI
+    needs: [publish, fetch-candidate]
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    steps:
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install from production PyPI and smoke-test
+        run: |
+          # Install exactly what was published — the package version is
+          # taken from the wheel filename that fetch-candidate parsed,
+          # not derived from the rc_version input. That means whether
+          # Workflow B builds the wheel as `2.4.5rc1` (standard PEP 440
+          # RC convention) or as some other version, post-verify tests
+          # the actual artifact and nothing else.
+          version="${WHEEL_VERSION}"
+          if [ -z "$version" ]; then
+            echo "::error::wheel_version job output is empty; upstream fetch failed."
+            exit 1
+          fi
+          python -m venv .venv-verify
+          .venv-verify/bin/python -m pip install --upgrade pip
+          # --pre allows RC/pre-release versions like `2.4.5rc1` to resolve
+          # from the standard PyPI index without needing --index-url overrides.
+          .venv-verify/bin/python -m pip install --pre "gator-command==${version}"
+          .venv-verify/bin/gator --version
+          .venv-verify/bin/gator --help
+          echo "Post-release verification OK for gator-command==${version}"
+        env:
+          WHEEL_VERSION: ${{ needs.fetch-candidate.outputs.wheel_version }}

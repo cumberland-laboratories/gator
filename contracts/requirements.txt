@@ -1,0 +1,9 @@
+# Runtime dependencies for the contracts compatibility pytest suite.
+#
+# CI MUST install this file before running `pytest contracts/compatibility`.
+# Without jsonschema, the two JSON-Schema-backed tests
+# (test_snippet_schema.py, test_enterprise_marker.py) skip silently via
+# pytest.importorskip — dev-local convenience, but load-bearing for the
+# Phase 2 contract guarantees. Skipping them in CI would let Enterprise
+# marker + snippet schema drift ship uncaught.
+jsonschema>=4.20

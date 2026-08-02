@@ -1,0 +1,116 @@
+name: Bug Report
+description: Something in Gator isn't working as documented
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. The more concrete you can be about what you ran and what happened, the faster this gets triaged. If you're not sure whether it's a bug or a design question, file it anyway — we'd rather have the signal.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What were you trying to do?
+      description: One or two sentences on the goal — the intended outcome, not the mechanics.
+      placeholder: "e.g. Update the smart-sort repo to the latest Gator version from the Dashboard's Fleet view."
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What actually happened?
+      description: Include exact error messages if any. Paste terminal or Dashboard output between triple backticks.
+      placeholder: |
+        Clicking Update produced:
+        ```
+        <paste output here>
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What would "working correctly" have looked like?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, concrete steps. Include any files, commit hashes, or configuration relevant to reproducing.
+      placeholder: |
+        1. `pipx install gator-command==2.4.5`
+        2. `gator dashboard` in a fresh repo
+        3. Click "Add Repository" → observe...
+    validations:
+      required: true
+
+  - type: input
+    id: gator-version
+    attributes:
+      label: Gator version
+      description: Output of `gator version` (or the version shown in the Dashboard's Updates view).
+      placeholder: "2.4.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: AI coding tool
+      description: Which agent were you using when the bug appeared? Select all that apply if multiple.
+      multiple: true
+      options:
+        - Claude Code
+        - Codex
+        - Gemini CLI
+        - Cursor
+        - Not agent-related
+        - Other (specify in Additional context)
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 14.5 / Windows 11 / Ubuntu 22.04"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Output of `python --version`
+      placeholder: "3.12.3"
+    validations:
+      required: true
+
+  - type: input
+    id: git-version
+    attributes:
+      label: Git version
+      description: Output of `git --version`
+      placeholder: "2.45.1"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Anything else — screenshots, related issues, workarounds you've tried, whether this is a regression from a prior Gator version.
+
+  - type: checkboxes
+    id: pre-flight
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true
+        - label: I'm on the latest Gator release (or the version above is intentional and I've documented why).
+          required: true

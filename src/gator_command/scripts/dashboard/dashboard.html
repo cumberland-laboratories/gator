@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gator</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div id="app-shell">
+
+    <aside id="sidebar">
+      <div id="sidebar-brand">
+        <img id="brand-logo" src="gator-logo.png" alt="Gator" />
+      </div>
+
+      <nav id="sidebar-nav">
+        <div class="nav-group-label">Overview</div>
+        <button class="sidebar-item active" data-view="fleet">
+          <span class="sidebar-icon">◈</span> Fleet
+        </button>
+        <button class="sidebar-item dimmed" data-view="repo" id="repo-tab" style="padding-left:28px">
+          <span class="sidebar-icon">▸</span> Repo
+        </button>
+        <button class="sidebar-item" data-view="history">
+          <span class="sidebar-icon">◉</span> History
+        </button>
+
+        <div class="nav-group-label">Knowledge</div>
+        <button class="sidebar-item dimmed" data-view="docs" id="docs-tab">
+          <span class="sidebar-icon">▤</span> Docs
+        </button>
+
+        <div class="nav-group-label">System</div>
+        <button class="sidebar-item" data-view="updates">
+          <span class="sidebar-icon">↻</span> Updates
+        </button>
+      </nav>
+
+      <div id="sidebar-footer">
+        <div id="sidebar-footer-text">Local-first · Git-native<br>governance for AI coding</div>
+      </div>
+    </aside>
+
+    <div id="main-shell">
+      <button id="sidebar-toggle" title="Toggle sidebar">&#9707;</button>
+      <header id="topbar">
+        <div id="topbar-left">
+          <h1 id="topbar-title">Fleet</h1>
+          <span id="topbar-subtitle"></span>
+        </div>
+        <div id="topbar-right">
+          <input type="text" id="repo-search-input" class="topbar-search" placeholder="Search... (AND / OR)" style="display:none" />
+          <span id="generated-at"></span>
+          <button id="refresh-btn" title="Re-run fleet scan">↺ Refresh</button>
+        </div>
+      </header>
+
+      <div id="snapshot-banner" style="display:none" class="snapshot-note">
+        Snapshot — data captured at generation time.
+        Run <code>gator dashboard</code> for live view with Repo drill-down.
+      </div>
+
+      <main id="view-slot">
+        <div id="loading">
+          <p>Loading fleet data...</p>
+        </div>
+      </main>
+    </div>
+
+  </div>
+
+  <script src="views/fleet.js"></script>
+  <script src="views/history.js"></script>
+  <script src="views/repo.js"></script>
+  <script src="views/updates.js"></script>
+  <script src="views/settings.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

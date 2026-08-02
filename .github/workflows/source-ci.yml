@@ -1,0 +1,103 @@
+# Workflow A — Source CI
+#
+# Runs on every push to main and every PR into main. No publication side
+# effects. Two lanes:
+#
+#   fast     — matrix (Ubuntu, Windows) × (Python 3.9, 3.13) running the
+#              main test suite + contracts compatibility suite, excluding
+#              the packaging suite (which builds a wheel + installs into
+#              a venv per class and is too slow to matrix out).
+#
+#   packaging — single job (Ubuntu × Python 3.13) running the full
+#               packaging suite: wheel build, wheel-contents assertions,
+#               fresh venv install, installed-CLI smoke tests including
+#               all Phase 3a `gator enterprise` guarantees.
+#
+# See gator-command/charters/release-pipeline.md for the invariants
+# this workflow enforces, and gator-command/artifacts/
+# 2026-07-27-public-release-pipeline-design.md for the three-workflow
+# topology (A source CI, B release candidate, C promote to PyPI).
+# Workflows B and C land in future 3b sub-phases.
+
+name: Source CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege GITHUB_TOKEN. This workflow is read-only by design
+# (see release-pipeline.md invariant "No publication side effects in
+# Workflow A"). Narrowing here defends against a future edit that
+# accidentally adds a push/publish step, and against any action in the
+# job chain that would otherwise inherit broader default permissions
+# from the repository setting. Any workflow that legitimately needs
+# write access (Workflows B, C) MUST set its own permissions block.
+permissions:
+  contents: read
+
+# Cancel in-flight runs for the same ref when a new one starts — cheap
+# on cost, no correctness impact for a read-only CI.
+concurrency:
+  group: source-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: fast (${{ matrix.os }} · py${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.9', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Don't leave the GITHUB_TOKEN in the checkout's git config —
+          # read-only CI never pushes, so credentials should not
+          # outlive the checkout step.
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install -r contracts/requirements.txt
+
+      - name: Run tests + contracts (excluding slow packaging suite)
+        run: >
+          python -m pytest
+          tests
+          contracts/compatibility
+          --ignore=tests/test_packaging.py
+          -q
+
+  packaging:
+    name: packaging (ubuntu · py3.13, wheel build + venv install)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install build + test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build pytest
+
+      - name: Run packaging suite (wheel build + installed-CLI smoke)
+        run: python -m pytest tests/test_packaging.py -v

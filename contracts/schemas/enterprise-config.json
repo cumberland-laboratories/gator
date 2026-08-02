@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cumberlandlaboratories.com/schemas/enterprise-config.json",
+  "title": "gator-enterprise-config-v1",
+  "description": "The .gator/enterprise.json presence marker + connection descriptor. Presence of this file with `enabled: true` is the canonical signal that Enterprise capability is configured on this repo. Written by `gator enterprise setup` (Phase 4c-A, 2026-08-01) and consumed by `gator_core.is_enterprise_active(gator_dir)` (Phase 4b-substrate, same day) — fail-closed against missing, malformed, non-object, or `enabled != true`. Removed by `gator enterprise disconnect --yes`. Adding a field is additive; renaming or removing a required field is a breaking change.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["enabled"],
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Master switch. When false, Enterprise integrations must remain inert even if the file is present. Allows temporary Enterprise disable without removing configured connection details."
+    },
+    "api_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL of the Enterprise control-plane server. Required when enabled=true; consuming code must validate this."
+    },
+    "org_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Organization identifier assigned by the Enterprise server at first connection."
+    },
+    "repo_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional server-assigned repository identifier (added Phase 4c-C-2, 2026-08-02). Required by `gator enterprise sync` for pulling repo-scoped policies (`GET /api/v1/repos/{repo_id}/policies`). Absent when the operator did not pass `--repo-id` to setup; markers written before 4c-C-2 lack this field and are still valid — sync will report the absence and skip the policy pull instead of erroring, since audit works fleet-wide without it."
+    },
+    "connected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp when this repo was first connected to the Enterprise server."
+    },
+    "schema": {
+      "const": "gator-enterprise-config-v1",
+      "description": "Optional self-identifying schema tag. Recommended for tooling."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "enabled": { "const": true } }
+      },
+      "then": {
+        "required": ["api_url", "org_id"]
+      }
+    }
+  ]
+}

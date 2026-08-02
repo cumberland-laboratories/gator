@@ -1,0 +1,116 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gator-command"
+version = "2.5.0"
+description = "Git-native governance for AI-assisted engineering"
+readme = "PYPI_README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Cumberland Laboratories", email = "support@cumberlandlaboratories.com"},
+]
+urls = {Homepage = "https://github.com/cumberland-laboratories/gator", Repository = "https://github.com/cumberland-laboratories/gator"}
+keywords = ["governance", "ai", "git", "charters", "audit", "compliance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.scripts]
+gator = "gator_command.cli:main"
+
+# Optional dependency group for operators running an Enterprise control-plane
+# server. Client-side commands (`gator enterprise setup/status/sync/audit/
+# disconnect`) stay in the base install and only need lightweight HTTP client
+# deps. Install as:
+#     pipx install "gator-command[enterprise-server]"
+# Ratified 2026-07-31 in monorepo product-contract Decision C, Option 2
+# (see gator-command/artifacts/2026-07-31-monorepo-product-contract-decisions.md).
+[project.optional-dependencies]
+enterprise-server = [
+    "fastapi>=0.115",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "uvicorn[standard]>=0.30",
+    "psycopg[binary]>=3.2",
+]
+
+[tool.setuptools]
+# Only the top-level package is a Python package. scripts/ and templates/
+# are package DATA, not importable sub-packages. This prevents setuptools
+# from auto-including enterprise .py files as Python modules.
+packages = ["gator_command"]
+package-dir = {"" = "src"}
+# Disable auto-inclusion of VCS-tracked files — we control package contents
+# explicitly via package-data. Enterprise-only scripts are intentionally absent.
+include-package-data = false
+
+# Package data — explicit file lists for scripts shipped in the wheel.
+# Per Phase 4e consolidation (2026-08-02): all Enterprise prototype code
+# lives under the top-level `enterprise/` tree, NOT in this wheel. The
+# base wheel ships only base-Gator code + the thin `gator-enterprise.py`
+# dispatcher (which degrades to a clean "Enterprise features not
+# available" message when the enterprise-cli package isn't installed).
+# Operators who want Enterprise features install:
+#     pip install ./enterprise/enterprise-cli/    (from a source checkout)
+# Prior architecture (Phase 4c/4d) shipped enterprise_client.py,
+# enterprise_credentials.py, enterprise_vendor_hooks.py in the base
+# wheel — those were consolidated into enterprise/ in Phase 4e per
+# Architect direction to keep all Enterprise pieces in one place.
+[tool.setuptools.package-data]
+gator_command = [
+    "scripts/gator-charter-draft.py",
+    "scripts/gator-charter-lint.py",
+    "scripts/gator-charter-verify.py",
+    "scripts/gator-dashboard.py",
+    "scripts/gator-deploy.py",
+    "scripts/gator-enforce.py",
+    "scripts/gator-enterprise.py",
+    "scripts/gator-init-command-post.py",
+    "scripts/gator-init.py",
+    "scripts/gator-kill.py",
+    "scripts/gator-loop.py",
+    "scripts/loop/__init__.py",
+    "scripts/loop/cli.py",
+    "scripts/loop/events.py",
+    "scripts/loop/host.py",
+    "scripts/loop/session.py",
+    "scripts/loop/state_machine.py",
+    "scripts/loop/submit.py",
+    "scripts/gator-machine-id.py",
+    "scripts/gator-policy-status.py",
+    "scripts/gator-pulse.py",
+    "scripts/gator-repo-status.py",
+    "scripts/gator-session-block.py",
+    "scripts/gator-state.py",
+    "scripts/gator-update.py",
+    "scripts/gator-version.py",
+    "scripts/gator_core.py",
+    "scripts/gator_layout.py",
+    "scripts/gator_remote.py",
+    "scripts/gator_runtime.py",
+    "scripts/gatorize.py",
+    "scripts/enforcer-prompt.md",
+    "scripts/dashboard/**/*",
+    "scripts/gatorize/**/*",
+    "scripts/legacy/**/*",
+    "templates/**/*",
+    "templates/**/.*",
+]
+
+# Enterprise-only files excluded from the wheel.
+[tool.setuptools.exclude-package-data]
+gator_command = [
+    "scripts/dashboard/views/audit.js",
+]

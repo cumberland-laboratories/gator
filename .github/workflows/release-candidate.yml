@@ -1,0 +1,287 @@
+# Workflow B — Release Candidate
+#
+# The RC pipeline: on every `vX.Y.Z-rcN` tag push, build the wheel
+# once, publish it to TestPyPI, run installed-CLI smoke tests from
+# TestPyPI, and (once cutover happens) open a deploy PR against the
+# public `gator` repo. The wheel this job builds is the immutable
+# artifact Workflow C promotes to production PyPI — no rebuild
+# anywhere in the promotion chain.
+#
+# See gator-command/artifacts/2026-07-27-public-release-pipeline-design.md
+# for the three-workflow topology, and
+# gator-command/charters/release-pipeline.md for the invariants this
+# workflow enforces.
+#
+# WIRED BUT DISABLED (2026-08-01, Architect direction):
+#
+#   Every job is gated behind `vars.RELEASE_PIPELINE_ENABLED == 'true'`.
+#   Repo variable absent by default; nothing runs until the operator
+#   flips it. The buildable pieces (wheel build, TestPyPI publish,
+#   TestPyPI smoke test) are complete and real. The
+#   `deploy-to-public-gator` job is a STUB pending the public monorepo
+#   cutover (Option B) — its shape is documented so cutover work can
+#   swap the STUB for the real deploy without redesigning the workflow.
+#
+# ARTIFACT COUPLING CONTRACT with Workflow C:
+#
+#   `build-candidate` uploads an artifact named
+#   `candidate-wheel-${{ github.ref_name }}` — e.g.
+#   `candidate-wheel-v2.4.5-rc1`. Workflow C's `fetch-candidate` job
+#   downloads by that exact name using the `workflow_b_run_id` input.
+#   Renaming this artifact is a contract violation; do it only
+#   alongside a coordinated update to Workflow C.
+#
+# PREREQUISITES for enabling:
+#
+#   1. TestPyPI Trusted Publisher configured for this repo + this
+#      workflow + the `pypi-test` environment. Register at
+#      https://test.pypi.org/manage/account/publishing/. Values:
+#        Owner:          cumberland-laboratories (or future org)
+#        Repo:           gator-command (or future monorepo)
+#        Workflow name:  release-candidate.yml
+#        Environment:    pypi-test
+#   2. `pypi-test` GitHub environment created — no required reviewers.
+#      TestPyPI publishes are validation, not production; approval
+#      would defeat automated RC cadence.
+#   3. `RELEASE_PIPELINE_ENABLED` repo variable set to `true`.
+#   4. Public repo deploy path chosen (see `deploy-to-public-gator`
+#      job comments for options); until then that job STUBs.
+
+name: Release Candidate
+
+on:
+  push:
+    tags: ['v*.*.*-rc*']
+
+# Repo access read-only at workflow level. The publish job elevates
+# to `id-token: write` for OIDC to TestPyPI. The deploy job (when
+# unstubbed) will need its own scope, chosen at cutover time.
+permissions:
+  contents: read
+
+# Never cancel a running release — a half-published TestPyPI upload
+# is worse than a slow one. Same rule as Workflow C.
+concurrency:
+  group: rc-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: RC tag validation + kill switch
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    steps:
+      - name: Verify tag pattern
+        run: |
+          # Belt-and-suspenders — the `on.push.tags` filter already
+          # constrains this, but the explicit check gives a clean
+          # error line if something upstream changes.
+          if ! echo "${{ github.ref_name }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$'; then
+            echo "::error::Tag must match pattern vX.Y.Z-rcN (got: '${{ github.ref_name }}')."
+            exit 1
+          fi
+          echo "RC tag OK: ${{ github.ref_name }}"
+
+  build-candidate:
+    name: build wheel once (immutable candidate artifact)
+    needs: [gate]
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    outputs:
+      # Emitted for downstream jobs + audit. Workflow C also parses
+      # the version from the wheel filename it downloads — this
+      # output is for observability, not the sole source of truth.
+      wheel_version: ${{ steps.extract.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install build backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Verify exactly one wheel produced
+        run: |
+          count=$(ls -1 dist/*.whl 2>/dev/null | wc -l)
+          if [ "$count" != "1" ]; then
+            echo "::error::Expected exactly one wheel, found $count."
+            ls -la dist/ || true
+            exit 1
+          fi
+
+      - name: Extract package version from wheel filename
+        id: extract
+        run: |
+          # PEP 427 shape: {name}-{version}-{python}-{abi}-{platform}.whl
+          wheel_name=$(basename "$(ls dist/gator_command-*-py3-none-any.whl)")
+          version=$(echo "$wheel_name" | sed -E 's/^gator_command-([^-]+)-py3-none-any\.whl$/\1/')
+          if [ "$version" = "$wheel_name" ]; then
+            echo "::error::Failed to parse version from wheel filename: $wheel_name"
+            exit 1
+          fi
+          echo "Candidate artifact: $wheel_name"
+          echo "Package version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Upload candidate artifact (Workflow C consumes this by name)
+        uses: actions/upload-artifact@v4
+        with:
+          # NAME IS A CONTRACT with Workflow C's fetch-candidate.
+          # Do not rename in isolation.
+          name: candidate-wheel-${{ github.ref_name }}
+          path: dist/*.whl
+          if-no-files-found: error
+          # Retain long enough for Workflow C promotion but not forever.
+          retention-days: 90
+
+  publish-to-testpypi:
+    name: publish to TestPyPI (OIDC trusted publisher)
+    needs: [build-candidate]
+    runs-on: ubuntu-latest
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    environment:
+      # `pypi-test` in GitHub environment settings — no required
+      # reviewers. TestPyPI publishes are validation; approval would
+      # defeat automated RC cadence and add friction with no safety
+      # win (TestPyPI is expected to be noisy).
+      name: pypi-test
+      url: https://test.pypi.org/project/gator-command/
+    permissions:
+      contents: read
+      # OIDC exchange with TestPyPI Trusted Publisher. Job-scoped
+      # per the release-pipeline "OIDC id-token scope is job-local"
+      # invariant.
+      id-token: write
+    steps:
+      - name: Download candidate wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: candidate-wheel-${{ github.ref_name }}
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # repository-url override targets test.pypi.org instead of
+          # production PyPI. Same OIDC mechanism, distinct trusted
+          # publisher registration on test.pypi.org's side.
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          verify-metadata: true
+          # Do NOT set `password` or `user` — that defeats OIDC.
+          # Same invariant as Workflow C's publish job.
+
+  smoke-test-testpypi:
+    name: fresh-env install from TestPyPI + CLI smoke
+    needs: [publish-to-testpypi, build-candidate]
+    # `runs-on` MUST reference `matrix.os` — a hardcoded runner here
+    # would collapse every matrix cell onto the same OS and give the
+    # workflow false Windows coverage. See the release-pipeline
+    # charter's "matrix jobs bind runs-on to matrix.os" invariant.
+    runs-on: ${{ matrix.os }}
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install from TestPyPI + smoke check
+        shell: bash
+        run: |
+          version="${{ needs.build-candidate.outputs.wheel_version }}"
+          if [ -z "$version" ]; then
+            echo "::error::wheel_version job output is empty; build failed."
+            exit 1
+          fi
+          # TestPyPI hosts our package; production PyPI hosts its deps.
+          # --index-url points primary lookup at TestPyPI, --extra-index-url
+          # falls back to production PyPI for fastapi/sqlalchemy/etc.
+          # --pre allows PEP 440 pre-release versions like `2.4.5rc1`.
+          python -m venv .venv-smoke
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            venv_pip=".venv-smoke/Scripts/pip"
+            venv_gator=".venv-smoke/Scripts/gator"
+          else
+            venv_pip=".venv-smoke/bin/pip"
+            venv_gator=".venv-smoke/bin/gator"
+          fi
+          $venv_pip install --upgrade pip
+          $venv_pip install \
+            --index-url https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            --pre \
+            "gator-command==${version}"
+          $venv_gator --version
+          $venv_gator --help
+          echo "TestPyPI smoke OK on ${{ matrix.os }} for gator-command==${version}"
+
+  deploy-to-public-gator:
+    name: deploy candidate as PR into public gator repo
+    needs: [build-candidate]
+    runs-on: ubuntu-latest
+    # Two independent flags:
+    #
+    #   RELEASE_PIPELINE_ENABLED — the whole-pipeline kill switch, shared
+    #   with every other job.
+    #
+    #   DEPLOY_PUBLIC_ENABLED — sub-gate for THIS job only. Absent by
+    #   default so this job SKIPS (not FAILS) even after the whole
+    #   pipeline is enabled. Set to 'true' when the cutover work picks
+    #   a deploy path and replaces the STUB below with real behavior.
+    #   Skipping here lets an enabled RC run pass cleanly on build +
+    #   TestPyPI + smoke test — the operator gets a green run whose
+    #   ID Workflow C's fetch-candidate can then reference.
+    if: vars.RELEASE_PIPELINE_ENABLED == 'true' && vars.DEPLOY_PUBLIC_ENABLED == 'true'
+    steps:
+      # STUB — the deploy target does not yet exist in a form this
+      # workflow can push to. Blocked on the public monorepo bootstrap
+      # + GitHub Option B cutover.
+      #
+      # Three viable shapes when cutover happens; the choice is a
+      # release-pipeline design decision, not a code fix:
+      #
+      # A. Same-repo monorepo (Option B outcome): the public repo IS
+      #    this repo post-cutover. This step becomes a no-op or moves
+      #    to "create a release branch" — no cross-repo push needed.
+      #    Uses only `permissions: contents: write` on this job.
+      #
+      # B. Cross-repo push via GitHub App: install a fine-grained App
+      #    on the public repo with `contents: write` and `pull_requests:
+      #    write`; token minted per run. Preferred over PATs — scoped
+      #    tighter, no long-lived secret, App identity audit-legible.
+      #
+      # C. Cross-repo push via PAT (bearer-token): stored as repo
+      #    secret. Simplest to set up, weakest security posture.
+      #    Fallback only.
+      #
+      # When cutover picks one, the STUB below is replaced with:
+      #   - checkout gator-command
+      #   - checkout public-gator (with the chosen auth)
+      #   - run gator-deploy.py against the public checkout
+      #   - commit to release/${{ github.ref_name }} branch
+      #   - open PR labeled "Release candidate: ${{ github.ref_name }}"
+      # AND `DEPLOY_PUBLIC_ENABLED` is flipped to 'true'.
+      - name: Deploy STUB (blocked on public repo cutover)
+        run: |
+          echo "::warning::Public gator repo deploy is not yet configured."
+          echo "  Cutover work chooses auth path (App / PAT / monorepo);"
+          echo "  see release-candidate.yml for the three viable shapes."
+          echo "  This job is only running because DEPLOY_PUBLIC_ENABLED"
+          echo "  was flipped to 'true' without replacing the STUB."
+          exit 78  # EX_CONFIG — deploy target not yet configured

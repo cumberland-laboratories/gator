@@ -1,0 +1,215 @@
+<!--
+================================================================
+ARCHITECT REVIEW REQUIRED -- do not publish without edits.
+Reason: Contains 'Revenue via strategic acquisition' language on lines ~29 and ~202. Curate to remove private strategic revenue-strategy framing before the monorepo goes public. The rest of the roadmap (400+ lines of Done/Building/Considering/Deferred items) is contributor-relevant and should stay.
+This banner MUST be removed once the review is complete.
+Ported by scripts/monorepo-bootstrap.py during Phase 3b-3-B.
+================================================================
+-->
+
+# Roadmap
+
+Updated 2026-08-02. Priority-ordered within each track.
+
+**Status key**: Done · Building · Designed · Considering · Deferred
+
+---
+
+## Product
+
+One product: **Gator** — Git-native governance for AI-assisted engineering. Ships as `pipx install gator-command`. Open source under **Apache License 2.0** (see [`LICENSE`](../LICENSE) and [`NOTICE`](../NOTICE); the MIT → Apache 2.0 flip landed in Phase 3c, 2026-08-01). Now at v2.4.5.
+
+Gator includes local repo governance, pre-commit enforcement, dashboard, CLI, and gator loop. **Enterprise capabilities** (API-first fleet management, session evidence, audit reporting, centralized policy) are an optional layer — same codebase, activated by configuration. Monorepo convergence planned.
+
+## Current Priority
+
+**Three priorities, in order:**
+
+1. **Gator: ridiculously easy to install and use.** The product must be frictionless from first install through daily use. Dashboard-first UX, one-command install, zero-config governance. Every rough edge in the install/onboard/update flow is a priority bug.
+
+2. **Gator Loop: smooth the rough edges.** The loop works end-to-end — all 12 subcommands shipped including `wait`, `pause`, `interject`, `end`, and round-versioned artifacts. What remains is better Dashboard integration (events timeline rendering, session summary card) and protocol refinements from real-world usage. The loop is the first multi-agent governance primitive — it needs polish before broader adoption.
+
+3. **Monorepo convergence.** Merge Gator and Enterprise into one public GitHub repo. Simplifies contribution, CI, and release. The product boundary (Individual wheel vs Enterprise deployment) stays; the repo boundary goes.
+
+## Strategic Direction
+
+- **Open source distribution** (Apache 2.0) for both Desktop and Enterprise
+- **Maximum developer adoption** through frictionless installation
+- **Revenue via strategic acquisition** (M&A / acqui-hire by DevSecOps players)
+- **Dashboard-first product surface** — CLI commands become internal implementation details
+- **Multi-agent governance** — gator loop as the foundation for governed AI collaboration
+
+---
+
+## Gator — Active Development
+
+### Done
+
+| Feature | Version | Notes |
+|---------|---------|-------|
+| Cross-platform install | v1.0+ | `gatorize.py`, no bash required |
+| Pre-commit hook | v1.0+ | Validation, trailers, status.json, charter enforcement, whiteboard |
+| Standalone mode | v1.1+ | Repos governed without command post |
+| Standalone dashboard | v1.1+ | Machine-local registry, fleet view, repo browser |
+| `pipx install gator-command` | v1.2+ | PyPI package, `gator` CLI entry point |
+| Git history in dashboard | v1.2+ | File history + branch history dropdowns |
+| Dashboard search | v1.2+ | Cross-doc AND/OR boolean, in-doc highlight, copy content |
+| Deploy pipeline | v1.2+ | PyPI publish, version stamping, session cleanup |
+| Module splits | v1.7.0 | `gator-deploy` (4 modules), `gator-pre-commit` (4 modules) |
+| Fleet UX overhaul | v1.7.1 | Inline enforcement, version-based Update, dot-pulse animation |
+| Self-upgrade from dashboard | v1.7.3 | PyPI check + `pipx upgrade` with automatic restart |
+| How to Use Gator | v1.8.8 | User-facing guide |
+| How Gator Works | v1.8.9 | Public technical explainer |
+| Dashboard logo | v1.8.11 | Gator-in-motion brand identity |
+| Fleet Add Repository | v1.9.0 | Dashboard modal with auto-discovery + manual path input |
+| Dashboard mode collapse | v1.9.0 | Single standalone mode, command-post mode retired |
+| Gatorize vs Update distinction | v1.9.0 | Fleet rows show blue "Gatorize" for ungoverned repos |
+| Registry path normalization | v1.9.0 | MSYS `/c/` paths auto-converted on Windows |
+| Hook warning mode | v1.9.3 | Warn instead of blocking on branches without `.gator/` |
+| Command-post full retirement | v2.0.0 | Constitution, init, topology, installer, updater, policy-status all retired from Individual |
+| Installer safety branch fix | v2.0.0 | All scenarios create `gator-install` branch before mutation |
+| **Gator Loop** | v2.1.0 | Governed planning debate between AI models. 12 subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, wait, tail, list), 3-role tokens (draftor, reviewer, architect), round-versioned artifacts |
+| **`.includes/` layout (v2)** | v2.1.0 | Shipped content in `.gator/.includes/`, user content at root. Layout resolver, migration command, dual-layout compat |
+| **Merge conflict fix** | v2.1.0 | `whiteboard.md`, `commit_draft.md`, `status.json` gitignored |
+| **Dashboard loop visibility** | v2.1.0 | Loops browseable in sidebar, `.tokens.json` blocked at server level |
+| **Cross-vendor loop orientation** | v2.1.0 | Loop join instructions in all entry points + `/loop-join` slash command |
+| **Architect override procedure** | v2.1.0 | Documented `--reason` and `--name` flags for clean override UX |
+| **Repo file browser overhaul** | v2.2.0 | Fleet → Repo browser: true nested directory tree, full-width markdown rendering, sidebar state retention across refresh + view-switch, and 5s auto-refresh when new files arrive. [Design record](artifacts/2026-07-28-gator-dashboard-fleet-repo-file-sidebar-and-content-fixes-implementation-plan.md) |
+| **Mixed-layout update deadlock fix** | v2.2.1 | `gator update` no longer deadlocks on scaffolding-only shipped dirs in mixed v1/v2 layouts |
+| **Charter-verify layout-resolver fix + enforcer trust-boundary docs + justified body text** | v2.2.2 | Repaired `gator charter-verify` crash (passed raw path where layout paths object expected); corrected enforcer trust-boundary docs (behavioral not agent-blind); Fleet → Repo file-content pane now justifies body text (Wikipedia-style) |
+| **Local-agent overrides + managed-state layer** | v2.3.0 | New `gator state` CLI (status + repair, six-state vocabulary, schema-versioned JSON); `CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md` companion files (gitignored, precedence contract); `gator update` refreshes managed blocks with `.pre-gator-update` backups + `"schema": "gator-update-v1"` JSON; constitution drift indicator in `gator init`; shipped `local-agent-skills.md` reference-note. [Design record](artifacts/2026-07-28-local-agent-overrides-and-managed-state-plan.md) — 11 review rounds |
+| **Retire `gator-install` branch + update in place** | v2.4.0 | `gatorize` no longer creates or switches to a `gator-install` safety branch — installs on the current branch, in place. New `--yes` flag with per-site opt-in contract. Dashboard "Update" button now calls `gator-update` (not `gatorize`), fixing the silent branch-switch bug. New `POST /api/repo/<name>/gatorize` endpoint for the ungoverned-repo install path. Bash installer chain (`gatorize.sh`, `gatorize-lib.sh`, `gatorize-actions.sh`, `gatorize-post.sh`) retired — ~2400 lines removed. Template `gatorize.py` retired (broken import chain, silently swallowed). Honest scenario-aware recovery messaging replaces the naive `git checkout .` / `git reset --hard` hints. Cross-platform cancel-hint recipe (Windows PowerShell + bash). [Design record](artifacts/2026-07-30-retire-gator-install-branch-implementation-plan.md) — 11 review rounds. Codex enforcer findings on Stages 1, 3, 4, 5 all remediated in-stage. |
+| **product-source.json self-heal** | v2.4.1 | Fleet-wide hotfix. v2.4.0's Dashboard-Update-endpoint swap (from `gatorize` to `gator-update`) exposed a latent bug: every gatorized repo captured an absolute `gator_root` path at install time, and a later pipx reinstall (especially editable) invalidated it. `gator-update.py:main()` now self-heals — on "product template source not found" it falls back to `Path(__file__).parent.parent` (the running install), rewrites `product-source.json`, continues the update. Sync-obligation-bound between package and template mirror. |
+| **`cli-version` stamps on every successful update** | v2.4.2 | Second fleet-wide hotfix. Under v2.4.0-v2.4.1 `gator-update` only stamped `cli-version` in `.gator-version` when files actually changed — repos already at the current template version never re-stamped after a CLI upgrade, so the Dashboard Fleet Version column stayed on the pre-upgrade CLI forever and the Update button stayed falsely enabled. Semantic split: `cli-version` now stamps unconditionally (records "who last verified"), `updated:` timestamp still gates on file changes (preserves "last modification"). |
+| **`gator kill dashboard` + discovery-roots + Dashboard-first docs** | v2.4.3 | New CLI verb `gator kill dashboard [--all \| --port N \| --dry-run]` for killing stale Dashboard processes (cross-platform: Windows `wmic`/`taskkill`, Unix `pgrep`/`SIGTERM`; mutually-exclusive selectors at argparse). New `GATOR_DASHBOARD_DISCOVERY_ROOTS` env var scopes the Add-Repository auto-discovery scan. New sleek-profile Dashboard sidebar logo. Documentation refresh across README + 3 docs, all restructured Dashboard-first with 17 image placeholders wired for the v2.4.5 screenshot pass. |
+| **Dashboard History no longer crashes on non-cp1252 git output** | v2.4.4 | Windows hotfix. `gator_core.git()` was using bare `text=True`, decoding subprocess stdout with the platform-default codec (`cp1252` on Windows) — crashed on any git output containing bytes unrepresentable in cp1252 (non-ASCII commit subjects, diacritic author names, trailer content copied from external sources). Symptom: History endpoint returned "Empty reply from server." Fixed with `encoding="utf-8", errors="replace"` — extended to `gator_core.get_version()`'s git subprocess calls and `dashboard/helpers.py::run_text` via a belt-and-suspenders sweep. Charter tripwire added in `scripts-core-library.md`. |
+| **HTML file support + Docs view broadening + wide-image sizing + first screenshot tranche + hero banner** | v2.4.5 | `.html`/`.htm` files in `.gator/` now visible in Dashboard file browser and served as `text/html; charset=utf-8` — clicking opens in new tab (`window.open(rawUrl, "_blank", "noopener")`). Auto-load code paths skip HTML to defend against popup-blocker. Opens the governance-HTML-reports channel (mermaid flowcharts, generated audit visualizations). Docs view broadened to list both `.gator/docs/` and repo-root `docs/`. `.repo-content` gets `min-width: 0` + `overflow-x: auto` so wide images shrink-to-fit. Six real Dashboard screenshots landed in `docs/images/` (from a fictional demo workspace) and wire up the README + 2 docs. New hero banner + social card (composed by Gemini from source assets), shields.io badge rows (core + agent-compatibility). YAML Issue Forms replace markdown templates. Dashboard favicon added. First proper GitHub Release since v1.8.10 — catch-up covers v2.3.0 → v2.4.5. `gh release create` folded into `release-and-deploy.md`. |
+
+### Building — Priority 1: Post-Install Onboarding & UX
+
+The `.exe` installer is deferred — the target audience (developers using AI tools) has Python and CLI fluency. The real gap is what happens after `pipx install gator-command`.
+
+**v2.4.x baseline shift (2026-07-30)**: the retire-gator-install release train (v2.4.0-v2.4.2) collapsed the whole install/update surface into a much simpler shape:
+
+- **`gator gatorize`** — installs on the current branch, in place. Prints a scenario-aware pre-action summary, asks a single Y/n gate, refuses on a dirty tree under `--yes`. No branch-dance, no merge-back-to-dev ritual, no `gator-install` branch to explain in every install doc.
+- **Dashboard Update** — invokes `gator-update` on the current branch. Result is exactly what the button label says. No silent branch switches, no cross-branch contamination. Non-interactive fragility is gone (`--yes` propagates cleanly, self-heal recovers from stale `product-source.json`).
+- **Dashboard Gatorize** (Fleet-row button, ungoverned repos) — its own dedicated `/api/repo/<name>/gatorize` endpoint. No more self-referential 400s.
+- **Fleet Version column** — stamps on every update, so drift is visible and Update-button enable/disable is trustworthy.
+- **Recovery messaging** — the safety-branch pattern (`git checkout -b my-gator-experiment` BEFORE running gatorize) is the documented supported clean-undo path. Scoped git-native recipes for uncommitted / committed / untracked-file cases. No overclaiming.
+- **Codebase** — ~2400 lines of retired bash / template gatorize.py deleted. Fewer surfaces to audit, fewer scenarios to explain, fewer failure modes to document.
+
+The remaining Priority-1 items below build on this new baseline. Several of them (welcome screen, in-dashboard next-step, getting-started narrative) got materially simpler because the underlying install/update flow no longer has weird edges to warn users about.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **First-run welcome screen** | Considering | Empty fleet → show welcome with "Add Repo" + "Gatorize" prominently, not empty table |
+| 2 | **Getting-started documentation** | Considering | Linear path: install → dashboard → add repo → gator init → first commit → see result. Complements the new `docs/custom-skills-and-team-workflow.md` shipped in v2.4.0 Stage 7 |
+| 3 | **In-dashboard next-step guidance** | Considering | After adding a repo, show "Open your AI CLI and type gator init" hint |
+| 4 | **Server reuse detection** | Considering | `gator dashboard` finds running instance instead of starting duplicate |
+| 5 | **Branding consistency** | Considering | Clean up any stale "Gator" vs "Gator Desktop" vs "Gator Dashboard" inconsistencies in docs |
+| 6 | **HTML file support in Dashboard** | Done (v2.4.5) | Shipped as new-tab open (`window.open` on `/raw/`) rather than sandboxed iframe. Iframe was the original plan; new-tab was chosen to sidestep CSP and iframe-sandbox complexity while still delivering the "governance HTML reports render inline" outcome. |
+
+*(Shipped items no longer listed here: "File sidebar auto-refresh" landed in v2.2.0 as part of the Repo file browser overhaul; "Justified body text in Repo content" landed in v2.2.2 — see Done above. "Gatorize `--batch` mode" landed in v2.4.0 as the `--yes` flag with per-site opt-in contract, folded into the retire-gator-install work — see Done above.)*
+
+### Building — Priority 2: Gator Loop Polish
+
+Shipped in v2.1.0: `wait`, `pause`, `interject`, `end`, round-versioned artifacts, architect token, dashboard loop sidebar. What remains is refinement from real usage.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Loop dashboard events timeline** | Designed | Render `events.jsonl` as formatted timeline table instead of raw JSON. [Plan](artifacts/2026-07-27-loop-usability-implementation-plan.md) |
+| 2 | **Loop dashboard session card** | Considering | Summary card showing loop stage, rounds, join status on Repo overview |
+| 3 | **Loop protocol refinement** | Considering | Update protocol and artifact formats based on live trial learnings |
+| 4 | **Auto-trigger update after migration** | Considering | `--migrate-layout` could auto-run `gator update` to refresh scripts |
+
+### Building — Priority 3: Monorepo Convergence
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Merge assessment** | Done | [Assessment](artifacts/2026-07-16-monorepo-merge-assessment.md) complete |
+| 2 | **Convergence plan** | Done | [Plan](artifacts/2026-07-16-monorepo-convergence-plan.md) reviewed through 5 Codex passes; reconciled + release-integrated 2026-08-01 as [implementation plan](artifacts/2026-07-21-monorepo-convergence-implementation-plan.md) |
+| 3 | **Phase 1 — Product-contract decisions** | Done | Naming, evidence default, packaging boundary ratified 2026-07-31. [Decisions](artifacts/2026-07-31-monorepo-product-contract-decisions.md) |
+| 4 | **Phase 2 — Contracts layer** | Done | `contracts/` at repo root: 4 schemas (2 JSON, 2 markdown), 4 reference docs, 5 pytest suites, 33 checks. Wired into `pytest.ini`. Fresh 2026-08-01. |
+| 5a | **Phase 3a — Packaging boundary** | Done | `[project.optional-dependencies].enterprise-server` added to pyproject.toml; `gator enterprise` subcommand group registered in `cli.py`; stub dispatcher at `src/gator_command/scripts/gator-enterprise.py` covering setup/status/sync/audit/disconnect/server/db/policy/org/fleet (all print "coming in Phase 4" and exit 0); charter at `scripts-enterprise.md`; wheel builds clean and `Provides-Extra: enterprise-server` present in METADATA. Fresh 2026-08-01. |
+| 5b | **Phase 3b — Release pipeline (GH Actions A/B/C)** | Done (deploy step deferred) | All three workflows shipped, wired but disabled behind `vars.RELEASE_PIPELINE_ENABLED == 'true'`. 3b-1: Workflow A source CI (`.github/workflows/source-ci.yml`) — fast lane (Ubuntu + Windows × Py 3.9 + 3.13, tests + contracts) + packaging lane (Ubuntu × Py 3.13, wheel build + venv install). 3b-2: Workflow C promote-to-PyPI (`.github/workflows/promote-to-pypi.yml`) — approval-gated via `pypi-production` protected environment, OIDC trusted publisher, hard no-rebuild + no-static-token invariants. 3b-3: Workflow B release-candidate (`.github/workflows/release-candidate.yml`) — fires on `vX.Y.Z-rcN` tags, builds wheel once, OIDC-publishes to TestPyPI via `pypi-test` environment (no approval), matrix smoke-tests on Ubuntu + Windows from TestPyPI. Cross-workflow artifact-name coupling contract verified. Deploy-to-public-gator step is a STUB (`exit 78 EX_CONFIG`) until the public monorepo cutover (Option B) picks between same-repo / GitHub App / PAT — that step is the only remaining blocker to full pipeline activation. [Design](artifacts/2026-07-27-public-release-pipeline-design.md) · [Charter](charters/release-pipeline.md) |
+| 5c | **Phase 3c — Apache 2.0 mechanical migration** | Done | LICENSE flipped MIT → Apache 2.0 (canonical text); new NOTICE at repo root; `pyproject.toml` `license = "Apache-2.0"` + `License :: OSI Approved :: Apache Software License` classifier; `README.md` + `PYPI_README.md` license references updated; `docs/how-gator-works.md` retired the "Gator Individual/Enterprise" as-products phrasing per Decision A; `constitution.md` + `src/gator_command/templates/gator-starter/constitution.md` glossary refreshed to name Gator as one product with Enterprise as an optional capability; `CONTRIBUTING.md` refreshed with Apache 2.0 inbound-license statement, DCO sign-off requirement, and SPDX source-header policy. Wheel METADATA verified: `License: Apache-2.0`, both LICENSE and NOTICE ship in `dist-info/licenses/`. Provenance sweep (Track E) deferred as a follow-on. 2026-08-01. [Checklist](artifacts/2026-07-18-apache-2-mechanical-migration-checklist.md) |
+| 6 | **Phase 4 — Selective Enterprise port** | Done (substrate) | 4a: shared snippet infrastructure ported (`record_commit_and_emit_snippet` et al., `phase_cleanup` guarded emit, Decision B amended). 4b-substrate: `gator_core.is_enterprise_active(gator_dir)` canonical fail-closed reader; `gator-session-block.py` ships. 4c-A: real setup/status/disconnect local-marker commands with credentials-before-marker ordering. 4c-B: `setup --install-hooks` MACHINE-scoped vendor SessionStart install (originally `enterprise_vendor_hooks.py`; moved to enterprise-cli in 4e). 4c-C-1: MACHINE-scoped credential store (chmod 600 on POSIX; moved to enterprise-cli in 4e). 4c-C-2: HTTP client with typed exceptions; real `sync` + `audit` grounded in enterprise-mvp `app/routes/` (stdlib client deleted in 4e; enterprise-cli's httpx client is the sole one going forward). 4d-substrate: server-side Migration 008 tracked — adds `transcript_session_id VARCHAR(255) NULL` column to `commits`, completes the client → server pipe for the snippet field 4a already emits. |
+| 6e | **Phase 4e — Enterprise consolidation** | Done | Per Architect direction 2026-08-02 ("we should have ALL the prototype enterprise code in the enterprise/ folder ... we should not leave pieces behind in gator-command at all"): bulk-ported the full `enterprise/` tree from enterprise-mvp (114 files: `app/` FastAPI service including `routes/crypto.py` envelope encryption, `enterprise-cli/` gator_enterprise_cli package including all client-side commands, full Alembic 001-008 migration chain, `tests/`, `docs/`, deployment scaffolding). Moved `enterprise_credentials.py` and `enterprise_vendor_hooks.py` from `src/gator_command/scripts/` into `enterprise/enterprise-cli/gator_enterprise_cli/`; deleted `enterprise_client.py` (the enterprise-cli package's httpx-based `client.py` is authoritative). Refactored `src/gator_command/scripts/gator-enterprise.py` from mixed real/stub dispatcher into a THIN backwards-compat dispatcher that imports `gator_enterprise_cli` and delegates — or prints `[gator-enterprise-unavailable]` + exits 69 (EX_UNAVAILABLE) if the enterprise-cli package isn't installed. Updated `pyproject.toml` to drop the three `enterprise_*.py` entries from `package-data`. Moved tests: `test_enterprise_credentials.py` → `enterprise/tests/test_credentials.py`, `test_enterprise_vendor_hooks.py` → `enterprise/tests/test_vendor_hooks.py`. Shrunk `test_gator_enterprise.py` from 47 tests to ~15 covering only the thin dispatcher. Pruned `test_packaging.py` — deleted 3 end-to-end round-trip tests, added `test_gator_enterprise_all_verbs_exit_unavailable_in_base_install` and `test_wheel_does_not_ship_enterprise_cli_modules` as regression guards. Charter `scripts-enterprise.md` restructured for new tree; INDEX row expanded. Cutover plan artifact updated with Phase 4e addendum. Enterprise integration polish (single-pipx-command install of enterprise-cli, httpx/urllib client reconciliation, envelope encryption UX, green enterprise test suite) is explicitly deferred as post-cutover work per Architect. |
+| 7 | **Phase 3b-3 — Public monorepo bootstrap + GitHub Option B cutover** | Building | 3b-3-recon shipped 2026-08-02: [tree-map + sub-phase plan](artifacts/2026-08-02-monorepo-cutover-plan-and-tree-map.md) — enumerates include/exclude sets, designs the target root `.gator/` layout, records Architect direction that `enterprise/` IS present in the initial monorepo (doesn't need to fully work), sequences 3b-3-A (staging skeleton via `scripts/monorepo-bootstrap.py`) through 3b-3-D (GitHub cutover, Architect-driven). Open questions listed in the artifact for Architect review before 3b-3-A begins. Staging location: `C:/Users/curator/code2/gator-monorepo-staging`. |
+| 8 | **Phase 5 — Source-tree normalization (optional)** | Deferred | Only if packaging/import pain later justifies collapsing `enterprise/` into `src/gator_command/enterprise/`. |
+
+### Considering
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **SonarCloud integration** | Considering | Code quality gates for the public repo |
+| 2 | **Branch switching in Repo view** | Considering | Replace static branch label with dropdown |
+| 3 | **MCP server** | Considering | Interesting surface for AI tool integration |
+| 4 | **Audit view visualizations** | Considering | Session timeline, decision density, file heat map |
+| 5 | **Legacy Memex retirement** | Considering | Cognitive cleanup of large legacy surface |
+
+### Deferred
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Codex model name canonicalization** | Deferred | Quality cleanup for session identity |
+| 2 | **In-flight session visibility** | Deferred | Sessions only visible after first commit |
+| 3 | **enforcer-review.py split** | Deferred | Architectural hygiene |
+
+---
+
+## Gator Enterprise — Post-MVP Hardening
+
+E1-E8 shipped. Encryption phase complete. The service has 42 endpoints, operator CLI with 10 command groups, envelope encryption for session blocks, and vendor session extraction.
+
+### Done
+
+| Phase | What | Notes |
+|-------|------|-------|
+| E1 | Foundation | FastAPI skeleton, PostgreSQL schema, Alembic, API token auth, health endpoint |
+| E2 | Git provider | GitHub App adapter, webhook receiver, repo sync, scheduled refresh |
+| E3 | Policy engine | Policy CRUD, versioning, repo targeting, rollout state machine, PR distribution |
+| E4 | Evidence & reporting | Governance artifact ingestion, materialized reports, drift detection |
+| E5 | Dashboard API | Fleet status, repo detail, policy compliance, session summaries, audit timeline |
+| E6 | Hardening | Error handling, structured logging, rate limiting, operator CLI |
+| E7 | Session blocks | Bare clone cache, machine identity, v2 schema |
+| E8 | Encryption | Envelope encryption for session blocks |
+
+### Building
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | **Vendor session identity capture** | Building | Tie session blocks to vendor session IDs |
+| 2 | **Stranded session block recovery** | Designed | Machine-local fallback spool for blocks on deleted branches |
+| 3 | **Transcript session migration** | Building | Migration 008 for transcript session IDs |
+
+### What Enterprise adds
+
+Enterprise capabilities build on top of the core Gator install — they don't replace anything. The planned activation surface is `gator enterprise` as a CLI subcommand group, following the same pattern as `gator loop`:
+
+```
+gator enterprise setup    — connect to an Enterprise server
+gator enterprise status   — show connection, policy sync state
+gator enterprise sync     — pull policy, push evidence
+gator enterprise audit    — fleet audit from the CLI
+```
+
+This keeps Enterprise as a feature of Gator, not a separate product. Same install, same CLI, same repo. Enterprise adds:
+
+- Session evidence capture and storage
+- Fleet-scale audit and reporting
+- Centralized policy management
+- Git provider integrations (GitHub App, webhooks)
+- API-first fleet visibility
+
+---
+
+## Connections
+
+-> [Mission](mission.md) — what we're building and why
+-> [Product split](artifacts/2026-06-22-gator-individual-vs-enterprise-product-split.md) — boundary decision
+-> [Business model](../inbox.md) — open source + strategic acquisition direction
+-> [Monorepo convergence plan](artifacts/2026-07-16-monorepo-convergence-plan.md) — merge assessment + execution plan
+-> [Loop usability plan](artifacts/2026-07-27-loop-usability-implementation-plan.md) — wait, artifacts, dashboard visibility
+-> [Architect authority plan](artifacts/2026-07-26-architect-loop-authority-plan.md) — pause, interject, end
+-> [`.includes/` migration sketch](artifacts/2026-07-27-gator-content-vs-includes-migration-implementation-sketch.md) — v2 layout design

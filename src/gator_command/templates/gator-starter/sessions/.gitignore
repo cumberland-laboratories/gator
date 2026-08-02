@@ -1,0 +1,7 @@
+# Rolling active session ledgers are local working artifacts.
+# They are NOT committed — only session snippets and summaries are git-tracked.
+_active/
+
+# NOTE: .gator/session-snippets/ is NOT gitignored. Snippets are durable
+# commit-linked artifacts that MUST be committed. They provide the traceability
+# bridge between session history and git history.

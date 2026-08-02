@@ -1,0 +1,29 @@
+# Gator Enterprise — dev environment
+# For staging/prod, clone this file and update app name + region as needed.
+app = "gator-enterprise-dev"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  api = "gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
+  worker = "python -m app.worker"
+
+[deploy]
+  release_command = "alembic upgrade head"
+
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+  processes = ["api"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    path = "/healthz"
+    interval = 10000
+    timeout = 2000
+    grace_period = "10s"

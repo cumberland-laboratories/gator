@@ -1,0 +1,11 @@
+fastapi>=0.100
+uvicorn[standard]>=0.23
+gunicorn>=21.2
+sqlalchemy>=2.0
+alembic>=1.12
+psycopg2-binary>=2.9
+pydantic-settings>=2.0
+httpx>=0.25
+python-dateutil>=2.8
+PyJWT[crypto]>=2.8
+structlog>=24.1
