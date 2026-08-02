@@ -8,7 +8,7 @@
 
 ![Gator banner](docs/images/banner.png)
 
-[![PyPI](https://img.shields.io/pypi/v/gator-command)](https://pypi.org/project/gator-command/) [![Python](https://img.shields.io/pypi/pyversions/gator-command)](https://pypi.org/project/gator-command/) [![License](https://img.shields.io/pypi/l/gator-command)](https://github.com/cumberland-laboratories/gator/blob/main/LICENSE) [![Downloads](https://img.shields.io/pypi/dm/gator-command)](https://pypi.org/project/gator-command/)
+[![PyPI](https://img.shields.io/pypi/v/gator-command)](https://pypi.org/project/gator-command/) [![Python](https://img.shields.io/pypi/pyversions/gator-command)](https://pypi.org/project/gator-command/) [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/cumberland-laboratories/gator/blob/main/LICENSE) [![Downloads](https://img.shields.io/pypi/dm/gator-command)](https://pypi.org/project/gator-command/)
 
 ![Claude Code](https://img.shields.io/badge/Claude_Code-supported-2ea043) ![Codex](https://img.shields.io/badge/Codex-supported-2ea043) ![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-supported-2ea043)
 Most AI coding tools generate code from local context. Gator is different: it makes models build *and maintain* a compact map of your codebase as they work, so architectural understanding survives across sessions instead of being rediscovered each time.
