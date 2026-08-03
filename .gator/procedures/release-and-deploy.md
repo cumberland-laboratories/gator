@@ -1,191 +1,201 @@
 # Release and Deploy
 
-How to release changes from gator-command to the Gator public repo and PyPI.
+The end-to-end procedure for cutting a Gator release from the monorepo. **Read every step of the "Checklist" section before starting a release** — several of the steps guard against real failures we've hit.
 
-## When to Use
+## When to use
 
-Any time changes in gator-command are ready to ship — template updates, script changes, doc fixes, dashboard improvements. This is a frequent operation.
+Any time shipping code changes that should reach `pipx install gator-command` users. Not for internal-only work (roadmap edits, inbox captures, charter refactors that don't change shipped code) — those can just land on `dev` and fast-forward `main` without a version bump or release.
 
-## Automated CI (Workflow A — shipped 3b-1)
+## Model overview
 
-`.github/workflows/source-ci.yml` runs on every push to `main` and every PR into `main`. Two lanes:
+Three GitHub Actions workflows, one PyPI upload path, one GitHub Release. Manual dispatch on the promote step (human approves before production PyPI accepts the wheel).
 
-- **fast**: matrix Ubuntu + Windows × Python 3.9 + 3.13 — runs `tests/` and `contracts/compatibility/` (excludes the slow packaging suite).
-- **packaging**: single job Ubuntu × Python 3.13 — runs `tests/test_packaging.py`, which builds a wheel and installs it into a fresh venv for the installed-CLI smoke tests.
-
-**Before proceeding with a release**, confirm CI is green on `main`. Both lanes must pass — a `fast`-only green misses the packaging surface; a `packaging`-only green misses cross-platform coverage. See [`release-pipeline.md`](../charters/release-pipeline.md) for the full charter.
-
-Workflow A is read-only: it does NOT publish, does NOT push, does NOT deploy. Publication belongs to Workflows B (release candidate — shipped 3b-3, wired but disabled) and C (PyPI promote — shipped 3b-2, wired but disabled). Until both are enabled, the manual steps below remain the current release path.
-
-## Automated release candidate (Workflow B — shipped 3b-3, wired but disabled)
-
-`.github/workflows/release-candidate.yml` runs on every `vX.Y.Z-rcN` tag push. It builds the wheel once, publishes to TestPyPI, runs installed-CLI smoke tests from TestPyPI on Ubuntu + Windows, and (when the STUB is filled in) opens a deploy PR against the public gator repo. The wheel it uploads becomes the immutable candidate artifact Workflow C promotes to production PyPI — no rebuild in the chain.
-
-**One-time setup**:
-
-1. **TestPyPI Trusted Publisher**. Register at https://test.pypi.org/manage/account/publishing/ — Owner `cumberland-laboratories`, workflow `release-candidate.yml`, environment `pypi-test`. This is a distinct registration from the production PyPI trusted publisher.
-2. **`pypi-test` GitHub environment**. Create in repo Settings → Environments with **no** required reviewers — TestPyPI is validation, approval friction defeats the automated RC cadence.
-3. **Kill switch**. Same `RELEASE_PIPELINE_ENABLED = true` repo variable that gates Workflow C. Setting it once enables build + TestPyPI + smoke test jobs.
-4. **Deploy sub-gate — deliberately left OFF**. `DEPLOY_PUBLIC_ENABLED` repo variable is separate from the pipeline kill switch. Leave it absent (or explicitly `false`) until cutover work replaces the deploy STUB with real behavior. With the sub-gate off, the `deploy-to-public-gator` job SKIPS cleanly (not FAILS), and the enabled RC run passes green on build + TestPyPI + smoke — giving the operator a valid run ID for Workflow C promotion.
-
-**Trigger a release candidate**:
-
-```bash
-# 1. Bump version in pyproject.toml, commit
-# 2. Tag with the RC pattern
-git tag v2.4.5-rc1
-git push origin v2.4.5-rc1
+```
+  dev commits ─push─▶ source-ci.yml (test matrix + wheel-install smoke)
+      │
+      │ ff-merge when source-ci green
+      ▼
+  main commits ─push─▶ source-ci.yml
+      │
+      │ tag vX.Y.Z-rcN
+      ▼
+  release-candidate.yml ─▶ TestPyPI publish (OIDC) ─▶ Ubuntu + Windows smoke
+      │
+      │ human dispatches promote-to-pypi.yml with (rc_version, run_id, "publish")
+      ▼
+  approval gate at pypi-production environment
+      │
+      │ human approves
+      ▼
+  promote-to-pypi.yml ─▶ production PyPI publish (OIDC, same wheel) ─▶ fresh-env smoke
+      │
+      │ gh release create
+      ▼
+  GitHub Release published
 ```
 
-Workflow B fires automatically on the tag push. Watch it in Actions. When TestPyPI publish + smoke test pass, note the run ID — that's the `workflow_b_run_id` input Workflow C needs to promote.
+Wheel is built **exactly once** — the artifact from `release-candidate.yml` is what `promote-to-pypi.yml` re-uploads to production PyPI. No rebuild in the chain.
 
-**Hard promises**:
-- Wheel built exactly once, in `build-candidate`. No downstream job rebuilds.
-- Artifact name is a contract: `candidate-wheel-${{ github.ref_name }}`. Workflow C's `fetch-candidate` depends on the exact string.
-- TestPyPI OIDC is separate from production PyPI OIDC — two independent trusted-publisher registrations.
-- `pypi-test` never gains a required reviewer — that would break automated RC cadence.
+## Prerequisites (one-time setup — already done for this repo)
 
-Until the deploy STUB is filled in, Workflow B still produces a validated TestPyPI-installable candidate — that alone is meaningful pre-production evidence.
+- **PyPI Trusted Publisher** registered at https://pypi.org/manage/account/publishing/. Values: Owner `cumberland-laboratories`, Repository `gator`, Workflow name `promote-to-pypi.yml`, Environment name `pypi-production`.
+- **TestPyPI Trusted Publisher** registered at https://test.pypi.org/manage/account/publishing/. Values: Owner `cumberland-laboratories`, Repository `gator`, Workflow name `release-candidate.yml`, Environment name `pypi-test`. Separate account, separate registration.
+- **GitHub environments**:
+  - `pypi-test` — no protection rules (RC cadence must be automated)
+  - `pypi-production` — required reviewer = the human doing releases (approval gate)
+- **Repo variables**: `RELEASE_PIPELINE_ENABLED = true` (whole-pipeline kill switch). `DEPLOY_PUBLIC_ENABLED` intentionally unset — that gated a legacy deploy-to-separate-public-repo step that the monorepo cutover retired.
+- **GitHub Actions permissions**: "Allow actions created by GitHub" + "Allow actions by Marketplace verified creators" (or "Allow all"). Verified creators is required for `pypa/gh-action-pypi-publish`.
+- **Local**: `gh` CLI authenticated to `cumberland-laboratories` account. Python 3.9+ with `build` and `twine` (only needed for local test builds; release path uses CI).
 
-## Automated PyPI publish (Workflow C — shipped 3b-2, wired but disabled)
+## Branch discipline
 
-`.github/workflows/promote-to-pypi.yml` implements approval-gated OIDC publish to production PyPI. Present but inert until you flip three switches:
+Per `CONTRIBUTING.md` `## Branching`:
 
-**One-time setup** (do these once, then never again):
-
-1. **PyPI Trusted Publisher**. Configure at https://docs.pypi.org/trusted-publishers/ — Owner `cumberland-laboratories`, workflow `promote-to-pypi.yml`, environment `pypi-production`. Removes the need for a static PyPI token secret in the repo.
-2. **Protected environment**. In repo Settings → Environments, create `pypi-production` with at least one required reviewer. This is the human-in-the-loop approval gate.
-3. **Kill switch**. In repo Settings → Variables, set `RELEASE_PIPELINE_ENABLED = true`. Absent or any other value = every job skips.
-
-**When ready to promote a candidate** (assumes Workflow B has produced the artifact — B shipped in 3b-3, wired but disabled by the same `RELEASE_PIPELINE_ENABLED` flag):
-
-1. Note the run ID of the passing Workflow B run for your RC tag.
-2. Actions tab → Promote to PyPI → Run workflow.
-3. Fill inputs:
-   - `rc_version` — exactly the tag Workflow B built (e.g. `v2.4.5-rc1`).
-   - `workflow_b_run_id` — the run ID from step 1.
-   - `confirm` — type exactly `publish`.
-4. Approve the deployment when the `publish` job requests it.
-5. Post-verify runs automatically — check its output for the smoke-test result.
-
-**Hard promises**:
-- Workflow C never rebuilds the wheel. It publishes the byte-identical artifact from Workflow B.
-- No static PyPI token exists in the repo. If setup breaks, the fix is to reconfigure the trusted publisher, not to add a token.
-- Both the repo variable AND the environment approval must pass. Removing either is a governance violation.
-
-Workflow C's `fetch-candidate` job downloads the artifact via `gh run download` against the `workflow_b_run_id` you pass in — the B→C handoff works end-to-end today. There is no manual-upload fallback path in the workflow — if a promote is needed against a wheel Workflow B did not produce (e.g. a hotfix built manually), implement the fallback as its own change (add a `wheel_url` input, download it, verify checksum) rather than bolting in an unaudited artifact.
-
-Until the pipeline is enabled operator-side, the manual procedure below remains the current release path.
-
-## Prerequisites
-
-- Working tree is clean or all intended changes are committed
-- Both repos are locally available:
-  - `code2/gator-command` (this repo)
-  - `code2/gator` (Gator public — `cumberland-laboratories/gator`)
-- `~/.pypirc` configured with PyPI API token (one-time setup):
-  ```ini
-  [pypi]
-  username = __token__
-  password = pypi-<your-token>
+- Work on `dev`. Push freely.
+- **Every commit on `main` MUST have a green `source-ci` run.** `main` is the release-anchor branch.
+- When `dev` is green, fast-forward `main` to `dev`:
+  ```bash
+  git checkout main
+  git merge --ff-only dev
+  git push origin main
   ```
-- `build` and `twine` installed: `pip install build twine`
-- `gh` CLI installed and authenticated (`gh auth status` shows the `cumberland-laboratories` account)
+  If the fast-forward fails, someone else moved `main` — rebase `dev` on top first (`git checkout dev && git rebase main`), retry the merge.
+- **Release tags are cut from `main` only.** Never tag a commit that hasn't gone through the ff-merge.
 
-## Procedure
+## The 2.5.2 partial-commit incident (hard-won lesson)
 
-### Step 1: Update CHANGELOG.md
+**Every `git add` of more than 2-3 files MUST be followed by `git diff --cached --name-only` before `git commit`.** Eyeball the list. Compare to what you intended to stage.
 
-Add a new version section to `CHANGELOG.md` in this repo with a summary of what changed. This file is copied to the public repo during deploy.
+Why: v2.5.2 shipped from a commit that silently dropped ~10 intended files during a Windows Git Bash trailing-backslash `git add \` continuation. Only ~3 of the ~13 intended files staged. The commit succeeded, CI passed (didn't catch the missing content), a release cut, PyPI shipped a wheel that didn't match its CHANGELOG. Discovered on the next session by diffing working tree against HEAD.
 
-### Step 2: Bump version
+The fix: pause between `git add` and `git commit`. Look at what's staged. Confirm the list. **Only then commit.**
 
-Update `pyproject.toml` with the new version number. The deploy script reads this to:
-- Stamp the public README banner
-- Auto-write the `VERSION` file in the public repo
+## Checklist (do these in order for every release)
 
-### Step 3: Commit and tag
+### 1. Prep on `dev`
 
+- [ ] All intended code changes committed to `dev`
+- [ ] All tests added/updated for new code
+- [ ] All charter updates staged for touched code files (INDEX.md rows tell you which charters are required for which paths)
+- [ ] `source-ci.yml` green on `dev` (check https://github.com/cumberland-laboratories/gator/actions?query=branch%3Adev)
+- [ ] Local test run: `python -m pytest tests/ contracts/compatibility/ -q` passes
+
+### 2. Version bump commit
+
+- [ ] `pyproject.toml` `version = "X.Y.Z"` (semantic: patch for bug fixes, minor for features, major for breaking changes)
+- [ ] `VERSION` file (root) matches (must stay byte-consistent — enforced by `scripts-core-library.md` charter tripwire)
+- [ ] `CHANGELOG.md` — add new `## [X.Y.Z] — YYYY-MM-DD` section above the previous entry. Categorize changes under `### Added / Changed / Fixed / Deprecated / Removed / Security`. Reference test file names and charter tripwires so future readers can find the pins.
+- [ ] `.gator/commit_draft.md` populated with `change-type: release` (from the schema-legal enum: `feature | fix | refactor | docs | test | release | maintenance | review | governance | ""`)
+- [ ] Charter mention: touching `VERSION` triggers the pre-commit `charter-alongside-code` rule. The `scripts-core-library.md` tripwire on `get_version()` already documents the sync obligation — a small note-update there (e.g. "current: X.Y.Z") satisfies the rule.
+- [ ] `git add pyproject.toml VERSION CHANGELOG.md .gator/charters/scripts-core-library.md`
+- [ ] **`git diff --cached --name-only` — verify staging matches intent**
+- [ ] `git commit -m "Bump to X.Y.Z"`
+- [ ] `git push origin dev`
+- [ ] Wait for `source-ci` green on `dev`
+
+### 3. Fast-forward to main
+
+- [ ] `git checkout main`
+- [ ] `git merge --ff-only dev`
+- [ ] `git push origin main`
+- [ ] Wait for `source-ci` green on `main` (usually green immediately since dev was green)
+
+### 4. Tag RC (fires the release-candidate pipeline)
+
+- [ ] `git tag -a vX.Y.Z-rc1 -m "Release candidate 1 for vX.Y.Z"`
+- [ ] `git push origin vX.Y.Z-rc1`
+- [ ] `release-candidate.yml` auto-fires. Watch: `gh run watch $(gh run list --repo cumberland-laboratories/gator --workflow release-candidate.yml --limit 1 --json databaseId --jq '.[0].databaseId') --repo cumberland-laboratories/gator --exit-status`
+- [ ] Expected jobs (all green): `RC tag validation + kill switch`, `build wheel once`, `publish to TestPyPI (OIDC trusted publisher)`, `fresh-env install from TestPyPI + CLI smoke (ubuntu-latest)`, `fresh-env install from TestPyPI + CLI smoke (windows-latest)`. `deploy candidate as PR into public gator repo` should show as `skipped` (the deploy step is a retired-flow stub, gated by absent `DEPLOY_PUBLIC_ENABLED`).
+- [ ] **Save the run ID** — you'll need it as `workflow_b_run_id` for the promote step.
+
+**Handling TestPyPI filename-permanence** (see #4 in `.gator/issues.md`): if the RC fails and you need to iterate, you must **bump the base version** for the next RC (e.g. `X.Y.Z-rc1` fails → next RC is `X.Y.(Z+1)-rc1`, NOT `X.Y.Z-rc2`). TestPyPI never lets you re-upload a filename, and `release-candidate.yml` doesn't inject the RC suffix into the wheel version — both `-rc1` and `-rc2` would build `gator_command-X.Y.Z-py3-none-any.whl` and the second upload gets `400 File already exists`. Version churn cost per failed RC: one patch version.
+
+### 5. Dispatch promote-to-pypi
+
+Two paths — either works. Both require your approval at the environment gate.
+
+**Via `gh` CLI**:
 ```bash
-git add pyproject.toml CHANGELOG.md
-git commit -m "v1.x.y: description"
-```
-
-### Step 4: Deploy to Gator public
-
-From the gator-command repo root:
-
-```bash
-python src/gator_command/scripts/gator-deploy.py ../gator
-```
-
-This builds `gator-engine/` (scripts, templates, tests, docs), stamps README and VERSION from `pyproject.toml`, and copies curated root files (CHANGELOG, LICENSE, etc.).
-
-### Step 5: Commit and push Gator public
-
-```bash
-cd ../gator
-git add -A
-git commit -m "Deploy v1.x.y: description"
-git push origin main
-```
-
-### Step 6: Build and publish to PyPI
-
-From the gator-command repo root:
-
-```bash
-python -m build --wheel
-python -m twine upload dist/gator_command-1.x.y-py3-none-any.whl
-```
-
-Twine reads the token from `~/.pypirc` automatically — no interactive prompt.
-
-### Step 7: Push source repo
-
-```bash
-git push origin main
-```
-
-Public repo is already pushed in Step 5 — this pushes the source-repo commits (version bump, CHANGELOG entry).
-
-### Step 8: Tag public repo and publish GitHub Release
-
-Tag the public repo at HEAD (the deployed state):
-
-```bash
-cd ../gator
-git tag v1.x.y
-git push origin v1.x.y
-```
-
-Extract the CHANGELOG section for this version and publish the Release:
-
-```bash
-# Extract just this version's CHANGELOG entry
-awk '/^## \[1\.x\.y\]/{flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > /tmp/release-notes.md
-
-# Publish
-gh release create v1.x.y \
+gh workflow run promote-to-pypi.yml \
   --repo cumberland-laboratories/gator \
-  --title "v1.x.y — <one-line summary>" \
-  --notes-file /tmp/release-notes.md
+  --ref main \
+  -f rc_version=vX.Y.Z-rc1 \
+  -f workflow_b_run_id=<RUN_ID_FROM_STEP_4> \
+  -f confirm=publish
 ```
 
-Longer-form Release notes (with narrative sections, headline, migration notes) can live in `.gator/vault/YYYY-MM-DD-github-release-vX.Y.Z.md` in the source repo — pass that path to `--notes-file` instead of the auto-extracted CHANGELOG section. The vault draft never ships; only what `gh release create` reads gets published.
+**Via GitHub UI**:
+1. https://github.com/cumberland-laboratories/gator/actions/workflows/promote-to-pypi.yml
+2. Run workflow → main
+3. Inputs: `rc_version=vX.Y.Z-rc1`, `workflow_b_run_id=<run ID>`, `confirm=publish`
+4. Run workflow
 
-**Discussions integration** (optional): add `--discussion-category Announcements` to create a linked Discussion in the Announcements category. Lets people react/comment without a second post to maintain.
+- [ ] Watch: `gh run watch $(gh run list --repo cumberland-laboratories/gator --workflow promote-to-pypi.yml --limit 1 --json databaseId --jq '.[0].databaseId') --repo cumberland-laboratories/gator`
+- [ ] Workflow queues the `publish to production PyPI` job → hits `pypi-production` env approval gate
+- [ ] **Approve the gate** — GitHub notifies you (email + web). Approve.
+- [ ] Publish job runs → wheel goes to PyPI via OIDC (no static token)
+- [ ] Post-publish smoke job runs
 
-## Notes
+### 6. Handle post-publish smoke failure (expected the first try)
 
-- **Version is early**: bump `pyproject.toml` before deploying — the deploy script reads it for the README stamp and VERSION file. PyPI rejects duplicate versions.
-- **CHANGELOG is manual**: write it before deploying. The deploy copies it to the public repo.
-- **VERSION is auto-stamped**: the deploy writes VERSION from `get_source_version()` (reads pyproject.toml). The static `VERSION` file in the source repo is a fallback only.
-- **Dry run**: add `--dry-run` to the deploy command to preview without writing.
-- **Public repo structure**: `gator-engine/` + root files only. No `.gator/` or `gator-command/` in the public repo.
-- **Public docs are curated**: only docs listed in `PUBLIC_DOCS` in `deploy_builders.py` ship to the public repo.
+PyPI CDN needs ~30–60 seconds after upload for the simple index to reflect the new version. The post-publish smoke job runs immediately after upload — it usually fails on the first attempt with:
+
+```
+ERROR: Could not find a version that satisfies the requirement gator-command==X.Y.Z (from versions: ..., X.Y.(Z-1))
+```
+
+Recovery: **wait for propagation, then rerun the failed job**:
+```bash
+# Verify propagation
+python -c "import urllib.request, json; d = json.loads(urllib.request.urlopen('https://pypi.org/pypi/gator-command/json').read()); print('Latest:', d['info']['version'])"
+# When it shows X.Y.Z, rerun:
+gh run rerun <PROMOTE_RUN_ID> --failed --repo cumberland-laboratories/gator
+```
+
+(Tracked as inbox item to auto-handle in the workflow.)
+
+- [ ] Second smoke run passes → promote workflow fully green
+
+### 7. Tag final version + GitHub Release
+
+- [ ] `git tag -a vX.Y.Z -m "vX.Y.Z — one-line summary"` (at the same commit the RC pointed at)
+- [ ] `git push origin vX.Y.Z`
+- [ ] Draft release notes as `.tmp/vX.Y.Z-release-notes.md` (gitignored). Include user-facing framing, migration notes, `pipx install` line, link to CHANGELOG section.
+- [ ] `gh release create vX.Y.Z --repo cumberland-laboratories/gator --title "vX.Y.Z — <summary>" --notes-file .tmp/vX.Y.Z-release-notes.md --latest`
+- [ ] Confirm at https://github.com/cumberland-laboratories/gator/releases/latest
+
+### 8. Post-release verification
+
+- [ ] `pipx upgrade gator-command` on a machine with the previous version — confirm it goes to X.Y.Z
+- [ ] `gator --version` reports X.Y.Z
+- [ ] `.gator/roadmap.md` updated with the new row in the Done table (this can be a small follow-on commit on `dev` — doesn't need to block the release)
+- [ ] `.gator/issues.md` — mark any issues this release resolved as `Resolved`
+
+## Recovery: wheel doesn't match CHANGELOG (like 2.5.2 → 2.5.3)
+
+If post-release you discover the shipped wheel is missing content the CHANGELOG claims (staging silent-drop, workflow bug, etc.):
+
+1. **Do not try to overwrite the version on PyPI** — PyPI's no-filename-reuse policy blocks it even after "yank." The bad version stays bad forever.
+2. **Bump patch version.** Ship the missing content in `X.Y.(Z+1)`.
+3. **Honest CHANGELOG entry** for the recovery release: name the missed prior release, describe what was missing, describe what this release adds. See the `[2.5.3]` entry as the reference example.
+4. **Yank the bad version** on PyPI (Settings → Releases → yank) so `pip install gator-command` skips it by default while remaining installable with an explicit `==X.Y.Z`.
+
+Cost is minor (one skipped version number). Credibility cost of releasing an overpromising wheel without a follow-up is higher.
+
+## Hard promises
+
+- **Wheel built exactly once** per release, in `release-candidate.yml::build-candidate`. `promote-to-pypi.yml` fetches that artifact by name and re-uploads it — no rebuild.
+- **No static PyPI tokens** anywhere in the repo. Both TestPyPI and PyPI use OIDC trusted publishing. If setup breaks, the fix is reconfigure trusted publisher, not add a token.
+- **`RELEASE_PIPELINE_ENABLED` AND environment approval both required.** Removing either is a governance violation.
+- **`main` is release-anchor.** Every release tag points at a commit whose `source-ci` was green.
+- **No manual `twine upload`** — the pipeline is the only publish path. The one-off local `python -m build` is fine for testing wheel shape but never for release.
 
 ## Connections
 
--> [`gator-deploy.py`](../../src/gator_command/scripts/gator-deploy.py) — the deploy script
--> [`deploy_builders.py`](../../src/gator_command/scripts/deploy_builders.py) — build sections + PUBLIC_DOCS list
+- `.gator/charters/release-pipeline.md` — full workflow charter (job graph, kill-switch semantics, artifact-name contract)
+- `.gator/procedures/gator-loop-protocol.md` — governance-loop reference; loops are unrelated to release cadence
+- `.gator/issues.md` #4 — RC-suffix injection missing in `release-candidate.yml` (drives the "bump base version per failed RC" workaround)
+- `.gator/issues.md` #5 — Node.js 20 deprecation warnings on `actions/*` v4/v5 (needs `actions/checkout@v5`, `actions/setup-python@v6`, etc. bump before GitHub's deadline)
+- `.gator/inbox.md` — "Promote workflow smoke test needs a PyPI-propagation wait" (the fix for step 6 above)
+- `CONTRIBUTING.md ## Branching` — the dev→main flow this procedure assumes
+- `CHANGELOG.md` — release history + the `[2.5.3]` recovery-release example

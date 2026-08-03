@@ -40,25 +40,13 @@ both a code file and a `.gator/charters/*.md` file, then asserts the
 
 ## #2. Dashboard renders empty `gator-command/` sidebar section in monorepo mode
 
-**Status**: Open
-**Discovered**: 2026-08-02 (during monorepo cutover, viewing the new monorepo in Dashboard)
-**Severity**: Minor (cosmetic — empty header renders, no functional impact)
+**Status**: Resolved (false alarm — not an actual bug)
+**Discovered**: 2026-08-02
+**Resolved**: 2026-08-02 (dashboard registry fix)
 
-The Dashboard's Repo file sidebar always renders three sections
-(`.gator/`, `gator-command/`, `source/`) regardless of whether each
-has content. In a monorepo (or any repo where `gator-command/` doesn't
-exist at the repo root), the `gator-command/` section shows as an
-empty collapsible header — visual noise that doesn't match reality.
+The "empty section" the Architect observed was because the Dashboard's `gator` registry entry pointed at `C:\Users\curator\code2\gator-test\gator` (an old test repo from 2026-06-19), not the actual monorepo at `C:\Users\curator\code2\gator`. The test repo does have `gator-command/` content that legitimately renders. When the registry was fixed to point at the real monorepo, no phantom section appears — the backend guard on `gc_dir.is_dir()` at `dashboard/gator-dashboard.py:405-419` correctly skips the scan, `gcFiles` is empty, and the frontend renders nothing.
 
-The Python backend at `dashboard/gator-dashboard.py:405-419` correctly
-guards on `gc_dir.is_dir()` and skips the scan, so `gcFiles` comes
-back empty. But the frontend at
-`dashboard/views/repo.js:377,390-392` unconditionally calls
-`buildTree(gcFiles, "gator-command")` and `renderSection("gator-command/",
-"section:gc", gcTree)` regardless of `gcFiles.length`.
-
-Fix (small): guard `renderSection("gator-command/", ...)` on
-`gcFiles.length > 0`. Two-line change in `repo.js:390-391`.
+No code change needed. Filed the fix suggestion for `dashboard/views/repo.js:390-391` (guard on `gcFiles.length > 0`) is a nice-to-have defensive tweak but not a bug in isolation.
 
 ---
 

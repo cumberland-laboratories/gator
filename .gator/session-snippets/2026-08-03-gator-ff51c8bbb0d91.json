@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.5.3 (real hook-hardening ship)",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release",
+    "hook-hardening",
+    "recovery-release"
+  ],
+  "commit": "ff51c8bbb0d91a2a9fea32a29ee2f7db6ff99090",
+  "short_commit": "ff51c8b",
+  "snippet_id": "snippet-ff51c8bbb0d91",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "657990fab012091ee45c28e85bd02bc840783678",
+  "started_at": "2026-08-03T00:51:04Z",
+  "ended_at": "2026-08-03T00:51:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-03-gator-657990fab0120.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump to 2.5.3. The intended-2.5.2 hook-hardening code actually",
+    "lands in the wheel this time (committed to `dev` as `657990f`,",
+    "fast-forwarded to `main`).",
+    "`pyproject.toml` `version = \"2.5.3\"`",
+    "`VERSION` `2.5.3`",
+    "`CHANGELOG.md` new `[2.5.3]` section with an honest note about the",
+    "2.5.2 miss + the full fix inventory + the mkdocs nav restructure +",
+    "the CONTRIBUTING.md branching addition."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
