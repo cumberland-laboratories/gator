@@ -242,10 +242,11 @@ Filesystem: stdout (W)
 
 ### main()
 File: `src/gator_command/scripts/gator-update.py`, `src/gator_command/templates/gator-starter/scripts/gator-update.py`
-Entry point: parses CLI args (`--dry-run`, `--json`, `--path`, `--source`, `--no-policy`), resolves template source, builds and optionally executes the update plan, syncs policy for policy-synced repos, installs git hooks, installs vendor SessionStart hook configs, and stamps version metadata. Both the package-level and template-deployed copies install vendor hooks — the template copy includes its own `merge_hooks_into_settings()`, `install_vendor_hooks()`, and `_extract_hook_commands()` implementations so governed repos can propagate new vendor hooks without depending on a pip install.
+Entry point: parses CLI args (`--dry-run`, `--json`, `--path`, `--source`, `--no-policy`, `--migrate-layout`), resolves template source, builds and optionally executes the update plan, syncs policy for policy-synced repos, installs git hooks, installs vendor SessionStart hook configs, and stamps version metadata. Both the package-level and template-deployed copies install vendor hooks — the template copy includes its own `merge_hooks_into_settings()`, `install_vendor_hooks()`, and `_extract_hook_commands()` implementations so governed repos can propagate new vendor hooks without depending on a pip install.
 Filesystem: delegates to plan/execute/hook/policy functions
 <- CLI invocation
--> `install_vendor_hooks()` (merge-safe vendor hook config propagation — separates Gator hooks from user hooks, rebuilds with template Gator hooks + preserved user hooks; never crashes on malformed user configs)
+-> `install_vendor_hooks()` (merge-safe vendor hook config propagation — separates Gator hooks from user hooks, rebuilds with template Gator hooks + preserved user hooks; never crashes on malformed user configs), `migrate_layout()` (when `--migrate-layout` is set)
+! **`--migrate-layout` refreshes vendor hooks after successful convergence.** When migration lands the repo at v2, `main()` calls `install_vendor_hooks(templates_dir, repo_root)` before exit — same call the normal update path makes. This closes the v1→v2 gap where session-hook command strings in `.claude/settings.json` / `.codex/hooks.json` / `.gemini/settings.json` would otherwise stay pointed at `.gator/scripts/...` (now gone) until a follow-up `gator update`. Vendor-hook refresh is wrapped in try/except so failure prints a warning to stderr but never masks or overrides the migration's own exit code (which is 0 iff `final_layout == "v2"`).
 
 ### load_governance_source(gator_dir)
 File: `src/gator_command/scripts/gator-policy-status.py`

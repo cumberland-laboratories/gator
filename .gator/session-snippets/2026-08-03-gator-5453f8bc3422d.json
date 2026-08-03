@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "migrate_layout Step 5: handle both-directories-exist (Issue #6)",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-migration",
+    "silent-failure-recovery",
+    "fleet-hygiene"
+  ],
+  "commit": "5453f8bc3422dc3b564802eb2d5224cdfc9a4d4f",
+  "short_commit": "5453f8b",
+  "snippet_id": "snippet-5453f8bc3422d",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "a53285155feb37b68532346e80a33209b4915805",
+  "started_at": "2026-08-03T11:07:02Z",
+  "ended_at": "2026-08-03T11:07:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-03-gator-a53285155feb3.json",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "tests/test_layout.py"
+  ],
+  "notes": [
+    "**Fixed `migrate_layout()` Step 5 silent non-convergence on directory conflicts.** Sibling to the v2.5.3 file-conflict fix. When a shipped directory (`scripts/`, `reference-notes/`) exists at BOTH `.gator/<dir>/` AND `.gator/.includes/<dir>/`, Step 5's merge loop branched only on `f.is_dir() and not dest_f.exists()` — no `else` for the both-exist case. So if `.gator/scripts/__pycache__/` existed at src AND dest, both survived; `src_dir.rmdir()` failed silently (except OSError: pass), layout re-detected as `mixed`, `--migrate-layout` reported \"Result: mixed (migration incomplete — check conflicts)\" and never converged. Manual cleanup (`rm -rf .gator/scripts/__pycache__ .gator/scripts/hooks`) was required per repo. Issue #6, discovered on `code/donoriq`.",
+    "**Fix**: added explicit `elif f.is_dir()` branch handling the both-exist case. Known-safe legacy names (`__pycache__`, `hooks`) get `shutil.rmtree`'d unconditionally — bytecode is regenerated on next Python invocation; `hooks/` is pre-monorepo git-hook install residue that `install_git_hooks()` no longer writes to. Everything else routes through the new `_merge_dir_files_only()` helper: recursive files-only merge, dest wins on collision (matches Step 4's SHIPPED_ROOT_FILES rule), any unresolvable residue (non-file/non-dir entries; subdirs still holding content) logged into `report[\"conflicts\"]`.",
+    "**Sync-obligation**: applied identically to `src/gator_command/scripts/gator-update.py` (wheel) and `src/gator_command/templates/gator-starter/scripts/gator-update.py` (fleet mirror). Cross-file diff (excluding the pre-existing entry-point inlining divergence) confirmed empty — verified with `git diff --no-index --stat`.",
+    "**Regression pins**: `tests/test_layout.py::TestMigration::test_shipped_dir_pycache_conflict_removed` (the known-safe legacy path — pycache and hooks both present at src, both removed, canonical `.includes/` bytecode untouched) and `test_shipped_dir_unknown_dir_conflict_merges` (unknown-name subdir goes through `_merge_dir_files_only`; shared file dest-wins, root-only file moved, src dir gone). All 8 `TestMigration` cases pass.",
+    "**Charter updates**: `scripts-repo-lifecycle.md` — added `_merge_dir_files_only` charter entry with tripwires (unbounded recursion caller-guarded by SHIPPED_DIRECTORIES; `mkdir(exist_ok=True)` safe by call site invariant); extended `migrate_layout` tripwire with the Issue #6 explanation and regression-pin references.",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step A1 of B1→B2→A1→A4→A2→B3→A3). Unblocks Dashboard Update on fleet repos that carry `.gator/scripts/__pycache__/` or `.gator/scripts/hooks/` residue — every fleet repo that has run a Python script under its own `.gator/scripts/`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

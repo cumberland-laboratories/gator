@@ -1371,6 +1371,22 @@ def main():
     # Migration mode — separate code path
     if args.migrate_layout:
         report = migrate_layout(repo_root, gator_dir, templates_dir)
+        # After a v1→v2 convergence the shipped script paths just moved from
+        # `.gator/scripts/` to `.gator/.includes/scripts/`. Vendor SessionStart
+        # hooks (Claude / Codex / Gemini) still point at the old paths until
+        # `install_vendor_hooks` re-merges the current templates. Do that
+        # inline so a caller who only runs `--migrate-layout` (and never a
+        # follow-up `gator update`) doesn't end up with dead hook targets.
+        # Wrap in try/except: a vendor-hook refresh failure must never mask
+        # or override the migration's own exit code.
+        if report.get("final_layout") == "v2":
+            try:
+                install_vendor_hooks(templates_dir, repo_root)
+            except Exception as e:
+                print(
+                    f"  Warning: vendor hook refresh failed: {e}",
+                    file=sys.stderr,
+                )
         sys.exit(0 if report.get("final_layout") == "v2" else 1)
 
     # Build plan (refuses mixed/invalid layouts with a clean message)
