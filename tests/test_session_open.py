@@ -80,17 +80,25 @@ class TestMain:
         assert main() == 0
 
     def test_calls_ensure_git_hooks(self, tmp_path, monkeypatch):
-        """Calls ensure_git_hooks() with correct args."""
+        """Calls ensure_git_hooks() with (repo_root, GatorPaths) — the layout-
+        resolver contract established by B1 (2026-08-03). Previously main()
+        passed the raw `.gator/` Path here, which crashed with AttributeError
+        on every v2 repo (ensure_git_hooks reads `paths.scripts_dir`)."""
+        # v2 layout with the minimum content _has_required_includes_content
+        # needs (scripts/ dir + constitution.md) PLUS the layout-version.json
+        # v2 marker so resolve_gator_layout returns 'v2' rather than 'mixed'.
         gator_dir = tmp_path / ".gator"
-        scripts_dir = gator_dir / "scripts"
-        scripts_dir.mkdir(parents=True)
+        includes = gator_dir / ".includes"
+        (includes / "scripts").mkdir(parents=True)
+        (includes / "constitution.md").write_text("# Constitution\n")
+        (gator_dir / "layout-version.json").write_text('{"layout": "v2"}\n')
+        (tmp_path / ".git").mkdir()
         monkeypatch.chdir(tmp_path)
 
         mock_init = MagicMock()
         mock_init.ensure_git_hooks.return_value = {
             "status": "ok", "detail": "ok", "adds": 0, "updates": 0,
         }
-
         mock_core = MagicMock()
         mock_core.import_sibling.return_value = mock_init
 
@@ -99,7 +107,17 @@ class TestMain:
                 assert main() == 0
 
         mock_core.import_sibling.assert_called_once_with("gator-init")
-        mock_init.ensure_git_hooks.assert_called_once_with(tmp_path, gator_dir)
+        assert mock_init.ensure_git_hooks.call_count == 1
+        call_args = mock_init.ensure_git_hooks.call_args
+        assert call_args.args[0] == tmp_path, "repo_root arg mismatch"
+        # Second arg is a GatorPaths dataclass — verify by attribute duck-type
+        # rather than importing the class (avoids sys.path shenanigans in
+        # the test fixture). If B1's contract regresses to a raw Path, the
+        # `.scripts_dir` attribute access below will raise AttributeError.
+        paths_arg = call_args.args[1]
+        assert paths_arg.gator_root == gator_dir
+        assert paths_arg.layout == "v2"
+        assert paths_arg.scripts_dir == includes / "scripts"
 
     def test_never_writes_stdout(self, tmp_path, monkeypatch, capsys):
         """Never writes to stdout."""

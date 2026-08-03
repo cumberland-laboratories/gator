@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "A3: rebind product-source + fleet propagation; close Issue #6; inbox housekeeping",
+  "change_type": "maintenance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "post-cutover-cleanup",
+    "fleet-propagation",
+    "housekeeping"
+  ],
+  "commit": "c4823f6fa51db15e46617349115f2afd2161ca30",
+  "short_commit": "c4823f6",
+  "snippet_id": "snippet-c4823f6fa51db",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "e47a53e4bf094d10e4135006e3717df2ee28e576",
+  "started_at": "2026-08-03T11:28:10Z",
+  "ended_at": "2026-08-03T11:28:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".claude/settings.json",
+    ".codex/hooks.json",
+    ".gator/.includes/scripts/gator-session-open.py",
+    ".gator/.includes/scripts/gator-update.py",
+    ".gator/.includes/scripts/gator_diagnostics.py",
+    ".gator/inbox.md",
+    ".gator/issues.md",
+    ".gator/session-snippets/2026-08-03-gator-e47a53e4bf094.json",
+    ".gemini/settings.json"
+  ],
+  "notes": [
+    "**Rebound `.gator/product-source.json` to the source tree.** Prior value pointed at `C:\\Users\\curator\\code2\\gator-command\\src\\gator_command` — the retired pre-monorepo source repo — with `gator-update.py`'s self-heal branch masking the drift on every run. New value: `C:\\Users\\curator\\code2\\gator\\src\\gator_command`. Executed via `gator update --source <that-path>` so the normalization went through the `--source` code path (`gator-update.py:1269-1289`), preserving the original `installed:` date and stamping today's `updated:`. product-source.json is gitignored, so this is machine-local state — not part of the commit — but the update it triggered IS. Architect decision (this session) to target the source tree instead of pipx v2.5.2 avoided a live regression trap: rebinding to pipx would have driven `merge_hooks_into_settings` to overwrite this repo's B1-B3-corrected vendor hooks with v2.5.2's still-v1 templates. Once v2.5.3 ships with B1-B3 fixes, rebinding to pipx becomes the intended steady state.",
+    "**End-to-end propagation locked in on this repo.** The update run refreshed `.gator/.includes/scripts/gator-session-open.py` (B1 layout resolver + return-value capture), `.gator/.includes/scripts/gator-update.py` (A1 dir-conflict fix + A2 residue enumerator + A4 vendor-hook-post-migrate), and added new `.gator/.includes/scripts/gator_diagnostics.py` (B3). Vendor-hook merges rewrote `.codex/hooks.json` and `.gemini/settings.json` from v1 paths to v2 paths (Claude was already at v2 from turn-2 manual fix; B2's template propagation validated automatically). Session-open smoke test post-update: exit 0, no stderr, no stdout — behavioral contract intact.",
+    "**Closed Issue #6** in `.gator/issues.md`. Resolution note cites commit `5453f8b` (A1) and adds crosslinks to the two regression pins. A2's `_enumerate_mixed_residue` mentioned as follow-on visibility improvement.",
+    "**Housekeeping in `.gator/inbox.md`**: struck four items now shipped — vendor SessionStart hook path drift (B2+A4), `gator-session-open.py` silent no-op (B1+B3), product-source.json rebind (A3, with the pipx-lag caveat noted), and the \"migrate_layout should print WHICH conflicts\" ask (A2). Each strikethrough cites the commit(s) that resolved it so the change history stays traceable from the inbox.",
+    "**Not touching**: the remaining inbox items (enterprise/ tree relocation, docs rewrite for the vaulted install/upgrade/getting-started docs, promote workflow PyPI-propagation wait, legacy `gator-command` local repo removal, `scripts-command-post.md` restoration decision) — all out of scope of this plan.",
+    "**Fix-set summary** (7 commits, one plan): `83a4f18` B1 → `a532851` B2 → `5453f8b` A1 → `2e80730` A4 → `dc63071` A2 → `e47a53e` B3 → this commit A3. Plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`. Every step of the sequenced plan landed as an independent commit with charter update; the fix set is ready for v2.5.3 release."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -445,12 +445,17 @@ class TestTemplateHookEntries:
         "gemini-settings.json",
     ])
     def test_template_has_session_open_and_session_start(self, filename):
+        """Vendor-hook templates ship v2 layout paths (`.gator/.includes/scripts/…`).
+        Reverting to v1 (`.gator/scripts/…`) silently breaks every v2 fleet repo
+        because merge_hooks_into_settings compares template-vs-existing and only
+        rewrites on mismatch. See scripts-installer.md::install_vendor_hooks
+        tripwire, and 2026-08-03 fix commit `a532851`."""
         template = self.TEMPLATE_DIR / filename
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        assert "python .gator/scripts/gator-session-open.py" in commands
-        assert "python .gator/scripts/gator-session-start.py" in commands
+        assert "python .gator/.includes/scripts/gator-session-open.py" in commands
+        assert "python .gator/.includes/scripts/gator-session-start.py" in commands
         assert len(hooks_list) == 2
 
     @pytest.mark.parametrize("filename", [
@@ -464,8 +469,12 @@ class TestTemplateHookEntries:
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        open_idx = commands.index("python .gator/scripts/gator-session-open.py")
-        start_idx = commands.index("python .gator/scripts/gator-session-start.py")
+        open_idx = commands.index(
+            "python .gator/.includes/scripts/gator-session-open.py"
+        )
+        start_idx = commands.index(
+            "python .gator/.includes/scripts/gator-session-start.py"
+        )
         assert open_idx < start_idx
 
     def test_marker_detection_works_with_both_hooks(self):
