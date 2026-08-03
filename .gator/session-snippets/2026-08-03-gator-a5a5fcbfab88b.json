@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Post-2.5.2 knowledge sweep: roadmap + issues + inbox",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "knowledge-layer",
+    "post-release-followup",
+    "issues-tracking"
+  ],
+  "commit": "a5a5fcbfab88b0fb2225918cccdbaf873d432800",
+  "short_commit": "a5a5fcb",
+  "snippet_id": "snippet-a5a5fcbfab88b",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 7,
+  "previous_commit_in_session": "6ea0367550db2e6dde72bffd2128f4eafdc2cfef",
+  "started_at": "2026-08-03T00:17:15Z",
+  "ended_at": "2026-08-03T00:17:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/issues.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-03-gator-6ea0367550db2.json"
+  ],
+  "notes": [
+    "Knowledge-layer sweep after v2.5.2 shipped. No shipping-code change,",
+    "no release warranted — just captures what we learned during the",
+    "cutover + v2.5.1 + v2.5.2 sessions so nothing is lost.",
+    "Added two rows to the Done table:",
+    "**Monorepo cutover** (v2.5.1) — first release from the new public",
+    "monorepo, Apache 2.0, `monorepo-bootstrap.py` + `monorepo-validate.py`",
+    "as reproducible cutover tooling, full RC → prod OIDC pipeline",
+    "exercised end-to-end, 2.5.0 skipped due to TestPyPI filename-permanence."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

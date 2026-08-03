@@ -42,6 +42,26 @@ This will change as the project stabilizes. When it does, PRs will need:
 - Passing CI (Workflow A source CI runs pytest across supported OS × Python matrix)
 - Governance discipline: charter updates alongside code changes (Gator's pre-commit hook enforces this locally; PRs to a governed branch will inherit the same expectation)
 
+## Branching
+
+- **`main`** is the release-anchor branch. Every commit on `main` MUST have a green `source-ci` run. Release tags (`vX.Y.Z-rcN`, `vX.Y.Z`) are cut from `main` only.
+- **`dev`** is the working branch. Feature work, refactors, and bug fixes happen here. Push freely; `source-ci` runs on every push to `dev` too.
+- When `dev` is green, fast-forward `main` to `dev`:
+
+  ```bash
+  git checkout main
+  git merge --ff-only dev
+  git push origin main
+  ```
+
+  If the fast-forward fails, someone else moved `main` — rebase `dev` onto `main` first (`git checkout dev && git rebase main`), then retry the merge.
+
+- **Trivial edits** (typo fixes, single-line docs tweaks) may commit directly to `main` — pragmatism over ceremony. Anything non-trivial goes through `dev`.
+- **Feature branches** off `dev` are fine when useful (`feat/xyz`), especially for larger changes or when you want to keep several small stacks in flight. Merge back to `dev` (either fast-forward or `--no-ff` for a merge commit), then dev → main as above.
+- The `--migrate-layout` and other one-shot operations that mutate `.gator/` should always be run on `dev`, not `main`.
+
+Solo maintainer note: this is a lightweight discipline, not full PR overhead. The point is that `main` stays green so anyone browsing the repo — external contributors, prospective users, `git bisect` — lands on validated commits.
+
 ## Source Header Policy
 
 Gator does not require a full Apache 2.0 header on every source file. New source files SHOULD include an SPDX identifier line where practical:
