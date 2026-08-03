@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "CONTRIBUTING.md: document dev→main branching flow",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "branching",
+    "workflow",
+    "contributor-experience"
+  ],
+  "commit": "8748811c164270bc65104be2b8b870dbb816b26b",
+  "short_commit": "8748811",
+  "snippet_id": "snippet-8748811c16427",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "a5a5fcbfab88b0fb2225918cccdbaf873d432800",
+  "started_at": "2026-08-03T00:29:40Z",
+  "ended_at": "2026-08-03T00:29:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-03-gator-a5a5fcbfab88b.json",
+    "CONTRIBUTING.md"
+  ],
+  "notes": [
+    "Added a `## Branching` section to `CONTRIBUTING.md` documenting the",
+    "new solo-lightweight dev→main workflow.",
+    "`main` is release-anchor; every commit MUST have green source-ci;",
+    "release tags cut from main only.",
+    "`dev` is the working branch; push freely; source-ci runs on dev",
+    "pushes too.",
+    "When dev is green: `git checkout main && git merge --ff-only dev",
+    "&& git push`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -554,3 +554,64 @@ class TestMigration:
         report = _update.migrate_layout(v2_repo, v2_repo / ".gator", None)
         assert report["final_layout"] == "v2"
         assert len(report["moved"]) == 0
+
+    def test_shipped_dir_duplicates_get_removed(self, tmp_path):
+        """Regression: mixed layout where a shipped directory contains
+        files that ALSO exist in .includes/ must converge to pure v2.
+
+        Before the fix (2026-08-02), Step 5's merge only moved files that
+        didn't exist in .includes/. Root duplicates stayed in place, the
+        layout re-detected as "mixed", and --migrate-layout could never
+        converge -- reported "Result: mixed (migration incomplete --
+        check conflicts)" and required manual cleanup. Exact state hit by
+        the monorepo cutover in .gator/reference-notes/.
+
+        Fix: mirror Step 4 (SHIPPED_ROOT_FILES) — when both exist, remove
+        src (dest is canonical).
+        """
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+
+        # v2 shape: .includes/ exists with a shipped file
+        includes_refnotes = gator / ".includes" / "reference-notes"
+        includes_refnotes.mkdir(parents=True)
+        (includes_refnotes / "shared-file.md").write_text(
+            "# Canonical version in .includes/\n"
+        )
+
+        # Duplicate ALSO at root (the bug's precondition)
+        root_refnotes = gator / "reference-notes"
+        root_refnotes.mkdir()
+        (root_refnotes / "shared-file.md").write_text(
+            "# Old duplicate at root — should be removed\n"
+        )
+        # Plus a file that's only at root — should MOVE to .includes/
+        (root_refnotes / "root-only.md").write_text(
+            "# Only exists at root — should move\n"
+        )
+
+        # Required v2 marker + minimum shipped content so resolver
+        # sees a valid-shaped .includes/ (per _has_required_includes_content:
+        # scripts/ dir + at least one of constitution.md / gator-start-up.md)
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n'
+        )
+        (gator / ".includes" / "scripts").mkdir()
+        (gator / ".includes" / "constitution.md").write_text("# Constitution\n")
+
+        # Sanity: detects as mixed before the migration
+        assert gator_layout.resolve_gator_layout(tmp_path) == "mixed"
+
+        report = _update.migrate_layout(tmp_path, gator, None)
+
+        # Post-fix: mixed → v2, no manual cleanup required
+        assert report["final_layout"] == "v2", (
+            f"Migration did not converge to v2. Report: {report}"
+        )
+        # Duplicate file removed from root, .includes/ version preserved
+        assert not (root_refnotes / "shared-file.md").exists()
+        canonical = (includes_refnotes / "shared-file.md").read_text()
+        assert "Canonical" in canonical
+        # Root-only file moved to .includes/
+        assert not (root_refnotes / "root-only.md").exists()
+        assert (includes_refnotes / "root-only.md").exists()

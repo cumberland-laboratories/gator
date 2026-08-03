@@ -942,13 +942,33 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
                 shutil.move(str(src_dir), str(dest_dir))
                 report["moved"].append(f"{dname}/")
             else:
-                # Both exist — merge: move files not yet in dest
+                # Both exist — merge: move files not yet in dest.
+                # Duplicate handling MUST mirror Step 4 (SHIPPED_ROOT_FILES):
+                # when a file exists at BOTH src and dest, the dest copy
+                # (`.includes/`) is canonical and the src copy is removed.
+                # Without this, files that were both bootstrapped to root
+                # AND populated in .includes/ (e.g. a repo that was
+                # re-gatorized on top of a v1-shape port) leave the root
+                # duplicates in place, migrate_layout reports "Result:
+                # mixed (migration incomplete)" and never converges.
+                # Fix committed 2026-08-02 after the monorepo cutover hit
+                # exactly that state in .gator/reference-notes/ and had
+                # to be resolved by hand.
                 for f in sorted(src_dir.iterdir()):
                     dest_f = dest_dir / f.name
-                    if f.is_file() and not dest_f.exists():
-                        shutil.move(str(f), str(dest_f))
+                    if f.is_file():
+                        if not dest_f.exists():
+                            shutil.move(str(f), str(dest_f))
+                            report["moved"].append(f"{dname}/{f.name}")
+                        else:
+                            # Both exist — remove src (dest is canonical)
+                            f.unlink()
+                            report["moved"].append(
+                                f"{dname}/{f.name} (root copy removed)"
+                            )
                     elif f.is_dir() and not dest_f.exists():
                         shutil.move(str(f), str(dest_f))
+                        report["moved"].append(f"{dname}/{f.name}/")
                 # Remove src if empty
                 try:
                     src_dir.rmdir()

@@ -1,26 +1,32 @@
 # Blueprints
 
-Blueprints explain major Gator features at a human/architecture level.
+Per-feature flow maps — how features work end-to-end, referencing modules, functions, and charters.
 
-They sit between:
+Blueprints are optional. Create one when a feature or subsystem needs an architect-facing flow map.
 
-- charters, which describe module ownership and invariants
-- code, which implements the feature
+## Structure
 
-Use these pages when the question is:
+Each blueprint describes one feature:
 
-- "How does this feature work end to end?"
-- "What is implemented versus partial?"
-- "Which modules participate?"
-- "Where are the known fragile areas?"
+```markdown
+# Blueprint: <Feature Name>
 
-Current pages:
+## What It Does
+[1-2 sentences]
 
-- [Repo Topology](repo-topology.md) — how gator-command, the public clone, and fleet repos relate
-- [Hook Pipeline](hook-pipeline.md) — how pre-commit/post-commit hooks work across all three repo types
-- [Thread Lifecycle](thread-lifecycle.md) — when threads are created, updated, and rotated between tiers
-- [Commit Pipeline](commit-pipeline.md) — end-to-end commit flow
-- [Charter Verify](charter-verify.md) — charter validation system
-- [Session Intelligence](session-intelligence.md) — session extraction, storage, dashboard display, and gaps
-- [Session Block Capture](session-block-capture.md) — commit-scoped transcript slices, CLI-first on-demand capture
-- [Install And Upgrade](install-and-upgrade.md) — gatorize, clone gap, hook self-heal, and update flow
+## Flow
+1. **<Module>** → `function_name()` — what happens
+   → [charter-name](../charters/charter-name.md)
+
+## Key Charters
+[Charters involved in this flow]
+
+## Invariants
+[What must be true for this to work]
+```
+
+## Master Blueprint
+
+Once you have several blueprints, create `system.md` — the architectural overview that links to individual feature blueprints.
+
+See the [charters README](../charters/README.md) for the notation system used in function references.

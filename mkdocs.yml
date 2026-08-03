@@ -27,26 +27,31 @@ theme:
     - content.code.copy
 
 nav:
-  - Home: index.md
-  - Getting Started:
-    - Quick Start: getting-started.md
-    - Installation: installation.md
-    - Upgrade & Versioning: upgrade.md
+  # Home + Getting Started + Audiences sections were vaulted 2026-08-02
+  # (see `.gator/vault/docs-not-ready/`) because their content described
+  # the pre-monorepo `gator-engine/`-shape install/upgrade flow that no
+  # longer exists. The pipx-first flow is documented in how-to-use-gator.md
+  # and how-gator-works.md. Rebuild these sections against the current
+  # monorepo reality as a post-2.5.2 follow-on.
+  - Home: how-gator-works.md
+  - How-to guides:
+    - How to Use Gator: how-to-use-gator.md
+    - Custom Skills & Team Workflow: custom-skills-and-team-workflow.md
+    - Refactor with Gator: refactor-with-gator.md
   - Concepts:
+    # How Gator Works appears as Home above; not duplicated here.
     - Governance Model: governance-model.md
     - Threat Model: threat-model.md
-    - Fleet Governance: fleet-governance.md
-    - Session Archaeology: session-archaeology.md
-    - Audit & Compliance: audit-compliance.md
     - Architecture: architecture.md
+    - What is Navigation Coding: what-is-navigation-coding.md
+    - Why Navigation Coding Feels Different: why-navigation-coding-feels-different.md
+    - Enforcer Patterns: enforcer-patterns.md
+    - Origin Story: origin-story.md
+    - Supporting Research: supporting-research.md
   - Reference:
     - Command Reference: command-reference.md
     - Charter Schema v1: charter-schema-v1.md
     - Charter Formation Process: charter-formation-process.md
-  - Audiences:
-    - For Engineers: for-engineers.md
-    - For Engineering Directors: for-directors.md
-    - For Leadership: for-leadership.md
 
 markdown_extensions:
   - admonition

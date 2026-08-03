@@ -633,6 +633,20 @@ def check_override(gator_dir):
 # Validation rules
 # ---------------------------------------------------------------------------
 
+# Sync obligation: this enum MUST stay byte-consistent with the
+# `change_type` enum in `contracts/schemas/gator-session-snippet-v2.json`
+# (`properties.change_type.enum`). Both surfaces are read by the same
+# schema-validation test (`contracts/compatibility/test_snippet_schema.py`),
+# so drift here would let a bad value pass pre-commit only to be caught
+# later by CI on the emitted session snippet — the exact failure mode
+# this validation exists to prevent. If either enum changes, change
+# both in the same commit.
+VALID_CHANGE_TYPES = frozenset({
+    "feature", "fix", "refactor", "docs", "test",
+    "release", "maintenance", "review", "governance", "",
+})
+
+
 def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir, override=None):
     """Check hard rules. Returns list of (rule_name, message) for failures."""
     failures = []
@@ -640,6 +654,22 @@ def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir,
     # 1. Frontmatter parse failure
     if parse_error:
         failures.append(("frontmatter-parse", parse_error))
+
+    # 1a. change-type enum validation (must match schema)
+    # Blocks values like "bugfix" that read plausibly but fail the
+    # gator-session-snippet-v2 schema at CI validation. `None` is
+    # allowed (agent may omit the field entirely; infer_change_type
+    # fills a default at trailer-assembly time).
+    change_type = frontmatter.get("change-type")
+    if change_type is not None and change_type not in VALID_CHANGE_TYPES:
+        valid_str = ", ".join(sorted(v for v in VALID_CHANGE_TYPES if v))
+        failures.append((
+            "invalid-change-type",
+            f"change-type: {change_type!r} is not one of the schema-legal "
+            f"values. Valid: {valid_str} (or empty). Common typos: "
+            f"'bugfix' -> 'fix', 'chore' -> 'maintenance', 'style' -> "
+            f"'refactor'. Update .gator/commit_draft.md and retry."
+        ))
 
     # 2. Empty commit_draft
     if not frontmatter and not body:
