@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.5.4",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "session-hooks",
+    "layout-migration",
+    "fleet-hygiene"
+  ],
+  "commit": "0ae8ac33a4c034d93f314eec2768047c57135903",
+  "short_commit": "0ae8ac3",
+  "snippet_id": "snippet-0ae8ac33a4c03",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "b454b74a5723b863814dd032b1bfc65ff888041e",
+  "started_at": "2026-08-03T13:32:00Z",
+  "ended_at": "2026-08-03T13:32:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-03-gator-b454b74a5723b.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "**Version bump to 2.5.4** — session-hook self-heal fixes (B1, B2, B3), migration Step 5 directory-conflict handling (A1, closes Issue #6), migration end-of-run report enrichment (A2), `--migrate-layout` auto-refresh of vendor hooks on convergence (A4), product-source rebind + fleet propagation (A3), plus test-pin refresh (R0). Ten user-facing commits since 2.5.3.",
+    "**Files touched by the version bump commit itself**: `pyproject.toml` (`version = \"2.5.4\"`), `VERSION` (byte-consistent per the `scripts-core-library.md` sync tripwire), `CHANGELOG.md` (new `[2.5.4] — 2026-08-03` section with Fixed / Added / Changed / Documentation subsections; every entry cross-references the regression pins in `tests/`), `.gator/charters/scripts-core-library.md` (extended the version-history sequence in the `get_version()` tripwire with \"then 2.5.4 (session-hook + migration hardening — closes the fleet-wide silent-no-op class introduced by the .includes/ split)\").",
+    "**Staging verification**: `git diff --cached --name-only` run before commit per the 2.5.2 partial-commit incident hard-won lesson. Confirmed the four intended files and only those files (plus the auto-added session-snippet from the preceding commit — expected governance residue, not staging drift).",
+    "Ships from `dev`. Fast-forward to `main` follows once `source-ci` clears on this commit."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
