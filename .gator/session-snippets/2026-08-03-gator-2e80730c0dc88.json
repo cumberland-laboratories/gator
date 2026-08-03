@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "gator update --migrate-layout: auto-refresh vendor hooks on convergence",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-migration",
+    "session-hooks",
+    "footgun-removal"
+  ],
+  "commit": "2e80730c0dc88c8e83c9c00d21940554b2378ae4",
+  "short_commit": "2e80730",
+  "snippet_id": "snippet-2e80730c0dc88",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "5453f8bc3422dc3b564802eb2d5224cdfc9a4d4f",
+  "started_at": "2026-08-03T11:09:38Z",
+  "ended_at": "2026-08-03T11:09:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-03-gator-5453f8bc3422d.json",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py"
+  ],
+  "notes": [
+    "**Closed the v1→v2 vendor-hook-drift footgun.** `main()`'s `--migrate-layout` branch previously exited immediately after `migrate_layout()` returned, before `install_vendor_hooks()` (which runs in the normal update path). Consequence: on a v1 repo, `gator update --migrate-layout` moved shipped scripts from `.gator/scripts/` to `.gator/.includes/scripts/` but left `.claude/settings.json` / `.codex/hooks.json` / `.gemini/settings.json` pointing at the old `.gator/scripts/…` paths. Session hooks became dead targets until the user ran a follow-up `gator update`. Migration's own end-of-run message hinted at this (\"Next step: run 'gator update' to refresh scripts …\") but users routinely miss it — and the invariant should be structural, not procedural.",
+    "**Fix**: added `install_vendor_hooks(templates_dir, repo_root)` call in `main()`'s migration branch, gated on `report.get(\"final_layout\") == \"v2\"` (successful convergence only), wrapped in `try/except` so any vendor-hook failure prints a warning to stderr but never masks or overrides the migration's own exit code. Combined with B2 (templates now ship v2 script paths), any v1 repo running `--migrate-layout` post-fix ends up with vendor hooks pointing at the correct v2 scripts in a single command.",
+    "**Sync-obligation**: applied identically to `src/gator_command/scripts/gator-update.py` (wheel) and `src/gator_command/templates/gator-starter/scripts/gator-update.py` (fleet mirror). `git diff --no-index --stat` shows the same 159-line pre-existing entry-point-inlining divergence and no new drift.",
+    "**Migration end-of-run message left alone**. \"Next step: run 'gator update' to refresh scripts in .includes/\" is still accurate — the recommendation refers to script content refresh, which `--migrate-layout` still doesn't do; A4 only closes the vendor-hook gap.",
+    "**Tests**: existing `TestMigration` (8 cases including A1's two new pins) all pass. No new test added — A4's behavior would need a subprocess-invocation fixture to exercise the `main()` migration branch end-to-end; deferring to a follow-on if flakiness surfaces in the field.",
+    "**Charter update**: `scripts-repo-lifecycle.md::main()` — added `--migrate-layout` to the arg list, added a TRIPWIRE explaining the vendor-hook-refresh-on-convergence contract and the exit-code preservation invariant.",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step A4 of B1→B2→A1→A4→A2→B3→A3). B2 fixed the templates so hooks POINT at v2 paths; A4 makes sure they get REWRITTEN to v2 paths automatically when a v1 repo migrates."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

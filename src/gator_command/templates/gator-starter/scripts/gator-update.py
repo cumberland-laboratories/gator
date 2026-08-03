@@ -1000,6 +1000,80 @@ def print_json_plan(plan, templates_dir, hooks=None, entry_point_actions=None):
 
 # --- Layout migration ---
 
+def _enumerate_mixed_residue(gator_dir):
+    """Enumerate the specific paths that leave a repo in `mixed` layout.
+
+    Called only from migrate_layout()'s Step 11 when the post-migration
+    classifier returns `mixed`. Returns a list of `(path_str, reason)`
+    tuples so the migration report can point the operator at concrete
+    files/directories instead of the historical "check conflicts" hand-wave.
+
+    Uses the same categories as `_has_legacy_shipped_content` in
+    gator_layout, kept in a separate function here so migrate_layout's own
+    report can enumerate residue without importing classifier internals.
+    Any classifier change that adds a mixed-detection category MUST be
+    mirrored here or the report will silently under-report the residue.
+    """
+    from gator_layout import (
+        SHIPPED_ROOT_FILES, SHIPPED_DIRECTORIES,
+        MIXED_DIRECTORY_SHIPPED_DEFAULTS, USER_VISIBLE_SCAFFOLDING,
+    )
+
+    residue = []
+    includes = gator_dir / ".includes"
+
+    # Category 1: shipped root files at root
+    for fname in SHIPPED_ROOT_FILES:
+        root_path = gator_dir / fname
+        if root_path.is_file():
+            includes_dup = (includes / fname).is_file()
+            reason = (
+                "root-side file duplicated in .includes/"
+                if includes_dup
+                else "root-side file should have moved to .includes/"
+            )
+            residue.append((f".gator/{fname}", reason))
+
+    # Category 2: fully shipped directories at root that hold real content
+    for dname in SHIPPED_DIRECTORIES:
+        root_dir = gator_dir / dname
+        if not root_dir.is_dir():
+            continue
+        # A dir that holds only scaffolding is intentional — skip
+        try:
+            has_real = any(
+                not (entry.is_file() and entry.name in USER_VISIBLE_SCAFFOLDING)
+                for entry in root_dir.iterdir()
+            )
+        except OSError:
+            has_real = True
+        if has_real:
+            includes_dir = includes / dname
+            reason = (
+                "root-side directory could not be merged (see conflicts above)"
+                if includes_dir.is_dir()
+                else "root-side directory should have moved to .includes/"
+            )
+            residue.append((f".gator/{dname}/", reason))
+
+    # Category 3: shipped files at root in mixed directories
+    for dname, shipped_files in MIXED_DIRECTORY_SHIPPED_DEFAULTS.items():
+        flat_dir = gator_dir / dname
+        if not flat_dir.is_dir():
+            continue
+        for fname in shipped_files:
+            if (flat_dir / fname).is_file():
+                includes_dup = (includes / dname / fname).is_file()
+                reason = (
+                    "shipped file duplicated in .includes/"
+                    if includes_dup
+                    else "shipped file should have moved to .includes/"
+                )
+                residue.append((f".gator/{dname}/{fname}", reason))
+
+    return residue
+
+
 def _merge_dir_files_only(src, dest, report, prefix):
     """Recursively merge files from src into dest, dest-wins on file collision.
 
@@ -1250,7 +1324,28 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
         print("  Next step: run 'gator update' to refresh scripts in .includes/")
         print("  with the latest resolver-aware versions.")
     elif final_layout == "mixed":
-        print(f"  Result: mixed (migration incomplete — check conflicts)")
+        print(f"  Result: mixed (migration incomplete)")
+        residue = _enumerate_mixed_residue(gator_dir)
+        if residue:
+            print()
+            print(f"  Blocking paths ({len(residue)}):")
+            for path_str, reason in residue:
+                print(f"    ! {path_str}  — {reason}")
+            print()
+            print("  Suggested next step: remove or resolve the paths above,")
+            print("  then run 'gator update --migrate-layout' again.")
+        elif report.get("conflicts"):
+            print()
+            print(f"  Conflicts logged during migration ({len(report['conflicts'])}):")
+            for item in report["conflicts"]:
+                print(f"    ! {item}")
+        else:
+            # Belt-and-suspenders: classifier says mixed but neither residue
+            # walk nor migration conflict log found anything. Should be
+            # unreachable — if it fires, the classifier and this enumerator
+            # have drifted (see _enumerate_mixed_residue sync obligation).
+            print("  (Classifier reported mixed but no residue enumerated —")
+            print("   inspect .gator/ manually and file a bug.)")
     else:
         print(f"  Result: {final_layout} (unexpected)")
     print()

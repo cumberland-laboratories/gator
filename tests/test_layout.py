@@ -713,3 +713,64 @@ class TestMigration:
         # Root experimental/ dir gone; canonical file preserved
         assert not root_experimental.exists()
         assert (includes_experimental / "canonical.txt").read_text() == "canonical\n"
+
+    def test_enumerate_mixed_residue_finds_root_file(self, tmp_path):
+        """A2: _enumerate_mixed_residue reports a shipped root file present
+        at .gator/ root as Category 1 residue, distinguishing duplicated
+        vs missing-from-includes cases."""
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        (gator / ".includes").mkdir()
+
+        # Duplicated case: constitution.md at both root and .includes/
+        (gator / "constitution.md").write_text("root\n")
+        (gator / ".includes" / "constitution.md").write_text("canonical\n")
+        # Root-only case: gator-start-up.md only at root
+        (gator / "gator-start-up.md").write_text("orphaned\n")
+
+        residue = _update._enumerate_mixed_residue(gator)
+        paths = dict(residue)
+        assert ".gator/constitution.md" in paths
+        assert "duplicated" in paths[".gator/constitution.md"]
+        assert ".gator/gator-start-up.md" in paths
+        assert "should have moved" in paths[".gator/gator-start-up.md"]
+
+    def test_enumerate_mixed_residue_ignores_scaffolding_only_dir(self, tmp_path):
+        """A2: a shipped directory at root that holds ONLY scaffolding
+        (README.md / _template.md) is NOT residue — it's the intentional
+        user-visible-scaffolding pattern (same rule as
+        _has_legacy_shipped_content). This matches _dir_is_scaffolding_only."""
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        (gator / ".includes").mkdir()
+
+        scaffolding_dir = gator / "reference-notes"
+        scaffolding_dir.mkdir()
+        (scaffolding_dir / "README.md").write_text("# Reference notes\n")
+        (scaffolding_dir / "_template.md").write_text("# Template\n")
+
+        residue = _update._enumerate_mixed_residue(gator)
+        # No entry for reference-notes/ because it holds only scaffolding
+        assert not any(
+            path.startswith(".gator/reference-notes/")
+            for path, _ in residue
+        )
+
+    def test_enumerate_mixed_residue_reports_dir_with_real_content(self, tmp_path):
+        """A2: a shipped directory at root that holds real content (not just
+        scaffolding) is Category 2 residue. When the same directory also
+        exists in .includes/, the reason cites the merge-conflict case."""
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        (gator / ".includes" / "scripts").mkdir(parents=True)
+
+        # Root scripts/ dir with a real (non-scaffolding) file
+        root_scripts = gator / "scripts"
+        root_scripts.mkdir()
+        (root_scripts / "user-tool.py").write_text("# user script\n")
+
+        residue = _update._enumerate_mixed_residue(gator)
+        paths = dict(residue)
+        assert ".gator/scripts/" in paths
+        # Both .includes/scripts/ and root scripts/ exist → merge-conflict reason
+        assert "could not be merged" in paths[".gator/scripts/"]
