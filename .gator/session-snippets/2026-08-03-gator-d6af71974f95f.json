@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "release-and-deploy.md rewrite for post-cutover flow + close issue #2",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-procedure",
+    "dev-main-flow",
+    "issues-tracking",
+    "post-cutover"
+  ],
+  "commit": "d6af71974f95f98e081d21a3b2d7d1c926c830d2",
+  "short_commit": "d6af719",
+  "snippet_id": "snippet-d6af71974f95f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 11,
+  "previous_commit_in_session": "ff51c8bbb0d91a2a9fea32a29ee2f7db6ff99090",
+  "started_at": "2026-08-03T01:04:10Z",
+  "ended_at": "2026-08-03T01:04:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/issues.md",
+    ".gator/procedures/release-and-deploy.md",
+    ".gator/session-snippets/2026-08-03-gator-ff51c8bbb0d91.json"
+  ],
+  "notes": [
+    "Full rewrite for the post-cutover reality. The old version described",
+    "the retired `gator-deploy.py` → separate-public-repo flow with",
+    "`git checkout upstream/main -- gator-engine/` upgrade path. That",
+    "world is gone.",
+    "New procedure documents:",
+    "**The three-workflow model** with a visual pipeline diagram",
+    "(source-ci → dev, ff-merge to main, tag RC → release-candidate.yml",
+    "→ TestPyPI + smoke, dispatch promote-to-pypi.yml → approval gate →"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -23,7 +23,10 @@ name: Source CI
 
 on:
   push:
-    branches: [main]
+    # dev is the working branch (see CONTRIBUTING.md ## Branching).
+    # source-ci gates the fast-forward from dev to main — so we need
+    # to run on dev pushes, not just main pushes.
+    branches: [main, dev]
   pull_request:
     branches: [main]
 
