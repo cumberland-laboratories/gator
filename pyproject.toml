@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gator-command"
-version = "2.5.3"
+version = "2.5.4"
 description = "Git-native governance for AI-assisted engineering"
 readme = "PYPI_README.md"
 license = {text = "Apache-2.0"}

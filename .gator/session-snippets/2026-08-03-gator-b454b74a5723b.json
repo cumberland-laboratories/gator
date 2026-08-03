@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "tests: refresh v1-path pins broken by B1+B2",
+  "change_type": "test",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "test-hygiene",
+    "release-gate"
+  ],
+  "commit": "b454b74a5723b863814dd032b1bfc65ff888041e",
+  "short_commit": "b454b74",
+  "snippet_id": "snippet-b454b74a5723b",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "c4823f6fa51db15e46617349115f2afd2161ca30",
+  "started_at": "2026-08-03T13:24:08Z",
+  "ended_at": "2026-08-03T13:24:08Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-installer.md",
+    ".gator/session-snippets/2026-08-03-gator-c4823f6fa51db.json",
+    "tests/test_session_open.py",
+    "tests/test_vendor_hooks.py"
+  ],
+  "notes": [
+    "**Fixed stale test pins surfaced by the release-cadence pre-push gate** (Step 1 of `.gator/procedures/release-and-deploy.md`). Local full-suite run against the just-committed B1-B3 fix set produced 8 failures. All 8 were expected consequences of the invariant changes those commits shipped — not new bugs. Fixed the tests to reflect the new invariants:",
+    "`tests/test_vendor_hooks.py::TestTemplateHookEntries` — two parametrized tests × 3 filenames = 6 failures. They asserted `\"python .gator/scripts/gator-session-open.py\"` (v1 path) was present in the shipped `vendor-hooks/*.json` templates. B2 changed those templates to v2 paths (`.gator/.includes/scripts/…`). Updated the assertions to the new expected values; added a docstring pointing at commit `a532851` and the `install_vendor_hooks` TRIPWIRE in `scripts-installer.md` so the next reader knows why v1 paths would be a regression.",
+    "`tests/test_session_open.py::TestMain::test_calls_ensure_git_hooks` — asserted `mock_init.ensure_git_hooks.assert_called_once_with(tmp_path, gator_dir)` (the pre-B1 raw-Path contract). B1 changed the second arg to a `GatorPaths` dataclass (matching `gator-init.py:193`'s reader signature). Rewrote the fixture: set up a real v2 layout with `layout-version.json` marker + `.includes/scripts/` + `.includes/constitution.md` so `get_gator_paths()` resolves `layout == \"v2\"`. Assertion now duck-types the `GatorPaths` return (checks `paths_arg.gator_root`, `paths_arg.layout == \"v2\"`, `paths_arg.scripts_dir`) — a regression to the raw-Path signature would fail on the very first attribute access.",
+    "**`tests/test_packaging.py::test_version_flag` was NOT a code regression** — it was a stale local editable install of `gator-command` (Python 3.13 site-packages pointing at `C:\\Users\\curator\\code2\\gator-command\\src\\gator_command`, the retired source repo, reporting version 2.5.1). Pytest's own `__version__` resolution walks up from the source tree's `__file__` and finds this repo's `pyproject.toml` (2.5.3), so the two paths disagreed. Fixed with `pip install -e . --no-deps` from the current repo. CI's packaging lane in `.github/workflows/source-ci.yml:110` runs `pip install -e .` in a fresh venv, so this env-drift class is impossible on CI. No code or test change; noting it here for the trail.",
+    "**Regression pin discipline**: no new tests added — the existing tests, once updated, ARE the regression pins for B1+B2's contract changes. The `scripts-installer.md::install_vendor_hooks` TRIPWIRE (added in commit `a532851`) already tells future editors that reverting the templates to v1 breaks the fleet; these tests now enforce the TRIPWIRE at CI time rather than only at charter-review time.",
+    "**Full-suite state**: 860 passed, 2 skipped (jsonschema `importorskip`), 0 failures. `set -o pipefail` used so the shell doesn't mask pytest's exit code — the earlier \"exit 0 with 8 failures\" was a pipefail-less pytest-into-tail composition bug in my invocation, not a pytest quirk.",
+    "Blocks progress to Step 2 of release-and-deploy.md (version bump commit). Ships as a follow-on to the B1-B3 fix set on `dev`, before the `dev` → `main` fast-forward that gates the RC tag."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
