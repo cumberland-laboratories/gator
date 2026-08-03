@@ -2,6 +2,22 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.5.3] — 2026-08-02
+
+Same intent as 2.5.2 — this release actually ships the code. The 2.5.2 wheel was published from a commit that dropped most of the intended hook-hardening files during `git add` (root cause: a Windows Git Bash trailing-backslash `git add \\` continuation silently skipped several entries). Only the `migrate_layout` src fix, the version bump, and the docs vault landed; the change-type validation, the tests, and the charter tripwires did not. This release is the recovery.
+
+### Fixed
+
+- **Pre-commit hook rejects invalid `change-type` values at commit time.** `gator-pre-commit.py::validate_hard_rules` now validates the `change-type` field in `.gator/commit_draft.md` against the schema-legal enum (`feature | fix | refactor | docs | test | release | maintenance | review | governance | ""`). Bad values fail with a helpful message naming the valid set and common typos (`bugfix` → `fix`, `chore` → `maintenance`, `style` → `refactor`). Previously, plausible-sounding values like `bugfix` passed pre-commit, were emitted verbatim into session snippets, and only got caught by CI schema validation on the emitted snippet — the exact drift class this validation exists to prevent. Sync obligation between `VALID_CHANGE_TYPES` and `contracts/schemas/gator-session-snippet-v2.json` pinned by `tests/test_precommit_validation.py::TestSchemaEnumSyncObligation`.
+- **`gator update --migrate-layout` Step 5 now handles duplicates like Step 4.** (This one DID land in 2.5.2's wheel — repeated in these notes for completeness.) When a shipped directory contains a file that exists at BOTH `.gator/<dir>/X.md` AND `.gator/.includes/<dir>/X.md`, the `.includes/` copy is now canonical and the root copy is removed. Regression pin: `tests/test_layout.py::TestMigration::test_shipped_dir_duplicates_get_removed` (newly added in this release; 2.5.2 shipped the fix but not the test).
+
+### Added
+
+- New test files: `tests/test_precommit_validation.py` (3 classes covering the change-type validator + schema-sync check), `tests/test_layout.py::TestMigration::test_shipped_dir_duplicates_get_removed`.
+- New charter tripwires: `.gator/charters/scripts-repo-lifecycle.md` (migrate_layout Step 5 duplicate contract), `.gator/charters/scripts-cross-cutting.md` (change-type enum sync obligation).
+- `mkdocs.yml` nav restructured to remove entries pointing at the docs vaulted in 2.5.2 — without this, mkdocs 404'd on those nav entries.
+- `CONTRIBUTING.md` — new `## Branching` section documenting the lightweight solo dev→main flow: work on `dev`, fast-forward `main` when source-ci is green, tag releases from main. This is the first release cut through that flow.
+
 ## [2.5.2] — 2026-08-02
 
 Post-cutover polish: two hook fixes that harden the governance loop
