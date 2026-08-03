@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "session-open: bounded diagnostic log for non-happy-path statuses",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-hooks",
+    "silent-failure-recovery",
+    "drift-visibility"
+  ],
+  "commit": "e47a53e4bf094d10e4135006e3717df2ee28e576",
+  "short_commit": "e47a53e",
+  "snippet_id": "snippet-e47a53e4bf094",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "dc63071fa01aeae956b9607022c0120f45e321b1",
+  "started_at": "2026-08-03T11:19:55Z",
+  "ended_at": "2026-08-03T11:19:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-installer.md",
+    ".gator/session-snippets/2026-08-03-gator-dc63071fa01ae.json",
+    ".gitignore",
+    "src/gator_command/scripts/gatorize.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-session-open.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_diagnostics.py",
+    "tests/test_session_hooks.py"
+  ],
+  "notes": [
+    "**Closed the \"silent-hook = silent-regression\" contract loophole.** Vendor SessionStart hooks (Claude / Codex / Gemini) invoke `gator-session-open.py` under a strict rule: no stdout, always exit 0. That rule was never wrong — but the previous implementation was also blind: when `ensure_git_hooks()` returned a non-happy-path status (`degraded` / `unavailable` / `error`), that status went nowhere. B1 fixed the AttributeError; B3 makes the recovered-but-not-quite state visible.",
+    "**New module** `src/gator_command/templates/gator-starter/scripts/gator_diagnostics.py`. Template-only (session hooks are template-only). Exports `log_hook_event(gator_dir, script_name, status, detail)` — bounded, append-only log at `.gator/diagnostics/hooks.log`, capped at `MAX_LINES = 200` via oldest-drops truncation, every code path wrapped in try/except so a diagnostic write can never affect the caller's exit code. Also exports `NON_HAPPY_STATUSES = frozenset({\"degraded\", \"unavailable\", \"error\"})` so callers don't hardcode the vocabulary from `gator-init.ensure_git_hooks()`'s return contract.",
+    "**Wired into `gator-session-open.py::main()`**: captures the `ensure_git_hooks()` return dict, checks the lowercase status against `NON_HAPPY_STATUSES`, and calls `log_hook_event()` when the shoe fits. Guarded import: if `gator_diagnostics` isn't shipped yet (old template on a not-yet-updated fleet repo), session-open degrades to pre-B3 behavior — still exit 0, still no stdout, no log entry. Forward-compat across the fleet during template rollout. Also added a `SKIP` entry when `paths.layout == \"invalid\"` so that early-return leaves evidence too.",
+    "**Gitignore extension**: `ensure_repo_gitignore()` at `src/gator_command/scripts/gatorize.py:357` now adds `.gator/diagnostics/` to the repo's `.gitignore`. Because `gator-update.main()` calls `ensure_repo_gitignore()` on every update (see `execute_updates()` charter entry), the rule propagates fleet-wide with zero per-repo work. Same-commit edit to this repo's root `.gitignore` so the rule is live before B3's first fire — otherwise the log file would surface in `git status` and defeat the \"private diagnostic residue\" contract Codex flagged in the plan-review pass.",
+    "**Regression pins** in the new `tests/test_session_hooks.py`: 8 test cases. Diagnostics covers write-first-line, status uppercasing, newline stripping in detail, rotation-at-cap, never-raises-on-bad-path, never-raises-on-permission-error. Session-open wire-up covers degraded-status-writes-log and ok-status-writes-no-log. All pass; 158 pre-existing tests across `test_layout.py` / `test_hooks.py` / `test_gatorize.py` / `test_init.py` still green.",
+    "**Charter updates** (`scripts-installer.md`): revised `gator-session-open.py::main()` to describe the diagnostics wire-up and log-write side effect; added new `log_hook_event()` entry with tripwires (never-raise contract, `NON_HAPPY_STATUSES` sync obligation with `ensure_git_hooks`, MAX_LINES rotation invariant tied to a regression pin); extended `ensure_repo_gitignore()` to name the new rule and note the fleet propagation contract.",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step B3 of B1→B2→A1→A4→A2→B3→A3). B1 fixed the crash; B3 closes the observability gap so the next silent regression at this seam surfaces as a log entry, not a mystery."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

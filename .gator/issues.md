@@ -127,9 +127,14 @@ edits across `.github/workflows/*.yml` — verify each still works.
 
 ## #6. `migrate_layout()` Step 5 doesn't handle directory conflicts
 
-**Status**: Open
+**Status**: Resolved (2026-08-03, commit `5453f8b`)
 **Discovered**: 2026-08-03 (running `gator update --migrate-layout` on the fleet repo `code/donoriq`)
 **Severity**: Moderate (blocks `gator update` on any repo that accumulated non-scaffolding subdirs under `.gator/scripts/`; requires manual cleanup)
+
+**Resolution**: A1 of the 2026-08-03 update-and-begin-session bugs fix set. `migrate_layout()`'s Step 5 loop now handles both-directories-exist: `__pycache__` and `hooks` (known-safe legacy residue) are `shutil.rmtree`'d unconditionally; everything else goes through `_merge_dir_files_only()` — recursive files-only merge, dest wins on collision, non-file/non-dir entries and non-empty leftover subdirs logged into `report["conflicts"]`. A2 adds `_enumerate_mixed_residue()` so residual mixed-layout cases get a concrete blocking-paths list. Regression pins: `tests/test_layout.py::TestMigration::test_shipped_dir_pycache_conflict_removed` and `test_shipped_dir_unknown_dir_conflict_merges`. Fleet repos that accumulated `.gator/scripts/__pycache__/` or `.gator/scripts/hooks/` residue can now run `gator update --migrate-layout` and converge without manual pre-cleanup.
+
+Original report retained below for context:
+
 
 Sibling to the file-conflict bug that v2.5.3 fixed. In `gator-update.py::migrate_layout()` Step 5 (SHIPPED_DIRECTORIES merge), when a shipped directory (`scripts/`, `reference-notes/`) exists at BOTH `.gator/<dir>/` and `.gator/.includes/<dir>/`, the merge loop handles FILES correctly (v2.5.3 fix — moves non-duplicates, removes src on file-name conflicts) but **skips DIRECTORY conflicts entirely**:
 

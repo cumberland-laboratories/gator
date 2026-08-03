@@ -1000,6 +1000,120 @@ def print_json_plan(plan, templates_dir, hooks=None, entry_point_actions=None):
 
 # --- Layout migration ---
 
+def _enumerate_mixed_residue(gator_dir):
+    """Enumerate the specific paths that leave a repo in `mixed` layout.
+
+    Called only from migrate_layout()'s Step 11 when the post-migration
+    classifier returns `mixed`. Returns a list of `(path_str, reason)`
+    tuples so the migration report can point the operator at concrete
+    files/directories instead of the historical "check conflicts" hand-wave.
+
+    Uses the same categories as `_has_legacy_shipped_content` in
+    gator_layout, kept in a separate function here so migrate_layout's own
+    report can enumerate residue without importing classifier internals.
+    Any classifier change that adds a mixed-detection category MUST be
+    mirrored here or the report will silently under-report the residue.
+    """
+    from gator_layout import (
+        SHIPPED_ROOT_FILES, SHIPPED_DIRECTORIES,
+        MIXED_DIRECTORY_SHIPPED_DEFAULTS, USER_VISIBLE_SCAFFOLDING,
+    )
+
+    residue = []
+    includes = gator_dir / ".includes"
+
+    # Category 1: shipped root files at root
+    for fname in SHIPPED_ROOT_FILES:
+        root_path = gator_dir / fname
+        if root_path.is_file():
+            includes_dup = (includes / fname).is_file()
+            reason = (
+                "root-side file duplicated in .includes/"
+                if includes_dup
+                else "root-side file should have moved to .includes/"
+            )
+            residue.append((f".gator/{fname}", reason))
+
+    # Category 2: fully shipped directories at root that hold real content
+    for dname in SHIPPED_DIRECTORIES:
+        root_dir = gator_dir / dname
+        if not root_dir.is_dir():
+            continue
+        # A dir that holds only scaffolding is intentional — skip
+        try:
+            has_real = any(
+                not (entry.is_file() and entry.name in USER_VISIBLE_SCAFFOLDING)
+                for entry in root_dir.iterdir()
+            )
+        except OSError:
+            has_real = True
+        if has_real:
+            includes_dir = includes / dname
+            reason = (
+                "root-side directory could not be merged (see conflicts above)"
+                if includes_dir.is_dir()
+                else "root-side directory should have moved to .includes/"
+            )
+            residue.append((f".gator/{dname}/", reason))
+
+    # Category 3: shipped files at root in mixed directories
+    for dname, shipped_files in MIXED_DIRECTORY_SHIPPED_DEFAULTS.items():
+        flat_dir = gator_dir / dname
+        if not flat_dir.is_dir():
+            continue
+        for fname in shipped_files:
+            if (flat_dir / fname).is_file():
+                includes_dup = (includes / dname / fname).is_file()
+                reason = (
+                    "shipped file duplicated in .includes/"
+                    if includes_dup
+                    else "shipped file should have moved to .includes/"
+                )
+                residue.append((f".gator/{dname}/{fname}", reason))
+
+    return residue
+
+
+def _merge_dir_files_only(src, dest, report, prefix):
+    """Recursively merge files from src into dest, dest-wins on file collision.
+
+    Used only by migrate_layout()'s Step 5 to handle both-directories-exist
+    cases whose names aren't in the known-safe legacy allowlist. Files present
+    at both sides are removed from src (dest is canonical, same rule as
+    SHIPPED_ROOT_FILES in Step 4). Empty subdirs are rmdir'd bottom-up. Any
+    leftover content (non-file/non-dir entries; subdirs that still hold
+    content after merge) is logged into report["conflicts"] and left in place
+    so the operator sees a concrete path in the final migration report.
+    """
+    dest.mkdir(exist_ok=True)
+    for entry in sorted(src.iterdir()):
+        dest_entry = dest / entry.name
+        if entry.is_file():
+            if not dest_entry.exists():
+                shutil.move(str(entry), str(dest_entry))
+                report["moved"].append(f"{prefix}/{entry.name}")
+            else:
+                entry.unlink()
+                report["moved"].append(
+                    f"{prefix}/{entry.name} (root copy removed)"
+                )
+        elif entry.is_dir():
+            _merge_dir_files_only(
+                entry, dest_entry, report,
+                prefix=f"{prefix}/{entry.name}",
+            )
+        else:
+            report["conflicts"].append(
+                f"{prefix}/{entry.name} (non-file, non-dir; left in place)"
+            )
+    try:
+        src.rmdir()
+    except OSError:
+        report["conflicts"].append(
+            f"{prefix}/ (still contains unresolvable content)"
+        )
+
+
 def migrate_layout(repo_root, gator_dir, templates_dir):
     """Migrate a v1 repo to v2 layout.
 
@@ -1085,13 +1199,53 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
                 shutil.move(str(src_dir), str(dest_dir))
                 report["moved"].append(f"{dname}/")
             else:
-                # Both exist — merge: move files not yet in dest
+                # Both exist — merge: move files not yet in dest.
+                # Duplicate handling MUST mirror Step 4 (SHIPPED_ROOT_FILES):
+                # when a file exists at BOTH src and dest, the dest copy
+                # (`.includes/`) is canonical and the src copy is removed.
+                # Without this, files that were both bootstrapped to root
+                # AND populated in .includes/ (e.g. a repo that was
+                # re-gatorized on top of a v1-shape port) leave the root
+                # duplicates in place, migrate_layout reports "Result:
+                # mixed (migration incomplete)" and never converges.
+                # Fix committed 2026-08-02 after the monorepo cutover hit
+                # exactly that state in .gator/reference-notes/ and had
+                # to be resolved by hand.
                 for f in sorted(src_dir.iterdir()):
                     dest_f = dest_dir / f.name
-                    if f.is_file() and not dest_f.exists():
-                        shutil.move(str(f), str(dest_f))
+                    if f.is_file():
+                        if not dest_f.exists():
+                            shutil.move(str(f), str(dest_f))
+                            report["moved"].append(f"{dname}/{f.name}")
+                        else:
+                            # Both exist — remove src (dest is canonical)
+                            f.unlink()
+                            report["moved"].append(
+                                f"{dname}/{f.name} (root copy removed)"
+                            )
                     elif f.is_dir() and not dest_f.exists():
                         shutil.move(str(f), str(dest_f))
+                        report["moved"].append(f"{dname}/{f.name}/")
+                    elif f.is_dir():
+                        # Both directories exist. Known-safe legacy residue:
+                        # __pycache__/ (Python bytecode, regenerated) and
+                        # hooks/ (pre-monorepo git-hook install location —
+                        # install_git_hooks now writes to .git/hooks/ or
+                        # .git/gator-hooks/, so these copies are dead weight
+                        # after migration). Remove src unconditionally for
+                        # both. Everything else: recursive files-only merge
+                        # (dest wins on collision) via _merge_dir_files_only.
+                        # See Issue #6 for the field case that motivated this.
+                        if f.name in ("__pycache__", "hooks"):
+                            shutil.rmtree(str(f))
+                            report["moved"].append(
+                                f"{dname}/{f.name}/ (legacy residue removed)"
+                            )
+                        else:
+                            _merge_dir_files_only(
+                                f, dest_f, report,
+                                prefix=f"{dname}/{f.name}",
+                            )
                 # Remove src if empty
                 try:
                     src_dir.rmdir()
@@ -1170,7 +1324,28 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
         print("  Next step: run 'gator update' to refresh scripts in .includes/")
         print("  with the latest resolver-aware versions.")
     elif final_layout == "mixed":
-        print(f"  Result: mixed (migration incomplete — check conflicts)")
+        print(f"  Result: mixed (migration incomplete)")
+        residue = _enumerate_mixed_residue(gator_dir)
+        if residue:
+            print()
+            print(f"  Blocking paths ({len(residue)}):")
+            for path_str, reason in residue:
+                print(f"    ! {path_str}  — {reason}")
+            print()
+            print("  Suggested next step: remove or resolve the paths above,")
+            print("  then run 'gator update --migrate-layout' again.")
+        elif report.get("conflicts"):
+            print()
+            print(f"  Conflicts logged during migration ({len(report['conflicts'])}):")
+            for item in report["conflicts"]:
+                print(f"    ! {item}")
+        else:
+            # Belt-and-suspenders: classifier says mixed but neither residue
+            # walk nor migration conflict log found anything. Should be
+            # unreachable — if it fires, the classifier and this enumerator
+            # have drifted (see _enumerate_mixed_residue sync obligation).
+            print("  (Classifier reported mixed but no residue enumerated —")
+            print("   inspect .gator/ manually and file a bug.)")
     else:
         print(f"  Result: {final_layout} (unexpected)")
     print()
@@ -1291,6 +1466,22 @@ def main():
     # Migration mode — separate code path
     if args.migrate_layout:
         report = migrate_layout(repo_root, gator_dir, templates_dir)
+        # After a v1→v2 convergence the shipped script paths just moved from
+        # `.gator/scripts/` to `.gator/.includes/scripts/`. Vendor SessionStart
+        # hooks (Claude / Codex / Gemini) still point at the old paths until
+        # `install_vendor_hooks` re-merges the current templates. Do that
+        # inline so a caller who only runs `--migrate-layout` (and never a
+        # follow-up `gator update`) doesn't end up with dead hook targets.
+        # Wrap in try/except: a vendor-hook refresh failure must never mask
+        # or override the migration's own exit code.
+        if report.get("final_layout") == "v2":
+            try:
+                install_vendor_hooks(templates_dir, repo_root)
+            except Exception as e:
+                print(
+                    f"  Warning: vendor hook refresh failed: {e}",
+                    file=sys.stderr,
+                )
         sys.exit(0 if report.get("final_layout") == "v2" else 1)
 
     # Build plan (refuses mixed/invalid layouts with a clean message)
