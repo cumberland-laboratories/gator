@@ -64,17 +64,37 @@ def main():
 
     from gator_layout import get_gator_paths
     from gator_core import import_sibling
+    try:
+        from gator_diagnostics import log_hook_event, NON_HAPPY_STATUSES
+    except ImportError:
+        # Diagnostics module unavailable — degrade silently to the pre-B3
+        # behavior (still exit 0, still no stdout). This should only happen
+        # if the module wasn't shipped by an old template; keep session-open
+        # forward-compatible.
+        log_hook_event = None
+        NON_HAPPY_STATUSES = frozenset()
 
     paths = get_gator_paths(repo_root)
     if paths.layout == "invalid":
+        if log_hook_event:
+            log_hook_event(gator_dir, "gator-session-open", "SKIP",
+                           f"layout={paths.layout}")
         return 0
 
     gator_init = import_sibling("gator-init")
-    # Capture the return so a future observability wire-up (B3) can route
-    # non-happy-path statuses (degraded / unavailable / error) into a bounded
-    # local diagnostic log. For now, discard: this commit is the layout fix
-    # only; visibility is added in the B3 commit.
-    _result = gator_init.ensure_git_hooks(repo_root, paths)
+    # Capture ensure_git_hooks's return dict so non-happy-path statuses
+    # (degraded / unavailable / error) get an entry in the bounded diagnostic
+    # log — the "silent hook" contract keeps stdout empty, but the maintainer
+    # still needs evidence when self-heal degrades.
+    result = gator_init.ensure_git_hooks(repo_root, paths) or {}
+    status = str(result.get("status", "")).lower()
+    if status in NON_HAPPY_STATUSES and log_hook_event:
+        log_hook_event(
+            gator_dir,
+            "gator-session-open",
+            status,
+            str(result.get("detail", "")),
+        )
 
     return 0
 

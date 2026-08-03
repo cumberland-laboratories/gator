@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "migrate_layout: enrich non-convergence report with blocking paths",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-migration",
+    "operator-diagnostics",
+    "drift-visibility"
+  ],
+  "commit": "dc63071fa01aeae956b9607022c0120f45e321b1",
+  "short_commit": "dc63071",
+  "snippet_id": "snippet-dc63071fa01ae",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "2e80730c0dc88c8e83c9c00d21940554b2378ae4",
+  "started_at": "2026-08-03T11:13:27Z",
+  "ended_at": "2026-08-03T11:13:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-03-gator-2e80730c0dc88.json",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "tests/test_layout.py"
+  ],
+  "notes": [
+    "**Made the \"mixed\" migration outcome self-explanatory.** Prior end-of-run message when `--migrate-layout` fell short of v2: `\"Result: mixed (migration incomplete — check conflicts)\"` — with no signal of which paths were blocking convergence. Operators had to open a shell, grep the classifier internals, or file a bug just to find out what to delete. That was the exact confusion cycle behind Issue #6's manual-cleanup workaround.",
+    "**Fix**: added `_enumerate_mixed_residue(gator_dir)` in `gator-update.py` (both wheel and template mirror). Enumerates the three categories `_has_legacy_shipped_content` checks — shipped root files at root, fully-shipped directories at root holding real (non-scaffolding) content, shipped default files at root of mixed directories — and returns `(path, reason)` tuples with the reason distinguishing \"duplicated in .includes/\" from \"should have moved to .includes/\" per category. `migrate_layout()`'s mixed-result branch now prints this as a numbered blocking-paths list with a \"Suggested next step\" hint. Fallback #1: if enumeration is empty but the migration logged conflicts via `_merge_dir_files_only`, those are printed instead. Fallback #2 (belt-and-suspenders): if both are empty, print a \"should be unreachable — the enumerator has drifted from `_has_legacy_shipped_content`\" note. Empty enumerator + no conflicts + still-mixed classification means the sync obligation has been violated.",
+    "**Sync-obligation**: applied identically to `src/gator_command/scripts/gator-update.py` (wheel) and `src/gator_command/templates/gator-starter/scripts/gator-update.py` (fleet mirror). `git diff --no-index --stat` still shows the same 159-line pre-existing entry-point-inlining divergence; nothing new. The enumerator itself imports from `gator_layout` rather than duplicating the classification lists — one source of truth for `SHIPPED_ROOT_FILES` / `SHIPPED_DIRECTORIES` / `MIXED_DIRECTORY_SHIPPED_DEFAULTS` / `USER_VISIBLE_SCAFFOLDING`.",
+    "**Regression pins** (`tests/test_layout.py::TestMigration`): three new cases exercising the enumerator directly. `test_enumerate_mixed_residue_finds_root_file` covers Category 1 with both duplicated and missing-from-includes reasons. `test_enumerate_mixed_residue_ignores_scaffolding_only_dir` pins the intentional exemption for reference-notes/ that holds only `README.md` + `_template.md`. `test_enumerate_mixed_residue_reports_dir_with_real_content` covers Category 2's \"could not be merged\" reason when both root and .includes/ hold the same shipped dir. All 11 `TestMigration` cases pass.",
+    "**Charter updates**: `scripts-repo-lifecycle.md` — added `_enumerate_mixed_residue` entry with tripwire about the sync obligation with `_has_legacy_shipped_content`; extended `migrate_layout`'s tripwire list with the enriched-report behavior and the \"should be unreachable\" branch semantics.",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step A2 of B1→B2→A1→A4→A2→B3→A3). A1 fixed the automatic convergence for the common cases; A2 makes the residual cases self-diagnosable instead of opaque."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

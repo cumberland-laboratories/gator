@@ -368,6 +368,7 @@ def ensure_repo_gitignore(repo_root):
         ".gator/whiteboard.md": "# Hook ephemera — written and cleared each commit cycle",
         ".gator/commit_draft.md": "# Hook ephemera — commit message source, reset after commit",
         ".gator/status.json": "# Hook ephemera — pre-commit validation state",
+        ".gator/diagnostics/": "# Session-hook diagnostic log (machine-local, bounded, appended-to on non-happy-path)",
         ".vscode/": "# IDE settings",
         "__pycache__/": "# Python cache",
         "AGENTS.local.md": "# Local agent companion — personal notes/skills (machine-local)",

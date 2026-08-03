@@ -23,6 +23,7 @@ Userscuratorpytest-temp/
 .gator/commit_issues.md
 .gator/whiteboard.md
 .gator/status.json
+.gator/diagnostics/
 gator-command/commit_draft.md
 
 # Override request/approval artifacts — ephemeral, written by pre-commit hook and gator-approve
