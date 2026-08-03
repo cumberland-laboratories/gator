@@ -37,3 +37,102 @@ both a code file and a `.gator/charters/*.md` file, then asserts the
 `Gator-Charter-Changed` trailer value is not `no`.
 
 ---
+
+## #2. Dashboard renders empty `gator-command/` sidebar section in monorepo mode
+
+**Status**: Open
+**Discovered**: 2026-08-02 (during monorepo cutover, viewing the new monorepo in Dashboard)
+**Severity**: Minor (cosmetic — empty header renders, no functional impact)
+
+The Dashboard's Repo file sidebar always renders three sections
+(`.gator/`, `gator-command/`, `source/`) regardless of whether each
+has content. In a monorepo (or any repo where `gator-command/` doesn't
+exist at the repo root), the `gator-command/` section shows as an
+empty collapsible header — visual noise that doesn't match reality.
+
+The Python backend at `dashboard/gator-dashboard.py:405-419` correctly
+guards on `gc_dir.is_dir()` and skips the scan, so `gcFiles` comes
+back empty. But the frontend at
+`dashboard/views/repo.js:377,390-392` unconditionally calls
+`buildTree(gcFiles, "gator-command")` and `renderSection("gator-command/",
+"section:gc", gcTree)` regardless of `gcFiles.length`.
+
+Fix (small): guard `renderSection("gator-command/", ...)` on
+`gcFiles.length > 0`. Two-line change in `repo.js:390-391`.
+
+---
+
+## #3. Dashboard swallows update errors as a bare "!"
+
+**Status**: Open
+**Discovered**: 2026-08-02 (trying to run Dashboard Update on the mixed-layout monorepo)
+**Severity**: Moderate (user gets no signal, has to drop to CLI to see the real error)
+
+When `gator update` fails on a Dashboard-triggered Update, the row's
+activity column renders a bare "!" with no error text. The real
+error message (`"Layout is mixed -- run 'gator update --migrate-layout'
+to repair before updating."` in the case that surfaced this) never
+reaches the UI.
+
+Underlying `/api/repo/<name>/update` endpoint has the message in the
+subprocess stderr/stdout; the Dashboard frontend just doesn't render
+it. The Update button ends up worse than useless in an error state —
+users have to `cd` into the repo and `gator update` from the terminal
+to see what happened.
+
+Fix path: return the last N lines of stderr/stdout in the endpoint's
+error JSON, render them under the "!" pill or in a tooltip/modal.
+
+---
+
+## #4. `release-candidate.yml` doesn't inject RC suffix into wheel version
+
+**Status**: Open
+**Discovered**: 2026-08-02 (during v2.5.0-rc1/rc2 iteration during monorepo cutover)
+**Severity**: Moderate (blocks RC iteration; forces version-number churn)
+
+`release-candidate.yml` (`build wheel once` step) uses
+`python -m build --wheel` against the repo as-is — the wheel's version
+comes from `pyproject.toml`'s `version` field verbatim. There is no
+RC-suffix injection.
+
+Consequence: every `vX.Y.Z-rcN` tag builds a wheel named
+`gator_command-X.Y.Z-py3-none-any.whl` — no RC suffix. Once
+uploaded to TestPyPI, TestPyPI's permanent no-filename-reuse policy
+prevents a subsequent `-rcN+1` from uploading (blocked as "400 File
+already exists"). Every RC iteration therefore requires bumping the
+BASE version (2.5.0 → 2.5.1) to unblock the pipeline, burning a
+version number per RC attempt.
+
+Two fix paths:
+
+- **Sed-inject `pyproject.toml` version at build time** — the RC
+  workflow could read the tag (e.g. `v2.5.3-rc1`), extract the RC
+  suffix, and rewrite `version = "2.5.3rc1"` before invoking `build`.
+  Small workflow change, no shipping-code impact.
+- **`setuptools-scm`** — derives version directly from git tag,
+  no `pyproject.toml` `version` field maintained by hand. Cleaner
+  long-term but larger refactor + affects every version-reading
+  code path.
+
+Recommend the sed approach for now.
+
+---
+
+## #5. Node.js 20 deprecation warnings on `actions/*` v4/v5
+
+**Status**: Open
+**Discovered**: 2026-08-02 (annotations on every source-ci and release-candidate run)
+**Severity**: Low → escalates (deadline-driven; GitHub will force-fail eventually)
+
+Every workflow run emits deprecation annotations for
+`actions/checkout@v4`, `actions/setup-python@v5`,
+`actions/upload-artifact@v4`, `actions/download-artifact@v4`. GitHub
+Actions runners are forcing these onto Node.js 24 today; a hard
+switch-off of Node 20 is coming (see
+`https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/`).
+
+Fix: bump each to the version that ships with a Node 24 target. Trivial
+edits across `.github/workflows/*.yml` — verify each still works.
+
+---

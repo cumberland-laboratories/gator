@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.5.2",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release",
+    "hook-hardening"
+  ],
+  "commit": "6ea0367550db2e6dde72bffd2128f4eafdc2cfef",
+  "short_commit": "6ea0367",
+  "snippet_id": "snippet-6ea0367550db2",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "437745345d7aebfdc1c72524d545f787be93e139",
+  "started_at": "2026-08-03T00:02:36Z",
+  "ended_at": "2026-08-03T00:02:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-02-gator-437745345d7ae.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump to 2.5.2 for the release covering:",
+    "**Pre-commit change-type enum validation** — blocks bad values",
+    "(like `bugfix`) at commit time before they reach snippet emission.",
+    "Sync obligation with `gator-session-snippet-v2` schema pinned.",
+    "**`migrate_layout` duplicate handling** — Step 5 now mirrors",
+    "Step 4; `--migrate-layout` self-repairs the mixed-layout state",
+    "that required manual cleanup during the monorepo cutover.",
+    "**12 outdated docs vaulted** — pre-monorepo install/upgrade docs"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
