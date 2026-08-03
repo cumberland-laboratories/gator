@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "issues.md: file #6 (migrate_layout Step 5 directory-conflict)",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "issues-tracking",
+    "migrate-layout",
+    "fleet-observed"
+  ],
+  "commit": "d7c7a1226973322fe8a4d853a849d6f47ec6636f",
+  "short_commit": "d7c7a12",
+  "snippet_id": "snippet-d7c7a12269733",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 13,
+  "previous_commit_in_session": "1ff62981f2f2ad29aa6daddb6d61fdaa195800b9",
+  "started_at": "2026-08-03T01:24:03Z",
+  "ended_at": "2026-08-03T01:24:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/issues.md",
+    ".gator/session-snippets/2026-08-03-gator-1ff62981f2f2a.json"
+  ],
+  "notes": [
+    "Filed issue #6 in `.gator/issues.md` for the `migrate_layout()` Step 5 directory-conflict bug discovered while helping the Architect update the `code/donoriq` fleet repo.",
+    "Sibling to the file-conflict bug that v2.5.3 fixed. Step 5's merge loop handles files correctly but has no branch for the both-directories-exist case:",
+    "```python",
+    "elif f.is_dir() and not dest_f.exists():",
+    "shutil.move(str(f), str(dest_f))",
+    "```",
+    "No `else` branch when `dest_f.exists()`. So `.gator/scripts/__pycache__/` (present at src) with `.gator/.includes/scripts/__pycache__/` (present at dest) leaves both in place, `rmdir` fails, layout re-detects mixed, migration never converges.",
+    "Any repo where `.gator/scripts/` accumulated `__pycache__/` (Python bytecode from running scripts) or `hooks/` (legacy pre-monorepo hook wrapper location) will hit this. `code/donoriq` was example #1. Likely other fleet repos affected — the `__pycache__` case triggers on any Python invocation under `.gator/scripts/`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

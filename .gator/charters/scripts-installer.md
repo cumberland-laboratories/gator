@@ -330,11 +330,12 @@ Filesystem: cwd ancestry (R)
 
 ### main()
 File: `src/gator_command/templates/gator-starter/scripts/gator-session-open.py`
-Entry point for silent self-heal at vendor session start. Finds repo-level `.gator/`, bootstraps `gator_core` via sys.path, imports `gator-init` via `import_sibling`, and calls `ensure_git_hooks()`. Always exits 0 — never blocks the vendor session. Never writes to stdout. Errors go to stderr with `gator-session-open:` prefix via the `__main__` guard's try/except.
-@reads: `.gator/scripts/gator-init.py` (ensure_git_hooks)
+Entry point for silent self-heal at vendor session start. Finds repo-level `.gator/`, resolves the scripts directory via a v2-first probe (`.gator/.includes/scripts/` → `.gator/scripts/` fallback), bootstraps sys.path from the resolved candidate, calls `get_gator_paths(repo_root)` from `gator_layout`, and passes the resulting `GatorPaths` (not a raw `Path`) into `ensure_git_hooks()`. Bails silently on `layout == "invalid"`. Captures `ensure_git_hooks()`'s return dict into a local for future observability wire-up (currently discarded — B3 will route non-happy-path statuses into a bounded diagnostic log). Always exits 0 — never blocks the vendor session. Never writes to stdout. Errors go to stderr with `gator-session-open:` prefix via the `__main__` guard's try/except.
+@reads: `.gator/.includes/scripts/gator-init.py` (v2, primary) or `.gator/scripts/gator-init.py` (v1 fallback)
 @writes: `.git/hooks/` (only when hooks are missing or stale)
 ! This script runs before `gator-session-start.py` in the vendor hook list. Both are independent — no ordering guarantee is assumed. The split ensures correctness (hook self-heal) without requiring the user to type `gator init`.
 ! Distributed as a template (`gator-starter/scripts/`) so fleet repos receive it on `gator update`.
+! Prior v1-only implementation hardcoded `scripts_dir = str(gator_dir / "scripts")` and passed the raw `gator_dir` into `ensure_git_hooks()` which expects a `GatorPaths`. On v2 repos this raised `AttributeError` and the `__main__` guard's `except → sys.exit(0)` swallowed it, making the "silent self-heal" a silent no-op fleet-wide. The v2-first probe + `get_gator_paths()` is the fix; keep the `GatorPaths` contract with `ensure_git_hooks()` (see `gator-init.py::ensure_git_hooks()` for the reader side).
 
 ### merge_hooks_into_settings(settings_path, hooks_template_path)
 File: `src/gator_command/scripts/gator-update.py`, `src/gator_command/scripts/gatorize.py`, `src/gator_command/templates/gator-starter/scripts/gator-update.py`
