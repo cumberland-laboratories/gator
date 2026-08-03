@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "source-ci: also run on dev pushes so it can gate the ff-merge",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "ci-config",
+    "dev-main-flow",
+    "gap-fix"
+  ],
+  "commit": "1ff62981f2f2ad29aa6daddb6d61fdaa195800b9",
+  "short_commit": "1ff6298",
+  "snippet_id": "snippet-1ff62981f2f2a",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 12,
+  "previous_commit_in_session": "d6af71974f95f98e081d21a3b2d7d1c926c830d2",
+  "started_at": "2026-08-03T01:08:52Z",
+  "ended_at": "2026-08-03T01:08:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-03-gator-d6af71974f95f.json",
+    ".github/workflows/source-ci.yml"
+  ],
+  "notes": [
+    "Discovered while pushing the release-and-deploy rewrite: source-ci.yml's trigger was `on: push: branches: [main]` — it only ran on main pushes, never on dev pushes. The `dev → main` flow I documented earlier this session assumed source-ci runs on dev too (that's the whole point — validate on dev, ff-merge to main when green). Without dev in the trigger list, \"wait for source-ci green on dev\" wasn't actually possible — no run would ever fire.",
+    "Fix: add `dev` to the push branches list. Kept `pull_request: branches: [main]` unchanged — PRs still target main (external contributors would follow the standard fork→PR→main pattern, not fork→dev).",
+    "Inline comment added explaining the intent so a future editor understands why dev is in the trigger list."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
