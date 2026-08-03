@@ -355,6 +355,7 @@ File: `src/gator_command/scripts/gator-update.py`, `src/gator_command/scripts/ga
 Installs vendor `SessionStart` hook configs for Claude Code, Codex CLI, and Gemini CLI. Reads templates from `vendor-hooks/` directory, writes to `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json` via `merge_hooks_into_settings()`. Returns count of files changed.
 <- `main()` (gator-update.py, including template-deployed copy), `action_install_gator()` (gatorize.py)
 -> `merge_hooks_into_settings()`
+! The `vendor-hooks/*.json` templates MUST reference script paths at `.gator/.includes/scripts/` (v2 layout). Reverting to `.gator/scripts/` (v1) silently breaks every v2 fleet repo because `merge_hooks_into_settings` compares template commands to existing commands and only rewrites on mismatch — a v1-path template plus a v1-path existing settings file looks like "no change needed" even though the target script doesn't exist under v2. The v1→v2 template drift is the root cause of the 2026-08-03 begin-session fleet-wide silent no-op fix set (see plan `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`).
 
 ---
 

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "session-open: layout-aware bootstrap + GatorPaths contract",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-migration",
+    "session-hooks",
+    "silent-failure-recovery"
+  ],
+  "commit": "83a4f183fb1d8d39a96144b6a7a1965f97048edf",
+  "short_commit": "83a4f18",
+  "snippet_id": "snippet-83a4f183fb1d8",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-03T10:54:24Z",
+  "ended_at": "2026-08-03T10:54:24Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-installer.md",
+    ".gator/session-snippets/2026-08-03-gator-d7c7a12269733.json",
+    "src/gator_command/templates/gator-starter/scripts/gator-session-open.py"
+  ],
+  "notes": [
+    "**Fixed `gator-session-open.py` silent no-op on v2 layout.** The template-shipped session-open script (`src/gator_command/templates/gator-starter/scripts/gator-session-open.py`) hardcoded `scripts_dir = str(gator_dir / \"scripts\")` and passed the raw `gator_dir` (a `Path`) to `ensure_git_hooks(repo_root, paths)`. `ensure_git_hooks` expects a `GatorPaths` (reads `.scripts_dir` and `.gator_root`), so v2 repos raised `AttributeError` on every session start — swallowed by the `__main__` guard's `except → sys.exit(0)`. Silent self-heal became silent no-op fleet-wide. Same shape as the v2.2.2 charter-verify bug.",
+    "**Fix**: v2-first probe for the scripts directory (`.gator/.includes/scripts/` → `.gator/scripts/` fallback so the script keeps working during a v1→v2 update straddle), then `paths = get_gator_paths(repo_root)` from `gator_layout`, then `ensure_git_hooks(repo_root, paths)` matching the reader contract. Bails silently on `layout == \"invalid\"`.",
+    "**Return-value capture** (partial): the script now captures `ensure_git_hooks`'s return dict into `_result` but discards it. The B3 commit will wire this into a bounded diagnostic log so degraded / unavailable / error statuses stop being invisible. Splitting the two lets each commit stand alone: this one fixes the immediate crash; B3 adds the observability layer.",
+    "**Charter update**: `scripts-installer.md` — `main()` entry rewritten to describe the layout-aware bootstrap and the `GatorPaths` contract, with a TRIPWIRE recording the prior silent-no-op failure mode so the next reader knows why the probe exists.",
+    "**Verified** on this repo (v2 monorepo): `python src/gator_command/templates/gator-starter/scripts/gator-session-open.py` returns exit 0 with no stderr and no stdout, as designed for silent hooks. Prior behavior: `gator-session-open: 'WindowsPath' object has no attribute 'scripts_dir'` on stderr (still exit 0 — the swallowed error is the whole reason this bug went undetected).",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step B1 of B1→B2→A1→A4→A2→B3→A3)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
