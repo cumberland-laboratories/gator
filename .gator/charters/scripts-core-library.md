@@ -29,6 +29,7 @@ Filesystem: `pyproject.toml` (R), `.git/` (R), `VERSION` file (R)
 <- `gator-version.py`, `gator-fleet-report.py`, `gator-drift.py`, `gator-audit.py`, `gator-fleet-intel.py`, `gatorize.py`, `gator-deploy.py`, `gator-update.py`, `dashboard/data.py`, `dashboard/updates.py`, `__init__.py`
 -> `_read_pyproject_version()`, `_read_version_file()`, `_find_repo_root()`
 ! This is the single source of truth for version resolution. All callers must use this function — do not add inline pyproject.toml reading or importlib.metadata calls elsewhere.
+! **VERSION file and pyproject.toml must stay byte-consistent on the version field.** Historical drift (root `VERSION` at `1.8.1` while pyproject was at `2.4.5`) was harmless in the normal source-checkout path because the resolver reads pyproject first, but the fallback path (deployed repos without full git history) would silently serve stale numbers. Pre-cutover fix (2026-08-02) synced both to 2.5.0, then 2.5.1 for the actual first monorepo release, now 2.5.2. Both files should be updated together in every version bump commit — CI has no cross-file consistency check for this.
 
 ### get_version_short(cwd=None)
 File: `src/gator_command/scripts/gator_core.py`

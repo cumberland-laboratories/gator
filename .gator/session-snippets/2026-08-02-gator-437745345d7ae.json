@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan-gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Patch stale bugfix snippet + open issues.md #1 (charter-trailer bug)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "snippet-schema-conformance",
+    "issues-tracking"
+  ],
+  "commit": "437745345d7aebfdc1c72524d545f787be93e139",
+  "short_commit": "4377453",
+  "snippet_id": "snippet-437745345d7ae",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "5dcdbdd9bea8cbf855ff5e8bd70219c8ffada850",
+  "started_at": "2026-08-02T23:58:23Z",
+  "ended_at": "2026-08-02T23:58:23Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/issues.md",
+    ".gator/session-snippets/2026-08-02-gator-5dcdbdd9bea8c.json",
+    ".gator/session-snippets/2026-08-02-gator-9f5d85fc2b859.json"
+  ],
+  "notes": [
+    "Companion cleanup for the previous commit's CI failure.",
+    "`.gator/session-snippets/2026-08-02-gator-9f5d85fc2b859.json` was",
+    "emitted by an earlier commit (before the pre-commit change-type",
+    "validation from `5dcdbdd` landed) with `\"change_type\": \"bugfix\"`.",
+    "Schema validator in CI (`contracts/compatibility/test_snippet_schema.py`)",
+    "rejects it — legal values are `feature | fix | refactor | docs | test",
+    "| release | maintenance | review | governance | \"\"`. Patched the",
+    "existing snippet to `\"change_type\": \"fix\"`. From this commit forward"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

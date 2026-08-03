@@ -2,6 +2,20 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.5.2] — 2026-08-02
+
+Post-cutover polish: two hook fixes that harden the governance loop
+against classes of drift the monorepo cutover surfaced.
+
+### Fixed
+
+- **Pre-commit hook rejects invalid `change-type` values at commit time.** `gator-pre-commit.py::validate_hard_rules` now validates the `change-type` field in `.gator/commit_draft.md` against the schema-legal enum (`feature | fix | refactor | docs | test | release | maintenance | review | governance | ""`). Bad values fail with a message naming the valid set and common typos (`bugfix` → `fix`, `chore` → `maintenance`, `style` → `refactor`). Before this fix, plausible-sounding values like `bugfix` passed pre-commit, were emitted verbatim into session snippets, and only got caught by CI schema validation on the emitted snippet — the exact drift class this validation exists to prevent. Sync obligation between `VALID_CHANGE_TYPES` and `contracts/schemas/gator-session-snippet-v2.json` pinned by `tests/test_precommit_validation.py::TestSchemaEnumSyncObligation`.
+- **`gator update --migrate-layout` now converges when shipped directories contain duplicates.** Previously, if a shipped directory (`reference-notes/`, `scripts/`) existed at BOTH the flat `.gator/` root AND `.gator/.includes/`, the migration's Step 5 merge only moved files that didn't yet exist in `.includes/` — leaving root duplicates in place, re-detection as "mixed", and endless "Result: mixed (migration incomplete — check conflicts)". Step 5 now mirrors Step 4's behavior: when both exist, the `.includes/` copy is canonical and the root copy is removed. This state was hit during the monorepo cutover in `.gator/reference-notes/` and required manual cleanup; the fix means `--migrate-layout` self-repairs it. Regression pin: `tests/test_layout.py::TestMigration::test_shipped_dir_duplicates_get_removed`.
+
+### Documentation
+
+- 12 pre-monorepo docs vaulted to `.gator/vault/docs-not-ready/` because they describe the retired `gator-engine/scripts/gatorize.sh` install path and `git checkout upstream/main -- gator-engine/` upgrade flow that no longer exist in the pipx-first monorepo world. Would actively mislead new users. `installation.md`, `upgrade.md`, `getting-started.md`, `index.md`, `audit-compliance.md`, `fleet-governance.md`, `session-archaeology.md`, `for-directors.md`, `for-engineers.md`, `for-leadership.md`, `new-project-with-gator.md`, `what-gator-requires-from-a-model.md`. Rewrite queued as a follow-on. `mkdocs.yml` nav restructured accordingly.
+
 ## [2.5.1] — 2026-08-02
 
 **Note on the version jump from 2.4.5 to 2.5.1**: 2.5.0 was published to TestPyPI during the cutover pipeline validation. TestPyPI enforces a permanent no-filename-reuse policy — once `gator_command-2.5.0-py3-none-any.whl` was uploaded (even after deletion), that filename cannot be reused. Rather than skip TestPyPI validation for the production publish, we bumped the version to 2.5.1 and re-ran the full pipeline. 2.5.0 is not, and will not be, published to production PyPI. The next contentful release will be 2.5.1 or higher.
