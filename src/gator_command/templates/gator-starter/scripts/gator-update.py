@@ -1000,6 +1000,46 @@ def print_json_plan(plan, templates_dir, hooks=None, entry_point_actions=None):
 
 # --- Layout migration ---
 
+def _merge_dir_files_only(src, dest, report, prefix):
+    """Recursively merge files from src into dest, dest-wins on file collision.
+
+    Used only by migrate_layout()'s Step 5 to handle both-directories-exist
+    cases whose names aren't in the known-safe legacy allowlist. Files present
+    at both sides are removed from src (dest is canonical, same rule as
+    SHIPPED_ROOT_FILES in Step 4). Empty subdirs are rmdir'd bottom-up. Any
+    leftover content (non-file/non-dir entries; subdirs that still hold
+    content after merge) is logged into report["conflicts"] and left in place
+    so the operator sees a concrete path in the final migration report.
+    """
+    dest.mkdir(exist_ok=True)
+    for entry in sorted(src.iterdir()):
+        dest_entry = dest / entry.name
+        if entry.is_file():
+            if not dest_entry.exists():
+                shutil.move(str(entry), str(dest_entry))
+                report["moved"].append(f"{prefix}/{entry.name}")
+            else:
+                entry.unlink()
+                report["moved"].append(
+                    f"{prefix}/{entry.name} (root copy removed)"
+                )
+        elif entry.is_dir():
+            _merge_dir_files_only(
+                entry, dest_entry, report,
+                prefix=f"{prefix}/{entry.name}",
+            )
+        else:
+            report["conflicts"].append(
+                f"{prefix}/{entry.name} (non-file, non-dir; left in place)"
+            )
+    try:
+        src.rmdir()
+    except OSError:
+        report["conflicts"].append(
+            f"{prefix}/ (still contains unresolvable content)"
+        )
+
+
 def migrate_layout(repo_root, gator_dir, templates_dir):
     """Migrate a v1 repo to v2 layout.
 
@@ -1112,6 +1152,26 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
                     elif f.is_dir() and not dest_f.exists():
                         shutil.move(str(f), str(dest_f))
                         report["moved"].append(f"{dname}/{f.name}/")
+                    elif f.is_dir():
+                        # Both directories exist. Known-safe legacy residue:
+                        # __pycache__/ (Python bytecode, regenerated) and
+                        # hooks/ (pre-monorepo git-hook install location —
+                        # install_git_hooks now writes to .git/hooks/ or
+                        # .git/gator-hooks/, so these copies are dead weight
+                        # after migration). Remove src unconditionally for
+                        # both. Everything else: recursive files-only merge
+                        # (dest wins on collision) via _merge_dir_files_only.
+                        # See Issue #6 for the field case that motivated this.
+                        if f.name in ("__pycache__", "hooks"):
+                            shutil.rmtree(str(f))
+                            report["moved"].append(
+                                f"{dname}/{f.name}/ (legacy residue removed)"
+                            )
+                        else:
+                            _merge_dir_files_only(
+                                f, dest_f, report,
+                                prefix=f"{dname}/{f.name}",
+                            )
                 # Remove src if empty
                 try:
                     src_dir.rmdir()

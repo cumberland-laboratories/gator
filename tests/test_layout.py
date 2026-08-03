@@ -615,3 +615,101 @@ class TestMigration:
         # Root-only file moved to .includes/
         assert not (root_refnotes / "root-only.md").exists()
         assert (includes_refnotes / "root-only.md").exists()
+
+    def test_shipped_dir_pycache_conflict_removed(self, tmp_path):
+        """Regression (Issue #6, 2026-08-03): mixed layout where both
+        `.gator/scripts/__pycache__/` and `.gator/.includes/scripts/__pycache__/`
+        exist must converge to pure v2 without manual cleanup.
+
+        Before A1's fix, Step 5's merge branched only on `f.is_dir() and not
+        dest_f.exists()`. With no `else` for both-directories-exist, root-side
+        `__pycache__/` stayed in place, `src_dir.rmdir()` failed silently
+        (via except OSError: pass), layout re-detected as `mixed`, migration
+        reported `Result: mixed (migration incomplete)` and never converged.
+        This state was hit by every fleet repo that ever ran a Python script
+        under `.gator/scripts/`.
+
+        Fix: known-safe legacy names (`__pycache__`, `hooks`) get rmtree'd
+        unconditionally; unknown names go through _merge_dir_files_only.
+        """
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+
+        # v2 shape: .includes/scripts/__pycache__/ exists with a .pyc
+        includes_scripts_cache = gator / ".includes" / "scripts" / "__pycache__"
+        includes_scripts_cache.mkdir(parents=True)
+        (includes_scripts_cache / "gator_core.cpython-313.pyc").write_bytes(
+            b"\x00\x00canonical bytecode"
+        )
+
+        # Root-side duplicate __pycache__ AND a legacy hooks/ dir (both are
+        # known-safe residue that should be removed unconditionally)
+        root_scripts = gator / "scripts"
+        root_scripts.mkdir()
+        (root_scripts / "__pycache__").mkdir()
+        (root_scripts / "__pycache__" / "gator_core.cpython-313.pyc").write_bytes(
+            b"\x00\x00stale bytecode from a prior interpreter"
+        )
+        (root_scripts / "hooks").mkdir()
+        (root_scripts / "hooks" / "pre-commit").write_text(
+            "#!/bin/sh\n# legacy pre-monorepo git hook copy\n"
+        )
+
+        # Required v2 marker + minimum shipped content
+        (gator / "layout-version.json").write_text('{"layout": "v2"}\n')
+        (gator / ".includes" / "constitution.md").write_text("# Constitution\n")
+
+        # Sanity: detects as mixed before the migration
+        assert gator_layout.resolve_gator_layout(tmp_path) == "mixed"
+
+        report = _update.migrate_layout(tmp_path, gator, None)
+
+        # Post-fix: mixed → v2 with no manual pre-cleanup required
+        assert report["final_layout"] == "v2", (
+            f"Migration did not converge to v2. Report: {report}"
+        )
+        # Root-side __pycache__/ and hooks/ removed entirely
+        assert not (root_scripts / "__pycache__").exists()
+        assert not (root_scripts / "hooks").exists()
+        # Root scripts/ dir itself gone (was left holding only the residue)
+        assert not root_scripts.exists()
+        # Canonical .includes/ bytecode untouched
+        canonical = (includes_scripts_cache / "gator_core.cpython-313.pyc").read_bytes()
+        assert canonical == b"\x00\x00canonical bytecode"
+
+    def test_shipped_dir_unknown_dir_conflict_merges(self, tmp_path):
+        """Regression (Issue #6, 2026-08-03): unknown-name directory conflict
+        (i.e. not __pycache__ or hooks) must be handled by _merge_dir_files_only
+        — files migrate, dest wins on collision, empty subdirs get rmdir'd.
+        """
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+
+        # v2 shape: .includes/scripts/experimental/ exists with a file
+        includes_experimental = gator / ".includes" / "scripts" / "experimental"
+        includes_experimental.mkdir(parents=True)
+        (includes_experimental / "canonical.txt").write_text("canonical\n")
+        (includes_experimental / "shared.txt").write_text("canonical wins\n")
+
+        # Root-side experimental/ with a duplicate + a root-only file
+        root_experimental = gator / "scripts" / "experimental"
+        root_experimental.mkdir(parents=True)
+        (root_experimental / "shared.txt").write_text("stale root copy\n")
+        (root_experimental / "root-only.txt").write_text("only at root\n")
+
+        (gator / "layout-version.json").write_text('{"layout": "v2"}\n')
+        (gator / ".includes" / "constitution.md").write_text("# Constitution\n")
+
+        assert gator_layout.resolve_gator_layout(tmp_path) == "mixed"
+        report = _update.migrate_layout(tmp_path, gator, None)
+
+        assert report["final_layout"] == "v2", f"Report: {report}"
+        # Shared file: dest kept, src removed
+        assert (includes_experimental / "shared.txt").read_text() == "canonical wins\n"
+        assert not (root_experimental / "shared.txt").exists()
+        # Root-only file: moved to dest
+        assert (includes_experimental / "root-only.txt").read_text() == "only at root\n"
+        assert not (root_experimental / "root-only.txt").exists()
+        # Root experimental/ dir gone; canonical file preserved
+        assert not root_experimental.exists()
+        assert (includes_experimental / "canonical.txt").read_text() == "canonical\n"

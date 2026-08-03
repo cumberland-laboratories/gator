@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "vendor-hook templates: point at v2 script paths (.includes/scripts/)",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-migration",
+    "session-hooks",
+    "fleet-propagation"
+  ],
+  "commit": "a53285155feb37b68532346e80a33209b4915805",
+  "short_commit": "a532851",
+  "snippet_id": "snippet-a53285155feb3",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "83a4f183fb1d8d39a96144b6a7a1965f97048edf",
+  "started_at": "2026-08-03T10:58:15Z",
+  "ended_at": "2026-08-03T10:58:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-installer.md",
+    ".gator/session-snippets/2026-08-03-gator-83a4f183fb1d8.json",
+    "src/gator_command/templates/gator-starter/vendor-hooks/claude-settings.json",
+    "src/gator_command/templates/gator-starter/vendor-hooks/codex-hooks.json",
+    "src/gator_command/templates/gator-starter/vendor-hooks/gemini-settings.json"
+  ],
+  "notes": [
+    "**Fixed vendor-hook templates to reference v2 script paths.** All three files under `src/gator_command/templates/gator-starter/vendor-hooks/` (claude-settings.json, codex-hooks.json, gemini-settings.json) shipped `python .gator/scripts/gator-session-open.py` — the v1 layout path. On v2 repos, those scripts live at `.gator/.includes/scripts/`, so every vendor hook installed since the v2 `.includes/` migration has pointed at a nonexistent script and silently no-op'd fleet-wide.",
+    "**Why the merge logic didn't catch it**: `merge_hooks_into_settings` (charter: `scripts-installer.md`) already detects and rebuilds the existing Gator hook group when template commands differ from existing commands (see `existing_gator_cmds != template_cmds` gate). But template ships v1 paths, existing repos have v1 paths — the diff was empty. The merge logic was correct; the input data was wrong.",
+    "**Fix**: rewrote the `command` fields in all three templates from `python .gator/scripts/…` to `python .gator/.includes/scripts/…`. Confirmed no other `.gator/scripts/` references remain in `vendor-hooks/` after the sweep.",
+    "**Fleet propagation**: on every governed repo's next `gator update`, `install_vendor_hooks` → `merge_hooks_into_settings` now sees template-vs-existing drift and rewrites the Gator hook group in-place, preserving user hooks. Zero code changes needed in the update pipeline.",
+    "**Charter update**: added a TRIPWIRE to `scripts-installer.md::install_vendor_hooks` recording why the templates MUST reference v2 paths and pointing at the 2026-08-03 plan for context. This prevents a future reader from \"helpfully\" reverting the templates to v1 on the theory that they'd be \"v1-compatible\" — they wouldn't; they'd resurrect the fleet-wide silent no-op.",
+    "Part of the \"update and begin-session bugs\" fix set (plan: `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`, step B2 of B1→B2→A1→A4→A2→B3→A3). B1 fixed the script itself; B2 fixes the templates so fleet repos get pointed at the fixed script."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
