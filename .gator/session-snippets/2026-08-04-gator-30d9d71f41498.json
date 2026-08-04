@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "issues.md → GitHub Issues; new file-github-issue procedure",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "tracking-system-migration",
+    "github-native",
+    "deprecation"
+  ],
+  "commit": "30d9d71f41498e055d8c9277ee5df8eb3d1d0c06",
+  "short_commit": "30d9d71",
+  "snippet_id": "snippet-30d9d71f41498",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-04T14:35:54Z",
+  "ended_at": "2026-08-04T14:35:54Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/issues.md",
+    ".gator/procedures/file-github-issue.md",
+    ".gator/procedures/release-and-deploy.md",
+    ".gator/session-snippets/2026-08-03-gator-baefadfb26436.json"
+  ],
+  "notes": [
+    "**Retired `.gator/issues.md` as the primary issue tracker.** Per the 2026-08-04 design outline at `.gator/vault/artifacts/2026-08-04-github-issue-tracking-outline.md` and the Architect's decision to migrate. The public monorepo has outgrown a flat repo-local markdown file — for a public Apache 2.0 project with release cadence, packaging boundaries, and (soon) external contributors, GitHub Issues is the right system of record.",
+    "**New tracker**: [GitHub Issues](https://github.com/cumberland-laboratories/gator/issues) on `cumberland-laboratories/gator`, organized by the [Gator project board](https://github.com/users/cumberland-laboratories/projects/1). Metadata contract: `Priority` (P0/P1/P2/P3), `Area` (Core CLI / Dashboard / Hooks / Charters / Loop / Enterprise / Packaging / Release / Docs), `Status` (Todo / In Progress / Done). Labels layered on top for cross-cutting tags (`bug`, `hooks`, `dashboard`, `packaging`, `maintenance`, etc.).",
+    "**Four issues migrated** from the old `.gator/issues.md` (all originally Open):",
+    "`.gator/issues.md` #3 → [GitHub #1](https://github.com/cumberland-laboratories/gator/issues/1) — Dashboard swallows `gator update` errors (Priority=P2, Area=Dashboard)",
+    "`.gator/issues.md` #1 → [GitHub #2](https://github.com/cumberland-laboratories/gator/issues/2) — Gator-Charter-Changed trailer reports `no` (Priority=P2, Area=Hooks)",
+    "`.gator/issues.md` #4 → [GitHub #3](https://github.com/cumberland-laboratories/gator/issues/3) — release-candidate.yml RC-suffix injection (Priority=P2, Area=Packaging / Release)",
+    "`.gator/issues.md` #5 → [GitHub #4](https://github.com/cumberland-laboratories/gator/issues/4) — Node.js 20 deprecation on `actions/*` (Priority=P3, Area=Packaging / Release)",
+    "**Two originally-resolved items** (#2 Dashboard false alarm; #6 migrate_layout Step 5 dir conflicts — shipped in v2.5.4 commit `5453f8b`) were NOT migrated: they're already Done, their resolution notes are preserved in git history via `git log --follow -- .gator/issues.md`, and re-filing them just to close them would be paperwork without signal. The retirement stub references both explicitly so the trail is walkable."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

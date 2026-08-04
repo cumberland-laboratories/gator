@@ -175,9 +175,57 @@ Optional but tidy. `.tmp/` is gitignored so it never propagates, but stale draft
 
 ## Common variations
 
-### Sub-issues (parent → children)
+### Sub-issues (parent → children — umbrella efforts)
 
-For multi-surface initiatives, file the parent issue first, then use GitHub's sub-issue feature via the issue's web UI (there's no first-class `gh` command yet for sub-issue linking as of 2026-08-04 — `gh` covers Projects, but sub-issue hierarchy is a newer feature and the CLI hasn't caught up). Alternative: reference the parent from each child body with `Parent: #<number>` and add all children under the same Project item.
+For multi-surface initiatives (e.g. "Gator Loop polish", "Enterprise post-MVP hardening"): file one **parent issue** framing the effort, file each **deliverable as a sub-issue**, and link them via GitHub's native sub-issue API. Both the parent and each child appear as first-class items on the project board; the parent gets a progress bar showing how many children are closed. Filter by `Area` to see everything under one umbrella together.
+
+**Parent issue conventions:**
+- Title includes `(umbrella)` suffix to signal it's an effort, not a discrete work item.
+- Body frames what the effort is / what's in scope / what's out of scope — references the roadmap section it corresponds to.
+- Labels: `enhancement` + the area label (`loop`, `enterprise`, etc.). Skip `bug` — an umbrella isn't a bug.
+- Project fields: same conventions as any other issue. The parent's `Priority` reflects the effort's urgency, not the individual deliverables'.
+
+**Child sub-issue conventions:**
+- Title starts with a short area prefix like `Loop: ...` so the board is scannable when the parent-child relationship isn't visible.
+- Body links back to the parent in the `### Related` section (`Parent effort: see linked parent issue #N`).
+- Same labels + project fields as the parent's area.
+- `Priority` reflects the deliverable's individual urgency; some sub-issues will be higher priority than the parent.
+
+**Linking a sub-issue via `gh api` (GraphQL — no first-class `gh sub-issue` command yet):**
+
+```bash
+# Fetch the parent's GraphQL node ID (different from the issue number)
+PARENT_ID=$(gh issue view <PARENT_N> --repo cumberland-laboratories/gator --json id --jq .id)
+
+# For each child: addSubIssue mutation using subIssueUrl (simpler than fetching child node ID)
+gh api graphql -f query="mutation {
+  addSubIssue(input: {
+    issueId: \"$PARENT_ID\",
+    subIssueUrl: \"https://github.com/cumberland-laboratories/gator/issues/<CHILD_N>\"
+  }) {
+    subIssue { number title }
+  }
+}"
+```
+
+The mutation is idempotent-safe on the same child (returns an error if already linked, but the state remains consistent). If a child already has a different parent and you want to move it, add `replaceParent: true` to the input.
+
+**Verify the parent's linked children:**
+
+```bash
+gh api graphql -f query='query {
+  repository(owner: "cumberland-laboratories", name: "gator") {
+    issue(number: <PARENT_N>) {
+      subIssuesSummary { total completed percentCompleted }
+      subIssues(first: 20) { nodes { number title state } }
+    }
+  }
+}'
+```
+
+**Note the naming quirk**: the GraphQL field is `subIssues` (plural, no `Connection` suffix — some GitHub docs use `subIssuesConnection` which is wrong and produces `undefinedField`). Also `subIssuesSummary` gives progress-bar counts without paginating.
+
+**First umbrella filed on this repo**: [#5 Gator Loop polish](https://github.com/cumberland-laboratories/gator/issues/5) with sub-issues #6, #7, #8 (2026-08-04). Board view shows parent + all children separately; parent's issue page shows the progress bar.
 
 ### Batch migrations from `.gator/inbox.md`
 
