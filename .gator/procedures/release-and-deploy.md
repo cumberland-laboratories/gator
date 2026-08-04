@@ -108,7 +108,7 @@ The fix: pause between `git add` and `git commit`. Look at what's staged. Confir
 - [ ] Expected jobs (all green): `RC tag validation + kill switch`, `build wheel once`, `publish to TestPyPI (OIDC trusted publisher)`, `fresh-env install from TestPyPI + CLI smoke (ubuntu-latest)`, `fresh-env install from TestPyPI + CLI smoke (windows-latest)`. `deploy candidate as PR into public gator repo` should show as `skipped` (the deploy step is a retired-flow stub, gated by absent `DEPLOY_PUBLIC_ENABLED`).
 - [ ] **Save the run ID** — you'll need it as `workflow_b_run_id` for the promote step.
 
-**Handling TestPyPI filename-permanence** (see #4 in `.gator/issues.md`): if the RC fails and you need to iterate, you must **bump the base version** for the next RC (e.g. `X.Y.Z-rc1` fails → next RC is `X.Y.(Z+1)-rc1`, NOT `X.Y.Z-rc2`). TestPyPI never lets you re-upload a filename, and `release-candidate.yml` doesn't inject the RC suffix into the wheel version — both `-rc1` and `-rc2` would build `gator_command-X.Y.Z-py3-none-any.whl` and the second upload gets `400 File already exists`. Version churn cost per failed RC: one patch version.
+**Handling TestPyPI filename-permanence** (tracked as [GitHub issue #3](https://github.com/cumberland-laboratories/gator/issues/3)): if the RC fails and you need to iterate, you must **bump the base version** for the next RC (e.g. `X.Y.Z-rc1` fails → next RC is `X.Y.(Z+1)-rc1`, NOT `X.Y.Z-rc2`). TestPyPI never lets you re-upload a filename, and `release-candidate.yml` doesn't inject the RC suffix into the wheel version — both `-rc1` and `-rc2` would build `gator_command-X.Y.Z-py3-none-any.whl` and the second upload gets `400 File already exists`. Version churn cost per failed RC: one patch version.
 
 ### 5. Dispatch promote-to-pypi
 
@@ -169,7 +169,7 @@ gh run rerun <PROMOTE_RUN_ID> --failed --repo cumberland-laboratories/gator
 - [ ] `pipx upgrade gator-command` on a machine with the previous version — confirm it goes to X.Y.Z
 - [ ] `gator --version` reports X.Y.Z
 - [ ] `.gator/roadmap.md` updated with the new row in the Done table (this can be a small follow-on commit on `dev` — doesn't need to block the release)
-- [ ] `.gator/issues.md` — mark any issues this release resolved as `Resolved`
+- [ ] [GitHub Issues](https://github.com/cumberland-laboratories/gator/issues) — close any issues this release resolved (link the closing commit in the close comment for the audit trail). See `.gator/procedures/file-github-issue.md` for the tracker location and metadata conventions.
 
 ## Recovery: wheel doesn't match CHANGELOG (like 2.5.2 → 2.5.3)
 
@@ -194,8 +194,8 @@ Cost is minor (one skipped version number). Credibility cost of releasing an ove
 
 - `.gator/charters/release-pipeline.md` — full workflow charter (job graph, kill-switch semantics, artifact-name contract)
 - `.gator/procedures/gator-loop-protocol.md` — governance-loop reference; loops are unrelated to release cadence
-- `.gator/issues.md` #4 — RC-suffix injection missing in `release-candidate.yml` (drives the "bump base version per failed RC" workaround)
-- `.gator/issues.md` #5 — Node.js 20 deprecation warnings on `actions/*` v4/v5 (needs `actions/checkout@v5`, `actions/setup-python@v6`, etc. bump before GitHub's deadline)
+- [GitHub issue #3](https://github.com/cumberland-laboratories/gator/issues/3) — RC-suffix injection missing in `release-candidate.yml` (drives the "bump base version per failed RC" workaround)
+- [GitHub issue #4](https://github.com/cumberland-laboratories/gator/issues/4) — Node.js 20 deprecation warnings on `actions/*` v4/v5 (needs `actions/checkout@v5`, `actions/setup-python@v6`, etc. bump before GitHub's deadline)
 - `.gator/inbox.md` — "Promote workflow smoke test needs a PyPI-propagation wait" (the fix for step 6 above)
 - `CONTRIBUTING.md ## Branching` — the dev→main flow this procedure assumes
 - `CHANGELOG.md` — release history + the `[2.5.3]` recovery-release example

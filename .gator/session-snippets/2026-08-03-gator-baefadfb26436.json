@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "roadmap: v2.5.3 + v2.5.4 Done rows; header refresh",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-followup",
+    "roadmap-maintenance"
+  ],
+  "commit": "baefadfb26436e2b7c377c1cf9362b33ae44d10b",
+  "short_commit": "baefadf",
+  "snippet_id": "snippet-baefadfb26436",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "0ae8ac33a4c034d93f314eec2768047c57135903",
+  "started_at": "2026-08-03T14:30:03Z",
+  "ended_at": "2026-08-03T14:30:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-03-gator-0ae8ac33a4c03.json"
+  ],
+  "notes": [
+    "**Roadmap Done table refreshed with two rows.** v2.5.3 (hook hardening recovery release) was missing entirely — added the row now. v2.5.4 (this session's ship — session-hook self-heal + migration convergence + drift visibility) added with a summary that names the fix set, the regression pins, and the plan artifact.",
+    "**Header line \"Now at v2.5.1\" → \"Now at v2.5.4\"** and the \"Updated\" date at the top of the file moved from `2026-08-02 (post-cutover)` to `2026-08-03 (post-v2.5.4)`.",
+    "**Not touched**: Issue #6 status in `.gator/issues.md` was already marked `Resolved (2026-08-03, commit 5453f8b)` in the A3 wrap-up commit; verified during R8, no re-edit needed. Priority-1 / Priority-2 / Considering / Deferred tables not touched — no items shifted status this cycle.",
+    "Follow-on to the v2.5.4 release. Per `release-and-deploy.md` Step 8, roadmap updates ride on `dev` and don't block the release."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
