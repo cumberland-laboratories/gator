@@ -60,3 +60,7 @@ AGENTS.local.md
 CLAUDE.local.md
 # Local agent companion — personal notes/skills (machine-local)
 GEMINI.local.md
+
+# Enterprise local bring-up scaffolding (machine-local, per 2026-08-06 plan)
+.venv-enterprise-local/
+.env-enterprise-local
