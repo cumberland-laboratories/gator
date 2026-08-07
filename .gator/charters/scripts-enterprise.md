@@ -279,6 +279,31 @@ enterprise-cli package.
   provisioned with `--mode evidence_only` had every commit run in
   strict because no git provider knew the repo.
 
+- **! `repo init --mode` default is `strict`, not `evidence_only`.**
+  Reverses the pre-2026-08-07 enterprise-cli default (which was
+  `evidence_only` with a help-text pointer to Individual for stricter
+  ceremony). Per Architect 2026-08-07: "commits should not go silently.
+  The commit should record everything it can, forcing the bot, human,
+  etc. to explain what is happening with the commit." Strict is the
+  only mode that FORCES the explanation (blocks without commit_draft).
+  `warning` requires commit_draft too but downgrades block→warning
+  (useful for CI/bot repos that can't respond to a block); operators
+  should choose it explicitly for those repos. `evidence_only` and
+  `off` remain available for explicit opt-out — machine-generated
+  evidence continues to flow regardless of mode.
+
+  Choices list widened from `["evidence_only", "warning"]` to
+  `["off", "evidence_only", "warning", "strict"]` (all four the
+  bundled pre-commit script recognizes; keeping choices narrower
+  would let some values through the wrapper's mode lookup but not
+  through the `repo init` CLI, which would be confusing).
+
+  Regression pin: `enterprise/tests/test_repo_init.py::
+  TestRepoInitIntegration` passes `mode="evidence_only"` explicitly
+  — that test verifies the non-default branch and continues to
+  demonstrate that explicit opt-out still writes the requested mode
+  correctly.
+
 - **! Mode-lookup in hook wrappers MUST compute the policy path with
   Python's `Path.home()` and MUST pass the repo-id via the
   `GATOR_REPO_ID` env var — NEVER shell-interpolate `$HOME` into the

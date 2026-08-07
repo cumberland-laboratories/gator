@@ -60,9 +60,19 @@ def register(subparsers):
 
     init_parser = repo_sub.add_parser("init", help="Provision a repo for Enterprise governance")
     init_parser.add_argument("path", nargs="?", default=".", help="Path to repo (default: current directory)")
-    init_parser.add_argument("--mode", default="evidence_only",
-                            choices=["evidence_only", "warning"],
-                            help="Hook enforcement mode (default: evidence_only). Use Gator Individual for strict/charter enforcement.")
+    init_parser.add_argument("--mode", default="strict",
+                            choices=["off", "evidence_only", "warning", "strict"],
+                            help=(
+                                "Hook enforcement mode (default: strict). "
+                                "'strict' requires commit_draft.md on every commit "
+                                "and blocks otherwise — commits explain themselves. "
+                                "'warning' requires the same but downgrades failures "
+                                "to warnings (useful for CI/bot repos that can't "
+                                "respond to a block). 'evidence_only' captures "
+                                "machine-generated evidence without requiring "
+                                "commit_draft. 'off' disables governance entirely. "
+                                "See docs for the tradeoffs."
+                            ))
     init_parser.add_argument("--canonical-id", default=None,
                             help="Canonical repo identifier (default: derived from git remote)")
     init_parser.add_argument("--commit", action="store_true",
