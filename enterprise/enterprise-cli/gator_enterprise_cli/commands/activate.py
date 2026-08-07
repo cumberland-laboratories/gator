@@ -13,13 +13,42 @@ from gator_enterprise_cli.output import print_kv
 
 
 # --- Hook wrapper templates ---
+#
+# TRIPWIRE: Windows Git Bash has `python` and `py -3` but NOT `python3` as a
+# real interpreter. Stock Windows installs an App Execution Alias for
+# `python3` that points at a Microsoft Store stub — it "exists" on PATH but
+# prints an install prompt and exits non-zero when invoked. Any hook wrapper
+# that hardcodes `python3` fails silently on the first commit on Windows,
+# blocking every governed commit with an opaque error. All Python invocations
+# in these templates MUST go through the resolved `$PYTHON` (via
+# `_PYTHON_RESOLVER` below), which prefers the pipx venv interpreter that
+# `activate` writes to `~/.gator/enterprise/cli-python-path` and only falls
+# back to `python3`/`python` on PATH when that file is unavailable.
 
-PRE_COMMIT_HOOK = r"""#!/bin/sh
+_PYTHON_RESOLVER = r'''
+# Resolve Python interpreter — prefer cli-python-path (written by activate);
+# fall back to python3 then python on PATH. See TRIPWIRE in activate.py.
+PYTHON=""
+CLI_PYTHON_FILE="$HOME/.gator/enterprise/cli-python-path"
+if [ -f "$CLI_PYTHON_FILE" ]; then
+    CANDIDATE=$(cat "$CLI_PYTHON_FILE")
+    [ -x "$CANDIDATE" ] && PYTHON="$CANDIDATE"
+fi
+[ -z "$PYTHON" ] && PYTHON=$(command -v python3 2>/dev/null)
+[ -z "$PYTHON" ] && PYTHON=$(command -v python 2>/dev/null)
+if [ -z "$PYTHON" ]; then
+    echo "gator: no Python interpreter found" >&2
+    echo "  (looked at: \$HOME/.gator/enterprise/cli-python-path, python3, python)" >&2
+    exit 1
+fi
+'''
+
+PRE_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global pre-commit hook
 # Installed by: gator-enterprise activate
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-
+''' + _PYTHON_RESOLVER + r'''
 # Read repo identity and look up hook policy
 REPO_ID_FILE=".gator/repo-id"
 POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
@@ -27,7 +56,7 @@ MODE="strict"
 
 if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
     REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$(python3 -c "
+    MODE=$("$PYTHON" -c "
 import json, sys
 try:
     p = json.load(open('$POLICY_FILE'))
@@ -40,21 +69,21 @@ fi
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
-python3 "$GATOR_SCRIPT" --phase validate "$@"
-"""
+"$PYTHON" "$GATOR_SCRIPT" --phase validate "$@"
+'''
 
-COMMIT_MSG_HOOK = r"""#!/bin/sh
+COMMIT_MSG_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global commit-msg hook
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-
+''' + _PYTHON_RESOLVER + r'''
 REPO_ID_FILE=".gator/repo-id"
 POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
 MODE="strict"
 
 if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
     REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$(python3 -c "
+    MODE=$("$PYTHON" -c "
 import json
 try:
     p = json.load(open('$POLICY_FILE'))
@@ -66,21 +95,21 @@ fi
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
-python3 "$GATOR_SCRIPT" --phase trailers "$@"
-"""
+"$PYTHON" "$GATOR_SCRIPT" --phase trailers "$@"
+'''
 
-POST_COMMIT_HOOK = r"""#!/bin/sh
+POST_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global post-commit hook
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-
+''' + _PYTHON_RESOLVER + r'''
 REPO_ID_FILE=".gator/repo-id"
 POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
 MODE="strict"
 
 if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
     REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$(python3 -c "
+    MODE=$("$PYTHON" -c "
 import json
 try:
     p = json.load(open('$POLICY_FILE'))
@@ -92,17 +121,16 @@ fi
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
-python3 "$GATOR_SCRIPT" --phase cleanup "$@"
+"$PYTHON" "$GATOR_SCRIPT" --phase cleanup "$@"
 
 # Generate session block for the just-completed commit
 if [ "$MODE" != "off" ]; then
     COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null)
     if [ -n "$COMMIT_SHA" ]; then
-        # Try CLI interpreter first (has cryptography for encrypted blocks)
-        # Fall back to repo-local script if CLI interpreter is unavailable
+        # Prefer CLI interpreter (has cryptography for encrypted blocks);
+        # fall back to repo-local script under resolved $PYTHON.
         BLOCK_GENERATED=0
-        CLI_PYTHON_FILE="$HOME/.gator/enterprise/cli-python-path"
-        if [ -f "$CLI_PYTHON_FILE" ]; then
+        if [ -n "$CLI_PYTHON_FILE" ] && [ -f "$CLI_PYTHON_FILE" ]; then
             CLI_PYTHON=$(cat "$CLI_PYTHON_FILE")
             if [ -x "$CLI_PYTHON" ]; then
                 "$CLI_PYTHON" -m gator_enterprise_cli.block_generate \
@@ -113,7 +141,7 @@ if [ "$MODE" != "off" ]; then
         if [ "$BLOCK_GENERATED" = "0" ]; then
             BLOCK_SCRIPT=".gator/scripts/gator-session-block.py"
             if [ -f "$BLOCK_SCRIPT" ]; then
-                python3 "$BLOCK_SCRIPT" generate --commit "$COMMIT_SHA" 2>/dev/null || true
+                "$PYTHON" "$BLOCK_SCRIPT" generate --commit "$COMMIT_SHA" 2>/dev/null || true
             fi
         fi
         # Stage generated blocks (both v2 .json.gz and v3 .block.json)
@@ -123,7 +151,7 @@ if [ "$MODE" != "off" ]; then
         fi
     fi
 fi
-"""
+'''
 
 
 def register(subparsers):

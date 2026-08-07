@@ -170,6 +170,26 @@ enterprise-cli package.
   wheel CI must pass (`tests/`, `contracts/`); enterprise CI is scoped
   to `enterprise/tests/` and can be red without holding shipping.
 
+- **! Global hook wrappers MUST resolve Python via `$PYTHON`
+  (`_PYTHON_RESOLVER` in `enterprise-cli/gator_enterprise_cli/commands/
+  activate.py`), never hardcode `python3`.** Stock Windows has no
+  `python3` interpreter — the App Execution Alias for `python3` points
+  at a Microsoft Store stub that "exists" on PATH but exits non-zero
+  with an install prompt when invoked. A hook wrapper that hardcodes
+  `python3` fails silently on the first commit on Windows and blocks
+  every governed commit thereafter. Resolution order: (1) file at
+  `~/.gator/enterprise/cli-python-path` if executable (written by
+  `_do_activate`, always present after `gator-enterprise activate`);
+  (2) `command -v python3` on PATH; (3) `command -v python` on PATH;
+  fail with clear stderr if none. The three templates
+  (`PRE_COMMIT_HOOK`, `COMMIT_MSG_HOOK`, `POST_COMMIT_HOOK`) each
+  concat `_PYTHON_RESOLVER` after the `GATOR_SCRIPT` existence check
+  and reference `"$PYTHON"` for every Python invocation, including the
+  inline `-c` mode-lookup and the `.gator/scripts/gator-session-block.py`
+  fallback in POST_COMMIT_HOOK. Surfaced during 2026-08-06 Enterprise
+  local bring-up (Phase 5), plan artifact
+  `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-implementation-plan.md`.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry
