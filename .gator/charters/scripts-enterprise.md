@@ -314,6 +314,32 @@ enterprise-cli package.
   interpolate a `$HOME`-derived path — always compute paths inside
   Python via `pathlib`.
 
+- **! `enterprise/tests/conftest.py` must put `enterprise/` and
+  `enterprise/enterprise-cli/` on `sys.path` and must filter the
+  `StarletteDeprecationWarning` about httpx2.** `enterprise/` is not a
+  Python package (no `__init__.py` at that level) and the root
+  `pytest.ini` scopes collection to `tests/ + contracts/compatibility/`
+  — running enterprise tests via `pytest enterprise/tests/` from repo
+  root without the conftest sys.path insert fails at collection with
+  `ModuleNotFoundError: No module named 'app'` for every test file
+  that imports from `app.*`. The conftest adds both `enterprise/`
+  (makes `app` importable) and `enterprise/enterprise-cli/` (makes
+  `gator_enterprise_cli` importable) so individual test files don't
+  need per-file workarounds.
+
+  The httpx2 warning filter needs BOTH `warnings.filterwarnings()`
+  (for the import-time warning that fires before pytest's warning-
+  capture takes over) AND a `pytest_configure` hook that registers
+  the filter with pytest's own warning system (because pytest re-
+  enables warnings via its `catch_warnings` context and would
+  otherwise surface the filtered warning in the summary regardless
+  of the Python-level filter). Neither alone suffices — do not
+  remove either.
+
+  Surfaced during Session 3 (Findings #7 + #8) of the 2026-08-06
+  Enterprise local bring-up. Both fixed in the same commit; no
+  regression pin (fixing test infrastructure IS the pin).
+
 - **! Diagnostic log for block-generation failures at
   `~/.gator/diagnostics/block-gen.log` (bounded, machine-local).**
   The post-commit shell wrapper suppresses stderr from
