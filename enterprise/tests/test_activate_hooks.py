@@ -36,6 +36,7 @@ if str(ENTERPRISE_CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(ENTERPRISE_CLI_ROOT))
 
 from gator_enterprise_cli.commands.activate import (
+    _MODE_LOOKUP,
     _PYTHON_RESOLVER,
     COMMIT_MSG_HOOK,
     POST_COMMIT_HOOK,
@@ -110,6 +111,83 @@ class TestHookTemplatesUseResolver:
         assert '"$1" -V' in _PYTHON_RESOLVER, (
             "resolver's probe helper must invoke `-V` on candidates to prove "
             "they actually run; presence on PATH is not enough."
+        )
+
+
+class TestModeLookupIsWindowsSafe:
+    """The wrapper's mode lookup crosses the shell/Python boundary. On
+    Windows Git Bash, `$HOME` expands to `/c/Users/...` (MSYS path form)
+    which Windows Python's `open()` can't resolve — the mode lookup then
+    silently falls through to 'strict', defeating any `repo init --mode X`
+    for X != strict. Two invariants preserved by _MODE_LOOKUP:
+    (a) the policy path is computed inside Python via `Path.home()`, not
+        shell-interpolated from `$HOME`;
+    (b) the repo-id crosses the shell/Python boundary via env var
+        (GATOR_REPO_ID), not string interpolation into the -c script
+        (quote-safe, injection-safe).
+    """
+
+    @pytest.mark.parametrize(
+        "template,name",
+        [
+            (PRE_COMMIT_HOOK, "PRE_COMMIT_HOOK"),
+            (COMMIT_MSG_HOOK, "COMMIT_MSG_HOOK"),
+            (POST_COMMIT_HOOK, "POST_COMMIT_HOOK"),
+        ],
+    )
+    def test_template_embeds_mode_lookup(self, template, name):
+        assert _MODE_LOOKUP in template, (
+            f"{name} does not embed _MODE_LOOKUP — mode resolution will be "
+            f"inconsistent or Windows-broken."
+        )
+
+    def test_mode_lookup_uses_pathlib_not_shell_home(self):
+        """The FIX for the third Windows bug: Path.home() replaces $HOME
+        shell interpolation. If someone reintroduces $HOME-into-Python
+        the Windows mode lookup silently degrades to strict."""
+        assert "Path.home()" in _MODE_LOOKUP, (
+            "_MODE_LOOKUP must compute the policy path via Path.home() "
+            "inside Python, NOT interpolate $HOME from the shell (Windows "
+            "Git Bash returns /c/Users/... which Windows Python can't open)."
+        )
+        # Verify the anti-pattern is gone
+        assert "'$POLICY_FILE'" not in _MODE_LOOKUP, (
+            "shell-interpolated POLICY_FILE is the Windows failure mode; "
+            "must not appear in the mode-lookup snippet"
+        )
+        assert "$POLICY_FILE" not in _MODE_LOOKUP, (
+            "shell-interpolated POLICY_FILE is the Windows failure mode; "
+            "must not appear in the mode-lookup snippet"
+        )
+
+    def test_mode_lookup_passes_repo_id_via_env(self):
+        """Repo-id crosses the shell/Python boundary via env var
+        (GATOR_REPO_ID), NOT via '$REPO_ID' string interpolation into
+        the inline -c script. Env passing is quote-safe and doesn't
+        risk python-syntax errors on unusual repo names."""
+        assert "GATOR_REPO_ID" in _MODE_LOOKUP, (
+            "repo-id must be passed via env var GATOR_REPO_ID; the "
+            "shell-interpolation pattern is fragile and unsafe"
+        )
+        # Verify the anti-pattern is gone
+        assert "'$REPO_ID'" not in _MODE_LOOKUP, (
+            "shell-interpolated REPO_ID is the anti-pattern; must not "
+            "appear in the mode-lookup snippet"
+        )
+
+    def test_mode_lookup_defaults_to_strict_on_error(self):
+        """When policy is unreadable / repo not in policy / any error,
+        the lookup MUST default to 'strict' — fail-safe posture."""
+        assert "'strict'" in _MODE_LOOKUP, (
+            "mode lookup must have 'strict' as fallback default"
+        )
+        assert "except" in _MODE_LOOKUP, (
+            "Python side must have an except clause so unreadable "
+            "policy falls through to the strict default"
+        )
+        assert "|| echo \"strict\"" in _MODE_LOOKUP, (
+            "shell side must have `|| echo strict` so a Python launch "
+            "failure also falls through to strict"
         )
 
 
@@ -300,3 +378,234 @@ class TestResolverBehavior:
         # Must be bound to the working `python` shim
         assert resolved.endswith("/python") or resolved.endswith("\\python")
         assert "working_bin" in resolved
+
+
+# --- Finding #2 regression pins ---
+# `activate --force` must NOT rotate the machine keypair. Rotation only
+# happens on explicit `--regenerate-keys`. Rationale: `--force` is used
+# routinely to redeploy hooks (e.g., after a source change to the wrapper
+# templates); rotating the keypair on every such redeploy would invalidate
+# every previously-encrypted session block on this machine and desync the
+# server's stored public key. See TRIPWIRE in scripts-enterprise.md.
+
+from types import SimpleNamespace
+
+
+class _FakeClient:
+    """Minimal client stand-in for _do_activate/_do_sync tests.
+
+    Records POST calls so tests can assert whether a machine key was
+    re-registered with the server after regeneration."""
+
+    def __init__(self, base="http://test", hook_policy=None, repos=None):
+        self._base = base
+        self._hook_policy = hook_policy if hook_policy is not None else {}
+        self._repos = repos if repos is not None else []
+        self.posts = []
+        self.puts = []
+        self.gets = []
+
+    def post(self, path, json=None):
+        self.posts.append((path, json))
+        return {}
+
+    def put(self, path, json=None):
+        self.puts.append((path, json))
+        return {}
+
+    def get(self, path):
+        self.gets.append(path)
+        if path == "/api/v1/hook-policy":
+            return self._hook_policy
+        if path == "/api/v1/repos":
+            return self._repos
+        if path == "/api/v1/org-policies":
+            return []
+        return {}
+
+
+@pytest.fixture
+def isolated_home(tmp_path, monkeypatch):
+    """Redirect Path.home() to tmp_path so activate/sync tests can't touch
+    the real ~/.gator/ on the developer's machine. Also stub git-config
+    calls so we don't rewrite the developer's global core.hooksPath."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+
+    # Stub the git-config subprocess call in _do_activate so it doesn't
+    # touch the developer's real ~/.gitconfig. We don't care about
+    # verifying git config here — that's not what these tests are about.
+    real_subprocess_run = subprocess.run
+
+    def stub_run(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and len(cmd) >= 2 and cmd[0] == "git" and "config" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        return real_subprocess_run(cmd, *args, **kwargs)
+
+    from gator_enterprise_cli.commands import activate as activate_mod
+    monkeypatch.setattr(activate_mod.subprocess, "run", stub_run)
+    return home
+
+
+class TestActivateKeyPreservation:
+    """Finding #2: `--force` must preserve the machine keypair; only
+    `--regenerate-keys` rotates it."""
+
+    def _run_activate(self, home, force=False, regenerate_keys=False):
+        from gator_enterprise_cli.commands.activate import _do_activate
+        args = SimpleNamespace(
+            command="activate",
+            force=force,
+            regenerate_keys=regenerate_keys,
+        )
+        client = _FakeClient()
+        _do_activate(args, client)
+        return client
+
+    def _read_private_key(self, home):
+        return (home / ".gator" / "enterprise" / "keys" / "machine-private-key.pem").read_bytes()
+
+    def test_first_activate_generates_keypair(self, isolated_home):
+        client = self._run_activate(isolated_home)
+        keys_dir = isolated_home / ".gator" / "enterprise" / "keys"
+        assert (keys_dir / "machine-private-key.pem").exists()
+        assert (keys_dir / "machine-public-key.pem").exists()
+        # Server-side registration attempted
+        assert any(path == "/api/v1/crypto/machine-keys" for path, _ in client.posts), (
+            "expected POST to /api/v1/crypto/machine-keys on fresh install"
+        )
+
+    def test_reactivate_without_flags_preserves_keypair(self, isolated_home):
+        self._run_activate(isolated_home)
+        first = self._read_private_key(isolated_home)
+        client2 = self._run_activate(isolated_home)
+        second = self._read_private_key(isolated_home)
+        assert first == second, "reactivate without flags rotated the key"
+        # Second activate must NOT re-POST the key (nothing changed)
+        assert not any(
+            path == "/api/v1/crypto/machine-keys" for path, _ in client2.posts
+        ), "reactivate without flags re-registered the key"
+
+    def test_reactivate_with_force_preserves_keypair(self, isolated_home):
+        """THE FIX: --force must NOT rotate the key. This test is the
+        specific regression pin for Finding #2."""
+        self._run_activate(isolated_home)
+        first = self._read_private_key(isolated_home)
+        client2 = self._run_activate(isolated_home, force=True)
+        second = self._read_private_key(isolated_home)
+        assert first == second, (
+            "--force rotated the machine keypair — Finding #2 regressed. "
+            "--force should redeploy hooks/config only; --regenerate-keys "
+            "is the rotation gesture."
+        )
+        # Second activate with --force must NOT re-POST the key
+        assert not any(
+            path == "/api/v1/crypto/machine-keys" for path, _ in client2.posts
+        ), "--force re-registered the key without a rotation reason"
+
+    def test_regenerate_keys_flag_rotates_keypair(self, isolated_home):
+        """--regenerate-keys is the explicit rotation gesture."""
+        self._run_activate(isolated_home)
+        first = self._read_private_key(isolated_home)
+        client2 = self._run_activate(isolated_home, regenerate_keys=True)
+        second = self._read_private_key(isolated_home)
+        assert first != second, (
+            "--regenerate-keys did NOT rotate the key — the explicit "
+            "rotation gesture must actually rotate."
+        )
+        # After rotation, the new public key must be re-POSTed to server
+        assert any(
+            path == "/api/v1/crypto/machine-keys" for path, _ in client2.posts
+        ), "--regenerate-keys did not re-register the new public key"
+
+    def test_force_does_not_wipe_hook_policy(self, isolated_home):
+        """--force must NOT wipe hook-policy.json (which may contain local
+        intent modes from repo init for repos not yet server-registered).
+        See TRIPWIRE in scripts-enterprise.md."""
+        # First activate to create baseline
+        self._run_activate(isolated_home)
+        # Manually seed a local intent entry (simulating repo init)
+        policy_path = isolated_home / ".gator" / "enterprise" / "hook-policy.json"
+        import json as _json
+        policy_path.write_text(
+            _json.dumps({"local/sandbox": {"mode": "evidence_only"}}, indent=2),
+            encoding="utf-8",
+        )
+        # Reactivate with --force
+        self._run_activate(isolated_home, force=True)
+        # Local intent must survive the --force reactivation. (The final
+        # _do_sync call merges the server view — an empty {} from the
+        # fake client — so the local intent is preserved by the merge.)
+        merged = _json.loads(policy_path.read_text(encoding="utf-8"))
+        assert "local/sandbox" in merged, (
+            "--force wiped the local intent-mode entry from hook-policy.json"
+        )
+        assert merged["local/sandbox"]["mode"] == "evidence_only"
+
+
+class TestSyncMerge:
+    """Sync must merge server view with local intents, not replace wholesale.
+    Load-bearing for Finding #3: repo init writes local intent; without
+    merge, the very next sync (which activate runs at end) wipes it."""
+
+    def _seed_local_policy(self, home, entries):
+        import json as _json
+        policy_path = home / ".gator" / "enterprise" / "hook-policy.json"
+        policy_path.parent.mkdir(parents=True, exist_ok=True)
+        policy_path.write_text(_json.dumps(entries, indent=2), encoding="utf-8")
+        return policy_path
+
+    def _run_sync(self, home, server_policy):
+        from gator_enterprise_cli.commands.activate import _do_sync
+        args = SimpleNamespace(command="sync")
+        client = _FakeClient(hook_policy=server_policy)
+        _do_sync(args, client)
+        return client
+
+    def test_sync_preserves_local_intent_when_server_empty(self, isolated_home):
+        """The exact scenario Finding #3 hinges on: repo init wrote local
+        intent; sync fires (from activate's own tail-end call); merge
+        keeps the intent because server doesn't know about the repo."""
+        policy_path = self._seed_local_policy(
+            isolated_home, {"local/sandbox": {"mode": "evidence_only"}}
+        )
+        self._run_sync(isolated_home, server_policy={})
+        import json as _json
+        merged = _json.loads(policy_path.read_text(encoding="utf-8"))
+        assert merged == {"local/sandbox": {"mode": "evidence_only"}}, (
+            "sync wiped local intent when server returned empty policy — "
+            "the exact bug the merge semantics were introduced to fix"
+        )
+
+    def test_sync_server_wins_for_overlapping_keys(self, isolated_home):
+        """Server is authoritative for repos it knows about. Local intent
+        gets overwritten by the server's view — that's the whole point
+        of eventual server-side registration."""
+        policy_path = self._seed_local_policy(
+            isolated_home, {"github.com/o/r": {"mode": "evidence_only"}}
+        )
+        self._run_sync(
+            isolated_home,
+            server_policy={"github.com/o/r": {"mode": "strict"}},
+        )
+        import json as _json
+        merged = _json.loads(policy_path.read_text(encoding="utf-8"))
+        assert merged["github.com/o/r"]["mode"] == "strict", (
+            "sync merge did not let server win for a repo the server knows about"
+        )
+
+    def test_sync_merges_disjoint_local_and_server(self, isolated_home):
+        """Local intents and server entries for DIFFERENT repos both survive."""
+        policy_path = self._seed_local_policy(
+            isolated_home, {"local/sandbox": {"mode": "evidence_only"}}
+        )
+        self._run_sync(
+            isolated_home,
+            server_policy={"github.com/o/r": {"mode": "strict"}},
+        )
+        import json as _json
+        merged = _json.loads(policy_path.read_text(encoding="utf-8"))
+        assert set(merged) == {"local/sandbox", "github.com/o/r"}
+        assert merged["local/sandbox"]["mode"] == "evidence_only"
+        assert merged["github.com/o/r"]["mode"] == "strict"

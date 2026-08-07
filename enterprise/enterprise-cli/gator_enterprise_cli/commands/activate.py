@@ -66,29 +66,38 @@ if [ -z "$PYTHON" ]; then
 fi
 '''
 
+_MODE_LOOKUP = r'''
+# Read repo identity and resolve hook enforcement mode from the local
+# hook-policy.json. TRIPWIRE (see activate.py header): the policy path
+# MUST be computed inside Python via `Path.home()`, NOT shell-interpolated
+# from `$HOME`. On Git Bash for Windows, `$HOME` expands to `/c/Users/...`
+# (an MSYS path) which Windows Python's `open()` cannot resolve, causing
+# the mode lookup to silently fall through to 'strict' and defeat the
+# whole Finding #3 fix. Repo-id crosses the shell/Python boundary via
+# an env var (GATOR_REPO_ID), not string interpolation into the -c
+# script — safer and quote-proof.
+REPO_ID_FILE=".gator/repo-id"
+MODE="strict"
+if [ -f "$REPO_ID_FILE" ]; then
+    export GATOR_REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
+    MODE=$("$PYTHON" -c "
+import json, os
+from pathlib import Path
+try:
+    policy_path = Path.home() / '.gator' / 'enterprise' / 'hook-policy.json'
+    p = json.loads(policy_path.read_text(encoding='utf-8'))
+    print(p.get(os.environ.get('GATOR_REPO_ID', ''), {}).get('mode', 'strict'))
+except Exception: print('strict')
+" 2>/dev/null || echo "strict")
+fi
+'''
+
 PRE_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global pre-commit hook
 # Installed by: gator-enterprise activate
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + r'''
-# Read repo identity and look up hook policy
-REPO_ID_FILE=".gator/repo-id"
-POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
-MODE="strict"
-
-if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
-    REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$("$PYTHON" -c "
-import json, sys
-try:
-    p = json.load(open('$POLICY_FILE'))
-    m = p.get('$REPO_ID', {}).get('mode', 'strict')
-    print(m)
-except: print('strict')
-" 2>/dev/null || echo "strict")
-fi
-
+''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
@@ -99,22 +108,7 @@ COMMIT_MSG_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global commit-msg hook
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + r'''
-REPO_ID_FILE=".gator/repo-id"
-POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
-MODE="strict"
-
-if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
-    REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$("$PYTHON" -c "
-import json
-try:
-    p = json.load(open('$POLICY_FILE'))
-    print(p.get('$REPO_ID', {}).get('mode', 'strict'))
-except: print('strict')
-" 2>/dev/null || echo "strict")
-fi
-
+''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
@@ -125,22 +119,7 @@ POST_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global post-commit hook
 GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
 [ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + r'''
-REPO_ID_FILE=".gator/repo-id"
-POLICY_FILE="$HOME/.gator/enterprise/hook-policy.json"
-MODE="strict"
-
-if [ -f "$REPO_ID_FILE" ] && [ -f "$POLICY_FILE" ]; then
-    REPO_ID=$(cat "$REPO_ID_FILE" | tr -d '[:space:]')
-    MODE=$("$PYTHON" -c "
-import json
-try:
-    p = json.load(open('$POLICY_FILE'))
-    print(p.get('$REPO_ID', {}).get('mode', 'strict'))
-except: print('strict')
-" 2>/dev/null || echo "strict")
-fi
-
+''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
@@ -185,7 +164,20 @@ def register(subparsers):
     )
     activate_parser.add_argument(
         "--force", action="store_true",
-        help="Overwrite existing hooks and config",
+        help=(
+            "Overwrite existing hooks and config. Does NOT rotate the machine "
+            "keypair (use --regenerate-keys for that) and does NOT wipe "
+            "hook-policy.json (local intent modes from `repo init` are preserved)."
+        ),
+    )
+    activate_parser.add_argument(
+        "--regenerate-keys", action="store_true",
+        help=(
+            "Rotate the machine keypair. Old encrypted session blocks become "
+            "undecryptable and the new public key is re-registered with "
+            "Enterprise. Rarely needed; use only when the private key is "
+            "compromised or a fresh identity is required."
+        ),
     )
 
     sync_parser = subparsers.add_parser(
@@ -256,13 +248,24 @@ def _do_activate(args, client):
     config_path.write_text(json.dumps(config_data, indent=2), encoding="utf-8")
     print(f"  Config saved: {config_path}")
 
-    # Initialize empty hook policy
+    # Initialize empty hook policy — ONLY when missing. --force does NOT
+    # wipe existing policy; that would destroy locally-written intent modes
+    # from `repo init --mode X` for repos not yet registered with Enterprise.
+    # (See TRIPWIRE in scripts-enterprise.md.)
     policy_path = enterprise_dir / "hook-policy.json"
-    if not policy_path.exists() or args.force:
+    if not policy_path.exists():
         policy_path.write_text("{}", encoding="utf-8")
         print(f"  Hook policy initialized: {policy_path}")
 
-    # Generate machine keypair for envelope encryption
+    # Generate machine keypair for envelope encryption.
+    #
+    # Key preservation contract (see TRIPWIRE in scripts-enterprise.md):
+    # `--force` does NOT rotate keys. Rotation is a semantically distinct
+    # operation that (a) invalidates every previously-encrypted session
+    # block on this machine, (b) breaks the server's stored public key
+    # until re-registered, (c) is almost never what someone re-running
+    # activate for hook/config redeployment actually wants. Explicit
+    # `--regenerate-keys` is the rotation gesture.
     keys_dir = enterprise_dir / "keys"
     keys_dir.mkdir(parents=True, exist_ok=True)
     org_keys_dir = enterprise_dir / "org-keys"
@@ -271,7 +274,8 @@ def _do_activate(args, client):
     private_key_path = keys_dir / "machine-private-key.pem"
     public_key_path = keys_dir / "machine-public-key.pem"
 
-    if not private_key_path.exists() or args.force:
+    if not private_key_path.exists() or args.regenerate_keys:
+        rotation = args.regenerate_keys and private_key_path.exists()
         try:
             from cryptography.hazmat.primitives.asymmetric import rsa
             from cryptography.hazmat.primitives import serialization
@@ -291,7 +295,12 @@ def _do_activate(args, client):
 
             private_key_path.write_text(private_pem, encoding="utf-8")
             public_key_path.write_text(public_pem, encoding="utf-8")
-            print(f"  Machine keypair generated: {keys_dir}")
+            if rotation:
+                print(f"  Machine keypair ROTATED: {keys_dir}")
+                print(f"    Previously-encrypted session blocks on this")
+                print(f"    machine are no longer decryptable.")
+            else:
+                print(f"  Machine keypair generated: {keys_dir}")
 
             # Register public key with Enterprise
             machine_id = _get_machine_id()
@@ -309,7 +318,8 @@ def _do_activate(args, client):
         except ImportError:
             print(f"  Machine keypair: skipped (cryptography library not available)")
     else:
-        print(f"  Machine keypair exists: {keys_dir} (use --force to regenerate)")
+        print(f"  Machine keypair preserved: {keys_dir}")
+        print(f"    (use --regenerate-keys to rotate — rarely needed)")
 
     # Record CLI interpreter path for post-commit hook
     cli_python_path = enterprise_dir / "cli-python-path"
@@ -384,13 +394,40 @@ def _do_sync(args, client):
 
     import json
 
-    # Sync hook policy
+    # Sync hook policy — MERGE server view with local intent, don't replace.
+    #
+    # Rationale (see TRIPWIRE in scripts-enterprise.md): `repo init --mode X`
+    # writes a local intent entry to hook-policy.json[canonical_id] so the
+    # very first commit honors the requested mode, even when the repo isn't
+    # yet server-registered. A wholesale replace here would wipe that intent
+    # on every sync (which activate itself runs unconditionally at end),
+    # producing the same silent-fall-through-to-strict UX the intent write
+    # was designed to fix. Merge semantics: server wins for repos it knows
+    # about; locally-intended entries for server-unknown repos are preserved.
     try:
         data = client.get("/api/v1/hook-policy")
         policy_path = enterprise_dir / "hook-policy.json"
-        policy_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        repo_count = len(data) if isinstance(data, dict) else 0
-        print(f"  Hook policy synced: {repo_count} repo(s)")
+        existing = {}
+        if policy_path.exists():
+            try:
+                existing = json.loads(policy_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+        if not isinstance(existing, dict):
+            existing = {}
+        if not isinstance(data, dict):
+            data = {}
+        merged = {**existing, **data}  # server wins for overlapping keys
+        policy_path.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+        server_count = len(data)
+        preserved = len(set(existing) - set(data))
+        if preserved:
+            print(
+                f"  Hook policy synced: {server_count} repo(s) from server, "
+                f"{preserved} local intent(s) preserved"
+            )
+        else:
+            print(f"  Hook policy synced: {server_count} repo(s)")
     except Exception as e:
         print(f"  Hook policy: not available ({e})")
 

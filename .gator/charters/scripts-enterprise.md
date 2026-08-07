@@ -215,6 +215,139 @@ enterprise-cli package.
   addressed in the follow-up. Plan artifact
   `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-implementation-plan.md`.
 
+- **! `gator-enterprise activate --force` MUST NOT rotate the machine
+  keypair, and MUST NOT wipe `hook-policy.json`.** `--force` is the
+  routine gesture for redeploying hook wrappers after a source change
+  (see the resolver TRIPWIRE above — every wrapper edit needs a
+  `--force` redeploy). Rotating the keypair on every such redeploy
+  would (a) invalidate every previously-encrypted session block on this
+  machine, (b) leave the server's stored public key stale until re-
+  registered, (c) surprise users who reasonably expected `--force` to
+  affect what its help text says it affects (hooks + config).
+
+  Two related contracts, both in `_do_activate`:
+  1. Keypair regeneration guard is `if not private_key_path.exists()
+     or args.regenerate_keys:` — NOT `or args.force`. Rotation is the
+     explicit `--regenerate-keys` gesture; nothing else.
+  2. `hook-policy.json` init guard is `if not policy_path.exists():` —
+     `--force` does not truncate it. Local intent-mode entries written
+     by `repo init` (see next TRIPWIRE) MUST survive `--force`.
+
+  Regression pin: `enterprise/tests/test_activate_hooks.py::
+  TestActivateKeyPreservation` (5 tests — first-generate; preserve
+  without flags; preserve on --force; rotate on --regenerate-keys;
+  --force does not wipe hook-policy.json).
+
+  Surfaced during 2026-08-06 bring-up Phase 5, Finding #2 — every
+  `activate --force` during Phase 5 desynced the local private key
+  from the server-registered public key.
+
+- **! `gator-enterprise repo init --mode <X>` MUST write the requested
+  mode to `~/.gator/enterprise/hook-policy.json` locally, before or
+  regardless of any server-side registration attempt.** The global
+  hook wrapper reads `hook-policy.json` at commit time; without a
+  local entry for the repo's `canonical_identifier`, the wrapper
+  defaults to `strict`. Server-side registration in `_register_hook_
+  policy` no-ops for repos the server doesn't know about yet (fresh
+  repo, no git provider integration, air-gapped setup), so relying on
+  the server round-trip alone silently drops the requested mode.
+
+  Contract: `_write_local_hook_policy_intent(canonical_id, mode)`
+  runs first in `_do_repo_init`, always (both when `client` is present
+  and when it is None). Server-side registration is best-effort on
+  top. `_register_hook_policy` returns a boolean so the caller can
+  print truthful diagnostics ("Local intent-mode written: X → Y
+  (honored by hooks until server registration succeeds)").
+
+  Sync contract (load-bearing companion): `_do_sync` MERGES server
+  hook-policy with local, server winning for overlapping keys. Without
+  merge semantics, the very next sync (which `activate` itself runs
+  at end) would wipe the just-written intent — reproducing the exact
+  bug. Do not revert `_do_sync` to a wholesale replace.
+
+  Regression pins:
+  `enterprise/tests/test_repo_init.py` (8 tests — write-intent when
+  missing, merge with existing, update-own-entry, corrupt-file
+  recovery; `_register_hook_policy` returns False on unknown repo /
+  True on PUT-success / False on server error; end-to-end
+  `_do_repo_init` writes intent even when server doesn't know the
+  repo). `enterprise/tests/test_activate_hooks.py::TestSyncMerge`
+  (3 tests — local preserved when server empty; server wins on
+  overlap; disjoint local+server both survive).
+
+  Surfaced during 2026-08-06 bring-up Phase 5, Finding #3 — sandbox
+  provisioned with `--mode evidence_only` had every commit run in
+  strict because no git provider knew the repo.
+
+- **! Mode-lookup in hook wrappers MUST compute the policy path with
+  Python's `Path.home()` and MUST pass the repo-id via the
+  `GATOR_REPO_ID` env var — NEVER shell-interpolate `$HOME` into the
+  Python `-c` script.** Surfaced end-to-end verifying Finding #3 during
+  the follow-up arc. On Git Bash for Windows, `$HOME` expands to
+  `/c/Users/<user>` (MSYS-form) which Windows Python's `open()` cannot
+  resolve; the `except: print('strict')` catch in the lookup then
+  silently swallows the `FileNotFoundError` and every commit runs in
+  the fail-safe `strict` default. Result: `repo init --mode X` for
+  X != strict is completely defeated on Windows even with the local
+  intent-write in place.
+
+  Contract implemented in `_MODE_LOOKUP` (module-level in activate.py,
+  concatenated into all three hook templates after `_PYTHON_RESOLVER`):
+  1. Policy path: `Path.home() / '.gator' / 'enterprise' / 'hook-policy.json'`
+     inside Python. NO shell path interpolation.
+  2. Repo-id: `export GATOR_REPO_ID=<from .gator/repo-id>` in shell,
+     read by Python via `os.environ.get('GATOR_REPO_ID', '')`. Quote-safe;
+     survives unusual chars in the canonical identifier.
+  3. Fail-safe: any exception (missing file, malformed JSON, missing
+     env) falls through to `strict`. This is intentional — a broken
+     policy state MUST NOT relax enforcement below `strict`.
+
+  Regression pins in `enterprise/tests/test_activate_hooks.py::
+  TestModeLookupIsWindowsSafe` (5 tests — each template embeds
+  `_MODE_LOOKUP`; uses `Path.home()` not `$HOME`; passes repo-id via
+  `GATOR_REPO_ID` env var; defaults to `strict` on error on both the
+  Python and shell sides).
+
+  Sync obligation: the resolver TRIPWIRE above and this one share the
+  same anti-pattern (Windows path/interop failures around shell-embedded
+  Python). Any new inline `python -c` block in a hook wrapper MUST NOT
+  interpolate a `$HOME`-derived path — always compute paths inside
+  Python via `pathlib`.
+
+- **! Diagnostic log for block-generation failures at
+  `~/.gator/diagnostics/block-gen.log` (bounded, machine-local).**
+  The post-commit shell wrapper suppresses stderr from
+  `gator_enterprise_cli.block_generate` via `2>/dev/null` — that
+  redirection is intentional (a loud stderr on every commit would
+  clutter terminal output) but it makes real failures invisible.
+  `block_generate` MUST write structured diagnostic entries to the
+  log file on every non-happy-path outcome (subprocess-delegate
+  failure, unknown crypto mode, corrupt v2 block, encryption
+  failure). Format:
+  `<ISO8601-utc> commit=<sha12> event=<slug> [msg=<repr>]` — one
+  line per event, ≤~700 chars.
+
+  Bounded rotation contract: log is trimmed to the last
+  `_DIAG_LOG_MAX_LINES` (500) whenever it exceeds
+  `_DIAG_LOG_ROTATE_TRIGGER` (750). Never grows unboundedly on
+  broken repos. `_diag_log` and `_diag_log_rotate` are strictly
+  best-effort — they must never raise, since introducing a new
+  failure mode to a helper whose whole purpose is exposing hidden
+  failures would be the opposite of what the fix is for.
+
+  Regression pins:
+  `enterprise/tests/test_block_generate.py` (9 tests). `TestDiagLog`
+  (4 — creates parent dir + appends, multiple entries, never raises
+  on unwritable path, truncates long messages). `TestDiagLogRotate`
+  (3 — no-op below trigger, trims to last 500 above trigger, never
+  raises on read failure). `TestMainFlowLogging` (2 — plaintext-
+  delegate-failed and unknown-crypto-mode-fallback both write an
+  entry with the expected event slug + message).
+
+  Surfaced during 2026-08-06 bring-up Phase 5, Finding #4 — silent
+  stderr suppression required manual re-run of the delegated command
+  to diagnose why session blocks weren't emitted.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

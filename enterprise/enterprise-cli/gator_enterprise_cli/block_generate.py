@@ -5,6 +5,14 @@ and can emit both v2 plaintext and v3 encrypted session blocks depending on the
 crypto policy synced from Enterprise.
 
 Invoked as: python -m gator_enterprise_cli.block_generate --commit <sha> --repo-root <path>
+
+Diagnostic logging (see TRIPWIRE in scripts-enterprise.md): the post-commit
+shell wrapper suppresses this module's stderr via `2>/dev/null` because a
+loud stderr on every commit would clutter the terminal. That suppression
+made real failures invisible during the 2026-08-06 Enterprise local bring-up
+(Phase 5, Finding 4). This module now writes structured diagnostic entries
+to `~/.gator/diagnostics/block-gen.log` (bounded ~500 lines) for every
+non-happy-path outcome, so silent failures leave machine-local evidence.
 """
 
 import argparse
@@ -15,7 +23,58 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+# Diagnostic log — see module docstring. Bounded rotation prevents unbounded
+# growth on repos that commit frequently or fail every commit.
+_DIAG_LOG_MAX_LINES = 500
+_DIAG_LOG_ROTATE_TRIGGER = int(_DIAG_LOG_MAX_LINES * 1.5)  # 750
+
+
+def _diag_log_path() -> Path:
+    return Path.home() / ".gator" / "diagnostics" / "block-gen.log"
+
+
+def _diag_log(commit_sha: str, event: str, message: str = "") -> None:
+    """Append one structured diagnostic line. Never raises — diagnostic
+    failure must not break the hook flow, since the whole point is to
+    make silent failures visible without introducing new failure modes.
+
+    Format:  <ISO8601-utc> commit=<sha12> event=<slug> [msg=<repr>]
+    """
+    try:
+        path = _diag_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        line = f"{ts} commit={commit_sha[:12]} event={event}"
+        if message:
+            # Cap message length to keep log tidy; repr() escapes newlines
+            # and control chars so a single entry stays on one line.
+            snippet = message.strip().replace("\n", " | ")[:500]
+            line += f" msg={snippet!r}"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        _diag_log_rotate(path)
+    except Exception:
+        # Diagnostic logging must never break the hook.
+        pass
+
+
+def _diag_log_rotate(path: Path) -> None:
+    """Trim log to the last _DIAG_LOG_MAX_LINES lines when it exceeds
+    _DIAG_LOG_ROTATE_TRIGGER. Never raises."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        if len(lines) <= _DIAG_LOG_ROTATE_TRIGGER:
+            return
+        kept = lines[-_DIAG_LOG_MAX_LINES:]
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+    except Exception:
+        pass
 
 
 def _read_machine_id() -> str:
@@ -62,6 +121,11 @@ def main():
             cwd=str(repo_root),
             capture_output=True, text=True,
         )
+        if result.returncode != 0:
+            _diag_log(
+                args.commit, "plaintext-delegate-failed",
+                f"rc={result.returncode} stderr={result.stderr}",
+            )
         sys.exit(result.returncode)
 
     # Encrypted mode — generate v2 block via repo script, then encrypt it
@@ -69,11 +133,20 @@ def main():
         _generate_encrypted_block(args.commit, repo_root, gator_dir, enterprise_dir, crypto_policy)
     else:
         # Unknown mode — fall back to plaintext
+        _diag_log(
+            args.commit, "unknown-crypto-mode-fallback",
+            f"mode={mode!r} (expected 'plaintext' or 'encrypted')",
+        )
         result = subprocess.run(
             [sys.executable, str(block_script), "generate", "--commit", args.commit],
             cwd=str(repo_root),
             capture_output=True, text=True,
         )
+        if result.returncode != 0:
+            _diag_log(
+                args.commit, "unknown-mode-fallback-delegate-failed",
+                f"rc={result.returncode} stderr={result.stderr}",
+            )
         sys.exit(result.returncode)
 
 
@@ -107,6 +180,10 @@ def _generate_encrypted_block(commit_sha, repo_root, gator_dir, enterprise_dir, 
         capture_output=True, text=True,
     )
     if result.returncode != 0:
+        _diag_log(
+            commit_sha, "encrypted-v2-gen-failed",
+            f"rc={result.returncode} stderr={result.stderr}",
+        )
         # Fall back based on policy
         missing_behavior = crypto_policy.get("session_blocks", {}).get(
             "missing_policy_behavior", "fallback_plaintext"
@@ -119,6 +196,7 @@ def _generate_encrypted_block(commit_sha, repo_root, gator_dir, enterprise_dir, 
     blocks_dir = gator_dir / "session-blocks"
     gz_files = sorted(blocks_dir.glob(f"*{commit_sha[:13]}*.json.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
     if not gz_files:
+        _diag_log(commit_sha, "encrypted-no-v2-block-found", "")
         sys.exit(0)  # No block generated (e.g., no transcript available)
 
     gz_path = gz_files[0]
@@ -128,7 +206,8 @@ def _generate_encrypted_block(commit_sha, repo_root, gator_dir, enterprise_dir, 
     try:
         plaintext_bytes = gzip.decompress(compressed)
         block = json.loads(plaintext_bytes)
-    except Exception:
+    except Exception as e:
+        _diag_log(commit_sha, "encrypted-v2-block-corrupt", f"{type(e).__name__}: {e}")
         sys.exit(0)  # Corrupt block, skip
 
     # Step 4: Encrypt
@@ -138,6 +217,10 @@ def _generate_encrypted_block(commit_sha, repo_root, gator_dir, enterprise_dir, 
         # Handle based on missing_policy_behavior
         missing_behavior = crypto_policy.get("session_blocks", {}).get(
             "missing_policy_behavior", "fallback_plaintext"
+        )
+        _diag_log(
+            commit_sha, "encryption-failed",
+            f"{type(e).__name__}: {e} behavior={missing_behavior}",
         )
         if missing_behavior == "fallback_plaintext":
             # Keep the plaintext .json.gz

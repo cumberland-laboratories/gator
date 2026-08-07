@@ -182,16 +182,78 @@ def _do_repo_init(args, client):
         print(f"  git commit -m 'Add Gator Enterprise governance'")
         print(f"  git push")
 
-    # Register hook policy with Enterprise and sync local cache
+    # ALWAYS write local hook-policy intent first — this is what the global
+    # hook wrapper reads at commit time, and it's the only way the wrapper
+    # can honor `--mode X` for a repo that isn't yet tracked by Enterprise
+    # (fresh repo, no git provider integration, air-gapped setup, etc.).
+    # Without this, the wrapper's lookup misses and defaults to `strict`,
+    # silently ignoring the requested mode — the exact bug this call fixes.
+    # (See TRIPWIRE in scripts-enterprise.md.)
+    _write_local_hook_policy_intent(canonical_id, args.mode)
+
+    # Register hook policy with Enterprise (best-effort). If the server
+    # doesn't yet know about the repo, that's fine — the local intent
+    # written above keeps the first commit honoring the requested mode
+    # until server-side registration succeeds and a subsequent `sync`
+    # overwrites the local intent with the server's authoritative value.
     if client:
-        _register_hook_policy(client, canonical_id, args.mode)
-        # Sync local cache so the first commit uses the right mode
+        server_registered = _register_hook_policy(client, canonical_id, args.mode)
+        if not server_registered:
+            print(
+                f"  Local intent-mode written: {canonical_id} -> {args.mode} "
+                f"(honored by hooks until server registration succeeds)"
+            )
+        # Sync local cache. With merge semantics (see _do_sync), the local
+        # intent survives the sync when the repo is still server-unknown.
         from gator_enterprise_cli.commands.activate import _do_sync
         _do_sync(args, client)
+    else:
+        print(
+            f"  Local intent-mode written: {canonical_id} -> {args.mode} "
+            f"(no Enterprise client configured; hooks will honor local intent)"
+        )
+
+
+def _write_local_hook_policy_intent(canonical_id, mode):
+    """Write requested mode to ~/.gator/enterprise/hook-policy.json so the
+    global hook wrapper honors it even before/if server-side registration
+    succeeds. The local file merges non-destructively with any prior state
+    (server-synced entries and other local intents are preserved).
+
+    See TRIPWIRE in scripts-enterprise.md — this write is what makes
+    `repo init --mode X` produce a first commit that runs in mode X for
+    repos not yet known to Enterprise. Without it, the wrapper's lookup
+    misses and every commit runs in default `strict`.
+    """
+    home = Path.home()
+    enterprise_dir = home / ".gator" / "enterprise"
+    policy_path = enterprise_dir / "hook-policy.json"
+
+    policy = {}
+    if policy_path.exists():
+        try:
+            loaded = json.loads(policy_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                policy = loaded
+        except (json.JSONDecodeError, OSError):
+            policy = {}
+
+    policy[canonical_id] = {"mode": mode}
+
+    # Ensure parent exists. `activate` creates it, but a user could run
+    # `repo init` before `activate` (misordered flow); handle it gracefully.
+    enterprise_dir.mkdir(parents=True, exist_ok=True)
+    policy_path.write_text(json.dumps(policy, indent=2), encoding="utf-8")
 
 
 def _register_hook_policy(client, canonical_id, mode):
-    """Register the hook enforcement mode for this repo with Enterprise."""
+    """Register the hook enforcement mode for this repo with Enterprise.
+
+    Returns True if the server-side registration succeeded (repo was known
+    and PUT completed); False otherwise (repo not yet tracked, network
+    error, etc.). The local intent write in _write_local_hook_policy_intent
+    ensures the requested mode is honored regardless of the return value.
+    """
     try:
         # Find the repo in Enterprise by canonical identifier
         repos = client.get("/api/v1/repos")
@@ -203,12 +265,23 @@ def _register_hook_policy(client, canonical_id, mode):
 
         if repo_id:
             client.put(f"/api/v1/hook-policy/{repo_id}", json={"mode": mode})
-            print(f"  Registered hook policy: {canonical_id} → {mode}")
+            print(f"  Registered hook policy: {canonical_id} -> {mode}")
+            return True
         else:
-            print(f"  Note: repo not yet tracked by Enterprise. Hook policy will use default ({mode}).")
-            print(f"  Push the repo and run 'gator-enterprise providers reconcile' to register it.")
+            print(
+                f"  Note: repo not yet tracked by Enterprise "
+                f"(canonical_id={canonical_id})."
+            )
+            print(
+                f"  Push the repo and run 'gator-enterprise providers reconcile' "
+                f"to register it. Hooks will honor local intent-mode "
+                f"({mode}) meanwhile."
+            )
+            return False
     except Exception as e:
-        print(f"  Note: could not register hook policy ({e}). Will use default mode.")
+        print(f"  Note: could not register hook policy with server ({e}).")
+        print(f"  Hooks will honor local intent-mode ({mode}) meanwhile.")
+        return False
 
 
 def _install_bundled_scripts(scripts_dir):
