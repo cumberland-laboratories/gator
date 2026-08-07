@@ -301,16 +301,39 @@ Extracts vendor session ID from hook payload. Payload always wins over env vars 
 
 ### build_session_file(payload)
 File: `.gator/scripts/gator-session-start.py`
-Builds `active-vendor-session.json` content from vendor hook stdin payload. Returns dict or None if no usable session ID. Extracts vendor, session_id, model, transcript_path, cwd, and started_at.
+Builds ONE v2 session entry from vendor hook stdin payload. Returns dict or None if no usable session ID. Extracts vendor, session_id, model, transcript_path, cwd, started_at, plus captures `owner_pid` (from payload's `pid`/`process_pid`/`parent_pid` fields, falling back to `os.getppid()`) and `owner_pid_started_at` (best-effort process-start timestamp for PID-recycling protection during attribution). This is ONE ENTRY, not the whole file — the file container is written by `write_session_file` which upserts entries into the sessions list. See TRIPWIRE in `scripts-cross-cutting.md::Multi-Session Vendor Attribution` for the read/attribution side.
 <- `main()`
--> `detect_vendor()`, `extract_vendor_session_id()`, `extract_model()`, `extract_transcript_path()`, `extract_cwd()`, `extract_started_at()`
+-> `detect_vendor()`, `extract_vendor_session_id()`, `extract_model()`, `extract_transcript_path()`, `extract_cwd()`, `extract_started_at()`, `_get_owner_pid_from_payload()`, `_get_owner_pid_started_at()`
 
-### write_session_file(gator_dir, data)
+### _get_owner_pid_from_payload(payload)
 File: `.gator/scripts/gator-session-start.py`
-Atomic write of `.gator/active-vendor-session.json` via temp-file-and-rename. Machine-local, gitignored.
+Extracts the AI-tool process PID from the SessionStart payload. Vendors expose this differently: Claude Code uses `pid` at top level or nested under `process`; Codex uses `parent_pid` / `pid`; Gemini uses `pid`. Falls back to `os.getppid()` (the SessionStart hook's parent is typically the AI tool itself). Returns int or None.
+<- `build_session_file()`
+
+### _get_owner_pid_started_at(pid)
+File: `.gator/scripts/gator-session-start.py`
+Best-effort ISO-8601 timestamp for when `pid` started, for PID-recycling protection during attribution. Windows: PowerShell `Get-CimInstance Win32_Process`. Unix: `/proc/<pid>/stat` field 22, falls back to `ps -o lstart=`. Never raises — returns None on any subprocess/parse failure; attribution still works without it, just with slightly weaker recycling protection.
+<- `build_session_file()`
+
+### write_session_file(gator_dir, entry)
+File: `.gator/scripts/gator-session-start.py`
+Atomic upsert of one session entry into the v2 container at `.gator/active-vendor-session.json`. Reads existing → migrates v1 → filters entries older than 24h → upserts new entry (dedupes on `vendor_session_id`) → writes v2 atomically via temp-file-and-rename. Preserves other vendors' active sessions when one vendor re-registers. Machine-local, gitignored.
 @writes: `.gator/active-vendor-session.json`
 <- `main()`
+-> `_read_existing_sessions()`, `_filter_stale()`
 ! Temp file cleanup is explicit on failure. Never leaves partial writes.
+! v1→v2 migration is a side effect of write: any read of a v1 file that's followed by a write will emit v2. No separate migration script.
+! Sync obligation: byte-identical with `src/gator_command/templates/gator-starter/scripts/gator-session-start.py`. See `scripts-cross-cutting.md::Multi-Session Vendor Attribution` TRIPWIRE.
+
+### _read_existing_sessions(target)
+File: `.gator/scripts/gator-session-start.py`
+Reads the existing v1 or v2 container. Returns list of entries (possibly empty). Never raises — corrupt/missing file yields []. v1 shape (single top-level object) is wrapped as a one-entry list; v2 shape's `sessions` list is returned as-is.
+<- `write_session_file()`
+
+### _filter_stale(entries)
+File: `.gator/scripts/gator-session-start.py`
+Drops entries where `started_at > 24h ago` (`_AVS_MAX_AGE_SECONDS = 86400`). Preserves entries without a parseable `started_at` (defensive — better to keep a maybe-stale entry than silently drop a valid one).
+<- `write_session_file()`
 
 ### main()
 File: `.gator/scripts/gator-session-start.py`
