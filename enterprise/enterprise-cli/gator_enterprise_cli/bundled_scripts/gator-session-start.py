@@ -174,17 +174,118 @@ def extract_started_at(payload):
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def build_session_file(payload):
-    """Build the active-vendor-session.json content from payload.
+# --- Multi-session file layout (v2) ---
+#
+# `.gator/active-vendor-session.json` is a container of sessions, not
+# a single entry — multiple vendor CLIs (Codex + Opus + Gemini) can
+# coexist in the same repo without overwriting each other's identity.
+#
+# The filename stays singular for backwards compat with `gator_layout.py`,
+# gitignore templates, and any tooling that reads it by name. The
+# CONTENT changes: v2 uses `{"schema": "...-v2", "sessions": [...]}`.
+#
+# On write: read existing → migrate v1 to v2 in-memory → filter stale
+# entries → upsert new entry (dedupe by vendor_session_id) → atomic
+# write. This preserves other sessions' entries when one vendor
+# re-registers.
+#
+# On read (in precommit_session.py, not this file): accept v1 or v2.
+# See TRIPWIRE in scripts-cross-cutting.md.
 
-    Returns dict if a valid session can be built, None otherwise.
+_AVS_SCHEMA_V1 = "gator-active-vendor-session-v1"
+_AVS_SCHEMA_V2 = "gator-active-vendor-sessions-v2"
+_AVS_MAX_AGE_SECONDS = 86400  # 24 hours
+
+
+def _get_owner_pid_started_at(pid):
+    """Return an ISO-8601 timestamp for when `pid` started, or None.
+
+    Used to protect against PID recycling (Windows especially): the
+    post-commit attribution walks parent PIDs and checks BOTH the pid
+    number and its start timestamp before matching an owner_pid. If a
+    later process reuses the same PID, its started_at won't match.
+
+    Best-effort — never raises. Returns None on any failure; attribution
+    still works without it, just with slightly weaker recycling
+    protection."""
+    try:
+        import subprocess
+        if sys.platform == "win32":
+            r = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}')"
+                    f".CreationDate.ToUniversalTime().ToString('o')",
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        else:
+            # Read process start time from /proc/<pid>/stat (Linux) — field 22
+            # is starttime in clock ticks since boot. Fall back to `ps` if not.
+            proc_stat = Path("/proc") / str(pid) / "stat"
+            if proc_stat.exists():
+                fields = proc_stat.read_text(encoding="utf-8", errors="replace").split()
+                # Field 22 (1-indexed) is starttime; the command name in field 2
+                # is parenthesized and may contain spaces, so index from the end
+                # using pfields after the last close-paren.
+                text = proc_stat.read_text(encoding="utf-8", errors="replace")
+                after_comm = text.rsplit(")", 1)[-1].split()
+                if len(after_comm) > 19:
+                    # starttime is field 22 = index 19 after ")"
+                    return after_comm[19]
+            r = subprocess.run(
+                ["ps", "-o", "lstart=", "-p", str(pid)],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _get_owner_pid_from_payload(payload):
+    """Extract the AI-tool process PID from the SessionStart payload.
+
+    Vendors expose this differently:
+      - Claude Code: `pid` at top level, or nested under `process`
+      - Codex: `parent_pid`, `pid`
+      - Gemini: `pid`
+    Fall back to os.getppid() — the parent that spawned this SessionStart
+    hook is typically the AI tool itself.
+    """
+    for key in ("pid", "process_pid", "parent_pid"):
+        val = payload.get(key)
+        if isinstance(val, int) and val > 0:
+            return val
+    proc = payload.get("process")
+    if isinstance(proc, dict):
+        val = proc.get("pid")
+        if isinstance(val, int) and val > 0:
+            return val
+    # Fallback: SessionStart hook's own parent is the AI tool
+    try:
+        return os.getppid()
+    except OSError:
+        return None
+
+
+def build_session_file(payload):
+    """Build one v2 session-entry dict from the vendor payload.
+
+    Returns dict if a valid session can be built (has vendor_session_id),
+    None otherwise. This is ONE ENTRY, not the whole file — the file
+    container is written by write_session_file which upserts entries
+    into the sessions list.
     """
     vendor_session_id = extract_vendor_session_id(payload)
     if not vendor_session_id:
         return None
 
-    return {
-        "schema": "gator-active-vendor-session-v1",
+    owner_pid = _get_owner_pid_from_payload(payload)
+    entry = {
         "vendor": detect_vendor(payload),
         "vendor_session_id": vendor_session_id,
         "model": extract_model(payload),
@@ -193,12 +294,89 @@ def build_session_file(payload):
         "cwd": extract_cwd(payload),
         "source": "session-start-hook",
     }
+    if owner_pid:
+        entry["owner_pid"] = owner_pid
+        pid_started = _get_owner_pid_started_at(owner_pid)
+        if pid_started:
+            entry["owner_pid_started_at"] = pid_started
+    return entry
 
 
-def write_session_file(gator_dir, data):
-    """Atomic write of active-vendor-session.json."""
+def _read_existing_sessions(target):
+    """Read existing sessions container. Accepts v1 or v2. Returns list
+    of entries (possibly empty). Never raises."""
+    if not target.exists():
+        return []
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    schema = data.get("schema")
+    if schema == _AVS_SCHEMA_V2:
+        entries = data.get("sessions", [])
+        return entries if isinstance(entries, list) else []
+    if schema == _AVS_SCHEMA_V1:
+        # v1 was a single entry as the top-level object; wrap it
+        return [data]
+    return []
+
+
+def _filter_stale(entries):
+    """Drop entries older than _AVS_MAX_AGE_SECONDS. Preserves entries
+    that don't have a parseable started_at (defensive — better to keep
+    a maybe-stale entry than silently drop a valid one)."""
+    import time
+    from datetime import datetime
+    now = time.time()
+    fresh = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        started = e.get("started_at")
+        if not started:
+            fresh.append(e)
+            continue
+        try:
+            ts = datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()
+        except (ValueError, TypeError):
+            fresh.append(e)
+            continue
+        if now - ts <= _AVS_MAX_AGE_SECONDS:
+            fresh.append(e)
+    return fresh
+
+
+def write_session_file(gator_dir, entry):
+    """Atomic upsert of one session entry into the v2 container file.
+
+    Reads existing → migrates v1 → filters stale → upserts new entry
+    (dedupe on vendor_session_id) → writes v2 atomically. This preserves
+    other sessions in the file when one vendor re-registers.
+    """
     target = gator_dir / "active-vendor-session.json"
-    content = json.dumps(data, indent=2) + "\n"
+
+    existing = _read_existing_sessions(target)
+    fresh = _filter_stale(existing)
+    # Upsert: replace any entry with matching vendor_session_id, else append
+    new_id = entry.get("vendor_session_id")
+    updated = False
+    merged = []
+    for e in fresh:
+        if isinstance(e, dict) and e.get("vendor_session_id") == new_id:
+            merged.append(entry)
+            updated = True
+        else:
+            merged.append(e)
+    if not updated:
+        merged.append(entry)
+
+    container = {
+        "schema": _AVS_SCHEMA_V2,
+        "sessions": merged,
+    }
+    content = json.dumps(container, indent=2) + "\n"
 
     # Atomic: write to temp, then replace
     fd, tmp_path = tempfile.mkstemp(

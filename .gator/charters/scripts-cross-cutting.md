@@ -148,11 +148,21 @@ All dashboard POST endpoints (config, topology, update, gatorize, fetch, pull, r
 
 **Cleanup semantics**: on both read and write, drop entries where `started_at > 24h ago` (`_AVS_MAX_AGE_SECONDS = 86400`). Entries without a parseable `started_at` are preserved (defensive — better to keep a maybe-stale entry than silently drop a valid one). CWD filter (entry's `cwd` field must match this repo) applies on read only — file itself is shared across all sessions on the machine that happen to have the same repo mounted.
 
-**Sync obligation**: `.gator/.includes/scripts/precommit_session.py` and `.gator/.includes/scripts/gator-session-start.py` (both shipped) MUST stay byte-identical with `src/gator_command/templates/gator-starter/scripts/precommit_session.py` and `src/gator_command/templates/gator-starter/scripts/gator-session-start.py` (both templates). The template copies are what `gatorize` installs into new repos; the shipped copies are what `.gator/.includes/` gives to already-gatorized v2 repos. Divergence means new installs and existing installs run different code paths.
+**Sync obligation — THREE-WAY (was originally documented as two-way; Codex Finding #1 from 2026-08-07 review surfaced the missing third)**: `precommit_session.py` and `gator-session-start.py` exist in THREE locations that MUST stay byte-identical:
 
-**Regression pin**: `tests/test_multi_session.py` (24 tests) — reader v1+v2, cwd filter, freshness filter, corrupt/missing/unknown-schema resilience; picker env var / PID / single / mtime / none; PID walker bounded + cross-platform; writer fresh + preserve + upsert + v1→v2 migration + stale-drop.
+1. `.gator/.includes/scripts/` — SHIPPED for v2-layout repos gatorized with `gator gatorize`.
+2. `src/gator_command/templates/gator-starter/scripts/` — TEMPLATE, copied INTO new repos by `gatorize`'s `_install_scripts` step.
+3. `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` — copied INTO new repos by `gator-enterprise repo init`'s `_install_bundled_scripts` step (`enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py:135-145`).
 
-**Blast radius**: base gator code, ships in every gatorized repo. Attribution accuracy changes for every governed commit. Old repos with v1 files continue working on read; get upgraded to v2 on the next SessionStart write.
+Missing any one of these means one class of provisioning gets stale code. Codex Finding #1 caught exactly this: the multi-session commit updated 1+2 but not 3, so freshly `gator-enterprise repo init`'d repos still ran the old v1-only path. Every future edit to either file MUST land in all three.
+
+**PID recycling protection**: `_walk_parent_pids()` returns `[(pid, started_at_or_none), ...]` tuples. `_pick_session_for_commit()` matches BOTH the ancestor PID number AND the session's `owner_pid_started_at` (via `_pid_start_times_match` — fuzzy string compare with graceful degradation when either side is None). Windows especially recycles PIDs aggressively; a session that recorded `owner_pid=1234` at SessionStart shouldn't match a different process that happens to have PID 1234 now. Codex Finding #2 caught the earlier code where the writer captured `owner_pid_started_at` but the reader ignored it.
+
+**Cross-repo vendor identity (GATOR_TRANSCRIPT_VENDOR companion env var)**: `GATOR_TRANSCRIPT_SESSION_ID` names the session; `GATOR_TRANSCRIPT_VENDOR` names its vendor. When only the ID is set, the synthesized entry has `vendor: None` (not `"unknown"`) — `render_snippet_json` then preserves the agent-inferred vendor rather than clobbering with `unknown`. `session_group_key` fallback: explicit `vendor_session["vendor"]` → agent-inferred `vendor_inferred` → `"unknown"` (last resort). Codex Finding #3 caught the earlier code where synthesized `vendor: "unknown"` was authoritative in `render_snippet_json`, producing `vendor_inferred: unknown` and `session_group_key: unknown:<id>` exactly in the cross-repo case the env override was designed to enable.
+
+**Regression pins**: `tests/test_multi_session.py` (now 34 tests) — reader v1+v2, cwd filter, freshness filter, corrupt/missing/unknown-schema resilience; picker env var / PID / single / mtime / none, PID+started_at recycling detection (Finding #2), env-var vendor override (Finding #3); PID walker returns tuples (bounded + cross-platform + started-at match helper); writer fresh + preserve + upsert + v1→v2 migration + stale-drop; render_snippet_json vendor fallback (Finding #3); byte-identity across all three copies (Finding #1 regression pin — `TestByteIdentityAcrossThreeCopies`).
+
+**Blast radius**: base gator code, ships in every gatorized repo AND every Enterprise-provisioned repo. Attribution accuracy changes for every governed commit. Old repos with v1 files continue working on read; get upgraded to v2 on the next SessionStart write.
 
 ## License Posture and Contribution Policy
 

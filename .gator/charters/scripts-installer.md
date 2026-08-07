@@ -335,6 +335,8 @@ File: `.gator/scripts/gator-session-start.py`
 Drops entries where `started_at > 24h ago` (`_AVS_MAX_AGE_SECONDS = 86400`). Preserves entries without a parseable `started_at` (defensive — better to keep a maybe-stale entry than silently drop a valid one).
 <- `write_session_file()`
 
+! **Three-way sync obligation (updated 2026-08-07, Codex Finding #1)**: `gator-session-start.py` and `precommit_session.py` exist in THREE locations that MUST stay byte-identical — `.gator/.includes/scripts/` (shipped), `src/gator_command/templates/gator-starter/scripts/` (template, copied by gatorize), AND `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` (copied by `gator-enterprise repo init`). The template copies alone were originally documented; missing the enterprise-cli bundled path meant Enterprise-provisioned repos ran stale code even after fleet-wide updates. See `scripts-cross-cutting.md::Multi-Session Vendor Attribution` for the full contract + regression pin (`tests/test_multi_session.py::TestByteIdentityAcrossThreeCopies`).
+
 ### main()
 File: `.gator/scripts/gator-session-start.py`
 Entry point for vendor `SessionStart` hooks. Reads stdin JSON, builds session file, writes atomically. Always exits 0 — never blocks the vendor session. Cross-vendor: handles Claude Code, Codex CLI, Gemini CLI payloads.

@@ -279,6 +279,8 @@ enterprise-cli package.
   provisioned with `--mode evidence_only` had every commit run in
   strict because no git provider knew the repo.
 
+- **! `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` is the THIRD copy of the session-capture scripts and MUST stay byte-identical with the shipped and template copies.** `repo_init.py::_install_bundled_scripts()` copies these into every Enterprise-provisioned repo's `.gator/scripts/`. The other two copies are `.gator/.includes/scripts/` (shipped, used by v2 repos gatorized with `gator gatorize`) and `src/gator_command/templates/gator-starter/scripts/` (template, copied by `gatorize`). Drift means Enterprise-provisioned repos and gator-gatorize'd repos run different code — Codex Finding #1 from the 2026-08-07 whiteboard review caught exactly this: a multi-session fix updated the first two but not the third, so freshly `repo init`'d repos still ran v1-only single-session logic. See `scripts-cross-cutting.md::Multi-Session Vendor Attribution` for the authoritative TRIPWIRE and the regression pin (`tests/test_multi_session.py::TestByteIdentityAcrossThreeCopies` — parametrized across both filenames, will fail loudly on any future divergence).
+
 - **! `repo init --mode` default is `strict`, not `evidence_only`.**
   Reverses the pre-2026-08-07 enterprise-cli default (which was
   `evidence_only` with a help-text pointer to Individual for stricter

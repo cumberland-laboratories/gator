@@ -244,74 +244,130 @@ def _read_active_vendor_sessions(gator_dir):
 # in scripts-cross-cutting.md — this is a hot-path helper on Windows
 # (PowerShell startup is ~150ms per hop) so it's gated behind a
 # session-count check by _pick_session_for_commit.
+#
+# The walker returns (ppid, started_at) tuples so the picker can
+# defeat PID recycling: a session's owner_pid may match an ancestor
+# PID number even though the ancestor is a different process (Windows
+# especially recycles PIDs aggressively). Both the PID and the start
+# time must align for a real match. `started_at` is best-effort; if
+# unavailable we degrade to PID-only matching for that hop.
 
 
-def _get_ppid_unix(pid):
-    """Return parent PID via `ps -o ppid=`. None on any failure."""
+def _get_process_info_unix(pid):
+    """Return (parent_pid, started_at_str) via `ps -o ppid=,lstart=`.
+    Returns (None, None) on any failure; (int, None) if we got ppid but
+    couldn't parse lstart."""
     try:
         import subprocess
         r = subprocess.run(
-            ["ps", "-o", "ppid=", "-p", str(pid)],
+            ["ps", "-o", "ppid=,lstart=", "-p", str(pid)],
             capture_output=True, text=True, timeout=5,
         )
         if r.returncode != 0:
-            return None
+            return (None, None)
         s = r.stdout.strip()
         if not s:
-            return None
-        return int(s)
+            return (None, None)
+        parts = s.split(None, 1)
+        ppid = int(parts[0])
+        started_at = parts[1].strip() if len(parts) > 1 else None
+        return (ppid, started_at)
     except (OSError, ValueError, subprocess.SubprocessError):
-        return None
+        return (None, None)
 
 
-def _get_ppid_windows(pid):
-    """Return parent PID via PowerShell Get-CimInstance. None on any failure.
-
-    Cost: ~150ms per call (PowerShell startup). Only invoked when a
-    2+-session commit needs disambiguation.
-    """
+def _get_process_info_windows(pid):
+    """Return (parent_pid, started_at_str) via PowerShell Get-CimInstance.
+    Both fields captured in ONE PowerShell call to keep hop cost at
+    ~150ms (startup dominates). Returns (None, None) on any failure;
+    (int, None) if we got ppid but couldn't format CreationDate."""
     try:
         import subprocess
+        script = (
+            f"$p=Get-CimInstance Win32_Process -Filter 'ProcessId={pid}';"
+            f"if($p){{Write-Output \"$($p.ParentProcessId) "
+            f"$($p.CreationDate.ToUniversalTime().ToString('o'))\"}}"
+        )
         r = subprocess.run(
-            [
-                "powershell", "-NoProfile", "-NonInteractive", "-Command",
-                f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}')"
-                f".ParentProcessId",
-            ],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True, text=True, timeout=10,
         )
         if r.returncode != 0:
-            return None
+            return (None, None)
         s = r.stdout.strip()
         if not s:
-            return None
-        return int(s)
+            return (None, None)
+        parts = s.split(None, 1)
+        ppid = int(parts[0])
+        started_at = parts[1].strip() if len(parts) > 1 else None
+        return (ppid, started_at)
     except (OSError, ValueError, subprocess.SubprocessError):
-        return None
+        return (None, None)
+
+
+def _get_process_info(pid):
+    """Return (parent_pid, started_at_str) for `pid`. Cross-platform.
+    (None, None) on failure."""
+    if sys.platform == "win32":
+        return _get_process_info_windows(pid)
+    return _get_process_info_unix(pid)
 
 
 def _get_ppid(pid):
-    """Return parent PID of `pid`, cross-platform. None on failure."""
-    if sys.platform == "win32":
-        return _get_ppid_windows(pid)
-    return _get_ppid_unix(pid)
+    """Return parent PID of `pid`, cross-platform. None on failure.
+
+    Preserved for backwards compat with external callers and tests.
+    New attribution code uses _get_process_info to also grab start times."""
+    ppid, _ = _get_process_info(pid)
+    return ppid
 
 
 def _walk_parent_pids(start_pid=None, max_depth=10):
     """Walk the parent-PID chain starting from `start_pid` (default: this
-    process). Returns the list of ancestor PIDs (excluding start_pid itself),
-    bounded by `max_depth`. Returns [] if walking fails immediately."""
+    process). Returns list of (ancestor_pid, ancestor_started_at) tuples,
+    bounded by `max_depth`. `ancestor_started_at` is a string when
+    obtainable and None otherwise (attribution degrades to PID-only
+    matching for that hop when start time is unavailable).
+
+    Returns [] if walking fails immediately."""
     if start_pid is None:
         start_pid = os.getpid()
     ancestors = []
     current = start_pid
     for _ in range(max_depth):
-        parent = _get_ppid(current)
+        parent, parent_started = _get_process_info(current)
         if parent is None or parent == 0 or parent == current:
             break
-        ancestors.append(parent)
+        ancestors.append((parent, parent_started))
         current = parent
     return ancestors
+
+
+def _pid_start_times_match(recorded, observed):
+    """Fuzzy-compare two process-start-time strings. Returns True when
+    they refer to the same instant (or when either is unavailable, in
+    which case we can't rule out a match — degrade gracefully).
+
+    Formats vary by platform:
+      - Windows: ISO-8601 with subseconds (e.g., '2026-08-07T13:59:58.1234567+00:00')
+      - Unix `ps -o lstart=`: 'Thu Aug  7 13:59:58 2026'
+      - `/proc/<pid>/stat` field 22: raw clock ticks since boot
+
+    Rather than parse the full space, do a normalized string comparison:
+    strip whitespace, lowercase, compare. If they differ, that's the
+    recycling signal. If we can't get a fresh timestamp (observed is
+    None), we DON'T claim recycled — better to over-attribute than
+    under-attribute for this best-effort check.
+    """
+    if not recorded:
+        # No recorded timestamp on the session → no recycling protection
+        # available; fall back to PID-only matching by returning True.
+        return True
+    if not observed:
+        # Couldn't read a fresh timestamp on this hop → same graceful
+        # degradation; PID-number match is our only signal.
+        return True
+    return recorded.strip().lower() == observed.strip().lower()
 
 
 # --- Attribution: which session made this commit? ---
@@ -341,9 +397,20 @@ def _pick_session_for_commit(sessions):
         # Env var pointed at a session not in the list — synthesize a
         # minimal entry so the caller can still emit the id. This
         # supports orchestrators that manage session identity out-of-band.
+        #
+        # Vendor identity: prefer the companion env var
+        # GATOR_TRANSCRIPT_VENDOR (orchestrator sets both — canonical
+        # for cross-repo commits). If unset, return `vendor: None` so
+        # render_snippet_json falls through to the agent-inferred
+        # vendor rather than clobbering with 'unknown' (Codex Finding
+        # #3 from 2026-08-07 review). The three canonical vendor
+        # values here match gator-session-start.py's VENDOR_CANONICAL:
+        # 'anthropic', 'openai', 'google' — plus 'unknown' as a valid
+        # explicit-opt-out.
+        override_vendor = os.environ.get("GATOR_TRANSCRIPT_VENDOR", "").strip()
         return {
             "vendor_session_id": override_id,
-            "vendor": "unknown",
+            "vendor": override_vendor or None,
             "model": None,
             "transcript_path": None,
             "source": "env-override",
@@ -353,12 +420,24 @@ def _pick_session_for_commit(sessions):
     if len(sessions) == 1:
         return sessions[0]
 
-    # 2. PID tree walk match (only when 2+ sessions)
+    # 2. PID tree walk match (only when 2+ sessions).
+    # Matches BOTH the owner_pid number AND owner_pid_started_at (when
+    # available) to defeat PID recycling. On Windows especially, PIDs
+    # can be reused within minutes of the original process exiting; a
+    # session that recorded `owner_pid=12345` at SessionStart shouldn't
+    # match a different process that happens to have PID 12345 now.
     entries_with_pid = [s for s in sessions if s.get("owner_pid")]
     if entries_with_pid:
-        ancestor_pids = set(_walk_parent_pids())
+        ancestors = _walk_parent_pids()
+        # Build pid -> observed_started_at map for fast lookup
+        ancestor_map = {pid: started for pid, started in ancestors}
         for s in entries_with_pid:
-            if s.get("owner_pid") in ancestor_pids:
+            owner_pid = s.get("owner_pid")
+            if owner_pid not in ancestor_map:
+                continue
+            observed_start = ancestor_map[owner_pid]
+            recorded_start = s.get("owner_pid_started_at")
+            if _pid_start_times_match(recorded_start, observed_start):
                 return s
 
     # 4. Most-recent transcript mtime fallback
@@ -817,14 +896,35 @@ def render_snippet_json(entry, session_meta, vendor_session=None):
         vendor_inferred, model_inferred = _infer_vendor_from_agent(agent)
 
     # Vendor session overlay
+    #
+    # When `vendor_session` comes from a real SessionStart entry, its
+    # vendor field is authoritative and overrides the agent-inferred
+    # value. When it comes from a GATOR_TRANSCRIPT_SESSION_ID env
+    # override without a companion GATOR_TRANSCRIPT_VENDOR, the
+    # synthesized entry has `vendor: None` — in that case we KEEP the
+    # agent-inferred vendor rather than clobber it with "unknown"
+    # (Codex Finding #3 from 2026-08-07 whiteboard). Same for
+    # session_group_key's vendor component: prefer the explicit
+    # session vendor, then agent-inferred, only fall back to "unknown"
+    # as a last resort so the group key stays meaningful for the
+    # cross-repo env-override case the env var was designed to enable.
     transcript_session_id = entry.get("transcript_session_id")
     session_group_key = None
     group_vendor = vendor_inferred  # default: agent-inferred vendor
     if vendor_session:
         if vendor_session.get("vendor_session_id"):
             transcript_session_id = vendor_session["vendor_session_id"]
-            # Group key vendor comes from vendor_session explicitly
-            group_vendor = vendor_session.get("vendor") or "unknown"
+            # Group key vendor: explicit vendor_session vendor wins;
+            # fall through to agent-inferred; "unknown" as last resort.
+            group_vendor = (
+                vendor_session.get("vendor")
+                or vendor_inferred
+                or "unknown"
+            )
+        # Only overlay vendor/model when vendor_session HAS them.
+        # Synthesized entries with vendor=None (env override without
+        # GATOR_TRANSCRIPT_VENDOR) skip these to preserve the
+        # agent-inferred vendor/model.
         if vendor_session.get("vendor"):
             vendor_inferred = vendor_session["vendor"]
         if vendor_session.get("model"):

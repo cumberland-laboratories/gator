@@ -8,6 +8,7 @@ Self-contained — no external imports beyond stdlib.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -125,35 +126,367 @@ def _read_machine_label():
         return ""
 
 
-def _read_active_vendor_session(gator_dir):
-    """Read .gator/active-vendor-session.json if valid, recent, and for this repo.
+# --- Multi-session support (v2 schema) ---
+#
+# `.gator/active-vendor-session.json` (filename kept singular for
+# backwards compat with the layout registry and gitignore templates)
+# is a container of sessions, not a single entry. This lets multiple
+# vendor CLIs (Codex + Opus + Gemini, etc.) coexist in the same repo
+# without overwriting each other's identity, and lets post-commit
+# hooks correctly attribute a commit to the specific session that
+# made it.
+#
+# Attribution priority in _pick_session_for_commit (highest first):
+#   1. GATOR_TRANSCRIPT_SESSION_ID env var — orchestrators, cross-repo
+#      commits, test harnesses can set this to override inference.
+#   2. PID tree walk match — if the git hook's ancestor process PIDs
+#      include a session's owner_pid, that's a hard match.
+#   3. Single entry — if only one session is registered, use it.
+#   4. Transcript mtime fallback — pick the session whose transcript
+#      file was most recently modified.
+#   5. None — snippet gets transcript_session_id=null; diagnostic log
+#      (Finding #4) captures the fall-through.
+#
+# Backwards compat: readers accept both v1 (single-entry) and v2
+# (multi-entry) schemas. v1 files are read as a single-session list
+# and are migrated to v2 on the next SessionStart write.
 
-    Validates schema, cwd (must match repo root), and freshness (< 24 hours).
-    Returns the parsed dict or None.
+_AVS_SCHEMA_V1 = "gator-active-vendor-session-v1"
+_AVS_SCHEMA_V2 = "gator-active-vendor-sessions-v2"
+_AVS_MAX_AGE_SECONDS = 86400  # 24 hours
+
+
+def _normalize_session_entry(entry, avs_mtime, repo_root):
+    """Validate one entry, apply cwd + freshness filters.
+
+    Returns the entry dict if valid for THIS repo AND fresh, else None.
+    """
+    if not isinstance(entry, dict):
+        return None
+    if not entry.get("vendor_session_id"):
+        return None
+    # CWD must match this repo (or be empty — permissive for
+    # test harnesses that don't populate it)
+    file_cwd = (entry.get("cwd") or "").replace("\\", "/").rstrip("/").lower()
+    repo_cwd = str(repo_root).replace("\\", "/").rstrip("/").lower()
+    if file_cwd and repo_cwd and file_cwd != repo_cwd:
+        return None
+    # Freshness: prefer per-entry started_at if present, fall back
+    # to file mtime for legacy v1 entries that didn't record their
+    # own timestamp granularity.
+    import time
+    started_at = entry.get("started_at")
+    entry_age = None
+    if started_at:
+        try:
+            # Parse a permissive set of ISO-8601 shapes
+            from datetime import datetime
+            iso = started_at.replace("Z", "+00:00")
+            entry_ts = datetime.fromisoformat(iso).timestamp()
+            entry_age = time.time() - entry_ts
+        except (ValueError, TypeError):
+            entry_age = None
+    if entry_age is None and avs_mtime is not None:
+        entry_age = time.time() - avs_mtime
+    if entry_age is not None and entry_age > _AVS_MAX_AGE_SECONDS:
+        return None
+    return entry
+
+
+def _read_active_vendor_sessions(gator_dir):
+    """Read .gator/active-vendor-session.json — v1 or v2 — and return
+    the list of valid session entries for THIS repo.
+
+    Accepts BOTH schema shapes for backwards compat:
+      v1: `{"schema": "...v1", "vendor_session_id": "...", ...}`
+          → wrapped as a single-entry list
+      v2: `{"schema": "...v2", "sessions": [...]}`
+          → the list, filtered
+
+    Never raises. Returns [] on any read/parse failure.
     """
     avs_path = gator_dir / "active-vendor-session.json"
     if not avs_path.exists():
-        return None
+        return []
     try:
-        data = json.loads(avs_path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            return None
-        if data.get("schema") != "gator-active-vendor-session-v1":
-            return None
-        # Validate cwd matches this repo
-        repo_root = gator_dir.parent
-        file_cwd = (data.get("cwd") or "").replace("\\", "/").rstrip("/").lower()
-        repo_cwd = str(repo_root).replace("\\", "/").rstrip("/").lower()
-        if file_cwd and repo_cwd and file_cwd != repo_cwd:
-            return None  # Wrong repo
-        # Validate freshness
-        import time
+        raw = avs_path.read_text(encoding="utf-8")
+        data = json.loads(raw)
         mtime = avs_path.stat().st_mtime
-        if (time.time() - mtime) > 86400:
-            return None  # Stale
-        return data
     except (json.JSONDecodeError, OSError):
+        return []
+
+    repo_root = gator_dir.parent
+    if not isinstance(data, dict):
+        return []
+
+    schema = data.get("schema")
+    if schema == _AVS_SCHEMA_V2:
+        entries = data.get("sessions", [])
+        if not isinstance(entries, list):
+            return []
+    elif schema == _AVS_SCHEMA_V1:
+        # v1 was a single entry as the top-level object
+        entries = [data]
+    else:
+        return []
+
+    valid = []
+    for e in entries:
+        normalized = _normalize_session_entry(e, mtime, repo_root)
+        if normalized is not None:
+            valid.append(normalized)
+    return valid
+
+
+# --- PID tree walking (cross-platform, subprocess-based) ---
+#
+# Used only when 2+ active sessions need disambiguation. See TRIPWIRE
+# in scripts-cross-cutting.md — this is a hot-path helper on Windows
+# (PowerShell startup is ~150ms per hop) so it's gated behind a
+# session-count check by _pick_session_for_commit.
+#
+# The walker returns (ppid, started_at) tuples so the picker can
+# defeat PID recycling: a session's owner_pid may match an ancestor
+# PID number even though the ancestor is a different process (Windows
+# especially recycles PIDs aggressively). Both the PID and the start
+# time must align for a real match. `started_at` is best-effort; if
+# unavailable we degrade to PID-only matching for that hop.
+
+
+def _get_process_info_unix(pid):
+    """Return (parent_pid, started_at_str) via `ps -o ppid=,lstart=`.
+    Returns (None, None) on any failure; (int, None) if we got ppid but
+    couldn't parse lstart."""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["ps", "-o", "ppid=,lstart=", "-p", str(pid)],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode != 0:
+            return (None, None)
+        s = r.stdout.strip()
+        if not s:
+            return (None, None)
+        parts = s.split(None, 1)
+        ppid = int(parts[0])
+        started_at = parts[1].strip() if len(parts) > 1 else None
+        return (ppid, started_at)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return (None, None)
+
+
+def _get_process_info_windows(pid):
+    """Return (parent_pid, started_at_str) via PowerShell Get-CimInstance.
+    Both fields captured in ONE PowerShell call to keep hop cost at
+    ~150ms (startup dominates). Returns (None, None) on any failure;
+    (int, None) if we got ppid but couldn't format CreationDate."""
+    try:
+        import subprocess
+        script = (
+            f"$p=Get-CimInstance Win32_Process -Filter 'ProcessId={pid}';"
+            f"if($p){{Write-Output \"$($p.ParentProcessId) "
+            f"$($p.CreationDate.ToUniversalTime().ToString('o'))\"}}"
+        )
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode != 0:
+            return (None, None)
+        s = r.stdout.strip()
+        if not s:
+            return (None, None)
+        parts = s.split(None, 1)
+        ppid = int(parts[0])
+        started_at = parts[1].strip() if len(parts) > 1 else None
+        return (ppid, started_at)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return (None, None)
+
+
+def _get_process_info(pid):
+    """Return (parent_pid, started_at_str) for `pid`. Cross-platform.
+    (None, None) on failure."""
+    if sys.platform == "win32":
+        return _get_process_info_windows(pid)
+    return _get_process_info_unix(pid)
+
+
+def _get_ppid(pid):
+    """Return parent PID of `pid`, cross-platform. None on failure.
+
+    Preserved for backwards compat with external callers and tests.
+    New attribution code uses _get_process_info to also grab start times."""
+    ppid, _ = _get_process_info(pid)
+    return ppid
+
+
+def _walk_parent_pids(start_pid=None, max_depth=10):
+    """Walk the parent-PID chain starting from `start_pid` (default: this
+    process). Returns list of (ancestor_pid, ancestor_started_at) tuples,
+    bounded by `max_depth`. `ancestor_started_at` is a string when
+    obtainable and None otherwise (attribution degrades to PID-only
+    matching for that hop when start time is unavailable).
+
+    Returns [] if walking fails immediately."""
+    if start_pid is None:
+        start_pid = os.getpid()
+    ancestors = []
+    current = start_pid
+    for _ in range(max_depth):
+        parent, parent_started = _get_process_info(current)
+        if parent is None or parent == 0 or parent == current:
+            break
+        ancestors.append((parent, parent_started))
+        current = parent
+    return ancestors
+
+
+def _pid_start_times_match(recorded, observed):
+    """Fuzzy-compare two process-start-time strings. Returns True when
+    they refer to the same instant (or when either is unavailable, in
+    which case we can't rule out a match — degrade gracefully).
+
+    Formats vary by platform:
+      - Windows: ISO-8601 with subseconds (e.g., '2026-08-07T13:59:58.1234567+00:00')
+      - Unix `ps -o lstart=`: 'Thu Aug  7 13:59:58 2026'
+      - `/proc/<pid>/stat` field 22: raw clock ticks since boot
+
+    Rather than parse the full space, do a normalized string comparison:
+    strip whitespace, lowercase, compare. If they differ, that's the
+    recycling signal. If we can't get a fresh timestamp (observed is
+    None), we DON'T claim recycled — better to over-attribute than
+    under-attribute for this best-effort check.
+    """
+    if not recorded:
+        # No recorded timestamp on the session → no recycling protection
+        # available; fall back to PID-only matching by returning True.
+        return True
+    if not observed:
+        # Couldn't read a fresh timestamp on this hop → same graceful
+        # degradation; PID-number match is our only signal.
+        return True
+    return recorded.strip().lower() == observed.strip().lower()
+
+
+# --- Attribution: which session made this commit? ---
+
+
+def _pick_session_for_commit(sessions):
+    """Given a list of valid session entries, return the one that most
+    likely made the current commit. Returns None if the list is empty
+    or no attribution rule matches.
+
+    Priority (highest first):
+      1. GATOR_TRANSCRIPT_SESSION_ID env var → match by vendor_session_id
+      2. PID tree walk match against owner_pid (skipped if only 1 entry)
+      3. Single-entry list → use it
+      4. Most-recent transcript mtime
+      5. None
+    """
+    if not sessions:
         return None
+
+    # 1. Env var override
+    override_id = os.environ.get("GATOR_TRANSCRIPT_SESSION_ID", "").strip()
+    if override_id:
+        for s in sessions:
+            if s.get("vendor_session_id") == override_id:
+                return s
+        # Env var pointed at a session not in the list — synthesize a
+        # minimal entry so the caller can still emit the id. This
+        # supports orchestrators that manage session identity out-of-band.
+        #
+        # Vendor identity: prefer the companion env var
+        # GATOR_TRANSCRIPT_VENDOR (orchestrator sets both — canonical
+        # for cross-repo commits). If unset, return `vendor: None` so
+        # render_snippet_json falls through to the agent-inferred
+        # vendor rather than clobbering with 'unknown' (Codex Finding
+        # #3 from 2026-08-07 review). The three canonical vendor
+        # values here match gator-session-start.py's VENDOR_CANONICAL:
+        # 'anthropic', 'openai', 'google' — plus 'unknown' as a valid
+        # explicit-opt-out.
+        override_vendor = os.environ.get("GATOR_TRANSCRIPT_VENDOR", "").strip()
+        return {
+            "vendor_session_id": override_id,
+            "vendor": override_vendor or None,
+            "model": None,
+            "transcript_path": None,
+            "source": "env-override",
+        }
+
+    # 3. Single-entry short-circuit (skip PID walk for the common case)
+    if len(sessions) == 1:
+        return sessions[0]
+
+    # 2. PID tree walk match (only when 2+ sessions).
+    # Matches BOTH the owner_pid number AND owner_pid_started_at (when
+    # available) to defeat PID recycling. On Windows especially, PIDs
+    # can be reused within minutes of the original process exiting; a
+    # session that recorded `owner_pid=12345` at SessionStart shouldn't
+    # match a different process that happens to have PID 12345 now.
+    entries_with_pid = [s for s in sessions if s.get("owner_pid")]
+    if entries_with_pid:
+        ancestors = _walk_parent_pids()
+        # Build pid -> observed_started_at map for fast lookup
+        ancestor_map = {pid: started for pid, started in ancestors}
+        for s in entries_with_pid:
+            owner_pid = s.get("owner_pid")
+            if owner_pid not in ancestor_map:
+                continue
+            observed_start = ancestor_map[owner_pid]
+            recorded_start = s.get("owner_pid_started_at")
+            if _pid_start_times_match(recorded_start, observed_start):
+                return s
+
+    # 4. Most-recent transcript mtime fallback
+    best = None
+    best_mtime = -1
+    for s in sessions:
+        tp = s.get("transcript_path")
+        if not tp:
+            continue
+        try:
+            mtime = os.path.getmtime(tp)
+        except OSError:
+            continue
+        if mtime > best_mtime:
+            best_mtime = mtime
+            best = s
+    if best is not None:
+        return best
+
+    # 5. Nothing matched
+    return None
+
+
+def _read_active_vendor_session(gator_dir):
+    """Backwards-compat entry point: return the ONE session attributed
+    to the current commit, or None.
+
+    Delegates to the multi-session pipeline: read all → pick one.
+    Preserves the pre-2026-08-07 return shape (single dict or None)
+    for callers that predate the multi-session refactor.
+    """
+    sessions = _read_active_vendor_sessions(gator_dir)
+    return _pick_session_for_commit(sessions)
+
+
+def _read_vendor_session(gator_dir):
+    """Read vendor session identity, returning {} on any failure.
+
+    Thin wrapper over _read_active_vendor_session that also validates
+    vendor_session_id is present and non-empty.
+    """
+    data = _read_active_vendor_session(gator_dir)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    if not data.get("vendor_session_id"):
+        return {}
+    return data
 
 
 def _derive_intent(entry):
@@ -563,14 +896,35 @@ def render_snippet_json(entry, session_meta, vendor_session=None):
         vendor_inferred, model_inferred = _infer_vendor_from_agent(agent)
 
     # Vendor session overlay
+    #
+    # When `vendor_session` comes from a real SessionStart entry, its
+    # vendor field is authoritative and overrides the agent-inferred
+    # value. When it comes from a GATOR_TRANSCRIPT_SESSION_ID env
+    # override without a companion GATOR_TRANSCRIPT_VENDOR, the
+    # synthesized entry has `vendor: None` — in that case we KEEP the
+    # agent-inferred vendor rather than clobber it with "unknown"
+    # (Codex Finding #3 from 2026-08-07 whiteboard). Same for
+    # session_group_key's vendor component: prefer the explicit
+    # session vendor, then agent-inferred, only fall back to "unknown"
+    # as a last resort so the group key stays meaningful for the
+    # cross-repo env-override case the env var was designed to enable.
     transcript_session_id = entry.get("transcript_session_id")
     session_group_key = None
     group_vendor = vendor_inferred  # default: agent-inferred vendor
     if vendor_session:
         if vendor_session.get("vendor_session_id"):
             transcript_session_id = vendor_session["vendor_session_id"]
-            # Group key vendor comes from vendor_session explicitly
-            group_vendor = vendor_session.get("vendor") or "unknown"
+            # Group key vendor: explicit vendor_session vendor wins;
+            # fall through to agent-inferred; "unknown" as last resort.
+            group_vendor = (
+                vendor_session.get("vendor")
+                or vendor_inferred
+                or "unknown"
+            )
+        # Only overlay vendor/model when vendor_session HAS them.
+        # Synthesized entries with vendor=None (env override without
+        # GATOR_TRANSCRIPT_VENDOR) skip these to preserve the
+        # agent-inferred vendor/model.
         if vendor_session.get("vendor"):
             vendor_inferred = vendor_session["vendor"]
         if vendor_session.get("model"):
@@ -598,7 +952,18 @@ def render_snippet_json(entry, session_meta, vendor_session=None):
         "branch": entry.get("branch", ""),
         "commit_index": entry.get("commit_index", 0),
         "previous_commit_in_session": entry.get("previous_commit"),
-        "started_at": vendor_session.get("started_at") if vendor_session else now,
+        # Three-tier fallback: vendor-reported start (most accurate) →
+        # ledger's session-start (from frontmatter, seeded on first commit) →
+        # now (last resort, should not fire for post-first-commit snippets).
+        # A bare `now` was Codex-flagged as breaking the schema's
+        # "when the session group began" contract for repos without an
+        # active vendor session — every snippet in such a session would
+        # otherwise carry the current commit's timestamp as `started_at`.
+        "started_at": (
+            (vendor_session or {}).get("started_at")
+            or session_meta.get("started-at")
+            or now
+        ),
         "ended_at": now,
         "vendor_inferred": vendor_inferred,
         "model_inferred": model_inferred,
@@ -611,6 +976,12 @@ def render_snippet_json(entry, session_meta, vendor_session=None):
     }
 
     return json.dumps(snippet, indent=2, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# Session timeout for ledger file reuse
+# ---------------------------------------------------------------------------
+SESSION_TIMEOUT_HOURS = 4
 
 
 def record_commit_and_emit_snippet(gator_dir, status, git_fn=None):
@@ -645,7 +1016,6 @@ def record_commit_and_emit_snippet(gator_dir, status, git_fn=None):
 
     # Find existing ledger for this agent within timeout (most recent first)
     import time as _time
-    SESSION_TIMEOUT_HOURS = 4
     for candidate in sorted(
         sessions_dir.glob(f"{repo_root.name}-{agent_normalized}-*.md"),
         key=lambda f: f.stat().st_mtime, reverse=True,
