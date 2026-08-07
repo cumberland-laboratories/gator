@@ -16,29 +16,52 @@ from gator_enterprise_cli.output import print_kv
 #
 # TRIPWIRE: Windows Git Bash has `python` and `py -3` but NOT `python3` as a
 # real interpreter. Stock Windows installs an App Execution Alias for
-# `python3` that points at a Microsoft Store stub — it "exists" on PATH but
-# prints an install prompt and exits non-zero when invoked. Any hook wrapper
-# that hardcodes `python3` fails silently on the first commit on Windows,
-# blocking every governed commit with an opaque error. All Python invocations
-# in these templates MUST go through the resolved `$PYTHON` (via
-# `_PYTHON_RESOLVER` below), which prefers the pipx venv interpreter that
-# `activate` writes to `~/.gator/enterprise/cli-python-path` and only falls
-# back to `python3`/`python` on PATH when that file is unavailable.
+# `python3` that points at a Microsoft Store stub — it "exists" on PATH,
+# passes `[ -x ]` and `command -v` checks, but exits non-zero (typically 126
+# "Permission denied" or 9009 "command not found") when actually invoked.
+# Any hook wrapper that hardcodes `python3` OR trusts `command -v python3`
+# without probing that it actually runs fails silently on the first commit
+# on Windows, blocking every governed commit with an opaque error.
+#
+# All Python invocations in these templates MUST go through the resolved
+# `$PYTHON` (via `_PYTHON_RESOLVER` below). The resolver:
+#   1. Prefers `~/.gator/enterprise/cli-python-path` (written by activate,
+#      always present after `gator-enterprise activate`)
+#   2. Falls back to `command -v python3`, then `command -v python`
+#   3. SANITY-PROBES each candidate with `-V` before accepting — a bare
+#      `command -v` result is NOT trustworthy on Windows (see stub above)
+#   4. Fails loudly with a message that names the Windows stub pitfall
+#      when no candidate probes clean
 
 _PYTHON_RESOLVER = r'''
 # Resolve Python interpreter — prefer cli-python-path (written by activate);
 # fall back to python3 then python on PATH. See TRIPWIRE in activate.py.
+# Each candidate is sanity-probed with `-V` because "discoverable" ≠ "usable":
+# on Windows the App Execution Alias for python3 passes `command -v`/`[ -x ]`
+# but exits non-zero on invocation. Trusting `command -v` alone re-creates
+# the exact bug this resolver was written to prevent.
+_gator_py_ok() {
+    [ -n "$1" ] && "$1" -V >/dev/null 2>&1
+}
 PYTHON=""
 CLI_PYTHON_FILE="$HOME/.gator/enterprise/cli-python-path"
 if [ -f "$CLI_PYTHON_FILE" ]; then
     CANDIDATE=$(cat "$CLI_PYTHON_FILE")
-    [ -x "$CANDIDATE" ] && PYTHON="$CANDIDATE"
+    _gator_py_ok "$CANDIDATE" && PYTHON="$CANDIDATE"
 fi
-[ -z "$PYTHON" ] && PYTHON=$(command -v python3 2>/dev/null)
-[ -z "$PYTHON" ] && PYTHON=$(command -v python 2>/dev/null)
 if [ -z "$PYTHON" ]; then
-    echo "gator: no Python interpreter found" >&2
-    echo "  (looked at: \$HOME/.gator/enterprise/cli-python-path, python3, python)" >&2
+    CANDIDATE=$(command -v python3 2>/dev/null)
+    _gator_py_ok "$CANDIDATE" && PYTHON="$CANDIDATE"
+fi
+if [ -z "$PYTHON" ]; then
+    CANDIDATE=$(command -v python 2>/dev/null)
+    _gator_py_ok "$CANDIDATE" && PYTHON="$CANDIDATE"
+fi
+if [ -z "$PYTHON" ]; then
+    echo "gator: no working Python interpreter found" >&2
+    echo "  (probed: \$HOME/.gator/enterprise/cli-python-path, python3, python)" >&2
+    echo "  each candidate must respond to '-V'. On Windows, python3 is often a" >&2
+    echo "  Microsoft Store shim; ensure 'python' or 'py -3' is installed and on PATH." >&2
     exit 1
 fi
 '''

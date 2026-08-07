@@ -172,22 +172,47 @@ enterprise-cli package.
 
 - **! Global hook wrappers MUST resolve Python via `$PYTHON`
   (`_PYTHON_RESOLVER` in `enterprise-cli/gator_enterprise_cli/commands/
-  activate.py`), never hardcode `python3`.** Stock Windows has no
-  `python3` interpreter — the App Execution Alias for `python3` points
-  at a Microsoft Store stub that "exists" on PATH but exits non-zero
-  with an install prompt when invoked. A hook wrapper that hardcodes
-  `python3` fails silently on the first commit on Windows and blocks
-  every governed commit thereafter. Resolution order: (1) file at
-  `~/.gator/enterprise/cli-python-path` if executable (written by
-  `_do_activate`, always present after `gator-enterprise activate`);
-  (2) `command -v python3` on PATH; (3) `command -v python` on PATH;
-  fail with clear stderr if none. The three templates
-  (`PRE_COMMIT_HOOK`, `COMMIT_MSG_HOOK`, `POST_COMMIT_HOOK`) each
-  concat `_PYTHON_RESOLVER` after the `GATOR_SCRIPT` existence check
-  and reference `"$PYTHON"` for every Python invocation, including the
-  inline `-c` mode-lookup and the `.gator/scripts/gator-session-block.py`
-  fallback in POST_COMMIT_HOOK. Surfaced during 2026-08-06 Enterprise
-  local bring-up (Phase 5), plan artifact
+  activate.py`), never hardcode `python3`. Every candidate MUST be
+  sanity-probed with `-V` before it is accepted — presence on PATH is
+  not proof of usability.** Stock Windows has no `python3` interpreter:
+  the App Execution Alias for `python3` sits on PATH, passes
+  `command -v` and `[ -x ]`, but exits non-zero (typically 126
+  "Permission denied" or 9009 "command not found") when actually
+  invoked. Two failure modes to guard against — both would break every
+  governed commit on Windows:
+  - **Hardcoded `python3`** anywhere in a template (the original bug
+    fixed in `3afe7e3`).
+  - **Trusting `command -v python3`** as a bare fallback without
+    running `-V` on the result. The `_gator_py_ok` helper in the
+    resolver exists to prevent this; do not remove it or short-circuit
+    it. The follow-up fix after the enforcer's Finding 1 explicitly
+    added this probe.
+
+  Resolution order (each step gated on the `-V` probe): (1) file at
+  `~/.gator/enterprise/cli-python-path` if it exists AND its target
+  probes clean (written by `_do_activate`, always present after
+  `gator-enterprise activate`); (2) `command -v python3` if it probes
+  clean; (3) `command -v python` if it probes clean; else fail with a
+  clear stderr message that names the Windows-stub pitfall. The three
+  templates (`PRE_COMMIT_HOOK`, `COMMIT_MSG_HOOK`, `POST_COMMIT_HOOK`)
+  each concat `_PYTHON_RESOLVER` after the `GATOR_SCRIPT` existence
+  check and reference `"$PYTHON"` for every Python invocation, including
+  the inline `-c` mode-lookup and the `.gator/scripts/gator-session-
+  block.py` fallback in POST_COMMIT_HOOK.
+
+  Regression pin: `enterprise/tests/test_activate_hooks.py` (12 tests).
+  `TestHookTemplatesUseResolver` asserts every template embeds
+  `_PYTHON_RESOLVER`, contains no bare `python3 <arg>` invocation
+  patterns, and includes the `_gator_py_ok` probe helper.
+  `TestResolverBehavior` executes the resolver in an isolated bash
+  shell with mocked HOME and PATH to prove: happy path, Windows-stub
+  fall-through, broken `cli-python-path` fall-through, no-candidate
+  loud failure. Skipped only when `bash` is unavailable.
+
+  Surfaced during 2026-08-06 Enterprise local bring-up (Phase 5);
+  Finding 1 (residual `command -v python3` vulnerability) surfaced
+  by the enforcer immediately after the initial fix landed and
+  addressed in the follow-up. Plan artifact
   `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-implementation-plan.md`.
 
 ## Called by (`←`)
