@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise Phase 4: Migration 010 SQL views + transcripts list UX polish",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "transcripts-first",
+    "enterprise",
+    "operator-surface"
+  ],
+  "commit": "b290dc052ce6957d50eaa02e98affd1d6df3b4d9",
+  "short_commit": "b290dc0",
+  "snippet_id": "snippet-b290dc052ce69",
+  "session_group_key": "anthropic:331a6a12-b575-4478-b623-d731a73fdbc2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "766ba3b9f2cd38543b52b6cadf671c1825ebe327",
+  "started_at": "2026-08-08T19:46:54Z",
+  "ended_at": "2026-08-08T23:01:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-08-gator-766ba3b9f2cd3.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py",
+    "enterprise/migrations/versions/010_transcript_query_views.py",
+    "enterprise/tests/test_ingest_routes.py"
+  ],
+  "notes": [
+    "Add Migration 010 (`enterprise/migrations/versions/010_transcript_query_views.py`) — three cross-tenant SQL views over the Phase 1 tables. `recent_transcripts` mirrors the `transcripts list` shape (metadata + `linked_commit_count` via LEFT JOIN + GROUP BY). `commits_with_transcript_coverage` returns per-commit `linked_transcript_count` + `best_linkage_rank` (numeric CASE-based) + `best_linkage_basis_ranked` (human-readable) — CASE-based rank because the string basis values don't sort alphabetically. `unlinked_recent_transcripts` is the 7-day investigation queue. All three intentionally cross-tenant; caller adds `WHERE organization_id = ...`. TRIPWIRE noted in charter: view definitions reference underlying-table columns, so any column rename requires a follow-up view migration or these break silently.",
+    "Polish `transcripts list` UX (`enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py::_handle_list`): add `--until` (server-side upper bound on started_at — the API param existed since Phase 2 but was unshipped in the CLI), `--offset` (paginate without spamming --limit), `--unlinked` (client-side filter matching the `unlinked_recent_transcripts` view), `--sort {ingested|started|size|links}` (client-side re-sort; ingested is a no-op since server returns that order), `--wide` (adds Machine + Started columns). Per-vendor summary line auto-appears when >= 2 vendors are visible. Non-breaking: existing invocations produce byte-identical output.",
+    "Add regression test `test_ingest_routes.py::TestListTranscripts::test_until_filters_upper_bound` covering the `until` query param — it was defined in Phase 2's read endpoint but had no test coverage. Full enterprise suite: 225 passed, 1 skipped.",
+    "Write operator guide `.gator/vault/artifacts/enterprise-transcripts-mvp-operator-guide.md` (vault artifact — not shipped in git; references in-firewall deployment shape). Nine sections: prerequisites, 5-command golden path, per-verb CLI reference, operational plumbing (uvicorn boot / migrations / BlobStore layout / machine-id), five SQL query recipes (recent + coverage + audit gap + investigation queue + storage stats), post-hoc linkage recovery workflow, seven troubleshooting entries covering the failure modes surfaced during Phase 2/3 dogfooding, explicit \"NOT in MVP\" list, cross-references to plan/ADR/charter.",
+    "Charter update (`.gator/charters/scripts-enterprise.md`): new Phase 4 invariant block naming Migration 010 + view definitions + column-rename TRIPWIRE, list UX polish flags, operator guide artifact, live-verification stanza. Ends \"MVP query surface complete\" — Phases 5-6 don't touch this surface.",
+    "Plan + ADR (both vault) marked Phase 4 COMPLETE (commit TBD). §16 handoff rolled forward to Phase 5. §17 estimate line rolled forward to include Phase 4 actual. Per the Pass 6/7 recurring failure-mode note, both artifacts touched in the same commit boundary. Also updated the operator-guide reference in the plan §17.",
+    "Live verification (2026-08-08): Migration 010 applied against local Postgres port 5434; upgrade + downgrade + re-upgrade round-trip clean. All three views return expected shape against the Phase 2/3 dogfooding data (2 sessions with 25/7 links each, commit `e784d604` surfaces at top of `commits_with_transcript_coverage` ORDER BY best_linkage_rank ASC with best basis `1_exact_sha_in_transcript`, `unlinked_recent_transcripts` correctly empty). `transcripts list --wide --sort links` and `--unlinked` both verified against the real server."
+  ],
+  "transcript_session_id": "331a6a12-b575-4478-b623-d731a73fdbc2",
+  "transcript_ref": null
+}

@@ -510,6 +510,27 @@ enterprise-cli package.
 
   **MVP query surface complete.** Phases 5-6 remain (hook seam cleanup + base-gator `Gator-Machine-Id` trailer); these are minimal deltas that don't touch the transcript custody surface described in this block.
 
+- **! Hook seam cleanup — v2-first script probe + at-risk hook enumeration (2026-08-08 MVP Phase 5).** Two Change items from §11 of the plan. Closes the silent-governance-bypass bug on v2 repos + makes `gator-enterprise activate` honest about the blast radius of setting global `core.hooksPath`.
+
+  **Change 1 — v2-first hook wrapper templates** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py`): the three global hook wrappers (`PRE_COMMIT_HOOK`, `COMMIT_MSG_HOOK`, `POST_COMMIT_HOOK`) previously hardcoded the v1 script path `.gator/scripts/gator-pre-commit.py`. On a v2 repo, the `[ -f "$GATOR_SCRIPT" ]` guard silently exited 0 and governance did not run — the exact bug §11 Change 2 flagged. New shared snippet `_GATOR_SCRIPT_RESOLVER` probes v2 (`.gator/.includes/scripts/gator-pre-commit.py`) FIRST, falls back to v1 (`.gator/scripts/gator-pre-commit.py`) SECOND, exits 0 only when neither exists (correct behavior for non-gatorized repos). Same v2-first ordering applied to the `gator-session-block.py` fallback in `POST_COMMIT_HOOK`. TRIPWIRE: the v2-first order is load-bearing under the plan's v2-only ratification — reversing it would re-invert the priority on mixed-layout machines. Regression pins: `test_activate_atrisk.py::TestV2FirstScriptDiscovery` (3 tests: v2-before-v1 ordering + variable-assignment shape + block-script parity).
+
+  **Change 2 — at-risk hook enumeration + blocking prompt** (same file, new `_enumerate_at_risk_hooks` + `_warn_about_at_risk_hooks` functions called from `_do_activate` BEFORE any `~/.gator/` state is written). Walks `~/.gator/dashboard-repos.json` and for each repo:
+  - Reports non-`.sample` files in `.git/hooks/*` — active hooks that will stop firing once global `core.hooksPath` is set.
+  - Detects hook-framework markers in repo root: `.pre-commit-config.yaml`, `.pre-commit-hooks.yaml`, `lefthook.yml`, `lefthook.yaml`, `husky.config.js`. Framework marker alone (no `.git/hooks/*` files) is enough to trigger a warning — the framework installs its hooks lazily.
+  - Skips repos with local `core.hooksPath` set — those are immune to the global takeover (Git prefers the local setting) and enumeration is silent for them.
+
+  Behavior on Linux/macOS: prints the per-repo enumeration + a `Proceed with activate? [y/N]:` prompt. Non-affirmative (or empty, or EOF) reply exits 1 with `Aborted by operator.`. `--yes`/`-y` skips the prompt but still prints the warning + notes `--yes was passed; proceeding despite at-risk hooks above.` for the operator's audit trail.
+
+  Behavior on Windows: prints the same enumeration but does NOT prompt. Base-gator's `gatorize` sets local `core.hooksPath` on every repo it installs, so gatorized repos on Windows are immune to the global-hooksPath takeover; the warning is informational for the operator's awareness of non-gatorized-repo impact.
+
+  `--yes`/`-y` argparse flag added to `activate_parser`. Legacy call sites that construct `args` via `types.SimpleNamespace` (test scaffolding) are handled with `getattr(args, "yes", False)` — argparse always supplies the attribute; the fallback keeps unit tests hermetic.
+
+  Regression pins: `test_activate_atrisk.py::TestEnumerateAtRiskHooks` (6 tests — nonexistent repo, no .git, sample-files-ignored, active-hooks-detected, framework-markers, local-hookspath-immunity via subprocess.run monkeypatch); `TestWarnAboutAtRiskHooks` (8 tests — silent-when-clean, silent-when-empty, prints-warning, blocks-on-no, --yes-skips, windows-informational, local-hookspath-repos-not-at-risk, framework-marker-alone-triggers).
+
+  **Non-changes (per §11 Non-changes list)**: base-gator's own local `core.hooksPath` install path is unchanged (Windows immunity flows from THAT install); `install_vendor_hooks` duplicate consolidation deferred post-MVP; session-block generation itself stays in POST_COMMIT_HOOK as TRANSITIONAL per plan D10 (post-MVP retirement arc).
+
+  **Live verification (2026-08-08)**: hook templates verified via full-file rebuild against local fixture repos in `test_activate_atrisk.py`; string-shape assertions confirm `_PYTHON_RESOLVER`, `_GATOR_SCRIPT_RESOLVER`, `_MODE_LOOKUP` all present in each of the three deployed wrappers. On this dev machine (Windows), the enumeration path is informational — verified by running the test fixture directly, output shape matches §11 Change 1's specified prose.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

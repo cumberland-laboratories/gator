@@ -92,12 +92,31 @@ except Exception: print('strict')
 fi
 '''
 
+# v2-first script discovery: shipped scripts live at
+# `.gator/.includes/scripts/` in v2 layout, `.gator/scripts/` in v1.
+# The plan's v2-only ratification (§ D-set) says v2 is authoritative,
+# but the templates keep the v1 fallback so mixed-layout machines
+# don't silently break during the transition. The old templates
+# hardcoded the v1 path only, which meant every commit on a v2 repo
+# hit `[ -f "$GATOR_SCRIPT" ] || exit 0` and governance silently
+# no-op'd — exactly the failure mode Phase 5 §11 Change 2 corrects.
+_GATOR_SCRIPT_RESOLVER = r'''
+# Resolve pre-commit script — prefer v2 (.includes/scripts/), fall back
+# to v1 (scripts/). Non-gatorized repos exit 0. TRIPWIRE: the v2-first
+# order is load-bearing under the plan's v2-only ratification.
+GATOR_SCRIPT=""
+if [ -f ".gator/.includes/scripts/gator-pre-commit.py" ]; then
+    GATOR_SCRIPT=".gator/.includes/scripts/gator-pre-commit.py"
+elif [ -f ".gator/scripts/gator-pre-commit.py" ]; then
+    GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
+fi
+[ -n "$GATOR_SCRIPT" ] || exit 0
+'''
+
 PRE_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global pre-commit hook
 # Installed by: gator-enterprise activate
-GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
-[ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
+''' + _GATOR_SCRIPT_RESOLVER + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
@@ -106,9 +125,7 @@ export GATOR_HOOK_MODE="$MODE"
 
 COMMIT_MSG_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global commit-msg hook
-GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
-[ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
+''' + _GATOR_SCRIPT_RESOLVER + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
@@ -117,15 +134,18 @@ export GATOR_HOOK_MODE="$MODE"
 
 POST_COMMIT_HOOK = r'''#!/bin/sh
 # Gator Enterprise — global post-commit hook
-GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"
-[ -f "$GATOR_SCRIPT" ] || exit 0
-''' + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
+''' + _GATOR_SCRIPT_RESOLVER + _PYTHON_RESOLVER + _MODE_LOOKUP + r'''
 [ "$MODE" = "off" ] && exit 0
 export GATOR_HOOK_MODE="$MODE"
 
 "$PYTHON" "$GATOR_SCRIPT" --phase cleanup "$@"
 
-# Generate session block for the just-completed commit
+# Generate session block for the just-completed commit.
+# TRANSITIONAL (per plan D10 OBSOLETE-FOR-TRANSCRIPTS-FIRST-MVP list):
+# session-block generation is being retired post-MVP. Do NOT extend this
+# block. The transcripts-first evidence path is `gator-enterprise
+# transcripts pull` (operator-triggered), which reads the SAME snippets
+# without needing per-commit block artifacts.
 if [ "$MODE" != "off" ]; then
     COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null)
     if [ -n "$COMMIT_SHA" ]; then
@@ -139,10 +159,16 @@ if [ "$MODE" != "off" ]; then
                     --commit "$COMMIT_SHA" --repo-root "$(pwd)" 2>/dev/null && BLOCK_GENERATED=1
             fi
         fi
-        # Fallback: repo-local script (plaintext v2 only)
+        # Fallback: repo-local script (plaintext v2 only) — v2-first path,
+        # v1 fallback to match the pre-commit resolver's ordering.
         if [ "$BLOCK_GENERATED" = "0" ]; then
-            BLOCK_SCRIPT=".gator/scripts/gator-session-block.py"
-            if [ -f "$BLOCK_SCRIPT" ]; then
+            BLOCK_SCRIPT=""
+            if [ -f ".gator/.includes/scripts/gator-session-block.py" ]; then
+                BLOCK_SCRIPT=".gator/.includes/scripts/gator-session-block.py"
+            elif [ -f ".gator/scripts/gator-session-block.py" ]; then
+                BLOCK_SCRIPT=".gator/scripts/gator-session-block.py"
+            fi
+            if [ -n "$BLOCK_SCRIPT" ]; then
                 "$PYTHON" "$BLOCK_SCRIPT" generate --commit "$COMMIT_SHA" 2>/dev/null || true
             fi
         fi
@@ -179,6 +205,15 @@ def register(subparsers):
             "compromised or a fresh identity is required."
         ),
     )
+    activate_parser.add_argument(
+        "--yes", "-y", action="store_true",
+        help=(
+            "Skip the confirmation prompt when at-risk hooks are detected in "
+            "known gatorized repos. Setting global core.hooksPath will cause "
+            "these hooks to stop firing; use only after reviewing the printed "
+            "at-risk-hook enumeration."
+        ),
+    )
 
     sync_parser = subparsers.add_parser(
         "sync",
@@ -194,6 +229,203 @@ def handle(args, client):
         _do_sync(args, client)
 
 
+# ----------------------------------------------------------------------
+# At-risk hook enumeration (Phase 5 §11 Change 1)
+# ----------------------------------------------------------------------
+
+
+# Non-`.sample` files in a repo's `.git/hooks/` are almost always
+# something a human or a framework installed on purpose. Standard Git
+# ships every default hook as `<name>.sample`; anything without that
+# suffix is an active hook that will stop firing when `core.hooksPath`
+# gets redirected. This is deliberately over-inclusive — Enterprise's
+# job at activate time is to be honest about the blast radius, not to
+# rank which hooks matter.
+_HOOK_FRAMEWORK_MARKERS = (
+    ".pre-commit-config.yaml",   # pre-commit.com Python framework
+    ".pre-commit-hooks.yaml",    # provider-side config
+    "lefthook.yml",              # Lefthook (Go)
+    "lefthook.yaml",
+    "husky.config.js",           # Husky (npm)
+)
+
+
+def _read_dashboard_repos() -> list[dict]:
+    """Read ~/.gator/dashboard-repos.json. Returns [] on any error."""
+    path = Path.home() / ".gator" / "dashboard-repos.json"
+    if not path.exists():
+        return []
+    try:
+        import json as _json
+        data = _json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if isinstance(data, dict):
+        return data.get("repos", []) or []
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def _enumerate_at_risk_hooks(repo_path: Path) -> dict:
+    """Scan one repo for `.git/hooks/*` files that will stop firing under a global `core.hooksPath`.
+
+    Returns a dict with:
+      - path: str (the input, echoed back for the caller)
+      - has_local_hookspath: bool (whether repo-local core.hooksPath is set;
+        when True, the repo is immune to the global-hooksPath takeover
+        and enumeration is informational)
+      - hooks: list[{name, bytes, mtime_iso}] — active (non-.sample) files
+        in .git/hooks/. Excludes .sample defaults + directories.
+      - frameworks: list[str] — matched _HOOK_FRAMEWORK_MARKERS in repo root
+    """
+    result = {
+        "path": str(repo_path),
+        "has_local_hookspath": False,
+        "hooks": [],
+        "frameworks": [],
+    }
+    if not repo_path.exists() or not (repo_path / ".git").exists():
+        return result
+
+    # Check for repo-local core.hooksPath — if set, global hooksPath is
+    # not consulted for this repo and the enumeration is informational.
+    try:
+        proc = subprocess.run(
+            ["git", "config", "--local", "--get", "core.hooksPath"],
+            cwd=str(repo_path),
+            capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            result["has_local_hookspath"] = True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    hooks_dir = repo_path / ".git" / "hooks"
+    if hooks_dir.exists() and hooks_dir.is_dir():
+        import datetime as _dt
+        for entry in sorted(hooks_dir.iterdir()):
+            if not entry.is_file():
+                continue
+            if entry.name.endswith(".sample"):
+                continue
+            try:
+                stat = entry.stat()
+                result["hooks"].append({
+                    "name": entry.name,
+                    "bytes": stat.st_size,
+                    "mtime_iso": _dt.datetime.fromtimestamp(
+                        stat.st_mtime, tz=_dt.timezone.utc,
+                    ).strftime("%Y-%m-%d"),
+                })
+            except OSError:
+                continue
+
+    for marker in _HOOK_FRAMEWORK_MARKERS:
+        if (repo_path / marker).exists():
+            result["frameworks"].append(marker)
+
+    return result
+
+
+def _warn_about_at_risk_hooks(
+    repos: list[dict],
+    *,
+    assume_yes: bool = False,
+    is_windows: bool = False,
+    stream=None,
+    prompt_fn=None,
+) -> None:
+    """Print at-risk-hook enumeration; block on confirmation unless --yes.
+
+    On Linux/macOS this is a real blocking gate: when any repo has
+    at-risk hooks and --yes was not passed, prompt for Y/n confirmation
+    and sys.exit(1) on non-affirmative reply. On Windows the enumeration
+    prints but does not block (base-gator's local core.hooksPath wins
+    over global there).
+    """
+    stream = stream if stream is not None else sys.stderr
+    scans = [_enumerate_at_risk_hooks(Path(r.get("path", ""))) for r in repos]
+    # Only repos that WOULD have their hooks bypassed are "at risk".
+    # A repo with local core.hooksPath keeps its hooks regardless.
+    at_risk = [
+        s for s in scans
+        if (s["hooks"] or s["frameworks"]) and not s["has_local_hookspath"]
+    ]
+
+    if not at_risk:
+        # Silent success — no need to spam the operator when the machine
+        # has no gatorized repos or every repo is already protected.
+        return
+
+    print(
+        "\n"
+        "  Enterprise activate will take over the git-hook path on this machine\n"
+        "  by setting `git config --global core.hooksPath ~/.gator/hooks`.\n"
+        "  Git will consult that directory for every commit and will STOP\n"
+        "  consulting each repo's `.git/hooks/*` entirely.\n\n"
+        "  Enterprise's wrappers invoke base-gator's inner pre-commit script\n"
+        "  as a delegate — so Gator's own governance behavior is PRESERVED.\n"
+        "  Any OTHER hooks installed to `.git/hooks/*` in your repos will\n"
+        "  STOP FIRING under Enterprise's global core.hooksPath. This includes:\n"
+        "    - formatters (prettier, black, gofmt) wired to pre-commit\n"
+        "    - non-Gator pre-commit frameworks (pre-commit.com, lefthook, husky)\n"
+        "    - custom user hooks (any scripts operators wrote themselves)\n\n"
+        f"  Scanned {len(scans)} known gatorized repo(s); {len(at_risk)} have at-risk hooks:",
+        file=stream,
+    )
+    for scan in at_risk:
+        print(f"\n  Repo: {scan['path']}", file=stream)
+        if scan["hooks"]:
+            print("    Custom hooks in .git/hooks/ that will stop firing:", file=stream)
+            for hook in scan["hooks"]:
+                print(
+                    f"      - {hook['name']} ({hook['bytes']} bytes; last modified {hook['mtime_iso']})",
+                    file=stream,
+                )
+        if scan["frameworks"]:
+            print(
+                f"    Non-Gator hook framework detected: {', '.join(scan['frameworks'])}",
+                file=stream,
+            )
+        print(
+            "    RECOMMENDATION: either move these hook responsibilities into\n"
+            "    Gator's charter/lint layer, OR set repo-local core.hooksPath\n"
+            "    BEFORE activating Enterprise\n"
+            "    (`git config core.hooksPath .git/hooks`) so the repo keeps\n"
+            "    consulting its own hook path.",
+            file=stream,
+        )
+
+    if is_windows:
+        print(
+            "\n  Windows: base-gator's `gatorize` sets local core.hooksPath on\n"
+            "  every gatorized repo, and Git prefers the local setting over the\n"
+            "  global core.hooksPath this activate is about to set. The\n"
+            "  enumeration above is informational; the hooks continue to fire\n"
+            "  on gatorized repos. Non-gatorized repos with hooks may still be\n"
+            "  affected — activate assumes you accept that trade.",
+            file=stream,
+        )
+        return
+
+    if assume_yes:
+        print(
+            "\n  --yes was passed; proceeding despite at-risk hooks above.",
+            file=stream,
+        )
+        return
+
+    prompt = prompt_fn or input
+    try:
+        reply = prompt("\n  Proceed with activate? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        reply = ""
+    if reply not in ("y", "yes"):
+        print("\n  Aborted by operator.", file=stream)
+        sys.exit(1)
+
+
 def _do_activate(args, client):
     """One-time machine activation."""
     home = Path.home()
@@ -201,6 +433,22 @@ def _do_activate(args, client):
     hooks_dir = gator_dir / "hooks"
     enterprise_dir = gator_dir / "enterprise"
     policies_dir = enterprise_dir / "policies"
+
+    # Enumerate at-risk hooks in known gatorized repos BEFORE setting
+    # global core.hooksPath. On Linux/macOS this is a blocking prompt
+    # unless --yes was passed (setting the global path stops the repo-
+    # local hooks from firing). On Windows the enumeration is
+    # informational only — base-gator's `gatorize` sets local
+    # core.hooksPath on every repo it installs, and Git prefers the
+    # local setting over the global, so those hooks keep firing.
+    _warn_about_at_risk_hooks(
+        _read_dashboard_repos(),
+        # getattr fallback keeps legacy call sites that construct `args`
+        # via SimpleNamespace (test scaffolding) working without a schema
+        # update — argparse always supplies the attribute.
+        assume_yes=getattr(args, "yes", False),
+        is_windows=sys.platform == "win32",
+    )
 
     # Create directory structure
     hooks_dir.mkdir(parents=True, exist_ok=True)
