@@ -16,12 +16,12 @@ from gator_enterprise_cli.client import CliError, EnterpriseClient
 from gator_enterprise_cli.config import CliConfig
 from gator_enterprise_cli.commands import (
     auth, repos, providers, policies, reports, blocks, machines,
-    activate, repo_init,
+    activate, repo_init, transcripts,
 )
 
 
 # Commands that require Enterprise server connection
-_SERVER_COMMANDS = {"auth", "repos", "providers", "policies", "reports", "blocks", "machines", "activate", "sync"}
+_SERVER_COMMANDS = {"auth", "repos", "providers", "policies", "reports", "blocks", "machines", "activate", "sync", "transcripts"}
 
 # Commands that work without server connection (local-only)
 _LOCAL_COMMANDS = set()  # repo init now needs server connection to register hook policy
@@ -49,6 +49,7 @@ def main():
     machines.register(subparsers)
     activate.register(subparsers)  # activate + sync
     repo_init.register(subparsers)  # repo init
+    transcripts.register(subparsers)  # transcripts pull + list
 
     args = parser.parse_args()
 
@@ -68,6 +69,7 @@ def main():
         "activate": activate.handle,
         "sync": activate.handle,
         "repo": repo_init.handle,
+        "transcripts": transcripts.handle,
     }
 
     handler = handlers.get(args.command)

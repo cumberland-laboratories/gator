@@ -61,6 +61,10 @@ class Commit(Base, TimestampMixin):
         String(255), nullable=True,
         comment="AI agent from snippet. Null = human-only commit. Key discriminator for pending block detection.",
     )
+    transcript_session_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="Vendor session ID from snippet (Migration 008). Drives session_id_in_snippet transcript linkage.",
+    )
 
     __table_args__ = (
         Index("ix_commits_org_repo_sha", "organization_id", "repo_identifier", "commit_sha", unique=True),
