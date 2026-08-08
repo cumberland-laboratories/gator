@@ -501,6 +501,27 @@ class TestListTranscripts:
         assert len(resp2.json()["items"]) == 1
         assert resp2.json()["pagination"]["has_more"] is False
 
+    def test_until_filters_upper_bound(self, client, api_token):
+        # Two transcripts on either side of 2026-08-07
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"a",
+                vendor_session_id="early",
+                started_at="2026-08-05T10:00:00Z"),
+            headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"b",
+                vendor_session_id="late",
+                started_at="2026-08-09T10:00:00Z"),
+            headers=_auth(api_token))
+
+        resp = client.get(
+            "/api/v1/transcripts?until=2026-08-07T00:00:00Z",
+            headers=_auth(api_token),
+        )
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["vendor_session_id"] == "early"
+
 
 class TestGetTranscript:
     def test_returns_links_inline(self, client, api_token):

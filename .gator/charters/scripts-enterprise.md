@@ -485,6 +485,31 @@ enterprise-cli package.
 
   **Phase 4 residue (explicitly NOT in Phase 3)**: `transcripts list` UX polish + SQL views (`recent_transcripts`, `commits_with_transcript_coverage`, `unlinked_recent_transcripts`); operator guide artifact. Named for scope honesty — `list`/`show`/`get`/`link`/`relink` all functional now, but the guided-tour operator experience is a Phase 4 concern.
 
+- **! Operator query surface — Migration 010 views + list UX polish + operator guide (2026-08-08 MVP Phase 4).** Closes the MVP query surface with three named SQL views, richer `transcripts list` output, and a runnable end-to-end operator guide. See parent plan §9 (view definitions) + §13 Phase 4 (updated scope).
+
+  **Migration 010** (`enterprise/migrations/versions/010_transcript_query_views.py`) — three views over the Phase 1 tables. Views intentionally do NOT filter by `organization_id`; the caller adds `WHERE organization_id = ...` at query time so one DDL works for every tenant.
+  - `recent_transcripts` — session metadata joined with `LEFT JOIN commit_transcript_links` + `GROUP BY ts.id` for `linked_commit_count`. Mirrors what the CLI `transcripts list` endpoint returns; useful for interactive `psql` queries.
+  - `commits_with_transcript_coverage` — one row per commit with `linked_transcript_count` and `best_linkage_rank`/`best_linkage_basis_ranked`. Rank uses `MIN(CASE linkage_basis WHEN 'exact_sha_in_transcript' THEN 1 ... END)` because the string values don't sort correctly alphabetically. The `_ranked` string column carries the human-readable form. Primary "audit-gap" surface: `WHERE linked_transcript_count = 0 AND snippet_agent IS NOT NULL` finds AI-authored commits with no transcript on file.
+  - `unlinked_recent_transcripts` — sessions ingested within the last 7 days with zero links; the "why is this session floating?" investigation queue. Bounded by `ingested_at > NOW() - INTERVAL '7 days'`; older unlinked sessions require the raw table.
+
+  TRIPWIRE — the view definitions reference columns on the underlying tables (`transcript_sessions`, `commit_transcript_links`, `commits`). Any column rename in a future migration MUST be paired with a follow-up view migration or these views break silently at query time. Unique-constraint names are NOT referenced here, so those are safe to rename.
+
+  **`transcripts list` UX polish** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py::_handle_list`):
+  - New flags: `--until` (server-side upper bound on `started_at`, complements the existing `--since`), `--offset` (paginate without spamming `--limit`), `--unlinked` (client-side filter: `linked_commit_count == 0`), `--sort {ingested|started|size|links}` (client-side re-sort; ingested is a no-op since the server returns that order), `--wide` (adds Machine + Started columns).
+  - Per-vendor summary line auto-appears when >= 2 vendors are visible in the result set.
+  - Non-breaking: existing invocations (no new flags) produce byte-identical output.
+
+  **Operator guide** (`.gator/vault/artifacts/enterprise-transcripts-mvp-operator-guide.md`) — end-to-end runthrough for someone approaching the MVP cold: prerequisites, 5-command golden path, per-verb CLI reference, operational plumbing (uvicorn boot, migrations, BlobStore layout, machine-id), five SQL query recipes (recent + coverage + audit gap + investigation queue + storage stats), post-hoc linkage recovery workflow, seven troubleshooting entries covering the failure modes surfaced during Phase 2/3 dogfooding, and an explicit "NOT in MVP" list. Vault artifact (not shipped in git) because it references specific in-firewall deployment shape; a shipped version tuned for public docs is post-MVP.
+
+  **Regression pins**:
+  - Migration 010 verified via `alembic upgrade head` + downgrade + re-upgrade round-trip against local Postgres port 5434 (all three views survive the round trip).
+  - New test `test_ingest_routes.py::TestListTranscripts::test_until_filters_upper_bound` covers the `until` query param that had been unshipped/untested since Phase 2. Full enterprise suite: 225 passed, 1 skipped.
+  - CLI `--wide`, `--sort`, `--unlinked` verified live against the local server on this dev machine (2 real transcripts, 25+7 links).
+
+  **Live verification (2026-08-08)**: all three views populated against the Phase 2/3 dogfooding data. `SELECT ... FROM recent_transcripts` returns the two ingested sessions with correct link counts. `commits_with_transcript_coverage ... ORDER BY best_linkage_rank ASC, committed_at DESC` surfaces commit `e784d604` at the top with 4 links, best basis `1_exact_sha_in_transcript`. `unlinked_recent_transcripts` is empty on this machine (both sessions have links).
+
+  **MVP query surface complete.** Phases 5-6 remain (hook seam cleanup + base-gator `Gator-Machine-Id` trailer); these are minimal deltas that don't touch the transcript custody surface described in this block.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

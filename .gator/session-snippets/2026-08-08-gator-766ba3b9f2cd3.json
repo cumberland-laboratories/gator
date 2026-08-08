@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise Phase 3: strong_machine_repo_time basis + explicit-linkage endpoints + CLI verbs",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "transcripts-first",
+    "enterprise",
+    "linkage-algorithm"
+  ],
+  "commit": "766ba3b9f2cd38543b52b6cadf671c1825ebe327",
+  "short_commit": "766ba3b",
+  "snippet_id": "snippet-766ba3b9f2cd3",
+  "session_group_key": "anthropic:331a6a12-b575-4478-b623-d731a73fdbc2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "0e7e869f207eca681714eb27c69898a25fb51499",
+  "started_at": "2026-08-08T19:46:54Z",
+  "ended_at": "2026-08-08T21:07:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-08-gator-0e7e869f207ec.json",
+    "enterprise/app/routes/ingest.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/main.py",
+    "enterprise/tests/test_ingest_routes.py"
+  ],
+  "notes": [
+    "Add `strong_machine_repo_time` linkage basis (§8 Step 3) to `enterprise/app/routes/ingest.py::_run_linkage` — Basis 3. Matches commits WHERE `machine_id == transcript.machine_id AND basename(repo_identifier) == basename(workspace_hint) AND committed_at ∈ [started - 24h, ended + 24h]`. Skips commits already claimed by high-confidence bases (checks `seen_pairs` set + queries pre-existing high-conf links on the transcript). Emits `linkage_confidence: medium`. Metadata records every input to the match decision. Helpers `_workspace_basename` / `_repo_basename` normalize path separators + reject empty/root strings; timestamp comparison uses the same aware-vs-naive normalization pattern as Phase 2's `_dt_equal`.",
+    "Add `POST /api/v1/transcripts/{id}/link` (orchestrator-declared linkage) — `OrchestratorLinkBody` model with SHA hex+length validation matching the reverse-lookup endpoint. Ambiguous SHA returns 409 `ambiguous_commit` (matches ingest-time algorithm's \"skip 2+ matches\" policy). Idempotent by the model's 3-tuple. Auto-populates `commit_sha` + `declared_at` in `linkage_metadata` if absent.",
+    "Add `POST /api/v1/transcripts/{id}/relink` — reads stored blob back from BlobStore, re-runs the full ingest-time algorithm. Discovers NEW links only (`_upsert_link` returns False for existing rows). TRIPWIRE: relink NEVER deletes existing links, so `orchestrator_declared` assertions survive across relinks — safe to run on any schedule. Returns 410 `blob_missing` if blob unreachable rather than 500.",
+    "Add CLI verbs to `enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py`: `transcripts show <tid>` (kv + links table), `transcripts get <tid> [--output|-o <file>]` (binary-safe blob stream to stdout or file with sha256 verification), `transcripts link <tid> --commit <sha> [--repo] [--basis] [--confidence] [--metadata <json>]`, `transcripts relink <tid>`. Add `_resolve_transcript_id()` — accepts 8+ char UUID prefix, client-side scan via list endpoint, ambiguous prefix exits 1.",
+    "Add new `commits` CLI subcommand group (`enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py`): `commits transcripts <sha> [--repo]` — reverse-lookup via `GET /api/v1/commits/{sha}/transcripts`. Verb-first pattern (not `commits <sha> transcripts`) because argparse resolves subcommand groups before positionals; API URL contract unchanged.",
+    "Wire routers unchanged (endpoints live in existing `ingest.py`). Register `commits` module in `enterprise/enterprise-cli/gator_enterprise_cli/main.py` handler + `_SERVER_COMMANDS`.",
+    "Tests: 17 new in `enterprise/tests/test_ingest_routes.py` (46 total). `TestStrongMachineRepoTimeLinkage` (5) covers positive-match + higher-confidence-wins skip + workspace-mismatch + time-window-edge + machine-id-mismatch. `TestOrchestratorDeclaredLink` (8) covers create + idempotent + reverse-lookup-visibility + prefix-SHA + ambiguous-409 + unknown-commit-404 + bad-SHA-400 + unknown-transcript-404. `TestRelink` (4) covers new-link-after-later-commit-ingest + idempotent + preserves-orchestrator-declared + unknown-transcript-404. Full enterprise suite: 224 passed, 1 skipped.",
+    "Charter update (`.gator/charters/scripts-enterprise.md`): new Phase 3 invariant block naming the new basis, both endpoints, all CLI verbs, `_resolve_transcript_id` prefix expansion, relink-preserves-orchestrator-declared TRIPWIRE, live-verification stanza, Phase 4 residue."
+  ],
+  "transcript_session_id": "331a6a12-b575-4478-b623-d731a73fdbc2",
+  "transcript_ref": null
+}

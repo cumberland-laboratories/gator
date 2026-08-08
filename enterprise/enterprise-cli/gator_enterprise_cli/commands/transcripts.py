@@ -85,8 +85,20 @@ def register(subparsers):
     ls = sub.add_parser("list", help="List ingested transcript sessions")
     ls.add_argument("--vendor", default=None)
     ls.add_argument("--machine-id", default=None)
-    ls.add_argument("--since", default=None)
+    ls.add_argument("--since", default=None,
+        help="ISO 8601 lower bound on started_at (accepts YYYY-MM-DD)")
+    ls.add_argument("--until", default=None,
+        help="ISO 8601 upper bound on started_at (accepts YYYY-MM-DD)")
     ls.add_argument("--limit", type=int, default=50)
+    ls.add_argument("--offset", type=int, default=0,
+        help="Pagination offset (default: 0)")
+    ls.add_argument("--unlinked", action="store_true",
+        help="Show only sessions with zero linked commits (client-side filter)")
+    ls.add_argument("--sort", default="ingested",
+        choices=["ingested", "started", "size", "links"],
+        help="Sort key (default: ingested, descending)")
+    ls.add_argument("--wide", action="store_true",
+        help="Show additional columns (machine_id short, started_at)")
 
     show = sub.add_parser("show", help="Show a transcript session's metadata + links")
     show.add_argument("transcript_id", help="Transcript session UUID (full or 8-char prefix)")
@@ -143,38 +155,92 @@ def handle(args, client):
 # ----------------------------------------------------------------------
 
 
+_SORT_KEYS = {
+    "ingested": ("ingested_at", True),   # (field, descending)
+    "started":  ("started_at", True),
+    "size":     ("blob_size_bytes", True),
+    "links":    ("linked_commit_count", True),
+}
+
+
 def _handle_list(args, client):
-    params: dict = {"limit": args.limit}
+    params: dict = {"limit": args.limit, "offset": args.offset}
     if args.vendor:
         params["vendor"] = args.vendor
     if args.machine_id:
         params["machine_id"] = args.machine_id
     if args.since:
         params["since"] = args.since
+    if args.until:
+        params["until"] = args.until
     data = client.get("/api/v1/transcripts", params=params)
     if args.json:
         print_json(data)
         return
+
     items = data.get("items", [])
-    rows = [
-        [
-            item["id"][:8],
-            item["vendor"],
-            (item.get("vendor_session_id") or "")[:12],
-            item.get("model") or "—",
-            (item.get("ingested_at") or "")[:19],
-            str(item.get("blob_size_bytes") or 0),
-            str(item.get("linked_commit_count") or 0),
+    if args.unlinked:
+        # Client-side filter — the server endpoint doesn't have an
+        # unlinked-only query param in MVP; the `unlinked_recent_transcripts`
+        # SQL view is a Postgres-side surface for the same query and both
+        # are documented in the operator guide.
+        items = [item for item in items if not (item.get("linked_commit_count") or 0)]
+
+    # Client-side sort — the API returns `ingested_at DESC` by default,
+    # so `--sort ingested` is a no-op. Other keys re-sort in memory.
+    if args.sort != "ingested":
+        field, descending = _SORT_KEYS[args.sort]
+        items = sorted(
+            items,
+            key=lambda item: (item.get(field) is None, item.get(field) or 0),
+            reverse=descending,
+        )
+
+    if args.wide:
+        headers = ["ID", "Vendor", "SessionID", "Model", "Machine",
+                   "Started", "Ingested", "Bytes", "Links"]
+        rows = [
+            [
+                item["id"][:8],
+                item["vendor"],
+                (item.get("vendor_session_id") or "")[:12],
+                item.get("model") or "-",
+                (item.get("machine_id") or "")[:8],
+                (item.get("started_at") or "")[:19] or "-",
+                (item.get("ingested_at") or "")[:19],
+                str(item.get("blob_size_bytes") or 0),
+                str(item.get("linked_commit_count") or 0),
+            ]
+            for item in items
         ]
-        for item in items
-    ]
-    print_table(
-        ["ID", "Vendor", "SessionID", "Model", "Ingested", "Bytes", "Links"],
-        rows,
-    )
+    else:
+        headers = ["ID", "Vendor", "SessionID", "Model", "Ingested", "Bytes", "Links"]
+        rows = [
+            [
+                item["id"][:8],
+                item["vendor"],
+                (item.get("vendor_session_id") or "")[:12],
+                item.get("model") or "-",
+                (item.get("ingested_at") or "")[:19],
+                str(item.get("blob_size_bytes") or 0),
+                str(item.get("linked_commit_count") or 0),
+            ]
+            for item in items
+        ]
+    print_table(headers, rows)
+
+    # Summary line: per-vendor breakdown when there are >= 2 vendors visible.
+    vendors = {}
+    for item in items:
+        v = item["vendor"]
+        vendors[v] = vendors.get(v, 0) + 1
+    if len(vendors) > 1:
+        summary = ", ".join(f"{v}={n}" for v, n in sorted(vendors.items()))
+        print(f"\nBy vendor: {summary}")
+
     pagination = data.get("pagination", {})
     if pagination.get("has_more"):
-        print(f"\n(more results -- increase --limit or use --json to page)")
+        print(f"\n(more results -- increase --limit or paginate with --offset)")
 
 
 # ----------------------------------------------------------------------
