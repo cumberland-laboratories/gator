@@ -401,6 +401,30 @@ enterprise-cli package.
   stderr suppression required manual re-run of the delegated command
   to diagnose why session blocks weren't emitted.
 
+- **! Transcript-custody data model (Migration 009 + models + BlobStore, 2026-08-08 MVP Phase 1).** Enterprise now owns transcript evidence storage per the ratified transcripts-first architecture. See parent plan `.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md` + ADR `2026-08-08-enterprise-transcripts-first-adr.md` (D1-D11).
+
+  **Migration 009** (`enterprise/migrations/versions/009_transcript_custody.py`) — two new tables, no changes to existing schema:
+  - `transcript_sessions` — one row per distinct vendor session ingested from a client machine. Metadata + BlobStore reference (`blob_key`, `blob_sha256`, `blob_size_bytes`); the transcript body itself lives out-of-DB. Idempotency: unique on `(organization_id, machine_id, vendor, vendor_session_id)`.
+  - `commit_transcript_links` — many-to-many between `commits` and `transcript_sessions` with `linkage_basis` recording WHY each link exists. Unique on `(commit_id, transcript_session_id, linkage_basis)` — a commit+session pair can be linked by MULTIPLE bases (e.g., both exact-SHA AND session-id-in-snippet), each is an independent audit-signal row. ON DELETE CASCADE from both `commits` and `transcript_sessions`.
+
+  **Models** (`enterprise/app/models/transcript_session.py` + `commit_transcript_link.py`) — mirror the migration schema. Both registered in `enterprise/app/models/__init__.py` so Alembic autogenerate + tests see them.
+
+  **BlobStore contract** (`enterprise/app/services/blob_store.py`) — `Protocol` (runtime_checkable) with 5 operations: `put(key, content) -> str`, `get(key) -> bytes` (raises `BlobNotFound`), `exists(key) -> bool`, `delete(key) -> None` (idempotent), `list(prefix) -> list[str]`. Implementations MUST be reentrant + safe for concurrent use across ingestion workers. `build_blob_key()` helper produces the canonical namespaced key (`transcripts/{org}/{machine_short}/{vendor}/{yyyy-mm-dd}/{session}.jsonl`).
+
+  **Reference implementation** (`enterprise/app/services/blob_store_filesystem.py::FilesystemBlobStore`) — filesystem-backed, suitable for single-node Enterprise deployments. Atomic write via temp-file + `os.replace` with Windows-safe retry loop (PermissionError from concurrent replace is transient; exponential backoff, 6 attempts). Rejects empty keys, traversal (`..` segments), and normalizes backslashes to forward-slashes.
+
+  **Config** (`enterprise/app/config.py::Settings.blob_store_root`) — env var `BLOB_STORE_ROOT`, default `/var/lib/gator-enterprise/blobs`. Not read by the blob-store module directly; ingestion pipeline in Phase 2 will instantiate `FilesystemBlobStore(settings.blob_store_root)` at startup.
+
+  **linkage_basis vocabulary discipline (TRIPWIRE — no DB enum by design)**: the column is a plain `String(64)`, not a Postgres enum, so evolving the vocabulary post-MVP doesn't require a migration. That flexibility comes with an obligation: any add/change/rename to the MVP vocabulary (`exact_sha_in_transcript`, `session_id_in_snippet`, `strong_machine_repo_time`, `orchestrator_declared`) MUST be reflected in the CLI help text for `gator-enterprise transcripts link`, the API docs, and the operator query documentation. Drift means audit queries return unexpected values.
+
+  **Post-MVP deferred columns on `commits`** (verified in Phase 0, not needed for MVP): `branch VARCHAR(255)`, `gator_trailers JSONB`. Added only if Phase 2 ingestion proves them necessary.
+
+  **Post-MVP retired columns/tables** (per plan D10 OBSOLETE list; NOT removed in Phase 1): existing `commit_evidence_blocks` table is Git-carried encrypted-block evidence — transitional, replaced conceptually by the transcript-custody tables. Cleanup happens in a post-MVP arc.
+
+  **Regression pins**: `enterprise/tests/test_transcript_models.py` (SQLite in-memory; uniqueness contracts, FK cascades, linkage_basis vocabulary tolerance). `enterprise/tests/test_blob_store_filesystem.py` (put/get/exists/delete/list; idempotent put; overwrite semantics; traversal rejection; empty-key rejection; multi-thread concurrent-put safety; Windows-safe replace retry). 34 tests total, all pass.
+
+  **Live verification (2026-08-08)**: Migration 009 applied end-to-end against local Postgres on port 5434; `alembic current` → `009 (head)`; `\d transcript_sessions` and `\d commit_transcript_links` confirm expected columns, indexes, unique constraints, and FKs. Downgrade + re-upgrade round-trip verified reversible.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

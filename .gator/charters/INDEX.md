@@ -19,7 +19,7 @@ Post-monorepo-cutover note: `scripts-command-post.md` was Cat 3-excluded during 
 | `gator_runtime.py` | [Core Library](scripts-core-library.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/loop/*.py`, `src/gator_command/scripts/gator-loop.py` | [Gator Loop](scripts-loop.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator-enterprise.py` (thin dispatcher only, post-Phase 4e) | [Enterprise CLI](scripts-enterprise.md) · [Contracts](contracts.md) |
-| `enterprise/enterprise-cli/**` (gator_enterprise_cli package: credentials.py, vendor_hooks.py, client.py, main.py, commands/*), `enterprise/app/**` (FastAPI service), `enterprise/migrations/versions/*.py` (Alembic 001-008 chain), `enterprise/tests/**` | [Enterprise CLI](scripts-enterprise.md) — Phase 4e consolidation |
+| `enterprise/enterprise-cli/**` (gator_enterprise_cli package: credentials.py, vendor_hooks.py, client.py, main.py, commands/*), `enterprise/app/**` (FastAPI service), `enterprise/migrations/versions/*.py` (Alembic 001-009 chain), `enterprise/tests/**` | [Enterprise CLI](scripts-enterprise.md) — Phase 4e consolidation; Migration 009 (2026-08-08) adds transcript-custody tables per transcripts-first MVP |
 | `src/gator_command/scripts/gator-state.py` | [Managed State](scripts-managed-state.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator-kill.py` | [Dashboard](scripts-dashboard.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator_layout.py` | [Layout Resolver](scripts-layout.md) |

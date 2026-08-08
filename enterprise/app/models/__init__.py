@@ -17,3 +17,5 @@ from app.models.commit_observation import CommitObservation  # noqa: F401
 from app.models.drift_finding import PolicyDriftFinding  # noqa: F401
 from app.models.report_run import ReportRun  # noqa: F401
 from app.models.report_snapshot import ReportSnapshot  # noqa: F401
+from app.models.transcript_session import TranscriptSession  # noqa: F401
+from app.models.commit_transcript_link import CommitTranscriptLink  # noqa: F401

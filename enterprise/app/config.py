@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # Bare clone cache for reading repo files
     clone_cache_dir: str = "/var/lib/gator-enterprise/clones"
 
+    # Transcript blob storage root (Enterprise-first evidence custody).
+    # Filesystem-backed by default (FilesystemBlobStore). Swap out for
+    # S3/Azure/customer-substrate implementations post-MVP without
+    # changing this env var — the BlobStore interface is the seam.
+    blob_store_root: str = "/var/lib/gator-enterprise/blobs"
+
     model_config = {"env_prefix": "", "case_sensitive": False}
 
 
