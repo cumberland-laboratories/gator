@@ -124,3 +124,107 @@ class TestSchemaEnumSyncObligation:
             f"Update both to match (see the sync-obligation comment above "
             f"VALID_CHANGE_TYPES in gator-pre-commit.py)."
         )
+
+
+class TestMachineIdTrailer:
+    """assemble_trailers emits `Gator-Machine-Id: <id>` sourced from
+    ~/.gator/machine-id (2026-08-08 transcripts-first MVP Phase 6).
+
+    The trailer is emitted only when the file exists and contains an
+    `id:` line — silent no-op keeps standalone base-gator use on a
+    machine that never activated Enterprise working without a hook
+    failure.
+
+    Enterprise-side consumer: `enterprise/app/routes/ingest.py`'s
+    commit ingest reads Gator-Machine-Id from the trailer bag to
+    populate `commits.machine_id`, which the linkage algorithm's
+    `strong_machine_repo_time` basis (Phase 3) matches against
+    transcript_sessions.machine_id.
+    """
+
+    def _base_frontmatter(self):
+        # Minimal, spec-legal frontmatter so assemble_trailers proceeds
+        # past its own required-fields short-circuits.
+        return {
+            "message": "test",
+            "change-type": "feature",
+            "significance": "routine",
+            "decision-tags": [],
+            "agent": "test-agent",
+            "architect": "test-architect",
+        }
+
+    def test_trailer_emitted_when_machine_id_file_present(
+        self, tmp_path, monkeypatch,
+    ):
+        # Mock $HOME so _read_machine_id reads our fixture, not the
+        # developer's real ~/.gator/machine-id.
+        fake_home = tmp_path / "home"
+        (fake_home / ".gator").mkdir(parents=True)
+        (fake_home / ".gator" / "machine-id").write_text(
+            "id: 11111111-2222-3333-4444-555555555555\n"
+            "hostname: test-host\n"
+            "label: test-machine\n"
+            "created: 2026-08-08T00:00:00Z\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+        gator_dir = tmp_path / "repo" / ".gator"
+        gator_dir.mkdir(parents=True)
+
+        trailers = pre_commit.assemble_trailers(
+            frontmatter=self._base_frontmatter(),
+            body="",
+            gator_dir=gator_dir,
+            staged_files=[],
+        )
+        machine_id_trailers = [
+            t for t in trailers if t.startswith("Gator-Machine-Id:")
+        ]
+        assert len(machine_id_trailers) == 1
+        assert machine_id_trailers[0] == (
+            "Gator-Machine-Id: 11111111-2222-3333-4444-555555555555"
+        )
+
+    def test_trailer_omitted_when_machine_id_file_missing(
+        self, tmp_path, monkeypatch,
+    ):
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        # Deliberately do NOT create ~/.gator/machine-id
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+        gator_dir = tmp_path / "repo" / ".gator"
+        gator_dir.mkdir(parents=True)
+
+        trailers = pre_commit.assemble_trailers(
+            frontmatter=self._base_frontmatter(),
+            body="",
+            gator_dir=gator_dir,
+            staged_files=[],
+        )
+        assert not any(t.startswith("Gator-Machine-Id:") for t in trailers)
+
+    def test_trailer_omitted_when_id_line_missing(
+        self, tmp_path, monkeypatch,
+    ):
+        # File exists but has no `id:` line — silent no-op, not a crash.
+        fake_home = tmp_path / "home"
+        (fake_home / ".gator").mkdir(parents=True)
+        (fake_home / ".gator" / "machine-id").write_text(
+            "hostname: test-host\nlabel: test-machine\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+        gator_dir = tmp_path / "repo" / ".gator"
+        gator_dir.mkdir(parents=True)
+
+        trailers = pre_commit.assemble_trailers(
+            frontmatter=self._base_frontmatter(),
+            body="",
+            gator_dir=gator_dir,
+            staged_files=[],
+        )
+        assert not any(t.startswith("Gator-Machine-Id:") for t in trailers)

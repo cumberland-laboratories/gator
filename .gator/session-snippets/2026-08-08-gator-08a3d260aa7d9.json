@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise Phase 5: v2-first hook wrappers + activate at-risk-hook enumeration",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "hook-seam",
+    "transcripts-first"
+  ],
+  "commit": "08a3d260aa7d98d165bd93367e53347874144a0c",
+  "short_commit": "08a3d26",
+  "snippet_id": "snippet-08a3d260aa7d9",
+  "session_group_key": "anthropic:331a6a12-b575-4478-b623-d731a73fdbc2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "b290dc052ce6957d50eaa02e98affd1d6df3b4d9",
+  "started_at": "2026-08-08T19:46:54Z",
+  "ended_at": "2026-08-08T23:16:01Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-08-gator-b290dc052ce69.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py",
+    "enterprise/tests/test_activate_atrisk.py"
+  ],
+  "notes": [
+    "Add `_GATOR_SCRIPT_RESOLVER` shared snippet in `enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py` — probes `.gator/.includes/scripts/gator-pre-commit.py` (v2) FIRST, falls back to `.gator/scripts/gator-pre-commit.py` (v1), exits 0 only when neither exists. Embedded in `PRE_COMMIT_HOOK`/`COMMIT_MSG_HOOK`/`POST_COMMIT_HOOK` in place of the previous v1-only hardcode. Fixes the silent governance no-op on v2 repos: old templates hit `[ -f \"$GATOR_SCRIPT\" ] || exit 0` and never ran the pre-commit script. Same v2-first ordering applied to the `gator-session-block.py` fallback in POST_COMMIT_HOOK. TRIPWIRE (noted in charter): v2-first ordering is load-bearing under the plan's v2-only ratification.",
+    "Add `_enumerate_at_risk_hooks(repo_path)` and `_warn_about_at_risk_hooks(repos, ...)` at module scope in `activate.py`. The first walks a single repo's `.git/hooks/*` (skipping `.sample` files) + checks root for hook-framework markers (`.pre-commit-config.yaml`, `.pre-commit-hooks.yaml`, `lefthook.yml`, `lefthook.yaml`, `husky.config.js`), and detects repo-local `core.hooksPath` (which grants immunity from the global-hooksPath takeover). The second reads `~/.gator/dashboard-repos.json`, calls the enumerator per repo, prints the §11 Change 1 warning prose with per-repo detail, blocks on `Proceed with activate? [y/N]:` on Linux/macOS (non-affirmative reply → `sys.exit(1)`). Windows: same enumeration prints but does NOT block (base-gator's local `core.hooksPath` from `gatorize` wins over global). Called from `_do_activate` BEFORE any `~/.gator/` state is written so the abort is clean.",
+    "Add `--yes`/`-y` argparse flag on `activate_parser`. `_do_activate` reads it via `getattr(args, \"yes\", False)` — argparse always supplies the attribute; the fallback keeps existing unit tests (which construct `args` via `types.SimpleNamespace`) working without a schema update. Even with `--yes`, the warning still prints (`--yes was passed; proceeding despite at-risk hooks above.`) for the operator's audit trail.",
+    "New test file `enterprise/tests/test_activate_atrisk.py` (17 tests). `TestV2FirstScriptDiscovery` (3) — v2-before-v1 ordering + variable-assignment shape + block-script parity. `TestEnumerateAtRiskHooks` (6) — nonexistent repo + no-.git + .sample-ignored + active-hooks + framework-markers + local-hookspath-immunity (subprocess.run monkeypatched hermetically). `TestWarnAboutAtRiskHooks` (8) — silent-when-clean + silent-empty + prints-warning + blocks-on-no + --yes-skips + windows-informational + local-hookspath-repos-not-at-risk + framework-marker-alone-triggers. Full enterprise regression: 246 passed, 1 skipped.",
+    "Charter update `.gator/charters/scripts-enterprise.md`: new Phase 5 invariant block covering Change 1 (v2-first templates), Change 2 (at-risk enumeration), TRIPWIRE on v2-first ordering, non-changes list, regression pins.",
+    "Plan + ADR (vault artifacts) rolled forward: Phase 5 COMPLETE marker + Phase 6 handoff prose + estimate line updated. Per Pass 6/7 recurring failure-mode note, both artifacts touched in the same commit boundary."
+  ],
+  "transcript_session_id": "331a6a12-b575-4478-b623-d731a73fdbc2",
+  "transcript_ref": null
+}

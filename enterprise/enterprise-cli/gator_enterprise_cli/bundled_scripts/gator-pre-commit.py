@@ -893,6 +893,21 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None)
     if architect:
         trailers.append(f"Gator-Architect: {architect}")
 
+    # Machine identity trailer (2026-08-08 transcripts-first MVP Phase 6).
+    # Sourced from ~/.gator/machine-id, which is populated on first
+    # `gator init` via `gator machine-id`. Silent no-op when the file is
+    # absent — standalone base-gator use on a machine that never activated
+    # Enterprise (or that predates the file) still commits without a
+    # trailer rather than failing the hook. The Enterprise linkage
+    # pipeline consumes this trailer to correlate commit → machine in the
+    # `commits` row (see enterprise/app/routes/ingest.py::ingest_commits
+    # for the consumer side and 2026-08-08-transcripts-first ADR D4 for
+    # the trust-boundary reasoning behind this being a client-emitted
+    # trailer, not a server-supplied evidence-id).
+    machine_id = _read_machine_id()
+    if machine_id:
+        trailers.append(f"Gator-Machine-Id: {machine_id}")
+
     return trailers
 
 

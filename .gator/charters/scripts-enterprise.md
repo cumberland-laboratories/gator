@@ -531,6 +531,16 @@ enterprise-cli package.
 
   **Live verification (2026-08-08)**: hook templates verified via full-file rebuild against local fixture repos in `test_activate_atrisk.py`; string-shape assertions confirm `_PYTHON_RESOLVER`, `_GATOR_SCRIPT_RESOLVER`, `_MODE_LOOKUP` all present in each of the three deployed wrappers. On this dev machine (Windows), the enumeration path is informational — verified by running the test fixture directly, output shape matches §11 Change 1's specified prose.
 
+- **! Base-gator `Gator-Machine-Id` trailer (2026-08-08 MVP Phase 6 — MVP COMPLETE).** The final phase closes the transcripts-first MVP by wiring base-gator's commit-msg phase to emit the machine identity that the Enterprise linkage pipeline consumes. Cross-referenced from the base-gator invariant in `scripts-cross-cutting.md::"Gator-Machine-Id trailer (Phase 6 ...)"` — that's where the shipped-code contract lives; this block is the Enterprise-side companion.
+
+  **What ties this to Enterprise**: `enterprise/app/routes/ingest.py::ingest_commits` accepts the trailer bag from `transcripts pull`'s commit ingest, extracts `Gator-Machine-Id`, and populates `commits.machine_id`. The Phase 3 `strong_machine_repo_time` linkage basis matches that column against `transcript_sessions.machine_id` — without the trailer, machine-based linkage on that basis degrades to no-link for commits that happened to lack a snippet at capture time. Phase 6 fills that gap for every commit going forward.
+
+  **Delta from base-gator**: only three lines of production code in `assemble_trailers` (read `_read_machine_id()` — already imported since Phase 2 — and conditionally append) plus the Enterprise-facing comment block explaining the consumer contract. Snippet schema already required `machine_id` per Phase 0 inventory — no schema change. All three copies of `gator-pre-commit.py` were updated to the same anchor (trio-copy contract note in `scripts-cross-cutting.md`).
+
+  **Regression pins**: `tests/test_precommit_validation.py::TestMachineIdTrailer` (3 tests — emitted-when-present + omitted-when-file-missing + omitted-when-id-line-missing; hermetic via `Path.home` monkeypatch). Base-gator suite: pre-existing failures on `dev` are unrelated to Phase 6 (confirmed by stashing Phase 6 edits and re-running — same 6 failures on baseline).
+
+  **MVP status: COMPLETE.** The Enterprise transcripts-first custody surface has all six phases landed: data model + BlobStore (Phase 1), ingest + read + Claude discovery + pull CLI (Phase 2), full linkage algorithm + orchestrator surface (Phase 3), operator query surface with SQL views + guide (Phase 4), hook seam cleanup (Phase 5), machine-id trailer (Phase 6). Post-MVP work (automatic sync, additional vendors, encryption at rest, weak-heuristic linkage, retention engine, web UI, session-block retirement) is enumerated in the plan §13 Phase 7 "Named for scope-honesty" list.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

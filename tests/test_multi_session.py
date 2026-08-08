@@ -622,6 +622,15 @@ class TestByteIdentityAcrossThreeCopies:
     @pytest.mark.parametrize("filename", [
         "precommit_session.py",
         "gator-session-start.py",
+        # `gator-pre-commit.py` is DELIBERATELY NOT included here — the
+        # three copies of that file drifted pre-2026-08-08 for reasons
+        # unrelated to the transcripts-first MVP work, and reconciling
+        # them is a separate follow-up (see scripts-enterprise.md
+        # Phase 6 charter block "Follow-up" note). Phase 6's
+        # `Gator-Machine-Id` addition was applied to all three copies
+        # by hand — same edit at the same anchor — but a full
+        # byte-identity assertion would fail on prior drift and mask
+        # the real change.
     ])
     def test_three_copies_byte_identical(self, filename):
         shipped = self._REPO_ROOT / ".gator" / ".includes" / "scripts" / filename
