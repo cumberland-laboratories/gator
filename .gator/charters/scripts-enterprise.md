@@ -449,6 +449,8 @@ enterprise-cli package.
 
   **Live verification (2026-08-08)**: booted uvicorn against local Postgres on port 5434; `gator-enterprise transcripts pull --since 2026-08-08` on this development machine ingested 150 commits across 13 gatorized repos and 2 Claude Code transcripts (1.16MB + 6.0MB), producing 23 links across the two implemented bases (`exact_sha_in_transcript: 15`, `session_id_in_snippet: 8`). Re-run reported all commits as `unchanged` — idempotency verified end-to-end.
 
+  **Follow-on hardening (2026-08-08, post-Phase-2 commit)**: `GET /api/v1/commits/{sha}/transcripts` now hex-validates its `commit_sha` path parameter (7-40 chars, `[0-9a-fA-F]` only) before building the `Commit.commit_sha.like(f"{sha}%")` query. SQLAlchemy already parameterizes the LIKE bind so raw injection was never possible, but a `%` or `_` in the caller-supplied prefix would have silently widened the match to unintended commits. Regression pins: `test_ingest_routes.py::TestCommitTranscripts::test_rejects_short_sha` + `test_rejects_wildcard_in_sha`. Pattern to preserve for future SHA-prefix endpoints (`transcripts show`/`get`/`link` in Phase 3): the LIKE-pattern-widening class is why the hex check is not just defense-in-depth but a correctness gate.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

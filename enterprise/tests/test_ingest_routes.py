@@ -595,6 +595,23 @@ class TestCommitTranscripts:
         )
         assert resp.status_code == 404
 
+    def test_rejects_short_sha(self, client, api_token):
+        # 6 chars — below the 7-char floor. Route asserts hex+length
+        # to prevent accidental LIKE-pattern widening even though
+        # SQLAlchemy parameterizes the bind variable.
+        resp = client.get("/api/v1/commits/abc123/transcripts", headers=_auth(api_token))
+        assert resp.status_code == 400
+        assert "7-40 hex chars" in resp.json()["error"]["message"]
+
+    def test_rejects_wildcard_in_sha(self, client, api_token):
+        # `%` would silently widen the match without the hex check
+        resp = client.get(
+            "/api/v1/commits/abc12%25/transcripts", headers=_auth(api_token),
+        )
+        # 400 either from route validation (preferred) or from starlette's
+        # path parser rejecting an oddly-shaped segment.
+        assert resp.status_code == 400
+
 
 # ============================================================
 # Cross-cutting: token auth

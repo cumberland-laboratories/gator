@@ -215,8 +215,13 @@ def get_commit_transcripts(
     db: Session = Depends(get_db),
 ):
     """List all transcripts linked to the commit(s) matching the SHA."""
-    if not commit_sha or len(commit_sha) < 7:
-        raise ApiError(400, "invalid_parameter", "commit_sha must be >= 7 hex chars")
+    if not commit_sha or len(commit_sha) < 7 or len(commit_sha) > 40:
+        raise ApiError(400, "invalid_parameter", "commit_sha must be 7-40 hex chars")
+    # Hex-only defense: SQLAlchemy parameterizes the LIKE pattern via
+    # bind variable so injection isn't possible, but a `%` or `_` in
+    # the input would silently widen the match to unintended commits.
+    if not all(c in "0123456789abcdefABCDEF" for c in commit_sha):
+        raise ApiError(400, "invalid_parameter", "commit_sha must be hex")
 
     commit_stmt = select(Commit).where(
         Commit.organization_id == token.organization_id,
