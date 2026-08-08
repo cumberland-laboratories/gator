@@ -24,7 +24,7 @@ import gzip
 import hashlib
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -79,6 +79,14 @@ class TranscriptIngestBody(BaseModel):
     ended_at: str | None = None
     content_encoding: str = "raw"  # "raw" | "gzip"
     content: str  # base64-encoded blob body
+
+
+class OrchestratorLinkBody(BaseModel):
+    commit_sha: str
+    repo_canonical_id: str | None = None  # optional scope for ambiguous SHAs
+    linkage_basis: str = "orchestrator_declared"
+    linkage_confidence: str = "high"
+    linkage_metadata: dict[str, Any] | None = None
 
 
 # --- Helpers ---
@@ -238,7 +246,124 @@ def _run_linkage(
                 "linkage_basis": "session_id_in_snippet",
             })
 
+    # --- Basis 3: strong machine + repo + time (§8 Step 3) ---
+    # Only runs when the high-confidence bases haven't already claimed
+    # a commit. `commits_linked_by_stronger` is the set of commit_ids
+    # already linked by exact_sha or session_id in THIS ingest call —
+    # tracked via seen_pairs above. We also exclude commits that ALREADY
+    # have a high-confidence link to this transcript from a prior ingest,
+    # since the linkage relationship is settled and adding a medium-conf
+    # row would just be noise.
+    high_conf_commit_ids = {
+        commit_id for (commit_id, basis) in seen_pairs
+        if basis in ("exact_sha_in_transcript", "session_id_in_snippet")
+    }
+    existing_high_conf = db.execute(
+        select(CommitTranscriptLink.commit_id).where(
+            CommitTranscriptLink.transcript_session_id == transcript_row.id,
+            CommitTranscriptLink.linkage_basis.in_(
+                ["exact_sha_in_transcript", "session_id_in_snippet"]
+            ),
+        )
+    ).scalars().all()
+    high_conf_commit_ids.update(existing_high_conf)
+
+    workspace_basename = _workspace_basename(transcript_row.workspace_hint)
+    started = transcript_row.started_at
+    ended = transcript_row.ended_at or started
+
+    if started and workspace_basename:
+        # 24h before started_at through 24h after ended_at (or started_at
+        # if no end). Aware/naive tolerance for SQLite in tests: normalize
+        # both to UTC before subtraction.
+        started_norm = started if started.tzinfo else started.replace(tzinfo=timezone.utc)
+        ended_norm = ended if ended.tzinfo else ended.replace(tzinfo=timezone.utc)
+        lower = started_norm - timedelta(hours=24)
+        upper = ended_norm + timedelta(hours=24)
+
+        candidates = db.execute(
+            select(Commit).where(
+                Commit.organization_id == organization_id,
+                Commit.machine_id == machine_id,
+                Commit.committed_at.is_not(None),
+            )
+        ).scalars().all()
+        for commit_row in candidates:
+            if commit_row.id in high_conf_commit_ids:
+                continue
+            pair = (commit_row.id, "strong_machine_repo_time")
+            if pair in seen_pairs:
+                continue
+            # Repo match via basename — the plan calls out the
+            # workspace_hint → repo_identifier mapping as best-effort
+            # (MVP scope). `local/gator` matches `C:\...\code2\gator`
+            # via basename equality on the trailing path segment.
+            commit_basename = _repo_basename(commit_row.repo_identifier)
+            if commit_basename != workspace_basename:
+                continue
+            # Timestamp window check with the same aware/naive normalizer
+            # used above (SQLite drops tzinfo; Postgres preserves it).
+            committed = commit_row.committed_at
+            committed_norm = committed if committed.tzinfo else committed.replace(tzinfo=timezone.utc)
+            if not (lower <= committed_norm <= upper):
+                continue
+            seen_pairs.add(pair)
+            link = _upsert_link(
+                db,
+                organization_id=organization_id,
+                commit_id=commit_row.id,
+                transcript_session_id=transcript_row.id,
+                linkage_basis="strong_machine_repo_time",
+                linkage_confidence="medium",
+                linkage_metadata={
+                    "commit_sha": commit_row.commit_sha,
+                    "matched_workspace_basename": workspace_basename,
+                    "matched_machine_id": machine_id,
+                    "commit_committed_at": committed_norm.isoformat(),
+                    "session_started_at": started_norm.isoformat(),
+                    "session_ended_at": ended_norm.isoformat(),
+                },
+            )
+            if link:
+                created.append({
+                    "commit_sha": commit_row.commit_sha,
+                    "linkage_basis": "strong_machine_repo_time",
+                })
+
     return created
+
+
+def _workspace_basename(workspace_hint: str | None) -> str | None:
+    """Extract the last path segment from a workspace path.
+
+    Handles Windows (`C:\\Users\\...\\gator`) and POSIX (`/Users/.../gator`)
+    style paths. Returns None if the hint is empty or the path resolves
+    to no basename (e.g., root).
+    """
+    if not workspace_hint:
+        return None
+    # Normalize backslashes so we can split on forward slashes only.
+    normalized = workspace_hint.replace("\\", "/").rstrip("/")
+    if not normalized:
+        return None
+    tail = normalized.rsplit("/", 1)[-1]
+    # Drop Windows drive letter if it survived as the whole tail (e.g. "C:").
+    if len(tail) == 2 and tail.endswith(":"):
+        return None
+    return tail or None
+
+
+def _repo_basename(repo_identifier: str | None) -> str | None:
+    """Extract the last segment of a canonical repo identifier.
+
+    Handles `local/gator`, `github.com/org/repo`, plain `repo`.
+    """
+    if not repo_identifier:
+        return None
+    normalized = repo_identifier.rstrip("/")
+    if not normalized:
+        return None
+    return normalized.rsplit("/", 1)[-1] or None
 
 
 def _upsert_link(
@@ -469,4 +594,166 @@ def ingest_transcript(
         "blob_size_bytes": ts_row.blob_size_bytes,
         "status": status,
         "commits_linked": links,
+    }
+
+
+# ============================================================
+# Explicit linkage endpoints (§8 Step 4: orchestrator_declared + relink)
+# ============================================================
+
+
+@router.post("/transcripts/{transcript_id}/link")
+def link_transcript(
+    transcript_id: str,
+    body: OrchestratorLinkBody,
+    token: ApiToken = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    """Create an operator-asserted link between a transcript and a commit.
+
+    The primary MVP use case is `linkage_basis="orchestrator_declared"`
+    (§8 Step 4) — the operator saw context this transcript doesn't
+    expose and wants to record the linkage explicitly. The body's
+    `linkage_basis` field defaults to that value but accepts any of
+    the MVP vocabulary; misuse (e.g. asserting an `exact_sha_in_transcript`
+    link that the ingest algorithm couldn't verify) is loud rather than
+    silent because `linkage_metadata` records the caller's rationale.
+
+    Idempotent by the (`commit_id`, `transcript_session_id`,
+    `linkage_basis`) unique constraint — repeat calls return the
+    existing link's id with `status: "unchanged"`.
+    """
+    from app.api_contract import parse_uuid  # local import to avoid cycles
+
+    tid = parse_uuid(transcript_id, "transcript_id")
+    ts = db.execute(
+        select(TranscriptSession).where(
+            TranscriptSession.id == tid,
+            TranscriptSession.organization_id == token.organization_id,
+        )
+    ).scalar_one_or_none()
+    if ts is None:
+        raise ApiError(404, "not_found", "Transcript session not found")
+
+    sha = body.commit_sha
+    if not sha or len(sha) < 7 or len(sha) > 40:
+        raise ApiError(400, "invalid_parameter", "commit_sha must be 7-40 hex chars")
+    if not all(c in "0123456789abcdefABCDEF" for c in sha):
+        raise ApiError(400, "invalid_parameter", "commit_sha must be hex")
+
+    commit_stmt = select(Commit).where(
+        Commit.organization_id == token.organization_id,
+        Commit.commit_sha.like(f"{sha}%"),
+    )
+    if body.repo_canonical_id:
+        commit_stmt = commit_stmt.where(Commit.repo_identifier == body.repo_canonical_id)
+    matches = db.execute(commit_stmt.limit(2)).scalars().all()
+    if not matches:
+        raise ApiError(404, "not_found", f"No commit matches sha prefix {sha}")
+    if len(matches) > 1:
+        raise ApiError(
+            409, "ambiguous_commit",
+            f"Multiple commits match sha prefix {sha}; pass repo_canonical_id to scope",
+        )
+    commit = matches[0]
+
+    existing_link = db.execute(
+        select(CommitTranscriptLink).where(
+            CommitTranscriptLink.commit_id == commit.id,
+            CommitTranscriptLink.transcript_session_id == tid,
+            CommitTranscriptLink.linkage_basis == body.linkage_basis,
+        )
+    ).scalar_one_or_none()
+    if existing_link is not None:
+        return {
+            "link_id": str(existing_link.id),
+            "commit_id": str(commit.id),
+            "commit_sha": commit.commit_sha,
+            "linkage_basis": existing_link.linkage_basis,
+            "linkage_confidence": existing_link.linkage_confidence,
+            "status": "unchanged",
+        }
+
+    metadata = dict(body.linkage_metadata or {})
+    metadata.setdefault("commit_sha", commit.commit_sha)
+    metadata.setdefault("declared_at", datetime.now(timezone.utc).isoformat())
+
+    new_link = CommitTranscriptLink(
+        id=uuid.uuid4(),
+        organization_id=token.organization_id,
+        commit_id=commit.id,
+        transcript_session_id=tid,
+        linkage_basis=body.linkage_basis,
+        linkage_confidence=body.linkage_confidence,
+        linkage_metadata=metadata,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(new_link)
+    db.commit()
+
+    return {
+        "link_id": str(new_link.id),
+        "commit_id": str(commit.id),
+        "commit_sha": commit.commit_sha,
+        "linkage_basis": new_link.linkage_basis,
+        "linkage_confidence": new_link.linkage_confidence,
+        "status": "created",
+    }
+
+
+@router.post("/transcripts/{transcript_id}/relink")
+def relink_transcript(
+    transcript_id: str,
+    token: ApiToken = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    """Re-run the ingest-time linkage algorithm against an existing transcript.
+
+    Reads the stored blob back from the BlobStore and runs the full
+    algorithm (all three MVP bases). Useful when new commits have been
+    ingested that would now match this transcript (e.g., a `git pull`
+    on another machine landed the commits, then `transcripts pull`
+    ingested them post-hoc; the transcript's existing linkage was
+    computed before those commits existed).
+
+    Idempotent — `_upsert_link` skips rows that already exist. Only
+    NEW links are counted in `commits_linked`; the endpoint intentionally
+    does NOT clear existing links so `orchestrator_declared` assertions
+    are preserved.
+    """
+    from app.api_contract import parse_uuid
+
+    tid = parse_uuid(transcript_id, "transcript_id")
+    ts = db.execute(
+        select(TranscriptSession).where(
+            TranscriptSession.id == tid,
+            TranscriptSession.organization_id == token.organization_id,
+        )
+    ).scalar_one_or_none()
+    if ts is None:
+        raise ApiError(404, "not_found", "Transcript session not found")
+
+    blob_store = _get_blob_store()
+    try:
+        content = blob_store.get(ts.blob_key)
+    except Exception as e:  # noqa: BLE001
+        raise ApiError(
+            410, "blob_missing",
+            f"Blob for transcript {tid} unavailable: {e}",
+        )
+
+    new_links = _run_linkage(
+        db,
+        organization_id=token.organization_id,
+        machine_id=ts.machine_id,
+        vendor=ts.vendor,
+        vendor_session_id=ts.vendor_session_id,
+        transcript_row=ts,
+        content=content,
+    )
+    db.commit()
+
+    return {
+        "transcript_session_id": str(ts.id),
+        "commits_linked": new_links,
     }

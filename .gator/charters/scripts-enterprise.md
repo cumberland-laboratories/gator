@@ -451,6 +451,40 @@ enterprise-cli package.
 
   **Follow-on hardening (2026-08-08, post-Phase-2 commit)**: `GET /api/v1/commits/{sha}/transcripts` now hex-validates its `commit_sha` path parameter (7-40 chars, `[0-9a-fA-F]` only) before building the `Commit.commit_sha.like(f"{sha}%")` query. SQLAlchemy already parameterizes the LIKE bind so raw injection was never possible, but a `%` or `_` in the caller-supplied prefix would have silently widened the match to unintended commits. Regression pins: `test_ingest_routes.py::TestCommitTranscripts::test_rejects_short_sha` + `test_rejects_wildcard_in_sha`. Pattern to preserve for future SHA-prefix endpoints (`transcripts show`/`get`/`link` in Phase 3): the LIKE-pattern-widening class is why the hex check is not just defense-in-depth but a correctness gate.
 
+- **! Transcript-custody linkage completion + explicit linkage surface (2026-08-08 MVP Phase 3).** Closes out the linkage half of §8 (all four MVP bases now implemented) and adds the operator-facing surface for explicit linkage + relink. See parent plan §8 (algorithm), §9 (CLI), §13 Phase 3.
+
+  **New linkage basis** — `strong_machine_repo_time` (medium confidence) in `ingest.py::_run_linkage` Basis 3. For commits WITHOUT `exact_sha_in_transcript` or `session_id_in_snippet` already claiming them (via `seen_pairs` in-memory dedup + a query against pre-existing high-confidence links on the same transcript), match commits where:
+  - Same `machine_id` as the transcript
+  - `basename(repo_identifier)` == `basename(workspace_hint)` — MVP workspace→repo mapping is best-effort via trailing path segment (`local/gator` matches `C:\...\code2\gator`; the seam is documented as brittle in `transcripts_discovery.py` and this charter's growth-path section for a Phase 4+ improvement)
+  - `committed_at` within `[started_at - 24h, ended_at + 24h]` (or `started_at + 24h` if no end)
+  - `Commit.committed_at IS NOT NULL` (nullable-timestamp defence)
+
+  Helper functions `_workspace_basename()` + `_repo_basename()` normalize backslash/forward-slash + strip Windows drive letters + reject empty/root strings. Timestamp comparison uses the same aware-vs-naive normalization pattern as `_dt_equal` from Phase 2 (SQLite drops tzinfo; Postgres preserves it — production is unaffected but the helper keeps in-memory SQLite tests honest).
+
+  **linkage_metadata payload for `strong_machine_repo_time`**: `{commit_sha, matched_workspace_basename, matched_machine_id, commit_committed_at, session_started_at, session_ended_at}` — every input to the match decision recorded so audit consumers can post-hoc reason about false positives without re-running the algorithm.
+
+  **New endpoints** (both in `ingest.py`, mounted under existing `/api/v1/` prefix):
+  - `POST /api/v1/transcripts/{id}/link` — orchestrator-declared linkage. Body: `{commit_sha, repo_canonical_id?, linkage_basis="orchestrator_declared", linkage_confidence="high", linkage_metadata?}`. Same hex+length validation as `GET .../transcripts` (`OrchestratorLinkBody` Pydantic model + inline validators). Ambiguous SHA prefix returns 409 `ambiguous_commit` (rather than picking one — matches the ingest-time algorithm's "skip when 2+ match" policy for exact_sha). Idempotent by `(commit_id, transcript_session_id, linkage_basis)` — repeat calls return existing `link_id` with `status: "unchanged"`. The `linkage_metadata` gets `commit_sha` + `declared_at` auto-populated if not provided by the caller.
+  - `POST /api/v1/transcripts/{id}/relink` — re-runs the full ingest-time linkage algorithm against the stored blob (reads from `BlobStore.get(ts.blob_key)`, calls `_run_linkage` with the current row's metadata). Discovers NEW links only — `_upsert_link` returns False for pre-existing rows and they don't count. Critical invariant: relink NEVER deletes existing links, so `orchestrator_declared` assertions survive across relinks — that's what makes relink safe to run on any schedule. If the blob is unreachable (retention purge, corrupted BlobStore state), returns 410 `blob_missing` rather than a 500.
+
+  **CLI verbs** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py`):
+  - `transcripts show <tid>` — key/value + links table via `GET /api/v1/transcripts/{id}`.
+  - `transcripts get <tid> [--output|-o <file>|- ]` — streams the raw blob body via `GET .../blob`. Default output is stdout (binary-safe `sys.stdout.buffer.write` on Windows). File output prints byte count + `blob_sha256` for verification.
+  - `transcripts link <tid> --commit <sha> [--repo <id>] [--basis <b>] [--confidence <c>] [--metadata <json>]` — POSTs to the new `/link` endpoint. `--metadata` is a JSON object merged into `linkage_metadata`; non-object or invalid JSON exits 2 with a clear error.
+  - `transcripts relink <tid>` — POSTs to `/relink`; prints per-new-link basis.
+  - `_resolve_transcript_id()` — accepts 8+ char UUID prefix, expands via `GET /api/v1/transcripts?limit=200` client-side scan. Ambiguous prefix (multiple matches) exits 1 rather than picking one; not-found exits 1 with the supplied prefix quoted. Full 36-char UUIDs pass through untouched — the prefix scan is only paid when a shorter id is supplied.
+
+  **New CLI subcommand** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py`): `commits transcripts <sha> [--repo <id>]` — reverse-lookup for the transcript custody surface. Verb-first argparse pattern (`commits transcripts <sha>`, not `commits <sha> transcripts`) because argparse resolves subcommand groups before positionals; the API URL contract is unchanged. Registered in `main.py` alongside `transcripts`.
+
+  **Regression pins** (`enterprise/tests/test_ingest_routes.py` — 17 new tests, 46 total in file, all pass):
+  - `TestStrongMachineRepoTimeLinkage` (5) — positive match, higher-confidence-wins skip, workspace mismatch, time-outside-window, machine-id mismatch
+  - `TestOrchestratorDeclaredLink` (8) — create, idempotent, visible-via-reverse-lookup, prefix-SHA-accepted, ambiguous-409, unknown-commit-404, bad-SHA-400, unknown-transcript-404
+  - `TestRelink` (4) — new-link-after-later-commit-ingest, idempotent, preserves-orchestrator-declared, unknown-transcript-404
+
+  **Live verification (2026-08-08)**: booted uvicorn against local Postgres on port 5434. Existing sessions from Phase 2 dogfooding: `76c6bdf2` (6.0MB, ba565a28-171 vendor session, previously 23 `session_id_in_snippet` links); `2ff89e37` (1.16MB, 331a6a12-b57, previously 7 links). Ran `transcripts relink 76c6bdf2` → 1 new `strong_machine_repo_time` link discovered on commit `e784d604` (its snippet had null transcript_session_id so session-id linkage never fired originally, but machine + workspace + time window matched). `commits transcripts e784d604` now shows all three link classes: `exact_sha_in_transcript` (high), `session_id_in_snippet` (high), and `strong_machine_repo_time` (medium) — same commit visible from all applicable evidence angles. `transcripts link 76c6bdf2 --commit e784d604 --metadata '{"note":"live-verify"}'` created an `orchestrator_declared` link; second call returned `unchanged` (idempotency proven end-to-end).
+
+  **Phase 4 residue (explicitly NOT in Phase 3)**: `transcripts list` UX polish + SQL views (`recent_transcripts`, `commits_with_transcript_coverage`, `unlinked_recent_transcripts`); operator guide artifact. Named for scope honesty — `list`/`show`/`get`/`link`/`relink` all functional now, but the guided-tour operator experience is a Phase 4 concern.
+
 ## Called by (`←`)
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry

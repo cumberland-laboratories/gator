@@ -88,14 +88,53 @@ def register(subparsers):
     ls.add_argument("--since", default=None)
     ls.add_argument("--limit", type=int, default=50)
 
+    show = sub.add_parser("show", help="Show a transcript session's metadata + links")
+    show.add_argument("transcript_id", help="Transcript session UUID (full or 8-char prefix)")
+
+    get = sub.add_parser("get", help="Fetch a transcript's raw blob content")
+    get.add_argument("transcript_id", help="Transcript session UUID")
+    get.add_argument(
+        "--output", "-o", default="-",
+        help="Output path (default: stdout as '-')",
+    )
+
+    link = sub.add_parser("link", help="Explicit orchestrator-declared linkage")
+    link.add_argument("transcript_id", help="Transcript session UUID")
+    link.add_argument("--commit", required=True, help="Commit SHA (7-40 hex chars)")
+    link.add_argument("--repo", default=None,
+        help="Optional repo_canonical_id scope for ambiguous SHAs")
+    link.add_argument("--basis", default="orchestrator_declared",
+        help="linkage_basis value (default: orchestrator_declared)")
+    link.add_argument("--confidence", default="high",
+        choices=["high", "medium", "low"])
+    link.add_argument("--metadata", default=None,
+        help="JSON object merged into linkage_metadata")
+
+    relink = sub.add_parser(
+        "relink",
+        help="Re-run the ingest-time linkage algorithm on an existing transcript",
+    )
+    relink.add_argument("transcript_id", help="Transcript session UUID")
+
 
 def handle(args, client):
     if args.transcripts_command == "pull":
         _handle_pull(args, client)
     elif args.transcripts_command == "list":
         _handle_list(args, client)
+    elif args.transcripts_command == "show":
+        _handle_show(args, client)
+    elif args.transcripts_command == "get":
+        _handle_get(args, client)
+    elif args.transcripts_command == "link":
+        _handle_link(args, client)
+    elif args.transcripts_command == "relink":
+        _handle_relink(args, client)
     else:
-        print("Usage: gator-enterprise transcripts {pull,list}", file=sys.stderr)
+        print(
+            "Usage: gator-enterprise transcripts {pull,list,show,get,link,relink}",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
 
@@ -135,7 +174,181 @@ def _handle_list(args, client):
     )
     pagination = data.get("pagination", {})
     if pagination.get("has_more"):
-        print(f"\n(more results — increase --limit or use --json to page)")
+        print(f"\n(more results -- increase --limit or use --json to page)")
+
+
+# ----------------------------------------------------------------------
+# transcripts show
+# ----------------------------------------------------------------------
+
+
+def _handle_show(args, client):
+    tid = _resolve_transcript_id(args.transcript_id, client)
+    data = client.get(f"/api/v1/transcripts/{tid}")
+    if args.json:
+        print_json(data)
+        return
+    print_kv([
+        ("id", data["id"]),
+        ("vendor", data["vendor"]),
+        ("vendor_session_id", data["vendor_session_id"]),
+        ("machine_id", data["machine_id"]),
+        ("model", data.get("model") or "(none)"),
+        ("workspace_hint", data.get("workspace_hint") or "(none)"),
+        ("started_at", data.get("started_at") or "(none)"),
+        ("ended_at", data.get("ended_at") or "(none)"),
+        ("ingested_at", data.get("ingested_at") or "(none)"),
+        ("blob_key", data["blob_key"]),
+        ("blob_size_bytes", str(data.get("blob_size_bytes") or 0)),
+        ("blob_sha256", data["blob_sha256"]),
+        ("retention_class", data["retention_class"]),
+        ("linked_commit_count", str(data.get("linked_commit_count") or 0)),
+    ])
+    links = data.get("links", [])
+    if links:
+        print("\nLinks:")
+        rows = [
+            [
+                link["commit_sha"][:12],
+                link["linkage_basis"],
+                link["linkage_confidence"],
+                (link.get("created_at") or "")[:19],
+            ]
+            for link in links
+        ]
+        print_table(["Commit SHA", "Basis", "Confidence", "Created"], rows)
+
+
+# ----------------------------------------------------------------------
+# transcripts get
+# ----------------------------------------------------------------------
+
+
+def _handle_get(args, client):
+    tid = _resolve_transcript_id(args.transcript_id, client)
+    # httpx returns parsed JSON on 2xx; the blob endpoint returns raw
+    # bytes with application/x-ndjson media type. Reach through the
+    # client's session to get the raw response.
+    import httpx  # local import — keeps CLI startup light
+    url = f"{client._base}/api/v1/transcripts/{tid}/blob"  # noqa: SLF001
+    try:
+        resp = httpx.get(url, headers=client._headers, timeout=120.0)  # noqa: SLF001
+    except httpx.ConnectError:
+        from gator_enterprise_cli.client import CliError
+        raise CliError(f"Connection failed: {client._base}")
+    if resp.status_code != 200:
+        from gator_enterprise_cli.client import CliError
+        raise CliError(f"Error ({resp.status_code}): {resp.text[:200]}")
+
+    if args.output == "-":
+        # Binary safe write to stdout on Windows too
+        sys.stdout.buffer.write(resp.content)
+    else:
+        out = Path(args.output)
+        out.write_bytes(resp.content)
+        sha = resp.headers.get("x-blob-sha256", "")
+        print(f"Wrote {len(resp.content)} bytes to {out}")
+        if sha:
+            print(f"blob_sha256: {sha}")
+
+
+# ----------------------------------------------------------------------
+# transcripts link
+# ----------------------------------------------------------------------
+
+
+def _handle_link(args, client):
+    tid = _resolve_transcript_id(args.transcript_id, client)
+    metadata = None
+    if args.metadata:
+        try:
+            metadata = json.loads(args.metadata)
+        except json.JSONDecodeError as e:
+            print(f"error: --metadata is not valid JSON: {e}", file=sys.stderr)
+            sys.exit(2)
+        if not isinstance(metadata, dict):
+            print("error: --metadata must be a JSON object", file=sys.stderr)
+            sys.exit(2)
+    body = {
+        "commit_sha": args.commit,
+        "linkage_basis": args.basis,
+        "linkage_confidence": args.confidence,
+    }
+    if args.repo:
+        body["repo_canonical_id"] = args.repo
+    if metadata is not None:
+        body["linkage_metadata"] = metadata
+
+    data = client.post(f"/api/v1/transcripts/{tid}/link", json=body)
+    if args.json:
+        print_json(data)
+        return
+    print(
+        f"{data['status']}: link {data['link_id'][:8]}  "
+        f"commit={data['commit_sha'][:12]}  "
+        f"basis={data['linkage_basis']}  "
+        f"confidence={data['linkage_confidence']}"
+    )
+
+
+# ----------------------------------------------------------------------
+# transcripts relink
+# ----------------------------------------------------------------------
+
+
+def _handle_relink(args, client):
+    tid = _resolve_transcript_id(args.transcript_id, client)
+    data = client.post(f"/api/v1/transcripts/{tid}/relink")
+    if args.json:
+        print_json(data)
+        return
+    links = data.get("commits_linked", [])
+    print(f"Relinked transcript {tid[:8]}: {len(links)} new links")
+    for link in links:
+        print(f"  {link['commit_sha'][:12]}  {link['linkage_basis']}")
+
+
+# ----------------------------------------------------------------------
+# Prefix expansion for transcript_id
+# ----------------------------------------------------------------------
+
+
+def _resolve_transcript_id(supplied: str, client) -> str:
+    """Accept an 8+ char prefix and expand it to a full UUID.
+
+    Full UUIDs (36 chars with dashes) pass through untouched.
+    Anything shorter is looked up via `list` and expanded if a single
+    match is found; multi-match errors so the caller can disambiguate.
+    """
+    if len(supplied) == 36 and supplied.count("-") == 4:
+        return supplied
+    if len(supplied) < 8:
+        print(
+            f"error: transcript_id prefix must be >= 8 chars, got {len(supplied)}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    # Page through the list looking for prefix matches. MVP: no dedicated
+    # server-side prefix endpoint; scan up to `_PREFIX_SCAN_CAP` sessions.
+    data = client.get("/api/v1/transcripts", params={"limit": _PREFIX_SCAN_CAP})
+    matches = [
+        item["id"] for item in data.get("items", [])
+        if item["id"].startswith(supplied)
+    ]
+    if len(matches) == 0:
+        print(f"error: no transcript matches prefix {supplied!r}", file=sys.stderr)
+        sys.exit(1)
+    if len(matches) > 1:
+        print(
+            f"error: {len(matches)} transcripts match prefix {supplied!r}; "
+            f"use the full UUID",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return matches[0]
+
+
+_PREFIX_SCAN_CAP = 200
 
 
 # ----------------------------------------------------------------------

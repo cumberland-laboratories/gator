@@ -633,3 +633,322 @@ class TestAuthEnforced:
     def test_list_needs_auth(self, client):
         resp = client.get("/api/v1/transcripts")
         assert resp.status_code == 401
+
+
+# ============================================================
+# Phase 3: strong_machine_repo_time linkage basis
+# ============================================================
+
+
+def _ts_body_with_workspace(
+    content_bytes: bytes,
+    workspace: str,
+    started: str = "2026-08-07T10:00:00Z",
+    ended: str | None = "2026-08-07T11:00:00Z",
+    machine_id: str = "m-1",
+    vendor_session_id: str = "sess-strong",
+    **overrides,
+) -> dict:
+    payload = _make_transcript_body(
+        content_bytes,
+        workspace_hint=workspace,
+        started_at=started,
+        vendor_session_id=vendor_session_id,
+        machine_id=machine_id,
+        **overrides,
+    )
+    if ended is not None:
+        payload["ended_at"] = ended
+    return payload
+
+
+class TestStrongMachineRepoTimeLinkage:
+    """§8 Step 3 — same machine + basename(workspace_hint) matches
+    basename(repo_identifier) + committed_at within 24h of started_at
+    → medium-confidence link."""
+
+    def test_positive_match(self, client, api_token):
+        # Commit on machine m-1, repo local/gator, committed within the
+        # session's time window.
+        client.post("/api/v1/commits/ingest", json={
+            "machine_id": "m-1",
+            "commits": [{
+                "repo_canonical_id": "local/gator",
+                "sha": "aa" + "0" * 38,
+                "committed_at": "2026-08-07T10:30:00Z",
+                "machine_id": "m-1",
+            }],
+        }, headers=_auth(api_token))
+        # Transcript with workspace whose basename == "gator"
+        resp = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_ts_body_with_workspace(
+                b"no sha or session id here",
+                workspace="C:\\Users\\dev\\code\\gator",
+            ),
+            headers=_auth(api_token),
+        )
+        bases = [l["linkage_basis"] for l in resp.json()["commits_linked"]]
+        assert "strong_machine_repo_time" in bases
+
+    def test_skipped_when_higher_confidence_link_exists(self, client, api_token):
+        # Same setup, but the transcript ALSO mentions the SHA prefix
+        # → exact_sha wins, strong_machine_repo_time skipped for this commit.
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/gator",
+                "sha": "bb1234567890" + "0" * 28,
+                "committed_at": "2026-08-07T10:30:00Z",
+                "machine_id": "m-1",
+            }],
+        }, headers=_auth(api_token))
+        resp = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_ts_body_with_workspace(
+                b"we landed bb123456\n",
+                workspace="C:\\Users\\dev\\code\\gator",
+                vendor_session_id="sess-strong-A",
+            ),
+            headers=_auth(api_token),
+        )
+        bases = {l["linkage_basis"] for l in resp.json()["commits_linked"]}
+        assert "exact_sha_in_transcript" in bases
+        assert "strong_machine_repo_time" not in bases
+
+    def test_workspace_mismatch_no_link(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/foo",
+                "sha": "cc" + "0" * 38,
+                "committed_at": "2026-08-07T10:30:00Z",
+                "machine_id": "m-1",
+            }],
+        }, headers=_auth(api_token))
+        resp = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_ts_body_with_workspace(
+                b"x",
+                workspace="C:\\code\\bar",  # basename "bar", repo basename "foo"
+                vendor_session_id="sess-mismatch",
+            ),
+            headers=_auth(api_token),
+        )
+        assert resp.json()["commits_linked"] == []
+
+    def test_time_outside_24h_no_link(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/gator",
+                "sha": "dd" + "0" * 38,
+                "committed_at": "2026-08-05T00:00:00Z",  # 2+ days before
+                "machine_id": "m-1",
+            }],
+        }, headers=_auth(api_token))
+        resp = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_ts_body_with_workspace(
+                b"x",
+                workspace="C:\\code\\gator",
+                vendor_session_id="sess-far",
+            ),
+            headers=_auth(api_token),
+        )
+        assert resp.json()["commits_linked"] == []
+
+    def test_different_machine_id_no_link(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/gator",
+                "sha": "ee" + "0" * 38,
+                "committed_at": "2026-08-07T10:30:00Z",
+                "machine_id": "m-OTHER",
+            }],
+        }, headers=_auth(api_token))
+        resp = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_ts_body_with_workspace(
+                b"x",
+                workspace="C:\\code\\gator",
+                vendor_session_id="sess-other-machine",
+            ),
+            headers=_auth(api_token),
+        )
+        assert resp.json()["commits_linked"] == []
+
+
+# ============================================================
+# Phase 3: POST /transcripts/{id}/link (orchestrator_declared)
+# ============================================================
+
+
+def _seed_commit_and_transcript(client, api_token, sha=None, vendor_session_id=None):
+    sha = sha or ("f" * 40)
+    vsid = vendor_session_id or "sess-for-link"
+    client.post("/api/v1/commits/ingest", json={
+        "commits": [{
+            "repo_canonical_id": "local/x",
+            "sha": sha,
+            "committed_at": "2026-08-07T10:00:00Z",
+        }],
+    }, headers=_auth(api_token))
+    upload = client.post(
+        "/api/v1/transcripts/ingest",
+        json=_make_transcript_body(b"no linkage", vendor_session_id=vsid),
+        headers=_auth(api_token),
+    )
+    return sha, upload.json()["transcript_session_id"]
+
+
+class TestOrchestratorDeclaredLink:
+    def test_creates_link(self, client, api_token):
+        sha, tid = _seed_commit_and_transcript(client, api_token)
+        resp = client.post(
+            f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": sha},
+            headers=_auth(api_token),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["status"] == "created"
+        assert body["linkage_basis"] == "orchestrator_declared"
+        assert body["linkage_confidence"] == "high"
+        assert body["commit_sha"] == sha
+
+    def test_idempotent(self, client, api_token):
+        sha, tid = _seed_commit_and_transcript(client, api_token)
+        client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": sha}, headers=_auth(api_token))
+        resp2 = client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": sha}, headers=_auth(api_token))
+        assert resp2.json()["status"] == "unchanged"
+
+    def test_link_visible_via_commits_transcripts(self, client, api_token):
+        sha, tid = _seed_commit_and_transcript(client, api_token)
+        client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": sha, "linkage_metadata": {"note": "operator saw slack"}},
+            headers=_auth(api_token))
+        resp = client.get(f"/api/v1/commits/{sha}/transcripts", headers=_auth(api_token))
+        bases = [l["linkage_basis"] for l in resp.json()["links"]]
+        assert "orchestrator_declared" in bases
+
+    def test_prefix_sha_accepted(self, client, api_token):
+        sha, tid = _seed_commit_and_transcript(client, api_token, sha="0abc1234" + "0" * 32)
+        # 8-char prefix
+        resp = client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": "0abc1234"}, headers=_auth(api_token))
+        assert resp.status_code == 200
+        assert resp.json()["commit_sha"] == "0abc1234" + "0" * 32
+
+    def test_ambiguous_sha_returns_409(self, client, api_token):
+        # Two commits with same 7-char prefix but different suffixes
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x", "sha": "abcdef1" + "0" * 33},
+                {"repo_canonical_id": "local/x", "sha": "abcdef1" + "1" * 33},
+            ],
+        }, headers=_auth(api_token))
+        upload = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"x", vendor_session_id="ambiguous"),
+            headers=_auth(api_token),
+        )
+        tid = upload.json()["transcript_session_id"]
+        resp = client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": "abcdef1"}, headers=_auth(api_token))
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "ambiguous_commit"
+
+    def test_unknown_commit_404(self, client, api_token):
+        _, tid = _seed_commit_and_transcript(client, api_token)
+        resp = client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": "deadbeef" + "0" * 32}, headers=_auth(api_token))
+        assert resp.status_code == 404
+
+    def test_bad_sha_400(self, client, api_token):
+        _, tid = _seed_commit_and_transcript(client, api_token)
+        resp = client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": "not-hex-here!"}, headers=_auth(api_token))
+        assert resp.status_code == 400
+
+    def test_unknown_transcript_404(self, client, api_token):
+        random_tid = str(uuid.uuid4())
+        resp = client.post(f"/api/v1/transcripts/{random_tid}/link",
+            json={"commit_sha": "a" * 40}, headers=_auth(api_token))
+        assert resp.status_code == 404
+
+
+# ============================================================
+# Phase 3: POST /transcripts/{id}/relink
+# ============================================================
+
+
+class TestRelink:
+    def test_adds_new_link_when_commit_ingested_after_transcript(self, client, api_token):
+        # Ingest transcript FIRST — no commits exist yet, so no links
+        upload = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"we landed 1234abc today\n",
+                vendor_session_id="sess-relink",
+            ),
+            headers=_auth(api_token),
+        )
+        tid = upload.json()["transcript_session_id"]
+        assert upload.json()["commits_linked"] == []
+
+        # NOW ingest the commit
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "1234abc" + "0" * 33,
+            }],
+        }, headers=_auth(api_token))
+
+        # Relink discovers the new link
+        resp = client.post(f"/api/v1/transcripts/{tid}/relink", headers=_auth(api_token))
+        assert resp.status_code == 200
+        links = resp.json()["commits_linked"]
+        assert any(l["linkage_basis"] == "exact_sha_in_transcript" for l in links)
+
+    def test_idempotent(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{"repo_canonical_id": "local/x", "sha": "5678def" + "0" * 33}],
+        }, headers=_auth(api_token))
+        upload = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"see 5678def\n", vendor_session_id="idem-relink",
+            ),
+            headers=_auth(api_token),
+        )
+        tid = upload.json()["transcript_session_id"]
+        # Relink: no NEW links (already linked at ingest)
+        resp = client.post(f"/api/v1/transcripts/{tid}/relink", headers=_auth(api_token))
+        assert resp.json()["commits_linked"] == []
+
+    def test_preserves_orchestrator_declared_links(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{"repo_canonical_id": "local/x", "sha": "77" + "0" * 38}],
+        }, headers=_auth(api_token))
+        upload = client.post(
+            "/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"no linkage", vendor_session_id="preserve-orch"),
+            headers=_auth(api_token),
+        )
+        tid = upload.json()["transcript_session_id"]
+        # Operator-declared link
+        client.post(f"/api/v1/transcripts/{tid}/link",
+            json={"commit_sha": "77" + "0" * 38}, headers=_auth(api_token))
+        # Relink runs — should NOT delete the orchestrator link
+        client.post(f"/api/v1/transcripts/{tid}/relink", headers=_auth(api_token))
+        detail = client.get(f"/api/v1/transcripts/{tid}", headers=_auth(api_token))
+        bases = [l["linkage_basis"] for l in detail.json()["links"]]
+        assert "orchestrator_declared" in bases
+
+    def test_unknown_transcript_404(self, client, api_token):
+        random_tid = str(uuid.uuid4())
+        resp = client.post(
+            f"/api/v1/transcripts/{random_tid}/relink",
+            headers=_auth(api_token),
+        )
+        assert resp.status_code == 404

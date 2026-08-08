@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "whiteboard cleanup: plan Phase 2 rollover + ADR sync + commit-sha hex validation",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "documentation-drift",
+    "security-hardening"
+  ],
+  "commit": "0e7e869f207eca681714eb27c69898a25fb51499",
+  "short_commit": "0e7e869",
+  "snippet_id": "snippet-0e7e869f207ec",
+  "session_group_key": "anthropic:331a6a12-b575-4478-b623-d731a73fdbc2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "2fdf29d1b0c878301a78b269056b7e628c6aac45",
+  "started_at": "2026-08-08T19:46:54Z",
+  "ended_at": "2026-08-08T20:37:46Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-08-gator-2fdf29d1b0c87.json",
+    "enterprise/app/routes/transcripts.py",
+    "enterprise/tests/test_ingest_routes.py"
+  ],
+  "notes": [
+    "Roll Phase 2 completion into the transcripts-first MVP plan artifact (`.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md`). Whiteboard finding 1 (§16 still titled \"Phase 1 handoff\" while Phase 2 was authorized) — §16 rewritten as \"Phase 3 handoff\" with per-phase COMPLETE summaries + Phase 3 scope statement. Whiteboard finding 2 (header claimed \"four-pass F1-F10\" while body enumerated F11-F12) — header now says \"clean after Codex reviews through F12\"; §17 revision-log header rewritten to \"successive Codex whiteboard reviews (F1-F12)\". Plan header + tail \"Status\" line + §13 Phase 2 section all rolled forward: Phase 2 marked COMPLETE with commit `2fdf29d`, deliverables checklist, all exit criteria checked, actual-vs-estimate time (~4h vs 10-14h), and named residue (Phase 3 items).",
+    "Sync ADR (`.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md`): both status lines updated to include \"Phase 2 COMPLETE 2026-08-08 (commit `2fdf29d`). Phase 3 authorized.\" The plan and ADR are now again in the same terminal state (which was the F10 invariant).",
+    "Harden `GET /api/v1/commits/{sha}/transcripts` input validation (`enterprise/app/routes/transcripts.py`) — pre-commit hook flagged SQL-004 warning at the SHA-prefix LIKE query. SQLAlchemy already parameterizes the LIKE bind variable so injection isn't possible, but a `%` or `_` in the caller-supplied prefix would silently widen the match to unintended commits. Now validates hex-only + length in 7-40 range before building the query. Regression pins: `TestCommitTranscripts::test_rejects_short_sha` + `test_rejects_wildcard_in_sha`."
+  ],
+  "transcript_session_id": "331a6a12-b575-4478-b623-d731a73fdbc2",
+  "transcript_ref": null
+}
