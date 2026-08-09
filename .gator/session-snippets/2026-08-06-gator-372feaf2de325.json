@@ -1,0 +1,35 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "gitignore: local Enterprise bring-up scaffolding paths",
+  "change_type": "maintenance",
+  "significance": "low",
+  "charter_changed": false,
+  "decision_tags": [
+    "enterprise-local-bringup"
+  ],
+  "commit": "372feaf2de3259c78c3eae875590f7b8cae70b69",
+  "short_commit": "372feaf",
+  "snippet_id": "snippet-372feaf2de325",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-06T23:40:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gitignore"
+  ],
+  "notes": [
+    "Add `.venv-enterprise-local/` and `.env-enterprise-local` to `.gitignore` so per-operator Enterprise bring-up scaffolding stays machine-local. Both paths are created by the 2026-08-06 Enterprise Local Bring-Up plan (vault-scoped). No source-code or charter-covered changes in this commit — everything else this session (venv build, DB, migrations, admin bootstrap, session log) lives outside git."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}

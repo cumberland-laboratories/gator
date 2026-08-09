@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise repo init: default mode to strict, widen choices to full set",
+  "change_type": "fix",
+  "significance": "medium",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise-local-bringup",
+    "default-posture",
+    "governance-friction"
+  ],
+  "commit": "5121c4d445914e5eaad3c16fcbd5b6e948eaf895",
+  "short_commit": "5121c4d",
+  "snippet_id": "snippet-5121c4d445914",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "da517cb22e5746880981766a4826a75ebee90895",
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-07T14:22:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py"
+  ],
+  "notes": [
+    "Change `gator-enterprise repo init --mode` default from `evidence_only` to `strict`. Per Architect direction 2026-08-07: \"commits should not go silently. The commit should record everything it can, forcing the bot, human, etc. to explain what is happening with the commit.\" `strict` is the only mode that FORCES the explanation (blocks without commit_draft.md). `warning` still requires the same content but downgrades block→warning for CI/bot repos that can't respond to a block. `evidence_only` and `off` remain available as explicit opt-outs.",
+    "Widen `--mode` choices list from `[\"evidence_only\", \"warning\"]` to `[\"off\", \"evidence_only\", \"warning\", \"strict\"]` — all four values the bundled pre-commit script actually recognizes. Prior narrow list would let an operator pass e.g. `--mode strict` and get an argparse error even though the wrapper's mode lookup handles strict fine; the narrower list was inconsistent with runtime behavior.",
+    "Reverses the pre-2026-08-07 enterprise-cli design intent (the help text pointed operators to Gator Individual for strict/charter enforcement). The framing shift here: strict IS the enterprise default; opt-out to evidence_only or warning is an explicit choice per repo, not the initial posture.",
+    "Updates help text to describe all four modes and their tradeoffs, so `gator-enterprise repo init --help` documents the choice space.",
+    "No test breakage: `enterprise/tests/test_repo_init.py::TestRepoInitIntegration::test_do_repo_init_writes_intent_even_when_server_unknown` passes `mode=\"evidence_only\"` EXPLICITLY (not by default), so it continues to verify the non-default branch. All 8 test_repo_init tests still pass.",
+    "Charter TRIPWIRE added in `.gator/charters/scripts-enterprise.md` documenting the new default, the framing rationale (Architect quote), the choices-list widening, and the regression pin.",
+    "Addresses Finding-set observation from Session 3: session-block generation without a bound vendor session is one thing; the commit ceremony being SILENT about it is another. This commit addresses the \"silent\" part by making the default posture explanatory. Multi-session capture (Issue B in the arc plan) is a separate follow-up."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}

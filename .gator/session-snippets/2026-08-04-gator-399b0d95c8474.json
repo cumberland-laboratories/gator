@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "procedure: sub-issue linking pattern for umbrella efforts",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "issue-tracking",
+    "sub-issues",
+    "procedure-extension"
+  ],
+  "commit": "399b0d95c84740b470e3b20e85bffe910ca650b4",
+  "short_commit": "399b0d9",
+  "snippet_id": "snippet-399b0d95c8474",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "30d9d71f41498e055d8c9277ee5df8eb3d1d0c06",
+  "started_at": "2026-08-04T15:00:55Z",
+  "ended_at": "2026-08-04T15:00:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/procedures/file-github-issue.md",
+    ".gator/session-snippets/2026-08-04-gator-30d9d71f41498.json"
+  ],
+  "notes": [
+    "**Extended `.gator/procedures/file-github-issue.md`** with the sub-issue linking pattern for umbrella efforts (e.g. \"Gator Loop polish\", \"Enterprise post-MVP hardening\"). Documents parent-issue conventions, child-issue conventions, and the `gh api` GraphQL mutation for linking sub-issues (there is no first-class `gh sub-issue` command yet, but the API is fully supported and works reliably via `gh api graphql -f query='mutation { addSubIssue(...) }'`).",
+    "**Notable GraphQL naming quirk captured**: the field is `subIssues` (plural, no `Connection` suffix), not `subIssuesConnection` as some GitHub docs suggest. Getting this wrong produces `Field 'subIssuesConnection' doesn't exist on type 'Issue'` — noted inline in the procedure so the next reader doesn't waste time.",
+    "**Demonstrated end-to-end on live repo**: filed [#5 Gator Loop polish (umbrella)](https://github.com/cumberland-laboratories/gator/issues/5) with three sub-issues (#6 Dashboard events timeline, #7 Dashboard session card, #8 Protocol refinement) — all linked via the mutation, all with Priority + Area=Loop + Status set on the board, parent shows `subIssuesSummary.total = 3, completed = 0` per GraphQL. Board view now has 8 items: the 4 standalone issues migrated 2026-08-04 (#1-#4) + the Loop umbrella + its 3 children.",
+    "**Roadmap categorization note**: the 4th roadmap item under \"Building — Priority 2: Gator Loop Polish\" (\"Auto-trigger update after migration\") is really Area=Packaging/Release, not Loop — v2.5.4's A4 fixed the vendor-hook half; the remaining gap (script content refresh after `--migrate-layout`) is a standalone migration polish. Draft body preserved at `.tmp/loop-sub4-auto-refresh-body.md` for filing as an independent issue with the correct area, not as a Loop sub-issue. The roadmap itself can move that row to Priority 1 (packaging/release polish) in a future roadmap edit.",
+    "Pattern is now reproducible: same procedure applies whenever a multi-surface effort needs a project-board umbrella (Enterprise post-MVP hardening is the natural next candidate)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

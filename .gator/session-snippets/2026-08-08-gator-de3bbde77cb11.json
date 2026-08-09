@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise Phase 6: Gator-Machine-Id trailer emission — MVP COMPLETE",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "transcripts-first",
+    "mvp-complete"
+  ],
+  "commit": "de3bbde77cb117cc26b36acf86b668f345cfb8db",
+  "short_commit": "de3bbde",
+  "snippet_id": "snippet-de3bbde77cb11",
+  "session_group_key": "anthropic:331a6a12-b575-4478-b623-d731a73fdbc2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "08a3d260aa7d98d165bd93367e53347874144a0c",
+  "started_at": "2026-08-08T19:46:54Z",
+  "ended_at": "2026-08-08T23:38:41Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/scripts/gator-pre-commit.py",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-08-gator-08a3d260aa7d9.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/gator-pre-commit.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py",
+    "tests/test_multi_session.py",
+    "tests/test_precommit_validation.py"
+  ],
+  "notes": [
+    "Add `Gator-Machine-Id` trailer emission to `assemble_trailers` in `.gator/.includes/scripts/gator-pre-commit.py`. Reads via `_read_machine_id()` (already imported since earlier phases from `precommit_session`). Silent no-op when `~/.gator/machine-id` is absent — standalone base-gator use on a machine that never activated Enterprise still commits successfully rather than failing the hook. The comment block above the emission names the Enterprise-side consumer explicitly (`enterprise/app/routes/ingest.py::ingest_commits` reads the trailer bag to populate `commits.machine_id`, which the Phase 3 `strong_machine_repo_time` linkage basis matches against `transcript_sessions.machine_id`).",
+    "Apply the same edit to all three copies of `gator-pre-commit.py` per the trio-copy invariant: `.gator/.includes/scripts/`, `src/gator_command/templates/gator-starter/scripts/`, `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/`. Byte-identity across the trio was NOT extended to `gator-pre-commit.py` (line counts 1480/1465/1500 pre-existed and reconciling them is a follow-up cleanup, not Phase 6 scope) — Phase 6 edit consistency guaranteed by hand-applied same-anchor edits + charter note.",
+    "Snippet schema unchanged. Phase 0 already verified `machine_id` is required with UUID pattern in `contracts/schemas/gator-session-snippet-v2.json`.",
+    "New regression tests in `tests/test_precommit_validation.py::TestMachineIdTrailer` (3 tests): `test_trailer_emitted_when_machine_id_file_present` (writes a fixture machine-id file with `Path.home` monkeypatched to tmp_path, asserts exactly one `Gator-Machine-Id: <uuid>` trailer emitted), `test_trailer_omitted_when_machine_id_file_missing` (no file → no trailer, hook still succeeds), `test_trailer_omitted_when_id_line_missing` (file exists but lacks `id:` line — silent no-op, not crash). 14 tests total in that file.",
+    "Charter update `.gator/charters/scripts-cross-cutting.md`: new \"`Gator-Machine-Id` trailer (Phase 6 — 2026-08-08 transcripts-first MVP)\" section covering the trailer definition, consumer contract, snippet-schema-already-required note, trio-copy invariant note (with the \"byte-identity NOT extended\" caveat), regression pin.",
+    "Charter update `.gator/charters/scripts-enterprise.md`: new Phase 6 invariant block cross-referencing the base-gator invariant, naming the Enterprise consumer wiring, declaring MVP COMPLETE with a listing of every phase's landing commit.",
+    "Plan + ADR (vault artifacts) rolled forward IN THIS SAME COMMIT per Pass 8's residual-risk warning that Phase 6 completion MUST touch the ADR review-history section too. Plan header: MVP COMPLETE marker + Phase 6 commit citation. Plan §13 Phase 6 section: full landed-deliverables + met-exit-criteria + actual-time-1.5h. Plan §16 handoff: rewritten to \"post-MVP\" with the §13 Phase 7 deferred-work list as the natural next-step surface. Plan §17 revision log: unchanged (no new F-findings this pass — the reviewer's Pass 9 was preventive). Plan bottom-line: \"All 6 phases complete; ~24.5h actual vs 36-56h estimate\". ADR: same status/end-marker updates + new Pass 9 subsection recording the preventive discipline as an audit-trail marker; standing-residual-risk note retired (\"post-MVP work doesn't have a plan-ADR pair of this shape, so this specific failure mode retires with the MVP\").",
+    "Full base-gator test suite regression: pre-existing failures on `dev` (6 fails in test_multi_session + test_packaging) confirmed unrelated to Phase 6 by stashing Phase 6 edits and re-running (same failures on baseline). Phase 6's own tests: 14 pass in test_precommit_validation.py. Full enterprise suite: 246 pass, 1 skipped."
+  ],
+  "transcript_session_id": "331a6a12-b575-4478-b623-d731a73fdbc2",
+  "transcript_ref": null
+}

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise hooks: sanity-probe every Python candidate + regression tests",
+  "change_type": "fix",
+  "significance": "medium",
+  "charter_changed": true,
+  "decision_tags": [
+    "windows-compat",
+    "hook-wrapper-fix",
+    "enterprise-local-bringup",
+    "regression-pin"
+  ],
+  "commit": "932880d9c6b5b71329af1630dab6b86793e5e521",
+  "short_commit": "932880d",
+  "snippet_id": "snippet-932880d9c6b5b",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-07T13:18:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py",
+    "enterprise/tests/test_activate_hooks.py"
+  ],
+  "notes": [
+    "Follow-up to `3afe7e3` addressing enforcer Finding 1: the initial Windows fix left `command -v python3` as an unprobed second fallback. On stock Windows, `command -v python3` returns the Microsoft Store App Execution Alias stub — it \"exists\" on PATH, passes `[ -x ]`, but exits non-zero (typically 126 \"Permission denied\" or 9009) when invoked. If `~/.gator/enterprise/cli-python-path` is ever missing (never activated, deleted, corrupted), the resolver bound to the stub and re-created the exact bug it was meant to prevent. Fix: introduce a `_gator_py_ok` shell helper that runs `-V` on every candidate before accepting it. All three fallback slots (cli-python-path, `command -v python3`, `command -v python`) now go through the probe. Failure message updated to name the Windows-stub pitfall so a stranded operator has a clue what happened.",
+    "Adds `enterprise/tests/test_activate_hooks.py` closing enforcer Finding 2 (no regression pin for the Windows resolver seam). 12 tests in 2 classes: `TestHookTemplatesUseResolver` (5 tests — asserts each of the three hook templates embeds `_PYTHON_RESOLVER`, asserts no bare `python3 <arg>` invocation patterns remain, asserts the `_gator_py_ok` sanity probe is present with the required `-V` invocation) and `TestResolverBehavior` (5 tests — executes the resolver in an isolated bash shell with mocked HOME + PATH to prove: happy-path cli-python-path binding, Windows-stub fall-through to `python`, broken cli-python-path fall-through, no-candidate-at-all loud-fail, and only-broken-stub loud-fail). `TestResolverBehavior` is skipped when `bash` is unavailable via `pytest.mark.skipif`. Tests exercise real bash and a real Python interpreter via a shim — proves end-to-end resolver behavior, not just string shape.",
+    "Updates `.gator/charters/scripts-enterprise.md` TRIPWIRE. The pre-existing `!` on `_PYTHON_RESOLVER` (from `3afe7e3`) named the hardcoded-`python3` failure mode; the tightened version now also names the `command -v` failure mode explicitly, calls out the `_gator_py_ok` helper as load-bearing (do not remove or short-circuit), documents the regression pin at `enterprise/tests/test_activate_hooks.py`, and cross-references both the original discovery (Session 2, Phase 5) and the enforcer's follow-up finding. Two ordered failure modes to guard against, both documented.",
+    "Wrappers redeployed via `gator-enterprise activate --force`; source picked up immediately because the editable pipx install points at the working tree. Behavior unchanged on Linux/macOS where `python3` on PATH is a real interpreter — the probe passes trivially.",
+    "Source: enforcer whiteboard findings on commit `3afe7e3` (2026-08-07). Both findings addressed in one commit per Architect direction. Full detail in `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-session-log.md`."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise activate/repo-init/block-gen: 4 Windows-verified fixes with 20 regression tests",
+  "change_type": "fix",
+  "significance": "medium",
+  "charter_changed": true,
+  "decision_tags": [
+    "windows-compat",
+    "hook-wrapper-fix",
+    "enterprise-local-bringup",
+    "evidence-only-mode",
+    "diagnostics-log",
+    "regression-pin"
+  ],
+  "commit": "71d027ca4f7164ac86af60f6246e3167355ea1ac",
+  "short_commit": "71d027c",
+  "snippet_id": "snippet-71d027ca4f716",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "932880d9c6b5b71329af1630dab6b86793e5e521",
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-07T13:51:29Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    "enterprise/enterprise-cli/gator_enterprise_cli/block_generate.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py",
+    "enterprise/tests/test_activate_hooks.py",
+    "enterprise/tests/test_block_generate.py",
+    "enterprise/tests/test_repo_init.py"
+  ],
+  "notes": [
+    "**Finding #2 (activate --force preserves keys + policy).** `activate.py`: guard was `if not private_key_path.exists() or args.force:` — every routine `--force` (used to redeploy hook wrappers) silently rotated the machine keypair, invalidating previously-encrypted session blocks and desyncing from the server's stored public key. Fixed: rotation is now gated on a new explicit `--regenerate-keys` flag; `--force` only redeploys hooks + config. Companion fix: `if not policy_path.exists() or args.force:` was wiping `hook-policy.json` on `--force`, which would destroy local intent-mode entries from Finding #3's `repo init` fix. Changed to `if not policy_path.exists():` — policy state now survives `--force`. `--regenerate-keys` output distinguishes rotation from first-generation (warns about undecryptable prior blocks).",
+    "**Finding #3 (repo init --mode X honored locally).** `repo_init.py`: `--mode evidence_only` (or any non-strict mode) silently fell through to strict when the repo wasn't yet tracked by any git provider — the mode was only registered server-side, which no-ops for unknown repos, and never written locally where the wrapper reads it. Fixed: new `_write_local_hook_policy_intent(canonical_id, mode)` helper writes to `~/.gator/enterprise/hook-policy.json` FIRST, called unconditionally (even without a client — supports air-gapped setups). `_register_hook_policy` now returns a bool so callers print truthful diagnostics (\"Local intent-mode written: X → Y (honored by hooks until server registration succeeds)\"). Load-bearing companion in `activate.py::_do_sync`: replaced wholesale-replace of `hook-policy.json` with merge semantics (server wins for repos it knows about; local intent entries for server-unknown repos are preserved). Without merge, the sync that activate runs at end would wipe the just-written intent, reproducing the exact bug.",
+    "**Finding #3-tail (Windows-safe mode-lookup).** Surfaced end-to-end verifying Finding #3. The wrapper's inline Python was doing `open('$POLICY_FILE')` where `$POLICY_FILE` was shell-expanded from `$HOME` — on Git Bash for Windows, `$HOME=/c/Users/curator` (MSYS path form) which Windows Python's `open()` cannot resolve. The `except: print('strict')` catch silently swallowed the FileNotFoundError; every commit ran in strict regardless of hook-policy.json contents. Even with Finding #3's local intent write, Windows commits would never honor the requested mode. Fixed by factoring the mode-lookup into a shared `_MODE_LOOKUP` template constant that computes the policy path via `Path.home()` inside Python (correct on all platforms) and crosses the shell/Python boundary with the repo-id via `GATOR_REPO_ID` env var instead of string interpolation into the -c script (quote-safe and injection-safe). Same anti-pattern class as `3afe7e3`'s python3 bug (Windows / shell / Python-interop failure); the resolver TRIPWIRE and this one now share a common warning about shell-embedded Python.",
+    "**Finding #4 (diagnostic log for block-generation failures).** `block_generate.py`: post-commit shell wrapper suppresses stderr via `2>/dev/null` (intentional — a loud stderr on every commit would clutter output). That suppression made real failures invisible during Session 2's bring-up. Fixed: new `_diag_log` / `_diag_log_rotate` helpers write structured entries to `~/.gator/diagnostics/block-gen.log` on every non-happy-path outcome (plaintext-delegate-failed, unknown-crypto-mode-fallback, encrypted-v2-gen-failed, encryption-failed). Format `<ISO8601-utc> commit=<sha12> event=<slug> [msg=<repr>]`, one line per event. Bounded rotation (500 lines kept, trimmed when file exceeds 750). Strictly best-effort — wrapped in bare `except: pass` so diagnostic logging can never introduce new failure modes. Verified live: first sandbox commit after fix produced the expected `event=plaintext-delegate-failed msg='rc=1 stderr=Error: Snippet has no transcript_session_id...'` — the exact silent failure that required manual diagnosis during Session 2 is now machine-local evidence.",
+    "**20 regression tests** in `enterprise/tests/`. `test_activate_hooks.py` extended: `TestActivateKeyPreservation` (5), `TestSyncMerge` (3), `TestModeLookupIsWindowsSafe` (5). New `test_repo_init.py` (8): local intent write + merge + update + corrupt-file recovery; `_register_hook_policy` truthful return values; end-to-end `_do_repo_init` writes intent when server-unknown. New `test_block_generate.py` (9): `_diag_log` correctness + never-raises + long-message truncation; `_diag_log_rotate` no-op-below-trigger + trim-to-500 + never-raises; main-flow logs on `plaintext-delegate-failed` and `unknown-crypto-mode-fallback` with the expected event slugs. All 43 tests pass locally (existing 12 + 20 new + 11 from other TestModeLookupIsWindowsSafe assertions I miscounted — actual pytest count: 43).",
+    "**Charter updates** in `.gator/charters/scripts-enterprise.md`: 4 new `!` invariants — `--force` preserves keys + policy; `repo init --mode X` writes local intent + `_do_sync` merges; Windows-safe mode-lookup (Path.home() + GATOR_REPO_ID env, never shell-interpolate $HOME); block-gen diagnostic log at `~/.gator/diagnostics/block-gen.log`. Each invariant names its regression pin.",
+    "**End-to-end verified** in `local/gator-enterprise-local-sandbox`: activate --force preserved keypair (sha256 identical before/after); repo init wrote local intent and printed \"1 local intent(s) preserved\" on sync merge; sandbox commit `955cb78` landed in evidence_only mode without requiring commit_draft (previously required strict-mode ceremony); diagnostics log created with the expected block-gen entry. Full detail in `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-session-log.md` Session 3."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}

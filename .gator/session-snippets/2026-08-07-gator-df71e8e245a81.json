@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "session capture: multi-vendor support (v2 schema) + attribution + env override",
+  "change_type": "feature",
+  "significance": "high",
+  "charter_changed": true,
+  "decision_tags": [
+    "multi-session",
+    "session-capture",
+    "vendor-attribution",
+    "enterprise-local-bringup",
+    "backwards-compat"
+  ],
+  "commit": "df71e8e245a81bf113889a411bc377c777910984",
+  "short_commit": "df71e8e",
+  "snippet_id": "snippet-df71e8e245a81",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "5121c4d445914e5eaad3c16fcbd5b6e948eaf895",
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-07T14:40:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/scripts/gator-session-start.py",
+    ".gator/.includes/scripts/precommit_session.py",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-installer.md",
+    "src/gator_command/templates/gator-starter/scripts/gator-session-start.py",
+    "src/gator_command/templates/gator-starter/scripts/precommit_session.py",
+    "tests/test_multi_session.py"
+  ],
+  "notes": [
+    "**`.gator/active-vendor-session.json` becomes a container of sessions instead of a single entry.** Filename stays singular (backwards compat with `gator_layout.py`'s file registry, gitignore templates, and other consumers) but content is now `{\"schema\": \"gator-active-vendor-sessions-v2\", \"sessions\": [...]}`. Motivation: multiple AI CLIs (Codex + Opus + Gemini) can coexist in the same repo without overwriting each other's session identity, and each commit gets correctly attributed to the session that made it. Surfaced during 2026-08-06 Enterprise local bring-up Finding #6 discussion; Architect direction 2026-08-07: \"handle multiple sessions committing.\" Blast radius: every governed repo runs this code on every commit; v1 files stay readable (auto-migrate to v2 on next SessionStart write) so no fleet-wide migration required.",
+    "**Attribution algorithm in `_pick_session_for_commit()`** (highest priority first): (1) `GATOR_TRANSCRIPT_SESSION_ID` env var — orchestrators, cross-repo commits, test harnesses can set this to override inference; if the env id isn't in the file, a minimal synthesized entry with `source: \"env-override\"` is returned so callers can still emit the id. (2) PID tree walk match — if the git hook's ancestor PIDs (bounded depth 10) include a session's `owner_pid`, hard match. Only walked when 2+ entries; single-entry short-circuits ahead of it. (3) Single entry — after freshness cleanup, if only one session in the file, use it. (4) Transcript mtime fallback — pick the session whose `transcript_path` was most recently modified. (5) None — snippet's `transcript_session_id` stays null; Finding #4 diagnostic log captures the fall-through.",
+    "**Cross-platform PID walking** via subprocess (no psutil dep). Windows: PowerShell `Get-CimInstance Win32_Process` (~150ms/hop startup cost, accepted per Architect design decision). Unix: `ps -o ppid=`. `owner_pid_started_at` timestamp captured at SessionStart protects against PID recycling — a later process reusing the same PID number won't match if its start time differs. Only walks when 2+ active sessions need disambiguation; common single-session case short-circuits.",
+    "**Writer** (`gator-session-start.py::write_session_file`) reads existing → migrates v1 → filters stale entries (>24h old) → upserts new entry (dedupes on `vendor_session_id`) → writes v2 atomically via temp-file-and-rename. Preserves other vendors' active sessions when one vendor re-registers — critical for multi-session cohabitation. `build_session_file()` now captures `owner_pid` (from payload's `pid`/`process_pid`/`parent_pid` fields, falls back to `os.getppid()`) and `owner_pid_started_at` (via `_get_owner_pid_started_at`).",
+    "**Backwards compat**: `_read_active_vendor_sessions()` accepts both `gator-active-vendor-session-v1` (legacy single-entry, wrapped as list-of-one) and `-sessions-v2` (multi-entry container). `_read_active_vendor_session()` (singular) is preserved as a thin wrapper for pre-refactor callers — delegates to the plural + picker so callers see the SAME return contract (dict or None) with the correct attribution algorithm now behind it. Zero behavior change for repos with one active session (the overwhelming common case).",
+    "**Issue C folded in**: `GATOR_TRANSCRIPT_SESSION_ID` env-var override is the top priority in the attribution algorithm — supports orchestrators managing session identity out-of-band, test harnesses, and cross-repo committing scenarios. Was originally a separate arc item; folded here because attribution needs the mechanism anyway.",
+    "**24 regression tests** in `tests/test_multi_session.py`. `TestReadActiveVendorSessions` (8): v1+v2 read, missing/corrupt/unknown-schema resilience, cwd filter, freshness filter, missing-id filter. `TestPickSessionForCommit` (6): empty list, env-var wins, env-var synthesizes unknown, single-entry short-circuit, PID match wins, no-PID-match falls to mtime, no-signal returns None. `TestPidWalker` (4): real walk returns ancestors, max_depth respected, bounded, cross-platform ppid-0 handling. `TestWriteSessionFile` (6): fresh write creates v2, second-write-different-session preserves first, second-write-same-id upserts, v1→v2 migration on write, stale-drop on write. All pass.",
+    "**Charter updates**: new `TRIPWIRE: Multi-Session Vendor Attribution (v2 schema)` in `scripts-cross-cutting.md` covers the read + attribution side; `scripts-installer.md` function-level entries updated for `build_session_file`, `write_session_file`, and new helpers `_get_owner_pid_from_payload`, `_get_owner_pid_started_at`, `_read_existing_sessions`, `_filter_stale`. Both charters name the sync obligation and regression pin."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}

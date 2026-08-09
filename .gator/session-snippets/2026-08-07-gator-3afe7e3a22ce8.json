@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "enterprise hooks: resolve Python via $PYTHON, unbreak Windows commits",
+  "change_type": "fix",
+  "significance": "medium",
+  "charter_changed": true,
+  "decision_tags": [
+    "windows-compat",
+    "hook-wrapper-fix",
+    "enterprise-local-bringup"
+  ],
+  "commit": "3afe7e3a22ce8dbc8e08941cd4c5e600606fe955",
+  "short_commit": "3afe7e3",
+  "snippet_id": "snippet-3afe7e3a22ce8",
+  "session_group_key": "anthropic:ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "372feaf2de3259c78c3eae875590f7b8cae70b69",
+  "started_at": "2026-08-06T23:02:39Z",
+  "ended_at": "2026-08-07T00:07:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py"
+  ],
+  "notes": [
+    "Fix Windows Python-not-found in the three global hook wrappers installed by `gator-enterprise activate`. Previously all three hardcoded `python3`, which on Windows resolves to a Microsoft Store App Execution Alias stub that \"exists\" on PATH but exits non-zero with an install prompt — the pre-commit / commit-msg / post-commit hooks failed silently on every Windows commit, blocking all governed activity. New `_PYTHON_RESOLVER` module-level constant is concatenated into each of `PRE_COMMIT_HOOK`, `COMMIT_MSG_HOOK`, `POST_COMMIT_HOOK` after the `GATOR_SCRIPT` existence check; resolves `$PYTHON` from (1) `~/.gator/enterprise/cli-python-path` (written by `_do_activate`, always present after activate), (2) `command -v python3`, (3) `command -v python`, else fails with clear stderr. All `python3` references in the three templates (final `--phase` invocation + inline `-c` mode-lookup + `POST_COMMIT_HOOK`'s `.gator/scripts/gator-session-block.py` fallback) now use `\"$PYTHON\"`. Added prominent TRIPWIRE header comment above the templates and a full `!` invariant to `.gator/charters/scripts-enterprise.md` with cross-reference to the parent plan artifact. Behavior on Linux/macOS is unchanged (they have `python3` on PATH; resolver falls through to it). Existing deployed wrappers get the fix on next `gator-enterprise activate --force`. Surfaced during the 2026-08-06 Enterprise Local Bring-Up plan (Session 2, Phase 5); documented in `.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-session-log.md`."
+  ],
+  "transcript_session_id": "ba565a28-171b-4a8a-986d-b43a41bdbe2b",
+  "transcript_ref": null
+}
