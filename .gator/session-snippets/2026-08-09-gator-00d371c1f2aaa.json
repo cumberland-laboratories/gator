@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "clarify tracked vs gitignored file split in .gator/",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "docs",
+    "byte-identity-mirror",
+    "transcripts-first"
+  ],
+  "commit": "00d371c1f2aaabc17a692ba80f6aa6d9220f0c79",
+  "short_commit": "00d371c",
+  "snippet_id": "snippet-00d371c1f2aaa",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "7695a45a32409834f9879eb008884ebc9fc31ddd",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T15:05:26Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/docs/how-to-use-gator.md",
+    ".gator/session-snippets/2026-08-09-gator-7695a45a32409.json",
+    ".gator/sessions/.gitignore",
+    "src/gator_command/templates/gator-starter/docs/how-to-use-gator.md"
+  ],
+  "notes": [
+    "`.gator/docs/how-to-use-gator.md`: replaces the too-strong \"Everything inside `.gator/` is committed to Git (except `vault/`)\" with an explicit split between tracked knowledge-layer artifacts and machine-local operational residue.",
+    "Tracked examples now listed: `mission.md`, `roadmap.md`, `charters/`, `threads/`, `docs/`, `artifacts/`, `session-snippets/`.",
+    "Gitignored examples now listed: `vault/`, `commit_draft.md`, `whiteboard.md`, `status.json`, `product-source.json`, `active-vendor-session.json`, `session-blocks/`, `diagnostics/`, `sessions/_active/`.",
+    "Explicit rationale added: \"This split is intentional: repo knowledge and durable evidence stay in Git, while machine-local state, sensitive material, and ephemeral workflow residue stay off-branch.\"",
+    "Byte-identity mirror kept in `src/gator_command/templates/gator-starter/docs/how-to-use-gator.md` per the shipping-content invariant.",
+    "`.gator/sessions/.gitignore` gets a note explaining why `.gator/session-snippets/` is intentionally NOT gitignored (\"Snippets are durable commit-linked artifacts that MUST be committed. They provide the traceability bridge between session history and git history.\") — consistent with commit A of this checkpoint chain.",
+    "Second of six checkpoint commits per stabilization plan Phase 1 §6."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
