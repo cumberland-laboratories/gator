@@ -2,6 +2,55 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.6.0] — 2026-08-09
+
+The Enterprise transcripts-first MVP substrate lands in-tree, and the base wheel's `gator enterprise` dispatcher is reconciled with the real verb set so the MVP is reachable from a `pipx install gator-command` + source-checkout enterprise-cli install. Under-the-hood cleanup retires the actively-harmful vestiges of the pre-transcripts-first evidence design.
+
+**Enterprise packaging remains source-checkout-only** for this release. The base wheel ships the dispatcher; installing enterprise-cli requires `pip install ./enterprise/enterprise-cli/` from a source checkout, plus Postgres + a venv + `.env-enterprise-local`. A single-pipx install path is post-release packaging work.
+
+### Added
+
+- **Enterprise transcripts-first MVP** (6 phases landed 2026-08-08 on `dev`, commits `e784d60` → `de3bbde`). Migration 009 adds `transcript_sessions` + `commit_transcript_links` schema (transcript custody model) plus a `BlobStore` Protocol with a `FilesystemBlobStore` reference implementation. Migration 010 adds three transcript query views (`recent_transcripts`, `commits_with_transcript_coverage`, `unlinked_recent_transcripts`). New ingest APIs at `POST /api/v1/commits/ingest` + `POST /api/v1/transcripts/ingest`; new read surface at `GET /api/v1/transcripts/*`. New enterprise-cli verbs: `transcripts pull|list|show|get|link` and `commits <sha> transcripts`. Claude Code transcript discovery + upload wired end-to-end.
+- **Enterprise CLI verbs `transcripts` and `commits` registered in the base dispatcher's `ENTERPRISE_CLI_VERBS`**, closing the gap where the MVP was unreachable from `gator enterprise <verb>` even with enterprise-cli installed. Prior state: `gator enterprise transcripts pull` printed "verb not yet integrated with enterprise-cli" and exited 69.
+- **`Gator-Machine-Id` commit trailer emission** in all three copies of `gator-pre-commit.py` (base-wheel, template, enterprise-cli bundled) — the audit chain "this commit followed the AI-governed pipeline on THIS machine" survives even without an Enterprise linkage lookup. Silent no-op when `~/.gator/machine-id` is absent (standalone base-gator use).
+- **Multi-vendor `.gator/active-vendor-session.json` v2 schema** with PID attribution and `owner_pid_started_at` PID-recycling protection, plus `GATOR_TRANSCRIPT_SESSION_ID` + `GATOR_TRANSCRIPT_VENDOR` env-var overrides — enables correct session attribution when multiple AI CLIs run in the same repo simultaneously.
+- **`_warn_about_at_risk_hooks()` in `gator-enterprise activate`** — before setting global `core.hooksPath`, enumerates known-gatorized repos whose local hooks may stop firing, prompts unless `--yes`. Windows path is informational-only (base-gator sets local `core.hooksPath` on every governed repo, and Git prefers local over global).
+- **`.gator/reference-notes/` scaffolding dir** — repo-user reference-notes location per constitution §File Purposes.
+- **`.gator/.includes/charters/` scaffolding** — v2 layout scaffolding for shipped charter surfaces.
+
+### Changed
+
+- **Base dispatcher `CLIENT_SUBCOMMANDS` and `SERVER_SUBCOMMANDS` reconciled with reality.** Old lists advertised `setup/status/audit/disconnect` and `server/db/policy/org/fleet` (11 verbs) that never mapped to any enterprise-cli command; `gator enterprise <verb> --help` misled operators. Rewritten to real developer-side verbs (`activate/sync/repo/transcripts/commits`) and real operator/admin verbs (`auth/repos/providers/policies/reports/machines/blocks`). Every advertised verb now maps to a real command; the integration-gap notice becomes a contributor-error guard rather than an operator-visible failure mode.
+- **`.gator/docs/how-to-use-gator.md`** rewrites the too-strong "Everything inside `.gator/` is committed to Git (except `vault/`)" into an explicit tracked-vs-gitignored split. Byte-identity mirror kept in `src/gator_command/templates/gator-starter/docs/how-to-use-gator.md`.
+- **`docs/how-gator-works.md`**: removed the misleading sentence claiming `gator enterprise setup` connects to an Enterprise server (verb is `activate`, not `setup`; Audit-view claim removed pending real Enterprise availability documentation).
+- **`docs/threat-model.md`**: replaced legacy "Gator Command" branding with "Gator Enterprise" (the Enterprise capability of Gator, not a separate product).
+- **`.gator/sessions/.gitignore`**: added explicit note explaining why `.gator/session-snippets/` is intentionally NOT gitignored (durable commit-linked artifacts).
+
+### Fixed
+
+- **Enterprise `_do_repo_init` no longer creates `.gator/session-blocks/` or rewrites `.gitignore`.** Prior flow created the directory and called `_fix_gitignore(repo_path)` on every provisioning run to un-gitignore it. Both contradicted the ratified transcripts-first architecture (evidence lives in Enterprise-managed storage, not Git). `_fix_gitignore()` function deleted. Evaluators inspecting `.gitignore` post-`repo init` no longer see governance-driven rewrites.
+- **`POST_COMMIT_HOOK` template in `gator-enterprise activate` no longer runs per-commit block generation.** Prior template's 40-line block-gen section invoked `gator_enterprise_cli.block_generate` (via CLI_PYTHON) with a v2-first repo-local script fallback, then `git add`'d the produced `.json.gz` and `.block.json` artifacts. Deleted. New template runs only `--phase cleanup` and returns. Machines that already activated Enterprise before this release still have the old hook until they re-run `gator-enterprise activate --force`.
+- **Dashboard favicon refresh** with `?v=3` cache-buster so users on the previous CLI don't get stuck displaying the old icon.
+- **Windows non-cp1252 git output crash in Dashboard History** (v2.5.4 baseline pre-fix): confirmed still holding.
+
+### Deprecated
+
+- **Session-block evidence path** — the entire code surface around per-commit `.gator/session-blocks/*.json.gz` artifacts, envelope encryption of session blocks (`gator_enterprise_cli.block_generate`, AES-256-GCM DEK wrapped for RSA-OAEP org key), and the server-side session-blocks routes + services (`enterprise/app/services/session_blocks.py`, `enterprise/app/routes/session_blocks.py`, `enterprise/app/routes/crypto.py`, `enterprise/app/models/evidence_block.py`) is now inert but still in-tree. Retirement is post-2.6 cleanup — the code is not on any active path but has not been physically removed. Base `.gator/session-blocks/` stays gitignored.
+- **Dispatcher `blocks` verb** — still registered in the dispatcher's `SERVER_SUBCOMMANDS` while the server surface exists, but the underlying block-ingest server surface is obsolete. Full retirement post-2.6.
+
+### Documentation
+
+- **CHANGELOG + release-and-deploy alignment**: this is the first release after the Phase 4 stabilization pass (`.gator/vault/artifacts/2026-08-09-gator-3.0-stabilization-plan.md` and companion cleanup + smoke-test + release-readiness artifacts). The "3.0" framing in those planning docs was resolved to `2.6.0` per strict semver — no breaking API changes, so MAJOR bump not justified.
+- **Historical banners** prepended to 4 obsolete Enterprise docs (`.gator/blueprints/session-block-capture.md`, `.gator/field-guides/enterprise-encryption-tutorial.md`, `.gator/field-guides/enterprise-encryption-patterns.md`, `enterprise/docs/session-block-schema-v2.md`). Each banner cross-references the transcripts-first MVP plan + ADR and instructs readers not to use the doc as guidance for new work.
+- **`.gator/blueprints/enterprise-configuration.md`** added (Codex-authored, 407 lines) as reference for the pre-transcripts-first Enterprise configuration model. Also banner-marked historical.
+- **`.gitignore`**: added `.tmp/` to prevent accidental commits of local test artifacts and release-notes drafts.
+
+### Under the hood
+
+- **Session-snippet catch-up**: 10 previously-unfilled session snippets from the 2026-08-04 through 2026-08-08 MVP arc committed as evidence bridge between session history and git history.
+- **12 new regression pins** across `tests/test_gator_enterprise.py::TestConstants::test_every_advertised_verb_is_mapped`, `enterprise/tests/test_activate_atrisk.py::TestV2FirstScriptDiscovery::test_post_commit_does_not_generate_session_blocks`, and other flipped/updated invariants ensuring reintroduction of retired code paths fails loudly.
+- **Test suites at release-time**: `tests/test_gator_enterprise.py` 30 pass, `enterprise/tests/test_repo_init.py` 8 pass, `enterprise/tests/test_activate_atrisk.py` + `test_activate_hooks.py` 47 pass. Full base-gator + enterprise + contracts suites run separately as part of the release cut.
+
 ## [2.5.4] — 2026-08-03
 
 Session-hook self-heal is no longer a silent no-op fleet-wide. `--migrate-layout` handles the last real-world non-convergence class (Issue #6). Vendor SessionStart hook drift auto-corrects on next update. When the migration can't converge, the operator finally sees WHICH paths are blocking.

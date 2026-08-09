@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "3.0 P2.3: gitignore .tmp/ (test artifacts + release-notes drafts scratch dir)",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "3.0",
+    "gitignore",
+    "scratch"
+  ],
+  "commit": "f5291e146e85903ef0c0978eb1c1fe097b86d693",
+  "short_commit": "f5291e1",
+  "snippet_id": "snippet-f5291e146e859",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 11,
+  "previous_commit_in_session": "4489073b2a3af34fbcd0cd321e659544def40c99",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:25:33Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-09-gator-4489073b2a3af.json",
+    ".gitignore"
+  ],
+  "notes": [
+    "**P2.3** — `.gitignore` at repo root: add `.tmp/` alongside the existing `tmp/`. The `.tmp/` directory accumulates test-run artifacts (`pytest-layout/`, `pytest-session-hooks/`, `gator-migrate-hook-check-*/`) and release-notes drafts (`v2.5.2-release-notes.md`, `v2.5.3-release-notes.md`, `v2.5.4-release-notes.md`) during normal development, but was NOT gitignored — an operator could accidentally `git add .tmp/*` in a broad staging operation and commit local test noise.",
+    "Discovered during Phase 1 (stabilization plan §7 \"Missing from `.gitignore` (real gaps)\"). Phase 4 P2.3 executes the fix.",
+    "**Verification**: `git status` output stops listing `.tmp/` as untracked after this commit.",
+    "**Fifth and final Phase 4 (Gator 3.0 stabilization) P1/P2 cleanup commit.** Working tree is now clean w.r.t. the release-blocker cleanup. Remaining §6 checklist items (test evidence, docs sweep, CHANGELOG + version bump, RC cut, promote, GitHub Release) are the release-execution phase, largely Architect-driven."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
