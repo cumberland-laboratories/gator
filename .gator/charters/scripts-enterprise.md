@@ -78,8 +78,17 @@ enterprise-cli package.
   Post-Phase-4e nuance flagged by Codex review (2026-08-02, finding 1):
   the enterprise-mvp port's `gator_enterprise_cli/main.py` registers a
   DIFFERENT verb set (`auth/repos/providers/policies/reports/blocks/
-  machines/activate/sync/repo`) than the dispatcher advertises. The
-  overlap is currently `sync` only.
+  machines/activate/sync/repo`, and 2026-08-08 MVP added `transcripts` +
+  `commits`) than the dispatcher originally advertised. Reconciled
+  2026-08-09 (Phase 4 — 3.0 stabilization P1.1 + P2.1): dispatcher's
+  `CLIENT_SUBCOMMANDS` rewritten to real developer-side verbs
+  (`activate/sync/repo/transcripts/commits`), `SERVER_SUBCOMMANDS`
+  rewritten to real operator/admin verbs (`auth/repos/providers/
+  policies/reports/machines/blocks`), and `ENTERPRISE_CLI_VERBS`
+  extended with `transcripts` + `commits`. Every advertised verb now
+  maps to a real enterprise-cli command; the integration-gap notice
+  becomes a contributor-error guard rather than an operator-visible
+  failure mode. Regression pin: `test_every_advertised_verb_is_mapped`.
 
   Dispatcher shape (post-2026-08-02 fix): the enumeration of
   enterprise-cli's registered verbs is mirrored as `ENTERPRISE_CLI_VERBS`
@@ -99,11 +108,12 @@ enterprise-cli package.
   real command failures and was reverted in favor of the pre-check.
 
   Regression pin: `tests/test_gator_enterprise.py::TestIntegrationGap`.
-  10 tests for advertised-but-unmapped verbs (each gets the gap
-  notice), 1 for the `sync` overlap (delegates cleanly), 3 for
-  Finding-1 propagation (SystemExit(1)/SystemExit(2)/SystemExit(None)
-  from mapped verbs surface as rc=1/rc=2/rc=0 without gap-notice
-  translation).
+  Post-reconciliation shape (2026-08-09): 1 monkeypatched test for the
+  contributor-error guard (synthesizes the advertised-but-unmapped
+  condition by removing `transcripts` from ENTERPRISE_CLI_VERBS at test
+  time), 1 for the `sync` overlap (delegates cleanly), 3 for Finding-1
+  propagation (SystemExit(1)/SystemExit(2)/SystemExit(None) from mapped
+  verbs surface as rc=1/rc=2/rc=0 without gap-notice translation).
 
   ! Sync obligation: any add/remove in the enterprise-cli registered
   set MUST be mirrored in `ENTERPRISE_CLI_VERBS`. Adding an enterprise-cli

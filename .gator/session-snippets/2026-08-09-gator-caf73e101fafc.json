@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "brand: add sleek-profile gator logo assets (Gemini-composed, staged for wire-up)",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "brand",
+    "assets",
+    "sleek-profile"
+  ],
+  "commit": "caf73e101fafc7c087091b27ba20d8a62e8a1150",
+  "short_commit": "caf73e1",
+  "snippet_id": "snippet-caf73e101fafc",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "20fb352bc90062df6737616d26b7a8ca5e3bd653",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T17:27:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-09-gator-20fb352bc9006.json",
+    "docs/images/sleek_profile_gator.png",
+    "docs/images/sleek_profile_gator_500.png",
+    "docs/images/sleek_profile_gator_inverted.png",
+    "docs/images/sleek_profile_gator_inverted_500.png"
+  ],
+  "notes": [
+    "Adds four Gemini-composed sleek-profile gator logo variants under `docs/images/`:",
+    "`sleek_profile_gator.png` (base)",
+    "`sleek_profile_gator_500.png` (500px variant)",
+    "`sleek_profile_gator_inverted.png` (inverted-color base)",
+    "`sleek_profile_gator_inverted_500.png` (500px inverted)",
+    "Not yet referenced from any doc, README, PYPI_README, or `src/gator_command/` HTML at commit time — staged for future wire-up. Per Architect direction 2026-08-09 (stabilization plan Phase 1 §6): \"logo files that Gemini made, including some that are not used at all right at the moment.\" Committed rather than parked so brand assets travel with the repo and are discoverable in `docs/images/`.",
+    "Sixth and final commit of the checkpoint chain per stabilization plan Phase 1 §6 — working tree is now clean w.r.t. tracked/added residue. The .tmp/ gitignore gap (P2.3) and the P1 code-cleanup batch remain as Phase 4 work."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}

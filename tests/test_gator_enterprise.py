@@ -40,11 +40,30 @@ class TestConstants:
 
     def test_client_subcommands_include_expected_verbs(self):
         names = [name for name, _ in gator_enterprise.CLIENT_SUBCOMMANDS]
-        assert set(names) >= {"setup", "status", "sync", "audit", "disconnect"}
+        # Post-Phase 4 (3.0 stabilization P2.1) real developer-side verbs.
+        # `sync` is shared with server-side (both categories can trigger it).
+        assert set(names) >= {"activate", "sync", "repo", "transcripts", "commits"}
 
     def test_server_subcommands_include_expected_verbs(self):
         names = [name for name, _ in gator_enterprise.SERVER_SUBCOMMANDS]
-        assert set(names) >= {"server", "db", "policy", "org", "fleet"}
+        # Post-Phase 4 real operator/admin verbs. `blocks` is transitional
+        # (retiring post-3.0 per stabilization plan §4 P3.2) but still listed
+        # while the server surface exists.
+        assert set(names) >= {"auth", "repos", "providers", "policies",
+                              "reports", "machines", "blocks"}
+
+    def test_every_advertised_verb_is_mapped(self):
+        """P2.1 invariant: after the reconciliation, every advertised verb
+        (CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS) is in ENTERPRISE_CLI_VERBS.
+        Guards against future contributors adding an entry to a help table
+        without registering it in the mapped-verbs set."""
+        advertised = {name for name, _ in gator_enterprise.ALL_SUBCOMMANDS}
+        mapped = set(gator_enterprise.ENTERPRISE_CLI_VERBS)
+        missing = advertised - mapped
+        assert not missing, (
+            f"Advertised verbs missing from ENTERPRISE_CLI_VERBS: {missing}. "
+            f"Add to the frozenset in gator-enterprise.py."
+        )
 
     def test_all_subcommands_is_client_plus_server(self):
         assert (
@@ -89,7 +108,9 @@ class TestUnavailableNotice:
             gator_enterprise, "_try_import_enterprise_cli", lambda: None,
         )
 
-    @pytest.mark.parametrize("verb", ["setup", "status", "sync", "audit", "disconnect"])
+    @pytest.mark.parametrize(
+        "verb", ["activate", "sync", "repo", "transcripts", "commits"],
+    )
     def test_client_subcommand_exits_ex_unavailable(self, verb, capfd):
         rc = gator_enterprise.main([verb])
         out, _err = capfd.readouterr()
@@ -97,7 +118,10 @@ class TestUnavailableNotice:
         assert gator_enterprise.UNAVAILABLE_SENTINEL in out
         assert "Enterprise features not available" in out
 
-    @pytest.mark.parametrize("verb", ["server", "db", "policy", "org", "fleet"])
+    @pytest.mark.parametrize(
+        "verb",
+        ["auth", "repos", "providers", "policies", "reports", "machines", "blocks"],
+    )
     def test_server_subcommand_exits_ex_unavailable(self, verb, capfd):
         rc = gator_enterprise.main([verb])
         out, _err = capfd.readouterr()
@@ -105,12 +129,12 @@ class TestUnavailableNotice:
         assert gator_enterprise.UNAVAILABLE_SENTINEL in out
 
     def test_notice_names_install_path(self, capfd):
-        gator_enterprise.main(["setup"])
+        gator_enterprise.main(["activate"])
         out, _err = capfd.readouterr()
         assert "enterprise/enterprise-cli/" in out
 
     def test_notice_names_exit_code_and_plan_ref(self, capfd):
-        gator_enterprise.main(["status"])
+        gator_enterprise.main(["sync"])
         out, _err = capfd.readouterr()
         assert "69" in out
         assert "EX_UNAVAILABLE" in out
@@ -180,7 +204,7 @@ class TestDelegation:
         if "gator_enterprise_cli.main" in sys.modules:
             monkeypatch.delitem(sys.modules, "gator_enterprise_cli.main")
 
-        rc = gator_enterprise.main(["setup"])
+        rc = gator_enterprise.main(["activate"])
         _out, err = capfd.readouterr()
 
         assert rc == gator_enterprise.EX_UNAVAILABLE
@@ -223,25 +247,39 @@ class TestIntegrationGap:
         monkeypatch.setitem(sys.modules, "gator_enterprise_cli", pkg)
         monkeypatch.setitem(sys.modules, "gator_enterprise_cli.main", pkg_main)
 
-    @pytest.mark.parametrize("advertised_but_unmapped", [
-        "setup", "status", "audit", "disconnect",
-        "server", "db", "policy", "org", "fleet",
-    ])
     def test_unmapped_verb_returns_ex_unavailable_not_argparse_exit(
-        self, monkeypatch, capfd, advertised_but_unmapped,
+        self, monkeypatch, capfd,
     ):
-        # Install a stub main() that only accepts the mvp verb set.
-        MVP_VERBS = ["auth", "repos", "providers", "policies", "reports",
-                     "blocks", "machines", "activate", "sync", "repo"]
+        """Regression guard for the integration-gap path.
+
+        After Phase 4 (3.0 stabilization P1.1 + P2.1), every verb
+        advertised in CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS is now
+        registered in ENTERPRISE_CLI_VERBS — so no advertised verb hits
+        the integration-gap notice in normal operation. The notice still
+        exists to catch the "contributor added a verb to a help table
+        without registering it here" bug. Simulate that condition by
+        monkey-patching ENTERPRISE_CLI_VERBS to omit one currently-
+        advertised verb, then invoking it."""
+        # Pretend 'transcripts' was advertised but the contributor forgot
+        # to add it to the mapped set.
+        monkeypatch.setattr(
+            gator_enterprise, "ENTERPRISE_CLI_VERBS",
+            frozenset(gator_enterprise.ENTERPRISE_CLI_VERBS - {"transcripts"}),
+        )
+        # Enterprise-cli stub accepts other real verbs but not transcripts,
+        # so if the pre-check failed to catch this, argparse in the stub
+        # would raise SystemExit(2) — proving the guard fired.
+        MVP_VERBS = ["activate", "sync", "repo", "commits"]
         self._install_mvp_style_main(monkeypatch, MVP_VERBS)
 
-        rc = gator_enterprise.main([advertised_but_unmapped])
+        rc = gator_enterprise.main(["transcripts"])
         out, _err = capfd.readouterr()
 
         assert rc == gator_enterprise.EX_UNAVAILABLE, (
-            f"Verb '{advertised_but_unmapped}' escaped with rc={rc}; "
-            f"expected 69 (EX_UNAVAILABLE). Raw argparse errors from "
-            f"mvp MUST NOT surface as the caller's exit code."
+            f"Advertised-but-unmapped verb 'transcripts' escaped with rc={rc}; "
+            f"expected 69 (EX_UNAVAILABLE). The pre-check guard against "
+            f"advertised-but-unmapped verbs (Codex Phase 4e Finding 1) must "
+            f"still fire even after P1.1 landed all real MVP verbs."
         )
         assert gator_enterprise.UNAVAILABLE_SENTINEL in out
         assert "not yet integrated" in out

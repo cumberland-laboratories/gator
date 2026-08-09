@@ -66,19 +66,21 @@ EX_UNAVAILABLE = 69
 UNAVAILABLE_SENTINEL = "[gator-enterprise-unavailable]"
 
 CLIENT_SUBCOMMANDS = [
-    ("setup",       "Connect this machine to an Enterprise server (URL + API key)"),
-    ("status",      "Show connection state, policy sync status, fleet summary"),
-    ("sync",        "Pull policy from server; push local evidence"),
-    ("audit",       "Fleet-wide audit from the CLI"),
-    ("disconnect",  "Remove Enterprise connection; local governance stays intact"),
+    ("activate",    "Activate Enterprise on this machine (one-time setup)"),
+    ("sync",        "Pull hook-policy and org policies from Enterprise"),
+    ("repo",        "Provision or upgrade a repo for Enterprise governance"),
+    ("transcripts", "Manage session transcripts (pull, list, show, get, link)"),
+    ("commits",     "Query commit ↔ transcript linkage"),
 ]
 
 SERVER_SUBCOMMANDS = [
-    ("server",      "Start / stop / status of the Enterprise FastAPI service"),
-    ("db",          "Run Alembic migrations for the Enterprise database"),
-    ("policy",      "CRUD for policies (or use the API)"),
-    ("org",         "Organization management"),
-    ("fleet",       "Fleet admin"),
+    ("auth",        "API auth token management"),
+    ("repos",       "Repository inventory + reconcile"),
+    ("providers",   "Git provider integrations (GitHub App etc.)"),
+    ("policies",    "Org policy CRUD + rollout"),
+    ("reports",     "Fleet reports"),
+    ("machines",    "Machine registry"),
+    ("blocks",      "Session block admin (transitional — retiring post-3.0)"),
 ]
 
 ALL_SUBCOMMANDS = CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS
@@ -86,15 +88,17 @@ ALL_SUBCOMMANDS = CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS
 # Verbs registered by the Enterprise CLI's own argparse (enterprise/
 # enterprise-cli/gator_enterprise_cli/main.py, `subparsers` in main()).
 # Sync obligation: any add/remove in enterprise-cli's registered set
-# MUST be reflected here, else `gator enterprise <newverb>` will either
-# (a) get rejected by THIS dispatcher's argparse before reaching
-# enterprise-cli, or (b) be misrouted to the integration-gap notice
-# when it's actually valid. Overlap with ALL_SUBCOMMANDS today: only
-# `sync`. The Phase 4e verb-set reconciliation between the two sides
-# is post-cutover integration polish.
+# MUST be reflected here AND in the CLIENT/SERVER_SUBCOMMANDS help
+# tables. `transcripts` and `commits` were added 2026-08-09 (Phase 4 —
+# 3.0 stabilization P1.1) to close the MVP-unreachable gap; the P2.1
+# reconciliation in the same commit rewrote the two help tables so
+# every advertised verb is now in this set (integration-gap notice
+# fires only when a future contributor advertises a verb without
+# registering it here).
 ENTERPRISE_CLI_VERBS = frozenset({
     "auth", "repos", "providers", "policies", "reports",
     "blocks", "machines", "activate", "sync", "repo",
+    "transcripts", "commits",
 })
 
 

@@ -95,6 +95,14 @@ contracts/
   responsibility is degraded-mode routing (three ordered checks:
   package importable, `.main` importable, verb in `ENTERPRISE_CLI_VERBS`;
   hardened by whiteboard Finding 1 fix, see `scripts-enterprise.md`).
+  **2026-08-09 (Phase 4 — 3.0 stabilization P1.1 + P2.1)**: dispatcher
+  verb tables reconciled with reality — `CLIENT_SUBCOMMANDS` now names
+  the real developer verbs (`activate/sync/repo/transcripts/commits`);
+  `SERVER_SUBCOMMANDS` names the real operator/admin verbs (`auth/
+  repos/providers/policies/reports/machines/blocks`); `ENTERPRISE_CLI_VERBS`
+  extended with `transcripts` + `commits` (the two MVP verbs that had
+  been advertised nowhere and rejected everywhere). Regression pin:
+  `tests/test_gator_enterprise.py::TestConstants::test_every_advertised_verb_is_mapped`.
   **Integration gap (post-cutover polish)**: the ported enterprise-cli
   command modules do NOT currently call `is_enterprise_active` — they
   were ported from enterprise-mvp which was designed as a standalone
@@ -105,8 +113,9 @@ contracts/
   **Phase 4c-B** added `enterprise_vendor_hooks.install_enterprise_vendor_hooks`
   as a MACHINE-scoped concern that does NOT read the marker itself —
   it is gated at the CLI layer by the operator's explicit `--install-hooks`
-  opt-in on `gator enterprise setup`, not by an `is_enterprise_active`
-  check. Distinct decision surface: the marker gates Enterprise-side
+  opt-in on `gator enterprise activate` (renamed from the earlier docstring's
+  `setup` per the 2026-08-09 P2.1 verb reconciliation), not by an
+  `is_enterprise_active` check. Distinct decision surface: the marker gates Enterprise-side
   behavior on a repo; the --install-hooks flag gates machine-level
   side effects on other tools' settings. The vendor-hooks module also
   fail-closes on wrong-shape settings files (malformed JSON,
