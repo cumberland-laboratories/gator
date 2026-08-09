@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "3.0 P1.4 + P1.5: docs correction on how-gator-works + historical banners on 4 obsolete docs",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "3.0",
+    "docs",
+    "transcripts-first",
+    "historical-banners"
+  ],
+  "commit": "4489073b2a3af34fbcd0cd321e659544def40c99",
+  "short_commit": "4489073",
+  "snippet_id": "snippet-4489073b2a3af",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "68bc54f18c7b4216dbd566ac37d4e257ce9198f6",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:24:51Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/blueprints/session-block-capture.md",
+    ".gator/field-guides/enterprise-encryption-patterns.md",
+    ".gator/field-guides/enterprise-encryption-tutorial.md",
+    ".gator/session-snippets/2026-08-09-gator-68bc54f18c7b4.json",
+    "docs/how-gator-works.md",
+    "enterprise/docs/session-block-schema-v2.md"
+  ],
+  "notes": [
+    "**P1.4** — `docs/how-gator-works.md:205`: removed the sentence claiming `gator enterprise setup` connects to an Enterprise server and the Audit view surfaces fleet-level session evidence. The verb is `activate`, not `setup` (per Phase 4 P2.1 reconciliation), and the Audit view is not part of a public claim under the 3.0 = base-Gator + Enterprise-unannounced framing. Replacement sentence: \"Summaries are queryable through the Dashboard's History view. Nothing leaves your machine — the trail lives in your Git repo.\" Removes the primary evaluator-mislead vector from stabilization plan §3.3 Item 1.",
+    "**P1.5** — historical banners prepended to four obsolete docs (each banner names the retirement date, cross-references the MVP plan/ADR, and instructs readers not to use as guidance for new work):",
+    "`.gator/blueprints/session-block-capture.md` — describes the retired per-commit block companion capture design",
+    "`.gator/field-guides/enterprise-encryption-tutorial.md` — describes the retired envelope-encryption tutorial (Architect-facing)",
+    "`.gator/field-guides/enterprise-encryption-patterns.md` — describes the retired envelope-encryption patterns (agent-facing)",
+    "`enterprise/docs/session-block-schema-v2.md` — schema for the retired per-commit block artifact shape",
+    "**Discoverability preserved**: banner strategy chosen over vault-move (per stabilization plan §8 Decision 5 ratification). Existing cross-references in charters and blueprints still resolve; the banner just prevents agents/evaluators from reading these as current design guidance.",
+    "**Not touched**: `enterprise/README.md` (Fly.io deploy examples predate local-first ratification; not a P1 evaluator concern), `docs/threat-model.md:12` (mentions \"Central audit dashboard (from Gator Command)\" — legacy Gator Command name, but not session-block-related; caught by Phase 3 §3.3 Item 5 as opportunistic P2/P3 work, deferred to §6.3 docs sweep or post-3.0), `docs/architecture.md` scan (not surfaced by grep as containing session-block claims — see Phase 3 §3.3 Item 5)."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}

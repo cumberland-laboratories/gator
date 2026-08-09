@@ -53,6 +53,7 @@ src/*.egg-info/
 
 # Scratch/test directories
 tmp/
+.tmp/
 
 # Local agent companion — personal notes/skills (machine-local)
 AGENTS.local.md
