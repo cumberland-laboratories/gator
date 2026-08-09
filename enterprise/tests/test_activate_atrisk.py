@@ -76,15 +76,33 @@ class TestV2FirstScriptDiscovery:
         assert 'GATOR_SCRIPT=".gator/.includes/scripts/gator-pre-commit.py"' in template
         assert 'GATOR_SCRIPT=".gator/scripts/gator-pre-commit.py"' in template
 
-    def test_post_commit_block_script_uses_v2_first(self):
-        """The session-block generator fallback in POST_COMMIT_HOOK should
-        follow the same v2-first pattern as the main pre-commit resolver.
+    def test_post_commit_does_not_generate_session_blocks(self):
+        """Retired 2026-08-09 (Phase 4 — 3.0 stabilization P1.3).
+
+        Under the transcripts-first MVP, evidence lives in Enterprise-
+        managed storage (DB + blob store), NOT per-commit `.gator/
+        session-blocks/` artifacts. This test flips the prior invariant:
+        POST_COMMIT_HOOK must NOT reference the block-generation code
+        paths. Guards against regression re-introduction.
         """
         v2 = ".gator/.includes/scripts/gator-session-block.py"
         v1 = ".gator/scripts/gator-session-block.py"
-        assert v2 in POST_COMMIT_HOOK
-        assert v1 in POST_COMMIT_HOOK
-        assert POST_COMMIT_HOOK.index(v2) < POST_COMMIT_HOOK.index(v1)
+        assert v2 not in POST_COMMIT_HOOK, (
+            "POST_COMMIT_HOOK references retired v2 session-block "
+            "script — reintroducing block generation contradicts the "
+            "transcripts-first MVP (see plan §2 D2 OBSOLETE list)."
+        )
+        assert v1 not in POST_COMMIT_HOOK, (
+            "POST_COMMIT_HOOK references retired v1 session-block "
+            "script — reintroducing block generation contradicts the "
+            "transcripts-first MVP (see plan §2 D2 OBSOLETE list)."
+        )
+        assert "block_generate" not in POST_COMMIT_HOOK, (
+            "POST_COMMIT_HOOK references retired block_generate module."
+        )
+        assert "session-blocks" not in POST_COMMIT_HOOK, (
+            "POST_COMMIT_HOOK references retired session-blocks directory."
+        )
 
 
 # ============================================================

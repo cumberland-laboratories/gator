@@ -140,45 +140,17 @@ export GATOR_HOOK_MODE="$MODE"
 
 "$PYTHON" "$GATOR_SCRIPT" --phase cleanup "$@"
 
-# Generate session block for the just-completed commit.
-# TRANSITIONAL (per plan D10 OBSOLETE-FOR-TRANSCRIPTS-FIRST-MVP list):
-# session-block generation is being retired post-MVP. Do NOT extend this
-# block. The transcripts-first evidence path is `gator-enterprise
-# transcripts pull` (operator-triggered), which reads the SAME snippets
-# without needing per-commit block artifacts.
-if [ "$MODE" != "off" ]; then
-    COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null)
-    if [ -n "$COMMIT_SHA" ]; then
-        # Prefer CLI interpreter (has cryptography for encrypted blocks);
-        # fall back to repo-local script under resolved $PYTHON.
-        BLOCK_GENERATED=0
-        if [ -n "$CLI_PYTHON_FILE" ] && [ -f "$CLI_PYTHON_FILE" ]; then
-            CLI_PYTHON=$(cat "$CLI_PYTHON_FILE")
-            if [ -x "$CLI_PYTHON" ]; then
-                "$CLI_PYTHON" -m gator_enterprise_cli.block_generate \
-                    --commit "$COMMIT_SHA" --repo-root "$(pwd)" 2>/dev/null && BLOCK_GENERATED=1
-            fi
-        fi
-        # Fallback: repo-local script (plaintext v2 only) — v2-first path,
-        # v1 fallback to match the pre-commit resolver's ordering.
-        if [ "$BLOCK_GENERATED" = "0" ]; then
-            BLOCK_SCRIPT=""
-            if [ -f ".gator/.includes/scripts/gator-session-block.py" ]; then
-                BLOCK_SCRIPT=".gator/.includes/scripts/gator-session-block.py"
-            elif [ -f ".gator/scripts/gator-session-block.py" ]; then
-                BLOCK_SCRIPT=".gator/scripts/gator-session-block.py"
-            fi
-            if [ -n "$BLOCK_SCRIPT" ]; then
-                "$PYTHON" "$BLOCK_SCRIPT" generate --commit "$COMMIT_SHA" 2>/dev/null || true
-            fi
-        fi
-        # Stage generated blocks (both v2 .json.gz and v3 .block.json)
-        BLOCKS_DIR=".gator/session-blocks"
-        if [ -d "$BLOCKS_DIR" ]; then
-            git add "$BLOCKS_DIR"/*.json.gz "$BLOCKS_DIR"/*.block.json 2>/dev/null || true
-        fi
-    fi
-fi
+# Per-commit block generation was RETIRED 2026-08-09 (Phase 4 —
+# 3.0 stabilization P1.3). Under the transcripts-first MVP, evidence
+# lives in Enterprise-managed storage (DB + blob store), not as per-
+# commit block artifacts. The transcripts-first evidence path is
+# operator-triggered `gator-enterprise transcripts pull`, which reads
+# session snippets without needing per-commit block generation.
+# Existing machines that already have this hook installed from a
+# pre-retirement `gator-enterprise activate` will continue to run
+# the old block code until they re-run activate; that is expected
+# (activate is machine-scoped, and this retirement only affects fresh
+# activations from 2026-08-09 forward).
 '''
 
 

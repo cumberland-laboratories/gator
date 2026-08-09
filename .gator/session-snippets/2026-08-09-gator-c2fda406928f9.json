@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "3.0 P1.2: retire _fix_gitignore + session-blocks dir creation from enterprise repo_init",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "3.0",
+    "transcripts-first",
+    "session-blocks-retirement"
+  ],
+  "commit": "c2fda406928f96556cbce5abdf203b18fb0127ed",
+  "short_commit": "c2fda40",
+  "snippet_id": "snippet-c2fda406928f9",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "07beb97abfb3bc537920fd2c594953418d6b4d85",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:20:06Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-09-gator-07beb97abfb3b.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py"
+  ],
+  "notes": [
+    "**P1.2** — `enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py`: three deletions removing the last actively-harmful vestige of the pre-transcripts-first \"commit session-blocks to Git as evidence\" design. Every prior `gator-enterprise repo init` (a) created `.gator/session-blocks/` in the repo, (b) called `_fix_gitignore(repo_path)` to un-gitignore it, and (c) had the `_fix_gitignore` function body waiting to strip the ignore rule from any pre-existing `.gitignore`. Under the transcripts-first MVP (2026-08-08), evidence lives in Enterprise-managed storage (DB + blob store), NOT in Git. The old flow directly contradicted the ratified architecture.",
+    "Removed the `(gator_dir / \"session-blocks\").mkdir(exist_ok=True)` in `_do_repo_init` (line ~123). Replacement comment names the retirement date and cross-references the MVP plan §2 D2 OBSOLETE list.",
+    "Removed the `_fix_gitignore(repo_path)` call in `_do_repo_init` (lines ~166-167).",
+    "Removed the `_fix_gitignore` function definition (lines ~359-380).",
+    "**Consequence**: `.gator/session-blocks/` stays gitignored globally (repo-root `.gitignore` line 46 unchanged); sandbox commits do not accumulate block artifacts under any Enterprise-provisioning path; evaluators inspecting `.gitignore` post-`repo init` see no governance-driven rewrites; the \"why is my `.gitignore` being edited?\" evaluator-mislead vector from stabilization plan §3.3 Item 3 is closed.",
+    "**Not touched**: session-block generation elsewhere in enterprise-cli (`block_generate.py`), server-side session-blocks routes/services (`enterprise/app/services/session_blocks.py`, `enterprise/app/routes/session_blocks.py`, `enterprise/app/models/evidence_block.py`), migration 005/007 SQL, and the `POST_COMMIT_HOOK` template in `activate.py` — that hook's inline block invocation is the P1.3 cleanup, coming in a separate commit. Bulk server-side retirement is post-3.0 (§4 P3.2) since it's inert while unused.",
+    "**Charter** — `.gator/charters/scripts-enterprise.md`: added a new `!` tripwire entry describing what `_do_repo_init` explicitly no longer does (session-blocks dir, `_fix_gitignore` call, function body all retired), naming the three source-line removals, the consequence for evaluators, and the post-MVP retirement scope kept out of this commit.",
+    "**Test evidence**: `enterprise/tests/test_repo_init.py` = 8 passed (no test pinned `_fix_gitignore` behavior — grep confirmed before deletion). No other enterprise test suite touched."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
