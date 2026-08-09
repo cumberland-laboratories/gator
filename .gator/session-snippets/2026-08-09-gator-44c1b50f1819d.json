@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "dashboard: refresh favicon (v3 cache-buster)",
+  "change_type": "refactor",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "brand"
+  ],
+  "commit": "44c1b50f1819d8431d1f892bec9daa6efc83226d",
+  "short_commit": "44c1b50",
+  "snippet_id": "snippet-44c1b50f1819d",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "00d371c1f2aaabc17a692ba80f6aa6d9220f0c79",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T15:06:44Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-08-09-gator-00d371c1f2aaa.json",
+    "src/gator_command/scripts/dashboard/dashboard.html",
+    "src/gator_command/scripts/dashboard/favicon.png"
+  ],
+  "notes": [
+    "New Dashboard favicon (`src/gator_command/scripts/dashboard/favicon.png`, 1617 → 1149 bytes).",
+    "`src/gator_command/scripts/dashboard/dashboard.html`: cache-buster added to the `<link rel=\"icon\">` (`favicon.png?v=3`) so users still on a previous CLI/dashboard version don't get stuck with the old icon.",
+    "Third of six checkpoint commits per stabilization plan Phase 1 §6."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
