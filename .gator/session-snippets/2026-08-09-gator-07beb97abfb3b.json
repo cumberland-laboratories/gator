@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "3.0 P1.1 + P2.1: dispatcher registers transcripts+commits, reconciles CLIENT/SERVER help tables",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "3.0",
+    "enterprise-dispatcher",
+    "mvp-reachability"
+  ],
+  "commit": "07beb97abfb3bc537920fd2c594953418d6b4d85",
+  "short_commit": "07beb97",
+  "snippet_id": "snippet-07beb97abfb3b",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "caf73e101fafc7c087091b27ba20d8a62e8a1150",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:17:25Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-09-gator-caf73e101fafc.json",
+    "src/gator_command/scripts/gator-enterprise.py",
+    "tests/test_gator_enterprise.py"
+  ],
+  "notes": [
+    "**P1.1** — `src/gator_command/scripts/gator-enterprise.py::ENTERPRISE_CLI_VERBS`: adds `\"transcripts\"` and `\"commits\"`. Before this fix, `gator enterprise transcripts pull` (the primary MVP operator path) got rejected by the base dispatcher's pre-check with the \"verb not yet integrated with enterprise-cli\" notice and exit 69 — even though enterprise-cli registers both verbs (see `enterprise/enterprise-cli/gator_enterprise_cli/main.py:52-53`). The MVP was unreachable from a stock `pipx install gator-command` + source-checkout enterprise-cli install. Fixed by adding both to the frozenset. Comment block above the constant updated to name the 2026-08-09 Phase 4 fix and cross-reference the sync obligation.",
+    "**P2.1** — Same file: `CLIENT_SUBCOMMANDS` and `SERVER_SUBCOMMANDS` rewritten to reflect the real verb sets, replacing five aspirational entries per list (`setup/status/sync/audit/disconnect` and `server/db/policy/org/fleet` respectively) that never mapped to enterprise-cli commands. New `CLIENT_SUBCOMMANDS` is the developer-side verb set: `activate/sync/repo/transcripts/commits`. New `SERVER_SUBCOMMANDS` is the operator/admin verb set: `auth/repos/providers/policies/reports/machines/blocks`. Every advertised verb now maps to a real enterprise-cli command; the integration-gap notice becomes a contributor-error guard rather than an operator-visible failure mode.",
+    "**Tests** — `tests/test_gator_enterprise.py`: updated three assertions to check the new expected verb sets (`test_client_subcommands_include_expected_verbs`, `test_server_subcommands_include_expected_verbs`), swapped four occurrences of the old `main([\"setup\"|\"status\"])` scaffolding for real verbs, rewrote the two parametrized `test_*_subcommand_exits_ex_unavailable` cases to cover the real verb sets, and rewrote `test_unmapped_verb_returns_ex_unavailable_not_argparse_exit` to monkeypatch `ENTERPRISE_CLI_VERBS` (removing `transcripts`) to synthesize the advertised-but-unmapped condition — the guard's regression coverage survives even though the guard becomes unreachable in normal operation. New `test_every_advertised_verb_is_mapped` locks in the P2.1 invariant: every entry in ALL_SUBCOMMANDS must appear in ENTERPRISE_CLI_VERBS.",
+    "**Charter** — `.gator/charters/scripts-enterprise.md`: post-Phase-4e nuance section rewritten to describe the 2026-08-09 reconciliation, cross-reference the new sync obligation shape, and update the `TestIntegrationGap` regression-pin count (from the pre-fix 10+1+3 shape to the post-reconciliation 1+1+3 shape).",
+    "**Test evidence**: `tests/test_gator_enterprise.py` = 30 passed. Full base-gator suite not re-run this commit; risk is bounded to the dispatcher file.",
+    "**Not touched**: `PLAN_REF` constant (still references the vaulted 2026-07-21 monorepo convergence plan; §6.4 checklist item to verify path validity is separate work).",
+    "First of the Phase 4 (Gator 3.0 stabilization) P1 cleanup commits. Per release-readiness plan §9."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}

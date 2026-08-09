@@ -117,10 +117,12 @@ def _do_repo_init(args, client):
     print(f"Mode: {args.mode}")
     print()
 
-    # Create .gator/ structure
+    # Create .gator/ structure. Note: .gator/session-blocks/ is intentionally
+    # NOT created here — evidence lives in Enterprise-managed storage (DB +
+    # blob store), not in Git, per the transcripts-first MVP (2026-08-08).
+    # See MVP plan §2 D2 OBSOLETE list.
     gator_dir.mkdir(exist_ok=True)
     (gator_dir / "session-snippets").mkdir(exist_ok=True)
-    (gator_dir / "session-blocks").mkdir(exist_ok=True)
 
     # Write repo-id
     repo_id_path = gator_dir / "repo-id"
@@ -162,9 +164,6 @@ def _do_repo_init(args, client):
         print(f"  Created: AGENTS.md")
     else:
         print(f"  Exists: AGENTS.md (keeping existing)")
-
-    # Ensure .gator/session-blocks/ is NOT gitignored
-    _fix_gitignore(repo_path)
 
     # Auto-stage everything
     print()
@@ -354,30 +353,6 @@ def _derive_canonical_id(repo_path):
     url = url.rstrip("/")
 
     return url
-
-
-def _fix_gitignore(repo_path):
-    """Ensure .gator/session-blocks/ is NOT in .gitignore."""
-    gitignore = repo_path / ".gitignore"
-    if not gitignore.exists():
-        return
-
-    text = gitignore.read_text(encoding="utf-8", errors="replace")
-    if ".gator/session-blocks/" not in text:
-        return
-
-    lines = text.split("\n")
-    cleaned = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped == ".gator/session-blocks/":
-            continue
-        if stripped.startswith("# Session blocks") and "local-only" in stripped:
-            continue
-        cleaned.append(line)
-
-    gitignore.write_text("\n".join(cleaned), encoding="utf-8")
-    print(f"  Fixed: .gitignore (removed .gator/session-blocks/ ignore rule)")
 
 
 def _do_repo_upgrade(args):
