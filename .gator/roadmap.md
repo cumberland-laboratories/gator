@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated 2026-08-03 (post-v2.5.4). Priority-ordered within each track.
+Updated 2026-08-09 (post-v2.6.0). Priority-ordered within each track.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
@@ -75,6 +75,7 @@ Gator includes local repo governance, pre-commit enforcement, dashboard, CLI, an
 | **Monorepo cutover** | v2.5.1 | First release from the new public `gator` monorepo. Repository home stays at `github.com/cumberland-laboratories/gator`; the pre-cutover MIT-era history archived at `-legacy-pre-monorepo`. Apache 2.0 across the whole public tree. Same wheel, same install, same CLI. `scripts/monorepo-bootstrap.py` (reproducible source→monorepo staging) + `scripts/monorepo-validate.py` (9-check validation runner with baselined stale-path gates) committed to source for reproducibility. Codex Finding 1 (enterprise dispatcher catch-all masking real failures) fixed with three-ordered-check pre-delegation pattern. 2.5.0 skipped due to TestPyPI filename-permanence policy. Full RC → prod pipeline via OIDC exercised end-to-end. |
 | **Hook hardening: change-type enum + migrate_layout duplicates + docs vault** | v2.5.2 | Two governance-hook fixes surfaced by the cutover. (1) `gator-pre-commit.py::validate_hard_rules` now validates `change-type` against the schema enum (`feature\|fix\|refactor\|docs\|test\|release\|maintenance\|review\|governance\|""`); rejects plausible-sounding drift like `bugfix` at commit time with helpful typo hints. Sync obligation with `gator-session-snippet-v2` schema pinned. (2) `gator-update.py::migrate_layout()` Step 5 now mirrors Step 4's duplicate handling — `--migrate-layout` self-repairs the mixed-layout state that required manual cleanup during the monorepo cutover. Regression pins for both. Also vaulted 12 pre-monorepo docs (installation/upgrade/getting-started etc.) that described the retired `gator-engine/scripts/gatorize.sh` install flow. |
 | **Hook hardening recovery** | v2.5.3 | Recovery release for v2.5.2. The v2.5.2 wheel was cut from a commit that silently dropped most of the intended hook-hardening files during `git add` (Windows Git Bash trailing-backslash continuation quirk). Only the `migrate_layout` src fix, the version bump, and the docs vault actually landed. v2.5.3 ships the rest — change-type enum validation with typo hints, regression pins for both fixes (`tests/test_precommit_validation.py`, `tests/test_layout.py::TestMigration::test_shipped_dir_duplicates_get_removed`), charter tripwires. Also: `CONTRIBUTING.md ## Branching` section documenting the solo dev→main flow; `.gator/charters/INDEX.md` monorepo refresh; `mkdocs.yml` nav restructured to remove entries pointing at docs vaulted in 2.5.2. First release under the new lightweight dev→main branching flow. |
+| **Enterprise transcripts-first MVP + Phase 4 stabilization cleanup + dispatcher reconciliation** | v2.6.0 | The Enterprise transcripts-first MVP substrate lands in-tree (Migration 009 transcript-custody tables + Migration 010 query views + `POST /api/v1/{commits,transcripts}/ingest` + `GET /api/v1/transcripts/*` + `gator-enterprise transcripts pull` end-to-end with Claude Code discovery + upload + `Gator-Machine-Id` trailer emission + multi-vendor `.gator/active-vendor-session.json` v2 schema with PID attribution). Base wheel unchanged in shape; enterprise-cli install stays source-checkout-only for this release (single-pipx path is post-2.6 packaging). Phase 4 stabilization cleanup retires the pre-transcripts-first evidence-in-Git design: `_do_repo_init` no longer creates `.gator/session-blocks/` or un-gitignores it (P1.2); `POST_COMMIT_HOOK` template no longer runs per-commit block generation (P1.3); 4 obsolete Enterprise docs get historical banners (P1.5); `docs/how-gator-works.md` misleading `gator enterprise setup` claim rewritten (P1.4). Base-wheel dispatcher `CLIENT_SUBCOMMANDS` + `SERVER_SUBCOMMANDS` reconciled to reflect real enterprise-cli verbs (P2.1) — `transcripts` + `commits` added to `ENTERPRISE_CLI_VERBS` (P1.1), closing the "MVP unreachable from `gator enterprise <verb>`" gap. `.tmp/` gitignored (P2.3). 12 new regression pins across `tests/test_gator_enterprise.py` and `enterprise/tests/test_activate_atrisk.py`. Version-narrative note: the Phase 4 planning artifacts framed this as "Gator 3.0"; resolved to `2.6.0` under strict semver (API additive, not breaking). Full plan chain: `.gator/vault/artifacts/2026-08-09-gator-3.0-{stabilization-plan,next-steps-sketch,release-readiness}.md` + `2026-08-09-enterprise-{post-mvp-cleanup-plan,architect-smoke-test}.md` + MVP plan/ADR at `2026-08-08-enterprise-transcripts-first-*`. |
 | **Session-hook self-heal + migration convergence + drift visibility** | v2.5.4 | Fleet-wide fix set for silent failures at the session-hook seam. Since the v2 `.includes/` split shipped, `gator-session-open.py` had been throwing `AttributeError` on every v2 repo (hardcoded `str(gator_dir / "scripts")` and passed raw `Path` into `ensure_git_hooks()` which expects `GatorPaths`) — swallowed by the silent-hook contract's `except → sys.exit(0)`. Silent self-heal became silent no-op fleet-wide. Fix uses v2-first probe + `get_gator_paths()`. Vendor-hook templates (Claude/Codex/Gemini) now ship v2 script paths so `merge_hooks_into_settings` auto-corrects existing repos on next update. `--migrate-layout` Step 5 handles both-dirs-exist case (closes Issue #6, discovered on `code/donoriq`): `__pycache__/` and legacy `hooks/` get `rmtree`'d, unknown dirs go through new `_merge_dir_files_only()` (dest-wins recursive merge). New `_enumerate_mixed_residue()` prints the specific blocking paths on non-convergence instead of opaque `check conflicts`. `--migrate-layout` auto-refreshes vendor hooks on convergence — single-command v1→v2 upgrade. New `gator_diagnostics.log_hook_event()` writes bounded (200-line) machine-local log to `.gator/diagnostics/hooks.log` (gitignored) on non-happy-path `ensure_git_hooks()` returns — silent regressions at this seam are now visible. 11 regression pins across `tests/test_layout.py::TestMigration` and 8 in new `tests/test_session_hooks.py`. Full plan (with 4 Codex-adversarial review passes): `.gator/vault/artifacts/2026-08-03-update-and-begin-session-bugs-implementation-plan.md`. First release using the release-and-deploy.md procedure rewritten for post-cutover flow. |
 
 ### Building — Priority 1: Post-Install Onboarding & UX
@@ -164,26 +165,29 @@ E1-E8 shipped. Encryption phase complete. The service has 42 endpoints, operator
 | E4 | Evidence & reporting | Governance artifact ingestion, materialized reports, drift detection |
 | E5 | Dashboard API | Fleet status, repo detail, policy compliance, session summaries, audit timeline |
 | E6 | Hardening | Error handling, structured logging, rate limiting, operator CLI |
-| E7 | Session blocks | Bare clone cache, machine identity, v2 schema |
-| E8 | Encryption | Envelope encryption for session blocks |
+| E7 | Session blocks | Bare clone cache, machine identity, v2 schema — **DEPRECATED as evidence path in v2.6.0** (transcripts-first replaced session-blocks as evidence; code inert-but-in-tree pending post-2.6 retirement) |
+| E8 | Encryption | Envelope encryption for session blocks — **DEPRECATED in v2.6.0** (evidence storage is now filesystem/blob-store at storage-layer encryption boundary, not per-block envelope) |
+| E9 | Transcripts-first MVP | v2.6.0 | Migration 009 transcript-custody tables + Migration 010 query views; `POST /api/v1/{commits,transcripts}/ingest` + `GET /api/v1/transcripts/*` endpoints; `gator-enterprise transcripts {pull,list,show,get,link}` CLI; `commits <sha> transcripts` reverse-lookup; `Gator-Machine-Id` commit trailer; multi-vendor session-file v2 schema with PID attribution + PID-recycling protection + `GATOR_TRANSCRIPT_{SESSION_ID,VENDOR}` env overrides; base wheel dispatcher reconciled (`transcripts` + `commits` registered, `CLIENT`/`SERVER_SUBCOMMANDS` rewritten to real verb sets); pre-transcripts-first evidence-in-Git design retired from `_do_repo_init` (`_fix_gitignore` deleted, `.gator/session-blocks/` no longer created) and `POST_COMMIT_HOOK` template (block-generation section removed). Enterprise packaging remains source-checkout-only; single-pipx install path deferred. |
 
 ### Building
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | **Vendor session identity capture** | Building | Tie session blocks to vendor session IDs |
-| 2 | **Stranded session block recovery** | Designed | Machine-local fallback spool for blocks on deleted branches |
-| 3 | **Transcript session migration** | Building | Migration 008 for transcript session IDs |
+| 1 | **Full session-block code retirement** | Considering | Post-2.6 cleanup. Inert-but-in-tree code paths: `enterprise/enterprise-cli/gator_enterprise_cli/block_generate.py`, `bundled_scripts/gator-session-block.py` + trio-copy, `enterprise/app/services/session_blocks.py`, `enterprise/app/routes/session_blocks.py`, `enterprise/app/routes/crypto.py`, `enterprise/app/models/evidence_block.py`, and the dispatcher's `blocks` verb. Bulk retirement, migration test cleanup. |
+| 2 | **Single-pipx install path** | Considering | `pipx install "gator-command[enterprise]"` or `pipx install gator-enterprise-command` so enterprise-cli install stops being source-checkout-only. Blocks a public Enterprise announcement. |
+| 3 | **Cross-OS blob store defaults** | Considering | `BLOB_STORE_ROOT` default (`/var/lib/gator-enterprise/blobs`) is POSIX; crashes on Windows without manual override. Needs OS-aware default or containerized reference. |
+| 4 | **Fresh-machine bootstrap smoke test** | Considering | Current smoke test assumes venv + Postgres + machine-id pre-exist. A truly-fresh-machine protocol would need to include venv creation + Postgres install + first bootstrap on Windows/macOS/Linux. |
 
 ### What Enterprise adds
 
-Enterprise capabilities build on top of the core Gator install — they don't replace anything. The planned activation surface is `gator enterprise` as a CLI subcommand group, following the same pattern as `gator loop`:
+Enterprise capabilities build on top of the core Gator install — they don't replace anything. The activation surface is `gator enterprise` as a CLI subcommand group:
 
 ```
-gator enterprise setup    — connect to an Enterprise server
-gator enterprise status   — show connection, policy sync state
-gator enterprise sync     — pull policy, push evidence
-gator enterprise audit    — fleet audit from the CLI
+gator enterprise activate     — one-time machine setup (creates ~/.gator/enterprise/, installs global git hooks, registers machine)
+gator enterprise sync         — pull hook-policy and org policies from Enterprise
+gator enterprise repo init    — provision a repo for Enterprise governance
+gator enterprise transcripts  — pull/list/show/get/link session transcripts
+gator enterprise commits <sha> transcripts  — reverse-lookup: which transcripts touched this commit
 ```
 
 This keeps Enterprise as a feature of Gator, not a separate product. Same install, same CLI, same repo. Enterprise adds:

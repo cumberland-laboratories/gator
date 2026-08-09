@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "v2.6.0 CHANGELOG entry + threat-model legacy-branding fix",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "2.6.0",
+    "changelog",
+    "docs-sweep"
+  ],
+  "commit": "c75acc3486c4572b0f425b8d6882381e08da439a",
+  "short_commit": "c75acc3",
+  "snippet_id": "snippet-c75acc3486c45",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 12,
+  "previous_commit_in_session": "f5291e146e85903ef0c0978eb1c1fe097b86d693",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:34:25Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-09-gator-f5291e146e859.json",
+    "CHANGELOG.md",
+    "docs/threat-model.md"
+  ],
+  "notes": [
+    "**CHANGELOG.md**: adds a `[2.6.0] — 2026-08-09` entry in Keep-a-Changelog format. Structured as: preamble naming the transcripts-first MVP substrate landing + dispatcher reconciliation + cleanup of pre-transcripts-first vestiges; Added (MVP substrate: Migration 009+010, transcripts+commits API surface, `transcripts pull` CLI, `Gator-Machine-Id` trailer, multi-vendor session-file v2 schema, at-risk-hook enumeration, scaffolds); Changed (dispatcher CLIENT/SERVER reconciliation, doc corrections); Fixed (session-blocks vestiges retired from `_do_repo_init` + `POST_COMMIT_HOOK`, favicon cache-buster); Deprecated (whole session-block code surface now inert-but-in-tree, `blocks` verb); Documentation (historical banners on 4 obsolete Enterprise docs, `.gator/blueprints/enterprise-configuration.md` added as retired-design reference); Under the hood (session-snippet catch-up, 12 new regression pins, test evidence).",
+    "**Enterprise packaging note** in the preamble is explicit: base wheel ships the dispatcher only; enterprise-cli install remains source-checkout-only for this release. Single-pipx path is post-2.6 packaging work.",
+    "**Semver justification** in Documentation section: \"3.0\" framing from the Phase 4 stabilization plan was resolved to `2.6.0` per strict semver — the API is additive, not breaking, so MAJOR bump not justified.",
+    "**`docs/threat-model.md:12`**: replaces legacy \"(from Gator Command)\" branding with \"(Gator Enterprise)\" — Gator Command was the pre-consolidation product name; the current terminology is \"Gator\" as the product with Enterprise as an optional capability.",
+    "**Not touched**: `README.md` (already clean of stale Enterprise claims), `PYPI_README.md` (clean), `docs/architecture.md` (no session-block or enterprise mentions), `.gator/mission.md` (only \"enterprise AI governance\" market-descriptor language, not a claim about Gator's Enterprise features — accurate).",
+    "**Roadmap update deferred to the next commit** (bundled with the `pyproject.toml` version bump for clean release-cut atomicity).",
+    "First of two release-prep commits: docs sweep first, version bump + roadmap second. Test evidence + smoke-test + RC/promote chain follow per release-readiness §6 checklist."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
