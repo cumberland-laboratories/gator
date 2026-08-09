@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "knowledge layer: enterprise-configuration blueprint (banner-marked historical) + reference-notes and .includes/charters scaffolds",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "blueprint",
+    "historical-reference",
+    "knowledge-scaffold"
+  ],
+  "commit": "20fb352bc90062df6737616d26b7a8ca5e3bd653",
+  "short_commit": "20fb352",
+  "snippet_id": "snippet-20fb352bc9006",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "d9ec46af9c312dc4a1e51f6f941b235310d6137f",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T15:08:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/charters/README.md",
+    ".gator/.includes/charters/_template.md",
+    ".gator/blueprints/enterprise-configuration.md",
+    ".gator/reference-notes/README.md",
+    ".gator/reference-notes/_template.md",
+    ".gator/session-snippets/2026-08-09-gator-d9ec46af9c312.json"
+  ],
+  "notes": [
+    "`.gator/blueprints/enterprise-configuration.md`: adds a 407-line Codex-authored blueprint mapping the OLD Enterprise-mvp configuration model (three-scope: server / machine / repo; activate + sync + repo-init sequence; machine-local vs repo-local vs server-side state; commit-time behavior; credentials model; hook model; E8 encryption extension). Prepended with a **HISTORICAL** banner marking it as pre-transcripts-first — the current MVP does NOT follow this model. Banner cross-references the MVP plan §2 D2 OBSOLETE list and points readers to the ADR for the current design.",
+    "Retained per Architect direction 2026-08-09 (stabilization plan Phase 1 §6 needs-review disposition) so future work can trace the legacy configuration architecture the current code paths still partly implement. Not to be used as guidance for new work.",
+    "`.gator/reference-notes/{README,_template}.md`: adds repo-user reference-notes scaffolding at repo-root scope. Constitution.md §File Purposes lists `.gator/reference-notes/` as a valid location for repo-user reference notes; scaffold signals to future contributors that this is where THIS repo's cognitive-aid notes go (as distinct from `.gator/.includes/reference-notes/` which is the shipped-to-customers scaffolding).",
+    "`.gator/.includes/charters/{README,_template.md}`: adds shipped-to-new-repos charter scaffolding under the v2 `.includes/` tree. `_template.md` (650 bytes) byte-identical with `.gator/charters/_template.md`; `README.md` (15048 bytes) is the customer-facing charter philosophy README (620 bytes slimmer than this repo's own `.gator/charters/README.md` which has repo-specific additions). Preserves v2 layout scaffolding; retirement (if the Architect later decides charters should never ship as `.includes/` content) is post-3.0 cleanup.",
+    "Fifth of six checkpoint commits per stabilization plan Phase 1 §6."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
