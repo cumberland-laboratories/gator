@@ -49,7 +49,21 @@ your-project/
     whiteboard.md          <- ephemeral surface for review findings
 ```
 
-Everything inside `.gator/` is committed to Git (except `vault/`). This means the knowledge layer travels with the code and is available to every person and every AI model that works on the repo.
+Most of `.gator/` is committed to Git, but not all of it. The durable knowledge layer travels with the code; machine-local operational residue does not.
+
+Tracked examples:
+- `mission.md`, `roadmap.md`, `charters/`, `threads/`, `docs/`, `artifacts/`, `session-snippets/`
+
+Gitignored local-only examples:
+- `vault/`
+- `commit_draft.md`, `whiteboard.md`, `status.json`
+- `product-source.json`
+- `active-vendor-session.json`
+- `session-blocks/`
+- `diagnostics/`
+- `sessions/_active/`
+
+This split is intentional: repo knowledge and durable evidence stay in Git, while machine-local state, sensitive material, and ephemeral workflow residue stay off-branch.
 
 ## Bootstrap: Your First Session
 

@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "session-snippet catch-up: 10 snippets covering 2026-08-04 through 2026-08-08 MVP arc",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "session-evidence",
+    "mvp-arc"
+  ],
+  "commit": "7695a45a32409834f9879eb008884ebc9fc31ddd",
+  "short_commit": "7695a45",
+  "snippet_id": "snippet-7695a45a32409",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T15:04:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-04-gator-399b0d95c8474.json",
+    ".gator/session-snippets/2026-08-06-gator-372feaf2de325.json",
+    ".gator/session-snippets/2026-08-07-gator-3afe7e3a22ce8.json",
+    ".gator/session-snippets/2026-08-07-gator-5121c4d445914.json",
+    ".gator/session-snippets/2026-08-07-gator-71d027ca4f716.json",
+    ".gator/session-snippets/2026-08-07-gator-932880d9c6b5b.json",
+    ".gator/session-snippets/2026-08-07-gator-da517cb22e574.json",
+    ".gator/session-snippets/2026-08-07-gator-df71e8e245a81.json",
+    ".gator/session-snippets/2026-08-07-gator-e1e09ef8bbe9a.json",
+    ".gator/session-snippets/2026-08-08-gator-de3bbde77cb11.json"
+  ],
+  "notes": [
+    "Adds 10 session snippets that accumulated during the enterprise transcripts-first MVP arc (`399b0d95` → `de3bbde7`) but were not committed alongside the commits they describe. Each snippet carries its own `commit_sha` field so linkage survives the delayed attach.",
+    "Snippets: 2026-08-04 (`399b0d95`), 2026-08-06 (`372feaf2`), 2026-08-07 (`3afe7e3a`, `5121c4d4`, `71d027ca`, `932880d9`, `da517cb2`, `df71e8e2`, `e1e09ef8`), 2026-08-08 (`de3bbde7`).",
+    "No code impact. Restores the traceability bridge between session history and git history documented in `.gator/sessions/.gitignore` (commit B in this checkpoint chain).",
+    "First of six checkpoint commits closing out working-tree residue before the Gator-3.0 stabilization Phase 4 cleanup work. See `.gator/vault/artifacts/2026-08-09-enterprise-post-mvp-cleanup-plan.md` §6 for the full plan."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
