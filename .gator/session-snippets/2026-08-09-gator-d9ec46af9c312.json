@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "inbox: 2026-08-08 STATUS block for transcripts-first MVP work",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "mvp-status",
+    "transcripts-first"
+  ],
+  "commit": "d9ec46af9c312dc4a1e51f6f941b235310d6137f",
+  "short_commit": "d9ec46a",
+  "snippet_id": "snippet-d9ec46af9c312",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "44c1b50f1819d8431d1f892bec9daa6efc83226d",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T15:07:21Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-09-gator-44c1b50f1819d.json"
+  ],
+  "notes": [
+    "`.gator/inbox.md`: replaces the older resolved backlog items with a durable 2026-08-08 STATUS block covering the transcripts-first MVP arc. Content includes: ratified plan / ADR / sketch references, phase progress (Phase 0-1 complete at inbox-write time; Phase 2-6 subsequently landed 2026-08-08 in commits `2fdf29d` → `de3bbde`), recent commit chain summary, the 7 architectural ratifications, persistent machine state (Postgres, .env, venv, ~/.gator/enterprise/ layout, machine-id), the \"uvicorn stack is likely DEAD\" recovery notes, and superseded-work markers for the retired adapter architecture and session-block direction.",
+    "Active backlog section carried forward: docs rewrite, PyPI-propagation wait, legacy `gator-command` local repo removal plan, charter promotion from vault, hook-config follow-up (absorbed by post-MVP arc).",
+    "Referenced by both the 2026-08-09 Codex stabilization sketch and the Opus 3.0 stabilization plan as the source-of-record for MVP state at handoff.",
+    "`.gator/.gator-version`: auto-stamped update from `cli-version: 2.5.0 / updated: 2026-08-02` to `cli-version: 2.5.3 / updated: 2026-08-03`, reflecting the actual last `gator update` run against this repo. Will re-stamp on next update to v2.5.4+ — not a source of truth, just a local install marker.",
+    "Fourth of six checkpoint commits per stabilization plan Phase 1 §6."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}
