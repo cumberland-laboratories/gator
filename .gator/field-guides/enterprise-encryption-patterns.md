@@ -11,6 +11,8 @@ tutorial: enterprise-encryption-tutorial.md
 
 # Enterprise Encryption Patterns
 
+> **HISTORICAL — pre-transcripts-first (2026-08-08).** These patterns describe the retired envelope-encryption design for per-commit session blocks committed as ciphertext to Git. Under the current transcripts-first MVP, evidence lives in Enterprise-managed storage (DB + blob store), NOT in Git; per-block envelope crypto is out of scope. Retained for architectural context; do NOT use as guidance for new work. For current design see [`../vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md`](../vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md).
+
 ### Repo-First Evidence, Ciphertext in Git
 Files: enterprise/enterprise-cli/gator_enterprise_cli/block_generate.py, enterprise/app/services/artifact_reader.py, enterprise/app/services/session_blocks.py
 When session evidence is durable, write it into `.gator/session-blocks/` and let Enterprise reconstruct from cloned repos. The database stores index metadata, not the transcript payload.

@@ -1,5 +1,7 @@
 # Session-Block Capture
 
+> **HISTORICAL — pre-transcripts-first (2026-08-08).** This blueprint describes the retired session-block companion capture design where each commit interval was extracted to compressed `.gator/session-blocks/*.json.gz` artifacts and committed to Git as evidence. Under the current transcripts-first MVP, evidence lives in Enterprise-managed storage (DB + blob store), NOT in Git; session-block generation was retired from the enterprise `POST_COMMIT_HOOK` on 2026-08-09 (Phase 4 P1.3), and `_do_repo_init` no longer creates `.gator/session-blocks/` or fights the gitignore rule (Phase 4 P1.2). Retained for architectural context; do NOT use as guidance for new work. For current design see [`../vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md`](../vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md) §2 D2.
+
 ## What This Page Is
 
 This page explains session-block companion capture: the system that extracts exact transcript slices for each commit interval and stores them as compressed local artifacts.

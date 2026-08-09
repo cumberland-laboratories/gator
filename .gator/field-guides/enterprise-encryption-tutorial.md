@@ -9,6 +9,8 @@ patterns: enterprise-encryption-patterns.md
 
 # Enterprise Encryption Tutorial
 
+> **HISTORICAL — pre-transcripts-first (2026-08-08).** This tutorial describes the retired envelope-encryption design for per-commit session blocks committed as ciphertext to Git. Under the current transcripts-first MVP, evidence lives in Enterprise-managed storage (DB + blob store), NOT in Git; per-block envelope crypto is out of scope. Storage-layer encryption (TLS in transit, at-rest encryption managed by the customer's storage substrate) is the current MVP's boundary. Retained for architectural context; do NOT use as guidance for new work. For current design see [`../vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md`](../vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md).
+
 Companion to [enterprise-encryption-patterns.md](enterprise-encryption-patterns.md). This is a topical field guide rather than a language guide: it explains how Gator Enterprise handles encrypted session evidence, what the trust boundaries are, and what questions to be ready for.
 
 ### Repo-First Evidence, Ciphertext in Git

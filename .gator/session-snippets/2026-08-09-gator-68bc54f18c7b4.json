@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "3.0 P1.3: retire per-commit block generation from POST_COMMIT_HOOK template",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "3.0",
+    "transcripts-first",
+    "session-blocks-retirement",
+    "hook-template"
+  ],
+  "commit": "68bc54f18c7b4216dbd566ac37d4e257ce9198f6",
+  "short_commit": "68bc54f",
+  "snippet_id": "snippet-68bc54f18c7b4",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "c2fda406928f96556cbce5abdf203b18fb0127ed",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:22:54Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-09-gator-c2fda406928f9.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py",
+    "enterprise/tests/test_activate_atrisk.py"
+  ],
+  "notes": [
+    "**P1.3** — `enterprise/enterprise-cli/gator_enterprise_cli/commands/activate.py`: deletes the 40-line block-generation section from the `POST_COMMIT_HOOK` template (previously lines 143-181). The prior hook fired on every commit: it invoked `gator_enterprise_cli.block_generate` via CLI_PYTHON (falling back to repo-local `gator-session-block.py` under a v2-first resolver), then `git add`'d the produced `.json.gz` and `.block.json` artifacts from `.gator/session-blocks/`. Under the transcripts-first MVP (2026-08-08), per-commit block artifacts are not the evidence path — operator-triggered `gator-enterprise transcripts pull` reads session snippets directly from the machine, uploads to Enterprise-managed storage (DB + blob store), and produces the linkage.",
+    "**New template body**: `POST_COMMIT_HOOK` now runs only `\"$PYTHON\" \"$GATOR_SCRIPT\" --phase cleanup \"$@\"` and returns. The retirement is documented in a 10-line comment inside the template naming the P1.3 identifier + retirement date + reason + the machine-scope caveat.",
+    "**Machine-scope caveat (important)**: machines that already activated Enterprise BEFORE 2026-08-09 still have the OLD block-generating hook script installed at `~/.gator/hooks/post-commit`. Every commit on those machines will keep running the old code until the operator re-runs `gator-enterprise activate --force` (which rewrites the hook file from the new template). The template edit here only affects FRESH activations from 2026-08-09 forward. This is expected — `activate` is machine-scoped, and post-3.0 cleanup will include a migration path.",
+    "**Test flip** — `enterprise/tests/test_activate_atrisk.py::TestV2FirstScriptDiscovery`: renamed `test_post_commit_block_script_uses_v2_first` → `test_post_commit_does_not_generate_session_blocks`. Old test asserted the v2-first script-resolver ordering was present in POST_COMMIT_HOOK; new test asserts (a) `.gator/.includes/scripts/gator-session-block.py`, (b) `.gator/scripts/gator-session-block.py`, (c) `block_generate`, (d) `session-blocks` are all ABSENT from POST_COMMIT_HOOK. Regression pin flipped: reintroduction of block generation now fails the test loudly.",
+    "**Charter** — `.gator/charters/scripts-enterprise.md`: added a new `!` tripwire entry for the retirement, cross-referencing the P1.3 identifier, the deleted code path, the flipped regression pin, and the machine-scope caveat (existing installations run old code until `--force` rewrites).",
+    "**Test evidence**: `enterprise/tests/test_activate_atrisk.py` + `test_activate_hooks.py` = 47 passed. Full enterprise suite not re-run this commit; risk bounded to the activate.py template.",
+    "**Not touched (still transitional-but-inert)**: `enterprise/enterprise-cli/gator_enterprise_cli/block_generate.py`, `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/gator-session-block.py`, `src/gator_command/scripts/gator-session-block.py`, `.gator/.includes/scripts/gator-session-block.py`. These bodies are no longer invoked from POST_COMMIT_HOOK; retiring them entirely (byte-identity contract sunset, deletions, migration test cleanup) is post-3.0 (§4 P3.2). Byte-identity across the three copies of `gator-session-block.py` still holds even if it stops mattering.",
+    "Third of the Phase 4 (Gator 3.0 stabilization) P1 cleanup commits."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}

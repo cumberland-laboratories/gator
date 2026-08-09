@@ -1,5 +1,7 @@
 # Session Block Schema v2
 
+> **HISTORICAL — pre-transcripts-first (2026-08-08).** This schema describes the retired per-commit session-block artifact shape (compressed `.json.gz` files committed to `.gator/session-blocks/`). Under the current transcripts-first MVP, evidence is raw transcripts uploaded to Enterprise-managed storage (DB + blob store), keyed by content hash — schema-less at the storage layer, with metadata in `transcript_sessions` per Migration 009. Retained for architectural context; do NOT use as guidance for new work. See [`../../.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md`](../../.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md) for the current design.
+
 **Schema identifier**: `gator-session-block-v2`
 
 ## Purpose

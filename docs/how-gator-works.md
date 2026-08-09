@@ -202,7 +202,7 @@ That means the governance trail travels with the repo. Six months from now, anyo
 
 > **📷 Screenshot (TODO — `docs/images/dashboard-session-evidence.png`):** Dashboard view rendering a session summary — visible commits, files touched, decision tags, agent/architect identity, change type, and significance. This is what the audit trail looks like as a user-facing artifact.
 
-Summaries are queryable through the Dashboard's History view. When Gator is connected to an Enterprise server (`gator enterprise setup`), the Audit view surfaces fleet-level session evidence. Nothing leaves your machine unless you explicitly connect to an Enterprise deployment — the trail lives in your Git repo either way.
+Summaries are queryable through the Dashboard's History view. Nothing leaves your machine — the trail lives in your Git repo.
 
 ## The Dashboard
 
