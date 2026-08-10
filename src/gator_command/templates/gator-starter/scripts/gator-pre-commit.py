@@ -646,6 +646,19 @@ VALID_CHANGE_TYPES = frozenset({
     "release", "maintenance", "review", "governance", "",
 })
 
+# Sync obligation: this enum MUST stay byte-consistent with the
+# `significance` enum in `contracts/schemas/gator-session-snippet-v2.json`
+# (`properties.significance.enum`). Added 2026-08-10 (v2.6.0) per the
+# smoke-test finding that surfaced 5 pre-existing snippets with `"medium"`
+# (not in enum) and 8 with `"architectural"` (which we then added to the
+# enum since it's a legitimate value that had been in de facto use). Gate
+# added to prevent future drift, mirroring v2.5.3's change-type gate. If
+# either enum changes, change both in the same commit.
+VALID_SIGNIFICANCE = frozenset({
+    "low", "minor", "routine", "notable", "high", "critical",
+    "architectural", "",
+})
+
 
 def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir, override=None):
     """Check hard rules. Returns list of (rule_name, message) for failures."""
@@ -669,6 +682,20 @@ def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir,
             f"values. Valid: {valid_str} (or empty). Common typos: "
             f"'bugfix' -> 'fix', 'chore' -> 'maintenance', 'style' -> "
             f"'refactor'. Update .gator/commit_draft.md and retry."
+        ))
+
+    # 1b. significance enum validation (must match schema) — added 2026-08-10
+    # (v2.6.0) per smoke-test finding. Mirrors 1a's shape. `None` is
+    # allowed (agent may omit; infer_significance fills at trailer time).
+    significance = frontmatter.get("significance")
+    if significance is not None and significance not in VALID_SIGNIFICANCE:
+        valid_str = ", ".join(sorted(v for v in VALID_SIGNIFICANCE if v))
+        failures.append((
+            "invalid-significance",
+            f"significance: {significance!r} is not one of the schema-legal "
+            f"values. Valid: {valid_str} (or empty). Common typos: "
+            f"'medium' -> 'notable', 'major' -> 'high', 'trivial' -> "
+            f"'routine'. Update .gator/commit_draft.md and retry."
         ))
 
     # 2. Empty commit_draft

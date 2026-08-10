@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.6.0",
+  "change_type": "release",
+  "significance": "architectural",
+  "charter_changed": false,
+  "decision_tags": [
+    "2.6.0",
+    "version-bump",
+    "roadmap"
+  ],
+  "commit": "ced40d5cd40c407912e91be74784036a3ef75107",
+  "short_commit": "ced40d5",
+  "snippet_id": "snippet-ced40d5cd40c4",
+  "session_group_key": "anthropic:54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 13,
+  "previous_commit_in_session": "c75acc3486c4572b0f425b8d6882381e08da439a",
+  "started_at": "2026-08-09T13:44:49Z",
+  "ended_at": "2026-08-09T18:36:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-09-gator-c75acc3486c45.json",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "**`pyproject.toml`**: version bump `2.5.4` → `2.6.0`.",
+    "**`.gator/roadmap.md`**: header updated (`Updated 2026-08-09 (post-v2.6.0)`); new v2.6.0 Done row inserted above v2.5.4 with the full arc summary (transcripts-first MVP substrate + Phase 4 stabilization cleanup + dispatcher reconciliation); Enterprise section E7/E8 tagged as DEPRECATED-as-evidence-path (code inert-but-in-tree pending post-2.6 retirement); new E9 row for the transcripts-first MVP; Enterprise Building list rewritten to reflect post-2.6 work (full session-block code retirement, single-pipx install path, cross-OS blob store defaults, fresh-machine bootstrap smoke test); \"What Enterprise adds\" example commands updated to reflect real verbs (`activate/sync/repo/transcripts/commits`) replacing the fictional `setup/status/audit/disconnect`.",
+    "**Second of two release-prep commits** (Commit A `c75acc3` shipped CHANGELOG + threat-model fix). Working tree now clean; ready for the release-and-deploy pipeline: RC tag → TestPyPI publish → matrix smoke tests → promote-to-pypi with approval gate → GitHub Release.",
+    "**Architect actions** ahead of the RC tag: run the Phase 2 smoke-test protocol against this cleaned tree; produce a run-artifact evidencing the MVP end-to-end.",
+    "**Ratifications recorded**: version = `2.6.0` (semver-strict; API additive not breaking, so MAJOR not justified per release-readiness §8); Enterprise described openly in CHANGELOG (per Architect direction 2026-08-09; the earlier \"unannounced\" framing relaxed)."
+  ],
+  "transcript_session_id": "54069634-1435-41a5-bfaa-fd3e0f4212c2",
+  "transcript_ref": null
+}

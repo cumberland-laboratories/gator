@@ -101,9 +101,90 @@ class TestChangeTypeValidation:
         assert "'bugfix' -> 'fix'" in msg or "bugfix -> fix" in msg
 
 
+class TestSignificanceValidation:
+    """significance frontmatter must be in the schema-legal enum. Added
+    2026-08-10 (v2.6.0) after the smoke test surfaced 5 pre-existing
+    snippets with `medium` (not in enum, typo for `notable`) and 8 with
+    `architectural` (semantically legit; enum extended to include it)."""
+
+    def test_valid_significance_values_pass(self, tmp_path):
+        """Every enum value in VALID_SIGNIFICANCE must pass validation."""
+        gator_dir = tmp_path / ".gator"
+        gator_dir.mkdir()
+        for value in pre_commit.VALID_SIGNIFICANCE:
+            frontmatter = {"message": "test", "significance": value}
+            failures = pre_commit.validate_hard_rules(
+                staged_files=[], frontmatter=frontmatter, body="",
+                parse_error=None, gator_dir=gator_dir,
+            )
+            invalid = [f for f in failures if f[0] == "invalid-significance"]
+            assert not invalid, (
+                f"Valid significance {value!r} unexpectedly flagged as "
+                f"invalid: {invalid}"
+            )
+
+    def test_omitted_significance_passes(self, tmp_path):
+        """`None` (field omitted entirely) is allowed — trailer assembly
+        infers a value later."""
+        gator_dir = tmp_path / ".gator"
+        gator_dir.mkdir()
+        frontmatter = {"message": "test"}  # no significance key
+        failures = pre_commit.validate_hard_rules(
+            staged_files=[], frontmatter=frontmatter, body="",
+            parse_error=None, gator_dir=gator_dir,
+        )
+        invalid = [f for f in failures if f[0] == "invalid-significance"]
+        assert not invalid
+
+    @pytest.mark.parametrize("bad_value", [
+        "medium",         # the actual value that motivated this validation
+        "major",          # plausible but not in enum
+        "trivial",        # plausible but not in enum
+        "HIGH",           # capitalization differs from enum
+        " notable ",      # whitespace
+        "notable,high",   # multi-value not allowed
+    ])
+    def test_invalid_significance_fails_with_helpful_message(
+        self, tmp_path, bad_value,
+    ):
+        """Invalid values fail with a clear error naming the valid set."""
+        gator_dir = tmp_path / ".gator"
+        gator_dir.mkdir()
+        frontmatter = {"message": "test", "significance": bad_value}
+        failures = pre_commit.validate_hard_rules(
+            staged_files=[], frontmatter=frontmatter, body="",
+            parse_error=None, gator_dir=gator_dir,
+        )
+        invalid = [f for f in failures if f[0] == "invalid-significance"]
+        assert invalid, (
+            f"Invalid significance {bad_value!r} was NOT flagged; would "
+            f"pass through and fail schema validation on the emitted "
+            f"session snippet."
+        )
+        msg = invalid[0][1]
+        assert "notable" in msg
+        assert "high" in msg
+        assert bad_value in msg or repr(bad_value) in msg
+
+    def test_medium_specifically_suggests_notable(self, tmp_path):
+        """The most common typo — 'medium' — should have a hint pointing
+        at the correct enum value 'notable'."""
+        gator_dir = tmp_path / ".gator"
+        gator_dir.mkdir()
+        frontmatter = {"message": "test", "significance": "medium"}
+        failures = pre_commit.validate_hard_rules(
+            staged_files=[], frontmatter=frontmatter, body="",
+            parse_error=None, gator_dir=gator_dir,
+        )
+        invalid = [f for f in failures if f[0] == "invalid-significance"]
+        assert invalid
+        msg = invalid[0][1]
+        assert "'medium' -> 'notable'" in msg or "medium -> notable" in msg
+
+
 class TestSchemaEnumSyncObligation:
-    """The pre-commit's VALID_CHANGE_TYPES set MUST match the enum in
-    contracts/schemas/gator-session-snippet-v2.json.
+    """The pre-commit's VALID_CHANGE_TYPES + VALID_SIGNIFICANCE sets MUST
+    match their enums in contracts/schemas/gator-session-snippet-v2.json.
 
     If either changes, this test fails — a byte-consistency check that
     prevents the exact drift class this whole validation exists to catch.
@@ -118,11 +199,28 @@ class TestSchemaEnumSyncObligation:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         schema_enum = frozenset(schema["properties"]["change_type"]["enum"])
         assert schema_enum == pre_commit.VALID_CHANGE_TYPES, (
-            f"Pre-commit enum drifted from schema.\n"
+            f"Pre-commit change-type enum drifted from schema.\n"
             f"  Schema: {sorted(schema_enum)}\n"
             f"  Hook:   {sorted(pre_commit.VALID_CHANGE_TYPES)}\n"
             f"Update both to match (see the sync-obligation comment above "
             f"VALID_CHANGE_TYPES in gator-pre-commit.py)."
+        )
+
+    def test_significance_enum_matches_schema(self):
+        """Added 2026-08-10 (v2.6.0) alongside VALID_SIGNIFICANCE."""
+        import json
+        schema_path = (
+            Path(__file__).parent.parent
+            / "contracts" / "schemas" / "gator-session-snippet-v2.json"
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        schema_enum = frozenset(schema["properties"]["significance"]["enum"])
+        assert schema_enum == pre_commit.VALID_SIGNIFICANCE, (
+            f"Pre-commit significance enum drifted from schema.\n"
+            f"  Schema: {sorted(schema_enum)}\n"
+            f"  Hook:   {sorted(pre_commit.VALID_SIGNIFICANCE)}\n"
+            f"Update both to match (see the sync-obligation comment above "
+            f"VALID_SIGNIFICANCE in gator-pre-commit.py)."
         )
 
 

@@ -47,8 +47,8 @@
     },
     "significance": {
       "type": "string",
-      "enum": ["low", "minor", "routine", "notable", "high", "critical", ""],
-      "description": "Significance tier from commit_draft frontmatter. Empty string permitted."
+      "enum": ["low", "minor", "routine", "notable", "high", "critical", "architectural", ""],
+      "description": "Significance tier from commit_draft frontmatter. Empty string permitted. `architectural` added 2026-08-10 (v2.6.0) to formalize a value that had been in de facto use for cross-module invariant changes."
     },
     "charter_changed": {
       "type": ["boolean", "string"],

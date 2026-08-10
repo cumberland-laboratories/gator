@@ -5,7 +5,7 @@
   "agent": "claude-opus-4-7",
   "intent": "enterprise hooks: resolve Python via $PYTHON, unbreak Windows commits",
   "change_type": "fix",
-  "significance": "medium",
+  "significance": "notable",
   "charter_changed": true,
   "decision_tags": [
     "windows-compat",

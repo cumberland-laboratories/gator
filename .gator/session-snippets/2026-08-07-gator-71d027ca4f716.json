@@ -5,7 +5,7 @@
   "agent": "claude-opus-4-7",
   "intent": "enterprise activate/repo-init/block-gen: 4 Windows-verified fixes with 20 regression tests",
   "change_type": "fix",
-  "significance": "medium",
+  "significance": "notable",
   "charter_changed": true,
   "decision_tags": [
     "windows-compat",
