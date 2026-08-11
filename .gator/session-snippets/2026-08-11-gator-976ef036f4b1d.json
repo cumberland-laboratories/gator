@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "2.6.0 CI-green: xfail 2 pre-existing multi_session v1-preservation tests + CHANGELOG known-issues note",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "2.6.0",
+    "ci-green",
+    "xfail",
+    "known-issues"
+  ],
+  "commit": "976ef036f4b1d03de6ce9cb06dc517a057ac2c27",
+  "short_commit": "976ef03",
+  "snippet_id": "snippet-976ef036f4b1d",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "dbc5aeafbce1eebdab7026371099a8684d30b93a",
+  "started_at": "2026-08-11T00:18:21Z",
+  "ended_at": "2026-08-11T00:18:21Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-11-gator-dbc5aeafbce1e.json",
+    "CHANGELOG.md",
+    "tests/test_multi_session.py"
+  ],
+  "notes": [
+    "**Trigger**: source-ci.yml on the first `dev` push after the multi-session work landed (2026-08-07 `df71e8e`) failed with the 2 pre-existing `test_multi_session` v1-preservation failures already documented in the v2.6.0 CHANGELOG. Prior source-ci run on `dev` was 2026-08-04, before those tests existed — so this is the first CI exercise of the latent breakage.",
+    "**`tests/test_multi_session.py::test_v1_file_returns_single_entry_list`** marked `@pytest.mark.xfail(strict=False)` with reason: \"v1 backwards-compat NOT implemented in the current v2 reader. Fix tracked as post-2.6 work: either implement v1 read-shim in `_read_active_vendor_sessions()` or delete this test if v1 is truly out of support.\"",
+    "**`tests/test_multi_session.py::test_v1_file_migrates_to_v2_on_write`** marked `@pytest.mark.xfail(strict=False)` with reason: \"v1 legacy entries dropped on v2 migration write. Sibling of test_v1_file_returns_single_entry_list. Fix tracked as post-2.6 work: preserve v1 entry into the v2 container when a v1 file exists at write time.\"",
+    "**`strict=False`** deliberately chosen: an unexpected pass (`xpass`) later — if the underlying code gets fixed post-2.6 without unmarking the tests — should not fail the build. When the tests genuinely pass again, unmark them in that same follow-up commit.",
+    "**CHANGELOG.md**: appended a **Known issues** section under `[2.6.0]` documenting the xfail, the fix scope, and the framing note (not release-blocking under transcripts-first MVP; session-capture is Enterprise-only in end-state, v1 session-file compat is transitional-obsolete).",
+    "**Test evidence** (local Windows): `tests/test_multi_session.py` = 32 pass, 2 xfailed. Zero regressions elsewhere.",
+    "**Release flow status**: after this commit lands + pushes, source-ci should go green on `dev`. Then ff main → push main → tag `v2.6.0-rc1` → push tag → `release-candidate.yml` fires to TestPyPI."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

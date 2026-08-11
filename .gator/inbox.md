@@ -4,7 +4,52 @@ Drop anything here. No formatting needed.
 
 ---
 
-## STATUS as of 2026-08-08
+## STATUS as of 2026-08-11
+
+**Shipped: v2.6.0 to PyPI + GitHub Release.**
+
+- **PyPI**: https://pypi.org/project/gator-command/2.6.0/
+- **GitHub Release**: https://github.com/cumberland-laboratories/gator/releases/tag/v2.6.0
+- **Local pipx**: upgraded, `gator version` reports 2.6.0
+
+**Release-shipped content (per [2.6.0] CHANGELOG):**
+- Enterprise transcripts-first MVP substrate (Migration 009+010, transcripts/commits ingest+read APIs, `gator-enterprise transcripts pull` CLI end-to-end)
+- Base dispatcher CLIENT/SERVER_SUBCOMMANDS reconciliation (P2.1) + transcripts/commits verbs registered (P1.1)
+- Session-block evidence path retired from `_do_repo_init` (P1.2) and `POST_COMMIT_HOOK` template (P1.3)
+- Historical banners on 4 obsolete Enterprise docs (P1.5); misleading `gator enterprise setup` claim removed from `docs/how-gator-works.md` (P1.4)
+- Significance enum extended with `architectural`; pre-commit gate added for significance-enum drift (v2.5.3 pattern); 5 legacy `medium` snippets fixed to `notable`
+- `Gator-Machine-Id` commit trailer emission across all 3 pre-commit copies
+- Multi-vendor `active-vendor-session.json` v2 schema with PID attribution + env-var overrides
+- `.tmp/` gitignored (P2.3)
+
+**Known issues (in v2.6.0):**
+- `test_v1_file_returns_single_entry_list` + `test_v1_file_migrates_to_v2_on_write` marked `xfail(strict=False)` — v1 backwards-compat not implemented in v2 reader/writer. Fix tracked as post-2.6 work.
+- **Recurring PyPI CDN propagation lag** in `promote-to-pypi.yml` post-publish smoke — v2.5.2, v2.5.3, v2.5.4, v2.6.0 all failed the smoke step for the same reason (PyPI CDN needs 30-60s before pip sees the new version). Publish itself always succeeds; only the immediate follow-up smoke assertion fails. Documented in prior inbox; fix is a `sleep 60` or poll-until-visible in the workflow. Filing this as post-2.6 P2 cleanup — small, worth doing before v2.6.1.
+
+**Phase 4 plan chain durably in vault:**
+- `.gator/vault/artifacts/2026-08-09-gator-3.0-stabilization-plan.md` (parent; framing rewritten to 2.6.0 at ratification)
+- `.gator/vault/artifacts/2026-08-09-enterprise-post-mvp-cleanup-plan.md` (Phase 1)
+- `.gator/vault/artifacts/2026-08-09-enterprise-architect-smoke-test.md` (Phase 2 protocol, revised post-Run-1)
+- `.gator/vault/artifacts/2026-08-09-gator-3.0-release-readiness.md` (Phase 3 — all §6 checklist items shipped)
+- `.gator/vault/artifacts/2026-08-10-smoke-test-run-1.md` (Run-1 evidence, green)
+
+**Post-2.6 candidate work** (roadmap post-3.0 backlog):
+1. Fix `promote-to-pypi.yml` post-publish smoke CDN-lag (P2, small)
+2. `sync_bundled_pre_commit` — bring `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/gator-pre-commit.py` up to parity with the shipped copy (change-type + significance gates absent per MVP plan §D2 relaxed byte-identity)
+3. Full retirement of session-block server-side + envelope-encryption surfaces (stabilization plan §4 P3.2)
+4. Single-pipx install path for enterprise-cli (biggest post-2.6 packaging win)
+5. Fix or delete the v1 session-file compat tests (currently xfailed)
+6. `commits.py` docstring + `handle()` fallback message use the wrong arg order (`commits <sha> transcripts`) vs the actual argparse (`commits transcripts <sha>`) — cosmetic fix
+
+**Machine state (persistent across sessions)** — unchanged from 2026-08-08 STATUS:
+- Postgres 18.4 on `localhost:5434`; DB `gator_enterprise`; alembic head `010`
+- Enterprise venv `.venv-enterprise-local/`; env file `.env-enterprise-local` (gitignored)
+- `~/.gator/machine-id` = `c5c707f5-155a-422f-9b1b-d9e8a10fea08`
+- Enterprise stack (uvicorn API + worker) up in separate terminals during smoke test; may or may not still be running
+
+---
+
+## STATUS as of 2026-08-08 (historical — pre-2.6.0 release)
 
 **Active work: Enterprise Transcripts-First MVP.**
 
