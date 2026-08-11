@@ -51,6 +51,10 @@ The Enterprise transcripts-first MVP substrate lands in-tree, and the base wheel
 - **12 new regression pins** across `tests/test_gator_enterprise.py::TestConstants::test_every_advertised_verb_is_mapped`, `enterprise/tests/test_activate_atrisk.py::TestV2FirstScriptDiscovery::test_post_commit_does_not_generate_session_blocks`, and other flipped/updated invariants ensuring reintroduction of retired code paths fails loudly.
 - **Test suites at release-time**: `tests/test_gator_enterprise.py` 30 pass, `enterprise/tests/test_repo_init.py` 8 pass, `enterprise/tests/test_activate_atrisk.py` + `test_activate_hooks.py` 47 pass. Full base-gator + enterprise + contracts suites run separately as part of the release cut.
 
+### Known issues
+
+- **`tests/test_multi_session.py::test_v1_file_returns_single_entry_list` and `::test_v1_file_migrates_to_v2_on_write`** marked `xfail` (non-strict) in v2.6.0. Pre-existing failures since `df71e8e` (2026-08-07); the v1→v2 reader + migrator do not currently preserve v1 legacy `active-vendor-session.json` content. Fix tracked as post-2.6 work: either implement a v1 read-shim in `_read_active_vendor_sessions()` and preserve v1 entries on v2 migration, OR delete the tests if v1 is truly out of support. Not release-blocking under the transcripts-first MVP framing (session-capture is Enterprise-only in end-state; v1 session-file compat is transitional-obsolete).
+
 ## [2.5.4] — 2026-08-03
 
 Session-hook self-heal is no longer a silent no-op fleet-wide. `--migrate-layout` handles the last real-world non-convergence class (Issue #6). Vendor SessionStart hook drift auto-corrects on next update. When the migration can't converge, the operator finally sees WHICH paths are blocking.
