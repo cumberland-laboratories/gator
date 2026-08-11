@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "roadmap: v2.6.0 rollforward — version, Enterprise reframe, post-2.6 backlog, table + link fixes",
+  "change_type": "governance",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "2.6.0",
+    "roadmap",
+    "post-release"
+  ],
+  "commit": "bf13028ae010414555e704abebfde4ab69af953a",
+  "short_commit": "bf13028",
+  "snippet_id": "snippet-bf13028ae0104",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "cf018050d78aac24e944768992640904fcbf3698",
+  "started_at": "2026-08-11T00:46:47Z",
+  "ended_at": "2026-08-11T00:46:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-11-gator-cf018050d78aa.json"
+  ],
+  "notes": [
+    "**Header rollforward**: `Updated 2026-08-11 (v2.6.0 shipped to PyPI + GitHub Release 2026-08-11)`. Product paragraph: `Now at v2.6.0`, and Enterprise capabilities line now leads with \"transcripts-first evidence custody\" and notes the MVP substrate landed in-tree v2.6.0 unannounced publicly.",
+    "**Done-table chronology fix**: swapped `v2.6.0` and `v2.5.4` row order — v2.5.4 (2026-08-03) now correctly precedes v2.6.0 (2026-08-11). Prior order was chronologically inverted from my earlier edit. Also expanded the v2.6.0 row to include the Option B follow-up (significance enum + `architectural` + pre-commit gate) and the smoke-test evidence artifact.",
+    "**Priority 1 §Building table**: removed the row 6 \"HTML file support in Dashboard\" which was `Done (v2.4.5)` and therefore already covered in the top Done table — moved to the trailing \"Shipped items no longer listed here\" parenthetical alongside the other three prior shipped items.",
+    "**§Gator Enterprise section reframe**: header now explicitly states the current architectural line (transcripts-first evidence custody, E7/E8 deprecated in favor of E9); \"Substrate shipped\" line notes E1–E6 originally scoped + E9 as the new evidence line, not the earlier \"E1-E8 shipped\" which was misleading post-deprecation.",
+    "**E9 row rendering fix**: the E9 row had 4 columns while the table header has 3 — rendered as broken markdown. Collapsed the version into the \"What\" cell (`Transcripts-first MVP (v2.6.0)`).",
+    "**Enterprise Building list expanded**: was 4 items; now 8 items covering the full post-2.6 candidate backlog from the inbox — `promote-to-pypi.yml` CDN-lag fix, `commits.py` docstring/fallback arg-order fix, enterprise-cli bundled `gator-pre-commit.py` sync, full session-block code retirement, single-pipx install, cross-OS blob store defaults, fresh-machine bootstrap smoke test, and the v1 session-file compat decision. Items 1-2 flagged as quick wins for a v2.6.1; items 3-6 sketched as \"the arc toward a defensible public Enterprise announcement.\"",
+    "**§Connections**: deduped the second `-> [Mission]` link; added a Phase 4 stabilization + transcripts-first MVP plan-chain locator (all in `.gator/vault/artifacts/`, gitignored).",
+    "**NOT touched — strategic question for Architect**: §Current Priority still reads pre-2.6.0 (two priorities: install/UX + Loop polish). Both are still valid but neither was worked on during the Enterprise MVP arc. Whether v2.6.0's shipping shifts priorities (e.g., add Enterprise polish as Priority 3, or reorder) is a strategic call I'm surfacing separately, not deciding unilaterally."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
