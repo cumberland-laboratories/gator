@@ -115,6 +115,8 @@ enterprise-cli package.
   propagation (SystemExit(1)/SystemExit(2)/SystemExit(None) from mapped
   verbs surface as rc=1/rc=2/rc=0 without gap-notice translation).
 
+  Additional wheel-level regression pin: `tests/test_packaging.py::TestInstalledArtifact::test_gator_enterprise_help` + `::test_gator_enterprise_all_verbs_exit_unavailable_in_base_install` iterate the reconciled verb set against an actually-installed wheel (proves the P2.1 reconciliation survived the packaging round-trip and no verb slipped between the source and the wheel).
+
   ! Sync obligation: any add/remove in the enterprise-cli registered
   set MUST be mirrored in `ENTERPRISE_CLI_VERBS`. Adding an enterprise-cli
   verb without updating the dispatcher constant means valid verbs get

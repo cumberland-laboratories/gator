@@ -277,9 +277,10 @@ class TestInstalledArtifact:
     def test_gator_enterprise_help(self, installed_venv):
         """Phase 3a: `gator enterprise --help` works via the installed entry point.
 
-        Help output stayed stable through Phase 4e — the same subcommand names
-        are listed, even though the command bodies now delegate to the
-        gator_enterprise_cli package (or print the degraded-mode notice).
+        Help output shape stays stable across Phase 4e (delegation) + the
+        2026-08-09 Phase 4 (3.0 stabilization P2.1) verb-set reconciliation.
+        The verb NAMES were rewritten in P2.1 to reflect real enterprise-cli
+        commands — this test now iterates the reconciled set.
         """
         gator = self._gator_exe(installed_venv)
         result = subprocess.run(
@@ -287,30 +288,42 @@ class TestInstalledArtifact:
             capture_output=True, text=True, timeout=10,
         )
         assert result.returncode == 0
-        # Client-side + server-side verbs must all be listed
-        for verb in ("setup", "status", "sync", "audit", "disconnect",
-                     "server", "db", "policy", "org", "fleet"):
+        # Real client-side + server-side verbs post-P2.1 reconciliation.
+        # Sync obligation: match CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS in
+        # src/gator_command/scripts/gator-enterprise.py.
+        for verb in ("activate", "sync", "repo", "transcripts", "commits",
+                     "auth", "repos", "providers", "policies", "reports",
+                     "machines", "blocks"):
             assert verb in result.stdout, (
                 f"gator enterprise --help does not list subcommand '{verb}'"
             )
 
     def test_gator_enterprise_all_verbs_exit_unavailable_in_base_install(self, installed_venv):
-        """Phase 4e released contract: with only the base wheel installed
-        (no `gator_enterprise_cli` package), every enterprise subcommand
-        prints the degraded-mode notice and exits 69 (EX_UNAVAILABLE).
+        """Released contract: with only the base wheel installed (no
+        `gator_enterprise_cli` package), every ADVERTISED enterprise
+        subcommand prints the degraded-mode notice and exits 69
+        (EX_UNAVAILABLE).
 
-        Prior to Phase 4e, setup/status/sync/audit/disconnect were real
-        commands baked into the base wheel; installers who wanted to
-        exercise them without a live server got mixed behavior (fake
-        success on some, stub-exit on others). Phase 4e consolidated ALL
-        Enterprise code under enterprise/enterprise-cli/, so the base
-        install now uniformly returns "not available" for every verb.
+        Phase 4e (2026-08-02) consolidated all Enterprise code under
+        enterprise/enterprise-cli/, so the base install uniformly returns
+        "not available" for every verb it advertises. Phase 4 (3.0
+        stabilization, 2026-08-09) reconciled CLIENT_SUBCOMMANDS +
+        SERVER_SUBCOMMANDS to reflect real enterprise-cli verbs — this
+        test now iterates the reconciled set. Verbs no longer advertised
+        (setup/status/audit/disconnect/server/db/policy/org/fleet) get
+        rejected by argparse with rc=2 upstream of the dispatcher, which
+        is the correct behavior; only advertised verbs reach the
+        degraded-mode notice.
+
         Real behavior is tested against the enterprise-cli package in
         enterprise/tests/.
         """
         gator = self._gator_exe(installed_venv)
-        for verb in ("setup", "status", "sync", "audit", "disconnect",
-                     "server", "db", "policy", "org", "fleet"):
+        # Sync obligation: match CLIENT_SUBCOMMANDS + SERVER_SUBCOMMANDS
+        # in src/gator_command/scripts/gator-enterprise.py.
+        for verb in ("activate", "sync", "repo", "transcripts", "commits",
+                     "auth", "repos", "providers", "policies", "reports",
+                     "machines", "blocks"):
             result = subprocess.run(
                 [str(gator), "enterprise", verb],
                 capture_output=True, text=True, timeout=10,
