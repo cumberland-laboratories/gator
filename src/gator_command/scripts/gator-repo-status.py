@@ -400,7 +400,7 @@ def get_session_summaries(repo_path, limit=20):
     of parseable summaries and recent_items is up to `limit` items
     (newest first) with metadata for dashboard display.
 
-    Uses read_committed_summaries() from gator-sessions.py — the same
+    Uses read_committed_summaries() from gator_session_reader.py — the same
     parser used by gator-audit.py. This ensures the count and the panel
     are consistent: both reflect only files that pass the canonical parser.
     """
@@ -410,15 +410,15 @@ def get_session_summaries(repo_path, limit=20):
 
     try:
         from gator_core import import_sibling
-        sessions_mod = import_sibling("gator-sessions")
+        reader_mod = import_sibling("gator_session_reader")
     except (ImportError, Exception):
         return 0, []
 
-    if sessions_mod is None:
+    if reader_mod is None:
         return 0, []
 
     # Read all summaries (since_days=9999 effectively means no time cutoff)
-    summaries = sessions_mod.read_committed_summaries(sessions_dir, since_days=9999)
+    summaries = reader_mod.read_committed_summaries(sessions_dir, since_days=9999)
 
     items = []
     for s in summaries:

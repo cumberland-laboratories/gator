@@ -320,6 +320,11 @@ def assemble_audit_data(since_days=7):
     except ImportError as e:
         sessions_mod = None
         data["sessions"] = {"error": f"import failed: {e}"}
+    try:
+        reader_mod = _import_script("gator_session_reader")
+    except ImportError as e:
+        reader_mod = None
+        data.setdefault("_errors", []).append(f"session-reader import failed: {e}")
     if sessions_mod:
         try:
             all_sessions = sessions_mod.discover_all_sessions()
@@ -469,14 +474,15 @@ def assemble_audit_data(since_days=7):
             data["decisions_source"] = "committed"
             data["decisions_dirs"] = len(sessions_dirs)
             all_summaries = []
-            for sdir, source_kind in sessions_dirs_tagged:
-                for s in sessions_mod.read_committed_summaries(sdir, since_days):
-                    s["source_kind"] = source_kind
-                    all_summaries.append(s)
+            if reader_mod:
+                for sdir, source_kind in sessions_dirs_tagged:
+                    for s in reader_mod.read_committed_summaries(sdir, since_days):
+                        s["source_kind"] = source_kind
+                        all_summaries.append(s)
             # Also read remote session summaries from bare caches
             # Uses the same parse_committed_summary() as the local path
             # to ensure identical decision extraction behavior.
-            if has_remote_sessions:
+            if has_remote_sessions and reader_mod:
                 try:
                     from gator_remote import read_session_summary_remote
                     for remote_info in data.pop("_remote_sessions"):
@@ -485,7 +491,7 @@ def assemble_audit_data(since_days=7):
                                 remote_info["cache_path"], filename
                             )
                             if content:
-                                result = sessions_mod.parse_committed_summary(
+                                result = reader_mod.parse_committed_summary(
                                     content, filename
                                 )
                                 if result:

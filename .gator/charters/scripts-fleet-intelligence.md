@@ -167,7 +167,7 @@ Loads fleet-report, drift, sessions, and governance coverage via `import_sibling
 ! Trailer field renamed: `Gator-Architect` (was `Gator-PI`). Reading code accepts both for backward compatibility with git history.
 Filesystem: indirectly reads all .gator/ state, session spool, bare caches
 <- `main()`
--> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator-sessions")`, `import_sibling("gator-session-common")`, `_collect_trailer_intelligence()`
+-> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator-sessions")` (vendor-discovery half, retiring in Phase 3), `import_sibling("gator_session_reader")` (Phase 2A snippet-reader — used at the `decisions_source="committed"` branch and the remote-cache path), `import_sibling("gator-session-common")`, `_collect_trailer_intelligence()`
 ! Each subsystem import is independently guarded — a broken fleet-report import does not prevent the drift section from rendering. Errors surface in `data["_errors"]` in JSON output.
 
 ### _collect_trailer_intelligence(fleet_status, since_days)
@@ -262,11 +262,11 @@ Filesystem: registry file (R via `parse_registry()`)
 
 ### get_session_summaries(repo_path, limit=20)
 File: `src/gator_command/scripts/gator-repo-status.py`
-Reads committed session summaries via the canonical parser (`read_committed_summaries()` from `gator-sessions.py`). Returns `(total_count, recent_items)` where `total_count` is the number of parseable summaries and `recent_items` is up to `limit` items (newest first) with metadata for dashboard display. Both the count and the panel are derived from the same parse pass, ensuring consistency.
+Reads committed session summaries via the canonical parser (`read_committed_summaries()` from `gator_session_reader.py` — Phase 2A retargeted 2026-08-12; was `gator-sessions.py` until then). Returns `(total_count, recent_items)` where `total_count` is the number of parseable summaries and `recent_items` is up to `limit` items (newest first) with metadata for dashboard display. Both the count and the panel are derived from the same parse pass, ensuring consistency.
 Filesystem: `.gator/sessions/` (R)
 <- `scan_repo_status()`
--> `import_sibling("gator-sessions").read_committed_summaries()`
-! `gator-sessions.py` is Enterprise-only — excluded from the Individual wheel. `import_sibling()` returns `None` when the file is absent. This function guards against `None` and returns `(0, [])` gracefully. Without this guard, `scan_repo_status()` crashes with `AttributeError` in the Individual runtime, breaking standalone dashboard enrichment.
+-> `import_sibling("gator_session_reader").read_committed_summaries()`
+! `import_sibling()` returns `None` when the file is absent. This function guards against `None` and returns `(0, [])` gracefully. Without this guard, `scan_repo_status()` crashes with `AttributeError`, breaking standalone dashboard enrichment.
 
 ### render_text(data)
 File: `src/gator_command/scripts/gator-repo-status.py`

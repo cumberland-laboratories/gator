@@ -255,7 +255,7 @@ Renders `data.audit.session_summaries` as a table after the "Sessions by agent" 
 ### Recent sessions panel
 Renders `repoData.recent_session_summaries` as a table after the Override events section. Columns: Date, Vendor, Goal, Decisions, Evidence. Same drill-down pattern as audit view. Same snapshot-mode suppression.
 <- `window.GatorViews.repo()`
-! Data comes from Tier 2 lazy load (gator-repo-status.py). Each item has `source_kind: "local-repo"`.
+! Data comes from Tier 2 lazy load (gator-repo-status.py::get_session_summaries). Each item has `source_kind: "local-repo"`. Underlying reader retargeted from `gator-sessions` to `gator_session_reader` in Phase 2A (2026-08-12); parse behavior byte-identical, dashboard payload unchanged.
 ! The View button always uses the viewed `repoName`, not the summary's frontmatter `repo` field. The file lives in the viewed repo's `.gator/sessions/` regardless of what repo the session was about.
 
 ### Policy columns retired

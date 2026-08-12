@@ -22,7 +22,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 from conftest import load_script
 
 audit = load_script("gator-audit")
-sessions = load_script("gator-sessions")
+sessions = load_script("gator_session_reader")
 
 # Also need gator_core for the mock
 import gator_core

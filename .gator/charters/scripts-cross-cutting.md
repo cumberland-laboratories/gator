@@ -246,16 +246,19 @@ When adding functions to `generate_wiki.py`, distinguish between:
 
 ## TRIPWIRE: parse_committed_summary() Canonical Parser
 
-`gator-sessions.parse_committed_summary(text, filename)` is the single parser for committed session summary markdown. It is shared across 4+ consumers via `import_sibling()`:
+`parse_committed_summary(text, filename)` is the single parser for committed session summary markdown. **Phase 2A (2026-08-12)** extracted the surviving copy into a new module and retargeted the two surviving external consumers; the legacy copy stays through Phase 2 for the retiring consumers, then retires with `gator-sessions.py` in Phase 3.
 
-1. `gator-sessions.py` — defines it, uses it in `read_committed_summaries()`
-2. `gator-session-sink.py` — imports via `import_sibling("gator-sessions")` for database loading
-3. `gator-audit.py` — imports via `import_sibling("gator-sessions")` for fleet-wide decision extraction and session_summaries
-4. `gator-repo-status.py` — imports via `import_sibling("gator-sessions")` for per-repo session display
+**Surviving copy (Phase 2+):**
+- `gator_session_reader.py` — defines it, uses it in `read_committed_summaries()`. Consumers: `gator-audit.py` (Phase 2A retargeted), `gator-repo-status.py` (Phase 2A retargeted), `tests/test_session_reader.py`, `tests/test_audit_integration.py`.
+
+**Legacy copy (retiring in Phase 3 with the rest of `gator-sessions.py`):**
+- `gator-sessions.py` — still defines a byte-identical copy; still used by `gator-session-sink.py` (also DELETE-VENDOR) and by `tests/test_sessions.py::TestReadCommittedSummaries` (also retiring).
+
+**Phase 2 sync obligation**: during Phase 2 both copies exist and must stay byte-identical. If a schema change lands before Phase 3 sweeps `gator-sessions.py`, update `gator_session_reader.py` first and mirror back only if the retiring consumers need to observe the change before their own deletion.
 
 The parser handles two schema types: `gator-session-summary-v1` (from archaeology) and `gator-commit-summary-v1` (from pre-commit hook). Returns dict with: date, repo, vendor, agent, goal, decisions, source_file, start. Returns None for unparseable files.
 
-Any change to frontmatter field names, section headers (`## Goal`, `## Decisions`), or the return dict shape breaks all 4 consumers. Adding new return fields is safe; removing or renaming existing ones is not.
+Any change to frontmatter field names, section headers (`## Goal`, `## Decisions`), or the return dict shape breaks all consumers of both copies. Adding new return fields is safe; removing or renaming existing ones is not.
 
 ## TRIPWIRE: source_kind Provenance Vocabulary
 
@@ -362,7 +365,7 @@ Used by:
 - `gator-audit.py` — imports fleet-report, drift, sessions, session-common (4 optional modules)
 - `gator-fleet-report.py` — imports policy-status optionally
 - `gator-drift.py` — imports policy-status optionally
-- `gator-repo-status.py` — imports gator-sessions optionally
+- `gator-repo-status.py` — imports `gator_session_reader` optionally (Phase 2A, 2026-08-12 — was `gator-sessions` until then; the reader module is the surviving snippet-reader per parent plan)
 - `gator-update.py` — imports policy-status optionally
 - `gator-init.py` — imports gator-state optionally for the Stage 5 constitution-drift suffix on the boot line; failure yields no suffix, never breaks session opening
 

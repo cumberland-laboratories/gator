@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "inbox: house rule + cleanup — only open items, finished work lives in Git",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "cleanup",
+    "house-rule"
+  ],
+  "commit": "03bf9800ccf481d298a39428587e4ddc9e715ab0",
+  "short_commit": "03bf980",
+  "snippet_id": "snippet-03bf9800ccf48",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "bf13028ae010414555e704abebfde4ab69af953a",
+  "started_at": "2026-08-11T00:50:14Z",
+  "ended_at": "2026-08-11T00:50:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-11-gator-bf13028ae0104.json"
+  ],
+  "notes": [
+    "**House rule added** at the top of `.gator/inbox.md`: keep only OPEN items. Finished work is captured in Git commits, CHANGELOG, and roadmap. If an item ships or gets promoted to the roadmap, remove it from the inbox. Prevents the file from accreting history that Git already holds.",
+    "**Removed as finished** (all captured in Git / CHANGELOG / GitHub Release / roadmap):",
+    "The entire 2026-08-11 STATUS block describing v2.6.0 shipped content (CHANGELOG has it)",
+    "The entire 2026-08-08 STATUS block (historical — pre-2.6.0 release; every phase in it landed and shipped)",
+    "Enterprise stack startup commands (moved to smoke-test protocol §2.4)",
+    "\"Promote workflow CDN-lag\" backlog entry (now roadmap Enterprise Building #1)",
+    "\"Post-2.6 candidate work\" 6-item list (now roadmap Enterprise Building 8-item list, expanded)",
+    "\"Phase 4 plan chain durably in vault\" pointer (now roadmap §Connections)"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
