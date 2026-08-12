@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "session cleanup Phase 2A: extract snippet-reader to new gator_session_reader module; retarget importers",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-cleanup",
+    "phase-2",
+    "extract-module"
+  ],
+  "commit": "cafb656b13dff8808e9b4e4e64332269b530f276",
+  "short_commit": "cafb656",
+  "snippet_id": "snippet-cafb656b13dff",
+  "session_group_key": "anthropic:14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-12T00:03:12Z",
+  "ended_at": "2026-08-12T14:19:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/INDEX.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/charters/scripts-session-archaeology.md",
+    ".gator/session-snippets/2026-08-11-gator-03bf9800ccf48.json",
+    "src/gator_command/scripts/gator-audit.py",
+    "src/gator_command/scripts/gator-repo-status.py",
+    "src/gator_command/scripts/gator_session_reader.py",
+    "tests/test_audit_integration.py",
+    "tests/test_session_reader.py"
+  ],
+  "notes": [
+    "Extract Phase 2A of the ratified [2026-08-11 non-Enterprise session cleanup plan](vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md) — the deletion-free reader-module split. Adds `src/gator_command/scripts/gator_session_reader.py` (importable library, no CLI) containing byte-identical copies of `parse_committed_summary()` and `read_committed_summaries()` from `gator-sessions.py:1044,1128`. Legacy copies stay in `gator-sessions.py` through Phase 2 (still exercised by `tests/test_sessions.py::TestReadCommittedSummaries`); Phase 3 deletes the whole vendor-discovery half.",
+    "Retarget the three surviving external consumers of the reader contract off `gator-sessions.py` and onto the new module: (1) `gator-audit.py` — new `reader_mod = _import_script(\"gator_session_reader\")` initializer parallel to `sessions_mod`; call sites at L473 (`read_committed_summaries`) and L488 (`parse_committed_summary`) swapped to `reader_mod`; guards added so the reader branch degrades cleanly if the new module ever fails to load. `sessions_mod` retained for the vendor-discovery branches (L325/L342/L343/L347 + L530-602 `raw-vendor-logs`), which Phase 2B refactors into a cleanly-separable function and Phase 3 deletes. (2) `gator-repo-status.py::get_session_summaries` — `import_sibling(\"gator-sessions\")` → `import_sibling(\"gator_session_reader\")`; docstring updated. (3) `tests/test_audit_integration.py:25` — `load_script(\"gator-sessions\")` → `load_script(\"gator_session_reader\")`.",
+    "Add `tests/test_session_reader.py` — copy of `TestReadCommittedSummaries` retargeted at the new module. Original class in `tests/test_sessions.py` left in place; it still pins the legacy copy in `gator-sessions.py` through Phase 2 (Phase 3 sweeps).",
+    "Refinement over r1 audit surfaced during implementation: `get_machine_identity()` in `gator-sessions.py:102` is a delegate-wrapper whose 3 internal callers all retire (`cmd_export` L661, `cmd_manifest` L724/776 — all DELETE-VENDOR) and has NO external callers (`gator-audit.py:272` calls `common.get_machine_identity()` from `gator-session-common` directly, bypassing the wrapper). The wrapper therefore does NOT need to migrate to the new module — it dies with `gator-sessions.py` in Phase 3. `gator_session_reader.py` ships with 2 fns, not 3. Audit artifact §3 has this row as KEEP-READER; Phase 2B or a small r2 revision can align it, but the discrepancy is cosmetic (correct behavior is implemented here).",
+    "Charter updates: `.gator/charters/scripts-session-archaeology.md` — `**Covers**` list extended; new \"Owns\" bullet for `gator_session_reader.py`; two \"Does Not Own\" bullets retargeted (audit + repo-status callers now cited against the new module with a Phase-2 date); two new function entries at the tail (`parse_committed_summary` + `read_committed_summaries` with tripwires noting byte-identity to the legacy copies and the Phase-3 sweep sync obligation). `.gator/charters/INDEX.md` — session-archaeology row extended with `gator_session_reader.py`.",
+    "Verification: 5 tests in new `tests/test_session_reader.py` PASS · 3 tests in `tests/test_audit_integration.py` PASS · 5 tests in `tests/test_sessions.py::TestReadCommittedSummaries` (legacy pins) PASS. Full test suite sweep pending.",
+    "Significance-check assessment (constitution step 7): touches no public CLI verb (`sessions` is not in `cli.py::COMMANDS`), no cross-module TRIPWIRE (row_key formula + vendor-extractor delegation contract both untouched), no security-relevant code. The `parse_committed_summary` schema contract with `gator-session-sink.load_committed_summaries()` is preserved byte-for-byte during Phase 2 (both copies of the parser now exist; sink still uses the legacy). Steelman argument against: this deliberately introduces a duplicate parser implementation across two files, temporarily raising divergence risk if a schema change lands during Phases 2-3. Mitigation: the duplication window is bounded (one commit sequence), the new module is now the surviving copy per Phase 3 plan, and any interim schema change should land in `gator_session_reader.py` first and be mirrored back to `gator-sessions.py` only if needed. Accepted risk for the ratified deletion-free staging."
+  ],
+  "transcript_session_id": "14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "transcript_ref": null
+}

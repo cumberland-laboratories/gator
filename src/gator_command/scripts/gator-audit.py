@@ -241,6 +241,160 @@ def _collect_trailer_intelligence(fleet_status, since_days):
     return override_events, sig_dist, governed_commits
 
 
+# ---------------------------------------------------------------------------
+# Decision-source branches (Phase 2B, 2026-08-12 — extracted from
+# assemble_audit_data for cleanly-separable Phase 3 deletion per parent plan
+# .gator/vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md §6
+# Phase 2. Behavior preserved byte-for-byte.)
+# ---------------------------------------------------------------------------
+
+def _committed_decisions_from_snippets(
+    reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days
+):
+    """Assemble (decisions, summary_items) from committed .md summaries.
+
+    Snippet-reader branch. **SURVIVING** contract per parent plan §2.1 — the
+    durable, portable read path via `gator_session_reader.py`. Called from
+    assemble_audit_data() when at least one `.gator/sessions/*.md` exists in
+    the fleet or a remote cache has session summaries.
+
+    Reader-side data mutations: pops `data["_remote_sessions"]` if present.
+    """
+    committed_decisions = []
+    summary_items = []
+    all_summaries = []
+
+    if reader_mod:
+        for sdir, source_kind in sessions_dirs_tagged:
+            for s in reader_mod.read_committed_summaries(sdir, since_days):
+                s["source_kind"] = source_kind
+                all_summaries.append(s)
+
+    # Also read remote session summaries from bare caches.
+    # Uses the same parse_committed_summary() as the local path
+    # to ensure identical decision extraction behavior.
+    if has_remote_sessions and reader_mod:
+        try:
+            from gator_remote import read_session_summary_remote
+            for remote_info in data.pop("_remote_sessions"):
+                for filename in remote_info["files"]:
+                    content = read_session_summary_remote(
+                        remote_info["cache_path"], filename
+                    )
+                    if content:
+                        result = reader_mod.parse_committed_summary(
+                            content, filename
+                        )
+                        if result:
+                            result["source_kind"] = "remote-cache"
+                            all_summaries.append(result)
+        except ImportError:
+            pass
+
+    # Build summary metadata with provenance for drill-down
+    for s in all_summaries:
+        summary_items.append({
+            "date": s.get("date", ""),
+            "start": s.get("start", ""),
+            "repo": s.get("repo", ""),
+            "vendor": s.get("vendor", ""),
+            "agent": s.get("agent", ""),
+            "goal": s.get("goal", ""),
+            "decisions_count": len(s.get("decisions", [])),
+            "source_file": s.get("source_file", ""),
+            "source_kind": s.get("source_kind", "command-post"),
+        })
+    summary_items.sort(
+        key=lambda x: (x.get("start", "") or x.get("date", ""), x.get("source_file", "")),
+        reverse=True,
+    )
+
+    for s in all_summaries:
+        for d in s.get("decisions", []):
+            text = d.get("text", "")
+            if not _is_real_decision(text):
+                continue
+            committed_decisions.append({
+                "timestamp": d.get("timestamp", ""),
+                "text": text,
+                "repo": s.get("repo", ""),
+                "vendor": s.get("vendor", ""),
+            })
+
+    return committed_decisions, summary_items
+
+
+def _committed_decisions_from_raw_vendor_logs(sessions_mod, common, since_days, data):
+    """Assemble committed_decisions from raw vendor session logs.
+
+    Raw-vendor-logs branch. **DELETE-VENDOR** — retires in Phase 3 with the
+    vendor-transcript archaeology per parent plan §2.2. Uses `sessions_mod`
+    (retiring) to enumerate sessions and vendor extractors (`extract-{claude,
+    codex,gemini}-sessions`, all retiring) to parse them; funnels through
+    `common.extract_intelligence()` (also retiring, no surviving caller
+    per r1 audit) for decision synthesis.
+
+    Phase 3 deletion is mechanical: delete this function + its `elif common:`
+    dispatch site in assemble_audit_data.
+    """
+    committed_decisions = []
+    try:
+        all_sessions_list = sessions_mod.discover_all_sessions()
+        since_dt = sessions_mod.parse_since(f"{since_days}d")
+        recent_sessions = sessions_mod.filter_sessions_since(all_sessions_list, since_dt) if since_dt else all_sessions_list
+
+        vendor_extractors = {
+            "claude": ("extract-claude-sessions", lambda mod, path: (mod.extract_session(path), None)),
+            "codex": ("extract-codex-sessions", lambda mod, path: mod.extract_session(path)),
+            "gemini": ("extract-gemini-sessions", lambda mod, path: mod.extract_session(path)),
+        }
+
+        by_repo = {}
+        for s in recent_sessions:
+            repo = s.get("project", "") or "unknown"
+            by_repo.setdefault(repo, []).append(s)
+
+        sampled = []
+        for pick in range(3):
+            for repo in sorted(by_repo.keys()):
+                items = by_repo[repo]
+                if pick < len(items):
+                    sampled.append(items[pick])
+
+        for s in sampled:
+            vendor = s["vendor"]
+            extractor_info = vendor_extractors.get(vendor)
+            if not extractor_info:
+                continue
+            mod_name, extract_fn = extractor_info
+            try:
+                mod = _import_script(mod_name)
+                if not mod:
+                    continue
+                result = extract_fn(mod, Path(s["path"]))
+                turns = result[0] if isinstance(result, tuple) else result
+                intel = common.extract_intelligence(turns)
+                for d in intel.get("decisions", []):
+                    text = d["text"]
+                    if not _is_real_decision(text):
+                        continue
+                    committed_decisions.append({
+                        "timestamp": d["timestamp"],
+                        "text": text,
+                        "repo": s.get("project", ""),
+                        "vendor": vendor,
+                    })
+            except (ImportError, OSError, KeyError, ValueError,
+                    json.JSONDecodeError, UnicodeDecodeError):
+                continue
+    except (OSError, KeyError, ValueError) as e:
+        data["_errors"] = data.get("_errors", []) + [
+            f"decisions assembly: {type(e).__name__}: {e}"
+        ]
+
+    return committed_decisions
+
+
 def assemble_audit_data(since_days=7):
     """Assemble all audit data from existing Gator subsystems.
 
@@ -470,123 +624,21 @@ def assemble_audit_data(since_days=7):
         has_remote_sessions = bool(data.get("_remote_sessions"))
 
         if has_committed or has_remote_sessions:
-            # Read from committed summaries across all repos (durable path)
+            # Read from committed summaries across all repos (durable path).
+            # Snippet-reader branch — SURVIVING per parent plan §2.1.
             data["decisions_source"] = "committed"
             data["decisions_dirs"] = len(sessions_dirs)
-            all_summaries = []
-            if reader_mod:
-                for sdir, source_kind in sessions_dirs_tagged:
-                    for s in reader_mod.read_committed_summaries(sdir, since_days):
-                        s["source_kind"] = source_kind
-                        all_summaries.append(s)
-            # Also read remote session summaries from bare caches
-            # Uses the same parse_committed_summary() as the local path
-            # to ensure identical decision extraction behavior.
-            if has_remote_sessions and reader_mod:
-                try:
-                    from gator_remote import read_session_summary_remote
-                    for remote_info in data.pop("_remote_sessions"):
-                        for filename in remote_info["files"]:
-                            content = read_session_summary_remote(
-                                remote_info["cache_path"], filename
-                            )
-                            if content:
-                                result = reader_mod.parse_committed_summary(
-                                    content, filename
-                                )
-                                if result:
-                                    result["source_kind"] = "remote-cache"
-                                    all_summaries.append(result)
-                except ImportError:
-                    pass
-
-            # Build summary metadata with provenance for drill-down
-            summary_items = []
-            for s in all_summaries:
-                summary_items.append({
-                    "date": s.get("date", ""),
-                    "start": s.get("start", ""),
-                    "repo": s.get("repo", ""),
-                    "vendor": s.get("vendor", ""),
-                    "agent": s.get("agent", ""),
-                    "goal": s.get("goal", ""),
-                    "decisions_count": len(s.get("decisions", [])),
-                    "source_file": s.get("source_file", ""),
-                    "source_kind": s.get("source_kind", "command-post"),
-                })
-            summary_items.sort(
-                key=lambda x: (x.get("start", "") or x.get("date", ""), x.get("source_file", "")),
-                reverse=True,
+            committed_decisions, summary_items = _committed_decisions_from_snippets(
+                reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days
             )
             data["session_summaries"] = summary_items[:50]
-
-            for s in all_summaries:
-                for d in s.get("decisions", []):
-                    text = d.get("text", "")
-                    if not _is_real_decision(text):
-                        continue
-                    committed_decisions.append({
-                        "timestamp": d.get("timestamp", ""),
-                        "text": text,
-                        "repo": s.get("repo", ""),
-                        "vendor": s.get("vendor", ""),
-                    })
         elif common:
-            # Fallback: raw vendor session logs (fragile, machine-dependent)
+            # Fallback: raw vendor session logs (fragile, machine-dependent).
+            # DELETE-VENDOR branch — retires in Phase 3 with vendor extractors.
             data["decisions_source"] = "raw-vendor-logs"
-            try:
-                all_sessions_list = sessions_mod.discover_all_sessions()
-                since_dt = sessions_mod.parse_since(f"{since_days}d")
-                recent_sessions = sessions_mod.filter_sessions_since(all_sessions_list, since_dt) if since_dt else all_sessions_list
-
-                vendor_extractors = {
-                    "claude": ("extract-claude-sessions", lambda mod, path: (mod.extract_session(path), None)),
-                    "codex": ("extract-codex-sessions", lambda mod, path: mod.extract_session(path)),
-                    "gemini": ("extract-gemini-sessions", lambda mod, path: mod.extract_session(path)),
-                }
-
-                by_repo = {}
-                for s in recent_sessions:
-                    repo = s.get("project", "") or "unknown"
-                    by_repo.setdefault(repo, []).append(s)
-
-                sampled = []
-                for pick in range(3):
-                    for repo in sorted(by_repo.keys()):
-                        items = by_repo[repo]
-                        if pick < len(items):
-                            sampled.append(items[pick])
-
-                for s in sampled:
-                    vendor = s["vendor"]
-                    extractor_info = vendor_extractors.get(vendor)
-                    if not extractor_info:
-                        continue
-                    mod_name, extract_fn = extractor_info
-                    try:
-                        mod = _import_script(mod_name)
-                        if not mod:
-                            continue
-                        result = extract_fn(mod, Path(s["path"]))
-                        turns = result[0] if isinstance(result, tuple) else result
-                        intel = common.extract_intelligence(turns)
-                        for d in intel.get("decisions", []):
-                            text = d["text"]
-                            if not _is_real_decision(text):
-                                continue
-                            committed_decisions.append({
-                                "timestamp": d["timestamp"],
-                                "text": text,
-                                "repo": s.get("project", ""),
-                                "vendor": vendor,
-                            })
-                    except (ImportError, OSError, KeyError, ValueError,
-                            json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-            except (OSError, KeyError, ValueError) as e:
-                data["_errors"] = data.get("_errors", []) + [
-                    f"decisions assembly: {type(e).__name__}: {e}"
-                ]
+            committed_decisions = _committed_decisions_from_raw_vendor_logs(
+                sessions_mod, common, since_days, data
+            )
 
     # Sort by timestamp, most recent first, cap at 15
     committed_decisions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
