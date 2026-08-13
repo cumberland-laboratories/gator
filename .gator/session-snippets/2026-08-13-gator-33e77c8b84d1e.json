@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "session cleanup Phase 3 cleanup: sweep stale charter tripwires missed by Commit F",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-cleanup",
+    "phase-3",
+    "charter-drift"
+  ],
+  "commit": "33e77c8b84d1e23def8de9ed3fb6426103fe8973",
+  "short_commit": "33e77c8",
+  "snippet_id": "snippet-33e77c8b84d1e",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "28422a9ae9e91581835f955231269b1cb584cecc",
+  "started_at": "2026-08-13T11:55:55Z",
+  "ended_at": "2026-08-13T11:55:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-08-13-gator-28422a9ae9e91.json"
+  ],
+  "notes": [
+    "Cleanup pass on the Phase 3 charter rewrite (Commit F, `28422a9`) — the whiteboard flagged two Medium findings identifying stale live-tripwire content that Commit F's session-archaeology rewrite missed but that lives in adjacent charters. All charter-only, no code touched.",
+    "**`scripts-fleet-intelligence.md`**: (1) removed the stale `import_sibling(\"gator-session-common\")` from `assemble_audit_data`'s `->` line (audit no longer imports session-common as of Commit F). (2) Rewrote \"TRIPWIRE: Decisions Source Preference\" (retired name) into \"TRIPWIRE: Decisions Source (Single Path)\" — the raw-vendor-logs fallback retired in Commit D; the tripwire had described a two-source-fork that no longer exists. (3) Updated the Connections line for `scripts-core-library` — session-common is Phase-4-deferred for extractors only, not consumed by audit.",
+    "**`scripts-cross-cutting.md`**: (1) Rewrote the row-key duplication TRIPWIRE to reflect single-owner state — `gator-session-sink.load_spool_sessions()` was the second copy and retired with the sink in Commit E. (2) Deleted the \"Pattern: Session-Block Script Dual Deployment\" section entirely — `gator-session-block.py` retired in Commit E; the section described a two-file byte-sync obligation for a file that no longer exists. (3) Updated \"TRIPWIRE: Schema Versioning in CLI JSON Output\" — removed the `gator-session-sink.py → gator-session-sink-v2` bullet (sink retired) and tagged the `gator-session-common.py` schema as Phase-4-deferred.",
+    "**`scripts-core-library.md`**: rewrote the \"Before Changing This Module\" note about `make_row_key()` duplication — collapsed to single-owner post-Phase-3.",
+    "Whiteboard's residual assessment was \"runtime Phase 3 code path still looks sound, but the charter rewrite is not actually finished\" — this commit finishes it. No new function surface, no test additions needed. Test suite still 770 passed / 2 xfailed.",
+    "Significance: minor. Charter-only cleanup; no runtime behavior change. The fixes are catching drift-that-was-already-drift (Commit F rewrote session-archaeology but didn't spot the same class of issue in three neighbor charters)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
