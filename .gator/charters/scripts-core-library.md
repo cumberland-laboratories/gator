@@ -132,12 +132,12 @@ File: `src/gator_command/scripts/gator_core.py`
 ---
 
 ### get_machine_identity()
-File: `src/gator_command/scripts/gator-session-common.py`
-Returns `{id, hostname, label}` for the current machine. Creates `~/.gator/machine-id` on first call.
+File: `src/gator_command/scripts/gator-session-common.py` (legacy) + `src/gator_command/scripts/gator_session_reader.py` (Phase 3F canonical for surviving callers)
+Returns `{id, hostname, label}` for the current machine. Creates `~/.gator/machine-id` on first call. Byte-identical copies exist in both files during the Phase 3→4 window.
 Filesystem: `~/.gator/machine-id` (R, W on creation)
-<- `extract-claude-sessions.py`, `extract-codex-sessions.py`, `extract-gemini-sessions.py`, `gator-sessions.py`, `gator-audit.py`
+<- **reader copy**: `gator-audit.py` (via `reader_mod.get_machine_identity()`). **session-common copy**: internal callers `format_summary_markdown()` L282 + `format_session_summary_dict()` L344 (which are called by the Phase-4-deferred `extract-codex-sessions.py` + `extract-gemini-sessions.py`).
 -> `gator-machine-id.py`'s storage format
-! This is the shared implementation used by all vendor extractors. `gator-machine-id.py`'s `get_machine_id()` is the standalone-CLI version with the same file format. Both must agree on the key names (id, hostname, label, created).
+! Duplicated across two files during Phase 3→4 per plan §5 decision 2(b). Rationale: retargeting session-common's internal callers to the reader would require an `import_sibling` from the retiring file, which is architecturally backward. Cleaner to keep both copies until Phase 4 sweeps session-common with the Codex/Gemini extractors. Both copies must stay in sync; either edit both together or fold the extractors' formatter dependency onto the reader in Phase 4.
 
 ### redact(text, summary_mode=False)
 File: `src/gator_command/scripts/gator-session-common.py`
@@ -157,16 +157,16 @@ Filesystem: none
 File: `src/gator_command/scripts/gator-session-common.py`
 Returns `sha256(session_id + "|" + source_path)[:16]` — the canonical unique key for a session.
 Filesystem: none
-<- `make_transcript_path()`, `format_session_summary_dict()`, vendor extractors
-! This exact hash formula is duplicated in `gator-session-sink.py` for spool-side row_key construction. Both must stay in sync. The separator is `|` and the full source_path is used (not just the filename) to handle Gemini's genuine duplicate session IDs across different files.
+<- `make_transcript_path()`, `format_session_summary_dict()`, Phase-4-deferred vendor extractors
+! The historical duplication in `gator-session-sink.py` retired 2026-08-13 in Phase 3 Commit E (sink deleted with the vendor pipeline). The separator is `|` and the full source_path is used (not just the filename) to handle Gemini's genuine duplicate session IDs across different files. Sole owner post-Phase-3.
 
 ### format_summary_markdown(turns, metadata) / format_session_summary_dict(turns, metadata)
 File: `src/gator_command/scripts/gator-session-common.py`
-Canonical summary formatters. All vendor extractors must delegate to these rather than implementing their own.
+Canonical summary formatters. Vendor extractors delegate to these rather than implementing their own.
 Filesystem: none
-<- `extract-claude-sessions.py`, `extract-codex-sessions.py`, `extract-gemini-sessions.py`
+<- `extract-codex-sessions.py`, `extract-gemini-sessions.py` (Phase-4-deferred; `extract-claude-sessions.py` retired 2026-08-13 in Phase 3 Commit E — Enterprise-cli's `transcripts_discovery.py` replaces it for Claude)
 -> `get_machine_identity()`, `extract_intelligence()`, `make_transcript_path()`
-! These are the ONLY implementations of summary formatting. Vendor scripts that hand-roll their own frontmatter will diverge from the schema. The schema version is `gator-session-summary-v1`.
+! These are the ONLY implementations of summary formatting for the surviving Codex/Gemini extractors. Vendor scripts that hand-roll their own frontmatter would diverge from the schema. The schema version is `gator-session-summary-v1`. This file retires in Phase 4 with the Codex+Gemini extractors.
 
 ---
 

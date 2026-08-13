@@ -363,7 +363,7 @@ except Exception:
 ```
 
 Used by:
-- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (Phase 2A snippet-reader), session-common (4 optional modules). Phase 3 Commit D (2026-08-13) retired the vendor-discovery import (`gator-sessions`) + the `_committed_decisions_from_raw_vendor_logs()` helper; `assemble_audit_data()` now runs the snippet-reader branch only.
+- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (3 optional modules). Phase 3 Commit F (2026-08-13) removed the `gator-session-common` import — machine identity now comes from `gator_session_reader.get_machine_identity()` (folded from session-common in the same commit). Session-common still exists in the tree but only its Phase-4-deferred vendor-formatter callers use it.
 - `gator-fleet-report.py` — imports policy-status optionally
 - `gator-drift.py` — imports policy-status optionally
 - `gator-repo-status.py` — imports `gator_session_reader` optionally (Phase 2A, 2026-08-12 — was `gator-sessions` until then; the reader module is the surviving snippet-reader per parent plan)

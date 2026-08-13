@@ -1,35 +1,97 @@
 #!/usr/bin/env python3
 """
-gator_session_reader.py — Committed-summary reader.
+gator_session_reader.py — Committed-summary reader + machine identity.
 
-Importable library — no CLI, no main(). This is the surviving snippet-based
-reader contract extracted from ``gator-sessions.py`` per the 2026-08-11
-non-Enterprise session cleanup plan (Phase 2 split, deletion-free).
+Importable library — no CLI, no main(). Post-Phase-3 (2026-08-13) this module
+owns the entire surviving reader-side contract:
+
+  - parse_committed_summary(text, filename)     — extracted from gator-sessions.py:1044 in Phase 2A
+  - read_committed_summaries(sessions_dir, ...) — extracted from gator-sessions.py:1128 in Phase 2A
+  - get_machine_identity()                      — folded from gator-session-common.py:33 in Phase 3F
 
 Consumers:
-  - ``gator-audit.py``            — snippet-based decisions_source ("committed")
-  - ``gator-repo-status.py``      — recent session summaries panel
-  - ``tests/test_session_reader.py``  — reader-contract regression pins
+  - ``gator-audit.py``               — snippet-based decisions_source + data["machine"]
+  - ``gator-repo-status.py``         — recent session summaries panel
+  - ``tests/test_session_reader.py`` — reader-contract regression pins
 
 Design notes:
-  - Two functions, both verbatim from ``gator-sessions.py`` (parse_committed_summary
-    at L1044, read_committed_summaries at L1128). Behavior is byte-identical to the
-    original — this module IS the extraction, not a rewrite.
-  - No dependency on ``gator-session-common.py`` or any other retirement candidate.
-    The Phase-2 machine-identity wrapper (``gator-sessions.get_machine_identity``)
-    is intentionally NOT ported — it has no surviving external callers (audit hits
-    ``gator-session-common.get_machine_identity`` directly at gator-audit.py:272).
+  - All three functions are byte-identical copies of their originals — this
+    module IS the consolidation, not a rewrite.
+  - No dependency on any retirement candidate. `gator-session-common.py` is
+    retired 2026-08-13 in this commit; `gator-sessions.py` retired 2026-08-13
+    in Commit E.
 
-@reads: .gator/sessions/*.md (committed summaries)
-@writes: none
+@reads: .gator/sessions/*.md (committed summaries), ~/.gator/machine-id
+@writes: ~/.gator/machine-id (first-call creation)
 
 See:
   - .gator/vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md
-  - .gator/vault/artifacts/2026-08-11-session-cleanup-consumer-audit.md (r1)
+  - .gator/vault/artifacts/2026-08-11-session-cleanup-consumer-audit.md (r2)
 """
 
+import platform
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Machine identity (folded from gator-session-common.py in Phase 3F, 2026-08-13)
+# ---------------------------------------------------------------------------
+
+GATOR_USER_DIR = Path.home() / ".gator"
+MACHINE_ID_FILE = GATOR_USER_DIR / "machine-id"
+
+
+def get_machine_identity():
+    """Get stable machine identity for session summaries.
+
+    Returns dict with id, hostname, label. Creates machine-id file
+    on first call if it doesn't exist.
+
+    Uses gator-machine-id.py's storage format for compatibility.
+    """
+    if MACHINE_ID_FILE.exists():
+        data = {}
+        try:
+            for line in MACHINE_ID_FILE.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if ":" in line and not line.startswith("#"):
+                    key, _, value = line.partition(":")
+                    data[key.strip()] = value.strip()
+        except OSError:
+            pass
+
+        if "id" in data:
+            return {
+                "id": data["id"],
+                "hostname": data.get("hostname", platform.node()),
+                "label": data.get("label", data.get("hostname", platform.node())),
+            }
+
+    # No machine-id file — create one
+    import uuid
+    from datetime import date
+
+    GATOR_USER_DIR.mkdir(parents=True, exist_ok=True)
+    mid = str(uuid.uuid4())
+    hostname = platform.node()
+
+    lines = [
+        f"id: {mid}",
+        f"hostname: {hostname}",
+        f"label: {hostname}",
+        f"created: {date.today()}",
+    ]
+    MACHINE_ID_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    return {"id": mid, "hostname": hostname, "label": hostname}
+
+
+# ---------------------------------------------------------------------------
+# Committed-summary parser + reader (extracted from gator-sessions.py in
+# Phase 2A, 2026-08-12)
+# ---------------------------------------------------------------------------
 
 
 def parse_committed_summary(text, filename=""):

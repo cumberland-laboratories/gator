@@ -194,8 +194,8 @@ Filesystem: git history of each accessible local repo path (R)
 File: `src/gator_command/scripts/gator-audit.py`
 Filters session choreography (review requests, confirmations, navigation) from governance decisions. Returns False for texts that are short, are tool results, match bare confirmations, or match choreography patterns.
 Filesystem: none
-<- `assemble_audit_data()` (decisions loop)
-! This is a second filter layer on top of `gator-session-common.extract_intelligence()`. Decisions that pass both layers are surfaced in the audit dashboard. The filter errs on the side of exclusion — governance evidence should be unambiguous.
+<- `_committed_decisions_from_snippets()` (decisions loop over committed summary decisions)
+! Post-Phase-3 (2026-08-13) this is the sole decision-quality filter. It runs over decisions parsed from committed `.gator/sessions/*.md` files (produced by the pre-commit hook and by legacy archaeology output). The pre-Phase-3 "second filter layer on top of `gator-session-common.extract_intelligence()`" framing retired with the raw-vendor-logs branch. The filter errs on the side of exclusion — governance evidence should be unambiguous.
 
 ### render_text(data)
 File: `src/gator_command/scripts/gator-audit-renderers.py`

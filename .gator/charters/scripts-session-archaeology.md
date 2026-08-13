@@ -2,231 +2,25 @@
 
 **Covers**: `src/gator_command/scripts/extract-codex-sessions.py`, `src/gator_command/scripts/extract-gemini-sessions.py`, `src/gator_command/scripts/gator-session-aggregator.py`, `src/gator_command/scripts/gator-session-common.py`, `src/gator_command/scripts/gator_session_reader.py`
 
-> **PHASE 3 STATUS (2026-08-13)**: Commit E (this commit) retired `gator-sessions.py`, `gator-session-sink.py`, `gator-session-block.py`, `extract-claude-sessions.py` from the source tree. Owns bullets + function entries for those files are pruned below. The deeper charter rewrite (retitle to `scripts-session-reader.md`? / fold `gator-session-common.py` into `gator_session_reader.py`?) is Commit F per parent plan §6 Phase 3.
+Post-Phase-3 shape (2026-08-13). The four files retired in Phase 3 (`gator-sessions.py`, `gator-session-sink.py`, `gator-session-block.py`, `extract-claude-sessions.py`) are gone from the source tree — their content is in git history only. Function entries below cover the surviving surface. The two remaining vendor extractors (`extract-codex-sessions.py`, `extract-gemini-sessions.py`) are Phase-4-deferred per parent plan §5 decision 2(b): they retire once Enterprise-side Codex + Gemini adapters ship, and `gator-session-common.py`'s vendor helpers retire with them in the same Phase 4 pass.
 
 ## Owns
 
-Snippet-based session pipeline (post-Phase-3 shape). Vendor-transcript archaeology retired 2026-08-13.
+Snippet-based session pipeline (surviving surface) + Phase-4-deferred vendor extractors.
 
-- `extract-codex-sessions.py` — Codex CLI session archaeology (**Phase 4 deferred retirement** per parent plan §5 decision 2(b); retires once Enterprise-side Codex adapter ships). Reads `~/.codex/sessions/` with normalized turn format.
-- `extract-gemini-sessions.py` — Gemini CLI session archaeology (**Phase 4 deferred retirement**, same reason). Reads `~/.gemini/tmp/`; Gemini is the only vendor with genuine duplicate session IDs across files — `make_row_key()` handles this.
-- `gator-session-aggregator.py` owns the snippet-to-summary pipeline: reads v2 JSON snippets from `.gator/session-snippets/*.json`, aggregates by `(repo, session_id)`, caches summaries at `~/.gator/sessions/<path-hash>/`. Importable library — no CLI entry point. Consumers: `gator-audit.py` (dashboard audit path), `gator-dashboard.py` (Audit view API).
-- `gator-session-common.py` owns the reduced shared-helper surface. Post-Phase-3 Commit E, only `get_machine_identity()` (L33) remains a live consumer target — Commit F folds it into `gator_session_reader.py` and deletes this file entirely per parent plan follow-on decision #2 = (b).
-- `gator_session_reader.py` owns the surviving committed-summary reader contract (`parse_committed_summary()` + `read_committed_summaries()`) — the canonical reader for `.gator/sessions/*.md`. Importable library — no CLI. Consumers: `gator-audit.py` (snippet-based decisions_source), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py`, `tests/test_session_reader.py`. Byte-identical parse/read behavior to the original in `gator-sessions.py` (retired 2026-08-13).
+- `gator-session-aggregator.py` owns the snippet-to-summary pipeline: reads v2 JSON snippets from `.gator/session-snippets/*.json`, aggregates by `(repo, session_id)`, caches summaries at `~/.gator/sessions/<path-hash>/`. Importable library — no CLI entry point. Consumers: `gator-dashboard.py` (Audit view API), `gator-audit.py::_handle_sessions()` (CLI `--sessions`).
+- `gator_session_reader.py` owns the surviving committed-summary reader contract + machine identity. Three functions: `parse_committed_summary()` (extracted from `gator-sessions.py` in Phase 2A, 2026-08-12), `read_committed_summaries()` (same origin), and `get_machine_identity()` (folded from `gator-session-common.py` in Phase 3F, 2026-08-13). Importable library — no CLI. Consumers: `gator-audit.py` (snippet-based decisions_source + machine identity), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py`, `tests/test_session_reader.py`. Byte-identical parse/read/identity behavior to the originals.
+- `gator-session-common.py` — **Phase-4-deferred retirement**. Retains 7 vendor-formatting helpers used by the Phase-4-deferred Codex + Gemini extractors: `redact()`, `extract_intelligence()`, `make_row_key()`, `make_transcript_path()`, `format_summary_frontmatter()`, `format_summary_markdown()`, `format_session_summary_dict()`. Also retains a copy of `get_machine_identity()` for internal use by the formatters — same behavior as the reader's copy; both retire in Phase 4. See [`scripts-core-library`](scripts-core-library.md) for the per-function entries.
+- `extract-codex-sessions.py` — Codex CLI session archaeology (**Phase-4-deferred retirement**). Reads `~/.codex/sessions/` with normalized turn format; delegates all summary formatting to `gator-session-common`.
+- `extract-gemini-sessions.py` — Gemini CLI session archaeology (**Phase-4-deferred retirement**). Reads `~/.gemini/tmp/` with the same delegation pattern. Gemini is the only vendor with genuine duplicate session IDs across files — `make_row_key()` handles this.
 
 ## Does Not Own
 
-- Machine identity storage — that is `gator-machine-id.py` and `gator-session-common.py`.
-- Summary formatting logic — all vendor extractors delegate to `gator-session-common.format_summary_markdown()` and `format_session_summary_dict()`.
-- Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py`.
+- Machine identity storage — that is `gator-machine-id.py` (standalone CLI) + the two reader-side canonical copies noted above.
+- Summary formatting logic — the Phase-4-deferred vendor extractors delegate to `gator-session-common.format_summary_markdown()` and `format_session_summary_dict()`. See [`scripts-core-library`](scripts-core-library.md).
+- Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py::assemble_audit_data()`.
 - The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()`.
-- The committed summary read path in repo-status — `gator-repo-status.py` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
-
----
-
-### discover_projects()
-File: `src/gator_command/scripts/extract-claude-sessions.py`
-Finds all Claude Code projects with session data in `~/.claude/projects/`. Determines readable project names from session `cwd` fields.
-Filesystem: `~/.claude/projects/` (R)
-<- `main()`
-! Returns project names from the `cwd` field of the first session turn, not from the directory slug. The slug (`C--Users-curator-code2-project`) is opaque; the cwd-derived name (`project`) is human-readable.
-
-### extract_session(session_path)
-File: `src/gator_command/scripts/extract-claude-sessions.py`
-Reads a Claude Code JSONL session file and returns normalized turns: role, timestamp, content (always string), tool_calls, cwd, branch, session_id.
-Filesystem: `~/.claude/projects/<slug>/<uuid>.jsonl` (R)
-<- `main()`, `gator-audit.py` (raw vendor fallback path)
-! Skips `file-history-snapshot` and `progress` turn types. Content for assistant turns is a list of blocks (text, tool_use, tool_result) — this function flattens them to a single string. The `tool_result` block content is truncated to 200 chars to avoid bloating summaries.
-
-### extract_session_metadata(turns)
-File: `src/gator_command/scripts/extract-claude-sessions.py`
-Derives session-level metadata from the turn list: timestamps, cwd/branch sets, turn counts, tools used, session ID, repo name.
-Filesystem: none
-<- `main()`
-! Session IDs come from the JSONL `sessionId` field, not from the filename UUID. A session file may contain turns with multiple session IDs (rare but possible after session recovery).
-
-### format_session_markdown(turns, metadata)
-File: `src/gator_command/scripts/extract-claude-sessions.py`
-Produces a full Markdown transcript of the session turns. Each turn is headed with a timestamp and role label (Architect / Agent).
-Filesystem: none
-<- `main()` (non-summary, non-JSON mode)
-! This is the full transcript formatter — it does NOT delegate to gator-session-common. Only `format_session_summary()` and `format_summary_markdown()` delegate to shared canonical formatters.
-
-### _import_vendor(module_name) / _spool_slug(session_id, source_path)
-File: `src/gator_command/scripts/gator-sessions.py`
-`_import_vendor()` loads a vendor extractor or `gator-session-common` by filename using `importlib.util.spec_from_file_location()` — file-based dynamic loading, not sys.path manipulation (sys.path is set once at module import time at the top of gator-sessions.py). `_spool_slug()` returns `sha256("{session_id}|{source_path}")[:16]` — the canonical spool filename key.
-Filesystem: scripts directory (R for import)
-<- all `cmd_*` handlers in `gator-sessions.py`
-! `_spool_slug()` must produce byte-identical output to `gator-session-common.make_row_key()` and `gator-session-sink.load_spool_sessions()`. See cross-cutting TRIPWIRE: row_key Formula Duplication.
-
-### load_exported_state() / save_exported_state(exported_ids) / get_pending_sessions(all_sessions)
-File: `src/gator_command/scripts/gator-sessions.py`
-Tracks which sessions have been exported to spool. `load_exported_state()` reads `~/.gator/session-spool/.exported.json`; `save_exported_state()` writes it; `get_pending_sessions()` filters sessions not in the exported set.
-Filesystem: `~/.gator/session-spool/.exported.json` (RW)
-<- `cmd_export()`, `cmd_pending()`, `cmd_index()`
-! Exported state is keyed by `{vendor}-{spool_slug}`. If the slug formula changes, existing entries go stale and sessions re-export on next run.
-
-### cmd_index(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-Discovers all sessions and prints a tabular index grouped by vendor. Supports `--since`, `--json`. JSON output includes per-session `row_key`. Text output shows latest 10 per vendor with pending export count.
-Filesystem: vendor session dirs (R)
-<- `main()` via `sessions index`
-
-### cmd_manifest(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-Emits a machine-readable JSON manifest (schema: `gator-session-manifest-v1`). Supports `--pending`. Includes machine identity, `row_key`, `spool_path`, and export status per session.
-Filesystem: `~/.gator/session-spool/` (R for status check)
-<- `main()` via `sessions manifest`
-! Designed for enterprise ETL pipelines. The `row_key` in the manifest matches the database deduplication key used by `gator-session-sink.py`.
-
-### cmd_export(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-Writes normalized session JSON to `~/.gator/session-spool/`. Dispatches to vendor extractors via `_import_vendor()`, applies redaction via `gator-session-common`, tracks exports in `.exported.json`.
-Filesystem: vendor session files (R), `~/.gator/session-spool/` (W), `.exported.json` (RW)
-<- `main()` via `sessions export`
--> `_import_vendor()` per vendor, `gator-session-common.redact()`
-! Per-session errors are caught and logged without aborting the full run. Check output for `!` lines to identify failed extractions.
-
-### cmd_pending(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-Shows sessions not yet exported to spool. Text output capped at 20 entries. Supports `--json`.
-Filesystem: vendor session dirs (R), `.exported.json` (R)
-<- `main()` via `sessions pending`
-
-### cmd_commit_summaries(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-Writes git-tracked session summaries to `.gator/sessions/` using `gator-session-common.format_summary_markdown()`. Filenames are deterministic: `{date}-{project}-{vendor}-{row_key}.md`. Idempotent — skips existing files unless `--force`.
-Filesystem: vendor session files (R), `.gator/sessions/` (W)
-<- `main()` via `sessions commit-summaries`
--> `gator-session-common.format_summary_markdown()`, `gator-session-common.make_row_key()`
-! Summaries written here are the durable committed-summary layer preferred by `gator-audit.py`. They must use the canonical formatter to stay schema-compatible with `parse_committed_summary()` and `gator-session-sink.load_committed_summaries()`.
-
-### discover_all_sessions()
-File: `src/gator_command/scripts/gator-sessions.py`
-Discovers all sessions across all enabled vendors (Claude, Codex, Gemini). Returns a flat list of session dicts with vendor, path, project, and timestamp fields.
-Filesystem: `~/.claude/`, `~/.codex/`, `~/.gemini/` (R)
-<- `main()`, `gator-audit.py` via import_sibling
-! Vendors are imported lazily — a missing vendor directory (no Codex installed) is silently skipped. If a vendor extractor fails to import, that vendor is excluded from the index but others continue.
-
-### filter_sessions_since(sessions, since_dt) / parse_since(since_str)
-File: `src/gator_command/scripts/gator-sessions.py`
-`parse_since()` converts strings like "7d", "24h", "30d" to a datetime. `filter_sessions_since()` filters sessions to those after the cutoff.
-Filesystem: none
-<- `main()`, `gator-audit.py`
-! `since_dt=None` means no filter (all sessions). Always check for None before calling filter_sessions_since.
-
-### read_committed_summaries(sessions_dir, since_days)
-File: `src/gator_command/scripts/gator-sessions.py`
-Reads `.gator/sessions/*.md` committed summary files and extracts decisions, repo, vendor, and date from their frontmatter and body.
-Filesystem: `.gator/sessions/` (R)
-<- `gator-audit.py` (preferred decisions source)
--> `parse_committed_summary()`
-! Files starting with `_` are skipped (reserved for index/manifest files). The committed summary layer is the durable, portable read path — preferred over raw vendor logs in all audit contexts.
-
-### parse_committed_summary(text, filename)
-File: `src/gator_command/scripts/gator-sessions.py`
-Parses a single committed summary markdown file (frontmatter + decisions section). Returns a structured dict or None if the file is not a valid summary. The returned dict includes a `start` field extracted from frontmatter (`start` key, falling back to `timestamp` key) for sub-day sort ordering in dashboard displays.
-Filesystem: none
-<- `read_committed_summaries()`, `gator-session-sink.load_committed_summaries()` (via import_sibling), `gator-audit.py` (session_summaries), `gator-repo-status.py` (recent_session_summaries)
-! Used by both gator-sessions.py and gator-session-sink.py. Any change to the committed summary format (frontmatter keys, section names) must be compatible with both callers.
-
-### get_machine_identity()
-File: `src/gator_command/scripts/gator-sessions.py`
-Returns stable machine identity dict by delegating to `gator-session-common.get_machine_identity()`, with a hostname-only fallback if the shared module is unavailable.
-Filesystem: `~/.gator/machine-id` (R, via gator-session-common)
-<- `cmd_manifest()`, `cmd_export()`
-
-### extract_turn_text(turn)
-File: `src/gator_command/scripts/gator-sessions.py`
-Coerces turn content (string, list of blocks, or other) to a single flat string for indexing and preview.
-Filesystem: none
-<- `build_turn_record()`
-
-### extract_tool_types(turn)
-File: `src/gator_command/scripts/gator-sessions.py`
-Returns sorted unique tool names from a turn's `tool_calls` list, checking both `tool` and `name` keys per call.
-Filesystem: none
-<- `build_turn_record()`
-
-### extract_mentions_files(text)
-File: `src/gator_command/scripts/gator-sessions.py`
-Extracts file path mentions from text via regex (backtick-quoted, double-quoted, and bare paths with code extensions). Returns deduplicated list, capped at 20.
-Filesystem: none
-<- `build_turn_record()`
-
-### extract_mentions_functions(text)
-File: `src/gator_command/scripts/gator-sessions.py`
-Extracts function and method call mentions (e.g. `foo()`, `Class.method()`) from text via regex, filtering language keywords. Returns bare names, capped at 20.
-Filesystem: none
-<- `build_turn_record()`
-
-### extract_keywords(text, top_n=8)
-File: `src/gator_command/scripts/gator-sessions.py`
-Returns top-N keywords by frequency from text, tokenizing to 3+ char alphabetic words and excluding a built-in stopword set.
-Filesystem: none
-<- `build_turn_record()`
-
-### build_turn_record(turn)
-File: `src/gator_command/scripts/gator-sessions.py`
-Builds a single manifest turn entry from a spool turn, including seq, role, timestamp, char count, tool types, file/function mentions, keywords, and preview.
-Filesystem: none
-<- `build_turn_manifest()`
--> `extract_turn_text()`, `extract_tool_types()`, `extract_mentions_files()`, `extract_mentions_functions()`, `extract_keywords()`
-
-### build_turn_manifest(session_export)
-File: `src/gator_command/scripts/gator-sessions.py`
-Builds a full `gator-turn-manifest-v1` dict from a spool export dict, computing `row_key` via `_spool_slug()` and calling `build_turn_record()` for each turn.
-Filesystem: none
-<- `cmd_turn_manifest()`
--> `build_turn_record()`, `_spool_slug()`
-
-### write_turn_manifest(manifest, out_path)
-File: `src/gator_command/scripts/gator-sessions.py`
-Writes a manifest dict as indented JSON to disk, creating parent directories as needed.
-Filesystem: `~/.gator/turn-manifests/<row_key>.turns.json` (W)
-<- `cmd_turn_manifest()`
-
-### cmd_turn_manifest(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-CLI command: generates turn manifests for all spool exports (or a single `--row-key`). Skips already-generated manifests unless `--force`.
-Filesystem: `~/.gator/session-spool/` (R), `~/.gator/turn-manifests/` (W)
-<- `main()` via `sessions turn-manifest`
--> `_load_spool_sessions()`, `build_turn_manifest()`, `write_turn_manifest()`
-
-### cmd_grep_turns(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-CLI command: searches turn manifests by file glob, function substring, keyword, vendor, repo, or role. Supports `--json` output.
-Filesystem: `~/.gator/turn-manifests/*.turns.json` (R)
-<- `main()` via `sessions grep-turns`
-
-### cmd_show_turns(args)
-File: `src/gator_command/scripts/gator-sessions.py`
-CLI command: shows full turn content from a spool export by `--row-key` and `--seq` (comma-separated sequence numbers), with optional `--context` to include surrounding turns.
-Filesystem: `~/.gator/turn-manifests/` (R for spool_file lookup), `~/.gator/session-spool/` (R for full turn content)
-<- `main()` via `sessions show-turns`
--> `_load_spool_sessions()` (fallback path)
-
-### load_spool_sessions(include_turns=False)
-File: `src/gator_command/scripts/gator-session-sink.py`
-Reads all spool JSON exports from `~/.gator/session-spool/`. Constructs `row_key` using the same sha256 formula as `gator-session-common.make_row_key()`.
-Filesystem: `~/.gator/session-spool/*.json` (R)
-<- `cmd_sink()`, `cmd_command()`
-! The `row_key` formula here must remain byte-for-byte identical to `make_row_key()` in `gator-session-common.py`: `sha256("{session_id}|{source_path}")[:16]`. This is the deduplication key across spool and committed summary inputs.
-
-### normalize_turn(turn, seq=None)
-File: `src/gator_command/scripts/gator-session-sink.py`
-Normalizes a vendor-specific turn to the stable database schema: seq, role, timestamp, content (always string), vendor_type, tool_calls (normalized).
-Filesystem: none
-<- `_insert_turns_sqlite()`, sink_duckdb turns loop
-! Strips vendor-specific fields (cwd, branch, item_type). `content` is coerced to string — Codex uses lists, Claude uses strings. The `vendor_type` field is the stable equivalent of Claude's `type` and Codex's `item_type`.
-
-### sink_sqlite(db_path, sessions, include_turns=False) / sink_duckdb(db_path, sessions, include_turns=False)
-File: `src/gator_command/scripts/gator-session-sink.py`
-Loads sessions into SQLite or DuckDB. Idempotent: duplicate rows are skipped via `row_key` unique constraint.
-Filesystem: database file (RW)
-<- `cmd_sink()`
-! Schema version is tracked in `sink_metadata` table as `gator-session-sink-v2`. The turns tables (turns, tool_calls) are only created when `--include-turns` is active. Spool-only for turns — committed summaries have no turn data.
-! **Input shape coupling**: both sinks access `s["pi"]` directly (SQLite line ~417, DuckDB line ~564) — the sink's INTERNAL shape uses `pi`, not `architect`. The spool-load path (`load_spool_sessions`, line ~179) converts `architect` → `pi` at construction time via `summary.get("architect", summary.get("pi", ""))`. Callers that construct session dicts and pass them to `sink_sqlite`/`sink_duckdb` DIRECTLY (bypassing spool-load) MUST include a `pi` key or they get `KeyError: 'pi'`. Extractors (`extract-{claude,codex,gemini}-sessions.py`) produce `architect`, not `pi` — direct extractor→sink pipelines need the conversion. Post-cutover cleanup opportunity: make the two `s["pi"]` sites defensive with the same `.get(...)` pattern already used in `load_spool_sessions`.
+- The committed summary read path in repo-status — `gator-repo-status.py::get_session_summaries()` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
 
 ---
 
@@ -281,97 +75,56 @@ Filesystem: `~/.gator/dashboard-repos.json` (R), per-repo snippets (R), `~/.gato
 
 ---
 
-### resolve_snippet(gator_dir, full_commit_hash)
-File: `src/gator_command/scripts/gator-session-block.py`
-Finds exactly one snippet for a commit hash. Enforces one-to-one snippet invariant.
-Filesystem: `.gator/session-snippets/*.json` (R)
-<- `generate()`
-! Raises `SnippetNotFound` (zero matches) or `SnippetInvariantViolation` (multiple matches).
-
-### discover_transcript(vendor, transcript_session_id)
-File: `src/gator_command/scripts/gator-session-block.py`
-Searches vendor-specific local log stores by session ID. Provisional local-machine best-effort layer — vendor log directory layouts are not stable APIs.
-Filesystem: `~/.claude/projects/` (R), `~/.codex/sessions/` (R), `~/.gemini/tmp/` (R)
-<- `generate()`
-! Raises `TranscriptNotFound` (zero) or `MultipleTranscriptsFound` (ambiguous — user must resolve manually).
-
-### parse_claude_transcript(transcript_path)
-File: `src/gator_command/scripts/gator-session-block.py`
-Reads Claude Code JSONL. Returns raw turn dicts with **full, untruncated** content. Key difference from `extract-claude-sessions.py`: tool results are NOT truncated to 200 chars. Marks `is_tool_output` for anchor scanning.
-Filesystem: transcript JSONL file (R)
-<- `extract_interval()`
-
-### find_commit_anchors(raw_turns, start_short_hash, end_short_hash)
-File: `src/gator_command/scripts/gator-session-block.py`
-Scans tool output turns only (`is_tool_output == True`) for Git commit hashes in `[branch hash]` format. Matches against short hashes from snippet metadata.
-Filesystem: none
-<- `extract_interval()`
-! Raises `AnchorNotFound` if end hash cannot be found. Conversational text is explicitly excluded.
-
-### extract_interval(transcript_path, vendor, start_short_hash, end_short_hash)
-File: `src/gator_command/scripts/gator-session-block.py`
-Dispatcher: vendor parser → `find_commit_anchors` → `normalize_turns`. Returns `(turns, capture_quality, capture_method)`.
-Filesystem: transcript file (R)
-<- `generate()`
--> `parse_claude_transcript()`, `find_commit_anchors()`, `normalize_turns()`
-
-### render_session_block(turns, capture_quality, capture_method, snippet)
-File: `src/gator_command/scripts/gator-session-block.py`
-Builds `gator-session-block-v1` dict. All identity fields read from snippet — the snippet is the authoritative source.
-Filesystem: none
-<- `generate()`
-
-### emit_session_block(gator_dir, block_data, snippet_filename_stem)
-File: `src/gator_command/scripts/gator-session-block.py`
-Gzip-compresses block JSON, writes to `.gator/session-blocks/`. Idempotent: no-op if identical content exists.
-Filesystem: `.gator/session-blocks/` (RW)
-<- `generate()`
-
----
+### get_machine_identity()
+File: `src/gator_command/scripts/gator_session_reader.py`
+Returns `{id, hostname, label}` for the current machine. Creates `~/.gator/machine-id` on first call using `gator-machine-id.py`'s storage format. Folded from `gator-session-common.py:33` in Phase 3F (2026-08-13).
+Filesystem: `~/.gator/machine-id` (R, W on creation)
+<- `gator-audit.py::assemble_audit_data()` (data["machine"])
+! Duplicate copy exists in `gator-session-common.py:33` during the Phase 3→4 window. Both must stay in sync. Rationale for the duplicate: session-common's internal formatters call `get_machine_identity()`, and retargeting them to the reader would add an `import_sibling` from the retiring file (architecturally backward). Phase 4 sweeps session-common and its copy with the Codex/Gemini extractors. See [`scripts-core-library`](scripts-core-library.md) for the sync obligation.
 
 ### parse_committed_summary(text, filename="")
 File: `src/gator_command/scripts/gator_session_reader.py`
-Parses one `.gator/sessions/*.md` committed summary (frontmatter + `## Goal` + `## Decisions`) into a structured dict. Handles both schemas: `gator-session-summary-v1` (archaeology-produced, retiring) and `gator-commit-summary-v1` (pre-commit hook, surviving). Returns None if no frontmatter.
+Parses one `.gator/sessions/*.md` committed summary (frontmatter + `## Goal` + `## Decisions`) into a structured dict. Handles both schemas: `gator-session-summary-v1` (legacy archaeology format, still readable) and `gator-commit-summary-v1` (pre-commit hook, primary source). Returns None if no frontmatter.
 Filesystem: none
-<- `read_committed_summaries()`, `gator-audit.py` (remote-cache path)
-! Byte-identical to the legacy copy in `gator-sessions.py:1044` — Phase 2 extracted this parser without altering behavior. Any future change to the committed-summary format must land in this module (the surviving copy); the legacy copy retires with `gator-sessions.py` in Phase 3.
+<- `read_committed_summaries()`, `gator-audit.py::_committed_decisions_from_snippets()` (remote-cache path)
+! Byte-identical to the original in the retired `gator-sessions.py:1044`. Sole owner post-Phase-3 (the Phase-3-Commit-E sweep removed the legacy copy).
 
 ### read_committed_summaries(sessions_dir, since_days=7)
 File: `src/gator_command/scripts/gator_session_reader.py`
 Reads `.gator/sessions/*.md` in a directory, filters by filename-date against `since_days`, parses each via `parse_committed_summary()`. Returns list of summary dicts. Empty list on missing dir.
 Filesystem: `.gator/sessions/` (R)
-<- `gator-audit.py` (snippet-based decisions_source), `gator-repo-status.py:get_session_summaries()`
+<- `gator-audit.py::_committed_decisions_from_snippets()`, `gator-repo-status.py::get_session_summaries()`
 ! Filename-date filter uses the first 10 chars of the filename (`YYYY-MM-DD-...`). Files without a leading date are always parsed (no filename filter possible).
 
 ---
 
-## TRIPWIRE: row_key Formula Duplication
+## TRIPWIRE: parse_committed_summary() Single-Owner Contract
 
-The `row_key` is computed identically in two places:
-- `gator-session-common.make_row_key()`: `sha256("{session_id}|{source_path}")[:16]`
-- `gator-session-sink.load_spool_sessions()`: inline hashlib code
+Post-Phase-3 the parser has exactly one owner (`gator_session_reader.py`) and two consumers (`gator-audit.py`, `gator-repo-status.py`). Any change to the committed-summary schema (frontmatter field names, section headers `## Goal` / `## Decisions`, return dict shape) must land in the single owner. See [`scripts-cross-cutting`](scripts-cross-cutting.md) for the full tripwire.
 
-These must remain identical. A mismatch causes the sink's deduplication to fail silently — the same session gets inserted twice with different keys.
+## TRIPWIRE: get_machine_identity() Phase-3→4 Duplicate Copies
+
+`gator_session_reader.get_machine_identity()` and `gator-session-common.get_machine_identity()` are byte-identical during the Phase-3→4 window. Both must stay in sync. Phase 4 sweeps session-common with the Codex/Gemini extractors; the reader's copy becomes sole owner. If a change to machine-id storage lands during this window (e.g. new field in `~/.gator/machine-id`), update BOTH copies in the same commit.
 
 ## TRIPWIRE: Vendor Extractor Delegation Contract
 
-All vendor extractors (`extract-claude-sessions.py`, `extract-codex-sessions.py`, `extract-gemini-sessions.py`) must:
+The Phase-4-deferred extractors (`extract-codex-sessions.py`, `extract-gemini-sessions.py`) must:
 1. Call `gator-session-common.format_summary_markdown()` for summary output (not hand-roll their own)
 2. Call `gator-session-common.format_session_summary_dict()` for JSON summary output
 3. Produce turns in the normalized format: `{role, content, tool_calls, timestamp, cwd, branch, session_id}`
 
-Violating the delegation contract creates schema divergence between vendors that the audit dashboard cannot handle.
+Violating the delegation contract creates schema divergence that the audit dashboard cannot handle. Contract retires in Phase 4 when both extractors + session-common retire together.
 
 ## Before Changing This Module
 
-- The committed summary format (`gator-session-summary-v1` frontmatter) is the contract between the extraction layer and the audit/sink consumers. Adding frontmatter fields is backward-compatible; removing or renaming them breaks `parse_committed_summary()` and `gator-session-sink.load_committed_summaries()`.
-- `gator-sessions.py`'s `parse_committed_summary()` is imported by `gator-session-sink.py` via `import_sibling`. It is not a pure library function — it's shared between two entry-point scripts. Test both consumers when changing the parser.
+- The committed summary format (`gator-session-summary-v1` and `gator-commit-summary-v1` frontmatter) is the contract between summary producers (pre-commit hook, legacy archaeology output) and `parse_committed_summary()`. Adding frontmatter fields is backward-compatible; removing or renaming them breaks the parser and both its consumers.
 - The Gemini extractor's duplicate session ID problem is solved by the source_path component of `make_row_key()`. Do not simplify the key to session_id-only.
-- `--include-turns` in the sink adds two tables (turns, tool_calls). These tables do not exist in databases loaded without this flag — don't assume they're present in downstream SQL.
+- Phase 4 sweep obligations: when Enterprise-side Codex + Gemini adapters ship, retire `extract-codex-sessions.py`, `extract-gemini-sessions.py`, `gator-session-common.py` (with its duplicate `get_machine_identity()` copy), the "Vendor Extractor Delegation Contract" TRIPWIRE, and the "get_machine_identity() Phase-3→4 Duplicate Copies" TRIPWIRE — all in the same commit for atomic retirement.
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator-session-common (canonical formatters, row_key, machine identity)
--> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — gator-audit.py consumes discover_all_sessions, read_committed_summaries
--> [scripts-cross-cutting](scripts-cross-cutting.md) — row_key duplication tripwire, import_sibling pattern
+-> [scripts-core-library](scripts-core-library.md) — gator-session-common (retained vendor formatters, row_key, machine identity duplicate)
+-> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — gator-audit.py::assemble_audit_data consumes gator_session_reader
+-> [scripts-cross-cutting](scripts-cross-cutting.md) — parse_committed_summary single-owner tripwire, import_sibling pattern
+-> [scripts-dashboard](scripts-dashboard.md) — gator-repo-status.py::get_session_summaries populates recent-sessions panel
 -> [Index](INDEX.md)

@@ -345,14 +345,18 @@ def assemble_audit_data(since_days=7):
         "decisions": [],
     }
 
-    # Machine identity
+    # Snippet-based session reader (`gator_session_reader.py`) — post-Phase-3
+    # owner of both `get_machine_identity()` (folded from gator-session-common
+    # in Phase 3F, 2026-08-13) AND the committed-summary parser/reader
+    # (extracted from gator-sessions in Phase 2A). Used here for machine
+    # identity; used again in the decisions section below.
     try:
-        common = _import_script("gator-session-common")
+        reader_mod = _import_script("gator_session_reader")
     except ImportError as e:
-        common = None
-        data["_errors"] = data.get("_errors", []) + [f"session-common: {e}"]
-    if common:
-        data["machine"] = common.get_machine_identity()
+        reader_mod = None
+        data["_errors"] = data.get("_errors", []) + [f"session-reader: {e}"]
+    if reader_mod:
+        data["machine"] = reader_mod.get_machine_identity()
 
     # Fleet report
     try:
@@ -393,16 +397,10 @@ def assemble_audit_data(since_days=7):
         except (OSError, KeyError, ValueError) as e:
             data["drift"] = [{"error": f"{type(e).__name__}: {e}"}]
 
-    # Snippet-based session reader (Phase 2A). Vendor-transcript-derived
-    # session counts (`sessions.by_vendor`, `by_repo`, `pending_export`,
-    # `total`, `exported`) retired in Phase 3 (2026-08-13) per parent plan
-    # §5 decision 4 = (i) drop silently. `data["sessions"]` stays as the
-    # `{}` init from L414; dashboard consumers default defensively.
-    try:
-        reader_mod = _import_script("gator_session_reader")
-    except ImportError as e:
-        reader_mod = None
-        data.setdefault("_errors", []).append(f"session-reader import failed: {e}")
+    # (`reader_mod` loaded above with machine identity — reused for the
+    # decisions section further down. Vendor-transcript-derived session
+    # counts retired in Phase 3 Commit D per parent plan §5 decision 4 = (i)
+    # drop silently. `data["sessions"]` stays as the `{}` init.)
 
     # Governance coverage (from fleet data)
     if data["fleet_status"]:
