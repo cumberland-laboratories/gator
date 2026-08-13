@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "session cleanup Phase 3 Commit D: retire vendor-discovery paths from gator-audit.py",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-cleanup",
+    "phase-3",
+    "deletion"
+  ],
+  "commit": "c9b2496c19e12e077a1c30b16d3dbc6083d4609a",
+  "short_commit": "c9b2496",
+  "snippet_id": "snippet-c9b2496c19e12",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-13T10:42:36Z",
+  "ended_at": "2026-08-13T10:42:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-08-12-gator-e5db8f4676317.json",
+    "src/gator_command/scripts/gator-audit.py"
+  ],
+  "notes": [
+    "Phase 3 Commit D of the [2026-08-11 non-Enterprise session cleanup plan](vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md) — audit surgery. Retires all vendor-transcript-discovery code paths from `gator-audit.py::assemble_audit_data()`, unblocking the whole-file deletes in Commit E. Ordering matters: doing file deletes first would break the snippet-reader path (spurious `if sessions_mod:` guard also wrapped `sessions_dirs` gathering).",
+    "Deleted `_committed_decisions_from_raw_vendor_logs()` fn (~70 lines, extracted in Phase 2B for exactly this deletion). Deleted the `elif common:` dispatch site in `assemble_audit_data()` (7 lines). Behavior: `data[\"decisions_source\"]` is now always `\"committed\"` when any summaries exist; no `\"raw-vendor-logs\"` value survives.",
+    "Deleted the \"Sessions — filtered to fleet repos only\" block (~65 lines): `sessions_mod = _import_script(\"gator-sessions\")` init, the outer `if sessions_mod:` guard, all `sessions_mod.discover_all_sessions/parse_since/filter_sessions_since/get_pending_sessions` call sites, and the `data[\"sessions\"] = {by_vendor, by_repo, pending_export, total, exported, recent}` assembly. Per parent plan §5 decision 4 = (i) drop vendor-derived fields silently: `data[\"sessions\"]` stays as the `{}` init from the top of the function; dashboard consumers (`audit.js:258/274/335/343`) default defensively (`sessions.by_vendor || {}` etc.), so empty tiles are the accepted honest degrade.",
+    "Restructured the decisions section: removed the spurious outer `if sessions_mod:` guard around `sessions_dirs` gathering (gathering only uses `find_command_post` + `parse_registry` + `normalize_path` + `gator_remote` — none from `sessions_mod`). Un-indented the block by one level. Removed the \"prefer committed / fall back to vendor logs\" comment prose (no fallback remains). `assemble_audit_data()` shrunk from ~380 lines to ~230.",
+    "`common = _import_script(\"gator-session-common\")` init preserved — still used at L355 for `data[\"machine\"] = common.get_machine_identity()`. Commit F retargets that call to `reader_mod.get_machine_identity()` after folding the helper into `gator_session_reader.py`, then removes the `common` import from audit.py.",
+    "Charter updates: `.gator/charters/scripts-fleet-intelligence.md` — `assemble_audit_data()` entry rewritten (no vendor mention, sessions-empty tripwire added, `->` list pruned); the `_committed_decisions_from_raw_vendor_logs` entry replaced with a one-line retirement stub for reader continuity. `.gator/charters/scripts-cross-cutting.md` — `gator-audit.py` degradation bullet updated to reflect the reduced optional-module set (5 → 4) and the vendor-branch retirement.",
+    "Verification: full test suite **867 passed, 2 xfailed** (pre-existing v2.6.0 xfails). Zero regressions. `tests/test_audit_integration.py` (3 tests) exercises `assemble_audit_data` end-to-end — snippet-reader path still produces `decisions_source: \"committed\"` with the expected decisions extracted from fleet repos.",
+    "Significance-check assessment (constitution step 7): touches no public CLI verb (`--sessions` mode continues via a separate code path — `_handle_sessions()` — that uses `gator-session-aggregator`, unaffected). No cross-module TRIPWIRE violated: the `parse_committed_summary` canonical parser TRIPWIRE (r2 updated) now has exactly one owner (`gator_session_reader.py`) after this commit, since the last vendor-side consumer (`gator-audit.py`'s DELETE-VENDOR helper) is gone. No security-relevant code. Steelman argument against: the `data[\"sessions\"]: {}` silent-empty is a soft behavior change — the Audit dashboard's \"Sessions by agent\" / \"Sessions by repo\" tiles now render empty. Response: this is the exact behavior the Architect ratified as (i) at Phase 3 kickoff; the field's semantics (\"counts across raw vendor transcripts on the machine\") have no snippet-based equivalent, and inventing one for cosmetic UI reasons is out of scope per parent plan §5 decision 4."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -246,19 +246,20 @@ When adding functions to `generate_wiki.py`, distinguish between:
 
 ## TRIPWIRE: parse_committed_summary() Canonical Parser
 
-`parse_committed_summary(text, filename)` is the single parser for committed session summary markdown. **Phase 2A (2026-08-12)** extracted the surviving copy into a new module and retargeted the two surviving external consumers; the legacy copy stays through Phase 2 for the retiring consumers, then retires with `gator-sessions.py` in Phase 3.
+`gator_session_reader.parse_committed_summary(text, filename)` is the sole parser for committed session summary markdown. Post-Phase-3 (2026-08-13) it has exactly one owner and two consumers.
 
-**Surviving copy (Phase 2+):**
-- `gator_session_reader.py` — defines it, uses it in `read_committed_summaries()`. Consumers: `gator-audit.py` (Phase 2A retargeted), `gator-repo-status.py` (Phase 2A retargeted), `tests/test_session_reader.py`, `tests/test_audit_integration.py`.
+**Owner:**
+- `gator_session_reader.py` — defines it, uses it in `read_committed_summaries()`.
 
-**Legacy copy (retiring in Phase 3 with the rest of `gator-sessions.py`):**
-- `gator-sessions.py` — still defines a byte-identical copy; still used by `gator-session-sink.py` (also DELETE-VENDOR) and by `tests/test_sessions.py::TestReadCommittedSummaries` (also retiring).
+**Consumers via `import_sibling()`:**
+- `gator-audit.py` — fleet-wide decision extraction + session_summaries (via `_committed_decisions_from_snippets()`).
+- `gator-repo-status.py` — per-repo recent sessions display (via `get_session_summaries()`).
 
-**Phase 2 sync obligation**: during Phase 2 both copies exist and must stay byte-identical. If a schema change lands before Phase 3 sweeps `gator-sessions.py`, update `gator_session_reader.py` first and mirror back only if the retiring consumers need to observe the change before their own deletion.
+The parser handles two schema types: `gator-session-summary-v1` (legacy archaeology format, still readable) and `gator-commit-summary-v1` (from pre-commit hook). Returns dict with: date, repo, vendor, agent, goal, decisions, source_file, start. Returns None for unparseable files.
 
-The parser handles two schema types: `gator-session-summary-v1` (from archaeology) and `gator-commit-summary-v1` (from pre-commit hook). Returns dict with: date, repo, vendor, agent, goal, decisions, source_file, start. Returns None for unparseable files.
+Any change to frontmatter field names, section headers (`## Goal`, `## Decisions`), or the return dict shape breaks the consumers. Adding new return fields is safe; removing or renaming existing ones is not.
 
-Any change to frontmatter field names, section headers (`## Goal`, `## Decisions`), or the return dict shape breaks all consumers of both copies. Adding new return fields is safe; removing or renaming existing ones is not.
+*(Prior state: `gator-sessions.py` was the definer, with `gator-session-sink.py` as a fourth consumer via `import_sibling`. Phase 2A extracted the parser into `gator_session_reader.py`; Phase 3 Commit E retired `gator-sessions.py` and `gator-session-sink.py`, collapsing back to one owner.)*
 
 ## TRIPWIRE: source_kind Provenance Vocabulary
 
@@ -371,7 +372,7 @@ Used by:
 
 The rule: a broken or missing optional module degrades that section's output (empty or `{"error": "..."}`) but never kills the entire script. Each import is independently guarded. Do not consolidate these into a single try/except block.
 
-! `import_sibling()` returns `None` when the file doesn't exist — it does NOT raise. A `try/except` around the import call will not catch this case. Callers must guard against `None` before calling methods on the returned module. In the Individual wheel, Enterprise-only scripts (gator-sessions, gator-session-aggregator, etc.) are absent, so `import_sibling()` returns `None` at runtime.
+! `import_sibling()` returns `None` when the file doesn't exist — it does NOT raise. A `try/except` around the import call will not catch this case. Callers must guard against `None` before calling methods on the returned module. Base-wheel package-data currently omits several session-pipeline scripts (`gator-session-aggregator`, `gator-session-common`, `gator_session_reader`, `gator-audit`, `gator-fleet-report`, `gator-drift`, `gator-fleet-intel`, `gator-audit-renderers`) — a pre-existing gap unrelated to Phase 3 session cleanup. Under `pipx install gator-command` these scripts return `None` at runtime and their features degrade to empty output; an editable/source-checkout install has them. Adding them to package-data is a separate follow-on task.
 
 ## Pattern: Parallel Local/Remote Scan Schemas
 

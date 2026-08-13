@@ -92,7 +92,6 @@ gator_command = [
     "scripts/gator-policy-status.py",
     "scripts/gator-pulse.py",
     "scripts/gator-repo-status.py",
-    "scripts/gator-session-block.py",
     "scripts/gator-state.py",
     "scripts/gator-update.py",
     "scripts/gator-version.py",

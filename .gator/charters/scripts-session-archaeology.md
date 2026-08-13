@@ -1,27 +1,26 @@
 # Charter: Session Archaeology
 
-**Covers**: `src/gator_command/scripts/extract-claude-sessions.py`, `src/gator_command/scripts/extract-codex-sessions.py`, `src/gator_command/scripts/extract-gemini-sessions.py`, `src/gator_command/scripts/gator-sessions.py`, `src/gator_command/scripts/gator-session-sink.py`, `src/gator_command/scripts/gator-session-aggregator.py`, `src/gator_command/scripts/gator-session-block.py`, `src/gator_command/scripts/gator_session_reader.py`
+**Covers**: `src/gator_command/scripts/extract-codex-sessions.py`, `src/gator_command/scripts/extract-gemini-sessions.py`, `src/gator_command/scripts/gator-session-aggregator.py`, `src/gator_command/scripts/gator-session-common.py`, `src/gator_command/scripts/gator_session_reader.py`
+
+> **PHASE 3 STATUS (2026-08-13)**: Commit E (this commit) retired `gator-sessions.py`, `gator-session-sink.py`, `gator-session-block.py`, `extract-claude-sessions.py` from the source tree. Owns bullets + function entries for those files are pruned below. The deeper charter rewrite (retitle to `scripts-session-reader.md`? / fold `gator-session-common.py` into `gator_session_reader.py`?) is Commit F per parent plan §6 Phase 3.
 
 ## Owns
 
-Session discovery, extraction, and persistence across all AI coding vendors:
+Snippet-based session pipeline (post-Phase-3 shape). Vendor-transcript archaeology retired 2026-08-13.
 
-- `extract-claude-sessions.py` owns Claude Code session archaeology: reads `~/.claude/projects/` JSONL files, produces normalized turns, delegates all summary formatting to `gator-session-common`.
-- `extract-codex-sessions.py` owns Codex CLI session archaeology: reads `~/.codex/sessions/` with the same normalized turn format and delegation pattern.
-- `extract-gemini-sessions.py` owns Gemini CLI session archaeology: reads `~/.gemini/tmp/` with the same pattern; Gemini is the only vendor with genuine duplicate session IDs across files — `make_row_key()` handles this.
-- `gator-sessions.py` owns the vendor-agnostic orchestration CLI: session discovery index, JSON manifests, spool exports, pending tracking, and the committed summary layer (`read_committed_summaries()`, `parse_committed_summary()`).
-- `gator-session-sink.py` owns loading session data into analytical backends: SQLite, DuckDB, and NDJSON command pipe. Two input paths: spool (full turns) and committed summaries (lightweight). Schema version: `gator-session-sink-v2`.
-- `gator-session-aggregator.py` owns the snippet-to-summary pipeline: reads v2 JSON snippets from `.gator/session-snippets/*.json`, aggregates by `(repo, session_id)`, caches summaries at `~/.gator/sessions/<path-hash>/`. Importable library — no CLI entry point. Consumers: `gator-audit.py` (CLI `--sessions`), `gator-dashboard.py` (Audit view API).
-- `gator-session-block.py` owns session-block companion capture: extracts exact transcript slices per commit interval from vendor session storage. CLI-first, on-demand via `gator session-blocks generate --commit <commit-ish>`. Discovers transcripts by snippet `transcript_session_id`, anchors intervals by short commit hashes in tool output, emits gzip-compressed blocks to `.gator/session-blocks/`. Local-only, same-machine best effort.
-- `gator_session_reader.py` owns the surviving committed-summary reader contract (`parse_committed_summary()` + `read_committed_summaries()`) extracted from `gator-sessions.py` in Phase 2 of the 2026-08-11 non-Enterprise session cleanup. Importable library — no CLI. Byte-identical parse/read behavior to the original. Consumers: `gator-audit.py` (snippet-based decisions_source), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py` (fleet-audit integration), `tests/test_session_reader.py` (reader-contract regression pins). During Phase 2 the old copies in `gator-sessions.py` still exist and still pass their tests; Phase 3 deletes them along with the whole vendor-discovery half.
+- `extract-codex-sessions.py` — Codex CLI session archaeology (**Phase 4 deferred retirement** per parent plan §5 decision 2(b); retires once Enterprise-side Codex adapter ships). Reads `~/.codex/sessions/` with normalized turn format.
+- `extract-gemini-sessions.py` — Gemini CLI session archaeology (**Phase 4 deferred retirement**, same reason). Reads `~/.gemini/tmp/`; Gemini is the only vendor with genuine duplicate session IDs across files — `make_row_key()` handles this.
+- `gator-session-aggregator.py` owns the snippet-to-summary pipeline: reads v2 JSON snippets from `.gator/session-snippets/*.json`, aggregates by `(repo, session_id)`, caches summaries at `~/.gator/sessions/<path-hash>/`. Importable library — no CLI entry point. Consumers: `gator-audit.py` (dashboard audit path), `gator-dashboard.py` (Audit view API).
+- `gator-session-common.py` owns the reduced shared-helper surface. Post-Phase-3 Commit E, only `get_machine_identity()` (L33) remains a live consumer target — Commit F folds it into `gator_session_reader.py` and deletes this file entirely per parent plan follow-on decision #2 = (b).
+- `gator_session_reader.py` owns the surviving committed-summary reader contract (`parse_committed_summary()` + `read_committed_summaries()`) — the canonical reader for `.gator/sessions/*.md`. Importable library — no CLI. Consumers: `gator-audit.py` (snippet-based decisions_source), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py`, `tests/test_session_reader.py`. Byte-identical parse/read behavior to the original in `gator-sessions.py` (retired 2026-08-13).
 
 ## Does Not Own
 
 - Machine identity storage — that is `gator-machine-id.py` and `gator-session-common.py`.
 - Summary formatting logic — all vendor extractors delegate to `gator-session-common.format_summary_markdown()` and `format_session_summary_dict()`.
 - Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py`.
-- The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()` (Phase 2, 2026-08-12). During Phase 2 the equivalent function still exists in `gator-sessions.py` (dead code from the outside; retires in Phase 3).
-- The committed summary read path in repo-status — `gator-repo-status.py` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")` (Phase 2, 2026-08-12).
+- The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()`.
+- The committed summary read path in repo-status — `gator-repo-status.py` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
 
 ---
 
