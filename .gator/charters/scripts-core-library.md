@@ -215,7 +215,7 @@ Runtime context resolver for Gator. Detects runtime mode (source-checkout, publi
 ## Before Changing This Module
 
 - `gator_core.py` is imported by every other script. Changes to function signatures, return types, or constants cascade across the entire codebase.
-- The `make_row_key()` formula in `gator-session-common.py` is duplicated in `gator-session-sink.py`. Any change to the hash formula (separator, length, algorithm) must be applied to both files simultaneously or session deduplication will break.
+- The `make_row_key()` formula in `gator-session-common.py` is sole-owned post-Phase-3 (2026-08-13, Commit E). The historical duplicate in `gator-session-sink.py` retired with the sink. Any change to the hash formula (separator, length, algorithm) now lands in one place. Retires in Phase 4 with the Codex/Gemini extractors + session-common.
 - `CURRENT_GENERATION` is imported by the Python installer and downstream tooling. Keep it on a single `CURRENT_GENERATION = N` line — some readers may still parse it literally. Bash installer chain retired in v2.4.0.
 - `format_summary_markdown()` and `format_session_summary_dict()` define the `gator-session-summary-v1` schema. Adding fields is backward-compatible; removing or renaming fields is not. The `architect:` frontmatter field (formerly `pi:`) is read with fallback: `metadata.get("architect", metadata.get("pi", "unknown"))`.
 - The bare-clone cache key format (`{name}-{hash8}.git`) has migration logic for legacy caches. If you change the format again, add another migration step.

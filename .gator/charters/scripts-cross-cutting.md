@@ -92,11 +92,7 @@ The canonical unique key for a session is:
 sha256(f"{session_id}|{source_path}".encode()).hexdigest()[:16]
 ```
 
-This formula appears in two places:
-1. `gator-session-common.make_row_key(metadata)` — used by all vendor extractors for spool and transcript paths
-2. `gator-session-sink.load_spool_sessions()` — inline, for database deduplication
-
-Both must remain byte-identical. A mismatch silently breaks deduplication: the same session gets two database rows with different keys. The separator is `|` (not `/` or `-`), the length is exactly 16 hex chars, and the full source_path (not just filename) is used.
+Post-Phase-3 (2026-08-13, Commit E), this formula has a single owner: `gator-session-common.make_row_key(metadata)`, used by the Phase-4-deferred Codex + Gemini extractors for spool and transcript paths. The historical duplicate in `gator-session-sink.load_spool_sessions()` retired with the sink in Commit E. The separator is `|` (not `/` or `-`), the length is exactly 16 hex chars, and the full source_path (not just filename) is used — this handles Gemini's genuine duplicate session IDs across different files. Sole-owner tripwire retires in Phase 4 when session-common retires with the extractors.
 
 ## TRIPWIRE: Local → Remote Fallback Pattern
 
@@ -341,8 +337,7 @@ All CLI scripts that produce JSON include a top-level `"schema"` field declaring
 
 - `gator-audit.py` → `"schema": "gator-audit-v1"`
 - `gator-repo-status.py` → `"schema": "gator-repo-status-v1"`
-- `gator-session-common.py` → `"schema": "gator-session-summary-v1"`
-- `gator-session-sink.py` → tracks `"gator-session-sink-v2"` in metadata table
+- `gator-session-common.py` → `"schema": "gator-session-summary-v1"` (Phase-4-deferred, ships with Codex/Gemini extractors)
 
 Every new CLI script with JSON output must include `"schema": "<name>-v<N>"` at the top level. This enables:
 - Downstream consumers to detect incompatible versions
@@ -384,14 +379,6 @@ Functions that read governance state from local repos have a parallel remote cou
 | `fleet-report.scan_repo()` | `gator_remote.scan_repo_remote()` | full repo scan with `scan_mode` field |
 
 Adding a field to the local function without the remote counterpart creates inconsistent data in fleet-report and audit — some repos show the field, others don't, with no indication of why.
-
-## Pattern: Session-Block Script Dual Deployment (Enterprise-Adjacent, Ships in Base Wheel)
-
-`gator-session-block.py` is mirrored at two paths that must stay byte-behaviorally in sync:
-- `src/gator_command/scripts/gator-session-block.py` — canonical source, shipped in the wheel via `pyproject.toml` `[tool.setuptools.package-data]` (added Phase 4b-substrate 2026-08-01).
-- `.gator/scripts/gator-session-block.py` — self-governance copy for this repo dogfooding the same code path.
-
-Per amended Decision B (2026-08-01, `.gator/artifacts/2026-07-31-monorepo-product-contract-decisions.md`), the file ships in the base wheel. Gating happens at the CLI dispatch layer — invocation belongs behind `gator enterprise ...` (Phase 4c) with a `gator_core.is_enterprise_active()` check against `.gator/enterprise.json`. The file itself has only stdlib imports (no fastapi/sqlalchemy/crypto), so it is safe to include unconditionally; heavier server-side deps stay behind the `[enterprise-server]` optional extra.
 
 ## Pattern: Individual/Enterprise Product Boundary
 

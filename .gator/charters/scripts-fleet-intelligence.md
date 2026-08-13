@@ -167,7 +167,7 @@ Loads fleet-report, drift, and governance coverage via `import_sibling()`. Assem
 ! Trailer field renamed: `Gator-Architect` (was `Gator-PI`). Reading code accepts both for backward compatibility with git history.
 Filesystem: indirectly reads all .gator/ state, bare caches
 <- `main()`
--> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator_session_reader")` (Phase 2A snippet-reader — used at the `decisions_source="committed"` branch and the remote-cache path), `import_sibling("gator-session-common")`, `_collect_trailer_intelligence()`, `_committed_decisions_from_snippets()`
+-> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator_session_reader")` (Phase 2A snippet-reader — machine identity + committed-summary parsing), `_collect_trailer_intelligence()`, `_committed_decisions_from_snippets()`
 
 ### _committed_decisions_from_snippets(reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days)
 File: `src/gator_command/scripts/gator-audit.py`
@@ -296,9 +296,9 @@ CLI entry point. Args: `--repo <name>` (registry lookup), `--path <path>` (direc
 
 `read_gator_state()` (fleet-report) and `read_gator_state_remote()` (gator_remote) must return structurally identical dicts. The audit dashboard merges results from both scan modes without discriminating. If you add a new field to the local scan, add it to the remote scan too — with an appropriate "cannot determine remotely" default.
 
-## TRIPWIRE: Decisions Source Preference
+## TRIPWIRE: Decisions Source (Single Path)
 
-`assemble_audit_data()` prefers committed summaries (`.gator/sessions/`) over raw vendor logs for the decisions section. The raw vendor log fallback is explicitly labeled "decisions_source: raw-vendor-logs" in JSON output. Never silently mix the two sources — the audit trail value depends on knowing where decisions came from.
+`assemble_audit_data()` reads decisions from committed summaries (`.gator/sessions/*.md`) via `gator_session_reader`. When any summary exists (local or remote-cache), `data["decisions_source"]` is set to `"committed"`; when none exists, decisions is empty and the field is absent. The raw-vendor-logs fallback retired in Phase 3 (2026-08-13, Commit D) — base Gator no longer parses vendor transcripts. The `"raw-vendor-logs"` string constant is no longer produced by any code path.
 
 ## Before Changing This Module
 
@@ -309,7 +309,7 @@ CLI entry point. Args: `--repo <name>` (registry lookup), `--path <path>` (direc
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote, gator-session-common
+-> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote (gator-session-common retained for Phase-4-deferred vendor extractors only; not consumed by audit as of Phase 3F)
 -> [scripts-session-archaeology](scripts-session-archaeology.md) — session discovery and committed summaries consumed by audit
 -> [scripts-cross-cutting](scripts-cross-cutting.md) — local/remote parity pattern, import_sibling pattern
 -> [scripts-dashboard](scripts-dashboard.md) — dashboard consumes fleet-intelligence data; file list API now includes mtime; file scanner includes `.html`/`.htm` as of v2.4.5 (see scripts-dashboard "HTML file support")

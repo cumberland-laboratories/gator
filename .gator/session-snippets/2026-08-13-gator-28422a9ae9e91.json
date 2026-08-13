@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "session cleanup Phase 3 Commit F: fold get_machine_identity into reader; charter rewrite",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-cleanup",
+    "phase-3",
+    "fold-and-consolidate"
+  ],
+  "commit": "28422a9ae9e91581835f955231269b1cb584cecc",
+  "short_commit": "28422a9",
+  "snippet_id": "snippet-28422a9ae9e91",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "d54d899594b40dff59018b60982c75b891741dfc",
+  "started_at": "2026-08-13T11:13:18Z",
+  "ended_at": "2026-08-13T11:13:18Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/charters/scripts-session-archaeology.md",
+    ".gator/session-snippets/2026-08-13-gator-d54d899594b40.json",
+    "src/gator_command/scripts/gator-audit.py",
+    "src/gator_command/scripts/gator_session_reader.py"
+  ],
+  "notes": [
+    "Phase 3 Commit F of the [2026-08-11 non-Enterprise session cleanup plan](vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md) — closes Phase 3 with the machine-identity fold + full charter rewrite. Scope reduced from the originally-proposed \"delete gator-session-common.py entirely\" to **F-partial** after a mid-execution finding: `extract-codex-sessions.py` + `extract-gemini-sessions.py` (both Phase-4-deferred per §5 decision 2(b)) transitively depend on 6 vendor-formatting helpers in session-common (`format_summary_markdown`, `format_session_summary_dict`, `extract_intelligence`, `redact`, `make_row_key`, `make_transcript_path`, `format_summary_frontmatter`). Deleting session-common now would break the deferred extractors. Session-common therefore stays for its remaining vendor helpers; full deletion happens naturally in Phase 4 with the extractor retirement.",
+    "**Reader fold**: added `get_machine_identity()` + `GATOR_USER_DIR` + `MACHINE_ID_FILE` constants to `gator_session_reader.py` — byte-identical copy of `gator-session-common.py:33-75`. Also added `import platform` at the module top. Updated the module docstring to reflect the three-fn contract (reader now owns both the committed-summary reader AND machine identity for surviving callers) and the reader-vs-common duplicate-copy window.",
+    "**`gator-audit.py` retarget**: `common = _import_script(\"gator-session-common\")` init deleted (2 blocks: the `if common:` guard that set `data[\"machine\"]`, and the module load). Replaced with a single unified `reader_mod = _import_script(\"gator_session_reader\")` load at the machine-identity site, reused for the decisions-section reader-mod need further down. Net: one fewer module load per `assemble_audit_data()` call, one fewer optional-module reference.",
+    "**Duplicate-copy sync obligation**: `get_machine_identity()` now exists byte-identically in TWO files during the Phase 3→4 window: `gator_session_reader.py` (surviving canonical owner for `gator-audit.py`) and `gator-session-common.py:33` (unchanged, for internal use by `format_summary_markdown()` L282 + `format_session_summary_dict()` L344 which the Phase-4-deferred extractors call). Both must stay in sync. Documented in new \"TRIPWIRE: get_machine_identity() Phase-3→4 Duplicate Copies\" section of `scripts-session-archaeology.md` + refreshed `get_machine_identity` entry in `scripts-core-library.md`. Rationale for not folding session-common's internal callers to import from the reader: it would require an `import_sibling` from a retiring file (architecturally backward), and Phase 4 sweeps both together anyway.",
+    "**`scripts-session-archaeology.md` full rewrite** (377 → 138 lines). Removed all function entries for the 4 retired files (extract-claude, gator-sessions, gator-session-sink, gator-session-block) that were leftover from Commit E's minimum-viable trim. Rewrote Owns section around 5 surviving files with clear Phase-4-retirement markers on the deferred ones. Rewrote Does Not Own to reflect post-Phase-3 canonical paths. Added new function entry for `get_machine_identity()` in the reader. Added \"TRIPWIRE: parse_committed_summary() Single-Owner Contract\" (parser now has one owner + two consumers post-Phase-3, was 1 owner + 4 consumers pre-Phase-2A). Added \"TRIPWIRE: get_machine_identity() Phase-3→4 Duplicate Copies\". Trimmed \"Vendor Extractor Delegation Contract\" TRIPWIRE (extract-claude removed from the enforced list). Rewrote \"Before Changing This Module\" section with explicit Phase 4 sweep obligations. Refreshed Connections.",
+    "**Charter side-updates**: `scripts-core-library.md` — `get_machine_identity` entry expanded to document the two-copy state + sync obligation; `format_summary_markdown / format_session_summary_dict` callers list pruned (`extract-claude-sessions.py` retired, only Codex+Gemini remain); `make_row_key` tripwire updated (`gator-session-sink.py` duplication retired with the sink in Commit E — sole owner now). `scripts-fleet-intelligence.md` — `_is_real_decision()` entry rewritten (post-Phase-3 sole decision-quality filter, no longer \"second layer over vendor extract_intelligence\").",
+    "**Verification**: full test suite **770 passed, 2 xfailed** (pre-existing v2.6.0 xfails). Zero regressions. `tests/test_audit_integration.py` (3 tests) exercises `assemble_audit_data` end-to-end through the folded machine-identity path — passes clean.",
+    "**Phase 3 complete.** Total across Commits D+E+F: **net -5,000 lines** across 15 files (deletion + fold + surgery). Base Gator no longer parses vendor transcripts, no longer runs a per-vendor extractor pipeline, no longer duplicates the committed-summary parser across 4 consumers. Snippet-based governance evidence is the sole surviving path in base Gator; Enterprise transcripts-first substrate (shipped v2.6.0) is the source of truth for full transcript custody."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
