@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "session cleanup Phase 2B: extract audit decision-source branches into separable functions",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "session-cleanup",
+    "phase-2",
+    "extract-function"
+  ],
+  "commit": "e5db8f467631706c14ee85162121c9125d356510",
+  "short_commit": "e5db8f4",
+  "snippet_id": "snippet-e5db8f4676317",
+  "session_group_key": "anthropic:14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "cafb656b13dff8808e9b4e4e64332269b530f276",
+  "started_at": "2026-08-12T00:03:12Z",
+  "ended_at": "2026-08-12T14:26:59Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-08-12-gator-cafb656b13dff.json",
+    "src/gator_command/scripts/gator-audit.py"
+  ],
+  "notes": [
+    "Phase 2B of the [2026-08-11 non-Enterprise session cleanup plan](vault/artifacts/2026-08-11-non-enterprise-session-cleanup-plan.md) — the second deletion-free reshape. Refactors `gator-audit.py::assemble_audit_data()` so the two `decisions_source` branches live in cleanly-separable module-level functions, making Phase 3's deletion mechanical.",
+    "Extracted `_committed_decisions_from_snippets(reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days)` — the snippet-reader branch (previously ~60 inline lines inside the `if has_committed or has_remote_sessions:` block). **SURVIVING** contract per parent plan §2.1. Returns `(committed_decisions, summary_items)`. Behavior byte-identical to the pre-extraction inline body.",
+    "Extracted `_committed_decisions_from_raw_vendor_logs(sessions_mod, common, since_days, data)` — the raw-vendor-logs branch (previously ~55 inline lines inside the `elif common:` block). **DELETE-VENDOR** — retires in Phase 3 with the vendor-transcript archaeology. Docstring notes the Phase 3 mechanical deletion recipe (delete function + delete `elif common:` dispatch site). Behavior byte-identical.",
+    "`assemble_audit_data()`'s decision-source dispatch is now a 14-line `if/elif` (was ~115 inline lines): each branch sets `data[\"decisions_source\"]` + `data[\"decisions_dirs\"]` + optional `data[\"session_summaries\"]`, then calls its helper. The outer `if sessions_mod:` guard is preserved (behavior-neutral) — Phase 3 removes the outer guard when the vendor branch retires.",
+    "Both helpers preserve the original data-mutation contract: snippets helper pops `data[\"_remote_sessions\"]` if present; vendor helper appends to `data[\"_errors\"]` on outer exceptions. Same call-graph, same exception handling, same return values.",
+    "Charter update: `.gator/charters/scripts-fleet-intelligence.md` — `assemble_audit_data()` `->` line extends to mention the two new helpers; new `### _committed_decisions_from_snippets(...)` and `### _committed_decisions_from_raw_vendor_logs(...)` entries with SURVIVING / DELETE-VENDOR tags and full call-in/call-out lists. Phase 3 charter sweep will delete the raw-vendor-logs entry when the code retires.",
+    "Verification: `tests/test_audit_integration.py` (3 tests) + `tests/test_session_reader.py` (5 tests) + `tests/test_sessions.py` (45 tests) all PASS. Full test suite: 867 passed, 2 xfailed (pre-existing v2.6.0 xfails). Zero regressions.",
+    "Significance-check assessment (constitution step 7): touches no public CLI verb, no cross-module TRIPWIRE (row_key formula + vendor-extractor delegation contract both untouched), no security-relevant code. This is a pure structural reshape of `assemble_audit_data()` — same inputs, same outputs, same side effects. Steelman argument against: extracting a helper that will be deleted in one commit later (Phase 3) may look wasteful. Response: the extraction IS the Phase 3 preparation — it converts a ~55-line diff scattered inside a nested branch into a mechanical whole-function delete + one call-site delete. That mechanical shape is exactly what deletion-free Phase 2 exists to produce."
+  ],
+  "transcript_session_id": "14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "transcript_ref": null
+}

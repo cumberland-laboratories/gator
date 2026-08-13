@@ -324,77 +324,6 @@ def _committed_decisions_from_snippets(
     return committed_decisions, summary_items
 
 
-def _committed_decisions_from_raw_vendor_logs(sessions_mod, common, since_days, data):
-    """Assemble committed_decisions from raw vendor session logs.
-
-    Raw-vendor-logs branch. **DELETE-VENDOR** — retires in Phase 3 with the
-    vendor-transcript archaeology per parent plan §2.2. Uses `sessions_mod`
-    (retiring) to enumerate sessions and vendor extractors (`extract-{claude,
-    codex,gemini}-sessions`, all retiring) to parse them; funnels through
-    `common.extract_intelligence()` (also retiring, no surviving caller
-    per r1 audit) for decision synthesis.
-
-    Phase 3 deletion is mechanical: delete this function + its `elif common:`
-    dispatch site in assemble_audit_data.
-    """
-    committed_decisions = []
-    try:
-        all_sessions_list = sessions_mod.discover_all_sessions()
-        since_dt = sessions_mod.parse_since(f"{since_days}d")
-        recent_sessions = sessions_mod.filter_sessions_since(all_sessions_list, since_dt) if since_dt else all_sessions_list
-
-        vendor_extractors = {
-            "claude": ("extract-claude-sessions", lambda mod, path: (mod.extract_session(path), None)),
-            "codex": ("extract-codex-sessions", lambda mod, path: mod.extract_session(path)),
-            "gemini": ("extract-gemini-sessions", lambda mod, path: mod.extract_session(path)),
-        }
-
-        by_repo = {}
-        for s in recent_sessions:
-            repo = s.get("project", "") or "unknown"
-            by_repo.setdefault(repo, []).append(s)
-
-        sampled = []
-        for pick in range(3):
-            for repo in sorted(by_repo.keys()):
-                items = by_repo[repo]
-                if pick < len(items):
-                    sampled.append(items[pick])
-
-        for s in sampled:
-            vendor = s["vendor"]
-            extractor_info = vendor_extractors.get(vendor)
-            if not extractor_info:
-                continue
-            mod_name, extract_fn = extractor_info
-            try:
-                mod = _import_script(mod_name)
-                if not mod:
-                    continue
-                result = extract_fn(mod, Path(s["path"]))
-                turns = result[0] if isinstance(result, tuple) else result
-                intel = common.extract_intelligence(turns)
-                for d in intel.get("decisions", []):
-                    text = d["text"]
-                    if not _is_real_decision(text):
-                        continue
-                    committed_decisions.append({
-                        "timestamp": d["timestamp"],
-                        "text": text,
-                        "repo": s.get("project", ""),
-                        "vendor": vendor,
-                    })
-            except (ImportError, OSError, KeyError, ValueError,
-                    json.JSONDecodeError, UnicodeDecodeError):
-                continue
-    except (OSError, KeyError, ValueError) as e:
-        data["_errors"] = data.get("_errors", []) + [
-            f"decisions assembly: {type(e).__name__}: {e}"
-        ]
-
-    return committed_decisions
-
-
 def assemble_audit_data(since_days=7):
     """Assemble all audit data from existing Gator subsystems.
 
@@ -464,72 +393,16 @@ def assemble_audit_data(since_days=7):
         except (OSError, KeyError, ValueError) as e:
             data["drift"] = [{"error": f"{type(e).__name__}: {e}"}]
 
-    # Sessions — filtered to fleet repos only
-    # discover_all_sessions() reads raw vendor logs from the entire machine.
-    # Unfiltered, this includes sessions for repos not in the fleet (personal
-    # projects, experiments, etc.) which inflates "Sessions by agent" counts
-    # and makes "Session coverage" meaningless. Filter to fleet repo names.
-    try:
-        sessions_mod = _import_script("gator-sessions")
-    except ImportError as e:
-        sessions_mod = None
-        data["sessions"] = {"error": f"import failed: {e}"}
+    # Snippet-based session reader (Phase 2A). Vendor-transcript-derived
+    # session counts (`sessions.by_vendor`, `by_repo`, `pending_export`,
+    # `total`, `exported`) retired in Phase 3 (2026-08-13) per parent plan
+    # §5 decision 4 = (i) drop silently. `data["sessions"]` stays as the
+    # `{}` init from L414; dashboard consumers default defensively.
     try:
         reader_mod = _import_script("gator_session_reader")
     except ImportError as e:
         reader_mod = None
         data.setdefault("_errors", []).append(f"session-reader import failed: {e}")
-    if sessions_mod:
-        try:
-            all_sessions = sessions_mod.discover_all_sessions()
-
-            # Build fleet repo name set for filtering
-            fleet_names = set()
-            for r in data["fleet_status"]:
-                name = r.get("name", "")
-                if name:
-                    fleet_names.add(name)
-
-            # Filter to fleet repos only
-            fleet_sessions = [
-                s for s in all_sessions
-                if (s.get("project", "") or "unknown") in fleet_names
-            ]
-
-            # Filter by recency
-            since_str = f"{since_days}d"
-            since_dt = sessions_mod.parse_since(since_str)
-            recent = sessions_mod.filter_sessions_since(fleet_sessions, since_dt) if since_dt else fleet_sessions
-
-            # Pending count (fleet sessions only)
-            pending = len([
-                s for s in sessions_mod.get_pending_sessions(all_sessions)
-                if (s.get("project", "") or "unknown") in fleet_names
-            ])
-
-            # By vendor
-            by_vendor = {}
-            for s in recent:
-                v = s["vendor"]
-                by_vendor[v] = by_vendor.get(v, 0) + 1
-
-            # By repo
-            by_repo = {}
-            for s in recent:
-                r = s.get("project", "") or "unknown"
-                by_repo[r] = by_repo.get(r, 0) + 1
-
-            data["sessions"] = {
-                "total": len(fleet_sessions),
-                "recent": len(recent),
-                "since_days": since_days,
-                "by_vendor": by_vendor,
-                "by_repo": dict(sorted(by_repo.items(), key=lambda x: -x[1])),
-                "pending_export": pending,
-                "exported": len(fleet_sessions) - pending,
-            }
-        except (OSError, KeyError, ValueError, json.JSONDecodeError) as e:
-            data["sessions"] = {"error": f"{type(e).__name__}: {e}"}
 
     # Governance coverage (from fleet data)
     if data["fleet_status"]:
@@ -565,80 +438,67 @@ def assemble_audit_data(since_days=7):
                 f"trailer intelligence: {type(e).__name__}: {e}"
             ]
 
-    # Recent decisions — prefer committed summaries, fall back to raw vendor logs
-    #
-    # The committed summary layer (.gator/sessions/) is the durable, portable
-    # read path. Scans both the command post AND fleet repos' .gator/sessions/
-    # directories. Fleet repos produce commit summaries automatically via the
-    # post-commit hook; the command post has archaeology-based summaries.
-    #
-    # Fallback to raw vendor logs only if no committed summaries exist anywhere.
+    # Recent decisions — read from the committed summary layer
+    # (.gator/sessions/). Scans both the command post AND fleet repos'
+    # .gator/sessions/ directories; fleet repos produce commit summaries
+    # automatically via the post-commit hook. The raw-vendor-logs fallback
+    # retired in Phase 3 (2026-08-13); base Gator no longer parses vendor
+    # transcripts. Enterprise transcripts-first substrate is the source of
+    # truth for full transcript custody.
     committed_decisions = []
-    if sessions_mod:
-        # Collect all sessions directories: command post + fleet repos
-        # Each entry is (sessions_dir, source_kind) for provenance tagging.
-        sessions_dirs = []
-        sessions_dirs_tagged = []  # (dir, source_kind)
-        try:
-            from gator_core import find_command_post, parse_registry, normalize_path
-            cp = find_command_post()
-            if cp:
-                cp_sessions = cp / ".gator" / "sessions"
-                if cp_sessions.is_dir():
-                    sessions_dirs.append(cp_sessions)
-                    sessions_dirs_tagged.append((cp_sessions, "command-post"))
-                # Also scan fleet repos' .gator/sessions/
-                for repo in parse_registry(cp):
-                    repo_path = Path(normalize_path(repo["path"]))
-                    repo_sessions = repo_path / ".gator" / "sessions"
-                    if repo_sessions.is_dir():
-                        sessions_dirs.append(repo_sessions)
-                        sessions_dirs_tagged.append((repo_sessions, "local-repo"))
-                    elif repo.get("remote") and repo["remote"] != "—":
-                        # Remote fallback: read sessions from bare cache
-                        try:
-                            from gator_remote import (
-                                ensure_cache, list_committed_sessions_remote,
-                                read_session_summary_remote, CACHE_DIR, _cache_key,
-                            )
-                            cache_path = CACHE_DIR / _cache_key(repo["name"], repo["remote"])
-                            if cache_path.is_dir() or ensure_cache(repo["name"], repo["remote"]):
-                                remote_sessions = list_committed_sessions_remote(cache_path)
-                                if remote_sessions:
-                                    # Store for later processing
-                                    if not hasattr(data, "_remote_sessions"):
-                                        data["_remote_sessions"] = []
-                                    data["_remote_sessions"].append({
-                                        "repo": repo["name"],
-                                        "cache_path": cache_path,
-                                        "files": remote_sessions,
-                                    })
-                        except ImportError:
-                            pass
-        except ImportError:
-            pass
+    sessions_dirs = []
+    sessions_dirs_tagged = []  # (dir, source_kind)
+    try:
+        from gator_core import find_command_post, parse_registry, normalize_path
+        cp = find_command_post()
+        if cp:
+            cp_sessions = cp / ".gator" / "sessions"
+            if cp_sessions.is_dir():
+                sessions_dirs.append(cp_sessions)
+                sessions_dirs_tagged.append((cp_sessions, "command-post"))
+            # Also scan fleet repos' .gator/sessions/
+            for repo in parse_registry(cp):
+                repo_path = Path(normalize_path(repo["path"]))
+                repo_sessions = repo_path / ".gator" / "sessions"
+                if repo_sessions.is_dir():
+                    sessions_dirs.append(repo_sessions)
+                    sessions_dirs_tagged.append((repo_sessions, "local-repo"))
+                elif repo.get("remote") and repo["remote"] != "—":
+                    # Remote fallback: read sessions from bare cache
+                    try:
+                        from gator_remote import (
+                            ensure_cache, list_committed_sessions_remote,
+                            read_session_summary_remote, CACHE_DIR, _cache_key,
+                        )
+                        cache_path = CACHE_DIR / _cache_key(repo["name"], repo["remote"])
+                        if cache_path.is_dir() or ensure_cache(repo["name"], repo["remote"]):
+                            remote_sessions = list_committed_sessions_remote(cache_path)
+                            if remote_sessions:
+                                # Store for later processing
+                                if not hasattr(data, "_remote_sessions"):
+                                    data["_remote_sessions"] = []
+                                data["_remote_sessions"].append({
+                                    "repo": repo["name"],
+                                    "cache_path": cache_path,
+                                    "files": remote_sessions,
+                                })
+                    except ImportError:
+                        pass
+    except ImportError:
+        pass
 
-        has_committed = any(
-            any(d.glob("*.md")) for d in sessions_dirs
-        ) if sessions_dirs else False
-        has_remote_sessions = bool(data.get("_remote_sessions"))
+    has_committed = any(
+        any(d.glob("*.md")) for d in sessions_dirs
+    ) if sessions_dirs else False
+    has_remote_sessions = bool(data.get("_remote_sessions"))
 
-        if has_committed or has_remote_sessions:
-            # Read from committed summaries across all repos (durable path).
-            # Snippet-reader branch — SURVIVING per parent plan §2.1.
-            data["decisions_source"] = "committed"
-            data["decisions_dirs"] = len(sessions_dirs)
-            committed_decisions, summary_items = _committed_decisions_from_snippets(
-                reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days
-            )
-            data["session_summaries"] = summary_items[:50]
-        elif common:
-            # Fallback: raw vendor session logs (fragile, machine-dependent).
-            # DELETE-VENDOR branch — retires in Phase 3 with vendor extractors.
-            data["decisions_source"] = "raw-vendor-logs"
-            committed_decisions = _committed_decisions_from_raw_vendor_logs(
-                sessions_mod, common, since_days, data
-            )
+    if has_committed or has_remote_sessions:
+        data["decisions_source"] = "committed"
+        data["decisions_dirs"] = len(sessions_dirs)
+        committed_decisions, summary_items = _committed_decisions_from_snippets(
+            reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days
+        )
+        data["session_summaries"] = summary_items[:50]
 
     # Sort by timestamp, most recent first, cap at 15
     committed_decisions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)

@@ -162,12 +162,12 @@ Filesystem: none (pure rendering)
 
 ### assemble_audit_data(since_days=7)
 File: `src/gator_command/scripts/gator-audit.py`
-Loads fleet-report, drift, sessions, and governance coverage via `import_sibling()`. Assembles decisions preferring committed summaries over raw vendor logs. Also calls `_collect_trailer_intelligence()` to produce `override_events`, `significance_distribution`, and `governed_commits` for the dashboard Audit view.
-! Session counts (`sessions.total`, `by_vendor`, `by_repo`, `pending_export`) are filtered to fleet repos only. `discover_all_sessions()` returns every session on the machine; without filtering, non-fleet repos inflate counts and make "Session coverage" meaningless.
+Loads fleet-report, drift, and governance coverage via `import_sibling()`. Assembles decisions from committed summaries only (raw-vendor-logs fallback retired in Phase 3, 2026-08-13). Also calls `_collect_trailer_intelligence()` to produce `override_events`, `significance_distribution`, and `governed_commits` for the dashboard Audit view.
+! `data["sessions"]` is intentionally `{}` (empty) — the vendor-transcript-derived session counts (`total`, `by_vendor`, `by_repo`, `pending_export`, `exported`) retired in Phase 3 (2026-08-13) per parent plan §5 decision 4 = (i) drop silently. Dashboard consumers default defensively (`sessions.by_vendor || {}`), so empty tiles are the honest degrade.
 ! Trailer field renamed: `Gator-Architect` (was `Gator-PI`). Reading code accepts both for backward compatibility with git history.
-Filesystem: indirectly reads all .gator/ state, session spool, bare caches
+Filesystem: indirectly reads all .gator/ state, bare caches
 <- `main()`
--> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator-sessions")` (vendor-discovery half, retiring in Phase 3), `import_sibling("gator_session_reader")` (Phase 2A snippet-reader — used at the `decisions_source="committed"` branch and the remote-cache path), `import_sibling("gator-session-common")`, `_collect_trailer_intelligence()`, `_committed_decisions_from_snippets()` (Phase 2B), `_committed_decisions_from_raw_vendor_logs()` (Phase 2B)
+-> `import_sibling("gator-fleet-report")`, `import_sibling("gator-drift")`, `import_sibling("gator_session_reader")` (Phase 2A snippet-reader — used at the `decisions_source="committed"` branch and the remote-cache path), `import_sibling("gator-session-common")`, `_collect_trailer_intelligence()`, `_committed_decisions_from_snippets()`
 
 ### _committed_decisions_from_snippets(reader_mod, sessions_dirs_tagged, has_remote_sessions, data, since_days)
 File: `src/gator_command/scripts/gator-audit.py`
@@ -177,13 +177,7 @@ Filesystem: `.gator/sessions/` (R via reader_mod), bare caches (R via gator_remo
 -> `reader_mod.read_committed_summaries()`, `reader_mod.parse_committed_summary()`, `gator_remote.read_session_summary_remote()`, `_is_real_decision()`
 ! **SURVIVING** contract. Byte-identical to the pre-Phase-2B inline body — pure extraction, no behavior change. Any change to the snippet-based decisions path lands here.
 
-### _committed_decisions_from_raw_vendor_logs(sessions_mod, common, since_days, data)
-File: `src/gator_command/scripts/gator-audit.py`
-Phase 2B extract from `assemble_audit_data()`. Fallback path when no committed summaries exist: enumerates raw vendor sessions via `sessions_mod.discover_all_sessions()`, samples up to 3 per repo, dispatches to `extract-{claude,codex,gemini}-sessions` extractors, funnels through `common.extract_intelligence()` for decision synthesis. Applies `_is_real_decision()` filter. Returns `committed_decisions` list. Mutates `data["_errors"]` on outer exceptions.
-Filesystem: `~/.claude/`, `~/.codex/`, `~/.gemini/` (R via vendor extractors)
-<- `assemble_audit_data()` (raw-vendor-logs branch — `elif common:`)
--> `sessions_mod.discover_all_sessions/parse_since/filter_sessions_since`, `_import_script("extract-*-sessions")`, `common.extract_intelligence()`, `_is_real_decision()`
-! **DELETE-VENDOR** — retires in Phase 3 per parent plan §2.2. Phase 3 deletion is mechanical: delete this function + the `elif common:` dispatch site in `assemble_audit_data`. Behavior preserved byte-for-byte from pre-Phase-2B inline body.
+*(`_committed_decisions_from_raw_vendor_logs()` retired 2026-08-13 in Phase 3 Commit D per parent plan §2.2 — raw-vendor-logs decisions branch removed from `assemble_audit_data()`; the `elif common:` dispatch site also gone. `assemble_audit_data()` now runs only the snippet-reader branch.)*
 ! Each subsystem import is independently guarded — a broken fleet-report import does not prevent the drift section from rendering. Errors surface in `data["_errors"]` in JSON output.
 
 ### _collect_trailer_intelligence(fleet_status, since_days)

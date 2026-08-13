@@ -362,7 +362,7 @@ except Exception:
 ```
 
 Used by:
-- `gator-audit.py` — imports fleet-report, drift, sessions (vendor-discovery, retiring), gator_session_reader (Phase 2A snippet-reader), session-common (5 optional modules). Phase 2B (2026-08-12) extracted the two decisions-source branches into `_committed_decisions_from_snippets()` (SURVIVING) and `_committed_decisions_from_raw_vendor_logs()` (DELETE-VENDOR, Phase 3 retirement) — see `scripts-fleet-intelligence.md`.
+- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (Phase 2A snippet-reader), session-common (4 optional modules). Phase 3 Commit D (2026-08-13) retired the vendor-discovery import (`gator-sessions`) + the `_committed_decisions_from_raw_vendor_logs()` helper; `assemble_audit_data()` now runs the snippet-reader branch only.
 - `gator-fleet-report.py` — imports policy-status optionally
 - `gator-drift.py` — imports policy-status optionally
 - `gator-repo-status.py` — imports `gator_session_reader` optionally (Phase 2A, 2026-08-12 — was `gator-sessions` until then; the reader module is the surviving snippet-reader per parent plan)
