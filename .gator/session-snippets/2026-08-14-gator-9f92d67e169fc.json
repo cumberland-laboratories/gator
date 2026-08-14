@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "roadmap + inbox: v2.6.1 shipped rollforward + audit-surface tranche reframe per Codex sketch",
+  "change_type": "governance",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "inbox",
+    "current-priority-reframe",
+    "codex-sketch"
+  ],
+  "commit": "9f92d67e169fc31c32ac4dee1dc485b48d2555c7",
+  "short_commit": "9f92d67",
+  "snippet_id": "snippet-9f92d67e169fc",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "0112190fac1b3c66a17baa6a0969dda295f2a783",
+  "started_at": "2026-08-14T02:44:36Z",
+  "ended_at": "2026-08-14T02:44:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-14-gator-0112190fac1b3.json"
+  ],
+  "notes": [
+    "Roadmap rollforward for the v2.6.1 ship (2026-08-14: PyPI + GitHub Release + `main` FF'd to `dev`) plus a substantive Current Priority reframe informed by the [2026-08-14 Codex next-steps sketch](vault/artifacts/2026-08-14-enterprise-audit-surface-next-steps-sketch.md) that the Architect surfaced this session.",
+    "**Roadmap header** — date bump to 2026-08-14; v2.6.1 marked shipped (was \"release-prep cut on `dev`\"); explicit note that the Current Priority reframe below comes from the sketch (draft, Architect-handoff-to-Opus status).",
+    "**Roadmap Current Priority section** — rewrote from a 2-item list (\"ridiculously easy to install / Gator Loop polish\") to a 3-item reframe: (1) Enterprise audit surface — evaluator-ready across Claude + Codex + Gemini, mapped to the sketch's 6-step tranche; (2) ridiculously easy to install / use (kept but reframed as #2 for this window — sketch's §5 deprioritization of \"dashboard-heavy transcript UX\" doesn't touch install friction); (3) Gator Loop polish (explicitly deprioritized per sketch §5 \"loop/design-tab work\" not-immediate; resumes after Phase 4 sweep + widened smoke test). Guiding rule quoted from the sketch: *base Gator emits a small amount of governance metadata; Enterprise owns transcript custody, parsing, and cross-session audit retrieval.*",
+    "**Roadmap session-cleanup Done row** — version tag flipped from `v2.6.1 (dev, awaiting RC/promote)` → `v2.6.1 (shipped 2026-08-14)`. Companion notes about the v2.6.1-vs-v2.7.0 decision unchanged.",
+    "**Roadmap Post-2.6 candidate work** — preamble refreshed to reflect the sketch's step-to-item mapping (Step 1 → new item 13, Step 2 → new item 14, Steps 3+4 → existing items 9+10, Step 5 → existing item 11, Step 6 → new item 15). Three new items appended:",
+    "**13**: Audit-question surface — canonical first questions (sketch Step 1). Prerequisite artifact naming the 5 canonical questions + CLI/API/DB-view paths. Small; unblocks the rest of the tranche.",
+    "**14**: Claude-first audit path hardening (sketch Step 2). Short hardening pass verifying transcript pipeline end-to-end + tightening error messages + refreshing operator guide. Not a redesign.",
+    "**15**: Architect smoke test against widened vendor set (sketch Step 6). Manual protocol matching the 2026-08-10 Run 1 template, but against Claude+Codex+Gemini rather than Claude only. Produces the real polish-pass backlog."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
