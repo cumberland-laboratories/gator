@@ -239,6 +239,38 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Wait for PyPI CDN to surface the new version
+        # PyPI's upload succeeds well before its CDN populates all edges
+        # — pip installs typically 404 for ~30-60s after a fresh publish.
+        # Every v2.5.2 → v2.6.0 promote failed the immediate post-publish
+        # smoke on this exact race. Poll the JSON API (which is where the
+        # simple-index CDN reads from) until the new version is visible,
+        # then hand off to the install step below. Bounded so a real
+        # publish failure surfaces instead of hanging forever.
+        run: |
+          version="${WHEEL_VERSION}"
+          if [ -z "$version" ]; then
+            echo "::error::wheel_version job output is empty; upstream fetch failed."
+            exit 1
+          fi
+          # 8 attempts × 15s = 120s max. Typical warm-up is one or two
+          # attempts; the 120s ceiling catches genuine CDN incidents.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl --silent --fail --show-error --location \
+                 "https://pypi.org/pypi/gator-command/${version}/json" > /dev/null 2>&1; then
+              echo "PyPI CDN sees gator-command==${version} on attempt ${attempt}."
+              exit 0
+            fi
+            if [ "$attempt" = "8" ]; then
+              echo "::error::PyPI CDN did not surface gator-command==${version} within 8 attempts (~120s). Check https://status.python.org/ and the publish job logs before manually re-running post-verify."
+              exit 1
+            fi
+            echo "Attempt ${attempt}/8: version ${version} not yet on CDN. Sleeping 15s."
+            sleep 15
+          done
+        env:
+          WHEEL_VERSION: ${{ needs.fetch-candidate.outputs.wheel_version }}
+
       - name: Install from production PyPI and smoke-test
         run: |
           # Install exactly what was published — the package version is

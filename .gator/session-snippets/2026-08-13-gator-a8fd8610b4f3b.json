@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "roadmap rollforward: non-Enterprise session cleanup Phase 2+3 shipped; Phase 4 mapped",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "session-cleanup",
+    "phase-4-scoped"
+  ],
+  "commit": "a8fd8610b4f3b87c49d40a4ca14ffca52668bc65",
+  "short_commit": "a8fd861",
+  "snippet_id": "snippet-a8fd8610b4f3b",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-13T17:01:05Z",
+  "ended_at": "2026-08-13T17:01:05Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-13-gator-33e77c8b84d1e.json"
+  ],
+  "notes": [
+    "Roadmap rollforward for the non-Enterprise session cleanup arc that landed on `dev` 2026-08-12/13. Companion to the vault-only r3 stamp on the consumer audit artifact (adds §14 \"Phase 3 execution notes\" — machine-local, not committed).",
+    "Header date bumped to 2026-08-13; preamble notes v2.6.0 shipped state PLUS the unreleased Phase 2+3 cleanup on `dev`.",
+    "New \"Done\" row under Gator Active Development for the session cleanup arc — `unreleased (dev)` version tag with all 6 commit shas cited (`cafb656`, `e5db8f4`, `c9b2496`, `d54d899`, `28422a9`, `33e77c8`). Full plan chain linked. Release-version decision (v2.6.1 patch vs v2.7.0 minor) deferred to release-prep. Records the two in-flight ratified decisions: `--sessions` output shape = (i) drop vendor-derived silently, `gator-session-common.py` fate = **F-partial** (not full-delete) with the transitive-dependency rationale documented.",
+    "Updated \"Building — Post-2.6 candidate work\" list:",
+    "Item 4 refreshed — base-Gator side of session-block retirement is DONE (landed 2026-08-13 as Phase 3 Commit E); item now scoped to Enterprise-side inert code paths only.",
+    "New item 9 (Enterprise-side Codex adapter) — required Enterprise-cli work to unblock the Phase 4 sweep of base's `extract-codex-sessions.py`.",
+    "New item 10 (Enterprise-side Gemini adapter) — same for Gemini + notes the source_path row_key wrinkle for duplicate session IDs across files.",
+    "New item 11 (session cleanup Phase 4 sweep) — atomic retirement recipe for `extract-codex-sessions.py` + `extract-gemini-sessions.py` + `gator-session-common.py` + two archaeology TRIPWIREs. Blocked on #9 and #10 shipping. Marked Deferred."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -214,7 +214,14 @@ Jobs pipeline:
    environment (approval gate). Uses `pypa/gh-action-pypi-publish` with
    OIDC trusted publishing — no static PyPI token. Guards that
    exactly one wheel is in `dist/` before publishing.
-4. **`post-verify`** — creates a fresh venv, installs the just-published
+4. **`post-verify`** — bounded poll of the PyPI JSON API for the
+   just-published version (8 attempts × 15s = 120s max) BEFORE the
+   install step. PyPI's upload succeeds well before its CDN populates
+   all edges — pip installs typically 404 for ~30-60s after a fresh
+   publish. Every v2.5.2 → v2.6.0 promote failed the immediate
+   post-publish smoke on this exact race; the wait-for-CDN step (added
+   2026-08-13) polls `https://pypi.org/pypi/gator-command/${version}/json`
+   until visible. Then creates a fresh venv, installs the just-published
    package from production PyPI, runs `gator --version` + `gator --help`
    as a smoke check.
 
