@@ -2,6 +2,49 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.6.1] — 2026-08-13
+
+Post-Enterprise-transcripts-first cleanup release. Retires vendor-transcript archaeology from base Gator (net **~-5,000 lines** across 6 commits) now that the Enterprise transcripts-first substrate is the source of truth for full transcript custody. Plus two paper-cut fixes: PyPI-CDN lag on post-publish smoke, and inverted arg order in the `commits` docstring.
+
+Semver-strict PATCH bump: no breaking API changes, no public CLI verb affected. The retired session subcommands (`sessions {index, manifest, export, pending, commit-summaries, turn-manifest, grep-turns, show-turns}`) were internal-only entry points reachable only via direct script invocation — never registered in `gator_command.cli::COMMANDS`.
+
+### Removed
+
+- **Vendor-transcript archaeology retired from base Gator.** Four whole files deleted: `src/gator_command/scripts/gator-sessions.py` (1,244 lines — vendor-agnostic session orchestrator CLI with `sessions {index, manifest, export, pending, commit-summaries, turn-manifest, grep-turns, show-turns}` subcommands, all internal), `gator-session-sink.py` (831 lines — SQLite/DuckDB/NDJSON sink), `gator-session-block.py` (680 lines — session-block generator, inert since v2.6.0 P1.3), `extract-claude-sessions.py` (489 lines — Claude JSONL archaeology; Enterprise-cli's `transcripts_discovery.py` is the replacement). Plus 3 test files (~97 tests). **Deferred to Phase 4**: `extract-codex-sessions.py` + `extract-gemini-sessions.py` retire once Enterprise-side Codex + Gemini adapters ship (parent plan §5 decision 2(b) — preserves multi-vendor coverage during the transition).
+- **`gator-audit.py::assemble_audit_data()` raw-vendor-logs decisions branch retired.** The `elif common: extract-* + extract_intelligence + is_real_decision` fallback path is gone. `data["decisions_source"]` is now always `"committed"` when any summaries exist; no `"raw-vendor-logs"` value survives.
+- **`data["sessions"]` vendor-transcript-derived counts retired** (`total`, `by_vendor`, `by_repo`, `pending_export`, `exported`). Per parent plan §5 decision 4 = (i) drop silently; `data["sessions"]` stays as an empty `{}` and dashboard consumers (`audit.js`) default defensively (`sessions.by_vendor || {}`) — empty tiles are the honest degrade.
+- **`pyproject.toml [tool.setuptools.package-data]`**: `scripts/gator-session-block.py` removed (the only session-family file that had been listed).
+
+### Added
+
+- **`src/gator_command/scripts/gator_session_reader.py`** — new importable library (no CLI) housing the surviving snippet-based reader contract. Three functions: `parse_committed_summary()` and `read_committed_summaries()` (extracted from `gator-sessions.py` in the deletion-free Phase 2 split), plus `get_machine_identity()` (folded from `gator-session-common.py` in Phase 3F). Byte-identical behavior to the originals. Consumers: `gator-audit.py::assemble_audit_data()` and `gator-repo-status.py::get_session_summaries()`.
+- **`gator-audit.py::_committed_decisions_from_snippets()`** — surviving snippet-reader decisions helper, extracted from `assemble_audit_data()` in the Phase 2B split.
+- **`tests/test_session_reader.py`** — new 5-test regression pin for the surviving reader contract (migrated from the retired `tests/test_sessions.py::TestReadCommittedSummaries`).
+
+### Fixed
+
+- **`.github/workflows/promote-to-pypi.yml`: bounded PyPI-CDN poll before the post-publish smoke.** v2.5.2, v2.5.3, v2.5.4, and v2.6.0 all failed the immediate post-publish smoke test because PyPI's upload succeeds ~30-60s before its CDN populates all edges — pip installs 404 during that window. New `Wait for PyPI CDN to surface the new version` step polls `https://pypi.org/pypi/gator-command/${version}/json` (8 attempts × 15s = 120s max) before the install step. On timeout, prints an explicit error pointing at `https://status.python.org/` before manual re-run.
+- **`enterprise-cli commits`: inverted arg order in docstring + fallback usage message.** The CLI itself has always worked as `commits transcripts <sha>` (verb-first — argparse resolves subcommand groups before positionals), but the module docstring, `handle()` fallback error message, and `main.py` register-comment all quoted the URL shape `commits <sha> transcripts`. Real evaluator-mislead vector caught during v2.6.0 smoke-test Run 1 (Finding #8). Fixed at all 3 sites; fallback also gained the previously-hidden `[--repo <id>]` option.
+
+### Documentation
+
+- **Charter overhaul across the session-pipeline surface** as part of the deletion. `scripts-session-archaeology.md` rewritten from 377 → 138 lines: function entries for the 4 retired files removed; Owns restructured around surviving files with explicit Phase-4-deferred markers on `extract-codex-sessions`, `extract-gemini-sessions`, and `gator-session-common`; new TRIPWIREs for the `parse_committed_summary` single-owner contract and the `get_machine_identity` Phase-3→4 duplicate-copy sync obligation; Before-Changing rewritten with atomic Phase 4 sweep obligations. Companion updates to `scripts-cross-cutting.md` (row-key duplication TRIPWIRE collapsed to single-owner; Session-Block Script Dual Deployment section retired; graceful-degradation note updated), `scripts-core-library.md` (`get_machine_identity` dual-copy note; `format_summary_markdown` callers pruned), `scripts-fleet-intelligence.md` (`assemble_audit_data` entry rewritten; TRIPWIRE Decisions Source Preference renamed to Single Path; `_is_real_decision` entry updated as sole filter), and `INDEX.md` (session-archaeology row rewritten).
+- **`.gator/roadmap.md`** rolled forward: new Done row for the cleanup arc with all 6 commit SHAs and both in-flight design decisions (F-partial + (i)-drop-silently); item 4 (session-block retirement) rescoped to Enterprise-side only (base side done); new items 9 (Codex adapter), 10 (Gemini adapter), 11 (Phase 4 sweep, blocked on 9+10), 12 (base-wheel package-data gap).
+
+### Under the hood
+
+- **`gator-audit.py::assemble_audit_data()` restructure**: the two decision-source branches were first extracted into cleanly-separable module-level helpers (`_committed_decisions_from_snippets`, `_committed_decisions_from_raw_vendor_logs`) in the deletion-free Phase 2B pass; Phase 3 Commit D then deleted the vendor-logs helper + its dispatch site as a single mechanical delete. Ordering-required-first: doing file deletes before the audit surgery would have broken the snippet-reader path via a spurious `if sessions_mod:` guard on `sessions_dirs` gathering.
+- **6-commit cleanup arc**: Phase 2A (`cafb656`) → 2B (`e5db8f4`) → Phase 3 Commit D (`c9b2496`) → E (`d54d899`) → F (`28422a9`) → charter-drift cleanup (`33e77c8`), plus the two paper-cut fixes G (`94b791e`) and H (`303e42a`). All 8 pre-commit-hook-verified; no `--no-verify` overrides used.
+- **Test suite at release-time**: 770 passed, 2 pre-existing xfails. The 97-test drop from v2.6.0's 867 matches the 3 deleted test files exactly (`test_sessions.py` + `test_session_sink.py` + `test_session_block.py`). Zero regressions in surviving tests.
+- **F-partial ratification**: mid-Commit-F grep discovered that Phase-4-deferred Codex + Gemini extractors transitively depend on 7 vendor-formatting helpers in `gator-session-common.py`. Fully deleting session-common in Phase 3 would have broken the deferred extractors. Architect ratified F-partial: fold `get_machine_identity` into the reader, keep session-common alive with its 7 vendor helpers + a duplicate copy of `get_machine_identity`; full deletion happens atomically in Phase 4 with the extractor retirement. Documented as a new TRIPWIRE in `scripts-session-archaeology.md`.
+- **Whiteboard-flagged charter drift**: Commit F's `scripts-session-archaeology.md` rewrite missed the same class of stale-tripwire content in three neighbor charters. Cleanup commit `33e77c8` swept them. Lesson noted in the consumer-audit artifact r3: on big deletion passes, grep the retiring filenames across ALL charters (especially `scripts-cross-cutting.md`, which tends to have cross-file TRIPWIRE and Pattern sections).
+
+### Known issues
+
+- Same v1 `active-vendor-session.json` compat xfails from v2.6.0 unchanged (`tests/test_multi_session.py::test_v1_file_returns_single_entry_list` and `::test_v1_file_migrates_to_v2_on_write`). Not release-blocking; fix tracked as roadmap item 8.
+- **Enterprise packaging still source-checkout-only** — unchanged from v2.6.0. Single-pipx install path remains post-2.6 work (roadmap item 5).
+- **Base-wheel package-data gap**: several session-pipeline scripts (`gator-session-aggregator`, `gator-session-common`, `gator_session_reader`, plus `gator-audit`, `gator-fleet-report`, `gator-drift`, `gator-fleet-intel`, `gator-audit-renderers`) are missing from `[tool.setuptools.package-data]`. Pre-existing gap unrelated to this release; under `pipx install gator-command` these degrade to empty output (dashboard audit view shows no session summaries; machine identity absent). Source-checkout install works. Tracked as new roadmap item 12.
+
 ## [2.6.0] — 2026-08-09
 
 The Enterprise transcripts-first MVP substrate lands in-tree, and the base wheel's `gator enterprise` dispatcher is reconciled with the real verb set so the MVP is reachable from a `pipx install gator-command` + source-checkout enterprise-cli install. Under-the-hood cleanup retires the actively-harmful vestiges of the pre-transcripts-first evidence design.

@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "commits.py: fix inverted arg order in docstring + fallback usage message",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise-cli",
+    "evaluator-mislead",
+    "cosmetic"
+  ],
+  "commit": "303e42acbfbdfd13c996c6375222acc71eebb699",
+  "short_commit": "303e42a",
+  "snippet_id": "snippet-303e42acbfbdf",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "94b791e04fffbd18af43cfe380c72e2abc939a61",
+  "started_at": "2026-08-14T02:05:16Z",
+  "ended_at": "2026-08-14T02:05:16Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-14-gator-94b791e04fffb.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/main.py"
+  ],
+  "notes": [
+    "Fix v2.6.1 quick win #2 from the roadmap: the enterprise-cli `commits` subcommand's docstring and fallback usage message both quoted `commits <sha> transcripts` (URL shape), but the actual argparse structure is `commits transcripts <sha>` (verb-first) — argparse resolves subcommand groups before positionals. Caught during smoke-test Run 1 as Finding #8 (evaluator-mislead vector — someone reading the docstring to learn the syntax gets a command shape that argparse rejects).",
+    "Fixed 4 sites:",
+    "`enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py:3` — docstring updated to the correct shape + parenthetical spelling out the verb-first-vs-URL-shape rationale so future readers don't re-introduce the inversion.",
+    "`enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py:38` — `handle()` fallback usage message corrected; also added `[--repo <id>]` since the arg exists and the shorter message previously hid it.",
+    "`enterprise/enterprise-cli/gator_enterprise_cli/main.py:53` — inline register-comment corrected.",
+    "`.gator/roadmap.md:202` — user-facing example command inside the \"What Enterprise adds\" block corrected.",
+    "Deliberately NOT touched:",
+    "`CHANGELOG.md:13` (v2.6.0 release entry) — CHANGELOG is a historical release record; the correct pattern is a new entry at v2.6.1 CHANGELOG time noting this fix, not rewriting the v2.6.0 line. Leaving as-is preserves the release-notes convention."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
