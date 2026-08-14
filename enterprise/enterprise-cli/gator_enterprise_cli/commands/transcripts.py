@@ -29,6 +29,7 @@ from pathlib import Path
 from gator_enterprise_cli.output import print_json, print_kv, print_table
 from gator_enterprise_cli.transcripts_discovery import (
     DiscoveredTranscript,
+    claude_root_path,
     discover as discover_transcripts,
 )
 
@@ -173,6 +174,15 @@ def _handle_list(args, client):
         params["since"] = args.since
     if args.until:
         params["until"] = args.until
+    if args.unlinked:
+        # Server-side filter (Phase 2 Q3 promotion, 2026-08-14). Earlier
+        # MVP versions of the CLI did the filter client-side because the
+        # server had no `unlinked=true` param; the server-side param was
+        # added in the same commit as this CLI change. On the off chance
+        # a caller runs a new CLI against an older server that doesn't
+        # honor the param, the extra client-side filter below covers the
+        # gap (defensive, cheap, no-op on new servers).
+        params["unlinked"] = "true"
     data = client.get("/api/v1/transcripts", params=params)
     if args.json:
         print_json(data)
@@ -180,10 +190,9 @@ def _handle_list(args, client):
 
     items = data.get("items", [])
     if args.unlinked:
-        # Client-side filter — the server endpoint doesn't have an
-        # unlinked-only query param in MVP; the `unlinked_recent_transcripts`
-        # SQL view is a Postgres-side surface for the same query and both
-        # are documented in the operator guide.
+        # Defensive client-side filter — see comment on the params block
+        # above. On a matching server, the items list already excludes
+        # linked sessions and this filter is a no-op.
         items = [item for item in items if not (item.get("linked_commit_count") or 0)]
 
     # Client-side sort — the API returns `ingested_at DESC` by default,
@@ -432,6 +441,23 @@ def _handle_pull(args, client):
     since_dt = _parse_iso(args.since)
     machine_id = _read_machine_id()
 
+    # Phase 2 hardening (2026-08-14): fail fast on missing machine-id
+    # instead of silently uploading with machine_id="unknown". A missing
+    # machine-id file means the operator hasn't run `gator init` (or an
+    # equivalent that creates ~/.gator/machine-id via gator_session_reader.
+    # get_machine_identity), and every transcript ingested in this state
+    # would collapse into a single synthesized "unknown" machine row —
+    # breaking the strong_machine_repo_time linkage basis fleet-wide.
+    if not machine_id:
+        print(
+            f"error: no machine-id found at {_MACHINE_ID_FILE}. Run `gator init` "
+            f"in any Gator-governed repo on this machine to create it, then retry. "
+            f"(Without machine-id, transcript ingest cannot attribute sessions "
+            f"correctly and the strong_machine_repo_time linkage basis fails.)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     # Step 1 + 2 — commit discovery + ingest.
     repos = _read_dashboard_repos()
     commit_batch, snippet_hint_count = _build_commit_batch(
@@ -459,6 +485,18 @@ def _handle_pull(args, client):
             print("No commits to ingest.")
 
     # Step 3 + 4 — transcript discovery + ingest.
+    # Phase 2 hardening (2026-08-14): informative warning when the vendor
+    # transcript root is absent, so the operator sees WHY zero transcripts
+    # were discovered instead of a silent zero-item pull.
+    if vendor == "claude":
+        _claude_root = claude_root_path()
+        if not _claude_root.exists() or not _claude_root.is_dir():
+            print(
+                f"warning: Claude transcript root {_claude_root} does not exist. "
+                f"This is normal if you have not used Claude Code on this machine; "
+                f"otherwise check the CLAUDE_TRANSCRIPTS_ROOT env override.",
+                file=sys.stderr,
+            )
     discovered = list(discover_transcripts(vendor, since=since_dt))
     print(f"Discovered {len(discovered)} {vendor} transcripts")
 
@@ -477,6 +515,22 @@ def _handle_pull(args, client):
         print("(dry-run: skipping transcripts/ingest POST)")
     else:
         for record in discovered:
+            # Phase 2 hardening (2026-08-14): skip records where the file
+            # itself was unreadable — attempting to upload a file we never
+            # actually read would either fail at read time (redundant work)
+            # or upload empty content (silently pollutes evidence). Named-
+            # file diagnostic so operator can investigate the underlying
+            # filesystem issue.
+            if record.unreadable:
+                transcripts_failed.append(
+                    (record.vendor_session_id, f"unreadable: {record.parse_error}")
+                )
+                print(
+                    f"  skip {record.vendor_session_id[:12]}  "
+                    f"unreadable file {record.source_path}: {record.parse_error}",
+                    file=sys.stderr,
+                )
+                continue
             try:
                 result = _upload_transcript(
                     client, record,

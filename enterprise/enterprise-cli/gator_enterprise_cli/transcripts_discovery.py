@@ -55,6 +55,13 @@ class DiscoveredTranscript:
     file_size_bytes: int = 0
     project_hash: str | None = None
     parse_error: str | None = None
+    # Fatal-parse marker (Phase 2 hardening, 2026-08-14): True when the
+    # file itself is unreadable (OSError) — record propagates the error
+    # so the CLI can skip-with-diagnostic instead of attempting to upload
+    # a file it never actually read. Non-fatal parse issues (e.g. missing
+    # sessionId, fell back to filename stem) keep unreadable=False because
+    # the file is still usable evidence.
+    unreadable: bool = False
     # Populated at upload time — sha256 of raw content, chosen encoding.
     extras: dict = field(default_factory=dict)
 
@@ -65,6 +72,16 @@ def _default_claude_root() -> Path:
     if override:
         return Path(override)
     return Path(os.path.expanduser("~/.claude/projects"))
+
+
+def claude_root_path() -> Path:
+    """Public accessor for the discovery root (Phase 2 hardening).
+
+    CLI callers use this to check root existence before running discovery,
+    so a missing `~/.claude/projects/` surfaces as an informative operator
+    message instead of a silent zero-transcripts-discovered pull.
+    """
+    return _default_claude_root()
 
 
 def _parse_iso_z(value: str | None) -> datetime | None:
@@ -145,6 +162,7 @@ def _parse_jsonl_metadata(path: Path) -> DiscoveredTranscript:
                     turn_count += 1
     except OSError as e:
         result.parse_error = f"read failed: {e}"
+        result.unreadable = True
         return result
 
     if session_id is None:

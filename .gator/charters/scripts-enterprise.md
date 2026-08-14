@@ -511,7 +511,7 @@ enterprise-cli package.
   TRIPWIRE — the view definitions reference columns on the underlying tables (`transcript_sessions`, `commit_transcript_links`, `commits`). Any column rename in a future migration MUST be paired with a follow-up view migration or these views break silently at query time. Unique-constraint names are NOT referenced here, so those are safe to rename.
 
   **`transcripts list` UX polish** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py::_handle_list`):
-  - New flags: `--until` (server-side upper bound on `started_at`, complements the existing `--since`), `--offset` (paginate without spamming `--limit`), `--unlinked` (client-side filter: `linked_commit_count == 0`), `--sort {ingested|started|size|links}` (client-side re-sort; ingested is a no-op since the server returns that order), `--wide` (adds Machine + Started columns).
+  - New flags: `--until` (server-side upper bound on `started_at`, complements the existing `--since`), `--offset` (paginate without spamming `--limit`), `--unlinked` (**Phase 2 Q3 promotion, 2026-08-14**: server-side filter via new `?unlinked=true` API query param — was previously client-side-only; the CLI keeps a defensive client-side filter as fallback for old-server compatibility), `--sort {ingested|started|size|links}` (client-side re-sort; ingested is a no-op since the server returns that order), `--wide` (adds Machine + Started columns).
   - Per-vendor summary line auto-appears when >= 2 vendors are visible in the result set.
   - Non-breaking: existing invocations (no new flags) produce byte-identical output.
 
@@ -557,7 +557,25 @@ enterprise-cli package.
 
   **MVP status: COMPLETE.** The Enterprise transcripts-first custody surface has all six phases landed: data model + BlobStore (Phase 1), ingest + read + Claude discovery + pull CLI (Phase 2), full linkage algorithm + orchestrator surface (Phase 3), operator query surface with SQL views + guide (Phase 4), hook seam cleanup (Phase 5), machine-id trailer (Phase 6). Post-MVP work (automatic sync, additional vendors, encryption at rest, weak-heuristic linkage, retention engine, web UI, session-block retirement) is enumerated in the plan §13 Phase 7 "Named for scope-honesty" list.
 
-## Called by (`←`)
+- **! Audit-surface Phase 2 hardening (2026-08-14, Commit I).** First code delivery of the 2026-08-14 Enterprise audit surface implementation plan. Three narrow hardening changes on top of the shipped Claude-first path — no new endpoints or CLI verbs in this commit (those are Commit J).
+
+  **Q3 promotion — server-side `unlinked` filter** (`enterprise/app/routes/transcripts.py::list_transcripts`): new `unlinked: bool = Query(False)` param + HAVING clause on the outerjoin+group_by (`func.count(CommitTranscriptLink.id) == 0`). CLI `transcripts list --unlinked` now passes `?unlinked=true` to the server; the pre-existing client-side filter stays as defensive fallback for old-server compatibility. Complements the `unlinked_recent_transcripts` view (Migration 010) — both surface the same investigation queue, view is bounded to last 7 days, API endpoint is unbounded.
+
+  **Missing-`~/.gator/machine-id` fail-fast** (`enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py::_handle_pull`): early exit code 2 with an actionable error message pointing at `gator init` as the fix. Prior behavior silently uploaded with `machine_id="unknown"`, collapsing every affected transcript into a single synthesized machine row and breaking the `strong_machine_repo_time` linkage basis fleet-wide.
+
+  **Missing-`~/.claude/projects/` warning** (`_handle_pull` + new `claude_root_path()` accessor in `transcripts_discovery.py`): informative warning when the Claude transcript root is absent, so operators see WHY zero transcripts were discovered instead of a silent zero-item pull. Non-fatal — operators may legitimately have no Claude transcripts.
+
+  **Malformed-JSONL fatal-skip** (`transcripts_discovery.py::DiscoveredTranscript`): new `unreadable: bool` field set to `True` when `_parse_jsonl_metadata` catches `OSError` on file open. CLI `_handle_pull` skips these with a named-file diagnostic instead of attempting to upload a file it never actually read. Non-fatal parse issues (e.g. missing sessionId → filename fallback) keep `unreadable=False` because the file is still usable evidence.
+
+  **Duplicate-ingest verification** — no code change. Existing upsert path at `enterprise/app/routes/ingest.py:536-575` returns `status="updated"` (not 500) on re-ingest; CLI's `_handle_pull` summary distinguishes `transcripts ingested (new)` from `transcripts updated`. Verified informative in Commit I audit; no fix needed.
+
+  **Regression pins**:
+  - New `TestListTranscripts::test_unlinked_filter_returns_only_zero_link_sessions` — seeds one linked + one unlinked transcript, asserts `?unlinked=true` returns only the unlinked.
+  - New `TestListTranscripts::test_unlinked_filter_false_is_noop` — parity check.
+  - New `TestPhase2Hardening` class in `test_transcripts_discovery.py` (5 tests): `unreadable` set on OSError, false on degraded-parse, false on clean-parse; `claude_root_path()` returns default; `claude_root_path()` honors env override.
+  - Test suite at commit time: enterprise 253 pass + 1 skip (was 245); base 770 pass + 2 pre-existing xfails (unchanged). No regressions.
+
+  **What Commit J adds next**: the three new Phase-1-gap surfaces per the audit-surface artifact — Q2 `commits list --repo`, Q4 `commits provenance <sha>`, Q5 `repos transcripts <id>`. Commit K adds docs + smoke-test protocol.
 
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry
   `"enterprise": ("gator-enterprise.py", ...)`.

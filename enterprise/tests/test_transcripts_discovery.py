@@ -24,6 +24,7 @@ if str(_CLI_ROOT) not in sys.path:
 from gator_enterprise_cli.transcripts_discovery import (
     DiscoveredTranscript,
     _parse_jsonl_metadata,
+    claude_root_path,
     discover,
     discover_claude_transcripts,
 )
@@ -195,3 +196,82 @@ class TestVendorDispatch:
     def test_unknown_vendor_raises(self):
         with pytest.raises(ValueError, match="Unsupported vendor"):
             list(discover("gemini"))
+
+
+class TestPhase2Hardening:
+    """Phase 2 hardening regression pins (2026-08-14).
+
+    Covers the two discovery-side additions:
+    - `DiscoveredTranscript.unreadable` — distinguishes fatal-parse (OSError
+      on read) from degraded-but-usable parse (missing sessionId → filename
+      fallback). CLI uses this to skip fatal cases with a named-file
+      diagnostic instead of attempting to upload a file it never read.
+    - `claude_root_path()` — public accessor exposing the discovery root so
+      the CLI can check existence up front and emit an informative warning
+      instead of a silent zero-transcripts-discovered pull.
+    """
+
+    def test_unreadable_flag_set_on_permission_error(self, tmp_path, monkeypatch):
+        """File that raises OSError on open() → unreadable=True + parse_error."""
+        path = tmp_path / "proj" / "s.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+
+        # Simulate an unreadable file by monkey-patching Path.open on this
+        # specific path to raise OSError. Cross-platform (chmod-based
+        # unreadable doesn't work on Windows for the current user).
+        original_open = Path.open
+
+        def _raise_on_target(self, *args, **kwargs):
+            if self == path:
+                raise OSError("Permission denied (simulated)")
+            return original_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", _raise_on_target)
+        result = _parse_jsonl_metadata(path)
+        assert result.unreadable is True
+        assert result.parse_error is not None
+        assert "read failed" in result.parse_error
+
+    def test_unreadable_flag_false_on_degraded_parse(self, tmp_path):
+        """Missing sessionId → filename fallback → parse_error but unreadable=False.
+
+        The record is still usable evidence — vendor_session_id gets the
+        filename stem. CLI should upload it, not skip.
+        """
+        path = tmp_path / "proj" / "abcdef-1234.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "file-history-delta"}) + "\n")
+        result = _parse_jsonl_metadata(path)
+        assert result.vendor_session_id == "abcdef-1234"
+        assert result.parse_error and "fell back to filename" in result.parse_error
+        assert result.unreadable is False
+
+    def test_unreadable_flag_default_false_on_clean_parse(self, tmp_path):
+        """Well-formed transcript → unreadable=False, no parse_error."""
+        path = tmp_path / "proj" / "s.jsonl"
+        _write_transcript(
+            path,
+            session_id="s",
+            events=[_turn("user", "2026-08-07T10:00:00.000Z")],
+        )
+        result = _parse_jsonl_metadata(path)
+        assert result.unreadable is False
+        assert result.parse_error is None
+
+    def test_claude_root_path_returns_default(self, monkeypatch):
+        """Accessor returns the same path _default_claude_root() would."""
+        monkeypatch.delenv("CLAUDE_TRANSCRIPTS_ROOT", raising=False)
+        expected = Path(os.path.expanduser("~/.claude/projects"))
+        assert claude_root_path() == expected
+
+    def test_claude_root_path_honors_env_override(self, tmp_path, monkeypatch):
+        """Env override propagates through the public accessor.
+
+        The CLI relies on this to check the SAME root the discovery code will
+        actually walk — must not diverge.
+        """
+        override = tmp_path / "some-other-root"
+        monkeypatch.setenv("CLAUDE_TRANSCRIPTS_ROOT", str(override))
+        assert claude_root_path() == override

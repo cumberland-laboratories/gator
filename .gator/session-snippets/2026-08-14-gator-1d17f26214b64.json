@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "procedures: add pre-gator-residue + committing-gator-files (v1→v2 upgrade guidance)",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "procedures",
+    "v1-v2-upgrade",
+    "pre-gator-backups",
+    "agent-guidance"
+  ],
+  "commit": "1d17f26214b643e2f2a61638ca332e5123d2239b",
+  "short_commit": "1d17f26",
+  "snippet_id": "snippet-1d17f26214b64",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-14T16:33:14Z",
+  "ended_at": "2026-08-14T16:33:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/constitution.md",
+    ".gator/.includes/procedures/committing-gator-files.md",
+    ".gator/.includes/procedures/pre-gator-residue.md",
+    ".gator/session-snippets/2026-08-14-gator-9f92d67e169fc.json"
+  ],
+  "notes": [
+    "Two new shipped procedures in `.gator/.includes/procedures/` for AI-model consumption. Both address recurring model-confusion pain surfaced by the Architect: agents in Gator-governed repos frequently get confused by `.pre.gator*` residue files (from `gator update --migrate-layout` v1→v2 upgrades) and by the general question \"should I commit `.gator/` files that Gator itself changed?\" Both procedures give unambiguous decision procedures so agents stop asking the operator for routine flow.",
+    "**`pre-gator-residue.md`** (~90 lines) — what `.pre.gator*` files ARE (rollback safety-net backups from `migrate_layout()`), what they are NOT (governance, docs, commit-worthy), and what to do with them: **move to `.gator/vault/pre-update-backups/<YYYY-MM-DD>/<original-path>/`**. Includes explicit non-actions, discovery-check `find` commands agents can run at session open, why-this-exists framing (4 common failure modes without the procedure), and cross-references to the two related surfaces.",
+    "**`committing-gator-files.md`** (~80 lines) — default rule: **most `.gator/` changes SHOULD be committed** when Gator produced them. Enumerated exceptions: (a) `.pre.gator*` backups → vault; (b) `.gator/vault/` → never; (c) post-commit residue (`commit_draft.md` + `whiteboard.md` → don't re-commit; cross-refs `expected-governance-residue.md`); (d) session snippets from unrelated sessions → let next commit's post-commit hook sweep naturally; (e) machine-local operational state → `.tmp/` or vault. Practical decision procedure as a 5-step ladder + 5 common failure modes without the procedure.",
+    "**Location decision — `.gator/.includes/procedures/`**: shipped-content path. Both files propagate to every governed repo on next `gator update`. Automatically hidden from the dashboard file browser because `.includes` is not in `VISIBLE_DIRS` at `dashboard/views/repo.js:218` — the v2 layout's built-in whitelist mechanism hides shipped content by default. No `DEFAULT_TEMPLATE_FILES` allowlist edit needed (that's the v1-layout safety net for cases where shipped defaults were copied down into `.gator/procedures/` directly).",
+    "**Constitution cross-reference** (`.gator/.includes/constitution.md` \"The Loop\" step 8 note on Expected governance residue): appended pointers to both new procedures so agents naturally discover them at the exact spot in the loop where the questions come up. Existing `expected-governance-residue.md` reference-note (covering only post-commit `commit_draft.md`/`whiteboard.md` rotation) is preserved and cross-referenced from `committing-gator-files.md` — no overlap, complementary coverage.",
+    "**`.pre.gator*` policy — vault (Architect ratified 2026-08-14)**: chosen over \"leave in place\" and \"delete immediately\". Rationale: (1) removes AI-model confusion (the reported pain); (2) preserves rollback safety for ~30d window; (3) aligns with vault's stated purpose (\"Sensitive material and large files, gitignored, never committed\"); (4) keeps the working tree clean of migration artifacts. Auto-vaulting inside `gator update` itself is a follow-on code change not scoped here — the procedure documents the manual/recommended behavior for now.",
+    "Companion vault artifact (not in this commit): [`.gator/vault/artifacts/2026-08-14-enterprise-audit-surface-implementation-plan.md`](vault/artifacts/2026-08-14-enterprise-audit-surface-implementation-plan.md) — converted the 2026-08-14 Codex next-steps sketch into a full 6-phase implementation plan mapping sketch Steps 1-6 to roadmap items 13 → 14 → 9 → 10 → 11 → 15. Vault-only, gitignored, machine-local.",
+    "Verification: no code touched; procedure + constitution edits only. Test suite unchanged (770 passed, 2 pre-existing xfails). No pre-commit hook charter-index-gap check triggers because none of these files are code paths mapped through INDEX.md."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

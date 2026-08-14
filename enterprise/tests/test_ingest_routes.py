@@ -522,6 +522,67 @@ class TestListTranscripts:
         assert len(items) == 1
         assert items[0]["vendor_session_id"] == "early"
 
+    def test_unlinked_filter_returns_only_zero_link_sessions(self, client, api_token):
+        """Phase 2 Q3 promotion (2026-08-14): server-side `unlinked=true` param.
+
+        Seeds two transcripts — one linked to a commit (via exact_sha_in_transcript),
+        one unlinked. Verifies that `?unlinked=true` returns only the unlinked row
+        and `?unlinked=false` (or omitted) returns both. Regression pin for the
+        HAVING count(...) = 0 clause added at `enterprise/app/routes/transcripts.py`.
+        """
+        # Linked transcript — SHA is all-hex; transcript body carries a
+        # 12-char prefix so the `exact_sha_in_transcript` matcher fires.
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abc1234567890abc1234567890abc1234567890a",
+            }],
+        }, headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"see abc12345678\n",
+                vendor_session_id="LINKED",
+            ),
+            headers=_auth(api_token))
+        # Unlinked transcript — content contains no hex-SHA-like substring.
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"no commit sha here\n",
+                vendor_session_id="UNLINKED",
+            ),
+            headers=_auth(api_token))
+
+        # Sanity check: no filter returns both
+        resp = client.get("/api/v1/transcripts", headers=_auth(api_token))
+        assert resp.status_code == 200
+        assert {i["vendor_session_id"] for i in resp.json()["items"]} == {
+            "LINKED", "UNLINKED",
+        }
+
+        # unlinked=true returns only UNLINKED
+        resp = client.get("/api/v1/transcripts?unlinked=true", headers=_auth(api_token))
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["vendor_session_id"] == "UNLINKED"
+        assert items[0]["linked_commit_count"] == 0
+
+    def test_unlinked_filter_false_is_noop(self, client, api_token):
+        """`unlinked=false` (the default) behaves exactly like omitting the param."""
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"x", vendor_session_id="A"),
+            headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"y", vendor_session_id="B"),
+            headers=_auth(api_token))
+
+        omitted = client.get("/api/v1/transcripts", headers=_auth(api_token))
+        explicit_false = client.get("/api/v1/transcripts?unlinked=false", headers=_auth(api_token))
+        assert omitted.status_code == 200
+        assert explicit_false.status_code == 200
+        assert {i["vendor_session_id"] for i in omitted.json()["items"]} == \
+               {i["vendor_session_id"] for i in explicit_false.json()["items"]}
+
 
 class TestGetTranscript:
     def test_returns_links_inline(self, client, api_token):

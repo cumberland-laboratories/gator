@@ -82,6 +82,16 @@ def list_transcripts(
     vendor: str | None = Query(None),
     since: str | None = Query(None, description="ISO 8601 lower bound on started_at"),
     until: str | None = Query(None, description="ISO 8601 upper bound on started_at"),
+    unlinked: bool = Query(
+        False,
+        description=(
+            "If true, return only transcript sessions with zero linked commits "
+            "(the investigation queue for whoever runs audit). Server-side filter "
+            "via HAVING count(...) = 0. Complements the `unlinked_recent_transcripts` "
+            "Postgres view (Migration 010) which does the same query at the DB "
+            "layer for direct-SQL callers."
+        ),
+    ),
     limit: int = Query(DEFAULT_LIMIT_LIST, ge=1, le=MAX_LIMIT_DEFAULT),
     offset: int = Query(0, ge=0),
     token: ApiToken = Depends(verify_token),
@@ -113,6 +123,10 @@ def list_transcripts(
         stmt = stmt.where(TranscriptSession.started_at >= since_dt)
     if until_dt:
         stmt = stmt.where(TranscriptSession.started_at <= until_dt)
+    if unlinked:
+        # HAVING on the aggregate — this is why the outerjoin+group_by exist
+        # above. Rows with zero matching CommitTranscriptLink survive.
+        stmt = stmt.having(func.count(CommitTranscriptLink.id) == 0)
 
     # Grab one extra to compute has_more without a second query.
     rows = db.execute(stmt.offset(offset).limit(limit + 1)).all()
