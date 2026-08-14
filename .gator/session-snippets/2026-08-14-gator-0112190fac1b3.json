@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.6.1",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "2.6.1",
+    "session-cleanup",
+    "paper-cuts"
+  ],
+  "commit": "0112190fac1b3c66a17baa6a0969dda295f2a783",
+  "short_commit": "0112190",
+  "snippet_id": "snippet-0112190fac1b3",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "303e42acbfbdfd13c996c6375222acc71eebb699",
+  "started_at": "2026-08-14T02:10:49Z",
+  "ended_at": "2026-08-14T02:10:49Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-14-gator-303e42acbfbdf.json",
+    "CHANGELOG.md",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Release-prep for v2.6.1. Version-decision ratified 2026-08-13: **patch bump** (v2.6.0 → v2.6.1) despite the substantial `dev`-branch delta since v2.6.0. Semver-strict justification: no breaking API changes, no public CLI verb affected — the retired session subcommands (`sessions {index, manifest, export, pending, commit-summaries, turn-manifest, grep-turns, show-turns}`) were internal-only entry points reachable only via direct script invocation, never registered in `gator_command.cli::COMMANDS`. `pyproject.toml` version = 2.6.1.",
+    "**`CHANGELOG.md`** — full `[2.6.1] — 2026-08-13` entry inserted above `[2.6.0]`. Follows the established Keep-a-Changelog structure (Removed / Added / Fixed / Documentation / Under the hood / Known issues). Covers all 8 landed commits since v2.6.0: the 6-commit session-cleanup arc (Phase 2A/2B + Phase 3D/E/F + charter-drift cleanup) plus the two paper-cut fixes G (PyPI-CDN poll) and H (commits.py docstring). Every subhead explains **what** and **why**; Under the hood section documents the mid-flight F-partial ratification and the whiteboard-flagged charter-drift lesson. Known issues carried forward from v2.6.0 (v1 `active-vendor-session.json` compat xfails; Enterprise packaging still source-checkout-only); new Known issue added for the base-wheel package-data gap surfaced during Phase 3.",
+    "**`.gator/roadmap.md`** — header updated to reflect the v2.6.1 release-prep cut on `dev` awaiting RC → PyPI promote. Session-cleanup Done row's version tag changed from `unreleased (dev) 2026-08-12/13` → `v2.6.1 (dev, awaiting RC/promote)`; row text updated to inline the 2 paper-cut fixes (previously described as separate work) and to record the v2.6.1-patch-vs-v2.7.0-minor decision.",
+    "**Release pipeline next steps** (not in this commit): (1) push `dev` to origin; (2) cut RC tag `v2.6.1-rc1` — triggers Workflow B (release-candidate.yml) → TestPyPI publish + matrix smoke; (3) run smoke locally against TestPyPI if desired; (4) dispatch Workflow C (promote-to-pypi.yml) with the RC version + Workflow B run ID → approval-gated PyPI publish + the new bounded CDN-poll smoke. The CDN-poll fix is real-tested for the first time on this release.",
+    "**Verification**: full test suite unchanged (770 passed, 2 pre-existing xfails). `pyproject.toml` version bump is byte-simple; wheel build not exercised here (that's Workflow B's job). CHANGELOG additions are prose-only.",
+    "**Significance-check assessment** (constitution step 7): SIGNIFICANT — this is a release commit. The `change-type: release` value is the schema-legal marker for release-prep. Steelman argument against v2.6.1 (in favor of v2.7.0): the -5,000-line deletion is a large tree change that user-visible tooling depends on. Response: user-visible tooling depended on the RESULT of what the session pipeline produced (`.gator/sessions/*.md` committed summaries — those still work, still parsed by the surviving reader); it did NOT depend on `gator sessions <subcommand>` invocation since those verbs were never publicly registered. Any user script that directly imported the retiring files would break — but such a script would be reaching into internal `src/gator_command/scripts/` module paths, not through documented public API. Semver PATCH is honest here."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

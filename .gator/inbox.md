@@ -14,6 +14,10 @@ Drop anything here. No formatting needed.
 
 - **Charter promotion decision from vault.** Vault archive at `.gator/vault/gator-command-archive/charters/` has 18 charters; monorepo has 17 (`scripts-command-post.md` was Cat 3-excluded during bootstrap). Decide whether to restore/rewrite `scripts-command-post.md` for the monorepo context or leave the coverage gap. (2026-08-02)
 
+- **PyPI-CDN poll fix — validation-pending watch item for next release.** The v2.6.1 CDN-poll fix (commit `94b791e`) shipped to PyPI + `main` on 2026-08-14, but Workflow C's actual v2.6.1 promote run (run `31763277200`) loaded `promote-to-pypi.yml` from `main` at `cf01805` (pre-fix) — that's how `workflow_dispatch` resolves workflow definitions. The install step passed anyway, either because PyPI's CDN was fast this time or `pip install` retried internally. Now that `main` has the fix (via the 2026-08-14 FF), the next release cycle will actually exercise the new "Wait for PyPI CDN to surface the new version" step. Watch: look for the `PyPI CDN sees gator-command==<version> on attempt <N>` log line in the next Workflow C run's post-verify job; N should typically be 1-2. If N is consistently 8 or the step times out, the poll cadence needs tuning. (2026-08-14)
+
+- **Audit-surface tranche — implementation-plan authoring pending.** The [2026-08-14 Codex next-steps sketch](vault/artifacts/2026-08-14-enterprise-audit-surface-next-steps-sketch.md) is now the current-priority direction (roadmap Current Priority #1 + candidate-work items 9-11, 13-15). Its own §7 says the next artifact is "revised implementation plan for this tranche" — that plan doesn't exist yet. When the Architect ratifies the sketch and hands the tranche to Opus, first deliverable is the implementation plan (parallel to `2026-08-11-non-enterprise-session-cleanup-plan.md`'s shape), starting with sketch Step 1 (the canonical audit-question surface artifact). (2026-08-14)
+
 ---
 
 ## Machine state (persistent operational reference — not backlog, not history)
