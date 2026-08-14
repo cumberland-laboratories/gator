@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "audit-surface Phase 2 Commit J: Q2 + Q4 + Q5 new audit-question surfaces",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "audit-surface",
+    "phase-2",
+    "new-endpoints"
+  ],
+  "commit": "604025ce5066cf1cae5483bf0152ea91bc4fba2e",
+  "short_commit": "604025c",
+  "snippet_id": "snippet-604025ce5066c",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "044cbdc9187d8aad520bb64ca7083c23b6833383",
+  "started_at": "2026-08-14T23:00:10Z",
+  "ended_at": "2026-08-14T23:00:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-14-gator-044cbdc9187d8.json",
+    "enterprise/app/main.py",
+    "enterprise/app/routes/commits.py",
+    "enterprise/app/routes/repos.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/repos.py",
+    "enterprise/tests/test_ingest_routes.py"
+  ],
+  "notes": [
+    "Second code delivery of the 2026-08-14 Enterprise audit surface implementation plan (r10). Phase 2 Commit J of 3 — the three new Phase-1-artifact DATA-BUT-NO-SURFACE surfaces (Q2, Q4, Q5) implemented per the R3/R4/R5 ratifications from Phase 1 exit. All classifications flip to EXISTS for Claude/Codex post-commit; Q5's Gemini cross-bucket answer-completeness caveat (Migration 011 dependency) stays as documented in Q5's Notes column per r10 bucket discipline.",
+    "**Q4 — `commits provenance <sha>`** (R3 = (i) dedicated verb). New file `enterprise/app/routes/commits.py` with `GET /api/v1/commits/{sha}/provenance?repo_canonical_id=<id>` returning commit-side provenance (commit_sha, repo_identifier, author_identity, committed_at, machine_id, machine_label, snippet_agent, transcript_session_id) populated during commit reconciliation from Migration 008's snippet fields. Multi-match returns all candidates in `commits` array; CLI (`_handle_provenance`) prints a compact ambiguity table + `--repo` disambiguation hint when >1 match, prints full key/value detail when 1 match. 7-40-char SHA prefix matching mirrors `/commits/{sha}/transcripts`.",
+    "**Q2 — `commits list --repo <id>`** (R4 = (a) flag-style repo scoping). `enterprise/app/routes/repos.py::list_repo_commits` with `GET /api/v1/repos/{repo_canonical_id:path}/commits?limit=&offset=` returning per-commit rows shaped like Migration 010's `commits_with_transcript_coverage` view. Route-level composition of the view's join (rather than direct `SELECT ... FROM commits_with_transcript_coverage`) so SQLite in-memory tests work without recreating the view at `Base.metadata.create_all` time. New module-level `_LINKAGE_BASIS_RANK` constant kept in sync with Migration 010's CASE ordering. Python-side grouping keeps SQL portable across Postgres/SQLite.",
+    "**Q5 — `repos transcripts <id>`** (R5 = (b) symmetric verb). `enterprise/app/routes/repos.py::list_repo_transcripts` with `GET /api/v1/repos/{repo_canonical_id:path}/transcripts?vendor=&since=&limit=&offset=` doing the 3-way join `TranscriptSession ⨝ CommitTranscriptLink ⨝ Commit WHERE Commit.repo_identifier = ?` with `DISTINCT` on TranscriptSession (dedupes when one session links N commits in same repo). Ordered by `started_at DESC`. CLI in `commands/repos.py::_handle_transcripts` prints a table with Transcript/Vendor/Model/SessionID/Started/Machine/Bytes columns.",
+    "**Path-converter fix — mid-development finding.** FastAPI treats `/` in path params as separators by default, so `/repos/local/x/commits` would match `repo_canonical_id=local` and 404 on the tail. Discovered via 9 initial test failures; both `/repos/*` routes now use `{repo_canonical_id:path}` converter to allow slashes in canonical ids (which follow `local/<name>` shape on this machine per inbox machine-state). Full test sweep post-fix: all 16 new tests green.",
+    "**New router wired** at `enterprise/app/main.py` — `commits_router` from the new `routes/commits.py`, registered with `/api/v1` prefix + auth deps. Follows the established router-registration pattern (10th router). CLI `commits` subcommand group extended from 1 subcommand (`transcripts`) → 3 (`transcripts`, `list`, `provenance`). CLI `repos` subcommand group extended from 3 (`list`, `refresh`, `policies`) → 4 (adds `transcripts`).",
+    "**Regression pins** (16 new tests in `enterprise/tests/test_ingest_routes.py`):",
+    "`TestCommitProvenance` (7): full-SHA return, prefix return, ambiguous-prefix multi-match, `repo_canonical_id` narrowing, empty-for-no-match, short-prefix-rejected-400, nulls-when-snippet-absent."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

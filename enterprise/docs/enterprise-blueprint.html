@@ -97,6 +97,19 @@ tr:nth-child(even) { background: rgba(22, 27, 34, 0.5); }
 </head>
 <body>
 
+<div style="background: #2b1f0f; border: 2px solid #d29922; border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 2rem;">
+  <p style="color: #d29922; font-weight: 600; margin: 0 0 0.5rem 0;">⚠️ HISTORICAL — pre-transcripts-first MVP (2026-07-11)</p>
+  <p style="margin: 0.5rem 0;">This blueprint describes the E1–E6 evidence-in-Git architecture from July 2026, which was superseded 2026-08-08 by the ratified transcripts-first MVP (session-block-per-commit artifacts + envelope encryption retired as the evidence path; transcript custody now lives in Enterprise-managed Postgres + BlobStore, keyed by content SHA-256).</p>
+  <p style="margin: 0.5rem 0;">For the current architecture, see:</p>
+  <ul style="margin: 0.5rem 0 0.5rem 1.5rem;">
+    <li><code>.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md</code> — ratified ADR (D1-D11)</li>
+    <li><code>.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-mvp-implementation-plan.md</code> — 6-phase MVP that shipped v2.6.0</li>
+    <li><code>.gator/vault/artifacts/2026-08-14-enterprise-audit-surface-implementation-plan.md</code> — current audit-surface tranche (Phase 2 in flight)</li>
+    <li>Migrations 009 + 010 (transcript custody tables + operator query views); Migration 011 tentatively planned per §10 item 6 for Gemini duplicate-ID substrate widening</li>
+  </ul>
+  <p style="margin: 0.5rem 0 0 0;">Retained for architectural context; do NOT use as guidance for new work.</p>
+</div>
+
 <h1>Gator Enterprise</h1>
 <p class="subtitle">Technical Blueprint — Git-native governance control plane for AI-assisted engineering</p>
 <p><span class="badge badge-green">v0.1.0</span> <span class="badge badge-blue">E1–E6 Complete</span> <span class="badge badge-purple">Deployed on Fly.io</span></p>

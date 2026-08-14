@@ -597,6 +597,25 @@ enterprise-cli package.
 
   **What Commit K adds next**: `enterprise/docs/` audit for retired-behavior banners + operator guide refresh matching current commands (including the 3 new Q2/Q4/Q5 verbs from this commit + Q3 server-side promotion from Commit I) + smoke-test protocol artifact for Architect to run against the fresh deliverables.
 
+- **! Audit-surface Phase 2 Commit K (2026-08-14) — docs + smoke protocol + Phase 1 artifact rollforward.** Third and final code delivery of the 2026-08-14 Enterprise audit surface implementation plan Phase 2 (Commits I + J + K). No new code paths — pure documentation + operator-facing deliverables to complete Phase 2's exit criteria per parent plan §4.
+
+  **`enterprise/docs/enterprise-blueprint.html` historical banner**: pre-transcripts-first-MVP artifact from 2026-07-11 (E1-E6 evidence-in-Git architecture) gained a top-of-file HISTORICAL warning banner pointing at the current transcripts-first ADR + MVP plan + audit-surface plan + relevant migrations. Follows the same pattern as `enterprise/docs/session-block-schema-v2.md` (banner-marked 2026-08-08). No content rewrite — architectural context retained; reader is now correctly oriented on what's superseded vs current.
+
+  **Vault deliverables (gitignored, not in this commit)**:
+  - `.gator/vault/artifacts/2026-08-14-audit-surface-phase-2-smoke-test-protocol.md` — 9-test protocol (T1-T9) for Architect to run against a real local Enterprise stack. Covers all 6 Phase 2 behavior changes (T1 missing-machine-id fail-fast, T2 missing-Claude-root warning, T3 unreadable-file skip, T4 Q3 server-side unlinked filter, T5-T6 Q4 provenance single-match + ambiguous-prefix, T7 Q2 commits list, T8 Q5 repos transcripts, T9 duplicate-ingest verification). Same shape as `2026-08-10-smoke-test-run-1.md` for structural comparability. Includes prerequisites + cleanup + failure signals per test.
+  - `.gator/vault/artifacts/2026-08-14-enterprise-audit-question-surface.md` bumped to **r4** — Q2/Q4/Q5 rows rolled forward to reflect Commit J shipping (all three flipped DATA-BUT-NO-SURFACE → EXISTS with the shipped CLI/API paths cited). §4 summary count table now shows post-Commit-J state (5 EXISTS, 0 DATA-BUT-NO-SURFACE) alongside Phase-1-exit historical state for ratification traceability. Q5 Gemini answer-completeness cross-bucket concern preserved per r10 bucket-discipline contract.
+  - `.gator/vault/artifacts/enterprise-transcripts-mvp-operator-guide.md` refreshed with a new §10 "Audit-question surface" section mapping Q1-Q5 to CLI/endpoint pairs, Gemini caveat on Q5, and Phase 2 error-message hardening summary. Prior §0-§9 content unchanged.
+
+  **Phase 2 exit criteria per parent plan §4** — verification:
+  - Every Phase 1 EXISTS-status question returns a correct answer: Q1 unchanged; Q3 promoted server-side by Commit I (T4 in smoke protocol verifies).
+  - Every Phase 1 DATA-BUT-NO-SURFACE question given a CLI+API surface: Q2 (T7), Q4 (T5+T6), Q5 (T8) all shipped in Commit J.
+  - Named failure modes surface as informative errors: T1 (machine-id), T2 (Claude-root), T3 (unreadable) all cover the failure-mode audit from parent plan §4.
+  - Operator guide walkthrough executable end-to-end: refreshed with §10; existing §0-§9 golden path still accurate.
+  - No test regressions: enterprise 269 pass + 1 skip (was 253 pre-Commit-I), base 770 pass + 2 pre-existing xfails (unchanged).
+  - Fresh smoke-test run artifact: protocol produced (Architect executes to fill in Run 1 results).
+
+  **Phase 2 status: COMPLETE.** Ready for Phase 3 (Enterprise-side Codex adapter) whenever Architect fires; §10 items 1-7 in the parent plan stay ratified as they were at Phase 1 exit.
+
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry
   `"enterprise": ("gator-enterprise.py", ...)`.
 
