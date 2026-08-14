@@ -1,11 +1,19 @@
-"""repos commands — list, refresh, policies."""
+"""repos commands — list, refresh, policies, transcripts (Q5).
+
+Q5 audit-question surface (`repos transcripts <id>`) ratified as R5 = (b)
+at Phase 1 exit. Answers "Which model/vendor sessions touched repo <repo>
+over time?" via `GET /api/v1/repos/{repo_canonical_id}/transcripts` — see
+`enterprise/app/routes/repos.py::list_repo_transcripts`.
+"""
+
+import sys
 
 from gator_enterprise_cli.output import print_json, print_kv, print_table
 
 
 def register(subparsers):
     """Register repos subcommands."""
-    repos_parser = subparsers.add_parser("repos", help="Repository management")
+    repos_parser = subparsers.add_parser("repos", help="Repository management + audit")
     repos_sub = repos_parser.add_subparsers(dest="repos_command")
 
     repos_sub.add_parser("list", help="List tracked repositories")
@@ -15,6 +23,22 @@ def register(subparsers):
 
     policies = repos_sub.add_parser("policies", help="List policies targeting a repo")
     policies.add_argument("repo_id", help="Repository UUID")
+
+    transcripts = repos_sub.add_parser(
+        "transcripts",
+        help="Transcript sessions that touched this repo, ordered by recency (Q5)",
+    )
+    transcripts.add_argument(
+        "repo_canonical_id",
+        help="Canonical repo identifier (e.g. 'local/gator')",
+    )
+    transcripts.add_argument("--vendor", default=None,
+        help="Optional vendor filter (e.g. anthropic, openai, google)")
+    transcripts.add_argument("--since", default=None,
+        help="ISO 8601 lower bound on started_at (accepts YYYY-MM-DD)")
+    transcripts.add_argument("--limit", type=int, default=50)
+    transcripts.add_argument("--offset", type=int, default=0,
+        help="Pagination offset")
 
 
 def handle(args, client):
@@ -58,3 +82,55 @@ def handle(args, client):
                 for p in data
             ]
             print_table(["ID", "Name", "Status", "Rollout"], rows)
+
+    elif args.repos_command == "transcripts":
+        _handle_transcripts(args, client)
+
+    else:
+        print(
+            "Usage: gator-enterprise repos {list,refresh,policies,transcripts} ...",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+def _handle_transcripts(args, client):
+    """Q5 — list transcript sessions that touched a repo over time."""
+    params: dict = {"limit": args.limit, "offset": args.offset}
+    if args.vendor:
+        params["vendor"] = args.vendor
+    if args.since:
+        params["since"] = args.since
+    data = client.get(
+        f"/api/v1/repos/{args.repo_canonical_id}/transcripts",
+        params=params,
+    )
+    if args.json:
+        print_json(data)
+        return
+
+    items = data.get("items", [])
+    if not items:
+        print(f"No transcript sessions found for repo {args.repo_canonical_id}.")
+        return
+
+    rows = [
+        [
+            item["id"][:8],
+            item["vendor"],
+            item.get("model") or "-",
+            (item.get("vendor_session_id") or "")[:12],
+            (item.get("started_at") or "")[:19] or "-",
+            (item.get("machine_id") or "")[:8],
+            str(item.get("blob_size_bytes") or 0),
+        ]
+        for item in items
+    ]
+    print_table(
+        ["Transcript", "Vendor", "Model", "SessionID", "Started", "Machine", "Bytes"],
+        rows,
+    )
+
+    pagination = data.get("pagination", {})
+    if pagination.get("has_more"):
+        print("\n(more results — increase --limit or paginate with --offset)")

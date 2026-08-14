@@ -1034,3 +1034,323 @@ class TestRelink:
             headers=_auth(api_token),
         )
         assert resp.status_code == 404
+
+
+# ============================================================
+# Phase 2 Commit J (2026-08-14) — new audit-question surfaces Q2/Q4/Q5
+# ============================================================
+
+
+class TestCommitProvenance:
+    """GET /api/v1/commits/{sha}/provenance — Q4 audit-question surface.
+
+    Returns commit-side provenance fields populated during commit
+    reconciliation from the snippet: machine_id, machine_label,
+    snippet_agent, transcript_session_id, committed_at, author_identity,
+    repo_identifier. Full-40-char and 7+char-prefix SHA both accepted.
+    """
+
+    def test_returns_provenance_for_full_sha(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abc1234567890abc1234567890abc1234567890a",
+                "author": "AG <ag@example.com>",
+                "committed_at": "2026-08-14T10:00:00Z",
+                "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+                "machine_label": "curator-dev",
+                "snippet_agent": "claude-opus-4-7",
+                "transcript_session_id": "session-123",
+            }],
+        }, headers=_auth(api_token))
+
+        resp = client.get(
+            "/api/v1/commits/abc1234567890abc1234567890abc1234567890a/provenance",
+            headers=_auth(api_token),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["commits"]) == 1
+        c = body["commits"][0]
+        assert c["commit_sha"] == "abc1234567890abc1234567890abc1234567890a"
+        assert c["repo_identifier"] == "local/x"
+        assert c["machine_id"] == "c5c707f5-155a-422f-9b1b-d9e8a10fea08"
+        assert c["machine_label"] == "curator-dev"
+        assert c["snippet_agent"] == "claude-opus-4-7"
+        assert c["transcript_session_id"] == "session-123"
+        assert c["author_identity"] == "AG <ag@example.com>"
+
+    def test_returns_provenance_for_sha_prefix(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abcdef1234567890abcdef1234567890abcdef12",
+            }],
+        }, headers=_auth(api_token))
+
+        resp = client.get("/api/v1/commits/abcdef12/provenance",
+            headers=_auth(api_token))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["commits"]) == 1
+
+    def test_returns_multiple_commits_for_ambiguous_prefix(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "aaaaaaa1111111aaaaaaa1111111aaaaaaa11111"},
+                {"repo_canonical_id": "local/y",
+                 "sha": "aaaaaaa2222222aaaaaaa2222222aaaaaaa22222"},
+            ],
+        }, headers=_auth(api_token))
+
+        resp = client.get("/api/v1/commits/aaaaaaa/provenance",
+            headers=_auth(api_token))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["commits"]) == 2
+
+    def test_repo_canonical_id_narrows_ambiguous_prefix(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "aaaaaaa1111111aaaaaaa1111111aaaaaaa11111"},
+                {"repo_canonical_id": "local/y",
+                 "sha": "aaaaaaa2222222aaaaaaa2222222aaaaaaa22222"},
+            ],
+        }, headers=_auth(api_token))
+
+        resp = client.get(
+            "/api/v1/commits/aaaaaaa/provenance?repo_canonical_id=local/x",
+            headers=_auth(api_token),
+        )
+        assert resp.status_code == 200
+        assert len(resp.json()["commits"]) == 1
+        assert resp.json()["commits"][0]["repo_identifier"] == "local/x"
+
+    def test_returns_empty_for_no_match(self, client, api_token):
+        resp = client.get(
+            "/api/v1/commits/0123456789abcdef0123456789abcdef01234567/provenance",
+            headers=_auth(api_token),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["commits"] == []
+
+    def test_short_prefix_rejected(self, client, api_token):
+        """SHA prefix < 7 chars is rejected — matches /commits/{sha}/transcripts."""
+        resp = client.get("/api/v1/commits/abc/provenance",
+            headers=_auth(api_token))
+        assert resp.status_code == 400
+
+    def test_nulls_when_snippet_absent(self, client, api_token):
+        """Commit ingested without snippet-derived fields → nulls in provenance."""
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "1111111222222233333333444444445555555566",
+            }],
+        }, headers=_auth(api_token))
+
+        resp = client.get(
+            "/api/v1/commits/1111111222222233333333444444445555555566/provenance",
+            headers=_auth(api_token),
+        )
+        c = resp.json()["commits"][0]
+        assert c["machine_id"] is None
+        assert c["machine_label"] is None
+        assert c["snippet_agent"] is None
+        assert c["transcript_session_id"] is None
+
+
+class TestRepoCommitsList:
+    """GET /api/v1/repos/{repo_canonical_id}/commits — Q2 audit-question surface.
+
+    Recent commits in the repo with transcript-coverage summary. Per-commit
+    rows shaped like the `commits_with_transcript_coverage` view in Migration
+    010 — commit metadata + linked_transcript_count + best_linkage_basis_ranked.
+    """
+
+    def test_lists_commits_with_link_count(self, client, api_token):
+        # Two commits in local/x, one gets a transcript link, one doesn't.
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "abc1234567890abc1234567890abc1234567890a",
+                 "committed_at": "2026-08-14T10:00:00Z"},
+                {"repo_canonical_id": "local/x",
+                 "sha": "def1234567890def1234567890def1234567890a",
+                 "committed_at": "2026-08-14T11:00:00Z"},
+            ],
+        }, headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"see abc12345678\n"),
+            headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/commits",
+            headers=_auth(api_token))
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 2
+
+        by_sha = {i["commit_sha"]: i for i in items}
+        linked = by_sha["abc1234567890abc1234567890abc1234567890a"]
+        unlinked = by_sha["def1234567890def1234567890def1234567890a"]
+        assert linked["linked_transcript_count"] == 1
+        assert linked["best_linkage_basis_ranked"] == "1_exact_sha_in_transcript"
+        assert unlinked["linked_transcript_count"] == 0
+        assert unlinked["best_linkage_basis_ranked"] is None
+
+    def test_orders_recent_first(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "aaaa" + "0" * 36,
+                 "committed_at": "2026-08-01T10:00:00Z"},
+                {"repo_canonical_id": "local/x",
+                 "sha": "bbbb" + "0" * 36,
+                 "committed_at": "2026-08-14T10:00:00Z"},
+            ],
+        }, headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/commits",
+            headers=_auth(api_token))
+        shas = [i["commit_sha"] for i in resp.json()["items"]]
+        assert shas[0].startswith("bbbb")  # newer first
+        assert shas[1].startswith("aaaa")
+
+    def test_scopes_to_repo(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "aaaa" + "1" * 36},
+                {"repo_canonical_id": "local/y",
+                 "sha": "bbbb" + "2" * 36},
+            ],
+        }, headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/commits",
+            headers=_auth(api_token))
+        assert len(resp.json()["items"]) == 1
+        assert resp.json()["items"][0]["commit_sha"].startswith("aaaa")
+
+    def test_pagination(self, client, api_token):
+        for i in range(5):
+            client.post("/api/v1/commits/ingest", json={
+                "commits": [{
+                    "repo_canonical_id": "local/x",
+                    "sha": f"{i:040d}",
+                    "committed_at": f"2026-08-{10 + i:02d}T10:00:00Z",
+                }],
+            }, headers=_auth(api_token))
+
+        page1 = client.get("/api/v1/repos/local/x/commits?limit=2",
+            headers=_auth(api_token))
+        assert len(page1.json()["items"]) == 2
+        assert page1.json()["pagination"]["has_more"] is True
+        assert page1.json()["pagination"]["total_matched"] == 5
+
+        page3 = client.get("/api/v1/repos/local/x/commits?limit=2&offset=4",
+            headers=_auth(api_token))
+        assert len(page3.json()["items"]) == 1
+        assert page3.json()["pagination"]["has_more"] is False
+
+
+class TestRepoTranscriptsList:
+    """GET /api/v1/repos/{repo_canonical_id}/transcripts — Q5 audit-question surface.
+
+    Transcript sessions that touched the repo, ordered by started_at DESC.
+    3-way join TranscriptSession ⨝ CommitTranscriptLink ⨝ Commit filtered
+    by Commit.repo_identifier. Deduped per transcript session.
+    """
+
+    def test_lists_transcripts_touching_repo(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abc1234567890abc1234567890abc1234567890a",
+            }],
+        }, headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"see abc12345678\n"),
+            headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/transcripts",
+            headers=_auth(api_token))
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["vendor"] == "anthropic"
+
+    def test_scopes_to_repo(self, client, api_token):
+        # Transcript links to commit in local/x, NOT local/y.
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abc1234567890abc1234567890abc1234567890a",
+            }],
+        }, headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"see abc12345678\n"),
+            headers=_auth(api_token))
+
+        resp_x = client.get("/api/v1/repos/local/x/transcripts",
+            headers=_auth(api_token))
+        resp_y = client.get("/api/v1/repos/local/y/transcripts",
+            headers=_auth(api_token))
+        assert len(resp_x.json()["items"]) == 1
+        assert len(resp_y.json()["items"]) == 0
+
+    def test_deduplicates_per_transcript(self, client, api_token):
+        """One transcript linking to N commits in the same repo returns 1 row."""
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [
+                {"repo_canonical_id": "local/x",
+                 "sha": "abc1234567890abc1234567890abc1234567890a"},
+                {"repo_canonical_id": "local/x",
+                 "sha": "abc9876543210abc9876543210abc9876543210a"},
+            ],
+        }, headers=_auth(api_token))
+        # Transcript that references BOTH SHAs → 2 links to same repo.
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(b"see abc12345678 and abc98765432\n"),
+            headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/transcripts",
+            headers=_auth(api_token))
+        # 1 transcript, not 2 (DISTINCT collapses the 2 links to the same session)
+        assert len(resp.json()["items"]) == 1
+
+    def test_vendor_filter(self, client, api_token):
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/x",
+                "sha": "abc1234567890abc1234567890abc1234567890a",
+            }],
+        }, headers=_auth(api_token))
+        # Two transcripts, different vendors, both link via the SHA.
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"see abc12345678\n",
+                vendor="anthropic",
+                vendor_session_id="S-A",
+            ),
+            headers=_auth(api_token))
+        client.post("/api/v1/transcripts/ingest",
+            json=_make_transcript_body(
+                b"see abc12345678\n",
+                vendor="openai",
+                vendor_session_id="S-O",
+            ),
+            headers=_auth(api_token))
+
+        resp = client.get("/api/v1/repos/local/x/transcripts?vendor=openai",
+            headers=_auth(api_token))
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["vendor"] == "openai"
+
+    def test_empty_for_repo_with_no_activity(self, client, api_token):
+        resp = client.get("/api/v1/repos/local/nonexistent/transcripts",
+            headers=_auth(api_token))
+        assert resp.status_code == 200
+        assert resp.json()["items"] == []

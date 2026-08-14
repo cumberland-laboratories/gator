@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "audit-surface Phase 2 Commit I: Q3 promotion + error-message hardening",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "audit-surface",
+    "phase-2",
+    "hardening"
+  ],
+  "commit": "044cbdc9187d8aad520bb64ca7083c23b6833383",
+  "short_commit": "044cbdc",
+  "snippet_id": "snippet-044cbdc9187d8",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-14T22:30:01Z",
+  "ended_at": "2026-08-14T22:30:01Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-14-gator-1d17f26214b64.json",
+    "enterprise/app/routes/transcripts.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py",
+    "enterprise/tests/test_ingest_routes.py",
+    "enterprise/tests/test_transcripts_discovery.py"
+  ],
+  "notes": [
+    "First code delivery of the 2026-08-14 Enterprise audit surface implementation plan (r8). Phase 2 Commit I of 3 (Commit J = new Phase-1-gap surfaces for Q2/Q4/Q5; Commit K = docs + smoke-test protocol). Scope-disciplined hardening on the existing Claude-first path — no new endpoints or CLI verbs in this commit. All Architect ratifications from Phase 1 exit (R1-R5) honored.",
+    "**Q3 promotion — server-side `unlinked` filter.** `enterprise/app/routes/transcripts.py::list_transcripts` gains an `unlinked: bool = Query(False)` param wired to a HAVING clause on the existing outerjoin+group_by (`func.count(CommitTranscriptLink.id) == 0`). The CLI `transcripts list --unlinked` now passes `?unlinked=true` to the server; the pre-existing client-side filter stays as defensive fallback so a new CLI works against an older server with no `unlinked=true` support. Flips Q3 from \"EXISTS (with efficiency caveat)\" per Phase 1 audit-question-surface artifact §3 to plain EXISTS. Complements the `unlinked_recent_transcripts` view (Migration 010) — API is unbounded, view is bounded to last 7 days; both surface the same investigation queue.",
+    "**Missing `~/.gator/machine-id` fail-fast** — `enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py::_handle_pull` now exits with code 2 + actionable error message pointing at `gator init` as the fix, at the top of the pull command before any commit or transcript ingest fires. Prior behavior silently uploaded with `machine_id=\"unknown\"` (from the `_read_machine_id() or \"unknown\"` fallback in the payload assembly), which would collapse every transcript ingested in this state into a single synthesized machine row + break the `strong_machine_repo_time` linkage basis fleet-wide.",
+    "**Missing `~/.claude/projects/` informative warning** — `transcripts_discovery.py` gains a public `claude_root_path()` accessor (returns whatever `_default_claude_root()` resolves to, honoring the `CLAUDE_TRANSCRIPTS_ROOT` env override). CLI `_handle_pull` checks the root exists before running discovery + prints a warning to stderr if not. Non-fatal — operators may legitimately have no Claude transcripts on the machine; the warning explains WHY zero transcripts were discovered so the operator isn't stuck debugging a silent zero-item pull.",
+    "**Malformed-JSONL fatal-skip** — `transcripts_discovery.DiscoveredTranscript` gains an `unreadable: bool = False` field, set to `True` in the `OSError` branch of `_parse_jsonl_metadata` (file unreadable on open). CLI `_handle_pull` skips these records with a named-file diagnostic to stderr (source path + parse error) instead of attempting to upload a file it never actually read. Non-fatal parse issues (missing sessionId → filename fallback) keep `unreadable=False` because the file is still usable evidence — those still upload with the fallback session id + parse_error field visible to the operator.",
+    "**Duplicate-ingest verification, no code change.** Existing upsert path at `enterprise/app/routes/ingest.py:536-575` already returns `status=\"updated\"` (not 500) on re-ingest of the same `(org, machine, vendor, vendor_session_id)` tuple; CLI's `_handle_pull` summary already distinguishes `transcripts ingested (new)` from `transcripts updated`. The 4th target failure mode from the Phase 2 plan §4 error-message audit is verified informative — no fix needed. Documented in the commit body so future audits know it was checked.",
+    "**Regression pins.** New tests wire through the two new hardening surfaces:",
+    "`enterprise/tests/test_ingest_routes.py::TestListTranscripts::test_unlinked_filter_returns_only_zero_link_sessions` — seeds one linked + one unlinked transcript, verifies `?unlinked=true` returns only the unlinked row + `linked_commit_count=0`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -577,6 +577,26 @@ enterprise-cli package.
 
   **What Commit J adds next**: the three new Phase-1-gap surfaces per the audit-surface artifact — Q2 `commits list --repo`, Q4 `commits provenance <sha>`, Q5 `repos transcripts <id>`. Commit K adds docs + smoke-test protocol.
 
+- **! Audit-surface Phase 2 Commit J (2026-08-14) — three new audit-question surfaces.** Second code delivery of the 2026-08-14 Enterprise audit surface implementation plan. Adds the three Phase-1-artifact DATA-BUT-NO-SURFACE surfaces (Q2, Q4, Q5); all classifications flip to EXISTS post-commit for Claude/Codex; Q5's Gemini cross-bucket answer-completeness caveat (Migration 011 dependency) stays as documented in Q5's Notes column.
+
+  **Q4 — `commits provenance <sha>`** (`enterprise/app/routes/commits.py` — new file; `enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py::_handle_provenance`): new endpoint `GET /api/v1/commits/{sha}/provenance?repo_canonical_id=<id>` returning commit-side provenance fields (commit_sha, repo_identifier, author_identity, committed_at, machine_id, machine_label, snippet_agent, transcript_session_id) populated during commit reconciliation from Migration 008's snippet fields. 7-40-char SHA prefix matching mirrors `/commits/{sha}/transcripts`. Multi-match returns all rows in the `commits` array; CLI prints a compact table + `--repo` disambiguation hint when >1 match. Single-match prints full key/value detail via `print_kv`. Ratified as **R3 = (i)** at Phase 1 exit — dedicated verb (not folding into `commits transcripts`).
+
+  **Q2 — `commits list --repo <id>`** (`enterprise/app/routes/repos.py::list_repo_commits`; `commands/commits.py::_handle_list`): new endpoint `GET /api/v1/repos/{repo_canonical_id:path}/commits?limit=&offset=` returning per-commit rows shaped like Migration 010's `commits_with_transcript_coverage` view (commit metadata + linked_transcript_count + best_linkage_basis_ranked). Route-level composition of the same join the view exposes rather than direct `SELECT ... FROM commits_with_transcript_coverage` — keeps the SQLite in-memory test harness working without recreating the view at `Base.metadata.create_all` time. Python-side grouping (dict) keeps SQL portable. New module-level `_LINKAGE_BASIS_RANK` constant kept in sync with Migration 010's CASE ordering. Ratified as **R4 = (a)** at Phase 1 exit — flag-style repo scoping composes better than `repos commits <id>`.
+
+  **Q5 — `repos transcripts <id>`** (`enterprise/app/routes/repos.py::list_repo_transcripts`; `commands/repos.py::_handle_transcripts`): new endpoint `GET /api/v1/repos/{repo_canonical_id:path}/transcripts?vendor=&since=&limit=&offset=` doing the 3-way join `TranscriptSession ⨝ CommitTranscriptLink ⨝ Commit WHERE Commit.repo_identifier = ?` with DISTINCT on TranscriptSession (dedupes when one session links to N commits in the same repo). Ordered by `started_at DESC`. Ratified as **R5 = (b)** — symmetric with `commits transcripts <sha>`. **Gemini answer-completeness caveat** (per Phase 1 artifact §3 Q5 Notes): pre-Migration-011, two Gemini transcript files with same raw `vendor_session_id` collide at ingest; this surface returns honest partial data for Gemini until Phase 4 lands parent plan §10 item 6.
+
+  **Path-converter fix**: FastAPI treats slashes in path parameters as separators by default, so `/repos/local/x/commits` would match `repo_canonical_id=local` and 404 on the tail. Both new `/repos/*` routes use `{repo_canonical_id:path}` converter to allow slashes. Verified via 9 initial test failures pre-fix + all-green post-fix.
+
+  **New router registration**: `enterprise/app/main.py` gains `from app.routes.commits import router as commits_router` + `app.include_router(commits_router, prefix="/api/v1", dependencies=_auth_deps)`. Follows the established pattern (10th router registered).
+
+  **Regression pins** (16 new tests in `enterprise/tests/test_ingest_routes.py`):
+  - `TestCommitProvenance` (7 tests): full-SHA return, prefix return, ambiguous-prefix multi-match, `repo_canonical_id` narrowing, empty-for-no-match, short-prefix-rejected-400, nulls-when-snippet-absent.
+  - `TestRepoCommitsList` (4 tests): link-count aggregation with best-basis-ranked, recent-first ordering, repo scoping, pagination + total_matched.
+  - `TestRepoTranscriptsList` (5 tests): 3-way-join surfaces transcripts, repo scoping, DISTINCT dedupe when one transcript links N commits, vendor filter, empty-for-repo-with-no-activity.
+  - Test suite at commit time: enterprise **269 pass + 1 skip** (was 253 + 1 skip pre-commit — 16 net-new); base 770 pass + 2 pre-existing xfails (unchanged). Zero regressions.
+
+  **What Commit K adds next**: `enterprise/docs/` audit for retired-behavior banners + operator guide refresh matching current commands (including the 3 new Q2/Q4/Q5 verbs from this commit + Q3 server-side promotion from Commit I) + smoke-test protocol artifact for Architect to run against the fresh deliverables.
+
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry
   `"enterprise": ("gator-enterprise.py", ...)`.
 

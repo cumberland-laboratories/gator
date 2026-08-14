@@ -28,6 +28,7 @@ from app.routes.hook_policy import router as hook_policy_router
 from app.routes.crypto import router as crypto_router
 from app.routes.ingest import router as ingest_router
 from app.routes.transcripts import router as transcripts_router
+from app.routes.commits import router as commits_router
 
 settings = get_settings()
 configure_logging(settings.app_env)
@@ -66,3 +67,4 @@ app.include_router(hook_policy_router, prefix="/api/v1", dependencies=_auth_deps
 app.include_router(crypto_router, prefix="/api/v1", dependencies=_auth_deps)
 app.include_router(ingest_router, prefix="/api/v1", dependencies=_auth_deps)
 app.include_router(transcripts_router, prefix="/api/v1", dependencies=_auth_deps)
+app.include_router(commits_router, prefix="/api/v1", dependencies=_auth_deps)
