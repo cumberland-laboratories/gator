@@ -1,9 +1,14 @@
 """commits commands — reverse-lookup for the transcript custody surface.
 
-`commits <sha> transcripts` is the operator's answer to "what AI
+`commits transcripts <sha>` is the operator's answer to "what AI
 sessions produced this commit?" — the primary evidence path in the
 2026-08-08 transcripts-first MVP. Backed by
 `GET /api/v1/commits/{sha}/transcripts` from `routes/transcripts.py`.
+
+(Verb-first arg order — `commits transcripts <sha>`, not `commits <sha>
+transcripts` — because argparse resolves subcommand groups before
+positionals. The API URL keeps `{sha}` mid-path; only the CLI shape
+differs from the URL shape.)
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ def handle(args, client):
     if args.commits_command == "transcripts":
         _handle_transcripts(args, client)
     else:
-        print("Usage: gator-enterprise commits <sha> transcripts", file=sys.stderr)
+        print("Usage: gator-enterprise commits transcripts <sha> [--repo <id>]", file=sys.stderr)
         sys.exit(2)
 
 

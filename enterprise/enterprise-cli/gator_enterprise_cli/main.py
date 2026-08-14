@@ -50,7 +50,7 @@ def main():
     activate.register(subparsers)  # activate + sync
     repo_init.register(subparsers)  # repo init
     transcripts.register(subparsers)  # transcripts pull + list + show + get + link + relink
-    commits.register(subparsers)  # commits <sha> transcripts
+    commits.register(subparsers)  # commits transcripts <sha>
 
     args = parser.parse_args()
 

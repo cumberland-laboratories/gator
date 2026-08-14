@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "promote-to-pypi.yml: add bounded PyPI-CDN poll before post-publish smoke",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release-pipeline",
+    "cdn-lag",
+    "post-verify"
+  ],
+  "commit": "94b791e04fffbd18af43cfe380c72e2abc939a61",
+  "short_commit": "94b791e",
+  "snippet_id": "snippet-94b791e04fffb",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-14T02:01:53Z",
+  "ended_at": "2026-08-14T02:01:53Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/session-snippets/2026-08-13-gator-a8fd8610b4f3b.json",
+    ".github/workflows/promote-to-pypi.yml"
+  ],
+  "notes": [
+    "Fix v2.6.1 quick win #1 from the roadmap: recurring paper cut on Workflow C's `post-verify` job. PyPI's upload succeeds well before its CDN populates all edges — pip installs typically 404 for ~30-60s after a fresh publish. Every v2.5.2 → v2.6.0 promote failed the immediate post-publish smoke on this exact race (publish itself always succeeded; the failure was cosmetic-but-alarming).",
+    "Added a new `Wait for PyPI CDN to surface the new version` step to `post-verify`, sequenced BEFORE the existing install step. Polls `https://pypi.org/pypi/gator-command/${version}/json` (the JSON API endpoint the simple-index CDN reads from), bounded at **8 attempts × 15s = 120s max**. Typical warm-up is one or two attempts; the 120s ceiling catches genuine CDN incidents without hanging forever. On timeout, prints an explicit error message pointing the operator at `https://status.python.org/` and the publish job logs before manual re-run — no silent stall.",
+    "Alternative considered: straight `sleep 60`. Rejected — same worst-case wait as an unlucky poll but doesn't degrade gracefully when the CDN is faster (typical case wastes 30-45s), doesn't fail cleanly when the CDN is slower than expected (would silently 404 the install step), and doesn't distinguish \"still warming\" from \"publish actually broken.\"",
+    "Charter: `.gator/charters/release-pipeline.md` — Workflow C `post-verify` step description updated to describe the new poll-before-install shape + link the historical incident context (v2.5.2 → v2.6.0 flakes).",
+    "Verification: cannot exercise the pipeline locally (workflow_dispatch requires PyPI publish credentials + `RELEASE_PIPELINE_ENABLED=true` gate). The new step is idiomatic bash + a stdlib `curl` invocation; no test infrastructure covers `.github/workflows/*.yml` in this repo. Real validation happens on the next release cycle — if the smoke passes in ≤8 attempts (~2 minutes total), the fix landed correctly.",
+    "Significance: minor. Fix scope is one workflow file + one charter update; the smoke behavior it fixes is cosmetic (publish succeeds, smoke fails post-publish, release notes get \"known issue\" boilerplate). But it's a recurring paper cut across 4 releases and the fix cost is trivial — worth cleaning up before the next release."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
