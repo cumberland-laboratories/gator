@@ -2,6 +2,60 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.7.0] — 2026-08-14
+
+Enterprise audit-surface tranche. Ships the first evaluator-ready set of audit questions across the transcripts-first substrate: **five canonical audit questions** ("Q1: which transcripts touched commit `<sha>`?"; "Q2: which recent commits in repo `<repo>` have transcript coverage?"; "Q3: which recent transcripts are still unlinked?"; "Q4: which machine produced commit `<sha>`?"; "Q5: which model/vendor sessions touched repo `<repo>` over time?") — all EXISTS post-release with working CLI + API paths. Plus two AI-model-focused shipped procedures for handling v1→v2 upgrade residue and Gator-file commit conventions.
+
+Semver-strict MINOR bump: 3 new API endpoints + 3 new CLI subcommands + 1 extended API endpoint. All additive; no breaking API changes; no removed endpoints; existing request/response shapes preserved. The retired session subcommands from v2.6.1 remain retired.
+
+### Added
+
+- **Q4 audit surface — `commits provenance <sha>`.** New CLI verb + `GET /api/v1/commits/{commit_sha}/provenance?repo_canonical_id=<id>` endpoint returning commit-side provenance from Migration 008's snippet fields (`machine_id`, `machine_label`, `snippet_agent`, `transcript_session_id`, `committed_at`, `author_identity`, `repo_identifier`). 7-40-char SHA prefix matching; multi-match returns all candidates; CLI prints ambiguity table + `--repo` disambiguation hint. New route file `enterprise/app/routes/commits.py`, new router registered in `main.py`.
+- **Q2 audit surface — `commits list --repo <id>`.** New CLI verb + `GET /api/v1/repos/{repo_canonical_id:path}/commits?limit=&offset=` endpoint returning per-commit rows shaped like Migration 010's `commits_with_transcript_coverage` view (commit metadata + `linked_transcript_count` + `best_linkage_basis_ranked`). Route-level composition of the view's join (rather than direct `SELECT ... FROM view`) so SQLite in-memory tests work without recreating the view.
+- **Q5 audit surface — `repos transcripts <id>`.** New CLI verb + `GET /api/v1/repos/{repo_canonical_id:path}/transcripts?vendor=&since=&limit=&offset=` endpoint doing the 3-way join `TranscriptSession ⨝ CommitTranscriptLink ⨝ Commit` with `DISTINCT` on TranscriptSession (dedupes when one session links N commits in same repo). Ordered by `started_at DESC`.
+- **Q3 audit surface — server-side `unlinked=true` filter.** `GET /api/v1/transcripts?unlinked=true` gains a HAVING clause returning only sessions with zero linked commits — was client-side-filter-only pre-v2.7.0. CLI `transcripts list --unlinked` now passes the param through; keeps a defensive client-side filter as fallback for old-server compat. Complements the `unlinked_recent_transcripts` view (Migration 010) — view is bounded to last 7 days, API endpoint is unbounded.
+- **New route file `enterprise/app/routes/commits.py`** — companion to `routes/ingest.py` (write side) and `routes/transcripts.py` (which houses the historical co-located `/commits/{sha}/transcripts` reverse-lookup). Owns commit-side reads that don't return transcripts. Router registered in `main.py` alongside the existing 9 routers.
+- **Two new shipped procedures in `.gator/.includes/procedures/`** (propagate to every governed repo on next `gator update`, hidden from dashboard file browser by the existing `.includes` whitelist mechanism):
+  - **`pre-gator-residue.md`** — for AI models encountering `.pre.gator*` files in the tree after a v1→v2 layout upgrade. Explains the files are safety-net backups from `gator update --migrate-layout`, prescribes vaulting them (`.gator/vault/pre-update-backups/<YYYY-MM-DD>/<original-path>/`), and enumerates the 4 common failure modes without the procedure.
+  - **`committing-gator-files.md`** — general guidance on committing `.gator/` files after any Gator-driven modification. Default rule: most `.gator/` changes SHOULD be committed when Gator produced them. Enumerated exceptions: `.pre.gator*` backups, `.gator/vault/`, post-commit residue (`commit_draft.md` + `whiteboard.md`), unrelated session snippets, machine-local operational state. 5-step decision ladder + 5 common failure modes without the procedure.
+
+### Changed
+
+- **`enterprise/enterprise-cli/gator_enterprise_cli/commands/commits.py`** subcommand group extended from 1 → 3 (`transcripts` pre-existing; `list` + `provenance` new).
+- **`enterprise/enterprise-cli/gator_enterprise_cli/commands/repos.py`** subcommand group extended from 3 → 4 (`list` + `refresh` + `policies` pre-existing; `transcripts` new).
+- **`.gator/.includes/constitution.md`** "The Loop" step 8 note gains cross-references to the two new procedures so agents naturally discover them at the seam where the questions come up.
+
+### Fixed
+
+- **`transcripts pull`: missing `~/.gator/machine-id` fail-fast.** Prior behavior silently uploaded transcripts with `machine_id="unknown"`, collapsing every affected transcript into a single synthesized machine row + breaking the `strong_machine_repo_time` linkage basis fleet-wide. Now exits code 2 with an actionable error message pointing at `gator init` as the fix, at the top of the pull command before any commit or transcript ingest fires.
+- **`transcripts pull`: missing `~/.claude/projects/` informative warning.** Prior behavior returned a silent zero-transcript pull. Now prints a warning to stderr explaining that the Claude transcript root is absent (with the `CLAUDE_TRANSCRIPTS_ROOT` env-override hint). Non-fatal — operators may legitimately have no Claude transcripts.
+- **`transcripts pull`: malformed-JSONL unreadable-file skip.** New `DiscoveredTranscript.unreadable` boolean, set to `True` when `_parse_jsonl_metadata` catches `OSError` on file open. Records with `unreadable=True` skip upload with a named-file diagnostic to stderr instead of attempting to upload a file the parser never actually read. Non-fatal parse issues (missing sessionId → filename fallback) keep `unreadable=False` — file is still usable evidence.
+
+### Documentation
+
+- **`enterprise/docs/enterprise-blueprint.html`** gains a top-of-file HISTORICAL warning banner. The blueprint is a 2026-07-11 artifact describing the E1-E6 evidence-in-Git architecture superseded 2026-08-08 by the ratified transcripts-first MVP. Banner points at the current ADR + MVP plan + audit-surface plan + relevant migrations. Follows the same pattern as `enterprise/docs/session-block-schema-v2.md` (banner-marked v2.6.0 P1.5).
+- **`.gator/roadmap.md`** Current-Priority section reframed per the 2026-08-14 Codex Enterprise-audit-surface next-steps sketch: the audit-surface tranche is now Current Priority #1 for the near-term window; install/UX + Loop polish preserved as #2/#3. Post-2.6 candidate-work list gained items 9-15 mapping the sketch's 6-step tranche (Codex adapter → Gemini adapter → Phase 4 sweep → smoke test) plus items 13/14/15 for the audit-surface tranche's Phase 1/2/6 deliverables.
+- **`.gator/inbox.md`** gains two new open items (PyPI-CDN poll validation-pending watch item; audit-surface tranche implementation-plan-authoring-pending) — both surfaced in prior sessions but formalized here.
+
+### Under the hood
+
+- **Audit-surface implementation plan** at `.gator/vault/artifacts/2026-08-14-enterprise-audit-surface-implementation-plan.md` (r10) — 6-phase plan mapping the Codex sketch's 6 steps to roadmap items 13→14→9→10→11→15. Iterated 10 revisions across 8 whiteboard-review rounds. Ratified §10 items 5-8 (Q4 surface = `commits provenance`, Q2 CLI = `commits list --repo`, Q5 CLI = `repos transcripts`, declared-evidence surface = spec-only follow-on). Items 1-7 in §10 remain phase-kickoff-deferrable for later phases.
+- **Phase 1 audit-question surface artifact** at `.gator/vault/artifacts/2026-08-14-enterprise-audit-question-surface.md` (r7) — the ratified Phase 1 deliverable + post-Commit-J rollforward showing all 5 questions in EXISTS status. Preserves the historical Phase-1-exit ratification record alongside the current state.
+- **Smoke-test protocol** at `.gator/vault/artifacts/2026-08-14-audit-surface-phase-2-smoke-test-protocol.md` — 9 tests (T1-T9) covering all 6 Phase 2 behavior changes; Architect executes locally to fill in Run 1.
+- **Operator guide refresh** at `.gator/vault/artifacts/enterprise-transcripts-mvp-operator-guide.md` gains a §10 "Audit-question surface" section mapping Q1-Q5 to CLI/endpoint pairs + Gemini caveat on Q5 + Phase 2 error-message hardening summary.
+- **Charter updates**: `.gator/charters/scripts-enterprise.md` gains 3 new invariant blocks (one per Commit I/J/K) with the full delta + regression-pin summary + hand-off notes. `.gator/.includes/constitution.md` gains procedure cross-references.
+- **24 new regression pins** across `enterprise/tests/test_ingest_routes.py` (Q3 filter + Q2/Q4/Q5 endpoints — `TestListTranscripts::test_unlinked_filter_*` + `TestCommitProvenance` (7) + `TestRepoCommitsList` (4) + `TestRepoTranscriptsList` (5)) + `enterprise/tests/test_transcripts_discovery.py` (`TestPhase2Hardening` — 5 tests for `unreadable` + `claude_root_path`).
+- **Test suite at release-time**: enterprise **269 passed + 1 skipped** (was 245 at v2.6.1 baseline, +24 net Phase 2 tests); base 770 passed + 2 pre-existing xfails (unchanged). Zero regressions.
+- **Path-converter fix during implementation**: FastAPI treats slashes in path params as separators by default; both new `/repos/*/*` routes use `{repo_canonical_id:path}` converter to allow slashes in canonical ids (`local/<name>` shape). Caught by 9 initial test failures; all-green post-fix.
+
+### Known issues
+
+- Same v1 `active-vendor-session.json` compat xfails from v2.6.0/v2.6.1 unchanged (`tests/test_multi_session.py::test_v1_file_returns_single_entry_list` and `::test_v1_file_migrates_to_v2_on_write`). Not release-blocking; roadmap item 8.
+- **Enterprise packaging still source-checkout-only** — unchanged from v2.6.0/v2.6.1. Single-pipx install path remains post-2.6 work (roadmap item 5).
+- **Base-wheel package-data gap** (unchanged from v2.6.1): several session-pipeline scripts missing from `[tool.setuptools.package-data]`. Roadmap item 12.
+- **Q5 Gemini answer-completeness gap**: pre-Migration-011 (Phase 4 work, tracked as parent-plan §10 item 6), two Gemini transcript files with the same raw `vendor_session_id` on the same machine collide at ingest — second-file uploads overwrite the first. Q5 for a repo where Gemini was used with duplicate-raw-ID transcripts returns an incomplete history until Phase 4 lands. Q5's shipped surface returns honest partial data for Gemini in the interim; Enterprise-side Codex + Gemini adapters (Phase 3 + Phase 4) address this.
+- **PyPI-CDN poll fix from v2.6.1 gets its first real-world test** on this release. The bounded poll (8 attempts × 15s = 120s max) sequenced before the post-publish smoke install lives at `.github/workflows/promote-to-pypi.yml` and is now on `main`; the v2.6.1 promote loaded pre-fix workflow definition. If the poll surfaces the new version in ≤2 attempts, fix landed correctly; if it exhausts, we discover a CDN-lag failure mode we hadn't observed. Either outcome is informative.
+
 ## [2.6.1] — 2026-08-13
 
 Post-Enterprise-transcripts-first cleanup release. Retires vendor-transcript archaeology from base Gator (net **~-5,000 lines** across 6 commits) now that the Enterprise transcripts-first substrate is the source of truth for full transcript custody. Plus two paper-cut fixes: PyPI-CDN lag on post-publish smoke, and inverted arg order in the `commits` docstring.

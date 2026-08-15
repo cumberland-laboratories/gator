@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "audit-surface Phase 2 Commit K: docs banner + smoke protocol + Phase 1 rollforward",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "audit-surface",
+    "phase-2",
+    "smoke-protocol",
+    "docs"
+  ],
+  "commit": "cfbc5009268487a7bf1bcd12230b73930b6758a6",
+  "short_commit": "cfbc500",
+  "snippet_id": "snippet-cfbc500926848",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "604025ce5066cf1cae5483bf0152ea91bc4fba2e",
+  "started_at": "2026-08-14T23:22:54Z",
+  "ended_at": "2026-08-14T23:22:54Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-14-gator-604025ce5066c.json",
+    "enterprise/docs/enterprise-blueprint.html"
+  ],
+  "notes": [
+    "Third and final Phase 2 commit of the 2026-08-14 Enterprise audit surface implementation plan (Commits I + J + K). Documentation + operator-facing deliverables only — no new code paths. Closes Phase 2 exit criteria per parent plan §4.",
+    "**`enterprise/docs/enterprise-blueprint.html` historical banner.** The blueprint is a 2026-07-11 artifact describing the E1-E6 evidence-in-Git architecture that was superseded 2026-08-08 by the ratified transcripts-first MVP (session-block-per-commit + envelope encryption retired; transcript custody now lives in Enterprise-managed Postgres + BlobStore, keyed by content SHA-256). New top-of-file HISTORICAL warning banner points at the current ADR + MVP plan + audit-surface plan + relevant migrations. Follows the same pattern as `enterprise/docs/session-block-schema-v2.md` (banner-marked 2026-08-08 during v2.6.0 P1.5). No content rewrite of the blueprint body — architectural context retained; readers now correctly oriented on what's superseded vs current.",
+    "**Vault deliverables** (gitignored, not part of this git commit but produced during the same Commit K work):",
+    "**New smoke-test protocol** at `.gator/vault/artifacts/2026-08-14-audit-surface-phase-2-smoke-test-protocol.md` — 9 tests (T1-T9) covering all six Phase 2 behavior changes. Same shape as `2026-08-10-smoke-test-run-1.md` for structural comparability across MVP milestones. Prerequisites + cleanup + failure signals per test. Architect executes locally against the real Enterprise stack; failures block Phase 2 exit, interesting-but-passing observations feed the Phase 6 polish-pass backlog.",
+    "**Phase 1 audit-question-surface artifact** bumped to **r4** with post-Commit-J status flips: Q2/Q4/Q5 all flipped DATA-BUT-NO-SURFACE → EXISTS with the shipped CLI/API paths cited inline. §4 summary count table now shows post-Commit-J state (5 EXISTS, 0 DATA-BUT-NO-SURFACE) alongside Phase-1-exit historical state (2 EXISTS + 3 DATA-BUT-NO-SURFACE) for ratification traceability. Q5 Gemini answer-completeness cross-bucket concern preserved per the r10 bucket-discipline contract (captured in Notes + Cross-bucket-concerns section, not as a status-bucket reclassification).",
+    "**Operator guide refresh** at `.gator/vault/artifacts/enterprise-transcripts-mvp-operator-guide.md` — new §10 \"Audit-question surface\" section mapping Q1-Q5 to CLI/endpoint pairs, Gemini caveat on Q5, and Phase 2 error-message hardening summary. Prior §0-§9 content unchanged (still accurate for the golden-path walkthrough).",
+    "**Phase 2 exit criteria per parent plan §4 — all met**:",
+    "Every Phase 1 EXISTS-status question returns a correct answer against a real Claude session: Q1 unchanged (already covered by pre-Phase-2 smoke); Q3 promoted server-side by Commit I — verified by protocol T4."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
