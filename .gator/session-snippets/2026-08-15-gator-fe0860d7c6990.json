@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "inbox: post-Commit-L rollforward + Phase 3 exit-criteria closeout tracking",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "rollforward",
+    "phase-3",
+    "audit-surface"
+  ],
+  "commit": "fe0860d7c69908b55725288934174725d11f4319",
+  "short_commit": "fe0860d",
+  "snippet_id": "snippet-fe0860d7c6990",
+  "session_group_key": "anthropic:14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "f7ef4c215a8842479d78c13ddf103b221c945ae0",
+  "started_at": "2026-08-15T17:08:00Z",
+  "ended_at": "2026-08-15T17:26:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-15-gator-f7ef4c215a884.json"
+  ],
+  "notes": [
+    "Post-Commit-L (`f7ef4c2`, Phase 3 Enterprise-side Codex adapter) rollforward on `.gator/inbox.md`.",
+    "Named Commit L as the Phase 3 core-code delivery: \"Phase 3 (Enterprise-side Codex adapter) — core code landed 2026-08-15 as Commit L `f7ef4c2` on `dev` (unreleased). Adapter for `~/.codex/sessions/` + `--vendor {codex,openai}` + 16 new discovery tests + charter invariant block. Enterprise suite: 285 pass + 1 skip (was 269 + 1 skip).\" Notes that `dev` is now one commit ahead of `main` (still at `58dc2f3`); Codex adapter will ride the next MINOR bump to PyPI.",
+    "Replaced \"Phase 3 (Enterprise-side Codex adapter)\" line with \"Phase 3 exit-criteria closeout\" — signaling core code is done but §5 exit criteria 2 (smoke evidence on a Codex-active machine) + 4 (operator-guide Codex section) remain.",
+    "Added \"Phase 4 (Enterprise-side Gemini adapter)\" as a now-unblocked next-natural-move — cross-referencing §6 + §10 item 6 = (b) ratified path (Migration 011 substrate widening for Gemini duplicate-id-across-files).",
+    "Retained Phase 2 smoke Run 1 + Workflow B CDN-poll wrapper items unchanged.",
+    "Names both remaining §5 criteria with the specific artifacts + commands. Operator-guide update is small (§10 Codex section parallel to Claude); smoke evidence needs a machine that has actually used Codex CLI (this dev machine `c5c707f5-…-a10fea08` has none — smoke would need to run on a different machine or after installing + using Codex CLI here). Same stack + machine-id as the Phase 2 smoke protocol.",
+    "The pre-commit hook wrote `.gator/session-snippets/2026-08-15-gator-f7ef4c215a884.json` post-Commit-L; this commit sweeps it up per the [`committing-gator-files.md`](.gator/.includes/procedures/committing-gator-files.md) §2d convention.",
+    "**Minor.** `change-type: governance` — strategic-planning-surface update. Steelman-against: no. This is straightforward inbox rollforward tracking a just-shipped code commit; no behavior claims that could mislead future sessions. Test suite unchanged (no code touched)."
+  ],
+  "transcript_session_id": "14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "transcript_ref": null
+}
