@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude",
+  "intent": "inbox: Phase 2 smoke-test Run 1 executed (9/9 PASS) + protocol r2 rollforward",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "audit-surface",
+    "phase-2",
+    "smoke-test"
+  ],
+  "commit": "d6874c9b11379f1d086e25602214073c9fe79c9c",
+  "short_commit": "d6874c9",
+  "snippet_id": "snippet-d6874c9b11379",
+  "session_group_key": "anthropic:58a32aa0-ddad-4597-ac12-64a4bec9de2f",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "fe0860d7c69908b55725288934174725d11f4319",
+  "started_at": "2026-08-15T17:27:36Z",
+  "ended_at": "2026-08-15T20:08:26Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-15-gator-fe0860d7c6990.json"
+  ],
+  "notes": [
+    "Executed audit-surface Phase 2 smoke-test protocol Run 1 (T1-T9) against the real local Enterprise stack: **9/9 PASS, zero MVP-code failures — Phase 2 exit criteria satisfied**. Run record at `.gator/vault/artifacts/2026-08-15-audit-surface-phase-2-smoke-test-run-1.md` (vault, machine-local). Net DB delta from the run: zero rows (all fixtures cleaned up).",
+    "Post-run enforcer round applied with Architect direction: smoke-test protocol rolled to r2 (Run 1 findings F1-F5 folded into T3/T5/T6/T9 steps + Windows/Git-Bash notes; status flipped to executed); run-record tree-identity claim sharpened (run was on `dev` `fe0860d` = v2.7.0 + Commit L; accepted as Phase 2 exit evidence, not strict release-tree evidence). Both artifacts vault-side.",
+    "Earlier whiteboard round: fixed three stale r4 self-references in the audit-question-surface artifact (now r7) — vault-side.",
+    "`inbox.md`: closed the \"Phase 2 smoke-test Run 1 execution pending\" open item per house rule; added Run 1 outcome + protocol-r2 summary to the where-we-are block.",
+    "Rides along: session snippet for `fe0860d` from the previous session (staged pre-session governance residue)."
+  ],
+  "transcript_session_id": "58a32aa0-ddad-4597-ac12-64a4bec9de2f",
+  "transcript_ref": null
+}

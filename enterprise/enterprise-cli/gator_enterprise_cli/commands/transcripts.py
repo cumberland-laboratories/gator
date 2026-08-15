@@ -101,7 +101,7 @@ def register(subparsers):
     ls.add_argument("--offset", type=int, default=0,
         help="Pagination offset (default: 0)")
     ls.add_argument("--unlinked", action="store_true",
-        help="Show only sessions with zero linked commits (client-side filter)")
+        help="Show only sessions with zero linked commits (server-side filter)")
     ls.add_argument("--sort", default="ingested",
         choices=["ingested", "started", "size", "links"],
         help="Sort key (default: ingested, descending)")
