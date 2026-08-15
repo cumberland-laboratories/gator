@@ -1,6 +1,6 @@
 generation: 2
 installed: 2026-08-02
-updated: 2026-08-03T07:24:07
+updated: 2026-08-10T20:43:30
 action: install
 installer: gatorize.py
-cli-version: 2.5.3
+cli-version: 2.6.0

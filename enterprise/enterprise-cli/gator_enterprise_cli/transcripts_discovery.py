@@ -74,14 +74,37 @@ def _default_claude_root() -> Path:
     return Path(os.path.expanduser("~/.claude/projects"))
 
 
+def _default_codex_root() -> Path:
+    """~/.codex/sessions — override with $CODEX_TRANSCRIPTS_ROOT for tests.
+
+    Codex CLI (OpenAI) stores rollout JSONL files under a
+    ``YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`` tree — a per-day
+    directory hierarchy, unlike Claude's flat ``projects/<hash>/`` layout.
+    """
+    override = os.environ.get("CODEX_TRANSCRIPTS_ROOT")
+    if override:
+        return Path(override)
+    return Path(os.path.expanduser("~/.codex/sessions"))
+
+
 def claude_root_path() -> Path:
-    """Public accessor for the discovery root (Phase 2 hardening).
+    """Public accessor for the Claude discovery root (Phase 2 hardening).
 
     CLI callers use this to check root existence before running discovery,
     so a missing `~/.claude/projects/` surfaces as an informative operator
     message instead of a silent zero-transcripts-discovered pull.
     """
     return _default_claude_root()
+
+
+def codex_root_path() -> Path:
+    """Public accessor for the Codex discovery root (Phase 3 addition).
+
+    Parallel to ``claude_root_path()`` — CLI's Codex-root-missing warning
+    at `_handle_pull` reaches for this so the warned path matches the path
+    discovery will actually walk.
+    """
+    return _default_codex_root()
 
 
 def _parse_iso_z(value: str | None) -> datetime | None:
@@ -214,19 +237,190 @@ def discover_claude_transcripts(
 
 
 # ------------------------------------------------------------------
-# Vendor dispatch (post-MVP: codex, gemini)
+# Codex CLI (OpenAI) — Phase 3 (2026-08-15)
+# ------------------------------------------------------------------
+#
+# Format reference (from the retired base-Gator extract-codex-sessions.py
+# module, deleted 2026-08-13 in Commit E `d54d899` per non-Enterprise
+# session cleanup plan; git-show'd from history at Phase 3 draft time):
+#
+#     ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl
+#
+# JSONL event types:
+#   session_meta   — first event; payload has {id, cwd, cli_version,
+#                    model_provider, git: {commit_hash, branch}}
+#   turn_context   — mid-session; payload has {turn_id, cwd, model,
+#                    approval_policy, sandbox_policy}
+#   response_item  — user/assistant/tool turns; payload has {role, type,
+#                    content: [{type, text}]}
+#   event_msg      — task lifecycle {type: task_started|task_complete}
+#
+# Metadata extraction: session_id from session_meta.payload.id (first-
+# available wins, exactly like Claude's sessionId); workspace_hint from
+# session_meta.payload.cwd; model from turn_context.payload.model;
+# started_at/ended_at from min/max of top-level `timestamp` across all
+# events; turn_count = count of response_item events with role in
+# (user, assistant).
+
+
+def _parse_codex_jsonl_metadata(path: Path) -> DiscoveredTranscript:
+    """Read a Codex CLI transcript file and extract session metadata.
+
+    Parallel to `_parse_jsonl_metadata` (the Claude parser) but uses
+    Codex's session_meta/turn_context/response_item event shape rather
+    than Claude's flat per-event fields. Streams line-by-line — Codex
+    sessions can be many MB. Stops early once every field of interest
+    is populated (session_id, model, started_at, workspace); continues
+    only to update ended_at + turn_count.
+    """
+    result = DiscoveredTranscript(
+        vendor="openai",
+        vendor_session_id="",
+        source_path=str(path),
+    )
+    try:
+        result.file_size_bytes = path.stat().st_size
+    except OSError:
+        pass
+
+    session_id: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    model: str | None = None
+    workspace: str | None = None
+    turn_count = 0
+
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    event = json.loads(stripped)
+                except (ValueError, json.JSONDecodeError):
+                    # Malformed line — skip individually rather than
+                    # abandon the whole file. Matches Claude parser.
+                    continue
+
+                # Timestamp: top-level field on every event.
+                ts = _parse_iso_z(event.get("timestamp"))
+                if ts is not None:
+                    if started_at is None or ts < started_at:
+                        started_at = ts
+                    if ended_at is None or ts > ended_at:
+                        ended_at = ts
+
+                msg_type = event.get("type")
+                payload = event.get("payload") or {}
+                if not isinstance(payload, dict):
+                    payload = {}
+
+                if msg_type == "session_meta":
+                    if session_id is None:
+                        sid = payload.get("id")
+                        if isinstance(sid, str) and sid:
+                            session_id = sid
+                    if workspace is None:
+                        cwd = payload.get("cwd")
+                        if isinstance(cwd, str) and cwd:
+                            workspace = cwd
+                    continue
+
+                if msg_type == "turn_context":
+                    if model is None:
+                        m = payload.get("model")
+                        if isinstance(m, str) and m:
+                            model = m
+                    # cwd on turn_context can override initial session_meta
+                    # cwd if the operator cd'd mid-session — take the
+                    # session_meta value as authoritative (initial workspace)
+                    # unless still None.
+                    if workspace is None:
+                        cwd = payload.get("cwd")
+                        if isinstance(cwd, str) and cwd:
+                            workspace = cwd
+                    continue
+
+                if msg_type == "response_item":
+                    role = payload.get("role")
+                    if role in ("user", "assistant"):
+                        turn_count += 1
+                    continue
+
+                # event_msg + any unknown type: ignore for metadata
+                # extraction (they don't carry session identity).
+    except OSError as e:
+        result.parse_error = f"read failed: {e}"
+        result.unreadable = True
+        return result
+
+    if session_id is None:
+        # Fall back to the UUID chunk of the filename. Codex filenames
+        # are `rollout-<ISO-timestamp>-<uuid>.jsonl` — last hyphen-
+        # separated segment before `.jsonl` is the UUID.
+        stem = path.stem  # e.g. "rollout-2026-05-28T08-33-48-abc123-uuid"
+        parts = stem.split("-")
+        session_id = parts[-1] if len(parts) > 1 else stem
+        result.parse_error = "no session_meta.id in file; fell back to filename UUID"
+
+    result.vendor_session_id = session_id
+    result.workspace_hint = workspace
+    result.model = model
+    result.started_at = started_at
+    result.ended_at = ended_at
+    result.turn_count = turn_count
+    return result
+
+
+def discover_codex_transcripts(
+    root: Path | None = None,
+    *,
+    since: datetime | None = None,
+) -> Iterator[DiscoveredTranscript]:
+    """Yield every Codex CLI transcript on the local machine.
+
+    Recursively walks ``~/.codex/sessions/YYYY/MM/DD/`` for files matching
+    ``rollout-*.jsonl``. Sorted by path (which orders by date + timestamp
+    naturally because Codex filenames start with the ISO timestamp).
+
+    ``since`` filters by ``ended_at`` (or ``started_at`` if end is missing)
+    — sessions entirely before ``since`` are skipped. Sessions with no
+    parseable timestamps are ALWAYS yielded regardless of ``since``,
+    matching Claude's behavior (surfaces parse failures to the operator).
+    """
+    root = root or _default_codex_root()
+    if not root.exists() or not root.is_dir():
+        return
+    for entry in sorted(root.rglob("rollout-*.jsonl")):
+        if not entry.is_file():
+            continue
+        record = _parse_codex_jsonl_metadata(entry)
+        if since:
+            effective = record.ended_at or record.started_at
+            if effective and effective < since:
+                continue
+        yield record
+
+
+# ------------------------------------------------------------------
+# Vendor dispatch (post-MVP: gemini)
 # ------------------------------------------------------------------
 
 _VENDOR_HANDLERS = {
     "claude": discover_claude_transcripts,
+    "codex": discover_codex_transcripts,
 }
 
-# Extra vendor slugs that map to the same handler (transcripts pull
-# accepts both "claude" and "anthropic" as vendor filter; the stored
-# vendor slug in Enterprise is "anthropic" per the transcripts_first
-# plan §5).
+# Extra vendor slugs that map to the same handler. `transcripts pull`
+# accepts both the vendor's product name (claude, codex) and the
+# canonical Enterprise vendor slug (anthropic, openai) as inputs. The
+# stored vendor slug on `transcript_sessions.vendor` is the canonical
+# form (anthropic for Claude, openai for Codex) — see the Enterprise
+# TranscriptSession model docstring.
 _VENDOR_ALIASES = {
     "anthropic": "claude",
+    "openai": "codex",
 }
 
 

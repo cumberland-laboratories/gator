@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "inbox: post-v2.7.0 rollforward + Phase 2 smoke + Workflow B follow-up",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "rollforward",
+    "2.7.0"
+  ],
+  "commit": "6e21990a6fa12f9ac229b39a3512b68acac3ee92",
+  "short_commit": "6e21990",
+  "snippet_id": "snippet-6e21990a6fa12",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "58dc2f3926a8f17aa9439ffa24811cdb5dbc1fdc",
+  "started_at": "2026-08-15T01:25:07Z",
+  "ended_at": "2026-08-15T01:25:07Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-15-gator-58dc2f3926a8f.json"
+  ],
+  "notes": [
+    "Post-v2.7.0-ship rollforward on `.gator/inbox.md`. Two open items closed (both promoted to shipped/validated state, no longer needing tracking): PyPI-CDN poll fix validation-pending (validated end-to-end on v2.7.0 Workflow C — log line `PyPI CDN sees gator-command==2.7.0 on attempt 1`); audit-surface tranche implementation-plan-authoring-pending (plan authored at r10 + Phase 2 shipped in v2.7.0). Two new open items added: Phase 2 smoke-test protocol Run 1 pending (Architect executes T1-T9 locally against the shipped v2.7.0 stack); Workflow B TestPyPI CDN-poll wrapper follow-up (Windows smoke retry-loop discovered on v2.7.0 RC — needs release-hygiene fix parallel to the Workflow C fix).",
+    "New \"Where we are (2026-08-15)\" anchor section at the top of the inbox — brief current-state summary + \"Ready to pick up next\" list naming Phase 3 (Codex adapter), Phase 2 smoke Run 1, and Workflow B wrapper as the three natural next moves. Serves as a session-boundary orientation for a fresh session (or a fresh model) picking up where this one left off.",
+    "House rule preserved: only OPEN items in §Open items. Three pre-existing 2026-08-02 open items unchanged (docs rewrite for install/upgrade/getting-started/index; legacy `cumberland-laboratories/gator-command` GitHub repo removal; charter promotion decision from vault). Machine state section unchanged (persistent operational reference, not backlog).",
+    "Verification: no code touched; inbox-only. Test suite unchanged. Whiteboard clean.",
+    "Significance-check assessment (constitution step 7): minor. `change-type: governance` — strategic planning surface. Steelman argument against: closing the PyPI-CDN validation-pending item is a real behavior claim (fix validated); mis-declaring that would mislead future sessions. Response: the validation is empirically-grounded (Workflow C run `31855839063` log line evidence + the fresh-env install step succeeded in 9s total on the run), documented in this commit body for traceability if the claim ever needs re-checking."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

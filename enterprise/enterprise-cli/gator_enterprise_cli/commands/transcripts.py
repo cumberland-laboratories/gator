@@ -30,6 +30,7 @@ from gator_enterprise_cli.output import print_json, print_kv, print_table
 from gator_enterprise_cli.transcripts_discovery import (
     DiscoveredTranscript,
     claude_root_path,
+    codex_root_path,
     discover as discover_transcripts,
 )
 
@@ -61,8 +62,14 @@ def register(subparsers):
     )
     pull.add_argument(
         "--vendor", default="claude",
-        choices=["claude", "anthropic", "all"],
-        help="Vendor to pull from (default: claude). MVP supports only claude.",
+        choices=["claude", "anthropic", "codex", "openai", "all"],
+        help=(
+            "Vendor to pull from (default: claude). Phase 3 (2026-08-15) added "
+            "Codex support: 'codex' and 'openai' both dispatch to the Codex "
+            "adapter (`~/.codex/sessions/`). 'anthropic' remains an alias for "
+            "'claude'. 'all' still resolves to claude in this release; "
+            "widening to iterate across all installed vendors is Phase 4+ work."
+        ),
     )
     pull.add_argument(
         "--since", default=None,
@@ -433,8 +440,16 @@ _PREFIX_SCAN_CAP = 200
 
 def _handle_pull(args, client):
     if args.vendor == "all":
+        # Phase 3 (2026-08-15): Codex adapter shipped, but --vendor all
+        # still resolves to claude only — iterating across all installed
+        # vendors is Phase 4+ work per parent plan §5. Operators wanting
+        # Codex today invoke `--vendor codex` (or `--vendor openai`)
+        # explicitly.
         vendor = "claude"
-        print("note: --vendor all resolves to claude in MVP (only vendor supported)")
+        print(
+            "note: --vendor all resolves to claude in this release "
+            "(iteration across installed vendors is Phase 4+)"
+        )
     else:
         vendor = args.vendor
 
@@ -487,14 +502,26 @@ def _handle_pull(args, client):
     # Step 3 + 4 — transcript discovery + ingest.
     # Phase 2 hardening (2026-08-14): informative warning when the vendor
     # transcript root is absent, so the operator sees WHY zero transcripts
-    # were discovered instead of a silent zero-item pull.
-    if vendor == "claude":
+    # were discovered instead of a silent zero-item pull. Phase 3
+    # (2026-08-15) extended the same pattern to Codex; `openai` is an
+    # alias for `codex` per the transcripts_discovery vendor-alias table.
+    if vendor in ("claude", "anthropic"):
         _claude_root = claude_root_path()
         if not _claude_root.exists() or not _claude_root.is_dir():
             print(
                 f"warning: Claude transcript root {_claude_root} does not exist. "
                 f"This is normal if you have not used Claude Code on this machine; "
                 f"otherwise check the CLAUDE_TRANSCRIPTS_ROOT env override.",
+                file=sys.stderr,
+            )
+    elif vendor in ("codex", "openai"):
+        _codex_root = codex_root_path()
+        if not _codex_root.exists() or not _codex_root.is_dir():
+            print(
+                f"warning: Codex transcript root {_codex_root} does not exist. "
+                f"This is normal if you have not used the Codex CLI on this "
+                f"machine; otherwise check the CODEX_TRANSCRIPTS_ROOT env "
+                f"override.",
                 file=sys.stderr,
             )
     discovered = list(discover_transcripts(vendor, since=since_dt))

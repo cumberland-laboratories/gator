@@ -616,6 +616,27 @@ enterprise-cli package.
 
   **Phase 2 status: COMPLETE.** Ready for Phase 3 (Enterprise-side Codex adapter) whenever Architect fires; §10 items 1-7 in the parent plan stay ratified as they were at Phase 1 exit.
 
+- **! Audit-surface Phase 3 Commit L (2026-08-15) — Enterprise-side Codex adapter.** First code delivery of Phase 3 in the 2026-08-14 Enterprise audit surface implementation plan. Widens transcript discovery from Claude-only to Claude + Codex CLI (OpenAI); Q1-Q5 audit-question surfaces begin returning Codex-side rows on the next `transcripts pull --vendor codex`. Extend-in-place decision: `enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py` was already vendor-dispatched via `_VENDOR_HANDLERS` + `_VENDOR_ALIASES` — a separate `codex_discovery.py` module would have duplicated that dispatch machinery. Single-commit target per parent plan §5 ("1-2 commits").
+
+  **Codex parser** (`transcripts_discovery.py::_parse_codex_jsonl_metadata`): reads `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl` line-by-line. Extracts `vendor_session_id` from the first `session_meta.payload.id`, `workspace_hint` from `session_meta.payload.cwd`, `model` from the first `turn_context.payload.model`, `started_at`/`ended_at` from min/max of top-level `timestamp` across all events, `turn_count` from `response_item` events with `payload.role in (user, assistant)`. If `session_meta` is absent, falls back to the last hyphen-separated segment of the filename stem as `vendor_session_id` (same degraded-parse semantics as the Claude parser: parse_error set, `unreadable=False`, file still uploaded as usable evidence). Fatal-parse (OSError on open) sets `unreadable=True` — CLI skips with a named-file diagnostic, matching the Claude Phase 2 hardening contract.
+
+  **Vendor slug = `openai`** (canonical form, per the Enterprise `TranscriptSession.vendor` model contract). CLI accepts both `codex` (product name) and `openai` (canonical) via `_VENDOR_ALIASES["openai"] → "codex"`.
+
+  **Codex root** (`_default_codex_root` + `codex_root_path()` accessor): `~/.codex/sessions/` by default; override via `CODEX_TRANSCRIPTS_ROOT` env var (test-only path, parallel to `CLAUDE_TRANSCRIPTS_ROOT`).
+
+  **Directory layout**: unlike Claude's flat `~/.claude/projects/<hash>/` layout, Codex uses per-day directories `YYYY/MM/DD/`. Discovery uses `Path.rglob("rollout-*.jsonl")` — the filename prefix ensures accidental `.jsonl` drops in the tree are not picked up. Files are sorted by path, which orders by date + timestamp naturally because Codex filenames begin with the ISO timestamp.
+
+  **CLI wire-up** (`commands/transcripts.py::_handle_pull`): `--vendor` choices extended `[claude, anthropic, all]` → `[claude, anthropic, codex, openai, all]`. `--vendor all` still resolves to `claude` only — iteration across all installed vendors is deferred to Phase 4+ per parent plan §5. Codex-root missing-warning added (parallel to Commit I's Claude-root warning): fires when `vendor in ("codex", "openai")` and the resolved root directory is absent — non-fatal (operator may legitimately have never used Codex CLI).
+
+  **Regression pins** (25 new tests in `enterprise/tests/test_transcripts_discovery.py`):
+  - `TestParseSingleCodexTranscript` (8 tests): session_meta.id extraction, model from turn_context, session_meta.cwd precedence over turn_context.cwd, turn_count excludes non-user/assistant response_items + event_msg, started/ended span across all events, filename UUID fallback when session_meta absent, malformed-line survival, unreadable-flag on OSError.
+  - `TestDiscoverCodex` (5 tests): yields every rollout, `since=` filters older rollouts, empty result when root missing, empty result when root empty, ignores non-`rollout-*.jsonl` files.
+  - `TestCodexRootAccessor` (2 tests): default = `~/.codex/sessions`, env override honored.
+  - `TestVendorDispatch::test_codex_alias_resolves` — both `codex` and `openai` dispatch to the Codex handler.
+  - Test suite at commit time: enterprise **285 pass + 1 skip** (was 269 + 1 skip pre-commit — 16 net-new counting fixture-derived variants; total delta +25 assertions across the new classes). No regressions.
+
+  **What Phase 4 adds next** (per parent plan §6): Gemini adapter — same shape, requires Migration 011 for widened `vendor_session_id` uniqueness (Gemini reuses the same raw id across duplicate-turn edits, colliding at DB + blob-key layer). Retiring the base-Gator `extract-codex-sessions.py` + `extract-gemini-sessions.py` scripts (already deleted in Commit E `d54d899`) closes the substrate-parity gap.
+
 - `src/gator_command/cli.py::COMMANDS` — dispatch entry
   `"enterprise": ("gator-enterprise.py", ...)`.
 
