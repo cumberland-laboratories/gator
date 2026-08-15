@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "audit-surface Phase 3 Commit L: Enterprise-side Codex adapter",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "audit-surface",
+    "phase-3",
+    "codex",
+    "transcripts-discovery",
+    "vendor-widening"
+  ],
+  "commit": "f7ef4c215a8842479d78c13ddf103b221c945ae0",
+  "short_commit": "f7ef4c2",
+  "snippet_id": "snippet-f7ef4c215a884",
+  "session_group_key": "anthropic:14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-15T17:08:00Z",
+  "ended_at": "2026-08-15T17:24:01Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-10-gator-f9d59fdd0c3e2.json",
+    ".gator/session-snippets/2026-08-15-gator-6e21990a6fa12.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py",
+    "enterprise/tests/test_transcripts_discovery.py"
+  ],
+  "notes": [
+    "First code delivery of Phase 3 in the 2026-08-14 Enterprise audit-surface",
+    "implementation plan (`.gator/vault/artifacts/2026-08-14-enterprise-audit-surface-implementation-plan.md`).",
+    "Widens transcript discovery from Claude-only to Claude + Codex CLI (OpenAI).",
+    "Q1-Q5 audit-question surfaces will begin returning Codex-side rows on the",
+    "next `transcripts pull --vendor codex`.",
+    "**Extend-in-place decision.** `enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py`",
+    "was already vendor-dispatched via `_VENDOR_HANDLERS` + `_VENDOR_ALIASES` —",
+    "a separate `codex_discovery.py` module would have duplicated that dispatch"
+  ],
+  "transcript_session_id": "14a7d32f-3928-4505-9db6-5f6f006d64d2",
+  "transcript_ref": null
+}
