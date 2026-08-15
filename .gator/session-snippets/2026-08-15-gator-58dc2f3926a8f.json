@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.7.0",
+  "change_type": "release",
+  "significance": "architectural",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "2.7.0",
+    "audit-surface",
+    "phase-2"
+  ],
+  "commit": "58dc2f3926a8f17aa9439ffa24811cdb5dbc1fdc",
+  "short_commit": "58dc2f3",
+  "snippet_id": "snippet-58dc2f3926a8f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "cfbc5009268487a7bf1bcd12230b73930b6758a6",
+  "started_at": "2026-08-15T00:57:19Z",
+  "ended_at": "2026-08-15T00:57:19Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-14-gator-cfbc500926848.json",
+    "CHANGELOG.md",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Release-prep for v2.7.0 — Enterprise audit-surface tranche Phase 2. Version-decision ratified 2026-08-14: **MINOR bump** (v2.6.1 → v2.7.0) — semver-strict correct because the release adds 3 new API endpoints + 3 new CLI subcommands + 1 extended API endpoint (`?unlinked=true` server-side param) + 2 new shipped procedures. All additive; no breaking API changes; no removed endpoints; existing request/response shapes preserved. `pyproject.toml` version = 2.7.0.",
+    "**`CHANGELOG.md`** — full `[2.7.0] — 2026-08-14` entry inserted above `[2.6.1]`. Keep-a-Changelog structure (Added / Changed / Fixed / Documentation / Under the hood / Known issues). Covers all 5 landed commits since v2.6.1: `9f92d67` (roadmap+inbox reframe), `1d17f26` (shipped procedures), `044cbdc` (Commit I hardening), `604025c` (Commit J new surfaces), `cfbc500` (Commit K docs+protocol). Every subhead explains what and why. Known-issues section carries forward v2.6.0/v2.6.1 items unchanged (v1 vendor-session xfails; source-checkout-only Enterprise packaging; base-wheel package-data gap) plus adds Q5 Gemini answer-completeness gap (Phase 4 dependency) and the CDN-poll-first-real-world-test note.",
+    "**`.gator/roadmap.md`** — header updated to reflect the v2.7.0 release-prep cut on `dev` + `main` awaiting RC → PyPI promote. New Done row for the Enterprise audit-surface tranche with all 5 commit SHAs + Phase 2 delivery summary + version-decision provenance recorded. Post-2.6 items 1+2 status flipped `Landed (dev)` → `Shipped v2.6.1` since they actually shipped with the prior release (v2.7.0 doesn't re-ship them).",
+    "**Release pipeline next steps** (not in this commit): (1) push `dev` to origin (already done for prior commits; will need re-push for this one); (2) FF `main` to `dev` (already at `cfbc500`; will need re-FF for this bump); (3) cut RC tag `v2.7.0-rc1` — triggers Workflow B → TestPyPI publish + matrix smoke; (4) dispatch Workflow C with the RC version + Workflow B run ID → approval-gated PyPI publish + **first real-world exercise of the v2.6.1 CDN-poll fix**. If the poll surfaces the new version in ≤2 attempts, fix landed correctly; if it exhausts (8 attempts × 15s = 120s max), we discover a CDN-lag failure mode not observed at protocol design time.",
+    "**Verification**: test suite unchanged from Commit K exit (enterprise 269 pass + 1 skip, base 770 pass + 2 pre-existing xfails). Zero regressions. `pyproject.toml` version bump is byte-simple; wheel build not exercised locally (Workflow B's job).",
+    "**Significance-check assessment** (constitution step 7): SIGNIFICANT — release commit. `change-type: release`, `significance: architectural` because this release completes Phase 2 of the ratified Enterprise audit-surface tranche AND establishes the first fully-shipped end-to-end audit-question surface for the transcripts-first architecture. Steelman argument against v2.7.0 (in favor of v2.6.2 PATCH): the changes are all additive so PATCH could be argued semantically. Response: PATCH is for backwards-compatible bug fixes only under strict semver; new features (even backwards-compatible ones) require MINOR. Three new user-facing verbs + three new user-facing endpoints are unambiguously new-feature surface. MINOR (v2.7.0) is honest. Steelman for v3.0.0 MAJOR: the audit-surface tranche establishes a materially new user-facing capability. Response: v3.0.0 is reserved for the point when the Enterprise-cli single-pipx install ships + the audit surface widens to Codex + Gemini (Phase 3+4+5 completion). v2.7.0 is the intermediate step where Claude-first audit is evaluator-ready.",
+    "**Post-v2.7.0 outlook**: Phase 3 (Enterprise-side Codex adapter) is the natural next tranche per parent plan §5. Blocked only on Architect firing. §10 items 1-7 in the audit-surface parent plan remain phase-kickoff-deferrable. Item 8 (declared-evidence surface) stays specification-only unless Phase 3+4 exit reveals it's needed."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -6,6 +6,19 @@ Drop anything here. No formatting needed.
 
 ---
 
+## Where we are (2026-08-15)
+
+**v2.7.0 shipped 2026-08-15** to PyPI + GitHub Release + tag; `main` + `dev` both at `58dc2f3`. Enterprise audit-surface tranche Phase 2 complete (Commits I `044cbdc` + J `604025c` + K `cfbc500`) — Q1-Q5 canonical audit questions all EXISTS with working CLI + API. **CDN-poll fix from v2.6.1 validated end-to-end** on this release's Workflow C post-verify (log: `PyPI CDN sees gator-command==2.7.0 on attempt 1`).
+
+**Ready to pick up next** (any of these; none are blocking each other):
+- **Phase 3 (Enterprise-side Codex adapter)** — parent plan §5, sketch Step 3. Blocked only on Architect firing. Next natural step in the audit-surface tranche.
+- **Phase 2 smoke-test protocol Run 1** — local execution of T1-T9 (see open item below) to fill in the Architect-observed results against the shipped v2.7.0 code.
+- **Workflow B CDN-poll wrapper** — small release-hygiene follow-up (see open item below).
+
+Everything else in the roadmap Post-2.6 candidate-work list (items 3-8, 11-12) is still-open + phase-independent.
+
+---
+
 ## Open items
 
 - **Docs rewrite for install/upgrade/getting-started/index.** 12 pre-monorepo docs vaulted to `.gator/vault/docs-not-ready/` in v2.5.2 described the retired `gator-engine/scripts/gatorize.sh` install path. Need fresh versions for the pipx-first monorepo world. Priorities: `installation.md` (`pipx install gator-command` → `gator dashboard`), `upgrade.md` (`pipx upgrade`), `getting-started.md` (dashboard-first walkthrough), `index.md` (Home page for docs site). Vault copies preserve OLD prose as reference for what to rewrite / NOT reintroduce. (2026-08-02)
@@ -14,9 +27,9 @@ Drop anything here. No formatting needed.
 
 - **Charter promotion decision from vault.** Vault archive at `.gator/vault/gator-command-archive/charters/` has 18 charters; monorepo has 17 (`scripts-command-post.md` was Cat 3-excluded during bootstrap). Decide whether to restore/rewrite `scripts-command-post.md` for the monorepo context or leave the coverage gap. (2026-08-02)
 
-- **PyPI-CDN poll fix — validation-pending watch item for next release.** The v2.6.1 CDN-poll fix (commit `94b791e`) shipped to PyPI + `main` on 2026-08-14, but Workflow C's actual v2.6.1 promote run (run `31763277200`) loaded `promote-to-pypi.yml` from `main` at `cf01805` (pre-fix) — that's how `workflow_dispatch` resolves workflow definitions. The install step passed anyway, either because PyPI's CDN was fast this time or `pip install` retried internally. Now that `main` has the fix (via the 2026-08-14 FF), the next release cycle will actually exercise the new "Wait for PyPI CDN to surface the new version" step. Watch: look for the `PyPI CDN sees gator-command==<version> on attempt <N>` log line in the next Workflow C run's post-verify job; N should typically be 1-2. If N is consistently 8 or the step times out, the poll cadence needs tuning. (2026-08-14)
+- **Phase 2 smoke-test protocol — Run 1 execution pending.** Protocol shipped as part of Commit K at `.gator/vault/artifacts/2026-08-14-audit-surface-phase-2-smoke-test-protocol.md` — 9 tests (T1-T9) covering all Phase 2 behavior changes (missing-machine-id fail-fast, missing-Claude-root warning, unreadable-file skip, Q3 server-side unlinked filter, Q4 provenance single-match + ambiguous-prefix, Q2 commits list, Q5 repos transcripts, duplicate-ingest verification). Requires local Enterprise stack up (uvicorn + worker + Postgres per machine-state section below). Architect executes → copies protocol into a new `2026-08-XX-audit-surface-phase-2-smoke-test-run-1.md` and fills in observed exit codes / stderr / notable diffs. Failures block Phase 3 kickoff; interesting-but-passing observations feed the Phase 6 polish-pass backlog per parent plan §8. Currently: v2.7.0 shipped code + tests all pass in unit tests but hasn't been exercised against the real local stack. (2026-08-15)
 
-- **Audit-surface tranche — implementation-plan authoring pending.** The [2026-08-14 Codex next-steps sketch](vault/artifacts/2026-08-14-enterprise-audit-surface-next-steps-sketch.md) is now the current-priority direction (roadmap Current Priority #1 + candidate-work items 9-11, 13-15). Its own §7 says the next artifact is "revised implementation plan for this tranche" — that plan doesn't exist yet. When the Architect ratifies the sketch and hands the tranche to Opus, first deliverable is the implementation plan (parallel to `2026-08-11-non-enterprise-session-cleanup-plan.md`'s shape), starting with sketch Step 1 (the canonical audit-question surface artifact). (2026-08-14)
+- **Workflow B TestPyPI CDN-poll wrapper — release-hygiene follow-up.** Discovered on v2.7.0 RC (Workflow B run `31855182635`, first attempt): the Windows-runner TestPyPI smoke hit the same CDN-lag race that the v2.6.1 CDN-poll fix addressed for Workflow C's production PyPI smoke. Ubuntu passed in 6s; Windows failed in 10s (`ERROR: Could not find a version that satisfies the requirement gator-command==2.7.0`). Retry-with-`gh run rerun --failed` cleared it after CDN warmed. Not urgent since retry unblocks it, but adding a bounded CDN-poll wrapper to `.github/workflows/release-candidate.yml`'s TestPyPI smoke step (parallel to the Workflow C fix at `promote-to-pypi.yml`) would eliminate the retry loop. Reference implementation: search for `Wait for PyPI CDN to surface the new version` in `promote-to-pypi.yml` — same shape, swap the JSON API URL to `test.pypi.org`. Would ride cleanly in a future release-hygiene commit; can't retrofit into v2.7.0-rc1 without burning `-rc2` on TestPyPI (filename permanence). (2026-08-15)
 
 ---
 
