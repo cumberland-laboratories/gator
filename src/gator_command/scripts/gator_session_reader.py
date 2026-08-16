@@ -17,9 +17,11 @@ Consumers:
 Design notes:
   - All three functions are byte-identical copies of their originals — this
     module IS the consolidation, not a rewrite.
-  - No dependency on any retirement candidate. `gator-session-common.py` is
-    retired 2026-08-13 in this commit; `gator-sessions.py` retired 2026-08-13
-    in Commit E.
+  - No dependency on any retirement candidate. `gator-sessions.py` retired
+    2026-08-13 in Commit E; `gator-session-common.py` survived Phase 3 as
+    F-partial (vendor-formatter callers) and retired 2026-08-16 in the
+    Phase 4/5 sweep with the Codex + Gemini extractors — this module's
+    `get_machine_identity()` is sole owner since then.
 
 @reads: .gator/sessions/*.md (committed summaries), ~/.gator/machine-id
 @writes: ~/.gator/machine-id (first-call creation)

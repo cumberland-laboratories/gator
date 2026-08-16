@@ -1,23 +1,20 @@
 # Charter: Session Archaeology
 
-**Covers**: `src/gator_command/scripts/extract-codex-sessions.py`, `src/gator_command/scripts/extract-gemini-sessions.py`, `src/gator_command/scripts/gator-session-aggregator.py`, `src/gator_command/scripts/gator-session-common.py`, `src/gator_command/scripts/gator_session_reader.py`
+**Covers**: `src/gator_command/scripts/gator-session-aggregator.py`, `src/gator_command/scripts/gator_session_reader.py`
 
-Post-Phase-3 shape (2026-08-13). The four files retired in Phase 3 (`gator-sessions.py`, `gator-session-sink.py`, `gator-session-block.py`, `extract-claude-sessions.py`) are gone from the source tree — their content is in git history only. Function entries below cover the surviving surface. The two remaining vendor extractors (`extract-codex-sessions.py`, `extract-gemini-sessions.py`) are Phase-4-deferred per parent plan §5 decision 2(b): they retire once Enterprise-side Codex + Gemini adapters ship, and `gator-session-common.py`'s vendor helpers retire with them in the same Phase 4 pass.
+Post-sweep shape (2026-08-16). Seven files retired across the non-Enterprise session cleanup: four in Phase 3 (2026-08-13: `gator-sessions.py`, `gator-session-sink.py`, `gator-session-block.py`, `extract-claude-sessions.py`) and three in the final sweep (2026-08-16: `extract-codex-sessions.py`, `extract-gemini-sessions.py`, `gator-session-common.py`) — content in git history only. The sweep fired once its ratified gate was met: Enterprise-side Codex (Commit L `f7ef4c2`) + Gemini (Commit M `25dbc58`) adapters landed with ≥1 real linked commit each. Base Gator now emits governance metadata (snippets) only; Enterprise owns transcript custody, parsing, and cross-session audit retrieval.
 
 ## Owns
 
-Snippet-based session pipeline (surviving surface) + Phase-4-deferred vendor extractors.
+Snippet-based session pipeline — the entire surviving surface.
 
 - `gator-session-aggregator.py` owns the snippet-to-summary pipeline: reads v2 JSON snippets from `.gator/session-snippets/*.json`, aggregates by `(repo, session_id)`, caches summaries at `~/.gator/sessions/<path-hash>/`. Importable library — no CLI entry point. Consumers: `gator-dashboard.py` (Audit view API), `gator-audit.py::_handle_sessions()` (CLI `--sessions`).
-- `gator_session_reader.py` owns the surviving committed-summary reader contract + machine identity. Three functions: `parse_committed_summary()` (extracted from `gator-sessions.py` in Phase 2A, 2026-08-12), `read_committed_summaries()` (same origin), and `get_machine_identity()` (folded from `gator-session-common.py` in Phase 3F, 2026-08-13). Importable library — no CLI. Consumers: `gator-audit.py` (snippet-based decisions_source + machine identity), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py`, `tests/test_session_reader.py`. Byte-identical parse/read/identity behavior to the originals.
-- `gator-session-common.py` — **Phase-4-deferred retirement**. Retains 7 vendor-formatting helpers used by the Phase-4-deferred Codex + Gemini extractors: `redact()`, `extract_intelligence()`, `make_row_key()`, `make_transcript_path()`, `format_summary_frontmatter()`, `format_summary_markdown()`, `format_session_summary_dict()`. Also retains a copy of `get_machine_identity()` for internal use by the formatters — same behavior as the reader's copy; both retire in Phase 4. See [`scripts-core-library`](scripts-core-library.md) for the per-function entries.
-- `extract-codex-sessions.py` — Codex CLI session archaeology (**Phase-4-deferred retirement**). Reads `~/.codex/sessions/` with normalized turn format; delegates all summary formatting to `gator-session-common`.
-- `extract-gemini-sessions.py` — Gemini CLI session archaeology (**Phase-4-deferred retirement**). Reads `~/.gemini/tmp/` with the same delegation pattern. Gemini is the only vendor with genuine duplicate session IDs across files — `make_row_key()` handles this.
+- `gator_session_reader.py` owns the surviving committed-summary reader contract + machine identity. Three functions: `parse_committed_summary()` (extracted from `gator-sessions.py` in Phase 2A, 2026-08-12), `read_committed_summaries()` (same origin), and `get_machine_identity()` (folded from `gator-session-common.py` in Phase 3F, 2026-08-13; **sole owner since the 2026-08-16 sweep** deleted session-common's duplicate copy). Importable library — no CLI. Consumers: `gator-audit.py` (snippet-based decisions_source + machine identity), `gator-repo-status.py` (recent sessions panel), `tests/test_audit_integration.py`, `tests/test_session_reader.py`.
 
 ## Does Not Own
 
-- Machine identity storage — that is `gator-machine-id.py` (standalone CLI) + the two reader-side canonical copies noted above.
-- Summary formatting logic — the Phase-4-deferred vendor extractors delegate to `gator-session-common.format_summary_markdown()` and `format_session_summary_dict()`. See [`scripts-core-library`](scripts-core-library.md).
+- Machine identity storage — that is `gator-machine-id.py` (standalone CLI); the reader owns the canonical read/create helper.
+- Vendor transcript discovery, parsing, and custody — Enterprise-side since the audit-surface tranche: `enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py` (Claude + Codex + Gemini). See [`scripts-enterprise`](scripts-enterprise.md).
 - Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py::assemble_audit_data()`.
 - The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()`.
 - The committed summary read path in repo-status — `gator-repo-status.py::get_session_summaries()` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
@@ -77,10 +74,9 @@ Filesystem: `~/.gator/dashboard-repos.json` (R), per-repo snippets (R), `~/.gato
 
 ### get_machine_identity()
 File: `src/gator_command/scripts/gator_session_reader.py`
-Returns `{id, hostname, label}` for the current machine. Creates `~/.gator/machine-id` on first call using `gator-machine-id.py`'s storage format. Folded from `gator-session-common.py:33` in Phase 3F (2026-08-13).
+Returns `{id, hostname, label}` for the current machine. Creates `~/.gator/machine-id` on first call using `gator-machine-id.py`'s storage format. Folded from `gator-session-common.py:33` in Phase 3F (2026-08-13); sole owner since the 2026-08-16 sweep retired session-common and its duplicate copy.
 Filesystem: `~/.gator/machine-id` (R, W on creation)
 <- `gator-audit.py::assemble_audit_data()` (data["machine"])
-! Duplicate copy exists in `gator-session-common.py:33` during the Phase 3→4 window. Both must stay in sync. Rationale for the duplicate: session-common's internal formatters call `get_machine_identity()`, and retargeting them to the reader would add an `import_sibling` from the retiring file (architecturally backward). Phase 4 sweeps session-common and its copy with the Codex/Gemini extractors. See [`scripts-core-library`](scripts-core-library.md) for the sync obligation.
 
 ### parse_committed_summary(text, filename="")
 File: `src/gator_command/scripts/gator_session_reader.py`
@@ -102,28 +98,14 @@ Filesystem: `.gator/sessions/` (R)
 
 Post-Phase-3 the parser has exactly one owner (`gator_session_reader.py`) and two consumers (`gator-audit.py`, `gator-repo-status.py`). Any change to the committed-summary schema (frontmatter field names, section headers `## Goal` / `## Decisions`, return dict shape) must land in the single owner. See [`scripts-cross-cutting`](scripts-cross-cutting.md) for the full tripwire.
 
-## TRIPWIRE: get_machine_identity() Phase-3→4 Duplicate Copies
-
-`gator_session_reader.get_machine_identity()` and `gator-session-common.get_machine_identity()` are byte-identical during the Phase-3→4 window. Both must stay in sync. Phase 4 sweeps session-common with the Codex/Gemini extractors; the reader's copy becomes sole owner. If a change to machine-id storage lands during this window (e.g. new field in `~/.gator/machine-id`), update BOTH copies in the same commit.
-
-## TRIPWIRE: Vendor Extractor Delegation Contract
-
-The Phase-4-deferred extractors (`extract-codex-sessions.py`, `extract-gemini-sessions.py`) must:
-1. Call `gator-session-common.format_summary_markdown()` for summary output (not hand-roll their own)
-2. Call `gator-session-common.format_session_summary_dict()` for JSON summary output
-3. Produce turns in the normalized format: `{role, content, tool_calls, timestamp, cwd, branch, session_id}`
-
-Violating the delegation contract creates schema divergence that the audit dashboard cannot handle. Contract retires in Phase 4 when both extractors + session-common retire together.
-
 ## Before Changing This Module
 
 - The committed summary format (`gator-session-summary-v1` and `gator-commit-summary-v1` frontmatter) is the contract between summary producers (pre-commit hook, legacy archaeology output) and `parse_committed_summary()`. Adding frontmatter fields is backward-compatible; removing or renaming them breaks the parser and both its consumers.
-- The Gemini extractor's duplicate session ID problem is solved by the source_path component of `make_row_key()`. Do not simplify the key to session_id-only.
-- Phase 4 sweep obligations: when Enterprise-side Codex + Gemini adapters ship, retire `extract-codex-sessions.py`, `extract-gemini-sessions.py`, `gator-session-common.py` (with its duplicate `get_machine_identity()` copy), the "Vendor Extractor Delegation Contract" TRIPWIRE, and the "get_machine_identity() Phase-3→4 Duplicate Copies" TRIPWIRE — all in the same commit for atomic retirement.
+- Vendor-transcript work belongs Enterprise-side. Do not reintroduce base-Gator vendor-log readers — the 2026-08-16 sweep's whole point was closing that surface. The duplicate-session-ID pathology the retired `make_row_key()` handled for Gemini is now handled by Enterprise's Migration 011 `session_qualifier` (see [`scripts-enterprise`](scripts-enterprise.md) Commit M block).
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator-session-common (retained vendor formatters, row_key, machine identity duplicate)
+-> [scripts-enterprise](scripts-enterprise.md) — Enterprise-side vendor transcript discovery + custody (successor to the retired extractors)
 -> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — gator-audit.py::assemble_audit_data consumes gator_session_reader
 -> [scripts-cross-cutting](scripts-cross-cutting.md) — parse_committed_summary single-owner tripwire, import_sibling pattern
 -> [scripts-dashboard](scripts-dashboard.md) — gator-repo-status.py::get_session_summaries populates recent-sessions panel

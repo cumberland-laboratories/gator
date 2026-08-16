@@ -309,7 +309,7 @@ CLI entry point. Args: `--repo <name>` (registry lookup), `--path <path>` (direc
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote (gator-session-common retained for Phase-4-deferred vendor extractors only; not consumed by audit as of Phase 3F)
+-> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote (gator-session-common retired 2026-08-16 in the final sweep; audit's machine identity comes from gator_session_reader since Phase 3F)
 -> [scripts-session-archaeology](scripts-session-archaeology.md) — session discovery and committed summaries consumed by audit
 -> [scripts-cross-cutting](scripts-cross-cutting.md) — local/remote parity pattern, import_sibling pattern
 -> [scripts-dashboard](scripts-dashboard.md) — dashboard consumes fleet-intelligence data; file list API now includes mtime; file scanner includes `.html`/`.htm` as of v2.4.5 (see scripts-dashboard "HTML file support")

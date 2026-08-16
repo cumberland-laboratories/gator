@@ -9,7 +9,6 @@ Patterns that cross module boundaries:
 - The `gator_core` import convention used by all scripts
 - The `git()` return contract
 - The local → remote fallback pattern (and parallel local/remote scan schemas)
-- The `row_key` formula shared between session-common and session-sink
 - The `SKIP_FILES` set used consistently across fleet, lint, and intel scripts
 - The `ensure_utf8_stdout()` call pattern
 - The `import_sibling()` dynamic load pattern and graceful degradation convention
@@ -68,7 +67,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from gator_core import get_version, find_command_post, ...
 ```
 
-Some scripts omit the `sys.path` insert because they rely on the caller having set it (e.g., when loaded via `import_sibling()`). Standalone scripts must always insert their own scripts directory. Library modules (gator_core.py, gator_remote.py, gator-session-common.py, memex_formatters.py) do not insert sys.path — they are loaded by their callers.
+Some scripts omit the `sys.path` insert because they rely on the caller having set it (e.g., when loaded via `import_sibling()`). Standalone scripts must always insert their own scripts directory. Library modules (gator_core.py, gator_remote.py, gator_session_reader.py, memex_formatters.py) do not insert sys.path — they are loaded by their callers.
 
 ## TRIPWIRE: git() Return Contract
 
@@ -83,16 +82,6 @@ if not out:
 ```
 
 Callers that check only `ok` and not `out` will silently treat "git returned empty string" as a successful non-result. Both must be checked. Fleet-report, drift, and fleet-intel all follow this pattern — preserve it in any new git consumers.
-
-## TRIPWIRE: row_key Formula Duplication
-
-The canonical unique key for a session is:
-
-```python
-sha256(f"{session_id}|{source_path}".encode()).hexdigest()[:16]
-```
-
-Post-Phase-3 (2026-08-13, Commit E), this formula has a single owner: `gator-session-common.make_row_key(metadata)`, used by the Phase-4-deferred Codex + Gemini extractors for spool and transcript paths. The historical duplicate in `gator-session-sink.load_spool_sessions()` retired with the sink in Commit E. The separator is `|` (not `/` or `-`), the length is exactly 16 hex chars, and the full source_path (not just filename) is used — this handles Gemini's genuine duplicate session IDs across different files. Sole-owner tripwire retires in Phase 4 when session-common retires with the extractors.
 
 ## TRIPWIRE: Local → Remote Fallback Pattern
 
@@ -182,7 +171,7 @@ The project ships under **Apache License 2.0** (`LICENSE` at repo root, canonica
 
 Every CLI entry-point script calls `ensure_utf8_stdout()` at the top of `main()` before any `print()`. This is required on Windows where the default encoding is not UTF-8 and causes UnicodeEncodeError for the ASCII art and emoji characters in the boot display.
 
-Library modules (gator_core.py, gator_remote.py, gator-session-common.py, memex_formatters.py) must not call this — they are imported by scripts that have already set up stdout.
+Library modules (gator_core.py, gator_remote.py, gator_session_reader.py, memex_formatters.py) must not call this — they are imported by scripts that have already set up stdout.
 
 ## Pattern: import_sibling() for Runtime Module Loading
 
@@ -337,7 +326,8 @@ All CLI scripts that produce JSON include a top-level `"schema"` field declaring
 
 - `gator-audit.py` → `"schema": "gator-audit-v1"`
 - `gator-repo-status.py` → `"schema": "gator-repo-status-v1"`
-- `gator-session-common.py` → `"schema": "gator-session-summary-v1"` (Phase-4-deferred, ships with Codex/Gemini extractors)
+
+*(Historical: `gator-session-common.py` → `"gator-session-summary-v1"` retired with the vendor extractors in the 2026-08-16 sweep; `parse_committed_summary()` still READS that schema from previously committed summaries.)*
 
 Every new CLI script with JSON output must include `"schema": "<name>-v<N>"` at the top level. This enables:
 - Downstream consumers to detect incompatible versions
@@ -358,7 +348,7 @@ except Exception:
 ```
 
 Used by:
-- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (3 optional modules). Phase 3 Commit F (2026-08-13) removed the `gator-session-common` import — machine identity now comes from `gator_session_reader.get_machine_identity()` (folded from session-common in the same commit). Session-common still exists in the tree but only its Phase-4-deferred vendor-formatter callers use it.
+- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (3 optional modules). Machine identity comes from `gator_session_reader.get_machine_identity()` (folded from session-common in Phase 3F, 2026-08-13; session-common itself retired in the 2026-08-16 sweep).
 - `gator-fleet-report.py` — imports policy-status optionally
 - `gator-drift.py` — imports policy-status optionally
 - `gator-repo-status.py` — imports `gator_session_reader` optionally (Phase 2A, 2026-08-12 — was `gator-sessions` until then; the reader module is the surviving snippet-reader per parent plan)
@@ -367,7 +357,7 @@ Used by:
 
 The rule: a broken or missing optional module degrades that section's output (empty or `{"error": "..."}`) but never kills the entire script. Each import is independently guarded. Do not consolidate these into a single try/except block.
 
-! `import_sibling()` returns `None` when the file doesn't exist — it does NOT raise. A `try/except` around the import call will not catch this case. Callers must guard against `None` before calling methods on the returned module. Base-wheel package-data currently omits several session-pipeline scripts (`gator-session-aggregator`, `gator-session-common`, `gator_session_reader`, `gator-audit`, `gator-fleet-report`, `gator-drift`, `gator-fleet-intel`, `gator-audit-renderers`) — a pre-existing gap unrelated to Phase 3 session cleanup. Under `pipx install gator-command` these scripts return `None` at runtime and their features degrade to empty output; an editable/source-checkout install has them. Adding them to package-data is a separate follow-on task.
+! `import_sibling()` returns `None` when the file doesn't exist — it does NOT raise. A `try/except` around the import call will not catch this case. Callers must guard against `None` before calling methods on the returned module. Base-wheel package-data currently omits several session-pipeline scripts (`gator-session-aggregator`, `gator_session_reader`, `gator-audit`, `gator-fleet-report`, `gator-drift`, `gator-fleet-intel`, `gator-audit-renderers`) — a pre-existing gap unrelated to the session cleanup (`gator-session-common` was also on this list until its 2026-08-16 retirement removed the question). Under `pipx install gator-command` these scripts return `None` at runtime and their features degrade to empty output; an editable/source-checkout install has them. Adding them to package-data is a separate follow-on task.
 
 ## Pattern: Parallel Local/Remote Scan Schemas
 
@@ -398,7 +388,7 @@ Enterprise scripts remain importable from `scripts/` for development, testing, a
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator_core, gator-session-common, gator_remote, normalize_path
+-> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote, normalize_path
 -> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — local/remote fallback, import_sibling consumers, registry resolution
 -> [scripts-session-archaeology](scripts-session-archaeology.md) — row_key duplication, parse_committed_summary canonical parser
 -> [scripts-repo-lifecycle](scripts-repo-lifecycle.md) — plan/execute separation, SKIP_FILES, policy sync import
