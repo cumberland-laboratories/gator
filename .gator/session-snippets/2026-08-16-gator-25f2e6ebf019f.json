@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude",
+  "intent": "charters: legacy-Memex cleanup — retire phantom graph-wiki/memex entries, single-source the charter map in INDEX",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-drift",
+    "legacy-memex",
+    "charter-hygiene"
+  ],
+  "commit": "25f2e6ebf019fb79a3c55a6b2c37aedcd9ee9bea",
+  "short_commit": "25f2e6e",
+  "snippet_id": "snippet-25f2e6ebf019f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "eb273f42d7141a7f1696b5abe4ccd5681cae3be3",
+  "started_at": "2026-08-16T20:30:28Z",
+  "ended_at": "2026-08-16T20:30:28Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/README.md",
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/charters/scripts-graph-wiki.md",
+    ".gator/charters/scripts-installer.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-16-gator-eb273f42d7141.json"
+  ],
+  "notes": [
+    "**Legacy-Memex charter cleanup (Architect option (b), 2026-08-16)** — charters covering files that never made the monorepo cutover (`git log --all` confirms; Genesis `57375f4` excluded the legacy surface). Chain: pre-commit `stale-charter-refs` warning on the sweep commit → whiteboard round widened scope → full cleanup:",
+    "`scripts-graph-wiki.md` **deleted** — covered only never-cutover Memex tools (`generate_wiki.py`, `graph_health.py`, `crawler.py`); none exist in the tree.",
+    "`scripts-core-library.md`: phantom `PrettyFormatter / JsonFormatter / get_formatter` entry (at nonexistent `legacy/memex_formatters.py`) + Does-Not-Own memex line removed.",
+    "`scripts-cross-cutting.md`: `memex_formatters.py` removed from both library-module lists; \"Dual-Use Library/Script (generate_wiki.py)\" pattern section + Owns bullet + graph-wiki Connection removed.",
+    "`scripts-installer.md`: nonexistent `legacy/memex-lint.{sh,py}` pruned from Covers/Owns/entry/Before-Changing. Live morph functionality (`action_morph_memex`, `detect_legacy_memex` — real code in `gatorize/morph.py` for morphing target repos) deliberately retained.",
+    "`charters/README.md`: the pre-monorepo \"Source gator-command Repo\" section + its parallel charter table (stale rows for `scripts-command-post.md` + `scripts-graph-wiki.md`, months of drift) replaced with a Monorepo Note declaring **INDEX.md the single authoritative code-path → charter map** — no second table to drift.",
+    "`scripts-fleet-intelligence.md`: thread-frontmatter contract re-marked write-only (its Memex-era consumers are gone; field names preserved for committed thread files in fleet repos).",
+    "`inbox.md`: legacy-drift open item closed per house rule. `roadmap.md`: Considering item 5 (Legacy Memex retirement) annotated — charter-side chunk done; remaining scope is vault-archive disposition + retired-repo deletion window. Whiteboard follow-up round: Post-2.6 item 12 (package-data gap) scope-trimmed — `gator-session-common` removed from the missing-wheel-assets list (retired 2026-08-16), so the future packaging pass targets the current tree."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
