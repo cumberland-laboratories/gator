@@ -1,14 +1,13 @@
 # Charter: Installer and Boot
 
-**Covers**: `src/gator_command/scripts/gatorize.py`, `src/gator_command/scripts/gatorize/helpers.py`, `src/gator_command/scripts/gatorize/vendor_hooks.py`, `src/gator_command/scripts/gatorize/entry_points.py`, `src/gator_command/scripts/gatorize/managed_block.py`, `src/gator_command/scripts/gatorize/post_install.py`, `src/gator_command/scripts/gatorize/morph.py`, `src/gator_command/scripts/legacy/memex-lint.sh`, `src/gator_command/scripts/legacy/memex-lint.py`, `.gator/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-open.py`
+**Covers**: `src/gator_command/scripts/gatorize.py`, `src/gator_command/scripts/gatorize/helpers.py`, `src/gator_command/scripts/gatorize/vendor_hooks.py`, `src/gator_command/scripts/gatorize/entry_points.py`, `src/gator_command/scripts/gatorize/managed_block.py`, `src/gator_command/scripts/gatorize/post_install.py`, `src/gator_command/scripts/gatorize/morph.py`, `.gator/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-open.py`
 
 ## Owns
 
 The initial installation and boot chain for Gator-governed repos:
 
 - `gatorize.py` is the canonical cross-platform installer (Python). Handles all five install scenarios: fresh directory, clean git repo, existing .gator/ (upgrade), memex structure (morph), and dual presence (prompt). `ensure_repo_gitignore()` runs in the common tail (all scenarios including upgrade) to guarantee standard rules (vault, .vscode, __pycache__). Available via `gator gatorize <path>` from pipx install — template resolution and COMMAND_POST detection are package-install compatible. Auto-registers repos in `~/.gator/dashboard-repos.json` for standalone dashboard visibility. As of v2.4.0 (retire-gator-install plan, 2026-07-30), no scenario creates or switches to a `gator-install` branch — every scenario operates on the current branch in place.
-- **Bash installer chain retired in v2.4.0** — `gatorize.sh`, `gatorize-lib.sh`, `gatorize-actions.sh`, `gatorize-post.sh` were shipped-but-unreachable artifacts (zero programmatic invocations; `cli.py:70` and the dashboard both routed to `gatorize.py`). All four files deleted per plan Stage 4. Git history preserves the original bash implementation for reference.
-- `memex-lint.sh` (legacy, now at `scripts/legacy/`) owns read-only mechanical invariant checking for the Memex knowledge layer. No new development.
+- **Bash installer chain retired in v2.4.0** — `gatorize.sh`, `gatorize-lib.sh`, `gatorize-actions.sh`, `gatorize-post.sh` were shipped-but-unreachable artifacts (zero programmatic invocations; `cli.py:70` and the dashboard both routed to `gatorize.py`). All four files deleted per plan Stage 4. Git history (pre-monorepo archive) preserves the original bash implementation for reference.
 
 ## Does Not Own
 
@@ -248,16 +247,6 @@ Filesystem: `memex/` or `.memex/` (renamed), `.gator/` (W), root `constitution.m
 
 ---
 
-
-### memex-lint.sh [legacy]
-File: `src/gator_command/scripts/legacy/memex-lint.sh`
-Read-only mechanical invariant checker for the Memex knowledge layer. Validates: budget file sizes (identity.md, active threads, patterns, inbox.md included in line count), link integrity, orphan detection.
-Filesystem: `gator-command/` (R only — never writes)
-<- manual invocation; CI/CD if configured
-! Exit code equals the error count (`exit $ERRORS`) — warnings do not affect the exit code, but multiple errors produce exit codes greater than 1. Do not assume exit 1 means exactly one error. Thresholds (budget sizes, counts) are hardcoded in the script — update both the script and companion procedure docs together if they change.
-
----
-
 ## TRIPWIRE: Five-Scenario Invariants
 
 Scenario detection is exhaustive — exactly one scenario is returned for any valid input:
@@ -399,7 +388,6 @@ Installs vendor `SessionStart` hook configs for Claude Code, Codex CLI, and Gemi
 - Adding a new install scenario requires updating: `detect_scenario()` in `gatorize.py`, the scenario dispatch in `gatorize.main()`, the scenario invariant table above, and `.gator/procedures/gatorize-permutations.md`.
 - The idempotency marker strings in `gatorize/helpers.py` (GATOR_MARKER, COMMAND_POST_MARKER) must match what `action_install_entry_points()` writes. A mismatch means re-runs append instead of update.
 - `action_morph_memex()` renames the source memex directory to `*.pre-gator/` — it does not delete it. Pre-gator dirs are preserved on the branch for PI review. The function prompts for confirmation before any filesystem change; do not add a second prompt inside it.
-- `memex-lint.sh` is not executed by any other script. It is a standalone diagnostic tool. Do not import or source it.
 
 ## Connections
 

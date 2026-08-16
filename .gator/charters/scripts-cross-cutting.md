@@ -13,7 +13,6 @@ Patterns that cross module boundaries:
 - The `ensure_utf8_stdout()` call pattern
 - The `import_sibling()` dynamic load pattern and graceful degradation convention
 - The plan/execute separation in gator-update
-- The dual-use library/script pattern (generate_wiki.py)
 - The `parse_committed_summary()` canonical parser shared across 4+ consumers
 - The `source_kind` provenance vocabulary ("command-post", "local-repo", "remote-cache")
 - The `X-Gator-Dashboard` header anti-CSRF trust boundary
@@ -67,7 +66,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from gator_core import get_version, find_command_post, ...
 ```
 
-Some scripts omit the `sys.path` insert because they rely on the caller having set it (e.g., when loaded via `import_sibling()`). Standalone scripts must always insert their own scripts directory. Library modules (gator_core.py, gator_remote.py, gator_session_reader.py, memex_formatters.py) do not insert sys.path — they are loaded by their callers.
+Some scripts omit the `sys.path` insert because they rely on the caller having set it (e.g., when loaded via `import_sibling()`). Standalone scripts must always insert their own scripts directory. Library modules (gator_core.py, gator_remote.py, gator_session_reader.py) do not insert sys.path — they are loaded by their callers.
 
 ## TRIPWIRE: git() Return Contract
 
@@ -171,7 +170,7 @@ The project ships under **Apache License 2.0** (`LICENSE` at repo root, canonica
 
 Every CLI entry-point script calls `ensure_utf8_stdout()` at the top of `main()` before any `print()`. This is required on Windows where the default encoding is not UTF-8 and causes UnicodeEncodeError for the ASCII art and emoji characters in the boot display.
 
-Library modules (gator_core.py, gator_remote.py, gator_session_reader.py, memex_formatters.py) must not call this — they are imported by scripts that have already set up stdout.
+Library modules (gator_core.py, gator_remote.py, gator_session_reader.py) must not call this — they are imported by scripts that have already set up stdout.
 
 ## Pattern: import_sibling() for Runtime Module Loading
 
@@ -220,14 +219,6 @@ If one of these changes without the others, the likely failures are:
 ! `session_cache_key()` uses `sha256(resolved_repo_path)[:12]` as the directory name. This is distinct from the snippet fingerprint — the cache key identifies the repo, the fingerprint validates the content.
 ! `_atomic_write()` uses fd_closed flag to track file descriptor state — do not call os.get_inheritable() or os.close() on an already-closed fd in the error path.
 ! Cache filenames use `sha256(effective_session_key)[:16].json`. The `effective_session_key()` helper returns `"group:<repo>:<session_group_key>"` when vendor session identity is present, `"legacy:<repo>:<session_id>"` otherwise. This is the single canonical grouping key used for aggregation, cache filenames, and fingerprint lookups. Aggregation, cache, and fingerprint code must all use this helper — never ad hoc `(repo, session_id)` tuples.
-
-## Pattern: Dual-Use Library/Script (generate_wiki.py)
-
-`generate_wiki.py` is both a standalone rendering script and a library imported by `graph_health.py`. Its public API — `load_threads()`, `extract_links()`, `Thread`, `Link` — is consumed externally.
-
-When adding functions to `generate_wiki.py`, distinguish between:
-- **Private rendering helpers** (safe to rename/remove): prefixed with `_` or used only within the file
-- **Public library API** (breaking change if removed): `load_threads`, `extract_links`, `Thread`, `Link`
 
 ## TRIPWIRE: parse_committed_summary() Canonical Parser
 
@@ -396,4 +387,3 @@ Enterprise scripts remain importable from `scripts/` for development, testing, a
 ! `gator-audit.py --sessions` and `gator-dashboard.py /api/audit/sessions` both import `gator-session-aggregator` via `import_sibling()` — follows the same graceful degradation pattern as other cross-script imports. `--fleet` and `--refresh` flags are rejected without `--sessions` via `parser.error()` to prevent silent no-ops. Dashboard endpoint logic extracted to `_resolve_audit_sessions()` for testability — handler is a thin delegate. Repos identified by path-hash only (no repo_name param) — consistent with plan's stable identity model. `_inject_repo_keys()` ensures both command-post and standalone fleet data include `repo_key` — the `session_cache_key()` call is the single source of truth for this identity. Cross-doc search uses server-side `_search_repo_files()` endpoint with AND/OR boolean operators — never fetches files individually from JS.
 ! `gator-audit.py` imports renderers from `gator-audit-renderers.py` via lazy `import_sibling()` — loaded on first call to `render_text()` or `render_html()`, not at module import time. This means `--sessions` and `--json` paths work even if the renderers file is missing. Raises explicit `ImportError` with diagnostic if the file is not found.
 ! `gator-dashboard.py` file-listing scan (v2.4.5) accepts `.html`/`.htm` in `.gator/` alongside `.md`/`.json`/`.jsonl`. The raw endpoint's MIME map serves them as `text/html; charset=utf-8`. Extension whitelist stays exhaustive — no wildcard, no "any text file" fallback. Same discipline applies whenever a new file kind needs Dashboard visibility: add it to both the scan and the MIME map together, or the file lists but downloads instead of rendering.
--> [scripts-graph-wiki](scripts-graph-wiki.md) — dual-use library pattern

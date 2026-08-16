@@ -158,20 +158,8 @@ For a working example of the full setup, see the charter files in this folder an
 
 ## Charters in This Project
 
-### Special Case: The Source `gator-command` Repo
+### Monorepo Note
 
-This repo is the source for the public `gator` deploy and the PyPI package. It has two charter surfaces:
+This repo (the public `gator` monorepo) is both the source of the shipped product and a Gator-governed repo itself, so `.gator/charters/` serves double duty: it documents the product's own scripts AND governs this repo's development workflow.
 
-- `.gator/charters/` — the authoritative charter set for source-repo script work. These charters describe the scripts that prepare deployment and define shipped governance behavior.
-- `.gator/charters/` — the self-governance layer for this repo's own development workflow.
-
-| Charter | Covers |
-|---------|--------|
-| [scripts-cross-cutting](scripts-cross-cutting.md) | Patterns spanning all script clusters: git() contract, row_key formula, local/remote fallback, SKIP_FILES, import_sibling, plan/execute separation |
-| [scripts-command-post](scripts-command-post.md) | Command-post CLI orchestration, shared memex state helpers, deploy pipeline, and spawn thread resolution |
-| [scripts-core-library](scripts-core-library.md) | Shared infrastructure: version resolution, repo discovery, registry parsing, path normalization, session schema, machine identity, remote bare-clone cache, output formatters |
-| [scripts-fleet-intelligence](scripts-fleet-intelligence.md) | Cross-repo governance: fleet status scan, per-repo intelligence profiles, drift detection, convergence audit dashboard |
-| [scripts-session-archaeology](scripts-session-archaeology.md) | Session extraction (Claude, Codex, Gemini), vendor-agnostic orchestration CLI, SQLite/DuckDB/NDJSON sinks |
-| [scripts-installer](scripts-installer.md) | Installer and boot chain: gatorize five-scenario dispatch, upgrade/morph, thin link, entry points, registry, command-post boot display |
-| [scripts-repo-lifecycle](scripts-repo-lifecycle.md) | Per-repo lifecycle: boot display, template overlay update, charter structural linting |
-| [scripts-graph-wiki](scripts-graph-wiki.md) | Thread graph rendering (MediaWiki, Markdown), graph health analysis, automated maintenance crawler |
+**[`INDEX.md`](INDEX.md) is the authoritative code-path → charter map.** This README deliberately does not duplicate it — a second table here drifted for months after the monorepo cutover (stale rows for `scripts-command-post.md` and `scripts-graph-wiki.md`, both excluded at Genesis) before the 2026-08-16 legacy-Memex charter cleanup removed it. Keep the map in one place.

@@ -304,7 +304,7 @@ CLI entry point. Args: `--repo <name>` (registry lookup), `--path <path>` (direc
 
 - Fleet-report and drift are both imported by `gator-audit.py` at runtime via `import_sibling()`. Their public function signatures (`scan_fleet()`, `read_command_post_policy()`, `check_repo_drift()`, `parse_registry()`) are part of an implicit API contract with the audit script.
 - The severity ladder (ok → warn → drift) in drift is mirrored in the audit dashboard's visual indicators. If you add a new severity level, update both.
-- Fleet-intel writes to `gator-command/threads/` — these are knowledge graph nodes. Their frontmatter fields (`title`, `category`, `generated`, `repo-path`) are consumed by `generate_wiki.py` and `graph_health.py`.
+- Fleet-intel writes intelligence profiles to `gator-command/threads/repo-*.md` with structured frontmatter (`title`, `category`, `generated`, `repo-path`). The Memex-era graph/wiki consumers of that frontmatter (`generate_wiki.py`, `graph_health.py`) did not survive the monorepo cutover — retired from charters in the 2026-08-16 legacy-Memex cleanup — so the frontmatter contract is currently write-only; preserve the field names anyway since committed thread files in fleet repos still carry them.
 - `gator-audit.py`'s HTML output is the CISO-facing artifact. It must remain self-contained and print-safe.
 
 ## Connections

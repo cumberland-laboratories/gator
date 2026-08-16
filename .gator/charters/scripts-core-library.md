@@ -16,7 +16,6 @@ The shared infrastructure consumed by every other gator-command script:
 - Vendor-transcript discovery, parsing, or session schema — Enterprise-side since the audit-surface tranche (the `extract-*.py` scripts and `gator-session-common.py` retired 2026-08-13/2026-08-16; see [`scripts-enterprise`](scripts-enterprise.md)).
 - CLI argument parsing for any script other than `gator-machine-id.py` and `gator-version.py`.
 - Fleet-level report assembly — that belongs in `gator-fleet-report.py`, `gator-drift.py`, `gator-audit.py`.
-- Summary formatting for the legacy memex CLI — that is `PrettyFormatter` in `legacy/memex_formatters.py`.
 
 ---
 
@@ -152,12 +151,6 @@ Filesystem: bare clone (R)
 ! Bare clones from `git clone --bare` store refs as `refs/heads/main`; after `git fetch origin` they also have `refs/remotes/origin/main`. Both are tried. The distinction matters for repos that haven't been fetched recently.
 
 ---
-
-### PrettyFormatter / JsonFormatter / get_formatter(fmt) [legacy]
-File: `src/gator_command/scripts/legacy/memex_formatters.py`
-Terminal (ANSI) and JSON output formatters for the legacy memex CLI. No new development.
-Filesystem: none
-<- `legacy/memex.py`
 
 ### read_dashboard_registry() / write_dashboard_registry() / ensure_dashboard_registry_entry() / add_dashboard_repo() / remove_dashboard_repo()
 File: `src/gator_command/scripts/gator_core.py`
