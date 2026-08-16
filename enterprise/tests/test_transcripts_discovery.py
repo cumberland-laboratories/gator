@@ -197,10 +197,11 @@ class TestVendorDispatch:
         assert len(list(discover("anthropic"))) == 2
 
     def test_unknown_vendor_raises(self):
-        # Phase 3 (2026-08-15): codex now supported; gemini remains
-        # the Phase 4+ target for the "unknown vendor" branch coverage.
+        # Phase 3 (2026-08-15) added codex; Phase 4 (2026-08-15) added
+        # gemini — the unknown-vendor branch now needs a slug no adapter
+        # will ever claim.
         with pytest.raises(ValueError, match="Unsupported vendor"):
-            list(discover("gemini"))
+            list(discover("not-a-vendor"))
 
     def test_codex_alias_resolves(self, fake_codex_root):
         # Both "codex" and "openai" dispatch to the Codex handler.

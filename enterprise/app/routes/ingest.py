@@ -29,7 +29,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api_contract import ApiError
@@ -72,6 +72,10 @@ class TranscriptIngestBody(BaseModel):
     machine_id: str
     vendor: str
     vendor_session_id: str
+    # Migration 011 (Phase 4 Gemini): disambiguator for duplicate-raw-ID
+    # transcripts. Gemini adapter sends a 16-hex source-path hash; all
+    # other vendor adapters omit it (defaults to "").
+    session_qualifier: str = ""
     model: str | None = None
     workspace_hint: str | None = None
     transcript_source_path: str | None = None
@@ -217,6 +221,38 @@ def _run_linkage(
     # Commits pre-ingested by `transcripts pull` step 1 carry the
     # snippet's transcript_session_id (Migration 008 column, mapped on
     # the ORM in the same commit as this ingest route).
+    #
+    # β multi-link fan-out contract (parent plan §10 item 7, ratified
+    # 2026-08-15): the snippet carries only the RAW vendor session id.
+    # For Gemini duplicate-raw-ID transcripts (distinct rows under
+    # Migration 011's qualifier), each row's ingest matches the same
+    # commits, so the commit accrues one snippet-basis link PER row —
+    # that fan-out is intentional ("here are all matching transcripts"
+    # is the honest answer). The ambiguity is signaled via confidence:
+    # when 2+ sibling rows share this raw id, new links get "medium"
+    # instead of "high", and previously-created snippet-basis links on
+    # the sibling rows are retroactively downgraded so the contract
+    # holds regardless of ingest order.
+    sibling_row_ids = db.execute(
+        select(TranscriptSession.id).where(
+            TranscriptSession.organization_id == organization_id,
+            TranscriptSession.machine_id == machine_id,
+            TranscriptSession.vendor == vendor,
+            TranscriptSession.vendor_session_id == vendor_session_id,
+        )
+    ).scalars().all()
+    raw_id_ambiguous = len(sibling_row_ids) > 1
+    snippet_confidence = "medium" if raw_id_ambiguous else "high"
+    if raw_id_ambiguous:
+        db.execute(
+            update(CommitTranscriptLink)
+            .where(
+                CommitTranscriptLink.transcript_session_id.in_(sibling_row_ids),
+                CommitTranscriptLink.linkage_basis == "session_id_in_snippet",
+                CommitTranscriptLink.linkage_confidence != "medium",
+            )
+            .values(linkage_confidence="medium")
+        )
     session_matches = db.execute(
         select(Commit).where(
             Commit.organization_id == organization_id,
@@ -234,10 +270,14 @@ def _run_linkage(
             commit_id=commit_row.id,
             transcript_session_id=transcript_row.id,
             linkage_basis="session_id_in_snippet",
-            linkage_confidence="high",
+            linkage_confidence=snippet_confidence,
             linkage_metadata={
                 "matched_vendor_session_id": vendor_session_id,
                 "commit_sha": commit_row.commit_sha,
+                **(
+                    {"raw_id_ambiguous_across": len(sibling_row_ids)}
+                    if raw_id_ambiguous else {}
+                ),
             },
         )
         if link:
@@ -499,8 +539,10 @@ def ingest_transcript(
     """Upsert a transcript session and store its body in the blob store.
 
     Idempotent by ``(organization_id, machine_id, vendor,
-    vendor_session_id)``. Re-ingesting the same session updates
-    ``last_seen_at`` and rewrites the blob if the sha256 differs.
+    vendor_session_id, session_qualifier)`` (qualifier since Migration
+    011 — empty for all vendors except Gemini). Re-ingesting the same
+    session updates ``last_seen_at`` and rewrites the blob if the
+    sha256 differs.
     """
     if not body.vendor or not body.vendor_session_id or not body.machine_id:
         raise ApiError(
@@ -520,6 +562,7 @@ def ingest_transcript(
         vendor=body.vendor,
         started_at_iso=body.started_at or now.isoformat(),
         vendor_session_id=body.vendor_session_id,
+        session_qualifier=body.session_qualifier,
     )
 
     existing = db.execute(
@@ -528,6 +571,7 @@ def ingest_transcript(
             TranscriptSession.machine_id == body.machine_id,
             TranscriptSession.vendor == body.vendor,
             TranscriptSession.vendor_session_id == body.vendor_session_id,
+            TranscriptSession.session_qualifier == body.session_qualifier,
         )
     ).scalar_one_or_none()
 
@@ -541,6 +585,7 @@ def ingest_transcript(
             machine_id=body.machine_id,
             vendor=body.vendor,
             vendor_session_id=body.vendor_session_id,
+            session_qualifier=body.session_qualifier,
             model=body.model,
             workspace_hint=body.workspace_hint,
             transcript_source_path=body.transcript_source_path,

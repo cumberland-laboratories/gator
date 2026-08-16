@@ -6,8 +6,12 @@ from a client machine. The transcript BODY lives in the BlobStore
 
 Populated by `POST /api/v1/transcripts/ingest` (per the 2026-08-08
 transcripts-first MVP plan). Idempotent by
-`(organization_id, machine_id, vendor, vendor_session_id)` — re-ingest
-of the same session upserts the row and refreshes the blob.
+`(organization_id, machine_id, vendor, vendor_session_id,
+session_qualifier)` — re-ingest of the same session upserts the row
+and refreshes the blob. The qualifier (Migration 011, Phase 4 Gemini
+adapter) is `''` for every vendor except Gemini, whose raw session IDs
+can genuinely repeat across files — Gemini rows carry a 16-hex source-
+path hash so duplicates coexist instead of silently overwriting.
 
 TRANSITIONAL NOTE (per plan D2): base-gator's SessionStart hook writes
 `<repo>/.gator/active-vendor-session.json` with the same vendor_session_id
@@ -43,6 +47,14 @@ class TranscriptSession(Base, TimestampMixin):
     vendor_session_id: Mapped[str] = mapped_column(
         String(255), nullable=False,
         comment="Opaque per-vendor session identifier",
+    )
+    session_qualifier: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="",
+        comment=(
+            "Disambiguator for vendors whose raw session IDs can repeat "
+            "across files (Gemini): 16-hex SHA-256 of the source path. "
+            "Empty string for all other vendors. Migration 011."
+        ),
     )
     model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workspace_hint: Mapped[str | None] = mapped_column(
@@ -87,6 +99,7 @@ class TranscriptSession(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint(
             "organization_id", "machine_id", "vendor", "vendor_session_id",
+            "session_qualifier",
             name="uq_transcript_sessions_org_machine_vendor_session",
         ),
         Index(

@@ -81,6 +81,7 @@ def build_blob_key(
     vendor: str,
     started_at_iso: str,
     vendor_session_id: str,
+    session_qualifier: str = "",
 ) -> str:
     """Construct the canonical blob key per the namespacing convention.
 
@@ -93,6 +94,13 @@ def build_blob_key(
     date component becomes ``"unknown-date"`` — caller has already
     stored the raw timestamp in the DB row, so this is a partitioning
     convenience, not a canonical value.
+
+    ``session_qualifier`` (Migration 011, Phase 4 Gemini adapter): when
+    non-empty, appended to the filename as ``__{qualifier}`` so two
+    duplicate-raw-ID transcripts (distinct rows under the widened
+    uniqueness constraint) get distinct blob keys instead of the second
+    upload overwriting the first. Empty for all non-Gemini vendors —
+    their keys are byte-identical to the pre-011 shape.
     """
     # First hyphen segment for readability (avoids mid-hyphen slicing);
     # falls back to first 12 chars if there's no hyphen in the input.
@@ -107,6 +115,8 @@ def build_blob_key(
         if len(candidate) == 10 and candidate[4] == "-" and candidate[7] == "-":
             date_prefix = candidate
     safe_session = (vendor_session_id or "unknown-session").replace("/", "_")
+    if session_qualifier:
+        safe_session = f"{safe_session}__{session_qualifier.replace('/', '_')}"
     return (
         f"transcripts/{org_uuid}/{machine_short}/{vendor}/"
         f"{date_prefix}/{safe_session}.jsonl"

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude",
+  "intent": "Phase 3 closeout: Codex smoke evidence + operator-guide refresh + --unlinked help-string drift fix",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "audit-surface",
+    "phase-3",
+    "codex"
+  ],
+  "commit": "85bbef9b9fe1ff83fed87713dbda0f7b4767eab2",
+  "short_commit": "85bbef9",
+  "snippet_id": "snippet-85bbef9b9fe1f",
+  "session_group_key": "anthropic:58a32aa0-ddad-4597-ac12-64a4bec9de2f",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "d6874c9b11379f1d086e25602214073c9fe79c9c",
+  "started_at": "2026-08-15T17:27:36Z",
+  "ended_at": "2026-08-15T20:51:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-15-gator-d6874c9b11379.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py"
+  ],
+  "notes": [
+    "**Phase 3 (Enterprise-side Codex adapter) exit-criteria closeout — all parent-plan §5 criteria now met.** Real-corpus smoke on this machine (the inbox's \"no Codex transcripts here\" claim was stale — 102 rollout files found): `transcripts pull --vendor codex` ingested 102/102 (~151MB), 0 failed, links by basis `{exact_sha_in_transcript: 1007, strong_machine_repo_time: 972}`, reverse lookup returns Codex rows with per-basis confidence. Evidence: `.gator/vault/artifacts/2026-08-15-phase-3-codex-smoke-evidence.md` (vault, machine-local). Operator guide gained §3.1a Codex section + §0/§3.1/§7.1/§8 refresh (vault-side).",
+    "`inbox.md`: Phase 3 marked complete; exit-criteria open item closed per house rule; stale machine-state claim corrected. `roadmap.md`: Post-2.6 item 9 (Codex adapter) flipped Considering → Done (on `dev`, unreleased).",
+    "**Enforcer round (operator-guide consistency, Architect-directed option a)**: guide intro no longer scopes the MVP to Claude-only; §3.2 `--unlinked` description corrected from \"client-side filter\" to the Phase 2 server-side `unlinked=true` path with defensive client fallback (both vault-side). Code: `enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py` argparse help for `--unlinked` corrected \"(client-side filter)\" → \"(server-side filter)\" — stale since the Commit I Q3 promotion; behavior unchanged. Charter `scripts-enterprise.md` Q3-promotion block records the drift closure.",
+    "Rides along: session snippet for `d6874c9` (staged post-commit governance residue)."
+  ],
+  "transcript_session_id": "58a32aa0-ddad-4597-ac12-64a4bec9de2f",
+  "transcript_ref": null
+}

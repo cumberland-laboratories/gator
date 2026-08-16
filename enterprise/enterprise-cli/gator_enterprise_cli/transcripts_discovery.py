@@ -1,12 +1,15 @@
-"""Vendor transcript discovery — MVP: Claude Code only.
+"""Vendor transcript discovery — Claude Code + Codex CLI + Gemini CLI.
 
 Walks vendor transcript stores on the local machine and produces a
 uniform ``DiscoveredTranscript`` record per session. The CLI ingest
 command (``gator-enterprise transcripts pull``) consumes these to
 upload transcripts to the Enterprise server.
 
-Design reference: 2026-08-08 transcripts-first MVP plan §10 step 2.
-Vendor-first target: Claude Code (per plan D6).
+Design reference: 2026-08-08 transcripts-first MVP plan §10 step 2
+(Claude-first per plan D6); Codex adapter added in audit-surface
+Phase 3 (2026-08-15); Gemini adapter added in audit-surface Phase 4
+(2026-08-15) with the Migration 011 ``session_qualifier`` contract for
+Gemini's duplicate-raw-ID-across-files pathology.
 
 Claude Code transcript layout (verified 2026-08-08 on this machine):
 
@@ -32,6 +35,7 @@ linkage: ``sessionId``, ``timestamp``, ``cwd``, ``message.model``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -62,6 +66,12 @@ class DiscoveredTranscript:
     # sessionId, fell back to filename stem) keep unreadable=False because
     # the file is still usable evidence.
     unreadable: bool = False
+    # Duplicate-raw-ID disambiguator (Migration 011, Phase 4 Gemini
+    # adapter): 16-hex SHA-256 of the source path for Gemini records,
+    # "" for every other vendor. Flows into the ingest payload's
+    # session_qualifier field so duplicate-raw-ID transcripts coexist
+    # as distinct rows + distinct blob keys server-side.
+    session_qualifier: str = ""
     # Populated at upload time — sha256 of raw content, chosen encoding.
     extras: dict = field(default_factory=dict)
 
@@ -105,6 +115,39 @@ def codex_root_path() -> Path:
     discovery will actually walk.
     """
     return _default_codex_root()
+
+
+def _default_gemini_root() -> Path:
+    """~/.gemini/tmp — override with $GEMINI_TRANSCRIPTS_ROOT for tests.
+
+    Gemini CLI stores one JSON file per session (NOT JSONL) under a
+    per-project tree: ``tmp/<project>/chats/session-<timestamp>-<uuid>.json``.
+    The sibling ``~/.gemini/projects.json`` maps workspace paths to
+    project slugs — read via ``_gemini_projects_file()`` for workspace
+    hints.
+    """
+    override = os.environ.get("GEMINI_TRANSCRIPTS_ROOT")
+    if override:
+        return Path(override)
+    return Path(os.path.expanduser("~/.gemini/tmp"))
+
+
+def gemini_root_path() -> Path:
+    """Public accessor for the Gemini discovery root (Phase 4 addition).
+
+    Parallel to ``claude_root_path()`` / ``codex_root_path()``.
+    """
+    return _default_gemini_root()
+
+
+def _gemini_projects_file(root: Path) -> Path:
+    """Path of Gemini's ``projects.json`` for a given discovery root.
+
+    Lives NEXT TO the ``tmp/`` root (``~/.gemini/projects.json`` in the
+    default layout), so a ``GEMINI_TRANSCRIPTS_ROOT`` override keeps the
+    pair co-located: ``<override>/../projects.json``.
+    """
+    return root.parent / "projects.json"
 
 
 def _parse_iso_z(value: str | None) -> datetime | None:
@@ -403,24 +446,170 @@ def discover_codex_transcripts(
         yield record
 
 
+def _gemini_session_qualifier(path: Path) -> str:
+    """16-hex SHA-256 of the source path — the duplicate-raw-ID key.
+
+    Gemini is the only known vendor whose transcript storage can put
+    the same internal ``sessionId`` in two DIFFERENT files. Base
+    Gator's retired archaeology handled this in
+    ``gator-session-common.py::make_row_key`` by hashing
+    ``session_id|source_path``; here the session id is already its own
+    column server-side (Migration 011 widened uniqueness), so the
+    qualifier hashes the source path alone.
+    """
+    return hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16]
+
+
+def _parse_gemini_json_metadata(
+    path: Path,
+    projects_map: dict[str, str] | None = None,
+) -> DiscoveredTranscript:
+    """Read a Gemini CLI session file and extract session metadata.
+
+    Unlike Claude/Codex (JSONL, streamed line-by-line), a Gemini
+    session is ONE JSON document:
+
+        {sessionId, projectHash, startTime, lastUpdated,
+         messages: [{type: user|gemini|info|error, content, model,
+                     tokens, ...}], kind}
+
+    so the whole file is parsed in one ``json.load``. Session identity
+    is the internal ``sessionId`` (canonical — the filename UUID can
+    differ); fallback to the filename stem with a ``parse_error`` note,
+    matching the Claude/Codex degraded-parse contract. A whole-file
+    JSON parse failure is likewise degraded-parse (the raw bytes are
+    still evidence), NOT ``unreadable`` — only an OSError sets that.
+
+    ``projects_map`` is the parsed ``projects.json`` mapping
+    ``{workspace_path: project_slug}``; the workspace hint is the
+    reverse lookup of the session's project directory name, falling
+    back to the directory name itself (basename-compatible with the
+    server's `strong_machine_repo_time` matcher either way).
+    """
+    result = DiscoveredTranscript(
+        vendor="google",
+        vendor_session_id="",
+        source_path=str(path),
+        session_qualifier=_gemini_session_qualifier(path),
+    )
+    try:
+        result.file_size_bytes = path.stat().st_size
+    except OSError:
+        pass
+
+    project_dirname = path.parent.parent.name
+    workspace: str | None = None
+    for ws_path, slug in (projects_map or {}).items():
+        if slug == project_dirname:
+            workspace = ws_path
+            break
+    result.workspace_hint = workspace or project_dirname
+
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            data = json.load(f)
+    except OSError as e:
+        result.parse_error = f"read failed: {e}"
+        result.unreadable = True
+        return result
+    except (ValueError, json.JSONDecodeError):
+        result.vendor_session_id = path.stem
+        result.parse_error = "malformed JSON; fell back to filename stem"
+        return result
+
+    if not isinstance(data, dict):
+        result.vendor_session_id = path.stem
+        result.parse_error = "non-object JSON root; fell back to filename stem"
+        return result
+
+    session_id = data.get("sessionId")
+    if isinstance(session_id, str) and session_id:
+        result.vendor_session_id = session_id
+    else:
+        result.vendor_session_id = path.stem
+        result.parse_error = "no sessionId in file; fell back to filename stem"
+
+    result.started_at = _parse_iso_z(data.get("startTime"))
+    result.ended_at = _parse_iso_z(data.get("lastUpdated"))
+
+    turn_count = 0
+    model: str | None = None
+    messages = data.get("messages")
+    if isinstance(messages, list):
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            if msg.get("type") in ("user", "gemini"):
+                turn_count += 1
+            if model is None and msg.get("type") == "gemini":
+                m = msg.get("model")
+                if isinstance(m, str) and m:
+                    model = m
+    result.turn_count = turn_count
+    result.model = model
+    return result
+
+
+def discover_gemini_transcripts(
+    root: Path | None = None,
+    *,
+    since: datetime | None = None,
+) -> Iterator[DiscoveredTranscript]:
+    """Yield every Gemini CLI transcript on the local machine.
+
+    Walks ``<root>/<project>/chats/session-*.json`` (default root
+    ``~/.gemini/tmp/``), sorted by path for deterministic ordering.
+
+    ``since`` filters by ``ended_at`` (or ``started_at`` if end is
+    missing) — sessions entirely before ``since`` are skipped. Sessions
+    with no parseable timestamps are ALWAYS yielded, matching
+    Claude/Codex behavior (surfaces parse failures to the operator).
+    """
+    root = root or _default_gemini_root()
+    if not root.exists() or not root.is_dir():
+        return
+    projects_map: dict[str, str] = {}
+    projects_file = _gemini_projects_file(root)
+    try:
+        raw_map = json.loads(projects_file.read_text(encoding="utf-8"))
+        candidate = raw_map.get("projects", {})
+        if isinstance(candidate, dict):
+            projects_map = {
+                k: v for k, v in candidate.items() if isinstance(v, str)
+            }
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass  # hints degrade to project dir names; not an error
+    for entry in sorted(root.glob("*/chats/session-*.json")):
+        if not entry.is_file():
+            continue
+        record = _parse_gemini_json_metadata(entry, projects_map)
+        if since:
+            effective = record.ended_at or record.started_at
+            if effective and effective < since:
+                continue
+        yield record
+
+
 # ------------------------------------------------------------------
-# Vendor dispatch (post-MVP: gemini)
+# Vendor dispatch
 # ------------------------------------------------------------------
 
 _VENDOR_HANDLERS = {
     "claude": discover_claude_transcripts,
     "codex": discover_codex_transcripts,
+    "gemini": discover_gemini_transcripts,
 }
 
 # Extra vendor slugs that map to the same handler. `transcripts pull`
-# accepts both the vendor's product name (claude, codex) and the
-# canonical Enterprise vendor slug (anthropic, openai) as inputs. The
-# stored vendor slug on `transcript_sessions.vendor` is the canonical
-# form (anthropic for Claude, openai for Codex) — see the Enterprise
-# TranscriptSession model docstring.
+# accepts both the vendor's product name (claude, codex, gemini) and
+# the canonical Enterprise vendor slug (anthropic, openai, google) as
+# inputs. The stored vendor slug on `transcript_sessions.vendor` is the
+# canonical form (anthropic for Claude, openai for Codex, google for
+# Gemini) — see the Enterprise TranscriptSession model docstring.
 _VENDOR_ALIASES = {
     "anthropic": "claude",
     "openai": "codex",
+    "google": "gemini",
 }
 
 

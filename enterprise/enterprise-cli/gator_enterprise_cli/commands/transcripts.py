@@ -32,6 +32,7 @@ from gator_enterprise_cli.transcripts_discovery import (
     claude_root_path,
     codex_root_path,
     discover as discover_transcripts,
+    gemini_root_path,
 )
 
 
@@ -62,13 +63,14 @@ def register(subparsers):
     )
     pull.add_argument(
         "--vendor", default="claude",
-        choices=["claude", "anthropic", "codex", "openai", "all"],
+        choices=["claude", "anthropic", "codex", "openai", "gemini", "google", "all"],
         help=(
             "Vendor to pull from (default: claude). Phase 3 (2026-08-15) added "
-            "Codex support: 'codex' and 'openai' both dispatch to the Codex "
-            "adapter (`~/.codex/sessions/`). 'anthropic' remains an alias for "
-            "'claude'. 'all' still resolves to claude in this release; "
-            "widening to iterate across all installed vendors is Phase 4+ work."
+            "Codex ('codex'/'openai' → `~/.codex/sessions/`); Phase 4 "
+            "(2026-08-15) added Gemini ('gemini'/'google' → `~/.gemini/tmp/`). "
+            "'anthropic' remains an alias for 'claude'. 'all' still resolves "
+            "to claude in this release; iterating across all installed "
+            "vendors is Phase 5+ work."
         ),
     )
     pull.add_argument(
@@ -524,6 +526,16 @@ def _handle_pull(args, client):
                 f"override.",
                 file=sys.stderr,
             )
+    elif vendor in ("gemini", "google"):
+        _gemini_root = gemini_root_path()
+        if not _gemini_root.exists() or not _gemini_root.is_dir():
+            print(
+                f"warning: Gemini transcript root {_gemini_root} does not exist. "
+                f"This is normal if you have not used the Gemini CLI on this "
+                f"machine; otherwise check the GEMINI_TRANSCRIPTS_ROOT env "
+                f"override.",
+                file=sys.stderr,
+            )
     discovered = list(discover_transcripts(vendor, since=since_dt))
     print(f"Discovered {len(discovered)} {vendor} transcripts")
 
@@ -653,6 +665,9 @@ def _upload_transcript(
         "machine_id": machine_id or "unknown",
         "vendor": record.vendor,
         "vendor_session_id": record.vendor_session_id,
+        # Migration 011: "" for all vendors except Gemini, whose
+        # duplicate-raw-ID files carry a source-path-hash qualifier.
+        "session_qualifier": record.session_qualifier,
         "model": record.model,
         "workspace_hint": record.workspace_hint,
         "transcript_source_path": record.source_path,
