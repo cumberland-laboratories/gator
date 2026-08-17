@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "governance: commit 331f1ef residue snippet as-is + capture snippet-identity fallback finding as inbox item",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "session-snippets",
+    "evidence-surface",
+    "enforcer-finding"
+  ],
+  "commit": "e28d0bf5cfd8810201a752a93f0104df0b7ab952",
+  "short_commit": "e28d0bf",
+  "snippet_id": "snippet-e28d0bf5cfd88",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T00:14:19Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-16-gator-331f1efdc6fba.json"
+  ],
+  "notes": [
+    "Committed the staged `331f1ef` session-snippet residue **as-is** (Architect-ratified): the snippet's null `session_group_key`/`transcript_session_id` and generic `model_inferred: \"claude\"` are honest evidence of what the emitter knew at commit time; rewriting would falsify the record.",
+    "Enforcer whiteboard finding (2026-08-16) investigated and dispositioned: not a code regression from the Phase 5 sweep. Two stacked causes — (1) intermittent, pre-existing registry-miss against `.gator/active-vendor-session.json` at commit time nulls the session identity fields; (2) on miss, the fallback passes the commit_draft `agent:` string through as `model_inferred`, so Fable-session drafts (`agent: claude`) degrade where Opus drafts (`agent: claude-opus-4-7`) looked precise. Full trace captured as a new inbox open item.",
+    "Convention adopted from this commit forward: precise model name in commit_draft `agent:` field (`claude-fable-5`), restoring fallback specificity at zero code cost. Registry-miss diagnostic logging deferred to a future hook-hardening commit (inbox item, rides with the `stale-charter-refs` fix)."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

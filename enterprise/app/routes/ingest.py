@@ -29,7 +29,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api_contract import ApiError
@@ -228,11 +228,12 @@ def _run_linkage(
     # Migration 011's qualifier), each row's ingest matches the same
     # commits, so the commit accrues one snippet-basis link PER row —
     # that fan-out is intentional ("here are all matching transcripts"
-    # is the honest answer). The ambiguity is signaled via confidence:
-    # when 2+ sibling rows share this raw id, new links get "medium"
-    # instead of "high", and previously-created snippet-basis links on
-    # the sibling rows are retroactively downgraded so the contract
-    # holds regardless of ingest order.
+    # is the honest answer). The ambiguity is signaled via confidence
+    # AND metadata: when 2+ sibling rows share this raw id, new links
+    # get "medium" instead of "high" plus a `raw_id_ambiguous_across`
+    # count, and previously-created snippet-basis links on the sibling
+    # rows are retroactively converged to the same confidence + count
+    # so the contract holds regardless of ingest order.
     sibling_row_ids = db.execute(
         select(TranscriptSession.id).where(
             TranscriptSession.organization_id == organization_id,
@@ -244,15 +245,28 @@ def _run_linkage(
     raw_id_ambiguous = len(sibling_row_ids) > 1
     snippet_confidence = "medium" if raw_id_ambiguous else "high"
     if raw_id_ambiguous:
-        db.execute(
-            update(CommitTranscriptLink)
-            .where(
+        # Retroactive convergence on the sibling rows' existing
+        # snippet-basis links: confidence AND `raw_id_ambiguous_across`
+        # must match what newly-created links get below, or the audit
+        # signal becomes ingest-order-dependent (whiteboard 2026-08-16
+        # Finding 1 — the previous confidence-only bulk UPDATE left the
+        # first sibling's link without the ambiguity marker). No
+        # already-medium skip filter: re-stamping keeps the count fresh
+        # when a THIRD sibling arrives. Read-modify-write rather than
+        # bulk UPDATE because linkage_metadata differs per link and the
+        # JSON column needs whole-value reassignment to dirty-track.
+        sibling_links = db.execute(
+            select(CommitTranscriptLink).where(
                 CommitTranscriptLink.transcript_session_id.in_(sibling_row_ids),
                 CommitTranscriptLink.linkage_basis == "session_id_in_snippet",
-                CommitTranscriptLink.linkage_confidence != "medium",
             )
-            .values(linkage_confidence="medium")
-        )
+        ).scalars().all()
+        for sibling_link in sibling_links:
+            sibling_link.linkage_confidence = "medium"
+            sibling_link.linkage_metadata = {
+                **(sibling_link.linkage_metadata or {}),
+                "raw_id_ambiguous_across": len(sibling_row_ids),
+            }
     session_matches = db.execute(
         select(Commit).where(
             Commit.organization_id == organization_id,

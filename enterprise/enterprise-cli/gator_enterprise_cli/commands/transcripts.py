@@ -1,18 +1,20 @@
-"""transcripts commands — pull (ingest), list.
+"""transcripts commands — pull (ingest), list, show, get, link, relink.
 
-`transcripts pull` is the primary operator entry point for MVP evidence
+`transcripts pull` is the primary operator entry point for evidence
 custody (2026-08-08 transcripts-first plan §10):
 
   1. Discover commits from known gatorized repos on this machine
      (~/.gator/dashboard-repos.json + git log + .gator/session-snippets/)
   2. POST /api/v1/commits/ingest with the batch
-  3. Discover vendor transcripts (MVP: Claude Code only)
+  3. Discover vendor transcripts — Claude Code (`--vendor claude`),
+     Codex CLI (`codex`), Gemini CLI (`gemini`), or `all` (audit-surface
+     tranche Phases 3+4, 2026-08-15)
   4. POST /api/v1/transcripts/ingest for each transcript — server-side
      linkage runs immediately
 
 `transcripts list` is the minimum operator-query surface needed to
-verify the exit criteria of Phase 2 (item ingested → visible).
-`show`/`get`/`link`/`relink` land in Phase 3-4.
+verify item-ingested → visible; `show`/`get`/`link`/`relink` are the
+per-transcript query + explicit-linkage verbs.
 """
 
 from __future__ import annotations
@@ -53,7 +55,7 @@ _MAX_CONTENT_BYTES = 50 * 1024 * 1024
 def register(subparsers):
     parser = subparsers.add_parser(
         "transcripts",
-        help="Transcript ingestion + query (MVP: Claude Code)",
+        help="Transcript ingestion + query (Claude Code, Codex, Gemini)",
     )
     sub = parser.add_subparsers(dest="transcripts_command")
 

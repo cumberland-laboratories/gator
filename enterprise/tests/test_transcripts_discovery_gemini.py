@@ -433,6 +433,46 @@ class TestDuplicateSessionIdAcrossFiles:
         assert {l.transcript_session_id for l in links} != {None}
         assert len({l.transcript_session_id for l in links}) == 2
         assert all(l.linkage_confidence == "medium" for l in links)
+        # Ambiguity metadata must be order-independent (whiteboard
+        # 2026-08-16 Finding 1): the FIRST sibling's link — created at
+        # high confidence before the duplicate existed — must carry the
+        # same `raw_id_ambiguous_across` marker the second one gets.
+        assert all(
+            (l.linkage_metadata or {}).get("raw_id_ambiguous_across") == 2
+            for l in links
+        )
+
+    def test_third_sibling_refreshes_ambiguity_count(
+        self, client, api_token, db_session,
+    ):
+        # The retroactive convergence re-stamps ALL sibling links on
+        # every ambiguous ingest, so earlier links don't keep a stale
+        # count when more duplicates arrive.
+        client.post("/api/v1/commits/ingest", json={
+            "commits": [{
+                "repo_canonical_id": "local/gator",
+                "sha": "a" * 40,
+                "transcript_session_id": "dup-raw-id",
+            }],
+        }, headers=_auth(api_token))
+        for content, qualifier in (
+            (b"file one", "q1" * 8),
+            (b"file two", "q2" * 8),
+            (b"file three", "q3" * 8),
+        ):
+            client.post("/api/v1/transcripts/ingest",
+                        json=_gemini_body(content, qualifier),
+                        headers=_auth(api_token))
+        links = db_session.execute(
+            select(CommitTranscriptLink).where(
+                CommitTranscriptLink.linkage_basis == "session_id_in_snippet")
+        ).scalars().all()
+        assert len(links) == 3
+        assert all(l.linkage_confidence == "medium" for l in links)
+        assert all(
+            (l.linkage_metadata or {}).get("raw_id_ambiguous_across") == 3
+            for l in links
+        )
 
     def test_reingest_same_file_still_upserts(self, client, api_token, db_session):
         body = _gemini_body(b"file one", "q1" * 8)
@@ -468,3 +508,4 @@ class TestDuplicateSessionIdAcrossFiles:
         ).scalars().all()
         assert len(links) == 1
         assert links[0].linkage_confidence == "high"
+        assert "raw_id_ambiguous_across" not in (links[0].linkage_metadata or {})
