@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "procedures: ship gator-version-drift (cross-branch Gator merge rules) + backfill v2.7.0 procedure pair into wheel template",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "procedures",
+    "version-drift",
+    "shipped-content",
+    "template-backfill"
+  ],
+  "commit": "48b1a0f52fa30e7b41d7bad535d1f5cd6d7c6181",
+  "short_commit": "48b1a0f",
+  "snippet_id": "snippet-48b1a0f52fa30",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "5c13cf9f62b22f57e41b7fa9aac1481535ea3eef",
+  "started_at": "2026-08-17T22:21:57Z",
+  "ended_at": "2026-08-17T22:21:57Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/constitution.md",
+    ".gator/.includes/procedures/committing-gator-files.md",
+    ".gator/.includes/procedures/gator-version-drift.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-5c13cf9f62b22.json",
+    "src/gator_command/templates/gator-starter/constitution.md",
+    "src/gator_command/templates/gator-starter/procedures/committing-gator-files.md",
+    "src/gator_command/templates/gator-starter/procedures/gator-version-drift.md",
+    "src/gator_command/templates/gator-starter/procedures/pre-gator-residue.md"
+  ],
+  "notes": [
+    "**New shipped procedure `gator-version-drift.md`** (roadmap Current Priority #5 deliverable) — written in `templates/gator-starter/procedures/` and copied to this repo's `.gator/.includes/procedures/`. Gives agents full self-sufficiency on `.gator/` merge conflicts and cross-branch version skew, with the operator never consulted on routine resolution. Core principle: shipped content is generated and version-owned — take either side whole, then `gator update` re-canonicalizes; user-authored knowledge merges as real prose with per-file semantics (inbox = union of open items; roadmap = more-advanced status wins; charters = must describe the MERGED code, verify via charter-alignment); session snippets = union both sides, never delete. Five scenario walkthroughs (merge across an update, coexisting versions with no merge planned = do nothing, origin ahead, origin behind, `.gator-version` conflicts), a what-NOT-to-do list, and the failure-modes-without-this section.",
+    "**Discovered + fixed a real propagation gap**: the v2.7.0 \"shipped procedures\" (`committing-gator-files.md`, `pre-gator-residue.md`) existed only in this repo's `.gator/.includes/` — never in `templates/gator-starter/procedures/` — so `gator update` never propagated them to fleet repos, contradicting the v2.7.0 release claim. Both backfilled into the template verbatim (files inside `SHIPPED_TEMPLATE_DIRS` directories propagate automatically; no constant change needed).",
+    "**Constitution step-8 note** (template + `.includes/` copies, kept in sync): now cross-references all three procedures, including the new merge-conflict pointer with the explicit \"do not ask the operator which version wins\" instruction. The template constitution had ALSO been missing the v2.7.0 cross-references — same gap, same fix.",
+    "`committing-gator-files.md` Related-surfaces section (both copies) links the new procedure.",
+    "Charter `scripts-repo-lifecycle.md`: new TRIPWIRE on the template-first authoring rule for shipped procedures (`.includes`-only copies are invisible to fleet propagation) + clarifying note that files inside listed shipped directories propagate without constant changes.",
+    "Roadmap Current Priority #5 status note: procedure written, rides next release; backfill documented.",
+    "Rides along: session snippet residue for `5c13cf9`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
