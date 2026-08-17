@@ -201,6 +201,42 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Wait for TestPyPI CDN to surface the new version
+        # Same CDN-lag race the v2.6.1 fix addressed for Workflow C's
+        # production-PyPI smoke (promote-to-pypi.yml "Wait for PyPI CDN"):
+        # upload succeeds well before the CDN populates all edges, so an
+        # immediate pip install can 404. Observed here on the v2.7.0-rc1
+        # run (31855182635): Ubuntu passed in 6s, Windows failed in 10s
+        # with "Could not find a version that satisfies the requirement",
+        # cleared by `gh run rerun --failed` after the CDN warmed. Poll
+        # the TestPyPI JSON API until the version is visible, then hand
+        # off to the install step. Bounded so a real publish failure
+        # surfaces instead of hanging. Runs per matrix cell — idempotent,
+        # and a warm CDN exits on attempt 1.
+        shell: bash
+        run: |
+          version="${WHEEL_VERSION}"
+          if [ -z "$version" ]; then
+            echo "::error::wheel_version job output is empty; build failed."
+            exit 1
+          fi
+          # 8 attempts × 15s = 120s max, mirroring the Workflow C fix.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl --silent --fail --show-error --location \
+                 "https://test.pypi.org/pypi/gator-command/${version}/json" > /dev/null 2>&1; then
+              echo "TestPyPI CDN sees gator-command==${version} on attempt ${attempt}."
+              exit 0
+            fi
+            if [ "$attempt" = "8" ]; then
+              echo "::error::TestPyPI CDN did not surface gator-command==${version} within 8 attempts (~120s). Check the publish-to-testpypi job logs, then re-run this job once TestPyPI shows the version."
+              exit 1
+            fi
+            echo "Attempt ${attempt}/8: version ${version} not yet on TestPyPI CDN. Sleeping 15s."
+            sleep 15
+          done
+        env:
+          WHEEL_VERSION: ${{ needs.build-candidate.outputs.wheel_version }}
+
       - name: Install from TestPyPI + smoke check
         shell: bash
         run: |

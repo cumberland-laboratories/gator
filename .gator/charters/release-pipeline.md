@@ -126,7 +126,19 @@ jobs:
    --extra-index-url https://pypi.org/simple/ --pre "gator-command==${version}"`,
    then runs `gator --version` and `gator --help`. Windows in the matrix
    because the packaging suite's Phase-3a checks proved Windows is a
-   distinct install surface.
+   distinct install surface. **Wait-for-TestPyPI-CDN step (added
+   2026-08-16, unvalidated until the v2.8.0-rc1 run)** precedes the
+   install: bounded poll (8×15s = 120s max) of
+   `https://test.pypi.org/pypi/gator-command/<version>/json` — the
+   TestPyPI twin of Workflow C's v2.6.1 production-CDN fix, motivated by
+   the v2.7.0-rc1 run (`31855182635`) where the Windows cell hit the
+   CDN-lag race (Ubuntu passed in 6s; Windows 404'd in 10s; manual
+   `gh run rerun --failed` cleared it). Runs per matrix cell —
+   idempotent; warm CDN exits on attempt 1. TRIPWIRE — the poll step
+   and the install step read the version from the same
+   `needs.build-candidate.outputs.wheel_version`; if the install step's
+   version source ever changes, change the poll step in the same
+   commit or the poll validates a different version than pip installs.
 5. **`deploy-to-public-gator`** (parallel with `publish-to-testpypi`) —
    STUB pending cutover. Documents three viable deploy shapes (same-repo
    monorepo / GitHub App / PAT) so cutover work swaps the STUB for real
