@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: Architect priority reorder — Blueprints 2.0 enters at #2, Loop slides to #3, normalized transcript index added as item 18",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "priorities",
+    "blueprints",
+    "transcript-index"
+  ],
+  "commit": "32e357f1747f54cf0c6e8a1104c2e5f96f630571",
+  "short_commit": "32e357f",
+  "snippet_id": "snippet-32e357f1747f5",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "25e5858e411254ff26f06632fe5d6f190cdd1353",
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T12:15:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-25e5858e41125.json"
+  ],
+  "notes": [
+    "**Current Priority re-set per Architect direction 2026-08-17** (supersedes the same-day post-tranche reset): #1 Gator + Enterprise polished and ready for lots of users (install/UX half + Enterprise polished-demo half, merged into one readiness goal); #2 **Blueprints 2.0** — new track; #3 Gator Loop (explicitly slid below Blueprints); #4 normalized transcript index (exploratory).",
+    "**New \"Building — Priority 2: Blueprints 2.0\" section**: HTML inspection surfaces for the human Architect, externalizing the charter-first understanding heuristic into progressive disclosure. 5 backlog items mapping the four-level model (L1 charter map productized → L2 covered-surfaces drill-down → L3 curated function map → L4 drift map) + relationship-type distinction. Supporting-artifact links wired: starter experiment `vault/blueprints/charter-flowchart-high-level.html` + the 2026-08-09 inspection exploration + 2026-08-14 understanding heuristic + 2026-08-12 module-guides delta/origin-story pair. Core framing preserved from the artifacts: charter graph = intentional model, code graph = observed model, inspection at the boundary; drift markers are prompts, not verdicts.",
+    "Loop section renumbered Priority 2 → 3 with the 2026-08-17 note.",
+    "**New Post-2.6 item 18 — normalized transcript index** (Considering/exploratory, below Loop per Architect): optional additive `transcript_messages` + `transcript_tool_calls` tables, rebuildable, raw-blob-stays-source-of-truth constraint, PAM as schema reference point without adopting it wholesale. Design note referenced.",
+    "Cross-references reconciled: header current-priority line, Post-2.6 intro (open items now 3-8, 12, 16, 17, 18), Connections (Blueprints artifact chain + transcript-index note), inbox next-steps.",
+    "Rides along: session snippet residue for `25e5858`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
