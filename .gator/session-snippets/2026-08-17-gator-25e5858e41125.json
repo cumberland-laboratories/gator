@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: post-v2.8.0 reset — priorities restored to standing order, tranche records finalized, E10 row, item 17 polish pass",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "priorities",
+    "post-release"
+  ],
+  "commit": "25e5858e411254ff26f06632fe5d6f190cdd1353",
+  "short_commit": "25e5858",
+  "snippet_id": "snippet-25e5858e41125",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T12:03:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-29dbb75a8b97e.json"
+  ],
+  "notes": [
+    "**Roadmap properly reset post-v2.8.0** (Architect-directed 2026-08-17). Header + Product section current (v2.8.0 shipped 2026-08-16, evaluator-ready Enterprise framing, issue-sweep note). **Current Priority rewritten**: tranche window closed; standing pre-tranche order restored — #1 install/onboarding UX (with its concrete backlog enumerated: Priority-1 table + vaulted-docs rewrite + issues #1/#4), #2 Loop polish (umbrella #5 + Priority-2 table), #3 Enterprise evaluator-ready → announceable (Post-2.6 items 5/6/3/4/7 + quality tail 16/17/12; unscheduled until Architect opens a window).",
+    "Post-2.6 candidate-work section finalized: intro rewritten (tranche complete; open = 3-8, 12, 16, 17); items 9/10/11/15 flipped to \"Done (shipped v2.8.0)\"; items 13/14 flipped from stale \"Considering\" to \"Done (shipped v2.7.0)\" with completion records; item 1's CDN-poll note updated with both live validations. **New item 17** — Enterprise CLI output polish pass, gathering Phase 6 RE-1/RE-3/RE-4/RE-5 + Phase 2 Run 1 P1-P4 into one S-class work item.",
+    "Enterprise section: architectural line refreshed to v2.8.0 (multi-vendor custody, four linkage bases, ambiguity signaling, guiding rule); **new E10 Done row** (audit surface, v2.7.0+v2.8.0, three smoke campaigns); \"What Enterprise adds\" CLI block now shows all five audit-question verbs with Q1-Q5 labels; Connections audit-surface entry rewritten as the completed-tranche artifact chain.",
+    "Inbox next-steps compressed to point at the reset roadmap (nothing queued in inbox; open work lives in roadmap tables + GitHub issues).",
+    "Rides along: session snippet residue for `29dbb75`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
