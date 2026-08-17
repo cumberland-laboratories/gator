@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: link all-branches-update + machine-scoped-runtime design note from priority #5",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "version-drift",
+    "design-note"
+  ],
+  "commit": "26ab61d0b7905535ef0b2b15e48cce96e59d75f3",
+  "short_commit": "26ab61d",
+  "snippet_id": "snippet-26ab61d0b7905",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "48b1a0f52fa30e7b41d7bad535d1f5cd6d7c6181",
+  "started_at": "2026-08-17T22:30:15Z",
+  "ended_at": "2026-08-17T22:30:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-48b1a0f52fa30.json"
+  ],
+  "notes": [
+    "Captured the 2026-08-17 Architect + agent brainstorm as a vault design note: `2026-08-17-gator-all-branches-update-and-machine-scoped-runtime-design-note.md` (vault-side, gitignored). Contents: three all-branches-update mechanisms evaluated (worktree sweep = feasible-but-blunt; **git merge driver for `.gator/.includes/**` = recommended near-term, installable via the existing `gator init` config seam**; machine-scoped runtime split = the structural fix); the `~/.gator/` question resolved to a policy-stays-in-repo / runtime-moves-machine-side hybrid honoring the mission's \"proof lives in Git\" constraint; five open design questions; sequencing recommendation (merge driver now-ish, runtime split later with full design review, worktree sweep probably never); the Enterprise-adjacency framing (machine-scoped runtime + repo-scoped record is one architecture, base Gator hasn't caught up to its own Enterprise layer's pattern).",
+    "Roadmap Current Priority #5 \"saved for later\" line now points at the design note with the mechanism summary.",
+    "Rides along: session snippet residue for `48b1a0f`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
