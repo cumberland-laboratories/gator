@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude",
+  "intent": "inbox: post-tranche rollforward — compress where-we-are, sequence Phase 6 / v2.8.0 / Workflow-B next steps",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox-rollforward",
+    "release-planning"
+  ],
+  "commit": "331f1efdc6fba98a5dafe7470438542133f22f6e",
+  "short_commit": "331f1ef",
+  "snippet_id": "snippet-331f1efdc6fba",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "25f2e6ebf019fb79a3c55a6b2c37aedcd9ee9bea",
+  "started_at": "2026-08-16T20:47:03Z",
+  "ended_at": "2026-08-16T20:47:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-16-gator-25f2e6ebf019f.json"
+  ],
+  "notes": [
+    "`inbox.md` where-we-are compressed per house rule (the five-paragraph session log was re-narrating what roadmap items 9/10/11, vault evidence artifacts, and commit bodies already record): now a 2026-08-16 snapshot — v2.7.0 released, `dev` 5 commits ahead (L, `85bbef9`, M, `eb273f4`, `25f2e6e`), audit-surface tranche Phases 1-5 complete, enterprise 310+1 / base+contracts 808 test state, custody 126 sessions across 3 vendors.",
+    "Next steps sequenced explicitly: (1) Phase 6 widened-vendor smoke (all prerequisites local), (2) v2.8.0 cut after Phase 6 — with new operator-facing changelog note that Enterprise operators must `alembic upgrade head` (Migration 011) before pulling Gemini transcripts, (3) Workflow B TestPyPI CDN-poll wrapper repositioned to land BEFORE the v2.8.0 RC so `rc1`'s own Workflow B run validates it (mirrors the Workflow C fix's v2.7.0-promote validation); open item annotated with that slot.",
+    "New open item (from post-`25f2e6e` verification): pre-commit `stale-charter-refs` checker false-positives on compound `###` headings (`### AUTO_YES / set_auto_yes(value) / get_auto_yes()` → grep'd as one identifier); all three names verified present in `gatorize/helpers.py`. Warning-only, but false positives erode the signal that caught real drift the same day. Fix targets `gator-pre-commit.py` charter validation in a future hook-hardening commit.",
+    "Rides along: session snippet for `25f2e6e` (staged post-commit governance residue)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
