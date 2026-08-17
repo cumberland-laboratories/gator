@@ -10,21 +10,16 @@ Drop anything here. No formatting needed.
 
 **Released**: v2.7.0 on PyPI (2026-08-15); `main` at `58dc2f3`. The v2.6.1 CDN-poll fix validated end-to-end on that promote.
 
-**`dev` is 5 commits ahead of `main`, all unreleased** — the completed audit-surface tranche Phases 3-5 plus governance follow-through:
-1. `f7ef4c2` Commit L — Enterprise-side Codex adapter
-2. `85bbef9` — Phase 3 exit-criteria closeout (operator guide §3.1a + Codex smoke: 102/102 ingested, 1,979 links, both bases) + `--unlinked` help-string drift fix
-3. `25dbc58` Commit M — Gemini adapter + Migration 011 `session_qualifier` + β fan-out (§10 items 6+7 both ratified; organic duplicate-raw-ID pair demonstrated)
-4. `eb273f4` — session-cleanup final sweep (extractors + session-common retired, ~1,259 lines; base emits governance metadata only, Enterprise owns all transcript custody)
-5. `25f2e6e` — legacy-Memex charter cleanup (phantom graph-wiki/memex entries retired; INDEX.md is the single charter map)
+**Audit-surface tranche: ALL SIX PHASES COMPLETE + ARCHITECT-RATIFIED (2026-08-16).** Phase 6 widened-vendor smoke Run 1: PASS — Q1-Q5 correct for Claude + Codex + Gemini against real custody, zero code failures; run artifact + 5-item rough-edges backlog in vault (`2026-08-16-audit-surface-widened-smoke-run-1.md`); RE-2 promoted to roadmap Post-2.6 item 16. Per-phase detail: roadmap Current Priority #1 + items 9/10/11/15, vault evidence artifacts, commit bodies.
 
-**Audit-surface tranche: Phases 1-5 COMPLETE** (Phase 2 smoke Run 1: 9/9 PASS; Phase 3+4 smoke evidence in vault, dated 2026-08-15). Test state: enterprise **310 pass + 1 skip**, base+contracts **808 pass**, zero regressions. Local stack: alembic head **011**; evidence custody **126 sessions** (5 anthropic + 102 openai + 19 google). Per-phase detail lives in roadmap Post-2.6 items 9/10/11, the vault evidence artifacts, and commit bodies — not re-narrated here per house rule.
+**`dev` is 8+ commits ahead of `main`, all unreleased** — tranche Phases 3-5 (`f7ef4c2` Codex adapter, `85bbef9` Phase 3 closeout, `25dbc58` Gemini adapter + Migration 011, `eb273f4` session-cleanup sweep, `25f2e6e` Memex charter cleanup) plus 2026-08-16 follow-through (`e28d0bf` snippet-identity governance, `db0bdae` whiteboard Findings 1+2 fix — order-independent fan-out ambiguity metadata + vendor-accurate CLI help, `200c6de` RE-2 roadmap promotion). Test state: enterprise **311 pass + 1 skip**, base+contracts **808 pass**, zero regressions. Local stack: alembic head **011**; custody **156 sessions** (35 anthropic + 102 openai + 19 google).
 
 **Next steps, in recommended order**:
-1. **Phase 6 — widened-vendor smoke test** (parent plan §8, the tranche's final phase). Architect-executed or Architect-directed: activate against the local stack, exercise Q1-Q5 across all three vendors' real custody, note rough edges. All prerequisites exist on this machine; runs entirely locally. Feeds the polish-pass backlog (which already holds Phase 2 Run 1's 4 observations: `�` em-dash console encoding, empty skip-line session-prefix, cumulative pagination count, oldest-first `--limit`).
-2. **v2.8.0 cut** — after Phase 6 passes: FF `main`, tag `v2.8.0-rc1`, Workflow B → promote. MINOR (3 vendors' adapter surface + Migration 011, all additive). First release where the release-notes story is "full Claude+Codex+Gemini audit surface". Operator-facing note for the changelog: Enterprise operators must run `alembic upgrade head` (Migration 011) before pulling Gemini transcripts.
-3. **Workflow B TestPyPI CDN-poll wrapper** — ideally lands BEFORE the v2.8.0 RC so the rc1 run benefits (it's a workflow-file change; see open item below).
+1. **Workflow B TestPyPI CDN-poll wrapper** — lands on `dev` BEFORE the RC cut so `v2.8.0-rc1`'s own Workflow B run validates it (see open item below).
+2. **v2.8.0 cut** — FF `main`, tag `v2.8.0-rc1`, Workflow B → promote. MINOR (3 vendors' adapter surface + Migration 011, all additive). First release where the release-notes story is "full Claude+Codex+Gemini audit surface". Operator-facing note for the changelog: Enterprise operators must run `alembic upgrade head` (Migration 011) before pulling Gemini transcripts.
+3. **Polish-pass backlog** (post-release): Phase 6 RE-1/RE-3/RE-4/RE-5 + Phase 2 Run 1 P1-P4 observations; roadmap item 16 (content-hash skip) when scheduled.
 
-Everything else in the roadmap Post-2.6 candidate-work list (items 3-8, 12) is still-open + phase-independent.
+Everything else in the roadmap Post-2.6 candidate-work list (items 3-8, 12, 16) is still-open + phase-independent.
 
 ---
 

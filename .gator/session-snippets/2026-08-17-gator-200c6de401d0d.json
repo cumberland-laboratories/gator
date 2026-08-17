@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: promote Phase 6 finding RE-2 to Post-2.6 item 16 — transcripts pull content-hash skip",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "enterprise",
+    "audit-surface"
+  ],
+  "commit": "200c6de401d0dd6c464ba0b7cb61cc682c01f853",
+  "short_commit": "200c6de",
+  "snippet_id": "snippet-200c6de401d0d",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "db0bdae2f015894278e33fbdd9478182b7377555",
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T00:37:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-db0bdae2f0158.json"
+  ],
+  "notes": [
+    "Promoted Phase 6 widened-smoke rough edge RE-2 (Codex re-pull re-uploads all unchanged transcript bytes; >300s for the 102-file corpus) to roadmap Post-2.6 candidate work item 16 (Architect-directed): `transcripts pull` content-hash skip. Fix shape captured in the entry — client-side sha256 vs a machine-scoped bulk `(vendor, vendor_session_id, session_qualifier) → blob_sha256` map fetched in one GET; content-addressed so evidence integrity is preserved and grown-old-sessions are still re-captured (unlike a bare `--since` filter). Pull summary to gain `skipped (unchanged): N`.",
+    "Vault Phase 6 run artifact RE-2 row cross-referenced with the promotion (vault-side, gitignored).",
+    "Rides along: session snippet residue for `db0bdae` (post-commit governance housekeeping)."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
