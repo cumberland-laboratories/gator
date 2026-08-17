@@ -8,17 +8,12 @@ Drop anything here. No formatting needed.
 
 ## Where we are (2026-08-16)
 
-**Released**: v2.7.0 on PyPI (2026-08-15); `main` at `58dc2f3`. The v2.6.1 CDN-poll fix validated end-to-end on that promote.
+**Released**: **v2.8.0 on PyPI (2026-08-16)** — full Claude+Codex+Gemini audit surface; the audit-surface tranche is COMPLETE and shipped. `main` = `dev` = `96b0e1a` (tags `v2.8.0-rc1` + `v2.8.0`). GitHub Release published (`--latest`). Pipeline fully green first-try: Workflow B run `31983519052` (new TestPyPI CDN-poll step validated — Windows cell passed without rerun), promote run `31983601397` (production smoke passed attempt 1). Local install upgraded + verified (`gator --version` → 2.8.0). Release detail: roadmap Done table v2.8.0 row + CHANGELOG `[2.8.0]`.
 
-**Audit-surface tranche: ALL SIX PHASES COMPLETE + ARCHITECT-RATIFIED (2026-08-16).** Phase 6 widened-vendor smoke Run 1: PASS — Q1-Q5 correct for Claude + Codex + Gemini against real custody, zero code failures; run artifact + 5-item rough-edges backlog in vault (`2026-08-16-audit-surface-widened-smoke-run-1.md`); RE-2 promoted to roadmap Post-2.6 item 16. Per-phase detail: roadmap Current Priority #1 + items 9/10/11/15, vault evidence artifacts, commit bodies.
-
-**`dev` is 8+ commits ahead of `main`, all unreleased** — tranche Phases 3-5 (`f7ef4c2` Codex adapter, `85bbef9` Phase 3 closeout, `25dbc58` Gemini adapter + Migration 011, `eb273f4` session-cleanup sweep, `25f2e6e` Memex charter cleanup) plus 2026-08-16 follow-through (`e28d0bf` snippet-identity governance, `db0bdae` whiteboard Findings 1+2 fix — order-independent fan-out ambiguity metadata + vendor-accurate CLI help, `200c6de` RE-2 roadmap promotion). Test state: enterprise **311 pass + 1 skip**, base+contracts **808 pass**, zero regressions. Local stack: alembic head **011**; custody **156 sessions** (35 anthropic + 102 openai + 19 google).
-
-**Next steps, in recommended order**:
-1. **v2.8.0 cut** — FF `main`, tag `v2.8.0-rc1`, Workflow B → promote. MINOR (3 vendors' adapter surface + Migration 011, all additive). First release where the release-notes story is "full Claude+Codex+Gemini audit surface". Operator-facing note for the changelog: Enterprise operators must run `alembic upgrade head` (Migration 011) before pulling Gemini transcripts. The Workflow B TestPyPI CDN-poll wrapper landed on `dev` 2026-08-16 — the rc1 run is its first real-world validation (mirrors how the Workflow C fix validated on the v2.7.0 promote).
-2. **Polish-pass backlog** (post-release): Phase 6 RE-1/RE-3/RE-4/RE-5 + Phase 2 Run 1 P1-P4 observations; roadmap item 16 (content-hash skip) when scheduled.
-
-Everything else in the roadmap Post-2.6 candidate-work list (items 3-8, 12, 16) is still-open + phase-independent.
+**Next steps**:
+1. **Polish-pass backlog** (when scheduled): Phase 6 RE-1/RE-3/RE-4/RE-5 + Phase 2 Run 1 P1-P4 observations; roadmap item 16 (content-hash skip).
+2. Roadmap Post-2.6 candidate-work items 3-8, 12, 16 — still-open, phase-independent. Item 5 (single-pipx Enterprise install) remains the biggest blocker to a public Enterprise announcement.
+3. Priorities 2/3 (install/onboarding UX, Loop polish) resume now that the tranche window is closed — Architect to set the next window's focus.
 
 ---
 
