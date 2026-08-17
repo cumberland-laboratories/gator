@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: append priority #5 — cross-branch Gator version drift, shipped procedure for agent self-sufficiency on .gator/ merge conflicts",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "priorities",
+    "version-drift",
+    "procedures"
+  ],
+  "commit": "5c13cf9f62b22f57e41b7fa9aac1481535ea3eef",
+  "short_commit": "5c13cf9",
+  "snippet_id": "snippet-5c13cf9f62b22",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-17T22:14:10Z",
+  "ended_at": "2026-08-17T22:14:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-32e357f1747f5.json"
+  ],
+  "notes": [
+    "**Current Priority #5 appended** (Architect-directed 2026-08-17): cross-branch Gator version drift — agent self-sufficiency. The friction: `gator update` on one branch leaves branches on different Gator versions; origin ahead/behind; `.gator/` merge conflicts — and users currently have no idea what to do when the agent asks about \"Gator file updates\". Deliverable: a **shipped procedure** in `.gator/.includes/procedures/` (propagates on `gator update`, like the v2.7.0 pair) covering the full scenario matrix — same-repo branches on different versions, merging across a version boundary, per-file-class conflict resolution (shipped `.includes/` vs user-authored knowledge vs generated residue), origin ahead/behind — with crystal-clear decision rules discoverable at the moment of conflict so the agent reads the procedure instead of asking the user. Starter coverage acknowledged: `committing-gator-files.md` + `pre-gator-residue.md` handle post-modification commits and upgrade residue but NOT the cross-branch/merge matrix.",
+    "**Deferred piece noted in the entry**: an all-branches-in-one-operation Gator update mechanism — the eventual structural fix, deliberately parked behind the procedure per Architect direction.",
+    "Header current-priority line + inbox next-steps updated to include #5.",
+    "Rides along: session snippet residue for `32e357f`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

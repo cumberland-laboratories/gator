@@ -324,8 +324,9 @@ Filesystem: none (stdout)
 File: `src/gator_command/scripts/gator-update.py`
 Constants defining the update boundary. `SHIPPED_TEMPLATE_DIRS` (scripts, procedures, reference-notes, blueprints) target `.includes/` on v2 repos. `USER_TEMPLATE_DIRS` (docs, artifacts, threads, policies, field-guides, vault, sessions) always target `.gator/` root. `TEMPLATE_DIRS` is the combined set for backward compat.
 <- `plan_updates()`, `_plan_dir_overlay()`
-! This boundary is the ownership contract with the Architect. Files not in these lists are user content and must never be touched. If a new template file is added to `gator-starter`, add it to the appropriate constant (shipped or user) or it will be silently skipped by `gator update`.
+! This boundary is the ownership contract with the Architect. Files not in these lists are user content and must never be touched. If a new template file is added to `gator-starter`, add it to the appropriate constant (shipped or user) or it will be silently skipped by `gator update`. (Files inside an already-listed directory — e.g. a new `procedures/*.md` — propagate automatically with no constant change; `plan_updates()` walks the directory.)
 ! Adding a directory to `SHIPPED_TEMPLATE_DIRS` means it will be routed to `.includes/` on v2 repos. Adding to `USER_TEMPLATE_DIRS` means it stays at root always.
+! TRIPWIRE — a shipped procedure only propagates if it exists in `templates/gator-starter/procedures/`; a copy in THIS repo's `.gator/.includes/procedures/` alone is invisible to `gator update` on fleet repos. The v2.7.0 pair (`committing-gator-files.md`, `pre-gator-residue.md`) shipped `.includes`-only by mistake and was backfilled into the template 2026-08-17 alongside the new `gator-version-drift.md` (cross-branch version drift / `.gator/` merge-conflict resolution, per-file-class rules; constitution step-8 note cross-references all three). When adding a shipped procedure: write it in the template FIRST, copy to `.includes/` second, and add the constitution cross-reference in BOTH the template constitution and this repo's `.includes/constitution.md`.
 
 ---
 
