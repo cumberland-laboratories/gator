@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "governance: v2.8.0 post-release rollforward — roadmap Done row, v2.7.0 status flip, inbox where-we-are",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "v2.8.0",
+    "roadmap",
+    "inbox"
+  ],
+  "commit": "29dbb75a8b97e732335c7a2f4b412ce74b0ff303",
+  "short_commit": "29dbb75",
+  "snippet_id": "snippet-29dbb75a8b97e",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "96b0e1af0a8f1647075ebddcd4c2bc49943cead0",
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T01:05:11Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-96b0e1af0a8f1.json"
+  ],
+  "notes": [
+    "**v2.8.0 shipped 2026-08-16**: RC tag → Workflow B (run `31983519052`, all green — new TestPyPI CDN-poll step validated, Windows cell first-try) → Architect-approved promote (run `31983601397`, production smoke attempt 1) → final tag + GitHub Release (`--latest`) → local `pipx upgrade` verified 2.8.0. Roadmap Done table gains the v2.8.0 row (full tranche summary + pipeline evidence); v2.7.0 row status flipped from \"awaiting RC/promote\" to \"shipped 2026-08-15\".",
+    "Inbox where-we-are rolled forward: released headline, `main` = `dev` = `96b0e1a`, next steps now polish-pass backlog + still-open Post-2.6 items + priority-window reset (Architect to set next focus).",
+    "Rides along: session snippet residue for `96b0e1a`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

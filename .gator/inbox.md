@@ -10,10 +10,7 @@ Drop anything here. No formatting needed.
 
 **Released**: **v2.8.0 on PyPI (2026-08-16)** — full Claude+Codex+Gemini audit surface; the audit-surface tranche is COMPLETE and shipped. `main` = `dev` = `96b0e1a` (tags `v2.8.0-rc1` + `v2.8.0`). GitHub Release published (`--latest`). Pipeline fully green first-try: Workflow B run `31983519052` (new TestPyPI CDN-poll step validated — Windows cell passed without rerun), promote run `31983601397` (production smoke passed attempt 1). Local install upgraded + verified (`gator --version` → 2.8.0). Release detail: roadmap Done table v2.8.0 row + CHANGELOG `[2.8.0]`.
 
-**Next steps**:
-1. **Polish-pass backlog** (when scheduled): Phase 6 RE-1/RE-3/RE-4/RE-5 + Phase 2 Run 1 P1-P4 observations; roadmap item 16 (content-hash skip).
-2. Roadmap Post-2.6 candidate-work items 3-8, 12, 16 — still-open, phase-independent. Item 5 (single-pipx Enterprise install) remains the biggest blocker to a public Enterprise announcement.
-3. Priorities 2/3 (install/onboarding UX, Loop polish) resume now that the tranche window is closed — Architect to set the next window's focus.
+**Next steps** (roadmap Current Priority reset 2026-08-17, Architect-directed): standing order restored — #1 install/onboarding UX, #2 Loop polish, #3 Enterprise evaluator-ready → announceable (single-pipx item 5 is the blocker). The smoke-campaign polish observations are now roadmap Post-2.6 item 17; content-hash skip is item 16. Open work lives in the roadmap tables + GitHub issues #1, #3-8 — nothing queued here.
 
 ---
 
