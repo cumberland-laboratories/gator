@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "release-hygiene: Workflow B TestPyPI CDN-poll step — pre-install bounded poll mirroring the v2.6.1 Workflow C fix",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release-pipeline",
+    "workflow-b",
+    "cdn-lag"
+  ],
+  "commit": "f0548e3d79e04a83a5ce87e6f11e9de83eb9d96b",
+  "short_commit": "f0548e3",
+  "snippet_id": "snippet-f0548e3d79e04",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "e9c7bcde268aa950d1cff9313f7514f065c08d90",
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T00:41:31Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-17-gator-e9c7bcde268aa.json",
+    ".github/workflows/release-candidate.yml"
+  ],
+  "notes": [
+    "**New `Wait for TestPyPI CDN to surface the new version` step** in `.github/workflows/release-candidate.yml::smoke-test-testpypi`, sequenced before the install step. Bounded poll (8 attempts × 15s = 120s max) of `https://test.pypi.org/pypi/gator-command/<version>/json` — the TestPyPI twin of the v2.6.1 Workflow C production-PyPI fix (`promote-to-pypi.yml`), same shape, retargeted JSON API URL. Motivation: v2.7.0-rc1 Workflow B run `31855182635` hit the CDN-lag race on the Windows matrix cell (Ubuntu passed in 6s; Windows 404'd in 10s; cleared manually via `gh run rerun --failed`). Runs per matrix cell — idempotent, warm CDN exits on attempt 1. Version read from the same `needs.build-candidate.outputs.wheel_version` the install step uses (charter TRIPWIRE: change both together). Did not reproduce Workflow C's cosmetic `${attempt}\\8` echo typo. YAML parse + step ordering verified locally.",
+    "Charter `release-pipeline.md`: Workflow B `smoke-test-testpypi` entry updated with the new step, its provenance, per-cell idempotency note, and the version-source sync TRIPWIRE. Marked unvalidated-until-v2.8.0-rc1 — the rc1 run is the first real-world validation, mirroring how the Workflow C fix validated on the v2.7.0 promote.",
+    "Inbox: `Workflow B TestPyPI CDN-poll wrapper` open item removed (shipped — house rule); where-we-are next-steps resequenced (v2.8.0 cut is now step 1, with the wrapper noted as landed).",
+    "Rides along: session snippet residue for `e9c7bcd`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

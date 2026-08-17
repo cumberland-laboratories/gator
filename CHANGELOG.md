@@ -2,6 +2,50 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.8.0] — 2026-08-16
+
+Full Claude + Codex + Gemini audit surface. Completes the Enterprise audit-surface tranche (all six phases, Architect-ratified 2026-08-16): the five canonical audit questions (Q1-Q5) now return correct answers against real transcript custody from **all three vendors** — Claude Code, Codex CLI, and Gemini CLI — verified end-to-end by the Phase 6 widened-vendor smoke test (156 sessions, ~2,420 links, 2,025 commits across 13 repos on the smoke machine).
+
+Semver-strict MINOR bump: two new vendor adapters on an existing flag (`--vendor codex|openai|gemini|google`), one additive schema migration (011), one new workflow step. No breaking API changes.
+
+**Operator note (Enterprise): run `alembic upgrade head` (Migration 011) before pulling Gemini transcripts.** Pre-011 schemas collide on Gemini's duplicate raw session IDs; the pull path assumes the widened uniqueness constraint.
+
+### Added
+
+- **Enterprise-side Codex adapter** (`transcripts pull --vendor codex`, alias `openai`). Discovers the `~/.codex/sessions/` rollout tree (`rollout-*.jsonl`), with `CODEX_TRANSCRIPTS_ROOT` env override and a missing-root informative warning matching the Claude pattern. Real-corpus verification on the smoke machine: 102/102 transcripts ingested, 1,979 links across both automatic bases (1,007 `exact_sha_in_transcript` + 972 `strong_machine_repo_time`), reverse lookup verified.
+- **Enterprise-side Gemini adapter** (`transcripts pull --vendor gemini`, alias `google`; canonical vendor slug `google`). Single-JSON parser for `~/.gemini/tmp/<project>/chats/session-*.json` with `projects.json` workspace-hint reverse-mapping, `GEMINI_TRANSCRIPTS_ROOT` env override, and the shared degraded-parse contract (whole-file JSON failure keeps raw bytes as evidence; only `OSError` marks unreadable).
+- **Migration 011 — `transcript_sessions.session_qualifier`.** Widens the uniqueness constraint to 5 columns and appends `__{qualifier}` to blob keys, so two Gemini files sharing the same raw `sessionId` coexist as two rows + two blobs instead of silently upserting over each other. Closes v2.7.0's "Q5 Gemini answer-completeness gap" known issue. Qualifier = `sha256(source_path)[:16]` for Gemini; empty for other vendors (pre-011 row + blob shapes preserved).
+- **β multi-link fan-out contract** on snippet-basis linkage: under duplicate-raw-ID sibling rows, each row links the matching commits (Q1 honestly returns N>1 candidates), with ambiguity signaled by `medium` confidence + `linkage_metadata.raw_id_ambiguous_across: N` on every sibling link, regardless of ingest order.
+- **Workflow B TestPyPI CDN-poll step** in `release-candidate.yml`: bounded poll (8×15s) of the TestPyPI JSON API before the smoke install — the TestPyPI twin of v2.6.1's Workflow C production fix, motivated by the v2.7.0-rc1 Windows-cell CDN race. This release's RC run is its first real-world validation.
+
+### Changed
+
+- **`--vendor` choices** now `claude | anthropic | codex | openai | gemini | google | all` (`all` still resolves to claude-only in this release; cross-vendor iteration is follow-on work).
+- **`transcripts` CLI help + module docstring** rewritten vendor-accurate: "Claude Code, Codex, Gemini" replaces the stale "MVP: Claude Code only", and the docstring now reflects all six shipped verbs (`pull/list/show/get/link/relink`).
+- **Enterprise operator guide** gains §3.1a (Codex pull walkthrough) and Gemini/Migration-011 notes.
+
+### Fixed
+
+- **Order-independent ambiguity metadata on fan-out links** (enforcer finding, 2026-08-16). The retroactive downgrade path previously updated only `linkage_confidence` on the first-ingested sibling's links, leaving `raw_id_ambiguous_across` present only on later siblings — the audit signal depended on ingest order. Now a per-row read-modify-write converges confidence AND metadata on all sibling links, and re-stamps the count when additional siblings arrive (a third duplicate refreshes earlier links from 2 → 3). Pins: `test_transcripts_discovery_gemini.py::TestDuplicateSessionIdAcrossFiles` (metadata parity + third-sibling refresh + no-marker-when-unambiguous).
+- **`transcripts list --unlinked` help-string drift** — help text now matches the server-side filter behavior shipped in v2.7.0.
+- **`VERSION` file re-synced with `pyproject.toml`** (both now 2.8.0). The byte-consistency rule drifted across 2.6.0 → 2.7.0 (three releases bumped pyproject only; `VERSION` sat at 2.5.4). Harmless in the primary resolution path (`get_version()` reads pyproject first) but the fallback path could serve stale numbers; tripwire updated in `scripts-core-library.md`.
+
+### Removed
+
+- **Base-Gator vendor-transcript extractors retired** (session-cleanup Phase 4 final sweep): `extract-codex-sessions.py`, `extract-gemini-sessions.py`, and `gator-session-common.py` deleted (~1,259 lines), their TRIPWIREs retired, 6 charters swept. `gator_session_reader` is now the sole owner of machine identity. This completes the architectural line ratified in the audit-surface sketch: **base Gator emits a small amount of governance metadata; Enterprise owns transcript custody, parsing, and cross-session audit retrieval.** The retirement gate (real linked commits via the Enterprise-side adapters) was satisfied by the Phase 3+4 smoke evidence before deletion.
+
+### Under the hood
+
+- **Phase 6 widened-vendor smoke run** (2026-08-16, Architect-ratified): Q1-Q5 correct for all three vendors against real custody; zero code failures; cross-vendor Q1 exemplar commit answered with 3 transcripts across 2 vendors in one query. Run artifact + 5-item rough-edges backlog in vault; RE-2 (stateless re-pull re-uploads unchanged bytes) promoted to roadmap Post-2.6 item 16 (content-hash skip).
+- **Legacy-Memex charter cleanup**: phantom `graph-wiki`/`memex` entries retired; `INDEX.md` single-sources the charter map.
+- **Test suite at release-time**: enterprise **311 passed + 1 skipped** (was 269 + 1 at v2.7.0; +42 net across Codex discovery, Gemini discovery/qualifier/fan-out, and the metadata-parity pins); base + contracts **808 passed**, 2 pre-existing xfails. Zero regressions.
+
+### Known issues
+
+- Same v1 `active-vendor-session.json` compat xfails (roadmap item 8), Enterprise packaging source-checkout-only (item 5), and base-wheel package-data gap (item 12) — all unchanged.
+- **Codex re-pull cost**: every `transcripts pull` re-uploads all discovered transcript bytes to learn `status=updated` (>300s for the 102-file corpus). By design (stateless, content-always-converges MVP loop); incremental content-hash skip tracked as roadmap Post-2.6 item 16.
+- **`--vendor all` still claude-only** — cross-vendor iteration in one invocation is follow-on work.
+
 ## [2.7.0] — 2026-08-14
 
 Enterprise audit-surface tranche. Ships the first evaluator-ready set of audit questions across the transcripts-first substrate: **five canonical audit questions** ("Q1: which transcripts touched commit `<sha>`?"; "Q2: which recent commits in repo `<repo>` have transcript coverage?"; "Q3: which recent transcripts are still unlinked?"; "Q4: which machine produced commit `<sha>`?"; "Q5: which model/vendor sessions touched repo `<repo>` over time?") — all EXISTS post-release with working CLI + API paths. Plus two AI-model-focused shipped procedures for handling v1→v2 upgrade residue and Gator-file commit conventions.
