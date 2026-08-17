@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "enterprise: order-independent ambiguity metadata on β fan-out links + vendor-accurate transcripts CLI help (whiteboard 2026-08-16 Findings 1+2)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "enterprise",
+    "audit-surface",
+    "linkage",
+    "enforcer-finding"
+  ],
+  "commit": "db0bdae2f015894278e33fbdd9478182b7377555",
+  "short_commit": "db0bdae",
+  "snippet_id": "snippet-db0bdae2f0158",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "e28d0bf5cfd8810201a752a93f0104df0b7ab952",
+  "started_at": "2026-08-16T20:53:45Z",
+  "ended_at": "2026-08-17T00:26:06Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-17-gator-e28d0bf5cfd88.json",
+    "enterprise/app/routes/ingest.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py",
+    "enterprise/tests/test_transcripts_discovery_gemini.py"
+  ],
+  "notes": [
+    "**Finding 1 (medium) — order-dependent ambiguity metadata on Gemini duplicate-ID fan-out links.** `enterprise/app/routes/ingest.py::_run_linkage` basis 2: replaced the confidence-only bulk UPDATE in the retroactive downgrade path with a per-row read-modify-write that converges BOTH `linkage_confidence=\"medium\"` AND `linkage_metadata.raw_id_ambiguous_across: N` onto existing sibling snippet-basis links. Previously the first-ingested sibling's link was downgraded to medium with no ambiguity marker while later siblings' links carried it — the audit signal depended on ingest order, contradicting the Commit M contract comment (\"holds regardless of ingest order\"). The convergence loop deliberately drops the already-medium skip filter so `raw_id_ambiguous_across` re-stamps fresh when a third sibling arrives. Metadata merge preserves unrelated keys; JSON column reassigned whole (`{**old, ...}`) for SQLAlchemy dirty-tracking (new charter TRIPWIRE). Unused `update` import removed.",
+    "**Test extensions** (`enterprise/tests/test_transcripts_discovery_gemini.py::TestDuplicateSessionIdAcrossFiles`, 5→6 tests): fan-out test now asserts metadata parity (`raw_id_ambiguous_across == 2` on both links — the enforcer's exact test gap); new `test_third_sibling_refreshes_ambiguity_count` (3 siblings → all links medium with count 3); non-duplicate test now asserts NO ambiguity marker leaks into the unambiguous case.",
+    "**Finding 2 (low) — stale Claude-only help surface.** `enterprise/enterprise-cli/gator_enterprise_cli/commands/transcripts.py`: module docstring (\"MVP: Claude Code only\", \"show/get/link/relink land in Phase 3-4\") and top-level parser help (\"MVP: Claude Code\") rewritten to reflect shipped reality — Claude + Codex + Gemini vendors, all six verbs present.",
+    "Charter `scripts-enterprise.md`: β fan-out block rewritten for the convergence semantics + Finding 1 provenance + new JSON-reassignment TRIPWIRE; Commit M regression-pin inventory updated (TestDuplicateSessionIdAcrossFiles 5→6).",
+    "Test state: enterprise **311 pass + 1 skip** (was 310+1; +1 net new), zero regressions.",
+    "Significance note (step 7, brief): behavior change is confined to the ambiguous-duplicate branch of snippet-basis linkage; metadata merge is additive per-key and cannot clobber operator-set metadata (snippet-basis links are machine-created; manual links use the separate `orchestrator_declared` basis). No schema change, no API shape change."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
