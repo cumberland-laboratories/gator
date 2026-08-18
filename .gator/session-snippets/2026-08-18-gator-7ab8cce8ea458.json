@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: link item-19 implementation plan (shipped-runtime churn analysis, r1)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "item-19",
+    "runtime-split",
+    "implementation-plan"
+  ],
+  "commit": "7ab8cce8ea458ce1bf1f6907ff719597721653d0",
+  "short_commit": "7ab8cce",
+  "snippet_id": "snippet-7ab8cce8ea458",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-18T14:09:36Z",
+  "ended_at": "2026-08-18T14:09:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-673d45d32f3a6.json"
+  ],
+  "notes": [
+    "**Implementation plan drafted** for roadmap item 19 (machine-scoped runtime + policy channel) at `vault/artifacts/2026-08-18-gator-shipped-runtime-churn-analysis.md` (r1, vault-side/gitignored; awaiting Architect review + Codex pass). Contents: quantified churn analysis (17 files / ~719 KB runtime duplicated per branch; 11 template-script commits across 8 releases in the last 60 days; sync-triangle drift evidence); two load-bearing code discoveries — the git-hook stub already hardcodes both the repo script path AND the machine's pipx interpreter (retarget seam = one machine-local line, deployed via the existing `gator init` refresh), and the installed wheel already contains the full runtime (making a no-materialization variant possible); 6 phases with exit criteria + S/M/L cost tiers (Phase 0 consumer audit → 1 pin+manifest emission → 2 resolver + fail-closed negotiation → 3 stub retarget → 4 stop shipping runtime into repos → 5 Enterprise policy channel [separable] → 6 fleet migration); Variant A (no materialization, git `repositoryformatversion` semantics, recommended) vs Variant B (versioned `~/.gator/runtime/` store, deferred); compat/failure-mode matrix; verification strategy; risks (item 12 package-data gap promoted to hard Phase 2 prerequisite); 5 Architect decision points D1-D5.",
+    "Roadmap item 19 row: plan pointer appended to the Architect's rewritten entry (entry text otherwise untouched).",
+    "Rides along: session snippet residue for `673d45d`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
