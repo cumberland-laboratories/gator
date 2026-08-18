@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: item 19 — org/repo policy distribution via ~/.gator/ machine channel (Architect-ratified direction; merge driver declined)",
+  "change_type": "governance",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "policy-distribution",
+    "enterprise",
+    "architecture-direction"
+  ],
+  "commit": "673d45d32f3a6b237af84dfcda6469e2137f86ba",
+  "short_commit": "673d45d",
+  "snippet_id": "snippet-673d45d32f3a6",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "26ab61d0b7905535ef0b2b15e48cce96e59d75f3",
+  "started_at": "2026-08-17T22:44:50Z",
+  "ended_at": "2026-08-17T22:44:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-17-gator-26ab61d0b7905.json"
+  ],
+  "notes": [
+    "**Architect directional decision recorded (2026-08-17)**: the merge-driver approach to cross-branch Gator drift is **declined** — it invests in the per-branch shipped-content model the Git paradigm makes obsolete. The ratified path: follow Git's own architecture (machinery machine-scoped, policy record repo-scoped) with org/repo policy flowing through the Enterprise functionality and `~/.gator/` as the first-class machine distribution channel; new Enterprise tables solve the version/drift tracking (which machine has which policy version, when applied, drift vs org current).",
+    "**New Post-2.6 candidate item 19** — org/repo policy distribution via `~/.gator/`. Names the existing substrate (E3 policy engine server-side; `enterprise sync` → `~/.gator/enterprise/*.json`; machine identity/key registry; mission's thin-link scope line), the additions (policy-version tracking tables, session-opening pull path, repo-side committed version pin + hash manifest preserving from-git-history proof), the explicit not-this-week framing (design pass with Codex review first), and sequencing relation to items 4/5.",
+    "Current Priority #5 status note updated: merge driver declined, item 19 is the direction, `gator-version-drift.md` procedure is the operative mitigation until it lands.",
+    "Design note advanced to r4 (vault-side): original sequencing recommendation preserved-but-superseded; Architect-decision section added with rationale.",
+    "Rides along: session snippet residue for `26ab61d`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
