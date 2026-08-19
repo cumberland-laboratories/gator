@@ -180,3 +180,46 @@ class TestSessionOpenDiagnosticsWiring:
         # for this repo since gator_dir is fresh in tmp_path — it must not
         # have been created here.
         assert not log.exists()
+
+
+class TestVendorHookMigration:
+    """Runtime-split Phase 3b: base-side merge logic must migrate
+    pre-Phase-3 repo-script commands to the CLI route in place."""
+
+    def test_predicate_recognizes_both_generations(self):
+        from conftest import load_script
+        vh_mod = load_script("gator-update")
+        assert vh_mod._is_gator_hook_command("python .gator/.includes/scripts/gator-session-open.py")
+        assert vh_mod._is_gator_hook_command("gator hook session-start")
+        assert not vh_mod._is_gator_hook_command("python user-hook.py")
+
+    def test_old_style_migrates_in_place_preserving_user_hooks(self, tmp_path):
+        import json
+        from conftest import load_script
+        upd = load_script("gator-update")
+        settings = tmp_path / "settings.json"
+        settings.write_text(json.dumps({
+            "hooks": {"SessionStart": [{"hooks": [
+                {"type": "command",
+                 "command": "python .gator/.includes/scripts/gator-session-open.py",
+                 "timeout": 5},
+                {"type": "command", "command": "python user-hook.py"},
+            ]}]}
+        }), encoding="utf-8")
+        template = tmp_path / "template.json"
+        template.write_text(json.dumps({
+            "hooks": {"SessionStart": [{"hooks": [
+                {"type": "command", "command": "gator hook session-open", "timeout": 5},
+                {"type": "command", "command": "gator hook session-start", "timeout": 5},
+            ]}]}
+        }), encoding="utf-8")
+        result = upd.merge_hooks_into_settings(settings, template)
+        assert result == "update"
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        groups = data["hooks"]["SessionStart"]
+        assert len(groups) == 1, "migrate in place, never duplicate"
+        cmds = [h["command"] for h in groups[0]["hooks"]]
+        assert "gator hook session-open" in cmds
+        assert "gator hook session-start" in cmds
+        assert "python user-hook.py" in cmds
+        assert not any(".gator/" in c for c in cmds if "user-hook" not in c)

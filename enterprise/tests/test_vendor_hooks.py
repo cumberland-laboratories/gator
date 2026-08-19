@@ -54,8 +54,8 @@ class TestInstallEnterpriseVendorHooks:
 
         hooks = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks]
-        assert "python .gator/scripts/gator-session-open.py" in commands
-        assert "python .gator/scripts/gator-session-start.py" in commands
+        assert "gator hook session-open" in commands
+        assert "gator hook session-start" in commands
 
     def test_second_invocation_is_unchanged(self, tmp_path):
         enterprise_vendor_hooks.install_enterprise_vendor_hooks(home=tmp_path)
@@ -133,8 +133,8 @@ class TestMergeSafety:
         for group in session_groups:
             all_commands.extend(h["command"] for h in group["hooks"])
         assert "python user-tracker.py" in all_commands
-        assert "python .gator/scripts/gator-session-open.py" in all_commands
-        assert "python .gator/scripts/gator-session-start.py" in all_commands
+        assert "gator hook session-open" in all_commands
+        assert "gator hook session-start" in all_commands
 
     def test_updates_drifted_gator_hooks_in_place(self, tmp_path):
         """When existing Gator commands differ from template, re-apply."""
@@ -159,8 +159,8 @@ class TestMergeSafety:
             for h in group["hooks"]
         ]
         assert "python .gator/scripts/OLD-NAME.py" not in commands
-        assert "python .gator/scripts/gator-session-open.py" in commands
-        assert "python .gator/scripts/gator-session-start.py" in commands
+        assert "gator hook session-open" in commands
+        assert "gator hook session-start" in commands
 
 
 class TestFailClosedOnBadInput:
@@ -249,3 +249,49 @@ class TestScopeDistinction:
         assert (fake_home / ".claude" / "settings.json").exists()
         assert not (tmp_path / ".claude" / "settings.json").exists()
         assert result["Claude Code"] == "installed"
+
+
+class TestGatorCommandPredicate:
+    """Runtime-split Phase 3b: the Gator-managed predicate must recognize
+    BOTH command generations, or updates duplicate the Gator group when a
+    repo migrates from repo-script to CLI-route commands."""
+
+    def test_old_style_recognized(self):
+        from gator_enterprise_cli.vendor_hooks import _is_gator_hook_command
+        assert _is_gator_hook_command("python .gator/scripts/gator-session-open.py")
+        assert _is_gator_hook_command("python .gator/.includes/scripts/gator-session-start.py")
+
+    def test_new_style_recognized(self):
+        from gator_enterprise_cli.vendor_hooks import _is_gator_hook_command
+        assert _is_gator_hook_command("gator hook session-open")
+        assert _is_gator_hook_command("  gator hook session-start")
+
+    def test_user_commands_not_recognized(self):
+        from gator_enterprise_cli.vendor_hooks import _is_gator_hook_command
+        assert not _is_gator_hook_command("python my-hook.py")
+        assert not _is_gator_hook_command("gator init")
+        assert not _is_gator_hook_command("echo gator hook not-at-start && rm x")
+
+    def test_old_style_entry_migrates_to_new_in_place(self, tmp_path):
+        """A settings file carrying pre-Phase-3 commands gets its Gator
+        group REPLACED (not duplicated) by the new CLI-route commands."""
+        import json
+        from gator_enterprise_cli.vendor_hooks import HOOK_TEMPLATES, _merge_hooks
+        settings = tmp_path / "settings.json"
+        settings.write_text(json.dumps({
+            "hooks": {"SessionStart": [{"hooks": [
+                {"type": "command",
+                 "command": "python .gator/scripts/gator-session-open.py",
+                 "timeout": 5},
+                {"type": "command", "command": "python user-hook.py"},
+            ]}]}
+        }), encoding="utf-8")
+        result = _merge_hooks(settings, HOOK_TEMPLATES["claude"])
+        assert result == "updated"
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        groups = data["hooks"]["SessionStart"]
+        assert len(groups) == 1, "must migrate in place, not duplicate"
+        cmds = [h["command"] for h in groups[0]["hooks"]]
+        assert "gator hook session-open" in cmds
+        assert "python .gator/scripts/gator-session-open.py" not in cmds
+        assert "python user-hook.py" in cmds, "user hooks preserved"

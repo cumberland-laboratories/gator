@@ -303,11 +303,14 @@ class TestPinAwareWrappers:
     otherwise (pre-split repos untouched by construction)."""
 
     def test_dispatcher_branch_present_when_resolvable(self):
-        """In this environment gator_command is importable and ships
-        gator-hook.py, so generated stubs carry the pin-aware branch."""
-        assert update._installed_dispatcher_path() is not None
-        hooks = update.build_git_hook_wrappers(
-            gator_script=".gator/.includes/scripts/gator-pre-commit.py")
+        """When the dispatcher path resolves, generated stubs carry the
+        pin-aware branch. Patched rather than relying on the environment:
+        CI's clean venv has no installed gator_command (2026-08-19 CI
+        failure — these tests must not depend on install state)."""
+        with patch.object(update, "_installed_dispatcher_path",
+                          return_value="/fake/site-packages/gator_command/scripts/gator-hook.py"):
+            hooks = update.build_git_hook_wrappers(
+                gator_script=".gator/.includes/scripts/gator-pre-commit.py")
         for name, content in hooks.items():
             assert 'runtime-pin.json' in content, name
             assert 'gator-hook.py' in content, name
@@ -336,7 +339,9 @@ class TestPinAwareWrappers:
     def test_dispatcher_branch_forwards_argv(self):
         """The dispatcher call forwards sys.argv[1:] (commit-msg needs
         the msg-file argument)."""
-        hooks = update.build_git_hook_wrappers()
+        with patch.object(update, "_installed_dispatcher_path",
+                          return_value="/fake/site-packages/gator_command/scripts/gator-hook.py"):
+            hooks = update.build_git_hook_wrappers()
         assert "+ sys.argv[1:]" in hooks["commit-msg"]
 
     def test_plan_hook_updates_with_pin_but_no_script(self, mock_gator_repo):

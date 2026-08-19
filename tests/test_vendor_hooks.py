@@ -445,17 +445,19 @@ class TestTemplateHookEntries:
         "gemini-settings.json",
     ])
     def test_template_has_session_open_and_session_start(self, filename):
-        """Vendor-hook templates ship v2 layout paths (`.gator/.includes/scripts/…`).
-        Reverting to v1 (`.gator/scripts/…`) silently breaks every v2 fleet repo
-        because merge_hooks_into_settings compares template-vs-existing and only
-        rewrites on mismatch. See scripts-installer.md::install_vendor_hooks
-        tripwire, and 2026-08-03 fix commit `a532851`."""
+        """Vendor-hook templates ship the CLI route (runtime-split Phase 3b,
+        2026-08-19): `gator hook session-open` / `gator hook session-start`.
+        History of this pin: v1 paths broke every v2 fleet repo (2026-08-03
+        fix `a532851`); v2 paths were then required here until Phase 3b
+        retargeted invocation through the machine-side dispatcher. Reverting
+        to ANY repo-script path resurrects the per-branch runtime coupling
+        the runtime split removed."""
         template = self.TEMPLATE_DIR / filename
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        assert "python .gator/.includes/scripts/gator-session-open.py" in commands
-        assert "python .gator/.includes/scripts/gator-session-start.py" in commands
+        assert "gator hook session-open" in commands
+        assert "gator hook session-start" in commands
         assert len(hooks_list) == 2
 
     @pytest.mark.parametrize("filename", [
@@ -469,23 +471,24 @@ class TestTemplateHookEntries:
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        open_idx = commands.index(
-            "python .gator/.includes/scripts/gator-session-open.py"
-        )
-        start_idx = commands.index(
-            "python .gator/.includes/scripts/gator-session-start.py"
-        )
+        open_idx = commands.index("gator hook session-open")
+        start_idx = commands.index("gator hook session-start")
         assert open_idx < start_idx
 
-    def test_marker_detection_works_with_both_hooks(self):
-        """GATOR_HOOK_MARKER ('gator-session-start.py') still detects Gator hooks
-        when both session-open and session-start are present."""
-        import json as json_mod
-        marker = "gator-session-start.py"
+    def test_templates_recognized_by_merge_predicate(self):
+        """Every command the templates ship MUST be recognized as
+        Gator-managed by the merge predicate — otherwise updates would
+        duplicate the Gator group instead of migrating it. (Replaces the
+        retired GATOR_HOOK_MARKER substring check: the predicate IS the
+        real detector.)"""
+        from conftest import load_script
+        upd = load_script("gator-update")
         for filename in ["claude-settings.json", "codex-hooks.json", "gemini-settings.json"]:
             data = _read_json(self.TEMPLATE_DIR / filename)
-            serialized = json_mod.dumps(data)
-            assert marker in serialized, f"Marker not found in {filename}"
+            for group in data["hooks"]["SessionStart"]:
+                for h in group["hooks"]:
+                    assert upd._is_gator_hook_command(h["command"]), (
+                        f"{filename}: {h['command']!r} not recognized")
 
 
 class TestInstallVendorHooks:

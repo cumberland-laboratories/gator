@@ -5,12 +5,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .gator/.includes/scripts/gator-session-open.py",
+            "command": "gator hook session-open",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "python .gator/.includes/scripts/gator-session-start.py",
+            "command": "gator hook session-start",
             "timeout": 5
           }
         ]

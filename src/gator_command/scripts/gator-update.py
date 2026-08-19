@@ -254,6 +254,17 @@ def _extract_hook_commands(groups):
     return commands
 
 
+def _is_gator_hook_command(cmd):
+    """True when a vendor-hook command string is Gator-managed.
+
+    Recognizes both generations: the pre-Phase-3 repo-script invocations
+    (".gator/" path substring) and the Phase 3b machine-side CLI route
+    ("gator hook <name>"). Both must match or updates would duplicate
+    the Gator group when migrating between generations.
+    """
+    return ".gator/" in cmd or cmd.strip().startswith("gator hook ")
+
+
 def merge_hooks_into_settings(settings_path, hooks_template_path):
     """Merge Gator hooks into a vendor settings JSON file without clobbering.
 
@@ -319,7 +330,7 @@ def merge_hooks_into_settings(settings_path, hooks_template_path):
                     continue
                 group_hooks = existing_group.get("hooks", [])
                 group_cmds = [h.get("command", "") for h in group_hooks if isinstance(h, dict)]
-                if any(".gator/" in cmd for cmd in group_cmds):
+                if any(_is_gator_hook_command(cmd) for cmd in group_cmds):
                     gator_group = existing_group
                     break
 
@@ -331,8 +342,8 @@ def merge_hooks_into_settings(settings_path, hooks_template_path):
                 # Separate user hooks from Gator hooks in the existing group,
                 # then rebuild: template Gator hooks + preserved user hooks.
                 existing_hooks_list = gator_group.get("hooks", [])
-                existing_gator = [h for h in existing_hooks_list if isinstance(h, dict) and ".gator/" in h.get("command", "")]
-                user_hooks = [h for h in existing_hooks_list if not (isinstance(h, dict) and ".gator/" in h.get("command", ""))]
+                existing_gator = [h for h in existing_hooks_list if isinstance(h, dict) and _is_gator_hook_command(h.get("command", ""))]
+                user_hooks = [h for h in existing_hooks_list if not (isinstance(h, dict) and _is_gator_hook_command(h.get("command", "")))]
                 existing_gator_cmds = [h.get("command", "") for h in existing_gator]
                 template_cmds = [h.get("command", "") for h in template_hooks_list if isinstance(h, dict)]
                 if existing_gator_cmds != template_cmds:

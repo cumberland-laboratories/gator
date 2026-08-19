@@ -39,11 +39,15 @@ from typing import Optional
 
 
 # SessionStart hook templates — the commands that run when a vendor
-# session starts. These call the repo-local scripts, which are
-# expected to exist at .gator/scripts/ inside the CWD when the
-# vendor session starts. Silent no-op when they're absent (repo not
-# governed) — Python errors from a missing script don't crash the
-# vendor tool.
+# session starts. Runtime-split Phase 3b (2026-08-19): route through the
+# installed CLI's `gator hook` dispatcher (resolves pinned vs repo
+# runtime per repo; warning-mode no-op on ungoverned CWDs). This also
+# fixes Phase-0 finding F1: the previous commands used v1 paths
+# (.gator/scripts/) that have been dead on v2 repos since the .includes
+# split — machine-hook session registration was silently no-op there.
+# Degradation: a machine without `gator` on PATH loses session
+# registration (visible hook error, session proceeds) — the CLI is a
+# prerequisite of Enterprise activation anyway.
 HOOK_TEMPLATES = {
     "claude": {
         "hooks": {
@@ -52,12 +56,12 @@ HOOK_TEMPLATES = {
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-open.py",
+                            "command": "gator hook session-open",
                             "timeout": 5,
                         },
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-start.py",
+                            "command": "gator hook session-start",
                             "timeout": 5,
                         },
                     ]
@@ -72,12 +76,12 @@ HOOK_TEMPLATES = {
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-open.py",
+                            "command": "gator hook session-open",
                             "timeout": 10,
                         },
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-start.py",
+                            "command": "gator hook session-start",
                             "timeout": 10,
                         },
                     ]
@@ -92,12 +96,12 @@ HOOK_TEMPLATES = {
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-open.py",
+                            "command": "gator hook session-open",
                             "timeout": 5,
                         },
                         {
                             "type": "command",
-                            "command": "python .gator/scripts/gator-session-start.py",
+                            "command": "gator hook session-start",
                             "timeout": 5,
                         },
                     ]
@@ -152,6 +156,17 @@ def install_enterprise_vendor_hooks(force: bool = False, home: Optional[Path] = 
         results[vendor_name] = result
 
     return results
+
+
+def _is_gator_hook_command(cmd):
+    """True when a vendor-hook command string is Gator-managed.
+
+    Recognizes both generations: the pre-Phase-3 repo-script invocations
+    (".gator/" path substring) and the Phase 3b machine-side CLI route
+    ("gator hook <name>"). Both must match or updates would duplicate
+    the Gator group when migrating between generations.
+    """
+    return ".gator/" in cmd or cmd.strip().startswith("gator hook ")
 
 
 def _merge_hooks(settings_path: Path, template: dict, force: bool = False) -> str:
@@ -218,7 +233,7 @@ def _merge_hooks(settings_path: Path, template: dict, force: bool = False) -> st
                 group_cmds = [
                     h.get("command", "") for h in group_hooks if isinstance(h, dict)
                 ]
-                if any(".gator/" in cmd for cmd in group_cmds):
+                if any(_is_gator_hook_command(cmd) for cmd in group_cmds):
                     gator_group = existing_group
                     break
 
@@ -232,12 +247,13 @@ def _merge_hooks(settings_path: Path, template: dict, force: bool = False) -> st
                 existing_hooks_list = gator_group.get("hooks", [])
                 existing_gator = [
                     h for h in existing_hooks_list
-                    if isinstance(h, dict) and ".gator/" in h.get("command", "")
+                    if isinstance(h, dict) and _is_gator_hook_command(h.get("command", ""))
                 ]
                 user_hooks_in_group = [
                     h for h in existing_hooks_list
                     if not (
-                        isinstance(h, dict) and ".gator/" in h.get("command", "")
+                        isinstance(h, dict)
+                        and _is_gator_hook_command(h.get("command", ""))
                     )
                 ]
                 existing_gator_cmds = [h.get("command", "") for h in existing_gator]
