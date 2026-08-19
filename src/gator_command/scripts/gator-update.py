@@ -257,12 +257,26 @@ def _extract_hook_commands(groups):
 def _is_gator_hook_command(cmd):
     """True when a vendor-hook command string is Gator-managed.
 
-    Recognizes both generations: the pre-Phase-3 repo-script invocations
-    (".gator/" path substring) and the Phase 3b machine-side CLI route
-    ("gator hook <name>"). Both must match or updates would duplicate
-    the Gator group when migrating between generations.
+    Recognizes all three shapes: the pre-Phase-3 repo-script invocations
+    (".gator/" path substring — also matches the Phase 3b shell-chain
+    fallback), the bare CLI route ("gator hook <name>"), and the
+    absolute-launcher route ('"/path/to/gator[.exe]" hook <name>' —
+    emitted machine-side by Enterprise). All must match or updates would
+    duplicate the Gator group when migrating between generations.
     """
-    return ".gator/" in cmd or cmd.strip().startswith("gator hook ")
+    if ".gator/" in cmd:
+        return True
+    s = cmd.strip()
+    if s.startswith('"'):
+        end = s.find('"', 1)
+        if end == -1:
+            return False
+        head, rest = s[1:end], s[end + 1:].lstrip()
+    else:
+        parts = s.split(None, 1)
+        head, rest = parts[0], (parts[1] if len(parts) > 1 else "")
+    exe = head.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return exe in ("gator", "gator.exe") and rest.startswith("hook ")
 
 
 def merge_hooks_into_settings(settings_path, hooks_template_path):

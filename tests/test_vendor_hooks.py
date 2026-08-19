@@ -456,8 +456,13 @@ class TestTemplateHookEntries:
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        assert "gator hook session-open" in commands
-        assert "gator hook session-start" in commands
+        open_cmds = [c for c in commands if c.startswith("gator hook session-open")]
+        start_cmds = [c for c in commands if c.startswith("gator hook session-start")]
+        assert len(open_cmds) == 1 and len(start_cmds) == 1
+        # Shell-chain fallback (whiteboard 2026-08-19): source-checkout
+        # machines without the CLI shim fall through to the repo script.
+        assert "|| python .gator/.includes/scripts/gator-session-open.py" in open_cmds[0]
+        assert "|| python .gator/.includes/scripts/gator-session-start.py" in start_cmds[0]
         assert len(hooks_list) == 2
 
     @pytest.mark.parametrize("filename", [
@@ -471,8 +476,10 @@ class TestTemplateHookEntries:
         data = _read_json(template)
         hooks_list = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks_list]
-        open_idx = commands.index("gator hook session-open")
-        start_idx = commands.index("gator hook session-start")
+        open_idx = next(i for i, c in enumerate(commands)
+                        if c.startswith("gator hook session-open"))
+        start_idx = next(i for i, c in enumerate(commands)
+                         if c.startswith("gator hook session-start"))
         assert open_idx < start_idx
 
     def test_templates_recognized_by_merge_predicate(self):

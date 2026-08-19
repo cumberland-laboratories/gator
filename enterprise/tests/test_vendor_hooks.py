@@ -54,8 +54,8 @@ class TestInstallEnterpriseVendorHooks:
 
         hooks = data["hooks"]["SessionStart"][0]["hooks"]
         commands = [h["command"] for h in hooks]
-        assert "gator hook session-open" in commands
-        assert "gator hook session-start" in commands
+        assert any(c.rstrip().endswith("hook session-open") for c in commands)
+        assert any(c.rstrip().endswith("hook session-start") for c in commands)
 
     def test_second_invocation_is_unchanged(self, tmp_path):
         enterprise_vendor_hooks.install_enterprise_vendor_hooks(home=tmp_path)
@@ -133,8 +133,8 @@ class TestMergeSafety:
         for group in session_groups:
             all_commands.extend(h["command"] for h in group["hooks"])
         assert "python user-tracker.py" in all_commands
-        assert "gator hook session-open" in all_commands
-        assert "gator hook session-start" in all_commands
+        assert any(c.rstrip().endswith("hook session-open") for c in all_commands)
+        assert any(c.rstrip().endswith("hook session-start") for c in all_commands)
 
     def test_updates_drifted_gator_hooks_in_place(self, tmp_path):
         """When existing Gator commands differ from template, re-apply."""
@@ -159,8 +159,8 @@ class TestMergeSafety:
             for h in group["hooks"]
         ]
         assert "python .gator/scripts/OLD-NAME.py" not in commands
-        assert "gator hook session-open" in commands
-        assert "gator hook session-start" in commands
+        assert any(c.rstrip().endswith("hook session-open") for c in commands)
+        assert any(c.rstrip().endswith("hook session-start") for c in commands)
 
 
 class TestFailClosedOnBadInput:
@@ -295,3 +295,44 @@ class TestGatorCommandPredicate:
         assert "gator hook session-open" in cmds
         assert "python .gator/scripts/gator-session-open.py" not in cmds
         assert "python user-hook.py" in cmds, "user hooks preserved"
+
+
+class TestAbsolutizeCommands:
+    """Phase 3b hardening (whiteboard 2026-08-19): machine-level hooks
+    embed the absolute gator launcher when resolvable."""
+
+    def test_no_launcher_is_noop(self):
+        from gator_enterprise_cli.vendor_hooks import (
+            HOOK_TEMPLATES, _absolutize_commands,
+        )
+        out = _absolutize_commands(HOOK_TEMPLATES["claude"], None)
+        assert out == HOOK_TEMPLATES["claude"]
+
+    def test_launcher_absolutizes_and_stays_recognized(self):
+        from gator_enterprise_cli.vendor_hooks import (
+            HOOK_TEMPLATES, _absolutize_commands, _is_gator_hook_command,
+        )
+        launcher = "C:/Users/x/.local/bin/gator.exe"
+        out = _absolutize_commands(HOOK_TEMPLATES["claude"], launcher)
+        cmds = [h["command"]
+                for g in out["hooks"]["SessionStart"] for h in g["hooks"]]
+        assert cmds, "template had no commands"
+        for c in cmds:
+            assert c.startswith(f'"{launcher}" hook '), c
+            assert _is_gator_hook_command(c), c
+
+    def test_original_template_not_mutated(self):
+        import json
+        from gator_enterprise_cli.vendor_hooks import (
+            HOOK_TEMPLATES, _absolutize_commands,
+        )
+        before = json.dumps(HOOK_TEMPLATES["codex"], sort_keys=True)
+        _absolutize_commands(HOOK_TEMPLATES["codex"], "/x/gator")
+        assert json.dumps(HOOK_TEMPLATES["codex"], sort_keys=True) == before
+
+    def test_user_commands_untouched(self):
+        from gator_enterprise_cli.vendor_hooks import _absolutize_commands
+        tpl = {"hooks": {"SessionStart": [{"hooks": [
+            {"type": "command", "command": "python my-hook.py"}]}]}}
+        out = _absolutize_commands(tpl, "/x/gator")
+        assert out["hooks"]["SessionStart"][0]["hooks"][0]["command"] == "python my-hook.py"

@@ -126,6 +126,39 @@ _DIR_TO_TEMPLATE = {
 }
 
 
+def _gator_launcher() -> Optional[str]:
+    """Absolute path to the gator CLI shim, resolved at install time.
+
+    Runtime-split Phase 3b hardening (whiteboard 2026-08-19): machine-
+    level hooks CAN embed absolute paths (they are machine-scoped, never
+    committed), and doing so removes the PATH assumption entirely —
+    covering GUI-launched vendor CLIs whose PATH may lack pipx shims.
+    Returns None when no shim is resolvable (bare `gator hook` command
+    is then kept as the best available).
+    """
+    import shutil
+    return shutil.which("gator")
+
+
+def _absolutize_commands(template: dict, launcher: Optional[str]) -> dict:
+    """Return a deep-copied template with bare `gator hook <name>`
+    commands rewritten to '"<abs-launcher>" hook <name>'. No-op when
+    launcher is None. The rewritten shape is recognized by
+    `_is_gator_hook_command`'s absolute-launcher clause.
+    """
+    import copy
+    if not launcher:
+        return template
+    out = copy.deepcopy(template)
+    for groups in out.get("hooks", {}).values():
+        for group in groups:
+            for h in group.get("hooks", []):
+                cmd = h.get("command", "")
+                if cmd.startswith("gator hook "):
+                    h["command"] = '"' + launcher + '"' + cmd[len("gator"):]
+    return out
+
+
 def install_enterprise_vendor_hooks(force: bool = False, home: Optional[Path] = None) -> dict:
     """Install vendor SessionStart hooks at MACHINE level (~/.claude, etc.).
 
@@ -147,9 +180,10 @@ def install_enterprise_vendor_hooks(force: bool = False, home: Optional[Path] = 
     home_dir = Path(home) if home is not None else Path.home()
     results: dict = {}
 
+    launcher = _gator_launcher()
     for vendor_name, settings_dir, settings_file in VENDOR_CONFIGS:
         template_key = _DIR_TO_TEMPLATE[settings_dir]
-        template = HOOK_TEMPLATES[template_key]
+        template = _absolutize_commands(HOOK_TEMPLATES[template_key], launcher)
         settings_path = home_dir / settings_dir / settings_file
 
         result = _merge_hooks(settings_path, template, force=force)
@@ -161,12 +195,26 @@ def install_enterprise_vendor_hooks(force: bool = False, home: Optional[Path] = 
 def _is_gator_hook_command(cmd):
     """True when a vendor-hook command string is Gator-managed.
 
-    Recognizes both generations: the pre-Phase-3 repo-script invocations
-    (".gator/" path substring) and the Phase 3b machine-side CLI route
-    ("gator hook <name>"). Both must match or updates would duplicate
-    the Gator group when migrating between generations.
+    Recognizes all three shapes: the pre-Phase-3 repo-script invocations
+    (".gator/" path substring — also matches the Phase 3b shell-chain
+    fallback), the bare CLI route ("gator hook <name>"), and the
+    absolute-launcher route ('"/path/to/gator[.exe]" hook <name>' —
+    emitted machine-side by Enterprise). All must match or updates would
+    duplicate the Gator group when migrating between generations.
     """
-    return ".gator/" in cmd or cmd.strip().startswith("gator hook ")
+    if ".gator/" in cmd:
+        return True
+    s = cmd.strip()
+    if s.startswith('"'):
+        end = s.find('"', 1)
+        if end == -1:
+            return False
+        head, rest = s[1:end], s[end + 1:].lstrip()
+    else:
+        parts = s.split(None, 1)
+        head, rest = parts[0], (parts[1] if len(parts) > 1 else "")
+    exe = head.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return exe in ("gator", "gator.exe") and rest.startswith("hook ")
 
 
 def _merge_hooks(settings_path: Path, template: dict, force: bool = False) -> str:
