@@ -1441,6 +1441,19 @@ def main():
             encoding="utf-8",
         )
 
+    # Runtime pin (runtime-split Phase 1, roadmap item 19): record which
+    # shipped runtime is now in force, committed alongside the overlay so
+    # "what runtime governed this commit" stays provable from git history.
+    # Best-effort — a pin failure must never fail the update.
+    try:
+        from gator_core import write_runtime_pin
+        pin = write_runtime_pin(gator_dir, version=cli_ver)
+        if pin:
+            print(f"  Runtime pin: {pin['runtime_version']} "
+                  f"({len(pin['manifest'])} files) -> .gator/runtime-pin.json")
+    except Exception as e:  # noqa: BLE001 — pin is additive, never blocking
+        print(f"  Runtime pin: skipped ({type(e).__name__}: {e})")
+
     print_result(added, updated, unchanged, entry_point_counts=entry_point_counts)
 
 

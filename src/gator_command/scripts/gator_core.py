@@ -554,6 +554,76 @@ def import_sibling(name):
 
 
 # ---------------------------------------------------------------------------
+# Runtime pin (runtime-split Phase 1 — roadmap item 19)
+# ---------------------------------------------------------------------------
+
+def _read_machine_id_value():
+    """Best-effort read of ~/.gator/machine-id's `id:` field.
+
+    Returns the machine id string, or None when the file is absent or
+    unparseable. Never raises — the pin must not fail an update over a
+    missing machine identity.
+    """
+    try:
+        mid_file = Path.home() / ".gator" / "machine-id"
+        for line in mid_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("id:"):
+                return line.split(":", 1)[1].strip() or None
+    except OSError:
+        pass
+    return None
+
+
+def write_runtime_pin(gator_dir, version=None):
+    """Write .gator/runtime-pin.json — the committed record of which shipped
+    runtime is in force in this repo (schema gator-runtime-pin-v1).
+
+    The pin is the repo-side half of the runtime split (Variant A): the
+    manifest proves from git history alone WHICH exact runtime bytes
+    governed each commit, while the runtime itself executes from the
+    installed CLI. Emitted by gator-update and gatorize after a
+    successful overlay; additive and reader-free until Phase 2's
+    resolver lands.
+
+    Manifest = sha256 of every file under the shipped scripts dir
+    (.includes/scripts/ on v2 layouts, scripts/ on v1), keyed by posix
+    relative path. __pycache__ is excluded.
+
+    Returns the pin dict on success, or None when no shipped scripts
+    dir exists (post-Phase-4 repos will pin differently; pre-existing
+    repos without shipped scripts are left unpinned).
+    """
+    import hashlib
+    from datetime import datetime, timezone
+
+    gator_dir = Path(gator_dir)
+    scripts_dir = gator_dir / ".includes" / "scripts"
+    if not scripts_dir.is_dir():
+        scripts_dir = gator_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return None
+
+    manifest = {}
+    for f in sorted(scripts_dir.rglob("*")):
+        if not f.is_file() or "__pycache__" in f.parts:
+            continue
+        digest = hashlib.sha256(f.read_bytes()).hexdigest()
+        manifest[f.relative_to(scripts_dir).as_posix()] = f"sha256:{digest}"
+
+    pin = {
+        "schema": "gator-runtime-pin-v1",
+        "runtime_version": version or get_version(),
+        "pinned_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pinned_by_machine": _read_machine_id_value(),
+        "manifest": manifest,
+    }
+    (gator_dir / "runtime-pin.json").write_text(
+        json.dumps(pin, indent=2) + "\n", encoding="utf-8"
+    )
+    return pin
+
+
+# ---------------------------------------------------------------------------
 # Charter surface resolution
 # ---------------------------------------------------------------------------
 

@@ -147,6 +147,7 @@ File: `src/gator_command/scripts/gatorize.py`
 Writes `.gator-version` with generation, install date, update timestamp, action type, installer name, and cli-version (resolved via `gator_core.get_version()`); preserves original install date on upgrade.
 Filesystem: `.gator/.gator-version` (RW)
 <- `action_install_gator()`, `action_morph_memex()`
+! Runtime-split Phase 1 (2026-08-18, roadmap item 19): the v2 install path calls `gator_core.write_runtime_pin(gator_dir)` immediately after `write_gator_version(gator_dir, "install")`, inside try/except — emitting the committed `.gator/runtime-pin.json` record of the shipped runtime just installed. Best-effort by contract: pin failure logs a skip step, never fails the install. Helper semantics in `scripts-core-library.md`; shape contract at `contracts/schemas/gator-runtime-pin-v1.json`.
 
 ### GATOR_BEGIN, GATOR_END, BlockState, ManagedBlockLocation
 File: `src/gator_command/scripts/gatorize/managed_block.py`

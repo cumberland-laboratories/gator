@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "roadmap: r2 corrections to item-19 plan pointer (runtime size 719→346 KB; one-line-seam claim softened)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "item-19",
+    "enforcer-finding"
+  ],
+  "commit": "b8889c71d4f613b1e12323fbc607020bd989ff94",
+  "short_commit": "b8889c7",
+  "snippet_id": "snippet-b8889c71d4f61",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "7ab8cce8ea458ce1bf1f6907ff719597721653d0",
+  "started_at": "2026-08-18T14:17:02Z",
+  "ended_at": "2026-08-18T14:17:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-18-gator-7ab8cce8ea458.json"
+  ],
+  "notes": [
+    "Applied both 2026-08-18 Codex whiteboard findings to the item-19 implementation plan (vault, now r2): (1) headline runtime-size figure corrected from ~719 KB to the measured **20 files / ~346 KB** — the r1 number was a `du` output inflated by `__pycache__` and filesystem block overhead; verified by per-file byte sum. (2) The \"retarget seam is one line\" claim softened: the git-hook stub is the *strongest enabling precedent* (one machine-local line, rewritten by existing `gator init` machinery), not the whole migration surface — the full cutover is the Phase 0 consumer matrix (vendor SessionStart hooks, entry-point fallbacks, dashboard/enforcer invocations), consistent with the plan's own later sections.",
+    "Roadmap item-19 pointer text corrected to match (this commit).",
+    "Rides along: session snippet residue for `7ab8cce`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

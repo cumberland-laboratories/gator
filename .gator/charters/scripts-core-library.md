@@ -36,6 +36,16 @@ Filesystem: same as `get_version()`
 <- `gator-version.py --short`
 -> `get_version()`
 
+### write_runtime_pin(gator_dir, version=None) / _read_machine_id_value()
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — repo-resident gator-update imports the repo-side gator_core)
+Runtime-split Phase 1 (roadmap item 19, Variant A ratified 2026-08-18). Writes `.gator/runtime-pin.json` (schema `gator-runtime-pin-v1`, contract at `contracts/schemas/`): `runtime_version` (arg or `get_version()`), `pinned_at` (UTC Z), `pinned_by_machine` (best-effort `~/.gator/machine-id` `id:` field via `_read_machine_id_value`, None on any failure — never raises), and `manifest` = sha256 of every file under the shipped scripts dir (`.includes/scripts/` v2-first, `scripts/` v1 fallback; `__pycache__` excluded), keyed by posix relpath. Returns the pin dict, or None when no shipped scripts dir exists (no file written).
+Filesystem: shipped scripts dir (R), `~/.gator/machine-id` (R), `.gator/runtime-pin.json` (W)
+<- `gator-update.py::main()` (post-stamp, best-effort), `gatorize.py` v2 install path (post-`write_gator_version`, best-effort)
+-> `get_version()`
+! The manifest hashes ON-DISK bytes — "the runtime in force on this checkout". Under `core.autocrlf` the same committed content yields different working-tree bytes per platform, so cross-platform manifest comparison is NOT valid; Phase 2 verification must compare git blob hashes or normalize newlines (plan §8 risk 7).
+! Emission is additive and reader-free until the Phase 2 resolver lands. Callers wrap in try/except — a pin failure must never fail an update or install.
+! Pin is COMMITTED (not gitignored) — it is the from-git-history proof of which runtime governed each commit.
+
 ### normalize_path(raw_path)
 File: `src/gator_command/scripts/gator_core.py`
 Converts MSYS2/Git Bash paths (/c/Users/...) to native Windows (C:/Users/...).

@@ -1,0 +1,10 @@
+{
+  "schema": "gator-runtime-pin-v1",
+  "runtime_version": "2.9.0",
+  "pinned_at": "2026-08-18T12:00:00Z",
+  "pinned_by_machine": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "manifest": {
+    "gator-pre-commit.py": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "hooks/pre-commit": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  }
+}

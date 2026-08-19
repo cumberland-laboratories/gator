@@ -265,6 +265,18 @@ def action_install_gator(target):
     # Write version
     write_gator_version(gator_dir, "install")
 
+    # Runtime pin (runtime-split Phase 1, roadmap item 19): record which
+    # shipped runtime this install put in force. Best-effort — a pin
+    # failure must never fail the install.
+    try:
+        from gator_core import write_runtime_pin
+        pin = write_runtime_pin(gator_dir)
+        if pin:
+            log_step(f"Runtime pin recorded ({pin['runtime_version']}, "
+                     f"{len(pin['manifest'])} files).")
+    except Exception as e:  # noqa: BLE001 — pin is additive, never blocking
+        log_step(f"Runtime pin skipped ({type(e).__name__}: {e}).")
+
     log_step(".gator/ installed (v2 layout).")
 
 

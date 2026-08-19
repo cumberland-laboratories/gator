@@ -298,3 +298,71 @@ class TestGitEncoding:
             "get_version's git subprocess calls should specify UTF-8 encoding"
         )
         assert "text=True" not in source
+
+
+class TestWriteRuntimePin:
+    """Runtime-split Phase 1 (roadmap item 19): write_runtime_pin emits the
+    committed record of which shipped runtime is in force."""
+
+    def _make_v2_gator(self, tmp_path):
+        gator = tmp_path / ".gator"
+        scripts = gator / ".includes" / "scripts"
+        (scripts / "hooks").mkdir(parents=True)
+        (scripts / "gator-pre-commit.py").write_text("print('hook')\n", encoding="utf-8")
+        (scripts / "hooks" / "pre-commit").write_text("#!/bin/bash\n", encoding="utf-8")
+        # __pycache__ must be excluded from the manifest
+        pyc = scripts / "__pycache__"
+        pyc.mkdir()
+        (pyc / "x.cpython-313.pyc").write_bytes(b"\x00")
+        return gator
+
+    def test_v2_layout_pin_written_with_manifest(self, tmp_path):
+        import hashlib
+        import json
+        gator = self._make_v2_gator(tmp_path)
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9")
+        assert pin is not None
+        on_disk = json.loads((gator / "runtime-pin.json").read_text(encoding="utf-8"))
+        assert on_disk == pin
+        assert pin["schema"] == "gator-runtime-pin-v1"
+        assert pin["runtime_version"] == "9.9.9"
+        assert set(pin["manifest"]) == {"gator-pre-commit.py", "hooks/pre-commit"}
+        # Manifest is byte-exact over the on-disk file (platform newlines
+        # included) — "the runtime in force on this checkout". Cross-platform
+        # verification semantics (autocrlf) are a Phase 2 concern.
+        raw = (gator / ".includes" / "scripts" / "gator-pre-commit.py").read_bytes()
+        expected = "sha256:" + hashlib.sha256(raw).hexdigest()
+        assert pin["manifest"]["gator-pre-commit.py"] == expected
+
+    def test_pycache_excluded(self, tmp_path):
+        gator = self._make_v2_gator(tmp_path)
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9")
+        assert not any("__pycache__" in k for k in pin["manifest"])
+
+    def test_v1_layout_fallback(self, tmp_path):
+        gator = tmp_path / ".gator"
+        scripts = gator / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "gator-pre-commit.py").write_text("x = 1\n", encoding="utf-8")
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9")
+        assert pin is not None
+        assert set(pin["manifest"]) == {"gator-pre-commit.py"}
+
+    def test_no_scripts_dir_returns_none_and_writes_nothing(self, tmp_path):
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        assert gator_core.write_runtime_pin(gator, version="9.9.9") is None
+        assert not (gator / "runtime-pin.json").exists()
+
+    def test_pinned_at_shape_and_machine_field_present(self, tmp_path):
+        import re
+        gator = self._make_v2_gator(tmp_path)
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9")
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", pin["pinned_at"])
+        assert "pinned_by_machine" in pin  # str or None, both legal
+
+    def test_reemission_is_idempotent_for_same_content(self, tmp_path):
+        gator = self._make_v2_gator(tmp_path)
+        first = gator_core.write_runtime_pin(gator, version="9.9.9")
+        second = gator_core.write_runtime_pin(gator, version="9.9.9")
+        assert first["manifest"] == second["manifest"]
