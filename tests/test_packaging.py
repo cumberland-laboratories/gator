@@ -88,6 +88,52 @@ class TestWheelBuildAndContents:
             assert "gator-dashboard.py" in names
             assert "gator_runtime.py" in names
 
+    def test_wheel_ships_every_top_level_script(self, built_wheel):
+        """Self-maintaining guard for the package-data gap class (roadmap
+        item 12, fixed 2026-08-18): every top-level scripts/*.py and *.md
+        that exists in the source tree MUST land in the wheel.
+
+        Pre-fix, seven session-pipeline/fleet scripts (gator-audit,
+        gator-audit-renderers, gator-drift, gator-fleet-intel,
+        gator-fleet-report, gator-session-aggregator, gator_session_reader)
+        were absent from [tool.setuptools.package-data] — under pipx
+        installs, import_sibling() returned None and features silently
+        degraded to empty. This is load-bearing for the runtime split
+        (Variant A): the wheel IS the runtime, so a script missing here
+        is no longer rescued by a repo-resident copy.
+
+        Comparing disk → wheel (not disk → pyproject text) keeps the test
+        valid regardless of how package-data is expressed.
+        """
+        src_scripts = REPO_ROOT / "src" / "gator_command" / "scripts"
+        on_disk = {
+            f.name for f in src_scripts.iterdir()
+            if f.is_file() and f.suffix in (".py", ".md")
+        }
+        with zipfile.ZipFile(built_wheel) as z:
+            in_wheel = {
+                Path(n).name for n in z.namelist()
+                if n.startswith("gator_command/scripts/")
+                and "/" not in n[len("gator_command/scripts/"):]
+            }
+        missing = sorted(on_disk - in_wheel)
+        assert missing == [], (
+            f"Top-level scripts on disk but missing from the wheel "
+            f"(add to [tool.setuptools.package-data] in pyproject.toml): {missing}"
+        )
+
+    def test_wheel_has_session_pipeline_scripts(self, built_wheel):
+        """The seven scripts item 12 restored, pinned by name."""
+        expected = {
+            "gator-audit.py", "gator-audit-renderers.py", "gator-drift.py",
+            "gator-fleet-intel.py", "gator-fleet-report.py",
+            "gator-session-aggregator.py", "gator_session_reader.py",
+        }
+        with zipfile.ZipFile(built_wheel) as z:
+            names = {Path(n).name for n in z.namelist()
+                     if n.startswith("gator_command/scripts/")}
+        assert expected <= names, f"missing: {sorted(expected - names)}"
+
     def test_wheel_has_dashboard(self, built_wheel):
         """Wheel contains dashboard static files."""
         with zipfile.ZipFile(built_wheel) as z:
