@@ -1492,6 +1492,29 @@ def main():
     )
     args = parser.parse_args()
 
+    # Runtime-split Phase 2 (roadmap item 19, Variant A): fail-closed
+    # version negotiation, feature-flagged for safe dogfooding. Gates the
+    # validate phase ONLY — refusing mid-commit (trailers/cleanup) would
+    # strand a half-finished commit. Flag off (default) = pre-Phase-2
+    # behavior exactly. The invocation retarget itself is Phase 3; this
+    # gate only decides run-vs-refuse.
+    if args.phase == "validate" and os.environ.get("GATOR_RUNTIME_RESOLVER") == "1":
+        try:
+            from gator_core import resolve_governed_runtime
+            decision = resolve_governed_runtime(Path.cwd())
+            if decision["mode"] == "refuse":
+                print("\n  gator pre-commit: RUNTIME VERSION MISMATCH\n")
+                print(f"  {decision['reason']}\n")
+                sys.exit(1)
+            if decision["mode"] in ("cli-newer", "pin-unreadable"):
+                print(f"  gator runtime: {decision['reason']}")
+        except ImportError:
+            pass  # resolver unavailable (very old repo copy) — proceed
+        except SystemExit:
+            raise
+        except Exception as e:  # noqa: BLE001 — gate must not add new failure modes
+            print(f"  gator runtime: resolver check skipped ({type(e).__name__}: {e})")
+
     if args.phase == "validate":
         phase_validate()
     elif args.phase == "trailers":

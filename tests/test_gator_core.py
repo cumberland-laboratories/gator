@@ -366,3 +366,112 @@ class TestWriteRuntimePin:
         first = gator_core.write_runtime_pin(gator, version="9.9.9")
         second = gator_core.write_runtime_pin(gator, version="9.9.9")
         assert first["manifest"] == second["manifest"]
+
+
+class TestResolveGovernedRuntime:
+    """Runtime-split Phase 2 (roadmap item 19, Variant A): fail-closed
+    version negotiation. Every branch of the plan §4.4 resolution order."""
+
+    def _repo(self, tmp_path, pin_version=None, scripts=True, pin_raw=None):
+        gator = tmp_path / ".gator"
+        if scripts:
+            (gator / ".includes" / "scripts").mkdir(parents=True)
+        else:
+            gator.mkdir(parents=True, exist_ok=True)
+        if pin_raw is not None:
+            (gator / "runtime-pin.json").write_text(pin_raw, encoding="utf-8")
+        elif pin_version is not None:
+            import json
+            (gator / "runtime-pin.json").write_text(
+                json.dumps({"schema": "gator-runtime-pin-v1",
+                            "runtime_version": pin_version,
+                            "pinned_at": "2026-08-18T00:00:00Z",
+                            "manifest": {}}),
+                encoding="utf-8")
+        return tmp_path
+
+    def test_equal_versions_current(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="2.9.0")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "current"
+        assert d["pin_version"] == "2.9.0"
+
+    def test_cli_newer_runs_and_advises(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="2.8.0")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "cli-newer"
+        assert "gator update" in d["reason"]
+
+    def test_cli_older_refuses_fail_closed(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="2.9.0")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.8.0")
+        assert d["mode"] == "refuse"
+        assert "pipx upgrade gator-command" in d["reason"]
+
+    def test_rc_suffix_tolerated_in_comparison(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="2.9.0")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0rc1")
+        assert d["mode"] == "current"
+
+    def test_no_pin_with_v2_scripts_falls_back(self, tmp_path):
+        repo = self._repo(tmp_path)
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "repo-scripts"
+
+    def test_no_pin_with_v1_scripts_falls_back(self, tmp_path):
+        gator = tmp_path / ".gator"
+        (gator / "scripts").mkdir(parents=True)
+        d = gator_core.resolve_governed_runtime(tmp_path, cli_version="2.9.0")
+        assert d["mode"] == "repo-scripts"
+
+    def test_nothing_at_all_is_ungoverned(self, tmp_path):
+        repo = self._repo(tmp_path, scripts=False)
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "ungoverned"
+
+    def test_malformed_pin_fails_open_to_repo_scripts(self, tmp_path):
+        repo = self._repo(tmp_path, pin_raw="{not json")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "pin-unreadable"
+        assert "gator update" in d["reason"]
+
+    def test_pin_missing_version_key_fails_open(self, tmp_path):
+        repo = self._repo(tmp_path, pin_raw='{"schema": "gator-runtime-pin-v1"}')
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "pin-unreadable"
+
+    def test_unparseable_version_fails_open(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="not-a-version")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "pin-unreadable"
+
+    def test_malformed_pin_without_scripts_is_ungoverned(self, tmp_path):
+        repo = self._repo(tmp_path, scripts=False, pin_raw="{not json")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "ungoverned"
+
+    def test_decision_is_pure_no_side_effects(self, tmp_path):
+        repo = self._repo(tmp_path, pin_version="2.9.0")
+        before = sorted(p.name for p in (repo / ".gator").rglob("*"))
+        gator_core.resolve_governed_runtime(repo, cli_version="1.0.0")
+        after = sorted(p.name for p in (repo / ".gator").rglob("*"))
+        assert before == after
+
+
+class TestVersionTuple:
+    def test_plain(self):
+        assert gator_core._version_tuple("2.9.0") == (2, 9, 0)
+
+    def test_rc_suffix(self):
+        assert gator_core._version_tuple("2.9.0rc1") == (2, 9, 0)
+
+    def test_two_part(self):
+        assert gator_core._version_tuple("2.9") == (2, 9)
+
+    def test_garbage_none(self):
+        assert gator_core._version_tuple("dev") is None
+        assert gator_core._version_tuple("") is None
+        assert gator_core._version_tuple(None) is None
+
+    def test_dev_suffix_stops_cleanly(self):
+        assert gator_core._version_tuple("2.9.dev1") == (2, 9)

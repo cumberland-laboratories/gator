@@ -623,6 +623,123 @@ def write_runtime_pin(gator_dir, version=None):
     return pin
 
 
+def _version_tuple(v):
+    """Parse 'X.Y.Z…' into a comparable numeric tuple.
+
+    Numeric prefixes of each dot-piece are honored; parsing stops at the
+    first non-numeric piece (so '2.9.0rc1' → (2, 9, 0) and '2.9' → (2, 9)).
+    Returns None when nothing numeric can be extracted ('dev', '', None).
+    """
+    parts = []
+    for piece in str(v or "").strip().split("."):
+        num = ""
+        for ch in piece:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        if not num:
+            break
+        parts.append(int(num))
+    return tuple(parts) if parts else None
+
+
+def resolve_governed_runtime(repo_root, cli_version=None):
+    """Runtime-split Phase 2 (roadmap item 19, Variant A): decide which
+    runtime governs this repo, fail-closed on version mismatch.
+
+    Resolution order (plan §4.4):
+      1. `.gator/runtime-pin.json` present and readable → compare pin vs
+         installed CLI (numeric-tuple compare, suffixes ignored):
+         - equal        → mode "current"      (run)
+         - CLI newer    → mode "cli-newer"    (run; advise `gator update`
+                          to advance the pin)
+         - CLI older    → mode "refuse"       (fail-closed — never run an
+                          older runtime against a newer repo's governance;
+                          `core.repositoryformatversion` semantics)
+         - unparseable versions → mode "pin-unreadable" (fail OPEN, below)
+      2. No pin, repo-resident shipped scripts present → mode
+         "repo-scripts" (pre-split behavior, unchanged by construction).
+      3. Neither → mode "ungoverned".
+
+    A malformed/unreadable pin deliberately FAILS OPEN to rule 2 (mode
+    "pin-unreadable"): a corrupt pin must not brick commits; the reason
+    string surfaces it for repair (re-run `gator update`).
+
+    Pure decision function — no side effects, no exits. Callers own
+    messaging and exit codes. Returns:
+      {"mode": str, "pin_version": str|None, "cli_version": str,
+       "reason": str}
+    """
+    repo_root = Path(repo_root)
+    gator_dir = repo_root / ".gator"
+    cli_version = cli_version or get_version()
+
+    def _result(mode, pin_version, reason):
+        return {
+            "mode": mode,
+            "pin_version": pin_version,
+            "cli_version": cli_version,
+            "reason": reason,
+        }
+
+    def _repo_scripts_present():
+        return (gator_dir / ".includes" / "scripts").is_dir() or \
+               (gator_dir / "scripts").is_dir()
+
+    pin_file = gator_dir / "runtime-pin.json"
+    if pin_file.exists():
+        try:
+            pin = json.loads(pin_file.read_text(encoding="utf-8"))
+            pin_version = pin["runtime_version"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            mode = "pin-unreadable" if _repo_scripts_present() else "ungoverned"
+            return _result(
+                mode, None,
+                f"runtime-pin.json unreadable ({type(e).__name__}); "
+                f"falling back to repo-resident scripts — re-run "
+                f"`gator update` to repair the pin.",
+            )
+
+        pin_t = _version_tuple(pin_version)
+        cli_t = _version_tuple(cli_version)
+        if pin_t is None or cli_t is None:
+            return _result(
+                "pin-unreadable", pin_version,
+                f"cannot compare pin '{pin_version}' with CLI "
+                f"'{cli_version}'; falling back to repo-resident scripts "
+                f"— re-run `gator update` to repair the pin.",
+            )
+        if cli_t < pin_t:
+            return _result(
+                "refuse", pin_version,
+                f"this repo's governance runtime is pinned to Gator "
+                f"{pin_version}, but the installed CLI is {cli_version}. "
+                f"Running an older runtime against a newer repo is "
+                f"unsafe. Fix: `pipx upgrade gator-command` (or "
+                f"`pip install -U gator-command`), then retry. If this "
+                f"machine cannot upgrade, commit from a machine that "
+                f"can, or ask the Architect before overriding.",
+            )
+        if cli_t > pin_t:
+            return _result(
+                "cli-newer", pin_version,
+                f"installed CLI {cli_version} is newer than the repo's "
+                f"pinned runtime {pin_version} — run `gator update` to "
+                f"advance the pin.",
+            )
+        return _result("current", pin_version,
+                       f"pin {pin_version} matches installed CLI.")
+
+    if _repo_scripts_present():
+        return _result("repo-scripts", None,
+                       "no runtime pin; pre-split repo — using "
+                       "repo-resident shipped scripts.")
+    return _result("ungoverned", None,
+                   "no runtime pin and no shipped scripts — this branch "
+                   "carries no Gator runtime.")
+
+
 # ---------------------------------------------------------------------------
 # Charter surface resolution
 # ---------------------------------------------------------------------------

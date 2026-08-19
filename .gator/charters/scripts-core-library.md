@@ -46,6 +46,15 @@ Filesystem: shipped scripts dir (R), `~/.gator/machine-id` (R), `.gator/runtime-
 ! Emission is additive and reader-free until the Phase 2 resolver lands. Callers wrap in try/except — a pin failure must never fail an update or install.
 ! Pin is COMMITTED (not gitignored) — it is the from-git-history proof of which runtime governed each commit.
 
+### resolve_governed_runtime(repo_root, cli_version=None) / _version_tuple(v)
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — the hook orchestrator is repo-resident and imports the repo-side gator_core; this is a DOCUMENTED DEVIATION from the plan's "natural home is gator_runtime.py": gator_runtime is wheel-only and unavailable to repo scripts)
+Runtime-split Phase 2 (Variant A). Pure decision function — no side effects, no exits; callers own messaging/exit codes. Resolution order (plan §4.4): pin present → numeric-tuple version compare (`_version_tuple` honors numeric prefixes, ignores rc/dev suffixes, None on garbage) yielding `current` / `cli-newer` (run + advise `gator update`) / `refuse` (fail-closed, `core.repositoryformatversion` semantics, reason includes `pipx upgrade gator-command`); no pin + repo scripts → `repo-scripts` (pre-split behavior); neither → `ungoverned`. Returns `{"mode", "pin_version", "cli_version", "reason"}`.
+Filesystem: `.gator/runtime-pin.json` (R), shipped scripts dirs (existence probe only)
+<- template `gator-pre-commit.py::main()` (validate phase, behind `GATOR_RUNTIME_RESOLVER=1` feature flag until Phase 3)
+-> `get_version()` (when cli_version not passed)
+! Malformed/unreadable pin FAILS OPEN to `pin-unreadable` (repo-scripts fallback + repair hint) — a corrupt pin must never brick commits. Contrast with `is_enterprise_active`'s fail-CLOSED: refusing to activate a feature is safe; refusing to commit is not.
+! The comparison is VERSION-based, not manifest-based — CRLF/autocrlf makes cross-platform manifest comparison invalid (plan §8 risk 7); manifest verification is future integrity work with git-blob-hash semantics.
+
 ### normalize_path(raw_path)
 File: `src/gator_command/scripts/gator_core.py`
 Converts MSYS2/Git Bash paths (/c/Users/...) to native Windows (C:/Users/...).

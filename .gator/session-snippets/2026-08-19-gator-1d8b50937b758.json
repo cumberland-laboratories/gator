@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "packaging: close item 12 — 7 session-pipeline scripts restored to package-data + self-maintaining wheel guard",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "packaging",
+    "item-12",
+    "runtime-split",
+    "wheel"
+  ],
+  "commit": "1d8b50937b758c9dc44710e5b9c86416b1b0bf7b",
+  "short_commit": "1d8b509",
+  "snippet_id": "snippet-1d8b50937b758",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "28f0864eba002126156b4119b15103742db0d8ed",
+  "started_at": "2026-08-19T02:23:34Z",
+  "ended_at": "2026-08-19T02:23:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-19-gator-28f0864eba002.json",
+    "pyproject.toml",
+    "tests/test_packaging.py"
+  ],
+  "notes": [
+    "**Roadmap Post-2.6 item 12 closed** (promoted to hard Phase 2 prerequisite by the runtime-split plan — under Variant A the wheel IS the runtime, so package-data gaps stop being rescued by repo-resident copies). `pyproject.toml` `[tool.setuptools.package-data]`: **added the 7 missing scripts** (`gator-audit.py`, `gator-audit-renderers.py`, `gator-drift.py`, `gator-fleet-intel.py`, `gator-fleet-report.py`, `gator-session-aggregator.py`, `gator_session_reader.py`) — pre-fix these were absent from pipx installs, `import_sibling()` returned None, and dashboard audit view / machine identity / fleet reports silently degraded to empty. **Pruned 3 stale entries** (`gator-deploy.py`, `gator-init-command-post.py` — both retired scripts; `scripts/legacy/**/*` — directory never existed in the monorepo; setuptools ignores missing patterns silently, which is how the list rotted unnoticed).",
+    "**Self-maintaining regression guard**: `tests/test_packaging.py::test_wheel_ships_every_top_level_script` builds the wheel and asserts every top-level `scripts/*.py`/`*.md` on disk lands in it — disk→wheel comparison, valid regardless of how package-data is expressed, so any future script added without an entry fails CI. Plus `test_wheel_has_session_pipeline_scripts` pinning the 7 by name. Packaging suite: **18 passed** (16 + 2 new) against a freshly built wheel.",
+    "Charter `scripts-cross-cutting.md`: new package-data-completeness block with the runtime-split TRIPWIRE.",
+    "Riding: session snippet residue for `28f0864`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
