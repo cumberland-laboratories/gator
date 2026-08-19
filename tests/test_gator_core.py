@@ -457,6 +457,23 @@ class TestResolveGovernedRuntime:
         after = sorted(p.name for p in (repo / ".gator").rglob("*"))
         assert before == after
 
+    def test_bom_pin_still_parses_and_refuses(self, tmp_path):
+        """A UTF-8 BOM on the pin (Windows editors, PowerShell 5.1
+        Set-Content) must NOT downgrade fail-closed refusal to fail-open
+        fallback. Live-caught during Phase 2 dogfooding: a BOM'd pin hit
+        JSONDecodeError -> pin-unreadable instead of refuse."""
+        import json
+        gator = tmp_path / ".gator"
+        (gator / ".includes" / "scripts").mkdir(parents=True)
+        pin = json.dumps({"schema": "gator-runtime-pin-v1",
+                          "runtime_version": "99.0.0",
+                          "pinned_at": "2026-08-18T00:00:00Z",
+                          "manifest": {}})
+        (gator / "runtime-pin.json").write_bytes(b"\xef\xbb\xbf" + pin.encode("utf-8"))
+        d = gator_core.resolve_governed_runtime(tmp_path, cli_version="2.9.0")
+        assert d["mode"] == "refuse"
+
+
 
 class TestVersionTuple:
     def test_plain(self):

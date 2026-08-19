@@ -53,6 +53,7 @@ Filesystem: `.gator/runtime-pin.json` (R), shipped scripts dirs (existence probe
 <- template `gator-pre-commit.py::main()` (validate phase, behind `GATOR_RUNTIME_RESOLVER=1` feature flag until Phase 3)
 -> `get_version()` (when cli_version not passed)
 ! Malformed/unreadable pin FAILS OPEN to `pin-unreadable` (repo-scripts fallback + repair hint) — a corrupt pin must never brick commits. Contrast with `is_enterprise_active`'s fail-CLOSED: refusing to activate a feature is safe; refusing to commit is not.
+! Pin is read with `encoding="utf-8-sig"` (BOM-tolerant; reads plain UTF-8 identically). Live-caught 2026-08-18: PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM, which under plain utf-8 turned a should-refuse pin into JSONDecodeError → fail-open fallback — a Windows editor could silently disable the version gate. Pin: `test_bom_pin_still_parses_and_refuses`.
 ! The comparison is VERSION-based, not manifest-based — CRLF/autocrlf makes cross-platform manifest comparison invalid (plan §8 risk 7); manifest verification is future integrity work with git-blob-hash semantics.
 
 ### normalize_path(raw_path)

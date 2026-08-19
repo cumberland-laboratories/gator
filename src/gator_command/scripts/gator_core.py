@@ -690,7 +690,11 @@ def resolve_governed_runtime(repo_root, cli_version=None):
     pin_file = gator_dir / "runtime-pin.json"
     if pin_file.exists():
         try:
-            pin = json.loads(pin_file.read_text(encoding="utf-8"))
+            # utf-8-sig: tolerate a BOM (Windows editors + PowerShell 5.1
+            # Set-Content add one silently). A BOM'd pin must not silently
+            # downgrade fail-closed refusal to fail-open fallback —
+            # live-caught during Phase 2 dogfooding, 2026-08-18.
+            pin = json.loads(pin_file.read_text(encoding="utf-8-sig"))
             pin_version = pin["runtime_version"]
         except (OSError, ValueError, KeyError, TypeError) as e:
             mode = "pin-unreadable" if _repo_scripts_present() else "ungoverned"
