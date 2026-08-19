@@ -708,11 +708,21 @@ def resolve_governed_runtime(repo_root, cli_version=None):
         pin_t = _version_tuple(pin_version)
         cli_t = _version_tuple(cli_version)
         if pin_t is None or cli_t is None:
+            # Same degradation contract as the malformed-JSON branch
+            # (whiteboard 2026-08-19 Finding 1): the fallback mode and
+            # its reason must describe what is actually possible here.
+            if _repo_scripts_present():
+                return _result(
+                    "pin-unreadable", pin_version,
+                    f"cannot compare pin '{pin_version}' with CLI "
+                    f"'{cli_version}'; falling back to repo-resident "
+                    f"scripts — re-run `gator update` to repair the pin.",
+                )
             return _result(
-                "pin-unreadable", pin_version,
+                "ungoverned", pin_version,
                 f"cannot compare pin '{pin_version}' with CLI "
-                f"'{cli_version}'; falling back to repo-resident scripts "
-                f"— re-run `gator update` to repair the pin.",
+                f"'{cli_version}' and no repo-resident scripts exist — "
+                f"re-run `gator update` to repair the pin.",
             )
         if cli_t < pin_t:
             return _result(

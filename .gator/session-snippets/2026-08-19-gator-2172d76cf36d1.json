@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 2 hardening: BOM-tolerant pin read (utf-8-sig) — live-caught fail-open downgrade",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "phase-2",
+    "bom",
+    "hardening"
+  ],
+  "commit": "2172d76cf36d1763a6caf4dd2b3016a16e56bec3",
+  "short_commit": "2172d76",
+  "snippet_id": "snippet-2172d76cf36d1",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "eb960f8ffd1aaf12bc0ce17ba926f6d8c6281490",
+  "started_at": "2026-08-19T02:34:50Z",
+  "ended_at": "2026-08-19T02:34:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/scripts/gator_core.py",
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-19-gator-eb960f8ffd1aa.json",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "**BOM hardening, live-caught during Phase 2 dogfooding**: the first refusal-path live test tampered the pin via PowerShell 5.1 `Set-Content -Encoding utf8`, which silently writes a UTF-8 BOM — `json.loads` rejected it and the gate downgraded from fail-closed `refuse` to fail-open `pin-unreadable` fallback. Same PS-5.1 BOM class that bit smoke-test Run 1's commit_draft parser. Fix: `resolve_governed_runtime` reads the pin with `encoding=\"utf-8-sig\"` (tolerates BOM, reads plain UTF-8 identically) across all three copies (wheel, template, `.includes`). A BOM'd pin from a Windows editor can no longer silently disable the version gate.",
+    "Regression pin `test_bom_pin_still_parses_and_refuses` (BOM'd 99.0.0 pin → mode `refuse`, not `pin-unreadable`); relocated into `TestResolveGovernedRuntime` after an append-misfiled first landing. gator_core suite: 56 pass.",
+    "**Refusal path now verified live end-to-end**: BOM-free tampered pin (99.0.0 vs CLI 2.8.0) → `RUNTIME VERSION MISMATCH` message + exit 1 through the real hook entry; pin restored from git after the test. Phase 2 exit criteria fully met: all comparison branches pinned + both happy (`current`, on commit `eb960f8` itself) and refusal paths exercised live."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

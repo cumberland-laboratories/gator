@@ -445,6 +445,17 @@ class TestResolveGovernedRuntime:
         d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
         assert d["mode"] == "pin-unreadable"
 
+    def test_unparseable_version_without_scripts_is_ungoverned(self, tmp_path):
+        """Whiteboard 2026-08-19 Finding 1: the unparseable-VERSION branch
+        must degrade the same way the malformed-JSON branch does — to
+        `ungoverned` when there are no repo-resident scripts to fall back
+        to, with a reason that does not promise an impossible fallback."""
+        repo = self._repo(tmp_path, scripts=False, pin_version="not-a-version")
+        d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
+        assert d["mode"] == "ungoverned"
+        assert "no repo-resident scripts exist" in d["reason"]
+        assert "gator update" in d["reason"]
+
     def test_malformed_pin_without_scripts_is_ungoverned(self, tmp_path):
         repo = self._repo(tmp_path, scripts=False, pin_raw="{not json")
         d = gator_core.resolve_governed_runtime(repo, cli_version="2.9.0")
