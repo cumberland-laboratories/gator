@@ -295,3 +295,67 @@ class TestInstallGitHooks:
             repo_root / ".git" / "gator-hooks",
             repo_root / ".git" / "hooks",
         ]
+
+
+class TestPinAwareWrappers:
+    """Runtime-split Phase 3: stubs gain a dispatcher-first branch on
+    pinned repos, and fall through to the pre-Phase-3 invocation
+    otherwise (pre-split repos untouched by construction)."""
+
+    def test_dispatcher_branch_present_when_resolvable(self):
+        """In this environment gator_command is importable and ships
+        gator-hook.py, so generated stubs carry the pin-aware branch."""
+        assert update._installed_dispatcher_path() is not None
+        hooks = update.build_git_hook_wrappers(
+            gator_script=".gator/.includes/scripts/gator-pre-commit.py")
+        for name, content in hooks.items():
+            assert 'runtime-pin.json' in content, name
+            assert 'gator-hook.py' in content, name
+            assert f'"{name}"' in content, name
+
+    def test_fallback_branch_always_present(self):
+        """The pre-Phase-3 repo-script invocation survives verbatim as
+        the fallthrough — pin absent or dispatcher gone → old behavior."""
+        hooks = update.build_git_hook_wrappers(
+            gator_script=".gator/.includes/scripts/gator-pre-commit.py")
+        assert '"--phase", "validate"' in hooks["pre-commit"]
+        assert '"--phase", "trailers", sys.argv[1]' in hooks["commit-msg"]
+        assert '"--phase", "cleanup"' in hooks["post-commit"]
+        for content in hooks.values():
+            assert 'warning mode' in content
+
+    def test_no_dispatcher_generates_pre_phase3_stub(self):
+        """Standalone template runs (no CLI importable) generate stubs
+        with NO dispatcher branch — byte-shape of the pre-Phase-3 era."""
+        with patch.object(update, "_installed_dispatcher_path", return_value=None):
+            hooks = update.build_git_hook_wrappers()
+            for content in hooks.values():
+                assert "runtime-pin.json" not in content
+                assert "gator-hook.py" not in content
+
+    def test_dispatcher_branch_forwards_argv(self):
+        """The dispatcher call forwards sys.argv[1:] (commit-msg needs
+        the msg-file argument)."""
+        hooks = update.build_git_hook_wrappers()
+        assert "+ sys.argv[1:]" in hooks["commit-msg"]
+
+    def test_plan_hook_updates_with_pin_but_no_script(self, mock_gator_repo):
+        """S5 forward-compat: a pinned repo whose repo-resident script is
+        gone (post-Phase-4 state) still plans stub installs."""
+        repo_root, gator_dir = mock_gator_repo
+        script = gator_dir / "scripts" / "gator-pre-commit.py"
+        if script.exists():
+            script.unlink()
+        (gator_dir / "runtime-pin.json").write_text(
+            '{"schema": "gator-runtime-pin-v1", "runtime_version": "9.9.9",'
+            ' "pinned_at": "2026-08-19T00:00:00Z", "manifest": {}}',
+            encoding="utf-8")
+        plan = update.plan_hook_updates(gator_dir, repo_root)
+        assert len(plan) == 3
+
+    def test_plan_hook_updates_no_script_no_pin_is_empty(self, mock_gator_repo):
+        repo_root, gator_dir = mock_gator_repo
+        script = gator_dir / "scripts" / "gator-pre-commit.py"
+        if script.exists():
+            script.unlink()
+        assert update.plan_hook_updates(gator_dir, repo_root) == []

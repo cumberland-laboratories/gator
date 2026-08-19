@@ -73,6 +73,7 @@ COMMANDS = {
     "pulse":      ("gator-pulse.py",         "Generate strategic operations brief"),
     "dashboard":  ("gator-dashboard.py",     "Start the governance dashboard"),
     "kill":       ("gator-kill.py",          "Kill Gator processes (dashboard, ...)"),
+    "hook":       ("gator-hook.py",          "Dispatch a governance hook via the runtime resolver"),
     "loop":       ("gator-loop.py",          "Run a governed planning loop"),
     "enterprise": ("gator-enterprise.py",    "Manage Enterprise capability (setup, status, sync, ...)"),
     "state":      ("gator-state.py",         "Report or repair managed state"),

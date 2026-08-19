@@ -698,7 +698,13 @@ def plan_hook_updates(gator_dir, repo_root):
     except Exception:
         gator_script = gator_dir / "scripts" / "gator-pre-commit.py"
 
-    if not git_hooks.parent.is_dir() or not gator_script.exists():
+    if not git_hooks.parent.is_dir():
+        return []
+    # Runtime-split Phase 3 (S5 forward-compat): a PINNED repo without a
+    # repo-resident script still gets stubs — they route through the
+    # installed dispatcher; the repo-script fallback branch simply never
+    # fires. Script-absent AND pin-absent → nothing to hook, plan empty.
+    if not gator_script.exists() and not (gator_dir / "runtime-pin.json").is_file():
         return []
 
     # Resolve script_path for wrappers (same logic as install_git_hooks)
@@ -777,6 +783,28 @@ def get_managed_hook_display_path():
     return get_managed_hooks_path_value() or ".git/hooks"
 
 
+def _installed_dispatcher_path():
+    """Absolute path to the installed CLI's gator-hook.py dispatcher, or None.
+
+    Runtime-split Phase 3: resolved at stub-generation time from the
+    installed gator_command package. Returns None when the package isn't
+    importable (standalone template runs on machines without the CLI) —
+    the generated stubs then carry no dispatcher branch and behave
+    exactly like pre-Phase-3 stubs.
+    """
+    try:
+        import gator_command
+        dispatcher = (
+            Path(gator_command.__file__).resolve().parent
+            / "scripts" / "gator-hook.py"
+        )
+        if dispatcher.is_file():
+            return str(dispatcher).replace("\\", "/")
+    except Exception:
+        pass
+    return None
+
+
 def build_git_hook_wrappers(gator_script=None):
     """Return the exact hook wrapper contents gator installs.
 
@@ -786,11 +814,21 @@ def build_git_hook_wrappers(gator_script=None):
     gator_script: path to the pre-commit script relative to repo root.
     Defaults to ".gator/scripts/gator-pre-commit.py" for v1 layout.
     v2 layout passes ".gator/.includes/scripts/gator-pre-commit.py".
+
+    Runtime-split Phase 3: when the installed CLI's dispatcher is
+    resolvable, each stub gains a PIN-AWARE branch — a repo carrying
+    .gator/runtime-pin.json routes through gator-hook.py (which applies
+    resolve_governed_runtime and picks wheel vs repo runtime). Pin absent
+    → the stub falls through to the pre-Phase-3 repo-script invocation
+    byte-for-byte, so pre-split repos are untouched by construction.
+    Dispatcher missing at commit time (CLI uninstalled/moved) → same
+    fallthrough; gator init regenerates stubs each session (self-heal).
     """
     python_path = sys.executable.replace("\\", "/")
     if gator_script is None:
         gator_script = ".gator/scripts/gator-pre-commit.py"
     shebang = _hook_shebang()
+    dispatcher = _installed_dispatcher_path()
 
     # Each wrapper checks if the governance script exists before calling it.
     # On branches where .gator/ hasn't been merged yet, the script is absent
@@ -800,29 +838,38 @@ def build_git_hook_wrappers(gator_script=None):
         '\\n  does not contain .gator/. Proceeding in warning mode.'
         '\\n  If this branch should be governed, merge or restore the Gator layer.\\n'
     )
-    guard = (
-        'import os, subprocess, sys\n'
-        f'script = "{gator_script}"\n'
-        'if not os.path.isfile(script):\n'
-        f'    print("{warn_msg}")\n'
-        '    sys.exit(0)\n'
-    )
+
+    def _stub(hook_name, tail):
+        pin_branch = ""
+        if dispatcher:
+            pin_branch = (
+                f'dispatcher = r"{dispatcher}"\n'
+                'if os.path.isfile(".gator/runtime-pin.json") and os.path.isfile(dispatcher):\n'
+                f'    sys.exit(subprocess.call([r"{python_path}", dispatcher, "{hook_name}"] + sys.argv[1:]))\n'
+            )
+        return (
+            f'{shebang}\n'
+            'import os, subprocess, sys\n'
+            f'{pin_branch}'
+            f'script = "{gator_script}"\n'
+            'if not os.path.isfile(script):\n'
+            f'    print("{warn_msg}")\n'
+            '    sys.exit(0)\n'
+            f'{tail}'
+        )
 
     return {
-        "pre-commit": (
-            f'{shebang}\n'
-            f'{guard}'
-            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "validate"]))\n'
+        "pre-commit": _stub(
+            "pre-commit",
+            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "validate"]))\n',
         ),
-        "commit-msg": (
-            f'{shebang}\n'
-            f'{guard}'
-            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "trailers", sys.argv[1]]))\n'
+        "commit-msg": _stub(
+            "commit-msg",
+            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "trailers", sys.argv[1]]))\n',
         ),
-        "post-commit": (
-            f'{shebang}\n'
-            f'{guard}'
-            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "cleanup"]))\n'
+        "post-commit": _stub(
+            "post-commit",
+            f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "cleanup"]))\n',
         ),
     }
 

@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 2 fix: unify unreadable-pin degradation across both branches (whiteboard 2026-08-19 Findings 1+2)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "phase-2",
+    "resolver",
+    "enforcer-finding"
+  ],
+  "commit": "8eca2c15b391b5e259c91c240f10dae397e394ba",
+  "short_commit": "8eca2c1",
+  "snippet_id": "snippet-8eca2c15b391b",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "2172d76cf36d1763a6caf4dd2b3016a16e56bec3",
+  "started_at": "2026-08-19T02:49:56Z",
+  "ended_at": "2026-08-19T02:49:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/scripts/gator_core.py",
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-19-gator-2172d76cf36d1.json",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "**Whiteboard Finding 1 (medium) fixed**: `resolve_governed_runtime`'s unparseable-`runtime_version` branch now follows the same degradation contract as the malformed-JSON branch — `_repo_scripts_present()` → `pin-unreadable` with the fallback reason; absent → `ungoverned` with an honest \"no repo-resident scripts exist\" reason (previously it unconditionally returned `pin-unreadable` and promised a repo-scripts fallback that might not exist — mode wrong + repair message describing an impossible action). Applied to all three copies (wheel, template, `.includes`). Latent-until-Phase-4 in practice (today every pinned repo also carries scripts), but Phase 4 is exactly where it would have started lying.",
+    "**Finding 2 (medium) fixed**: new pin `test_unparseable_version_without_scripts_is_ungoverned` — the missing no-scripts variant that let the asymmetry ship (the `_repo()` helper creates `.includes/scripts/` by default, so the unparseable-version case only existed with-scripts). gator_core suite: 57 pass.",
+    "Charter `scripts-core-library.md`: fail-open tripwire extended with the both-branches degradation contract + finding provenance.",
+    "Riding: session snippet residue for `2172d76`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

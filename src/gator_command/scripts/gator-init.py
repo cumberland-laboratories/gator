@@ -224,7 +224,11 @@ def ensure_git_hooks(repo_root, paths):
     # Check that the hook target script exists — without it, hooks can't work
     # even if they're installed, and plan_hook_updates returns [] (masking the problem).
     gator_script = paths.scripts_dir / "gator-pre-commit.py"
-    if not gator_script.exists():
+    # Runtime-split Phase 3 (S5): a PINNED repo needs no repo-resident
+    # script — its stubs route through the installed CLI's dispatcher.
+    # Only script-missing AND pin-missing is a genuinely degraded state.
+    _pin_present = (repo_root / ".gator" / "runtime-pin.json").is_file()
+    if not gator_script.exists() and not _pin_present:
         return {
             "status": "degraded",
             "detail": "gator-pre-commit.py missing",

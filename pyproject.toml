@@ -81,6 +81,7 @@ gator_command = [
     "scripts/gator-enterprise.py",
     "scripts/gator-fleet-intel.py",
     "scripts/gator-fleet-report.py",
+    "scripts/gator-hook.py",
     "scripts/gator-init.py",
     "scripts/gator-kill.py",
     "scripts/gator-loop.py",
