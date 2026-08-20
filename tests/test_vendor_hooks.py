@@ -459,10 +459,16 @@ class TestTemplateHookEntries:
         open_cmds = [c for c in commands if c.startswith("gator hook session-open")]
         start_cmds = [c for c in commands if c.startswith("gator hook session-start")]
         assert len(open_cmds) == 1 and len(start_cmds) == 1
-        # Shell-chain fallback (whiteboard 2026-08-19): source-checkout
-        # machines without the CLI shim fall through to the repo script.
-        assert "|| python .gator/.includes/scripts/gator-session-open.py" in open_cmds[0]
-        assert "|| python .gator/.includes/scripts/gator-session-start.py" in start_cmds[0]
+        # Four-clause launcher chain (whiteboard 2026-08-19 ×2): CLI shim →
+        # `python` → `python3` (python3-only POSIX) → `py -3` (py-launcher-
+        # only Windows — the second finding's exact case). Mirrors the
+        # launcher-sensitivity rule the git-hook wrappers already follow.
+        for cmd, script in ((open_cmds[0], "gator-session-open.py"),
+                            (start_cmds[0], "gator-session-start.py")):
+            path = f".gator/.includes/scripts/{script}"
+            for clause in (f"|| python {path}", f"|| python3 {path}",
+                           f"|| py -3 {path}"):
+                assert clause in cmd, (clause, cmd)
         assert len(hooks_list) == 2
 
     @pytest.mark.parametrize("filename", [

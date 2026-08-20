@@ -1,7 +1,7 @@
 {
   "schema": "gator-runtime-pin-v1",
   "runtime_version": "2.8.0",
-  "pinned_at": "2026-08-19T23:41:07Z",
+  "pinned_at": "2026-08-20T00:06:29Z",
   "pinned_by_machine": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
   "manifest": {
     "enforcer-prompt.md": "sha256:a93b8ab23efa399a5a8309d8653a17184fa3619c8eb767a94a81d658d133c1b0",
