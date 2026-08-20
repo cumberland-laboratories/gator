@@ -1,5 +1,0 @@
-#!/bin/bash
-# Gator pre-commit hook — deterministic governance gate.
-# Installed by the Gator installer. Do not edit manually.
-
-python .gator/scripts/gator-pre-commit.py --phase validate

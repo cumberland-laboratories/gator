@@ -180,6 +180,12 @@ def plan_updates(templates_dir, gator_dir, repo_root):
     # Shipped directories → shipped_base (but scaffolding stays at root)
     _SCAFFOLDING = {"README.md", "_template.md"}
     for src_subdir, dest_subdir in SHIPPED_TEMPLATE_DIRS.items():
+        if src_subdir == "scripts":
+            # Runtime-split Phase 4 (2026-08-19): runtime scripts are no
+            # longer shipped into repos — the machine-side runtime executes
+            # via the dispatcher and the pin records what is in force.
+            # (Constant kept for migrate_layout's classification logic.)
+            continue
         src_dir = templates_dir / src_subdir
         if not src_dir.is_dir():
             continue
@@ -721,7 +727,18 @@ def build_git_hook_wrappers(gator_script=None):
         '\\n  If this branch should be governed, merge or restore the Gator layer.\\n'
     )
 
-    def _stub(hook_name, tail):
+    # Runtime-split Phase 4: a pinned repo whose repo-resident script is
+    # gone AND whose dispatcher is unreachable has no runtime at all —
+    # fail closed for pre-commit (never commit ungoverned against a pin),
+    # warn-and-proceed for the non-blocking hooks.
+    refuse_msg = (
+        '\\n  gator pre-commit: this repo is pinned to a machine-side Gator'
+        '\\n  runtime, but no usable Gator installation was found on this'
+        '\\n  machine. Fix: pipx install gator-command (or pipx upgrade'
+        '\\n  gator-command), then retry.\\n'
+    )
+
+    def _stub(hook_name, tail, blocking=False):
         pin_branch = ""
         if dispatcher:
             pin_branch = (
@@ -729,11 +746,18 @@ def build_git_hook_wrappers(gator_script=None):
                 'if os.path.isfile(".gator/runtime-pin.json") and os.path.isfile(dispatcher):\n'
                 f'    sys.exit(subprocess.call([r"{python_path}", dispatcher, "{hook_name}"] + sys.argv[1:]))\n'
             )
+        refuse_exit = "1" if blocking else "0"
+        pin_refuse = (
+            f'script = "{gator_script}"\n'
+            'if os.path.isfile(".gator/runtime-pin.json") and not os.path.isfile(script):\n'
+            f'    print("{refuse_msg}")\n'
+            f'    sys.exit({refuse_exit})\n'
+        )
         return (
             f'{shebang}\n'
             'import os, subprocess, sys\n'
             f'{pin_branch}'
-            f'script = "{gator_script}"\n'
+            f'{pin_refuse}'
             'if not os.path.isfile(script):\n'
             f'    print("{warn_msg}")\n'
             '    sys.exit(0)\n'
@@ -744,6 +768,7 @@ def build_git_hook_wrappers(gator_script=None):
         "pre-commit": _stub(
             "pre-commit",
             f'sys.exit(subprocess.call([r"{python_path}", script, "--phase", "validate"]))\n',
+            blocking=True,
         ),
         "commit-msg": _stub(
             "commit-msg",
@@ -1519,12 +1544,28 @@ def main():
     # Best-effort — a pin failure must never fail the update.
     try:
         from gator_core import write_runtime_pin
-        pin = write_runtime_pin(gator_dir, version=cli_ver)
+        pin = write_runtime_pin(gator_dir, version=cli_ver,
+                                runtime_dir=templates_dir / "scripts")
         if pin:
             print(f"  Runtime pin: {pin['runtime_version']} "
                   f"({len(pin['manifest'])} files) -> .gator/runtime-pin.json")
     except Exception as e:  # noqa: BLE001 — pin is additive, never blocking
         print(f"  Runtime pin: skipped ({type(e).__name__}: {e})")
+
+    # Runtime-split Phase 4: with a fresh pin recorded, the repo-resident
+    # runtime copy is redundant — remove it so the repo carries policy +
+    # pin only. v2-layout-only (v1 repos migrate layout first); guarded so
+    # a removal failure never fails the update.
+    try:
+        legacy_runtime = gator_dir / ".includes" / "scripts"
+        if pin and legacy_runtime.is_dir():
+            n = sum(1 for f in legacy_runtime.rglob("*") if f.is_file())
+            shutil.rmtree(legacy_runtime)
+            print(f"  Runtime scripts: removed {n} repo-resident file(s) — "
+                  f"the machine-side runtime (pin {pin['runtime_version']}) "
+                  f"is now authoritative")
+    except Exception as e:  # noqa: BLE001
+        print(f"  Runtime scripts: removal skipped ({type(e).__name__}: {e})")
 
     print_result(added, updated, unchanged, entry_point_counts=entry_point_counts)
 

@@ -327,14 +327,33 @@ class TestPinAwareWrappers:
         for content in hooks.values():
             assert 'warning mode' in content
 
-    def test_no_dispatcher_generates_pre_phase3_stub(self):
+    def test_no_dispatcher_generates_stub_without_dispatch_branch(self):
         """Standalone template runs (no CLI importable) generate stubs
-        with NO dispatcher branch — byte-shape of the pre-Phase-3 era."""
+        with NO dispatcher branch. Phase 4: the fail-closed pin-refuse
+        branch is ALWAYS present — a pinned, script-less repo must never
+        commit ungoverned even when this stub was generated without a
+        resolvable dispatcher."""
         with patch.object(update, "_installed_dispatcher_path", return_value=None):
             hooks = update.build_git_hook_wrappers()
             for content in hooks.values():
-                assert "runtime-pin.json" not in content
                 assert "gator-hook.py" not in content
+                assert "runtime-pin.json" in content  # the refuse branch
+            assert "sys.exit(1)" in hooks["pre-commit"]
+            assert "sys.exit(1)" not in hooks["post-commit"]
+
+    def test_pin_refuse_branch_blocking_matrix(self):
+        """Phase 4: pinned + script-missing fails closed ONLY for
+        pre-commit; commit-msg/post-commit warn-and-proceed."""
+        with patch.object(update, "_installed_dispatcher_path",
+                          return_value="/fake/gator-hook.py"):
+            hooks = update.build_git_hook_wrappers()
+        pre = hooks["pre-commit"]
+        assert "pipx install gator-command" in pre
+        refuse_idx = pre.index("not os.path.isfile(script)")
+        assert "sys.exit(1)" in pre[refuse_idx:]
+        for name in ("commit-msg", "post-commit"):
+            assert "pipx install gator-command" in hooks[name]
+            assert "sys.exit(1)" not in hooks[name]
 
     def test_dispatcher_branch_forwards_argv(self):
         """The dispatcher call forwards sys.argv[1:] (commit-msg needs

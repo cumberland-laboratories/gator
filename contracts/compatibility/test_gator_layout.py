@@ -28,7 +28,10 @@ REQUIRED_DIRS_ROOT = {
 REQUIRED_DIRS_INCLUDES = {
     "reference-notes",
     "procedures",
-    "scripts",
+    # "scripts" retired here by runtime-split Phase 4 (2026-08-19):
+    # fresh installs carry NO repo-resident runtime — the machine-side
+    # runtime executes via the dispatcher and .gator/runtime-pin.json
+    # records what is in force (asserted below).
 }
 
 REQUIRED_STUBS = {
@@ -118,6 +121,18 @@ def test_gatorize_install_produces_required_layout(tmp_path: Path, gatorize_mod)
         assert (gator_dir / ".includes" / d).is_dir(), (
             f"missing required includes dir: .gator/.includes/{d}"
         )
+
+    # Runtime-split Phase 4 contract: no repo-resident runtime; a valid
+    # runtime pin instead.
+    assert not (gator_dir / ".includes" / "scripts").is_dir(), (
+        "fresh installs must NOT ship .includes/scripts/ post-Phase-4"
+    )
+    pin_file = gator_dir / "runtime-pin.json"
+    assert pin_file.is_file(), "fresh installs must emit runtime-pin.json"
+    import json as _json
+    pin = _json.loads(pin_file.read_text(encoding="utf-8"))
+    assert pin.get("schema") == "gator-runtime-pin-v1"
+    assert pin.get("manifest"), "pin manifest must not be empty (wheel-sourced)"
 
     # Required stubs at root
     for name in REQUIRED_STUBS:

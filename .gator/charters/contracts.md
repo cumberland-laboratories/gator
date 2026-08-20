@@ -186,7 +186,7 @@ contracts/
 | `contracts/compatibility/test_summary_schema.py` | parametrized `test_commit_summary_frontmatter`, `test_commit_summary_body_sections`, `test_live_commit_summaries_conform`, `test_session_summary_frontmatter`, `test_session_summary_body_sections`, `test_live_session_summaries_conform`, spec-present checks | spec + fixture files, live `.gator/sessions/*commit*.md` and `.gator/sessions/*.md` with `schema: gator-session-summary-v1` | nothing |
 | `contracts/compatibility/test_enterprise_marker.py` | marker validity + `_is_enterprise_active` reference impl + fail-closed tests | schema JSON, fixtures, `tmp_path` | temp `.gator/enterprise.json` |
 | `contracts/compatibility/test_hook_modes.py` | `test_gator_enforce_uses_canonical_enum`, `test_pre_commit_hook_validates_against_canonical_enum`, `test_default_config_stub_uses_strict` | shipped script sources | nothing |
-| `contracts/compatibility/test_gator_layout.py` | imports `gatorize.action_install_gator` via `importlib` and runs into `tmp_path`; asserts layout marker, stubs, `.includes/`, machine-id KV format | `src/gator_command/scripts/gatorize.py`, `tmp_path` | tmp `.gator/` tree |
+| `contracts/compatibility/test_gator_layout.py` | imports `gatorize.action_install_gator` via `importlib` and runs into `tmp_path`; asserts layout marker, stubs, `.includes/`, machine-id KV format. **Runtime-split Phase 4 (2026-08-19)**: `scripts` removed from `REQUIRED_DIRS_INCLUDES`; now asserts the Phase-4 shape — `.includes/scripts/` ABSENT on fresh installs + `.gator/runtime-pin.json` present, schema-tagged `gator-runtime-pin-v1`, with a non-empty wheel-sourced manifest | `src/gator_command/scripts/gatorize.py`, `tmp_path` | tmp `.gator/` tree |
 
 ## Called by (`←`)
 

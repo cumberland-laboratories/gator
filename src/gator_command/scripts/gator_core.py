@@ -574,7 +574,7 @@ def _read_machine_id_value():
     return None
 
 
-def write_runtime_pin(gator_dir, version=None):
+def write_runtime_pin(gator_dir, version=None, runtime_dir=None):
     """Write .gator/runtime-pin.json — the committed record of which shipped
     runtime is in force in this repo (schema gator-runtime-pin-v1).
 
@@ -597,7 +597,14 @@ def write_runtime_pin(gator_dir, version=None):
     from datetime import datetime, timezone
 
     gator_dir = Path(gator_dir)
-    scripts_dir = gator_dir / ".includes" / "scripts"
+    # Manifest source (runtime-split Phase 4): callers pass the SOURCE
+    # runtime dir (the wheel's template scripts — the bytes actually in
+    # force under Variant A, and stable across checkouts, sidestepping
+    # the autocrlf concern for wheel-sourced manifests). Fallback probes
+    # the repo-resident copies for pre-Phase-4 standalone runs.
+    scripts_dir = Path(runtime_dir) if runtime_dir else None
+    if scripts_dir is None or not scripts_dir.is_dir():
+        scripts_dir = gator_dir / ".includes" / "scripts"
     if not scripts_dir.is_dir():
         scripts_dir = gator_dir / "scripts"
     if not scripts_dir.is_dir():

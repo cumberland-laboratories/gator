@@ -50,6 +50,11 @@ HOOK_MAP = {
     "post-commit":   ("gator-pre-commit.py", ["--phase", "cleanup"], False),
     "session-open":  ("gator-session-open.py", [], False),
     "session-start": ("gator-session-start.py", [], False),
+    # Not a git/vendor hook, but the same dispatch problem (runtime-split
+    # Phase 4): post-removal repos carry no enforcer-review.py, so the
+    # constitution's enforcement path needs a machine-side invocation —
+    # `gator hook enforcer-review [args...]`. Non-blocking; passthrough.
+    "enforcer-review": ("enforcer-review.py", [], True),
 }
 
 # Hooks whose failure must block the git operation. Everything else

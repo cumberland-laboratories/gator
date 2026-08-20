@@ -503,3 +503,45 @@ class TestVersionTuple:
 
     def test_dev_suffix_stops_cleanly(self):
         assert gator_core._version_tuple("2.9.dev1") == (2, 9)
+
+
+class TestWriteRuntimePinRuntimeDir:
+    """Runtime-split Phase 4a: manifest source override — callers pass the
+    wheel's template scripts (the bytes in force under Variant A)."""
+
+    def test_runtime_dir_used_when_provided(self, tmp_path):
+        import hashlib
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        wheel = tmp_path / "wheel-scripts"
+        wheel.mkdir()
+        (wheel / "gator-pre-commit.py").write_bytes(b"wheel bytes\n")
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9",
+                                           runtime_dir=wheel)
+        assert pin is not None
+        expected = "sha256:" + hashlib.sha256(b"wheel bytes\n").hexdigest()
+        assert pin["manifest"] == {"gator-pre-commit.py": expected}
+
+    def test_runtime_dir_wins_over_repo_copy(self, tmp_path):
+        gator = tmp_path / ".gator"
+        scripts = gator / ".includes" / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "gator-pre-commit.py").write_bytes(b"repo bytes\n")
+        wheel = tmp_path / "wheel-scripts"
+        wheel.mkdir()
+        (wheel / "gator-pre-commit.py").write_bytes(b"wheel bytes\n")
+        pin = gator_core.write_runtime_pin(gator, version="9.9.9",
+                                           runtime_dir=wheel)
+        import hashlib
+        expected = "sha256:" + hashlib.sha256(b"wheel bytes\n").hexdigest()
+        assert pin["manifest"]["gator-pre-commit.py"] == expected
+
+    def test_missing_runtime_dir_falls_back_to_repo(self, tmp_path):
+        gator = tmp_path / ".gator"
+        scripts = gator / ".includes" / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "x.py").write_bytes(b"x\n")
+        pin = gator_core.write_runtime_pin(
+            gator, version="9.9.9", runtime_dir=tmp_path / "nope")
+        assert pin is not None
+        assert set(pin["manifest"]) == {"x.py"}

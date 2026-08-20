@@ -227,11 +227,11 @@ def action_install_gator(target):
                     # Shipped procedure → .includes/
                     shutil.copy2(str(f), str(includes / "procedures" / f.name))
 
-    # Scripts → .includes/scripts/ (including hooks/)
-    scripts_src = TEMPLATES / "scripts"
-    if scripts_src.is_dir():
-        (includes / "scripts").mkdir(exist_ok=True)
-        copy_tree_overlay(scripts_src, includes / "scripts")
+    # Runtime scripts are NOT copied into repos (runtime-split Phase 4,
+    # 2026-08-19): the machine-side runtime (installed wheel) executes via
+    # the gator-hook dispatcher; the committed runtime-pin.json (emitted
+    # below) records which runtime is in force. Pre-Phase-4 installs
+    # copied templates/scripts/ into .includes/scripts/ here.
 
     # User-content directories get template content directly (not shipped —
     # these are starter content like docs/, artifacts/, threads/)
@@ -270,7 +270,7 @@ def action_install_gator(target):
     # failure must never fail the install.
     try:
         from gator_core import write_runtime_pin
-        pin = write_runtime_pin(gator_dir)
+        pin = write_runtime_pin(gator_dir, runtime_dir=TEMPLATES / "scripts")
         if pin:
             log_step(f"Runtime pin recorded ({pin['runtime_version']}, "
                      f"{len(pin['manifest'])} files).")

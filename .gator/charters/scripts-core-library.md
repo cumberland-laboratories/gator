@@ -36,13 +36,13 @@ Filesystem: same as `get_version()`
 <- `gator-version.py --short`
 -> `get_version()`
 
-### write_runtime_pin(gator_dir, version=None) / _read_machine_id_value()
+### write_runtime_pin(gator_dir, version=None, runtime_dir=None) / _read_machine_id_value()
 File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — repo-resident gator-update imports the repo-side gator_core)
 Runtime-split Phase 1 (roadmap item 19, Variant A ratified 2026-08-18). Writes `.gator/runtime-pin.json` (schema `gator-runtime-pin-v1`, contract at `contracts/schemas/`): `runtime_version` (arg or `get_version()`), `pinned_at` (UTC Z), `pinned_by_machine` (best-effort `~/.gator/machine-id` `id:` field via `_read_machine_id_value`, None on any failure — never raises), and `manifest` = sha256 of every file under the shipped scripts dir (`.includes/scripts/` v2-first, `scripts/` v1 fallback; `__pycache__` excluded), keyed by posix relpath. Returns the pin dict, or None when no shipped scripts dir exists (no file written).
 Filesystem: shipped scripts dir (R), `~/.gator/machine-id` (R), `.gator/runtime-pin.json` (W)
 <- `gator-update.py::main()` (post-stamp, best-effort), `gatorize.py` v2 install path (post-`write_gator_version`, best-effort)
 -> `get_version()`
-! The manifest hashes ON-DISK bytes — "the runtime in force on this checkout". Under `core.autocrlf` the same committed content yields different working-tree bytes per platform, so cross-platform manifest comparison is NOT valid; Phase 2 verification must compare git blob hashes or normalize newlines (plan §8 risk 7).
+! Phase 4a (2026-08-19): new `runtime_dir` param — callers (both gator-update copies + gatorize) pass the WHEEL's template scripts dir, so the manifest hashes the bytes actually in force under Variant A. Wheel-sourced manifests are also checkout-stable (wheel files never pass through git's autocrlf), largely retiring the risk-7 caveat for pinned repos; the repo-probe fallback (v2 → v1) remains for standalone pre-Phase-4 runs, where the on-disk-bytes caveat still applies.
 ! Emission is additive and reader-free until the Phase 2 resolver lands. Callers wrap in try/except — a pin failure must never fail an update or install.
 ! Pin is COMMITTED (not gitignored) — it is the from-git-history proof of which runtime governed each commit.
 

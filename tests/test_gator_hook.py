@@ -138,10 +138,14 @@ class TestPlanDispatch:
 
 
 class TestHookMap:
-    def test_all_five_hooks_mapped(self):
+    def test_all_six_entries_mapped(self):
         assert set(hook.HOOK_MAP) == {"pre-commit", "commit-msg",
                                       "post-commit", "session-open",
-                                      "session-start"}
+                                      "session-start", "enforcer-review"}
+
+    def test_enforcer_review_is_non_blocking_passthrough(self):
+        assert "enforcer-review" not in hook.BLOCKING_HOOKS
+        assert hook.HOOK_MAP["enforcer-review"][2] is True
 
     def test_only_pre_commit_blocks(self):
         assert hook.BLOCKING_HOOKS == {"pre-commit"}

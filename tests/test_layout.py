@@ -774,3 +774,36 @@ class TestMigration:
         assert ".gator/scripts/" in paths
         # Both .includes/scripts/ and root scripts/ exist → merge-conflict reason
         assert "could not be merged" in paths[".gator/scripts/"]
+
+
+class TestPinnedScriptlessV2:
+    """Runtime-split Phase 4 S1 (2026-08-19): scripts-absent-with-pin is a
+    VALID v2 state — the plan's highest-risk seam. Without this, every
+    post-Phase-4 repo resolved invalid, breaking update/init/state."""
+
+    def _v2_base(self, tmp_path):
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        includes.mkdir(parents=True)
+        (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        (gator / "mission.md").write_text("# m\n", encoding="utf-8")
+        return tmp_path
+
+    def test_pin_without_scripts_is_valid_v2(self, tmp_path):
+        repo = self._v2_base(tmp_path)
+        (repo / ".gator" / "runtime-pin.json").write_text(
+            '{"schema": "gator-runtime-pin-v1", "runtime_version": "9.9.9",'
+            ' "pinned_at": "2026-08-19T00:00:00Z", "manifest": {}}',
+            encoding="utf-8")
+        assert gator_layout.resolve_gator_layout(repo) == "v2"
+
+    def test_no_pin_no_scripts_stays_invalid(self, tmp_path):
+        repo = self._v2_base(tmp_path)
+        assert gator_layout.resolve_gator_layout(repo) == "invalid"
+
+    def test_scripts_without_pin_still_valid_v2(self, tmp_path):
+        repo = self._v2_base(tmp_path)
+        (repo / ".gator" / ".includes" / "scripts").mkdir()
+        assert gator_layout.resolve_gator_layout(repo) == "v2"

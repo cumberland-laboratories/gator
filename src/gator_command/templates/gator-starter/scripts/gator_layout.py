@@ -212,8 +212,11 @@ def _has_required_includes_content(includes_dir):
     """
     if not includes_dir.is_dir():
         return False
-    # Minimum: scripts/ directory must exist (contains the pre-commit hook)
-    if not (includes_dir / "scripts").is_dir():
+    # Minimum: scripts/ dir (pre-Phase-4 repos: contains the pre-commit
+    # hook) OR a runtime pin at the gator root (runtime-split Phase 4,
+    # 2026-08-19: pinned repos run the machine-side runtime and
+    # legitimately carry no repo-resident scripts).
+    if not (includes_dir / "scripts").is_dir() and             not (includes_dir.parent / "runtime-pin.json").is_file():
         return False
     # Minimum: at least one shipped root file (constitution or startup)
     has_root_file = (

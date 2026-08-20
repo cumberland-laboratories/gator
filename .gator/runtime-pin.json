@@ -1,7 +1,7 @@
 {
   "schema": "gator-runtime-pin-v1",
   "runtime_version": "2.8.0",
-  "pinned_at": "2026-08-20T00:06:29Z",
+  "pinned_at": "2026-08-20T00:21:41Z",
   "pinned_by_machine": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
   "manifest": {
     "enforcer-prompt.md": "sha256:a93b8ab23efa399a5a8309d8653a17184fa3619c8eb767a94a81d658d133c1b0",
@@ -13,14 +13,11 @@
     "gator-pulse.py": "sha256:639bf7113b9ee474b6680079dbca8e2d436087a6c29c221133938950424375ec",
     "gator-session-open.py": "sha256:93b74dcd6fa6a61079d7df02447be7fb726554f69bb6cf8967aaa052c357c3f9",
     "gator-session-start.py": "sha256:6946b995e6ee356f032bc21c9da6f07d78d376db62450e77b8b891b79d1827c9",
-    "gator-update.py": "sha256:15ae6e43ecb2d5b4a6d8d522baa21ec363ab049af3fee7feb76a64440fa06d83",
+    "gator-update.py": "sha256:a9e1744aeb9392665a48e31deb077651ecff92f1ed4518be74a266eeb941ff08",
     "gator-version.py": "sha256:8f2baf17d989a0473bebcfabe4f6b65a890faad0f4bb4aedfd60b5b29d801960",
-    "gator_core.py": "sha256:55557b155e857f96e6363a07c69f55a16ec9eadcfe0164135dcabc653a73f644",
+    "gator_core.py": "sha256:36dc6a666b5f468abc576b1a5b695b760411c7585a3f1e7c881b2fd5a52560db",
     "gator_diagnostics.py": "sha256:4e8efca69d6d346749cc4847fa4d69742435b44331e8f22361889affaf3c350c",
-    "gator_layout.py": "sha256:e4908427df07ce00ebb668cb5728805bdfe297a2f135e62aacd65805043930f7",
-    "hooks/commit-msg": "sha256:8e47763aec477394996319111dcea98f584d06c729380fa40b1fbbcc1eafecca",
-    "hooks/post-commit": "sha256:2102eb8f521485775ef8de2f3e13e890cbf0ff8a41a214b984cb85c5a527e2d6",
-    "hooks/pre-commit": "sha256:b978832dfa3cff36e25459994ae09a5cd4827ef512a7ffa3d5c0d956e7ef9cda",
+    "gator_layout.py": "sha256:404440357e8f49fb038c2ea106ad2fe023624a5cf8439a7e558e263f17405dc6",
     "precommit_charter.py": "sha256:0f351ae0a60618dcc26066371a4bad9774e3de5322e944abc79837c1c8491d53",
     "precommit_lint.py": "sha256:52b36bab391018f8078816572cb1608b3e08b71c7d517619aeaafb45c632ff6e",
     "precommit_session.py": "sha256:ae0fa57a9117b44c9a8c4fb7ed094c68b52310712c5bc9dc98642dcb56e833f1"
