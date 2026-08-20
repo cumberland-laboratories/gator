@@ -65,3 +65,6 @@ GEMINI.local.md
 # Enterprise local bring-up scaffolding (machine-local, per 2026-08-06 plan)
 .venv-enterprise-local/
 .env-enterprise-local
+
+# Entry-point managed-block refresh backups (machine-local safety nets)
+*.pre-gator-update
