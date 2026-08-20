@@ -10,7 +10,7 @@ setup (root constitution, source charters under `gator-command/charters/`)
 that this fleet template does not describe.
 -->
 
-Run the Gator boot sequence by executing: `gator init` (or find and run `gator-init.py` in `.gator/scripts/` or `.gator/.includes/scripts/` if the CLI is not installed).
+Run the Gator boot sequence by executing: `gator init` (requires the Gator CLI — `pipx install gator-command`; pre-2.9 repos may still carry a runnable `gator-init.py` in `.gator/scripts/` or `.gator/.includes/scripts/`).
 
 Display the output exactly as printed — do not summarize, reformat, or interpret it. This is the standardized Gator orientation display.
 

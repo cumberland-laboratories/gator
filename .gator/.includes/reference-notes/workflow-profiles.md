@@ -80,7 +80,7 @@ Architect gives instruction
 - **Post-code review**: Standard review of the diff against charters.
 - Architect is actively engaged at all checkpoints.
 
-**Pre-code review** reviews a free-text *plan* before any diff exists — so it is **not** a job for `enforcer-review.py`, which reviews charters against an actual diff/code, not a text plan. Pre-code plan review is run by the **Architect** independently in a separate terminal — e.g. `codex review "Read all charters in .gator/charters/. Here is the proposed plan: [plan]. Does this plan violate any charter boundaries, TRIPWIREs, or cross-cutting patterns? Report concerns."` The primary agent never invokes a CLI enforcer directly; its trust-boundaried path — `python .gator/scripts/enforcer-review.py` — is for **post-code** review of an actual diff.
+**Pre-code review** reviews a free-text *plan* before any diff exists — so it is **not** a job for `enforcer-review.py`, which reviews charters against an actual diff/code, not a text plan. Pre-code plan review is run by the **Architect** independently in a separate terminal — e.g. `codex review "Read all charters in .gator/charters/. Here is the proposed plan: [plan]. Does this plan violate any charter boundaries, TRIPWIREs, or cross-cutting patterns? Report concerns."` The primary agent never invokes a CLI enforcer directly; its trust-boundaried path — `gator hook enforcer-review` — is for **post-code** review of an actual diff.
 
 ---
 

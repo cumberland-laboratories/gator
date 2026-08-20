@@ -140,13 +140,12 @@ All dashboard POST endpoints (config, topology, update, gatorize, fetch, pull, r
 
 **Cleanup semantics**: on both read and write, drop entries where `started_at > 24h ago` (`_AVS_MAX_AGE_SECONDS = 86400`). Entries without a parseable `started_at` are preserved (defensive — better to keep a maybe-stale entry than silently drop a valid one). CWD filter (entry's `cwd` field must match this repo) applies on read only — file itself is shared across all sessions on the machine that happen to have the same repo mounted.
 
-**Sync obligation — THREE-WAY (was originally documented as two-way; Codex Finding #1 from 2026-08-07 review surfaced the missing third)**: `precommit_session.py` and `gator-session-start.py` exist in THREE locations that MUST stay byte-identical:
+**Sync obligation — TWO-WAY as of runtime-split Phase 4 (2026-08-19; historically three-way per Codex Finding #1 from 2026-08-07, then shrunk when repos stopped carrying runtime)**: `precommit_session.py` and `gator-session-start.py` exist in TWO locations that MUST stay byte-identical:
 
-1. `.gator/.includes/scripts/` — SHIPPED for v2-layout repos gatorized with `gator gatorize`.
-2. `src/gator_command/templates/gator-starter/scripts/` — TEMPLATE, copied INTO new repos by `gatorize`'s `_install_scripts` step.
-3. `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` — copied INTO new repos by `gator-enterprise repo init`'s `_install_bundled_scripts` step (`enterprise/enterprise-cli/gator_enterprise_cli/commands/repo_init.py:135-145`).
+1. `src/gator_command/templates/gator-starter/scripts/` — the WHEEL RUNTIME (executed machine-side via the gator-hook dispatcher; also the gatorize/update pin-manifest source).
+2. `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` — copied INTO new repos by `gator-enterprise repo init`'s `_install_bundled_scripts` step (`repo_init.py:135-145`).
 
-Missing any one of these means one class of provisioning gets stale code. Codex Finding #1 caught exactly this: the multi-session commit updated 1+2 but not 3, so freshly `gator-enterprise repo init`'d repos still ran the old v1-only path. Every future edit to either file MUST land in all three.
+The historical first location (`.gator/.includes/scripts/`, repo-resident shipped copies) was RETIRED by Phase 4 — `tests/test_multi_session.py::test_repo_resident_copy_retired` pins that it stays gone in this repo, and `test_wheel_and_bundled_copies_byte_identical` pins the remaining pair. The pair dissolves entirely when Enterprise bundled_scripts retire (runtime-split D4 / Post-2.6 item 4). Until then, every edit to either file MUST land in both.
 
 **PID recycling protection**: `_walk_parent_pids()` returns `[(pid, started_at_or_none), ...]` tuples. `_pick_session_for_commit()` matches BOTH the ancestor PID number AND the session's `owner_pid_started_at` (via `_pid_start_times_match` — fuzzy string compare with graceful degradation when either side is None). Windows especially recycles PIDs aggressively; a session that recorded `owner_pid=1234` at SessionStart shouldn't match a different process that happens to have PID 1234 now. Codex Finding #2 caught the earlier code where the writer captured `owner_pid_started_at` but the reader ignored it.
 

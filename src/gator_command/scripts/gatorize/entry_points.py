@@ -38,12 +38,12 @@ def render_entry_content(has_command_post, agent_type="claude"):
     """Render the canonical Gator-managed block for an entry point."""
     gator_init_block = (
         '**"gator init" means**: run `gator init` (or find and run `gator-init.py` '
-        "in `.gator/scripts/` or `.gator/.includes/scripts/` if the CLI is not installed) "
+        "if the CLI is not installed, install it: `pipx install gator-command`; pre-2.9 repos may carry a runnable copy in `.gator/scripts/` or `.gator/.includes/scripts/`) "
         "and display the output exactly as printed. "
         "It is NOT a repo bootstrap or git init — it is the standardized Gator boot sequence. "
         "Run the command, show the output, then proceed with session opening.\n\n"
         '**"gator pulse"**: run `gator pulse` (or find and run `gator-pulse.py` '
-        "in `.gator/scripts/` or `.gator/.includes/scripts/`) "
+        "via the installed CLI — `pipx install gator-command` if missing) "
         "to generate `.gator/pulse.md` — a strategic operations brief with next steps, project "
         "assessment, roadmap check, priorities, and recent activity.\n\n"
         '**"gator loop join" (when given a loop token)**: you are joining a governed '
@@ -95,7 +95,7 @@ def render_entry_content(has_command_post, agent_type="claude"):
     if agent_type == "agents":
         content += (
             "\n\nIf the PI asks for an **enforcer review**, do not repurpose yourself as the enforcer. "
-            "Use the dedicated enforcer prompt — find `enforcer-prompt.md` in `.gator/scripts/` or `.gator/.includes/scripts/`."
+            "Use the dedicated enforcer prompt — `.gator/.includes/reference-notes/enforcer-prompt.md` (pre-2.9 repos: `.gator/.includes/scripts/enforcer-prompt.md`)."
         )
 
     content += cp_section

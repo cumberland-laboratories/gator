@@ -55,7 +55,7 @@ export ANTHROPIC_API_KEY=sk-ant-...          # macOS/Linux
 # $env:ANTHROPIC_API_KEY = "sk-ant-..."      # Windows PowerShell
 ```
 
-**Run**: `python .gator/scripts/enforcer-review.py`
+**Run**: `gator hook enforcer-review`
 
 **If the primary agent is Codex**: this is the cleanest way to use Anthropic as enforcer. The Python script applies the enforcer role directly and avoids any ambiguity from Claude CLI also seeing the repo's `CLAUDE.md`.
 
@@ -84,7 +84,7 @@ pip install openai
 export OPENAI_API_KEY=sk-...
 ```
 
-**Run**: `python .gator/scripts/enforcer-review.py`
+**Run**: `gator hook enforcer-review`
 
 ### Codex CLI (OpenAI)
 
@@ -102,9 +102,9 @@ npm install -g @openai/codex
 codex login
 ```
 
-**Run (primary agent)**: `python .gator/scripts/enforcer-review.py` with `provider: openai` configured. The primary agent always routes enforcement through the review script — it never invokes a CLI enforcer directly. That is not because the script hides findings (it prints to stdout too, and the agent reads them to summarize for the Architect), but because routing through it produces the durable `whiteboard.md` record and keeps enforcement structured. Independent CLI review is the Architect's to run in a separate terminal.
+**Run (primary agent)**: `gator hook enforcer-review` with `provider: openai` configured. The primary agent always routes enforcement through the review script — it never invokes a CLI enforcer directly. That is not because the script hides findings (it prints to stdout too, and the agent reads them to summarize for the Architect), but because routing through it produces the durable `whiteboard.md` record and keeps enforcement structured. Independent CLI review is the Architect's to run in a separate terminal.
 
-**Run (Architect, independent)**: `codex review "Read .gator/scripts/enforcer-prompt.md for full instructions. Review the uncommitted changes against the charters."`
+**Run (Architect, independent)**: `codex review "Read .gator/.includes/reference-notes/enforcer-prompt.md for full instructions. Review the uncommitted changes against the charters."`
 
 **Note**: Codex review runs in a read-only sandbox by default. The Architect runs this in a separate terminal for fully independent review (no primary agent involved). The agent may suggest it, but must not run the CLI itself.
 
@@ -133,7 +133,7 @@ pip install google-generativeai
 export GOOGLE_API_KEY=...
 ```
 
-**Run**: `python .gator/scripts/enforcer-review.py`
+**Run**: `gator hook enforcer-review`
 
 ### Claude Code CLI (Anthropic)
 
@@ -143,7 +143,7 @@ export GOOGLE_API_KEY=...
 
 **Run (Architect, independent)**: the Architect runs this in a separate terminal — it is not a primary-agent path.
 ```bash
-claude --print "$(cat .gator/scripts/enforcer-prompt.md)"
+claude --print "$(cat .gator/.includes/reference-notes/enforcer-prompt.md)"
 ```
 
 **Trade-off**: workable, but less clean than the Python Anthropic path when `CLAUDE.md` in the same repo defines Claude as the primary agent. The explicit enforcer prompt should steer the session correctly, but the role boundary is cleaner through `enforcer-review.py`. The primary agent's own enforcement path is always `enforcer-review.py`, never a direct `claude --print`.
@@ -172,7 +172,7 @@ claude --print "$(cat .gator/scripts/enforcer-prompt.md)"
 ollama pull llama3
 ```
 
-**Run**: `python .gator/scripts/enforcer-review.py`
+**Run**: `gator hook enforcer-review`
 
 **Trade-off**: Free and private, but slower and less capable than cloud models. Good enough for catching obvious charter violations. Won't match Sonnet/GPT on nuanced boundary analysis.
 
@@ -184,13 +184,13 @@ ollama pull llama3
 
 **No config changes needed.**
 
-**Run**: `python .gator/scripts/enforcer-review.py --layer 1`
+**Run**: `gator hook enforcer-review --layer 1`
 
 **Limitation**: Only catches secrets, SQL dangers, injection risks, TODO markers. Does **not** read charters, check TRIPWIREs, or verify boundary compliance. This is hygiene, not architectural review.
 
 ## How the Config File Works
 
-The enforcer config lives at `.gator/scripts/enforcer-config.json`. The primary agent edits this file when configuring the enforcer for the Architect.
+The enforcer config lives at `.gator/enforcer-config.json`. The primary agent edits this file when configuring the enforcer for the Architect.
 
 ```json
 {

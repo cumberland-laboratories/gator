@@ -170,7 +170,7 @@ The key principle: charters follow domain boundaries, not file boundaries. A pac
 Read each charter's `### func()` entries. Grep the covered files for those function names. If a charter says `### foo()` but `foo` doesn't exist in the code, it's stale. Also check `Covers:` lines — do those files still exist? This catches renames and deletions.
 
 **Level 2 — Enforcer review script (Architect triggers):**
-Run `python .gator/scripts/enforcer-review.py` — the enforcer review script sends the diff and relevant charters (selected via INDEX.md) to the configured model. It checks boundary violations, TRIPWIRE breaches, missing cross-references, and charter update accuracy. Token-efficient: caches charters across runs, loads only relevant charters via INDEX.
+Run `gator hook enforcer-review` — the enforcer review script sends the diff and relevant charters (selected via INDEX.md) to the configured model. It checks boundary violations, TRIPWIRE breaches, missing cross-references, and charter update accuracy. Token-efficient: caches charters across runs, loads only relevant charters via INDEX.
 
 **Level 3 — Full audit (Architect triggers, separate enforcer model or CLI):**
 For a repo-wide health check with no diff: the agent suggests the Architect run a CLI enforcer (a different model in a separate terminal) with a custom prompt — the Architect runs it independently; the agent does not invoke the CLI itself. This reads all charters and all code, not just recent changes.
@@ -211,7 +211,7 @@ Then walk them through it:
 | Any | Free local model | `provider: "ollama"`, `model: "llama3"` |
 | Any | No model, lint only | `provider: "none"` |
 
-Edit `.gator/scripts/enforcer-config.json`:
+Edit `.gator/enforcer-config.json`:
 ```json
 {
   "layer2_3": {
@@ -353,22 +353,22 @@ Open a new terminal in the project directory and run one of these:
 
 ```bash
 # Codex CLI (use the dedicated enforcer prompt explicitly)
-codex review "Read .gator/scripts/enforcer-prompt.md for full instructions. Review the uncommitted changes against the charters."
+codex review "Read .gator/.includes/reference-notes/enforcer-prompt.md for full instructions. Review the uncommitted changes against the charters."
 
 # Or with a specific prompt
 codex review "Read .gator/constitution.md and all charters in .gator/charters/. Review the uncommitted changes against the charters. Report findings with severity levels."
 
 # Claude Code
-claude --print "$(cat .gator/scripts/enforcer-prompt.md)"
+claude --print "$(cat .gator/.includes/reference-notes/enforcer-prompt.md)"
 
 # Gemini CLI
-gemini < .gator/scripts/enforcer-prompt.md
+gemini < .gator/.includes/reference-notes/enforcer-prompt.md
 ```
 
 **What the external enforcer agent should know:**
 
 When running a CLI enforcer in a separate terminal, the agent picks up its instructions from:
-1. **`.gator/scripts/enforcer-prompt.md`** -- the full enforcer prompt: what to read, what to check, output format
+1. **`.gator/.includes/reference-notes/enforcer-prompt.md`** -- the full enforcer prompt: what to read, what to check, output format
 2. **`AGENTS.md`** -- the primary-agent entrypoint for Codex; useful project context, but not the enforcer role definition
 
 For a custom audit (not just diff review), the Architect can prompt the enforcer directly:
@@ -393,7 +393,7 @@ Report findings with severity levels (CRITICAL/HIGH/MEDIUM/LOW).
 
 **Draw from**: `reference-notes/dashboard-operations.md` (if present)
 
-**Frame as**: Run `python .gator/scripts/gator-dashboard.py`. It starts on port 8420 and opens the browser. Done. Do not attempt to verify the launch or retry -- the server stays alive but agent tooling may falsely report it as completed. See the reference note for flags (`--no-open`, `--port`, `--snapshot`, `--repo`).
+**Frame as**: Run `gator dashboard`. It starts on port 8420 and opens the browser. Done. Do not attempt to verify the launch or retry -- the server stays alive but agent tooling may falsely report it as completed. See the reference note for flags (`--no-open`, `--port`, `--snapshot`, `--repo`).
 
 ### "How do I gatorize a repo?" / "What's gatorize?" / "Install gator"
 
@@ -407,7 +407,7 @@ Report findings with severity levels (CRITICAL/HIGH/MEDIUM/LOW).
 
 **Draw from**: `pulse.md`, `scripts/gator-pulse.py`
 
-**Frame as**: Run `python .gator/scripts/gator-pulse.py` to regenerate, then read `pulse.md`. Present the strategic brief.
+**Frame as**: Run `gator pulse` to regenerate, then read `pulse.md`. Present the strategic brief.
 
 ---
 

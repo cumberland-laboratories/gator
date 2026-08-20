@@ -5,7 +5,7 @@ Notes on launching and operating the Gator Dashboard from an agent session.
 ## Launching
 
 ```
-python .gator/scripts/gator-dashboard.py
+gator dashboard
 ```
 
 The script starts an HTTP server on port 8420, opens the browser, and enters `serve_forever()`. It works on the first invocation. Do not retry or attempt to verify the launch -- the server process stays alive but agent tooling may incorrectly report it as "completed" because only the startup banner is captured before the event loop takes over.

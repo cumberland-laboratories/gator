@@ -19,13 +19,13 @@ The agent must NOT run `gator-approve.py` itself. The agent must NOT create over
 The approval script accepts `--reason` and `--name` as CLI flags to avoid interactive prompts:
 
 ```
-python .gator/scripts/gator-approve.py --reason "<why the override is acceptable>" --name "<Architect name>"
+gator hook approve --reason "<why the override is acceptable>" --name "<Architect name>"
 ```
 
 **Example:**
 
 ```
-python .gator/scripts/gator-approve.py --reason "Cross-cutting charter already updated in prior commit. No new patterns." --name "Alan Gillette"
+gator hook approve --reason "Cross-cutting charter already updated in prior commit. No new patterns." --name "Alan Gillette"
 ```
 
 Both flags are required. If omitted, the script falls back to interactive prompts (which may fail in piped or non-interactive contexts).

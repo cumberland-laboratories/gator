@@ -33,7 +33,11 @@ import pytest
 
 # Load the two shipped modules by path so this test doesn't depend on
 # them being installed as a package (they live under .gator/.includes/).
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / ".gator" / ".includes" / "scripts"
+# Runtime-split Phase 4 (2026-08-19): this repo no longer carries
+# .gator/.includes/scripts/ — load the canonical template source
+# (the wheel runtime) instead.
+_SCRIPTS_DIR = (Path(__file__).resolve().parent.parent / "src" /
+                "gator_command" / "templates" / "gator-starter" / "scripts")
 
 
 def _load(module_name: str, filename: str):
@@ -623,21 +627,22 @@ class TestRenderSnippetVendorFallback:
 
 
 class TestByteIdentityAcrossThreeCopies:
-    """CODEX FINDING #1: precommit_session.py and gator-session-start.py
-    have THREE copies that must stay byte-identical:
+    """CODEX FINDING #1, amended by runtime-split Phase 4 (2026-08-19):
+    the original THREE-copy byte-identity contract shrank to TWO — the
+    repo-resident copy (`.gator/.includes/scripts/`, historical copy A)
+    no longer exists by design; repos run the machine-side wheel runtime.
+    Remaining copies that must stay byte-identical:
 
-      A. `.gator/.includes/scripts/` — shipped, used by v2-layout repos
-         gatorized with `gator gatorize`
-      B. `src/gator_command/templates/gator-starter/scripts/` — template,
-         copied INTO new repos by gatorize's `_install_scripts` step
+      B. `src/gator_command/templates/gator-starter/scripts/` — the wheel
+         runtime (executed via the gator-hook dispatcher)
       C. `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/`
          — copied INTO new repos by `gator-enterprise repo init`'s
          `_install_bundled_scripts` step
 
-    Drift means Enterprise-provisioned repos and gator-gatorize'd repos
-    run different code — the exact class of bug Codex caught: the
-    multi-session fix landed in A + B but not C, so freshly `repo init`'d
-    repos still ran v1-only single-session logic."""
+    The B⟷C pair dissolves entirely when Enterprise bundled_scripts
+    retire (runtime-split decision D4 / roadmap Post-2.6 item 4). Drift
+    still means Enterprise-provisioned repos run different code than the
+    wheel runtime — the original Codex bug class."""
 
     _REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -654,8 +659,7 @@ class TestByteIdentityAcrossThreeCopies:
         # byte-identity assertion would fail on prior drift and mask
         # the real change.
     ])
-    def test_three_copies_byte_identical(self, filename):
-        shipped = self._REPO_ROOT / ".gator" / ".includes" / "scripts" / filename
+    def test_wheel_and_bundled_copies_byte_identical(self, filename):
         template = (
             self._REPO_ROOT / "src" / "gator_command" / "templates"
             / "gator-starter" / "scripts" / filename
@@ -664,19 +668,25 @@ class TestByteIdentityAcrossThreeCopies:
             self._REPO_ROOT / "enterprise" / "enterprise-cli"
             / "gator_enterprise_cli" / "bundled_scripts" / filename
         )
-        for p in (shipped, template, bundled):
+        for p in (template, bundled):
             assert p.exists(), f"missing copy: {p}"
-        shipped_bytes = shipped.read_bytes()
-        template_bytes = template.read_bytes()
-        bundled_bytes = bundled.read_bytes()
-        assert shipped_bytes == template_bytes, (
-            f"{filename}: shipped != template. gatorize'd new repos "
-            f"and update'd existing repos will run different code."
+        assert template.read_bytes() == bundled.read_bytes(), (
+            f"{filename}: wheel-runtime template != enterprise-cli "
+            f"bundled_scripts. Enterprise-provisioned repos would run "
+            f"different code than the wheel runtime."
         )
-        assert shipped_bytes == bundled_bytes, (
-            f"{filename}: shipped != enterprise-cli bundled_scripts. "
-            f"Enterprise-provisioned repos (via `gator-enterprise repo "
-            f"init`) will run different code than base-gator repos — "
-            f"exactly the Codex Finding #1 class of bug."
+
+    @pytest.mark.parametrize("filename", [
+        "precommit_session.py",
+        "gator-session-start.py",
+    ])
+    def test_repo_resident_copy_retired(self, filename):
+        """Phase 4 contract: this repo carries NO repo-resident runtime —
+        the historical copy A must stay gone."""
+        shipped = self._REPO_ROOT / ".gator" / ".includes" / "scripts" / filename
+        assert not shipped.exists(), (
+            f"{filename} reappeared in .gator/.includes/scripts/ — the "
+            f"runtime split removed repo-resident runtime; check whether "
+            f"an old gator-update re-shipped it."
         )
 

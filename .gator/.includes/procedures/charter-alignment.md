@@ -57,7 +57,7 @@ For deeper misalignment, ask the Architect to run the enforcer review script or 
 
 ```bash
 # Enforcer review script (uses configured model, diff-based)
-python .gator/scripts/enforcer-review.py
+gator hook enforcer-review
 
 # CLI enforcer (separate model, full repo-wide audit, no diff needed)
 codex review "Read all charters in .gator/charters/. Read the code they cover. Report any places where the code has drifted from what the charters describe -- missing functions, stale entries, boundary violations, and broken cross-references."

@@ -3,9 +3,9 @@
 You are the primary agent for this project.
 
 <!-- GATOR:BEGIN -->
-**"gator init" means**: run `gator init` (or find and run `gator-init.py` in `.gator/scripts/` or `.gator/.includes/scripts/` if the CLI is not installed) and display the output exactly as printed. It is NOT a repo bootstrap or git init — it is the standardized Gator boot sequence. Run the command, show the output, then proceed with session opening.
+**"gator init" means**: run `gator init` (or find and run `gator-init.py` if the CLI is not installed, install it: `pipx install gator-command`; pre-2.9 repos may carry a runnable copy in `.gator/scripts/` or `.gator/.includes/scripts/`) and display the output exactly as printed. It is NOT a repo bootstrap or git init — it is the standardized Gator boot sequence. Run the command, show the output, then proceed with session opening.
 
-**"gator pulse"**: run `gator pulse` (or find and run `gator-pulse.py` in `.gator/scripts/` or `.gator/.includes/scripts/`) to generate `.gator/pulse.md` — a strategic operations brief with next steps, project assessment, roadmap check, priorities, and recent activity.
+**"gator pulse"**: run `gator pulse` (or find and run `gator-pulse.py` via the installed CLI — `pipx install gator-command` if missing) to generate `.gator/pulse.md` — a strategic operations brief with next steps, project assessment, roadmap check, priorities, and recent activity.
 
 **"gator loop join" (when given a loop token)**: you are joining a governed planning loop. Before acting: (1) read the loop protocol at `procedures/gator-loop-protocol.md` (in `.gator/`, `.gator/.includes/`, or `gator-command/`, whichever exists) — this is your behavioral contract, (2) run `gator loop status --token <your-token>` to see your role and whether it is your turn, (3) read the relevant files from the loop directory shown in the status output (`sketch.md`, `plan.current.md`, or `findings.current.md`), (4) follow the 10 rules in the protocol exactly. Submit artifacts only through the CLI (`gator loop submit-draft` or `gator loop submit-review`). Never edit loop directory files directly.
 

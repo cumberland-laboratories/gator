@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 4d: restore Architect override + machine-side enforcer paths (Phase 0 audit misses)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "phase-4",
+    "enforcer",
+    "architect-override",
+    "audit-gap"
+  ],
+  "commit": "16d7cc544dfd6499734c4bd90d418689553d0972",
+  "short_commit": "16d7cc5",
+  "snippet_id": "snippet-16d7cc544dfd6",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "b30aa38ad09edc6a80555fede2a3a24167635b8c",
+  "started_at": "2026-08-20T00:51:35Z",
+  "ended_at": "2026-08-20T00:51:35Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-20-gator-b30aa38ad09ed.json",
+    "src/gator_command/scripts/gator-hook.py",
+    "src/gator_command/templates/gator-starter/scripts/enforcer-review.py",
+    "tests/test_gator_hook.py",
+    "tests/test_hooks.py"
+  ],
+  "notes": [
+    "**Phase 4d — two Phase-0 audit MISSES repaired** (surfaced by the 4c prose sweep; addendum §6a written into the Phase 0 vault artifact with the method lesson: audits must sweep documented human procedures and user-owned-files-in-shipped-dirs, not just code invokers).",
+    "**MISS-1, live regression**: `gator-approve.py` (Architect override) was removed with the runtime — the documented `python .gator/scripts/gator-approve.py` invocation broke on every post-Phase-4 repo including this one. Fixed: HOOK_MAP gains `approve` (non-blocking, `--reason`/`--name` passthrough) → `gator hook approve`. The script itself was already cwd-based and interactive-safe — zero changes needed. **Constitution guard preserved**: the agent must never invoke it; reachability is pinned by test (`test_approve_is_non_blocking_passthrough` asserts map shape + wheel-file existence), deliberately NOT by execution.",
+    "**MISS-2**: `enforcer-config.json` (user-owned provider config) lived inside the shipped scripts dir. `enforcer-review.py` gains `_resolve_config_path()` — canonical home `.gator/enforcer-config.json` at the user-owned root, legacy probes (`.includes/scripts/`, `scripts/`, script-dir) for pre-Phase-4 repos.",
+    "**`enforcer-review.py` made machine-side-executable**: `_resolve_repo_root()` is CWD-based (`find_gator_root()`, legacy script-position fallback); whiteboard writes resolve `<repo>/.gator/whiteboard.md` — **fixing a latent v2 bug** (old `dirname(SCRIPT_DIR)` path resolved to `.includes/whiteboard.md`; masked because the Architect-run external enforcer writes the whiteboard directly). Charter-verify probe gains the installed-wheel-sibling candidate.",
+    "**Live-verified**: `gator hook enforcer-review --layer 1 --no-whiteboard` → clean run through the dispatcher with cwd-resolved root.",
+    "Tests: `TestEnforcerReviewResolution` (4 — canonical-first, legacy fallback, default-when-none, cwd root) + dispatcher map updated to 7 entries + approve/enforcer reachability pins. Hook suites 57 pass.",
+    "Charters: repo-lifecycle (approve entry + agent-forbidden TRIPWIRE), cross-cutting (enforcer resolution rewiring + latent-bug provenance).",
+    "Riding: session snippet residue for `b30aa38`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

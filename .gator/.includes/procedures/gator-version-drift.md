@@ -11,6 +11,24 @@
 
 **Short answer**: this is routine, not an emergency. Git handles the mechanics; your job is to apply the right resolution rule **per file class**, then let the installed CLI re-canonicalize shipped content with one `gator update`. Do not ask the operator which Gator version they want — the answer is always the same: **the latest installed CLI wins, applied via `gator update` after the merge**.
 
+## 0a. Post-2.9 note (runtime split, Phase 4)
+
+From Gator 2.9 onward, updated repos NO LONGER carry runtime scripts —
+`.gator/.includes/scripts/` is removed and the committed
+`.gator/runtime-pin.json` records which machine-side runtime governs the
+repo. Consequences for this procedure:
+
+- The largest Class A merge surface (the scripts tree) no longer exists
+  on pinned repos — most shipped-content conflicts simply stop occurring.
+- A `runtime-pin.json` conflict resolves like any Class A file: take
+  either side whole, run `gator update` on the merged result, commit.
+- Merging a pinned branch with a pre-2.9 branch that still carries
+  scripts: resolve scripts-side conflicts with `--theirs`/`--ours`
+  (either), finish the merge, run `gator update` — it re-pins and
+  removes the scripts tree on the merged result.
+
+Everything below remains correct for pre-2.9 repos and mixed merges.
+
 ## 1. The one principle that resolves most of this
 
 Shipped Gator content is **generated, version-owned, and reproducible**. It is not source to be hand-merged — it is output that `gator update` can rewrite to canonical form at any time. Therefore a conflict in shipped content never needs a careful line-by-line merge: clear the conflict any valid way, finish the merge, run `gator update`, commit the result. The CLI is the merge tool for its own files.
