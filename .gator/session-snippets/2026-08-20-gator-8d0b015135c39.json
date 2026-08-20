@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "chore: untrack .pre-gator-update entry-point backups + gitignore the class",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "gitignore",
+    "governance-residue"
+  ],
+  "commit": "8d0b015135c39d98f485d6152dbcfd481b37422e",
+  "short_commit": "8d0b015",
+  "snippet_id": "snippet-8d0b015135c39",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "b2fcd0159220c3cee294daf1806e0516e2404474",
+  "started_at": "2026-08-20T01:07:28Z",
+  "ended_at": "2026-08-20T01:07:28Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-20-gator-b2fcd0159220c.json",
+    ".gitignore",
+    "AGENTS.md.pre-gator-update",
+    "CLAUDE.md.pre-gator-update",
+    "GEMINI.md.pre-gator-update"
+  ],
+  "notes": [
+    "The Phase 4c commit's `git add -A` accidentally committed three `*.pre-gator-update` files (the machine-local safety backups `gator update` writes when refreshing entry-point managed blocks, v2.3.0 design). They are residue, not content: untracked here and the class gitignored (`*.pre-gator-update`) so the mistake can't recur — same rationale as the v2.1.0 gitignoring of `whiteboard.md`/`commit_draft.md`/`status.json`.",
+    "Riding: session snippet residue for `b2fcd01`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

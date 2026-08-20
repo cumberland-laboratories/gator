@@ -427,3 +427,27 @@ class TestEnforcerReviewResolution:
         (tmp_path / ".gator").mkdir()
         monkeypatch.chdir(tmp_path)
         assert Path(er._resolve_repo_root()) == tmp_path.resolve()
+
+    def test_guidance_strings_name_canonical_config_path(self):
+        """Whiteboard 2026-08-20: the script's OWN docstring and operator
+        guidance must name the canonical config home — the 4c prose sweep
+        covered template .md files but missed strings inside the script,
+        leaving recovery guidance pointing at the retired scripts-dir
+        location exactly where an operator follows it. Source-text pin in
+        the test_hook_modes.py grep-anchored style; resolution-precedence
+        code (the legacy probe list) is exempt by construction."""
+        src = (Path(__file__).parent.parent / "src" / "gator_command" /
+               "templates" / "gator-starter" / "scripts" /
+               "enforcer-review.py").read_text(encoding="utf-8")
+        offenders = [
+            line for line in src.splitlines()
+            if ".gator/scripts/enforcer-config.json" in line
+            and "os.path.join" not in line  # the legacy probe is legitimate
+        ]
+        assert offenders == [], f"stale config-path guidance: {offenders}"
+        assert ".gator/enforcer-config.json" in src.split('"""')[1], (
+            "docstring must name the canonical config home"
+        )
+        assert "edit .gator/enforcer-config.json" in src, (
+            "operator guidance must name the canonical config home"
+        )

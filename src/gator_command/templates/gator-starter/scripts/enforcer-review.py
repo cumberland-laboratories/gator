@@ -7,17 +7,19 @@ Runs in three layers:
   Layer 2: Charter-grounded review (model reads charters + diff)
   Layer 3: Blast radius check (model reads cross-cutting + diff)
 
-Configuration: .gator/scripts/enforcer-config.json
+Configuration: .gator/enforcer-config.json  (canonical since the runtime
+split, Phase 4d — legacy pre-2.9 locations under the old scripts dirs are
+still probed for older repos; see _resolve_config_path)
   - Set provider/model/api_key_env for Layer 2-3
   - Supports: anthropic, openai, google, ollama, none
   - Layer 1 always runs regardless of configuration
 
-Usage:
-  python .gator/scripts/enforcer-review.py                    # review all modified files
-  python .gator/scripts/enforcer-review.py --files "a.py,b.py"  # review specific files
-  python .gator/scripts/enforcer-review.py --staged           # review git staged changes
-  python .gator/scripts/enforcer-review.py --layer 1          # mechanical lint only (no model)
-  python .gator/scripts/enforcer-review.py --format json      # JSON output
+Usage (via the installed CLI — this script executes from the wheel):
+  gator hook enforcer-review                    # review all modified files
+  gator hook enforcer-review --files "a.py,b.py"  # review specific files
+  gator hook enforcer-review --staged           # review git staged changes
+  gator hook enforcer-review --layer 1          # mechanical lint only (no model)
+  gator hook enforcer-review --format json      # JSON output
 
 Output goes to stdout and .gator/whiteboard.md (by default).
 The whiteboard is the authoritative PI-visible record. Use --no-whiteboard
@@ -803,7 +805,7 @@ def run_layer2_3(files, diff, config):
                 "message": (
                     f"{api_key_env} not set — skipping charter-grounded review (Layer 2-3).\n"
                     f"  To enable: set {api_key_env} in your environment.\n"
-                    f"  To use a different provider: edit .gator/scripts/enforcer-config.json.\n"
+                    f"  To use a different provider: edit .gator/enforcer-config.json.\n"
                     f"  Supported: anthropic, openai, google, ollama (free/local), none (disable).\n"
                     f"  Layer 1 mechanical lint still ran."
                 ),
