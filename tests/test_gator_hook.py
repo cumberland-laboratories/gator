@@ -138,10 +138,26 @@ class TestPlanDispatch:
 
 
 class TestHookMap:
-    def test_all_six_entries_mapped(self):
+    def test_all_seven_entries_mapped(self):
         assert set(hook.HOOK_MAP) == {"pre-commit", "commit-msg",
                                       "post-commit", "session-open",
-                                      "session-start", "enforcer-review"}
+                                      "session-start", "enforcer-review",
+                                      "approve"}
+
+    def test_approve_is_non_blocking_passthrough(self):
+        """Phase 4d: the Architect override path stays reachable post-
+        removal via `gator hook approve` — non-blocking, argv passthrough
+        (--reason/--name). Reachability is verified here rather than by
+        executing the script: the constitution forbids the agent running
+        gator-approve.py."""
+        assert "approve" not in hook.BLOCKING_HOOKS
+        assert hook.HOOK_MAP["approve"] == ("gator-approve.py", [], True)
+        wheel = hook._wheel_runtime_dir()
+        assert (wheel / "gator-approve.py").is_file()
+
+    def test_enforcer_review_reachable_in_wheel_runtime(self):
+        wheel = hook._wheel_runtime_dir()
+        assert (wheel / "enforcer-review.py").is_file()
 
     def test_enforcer_review_is_non_blocking_passthrough(self):
         assert "enforcer-review" not in hook.BLOCKING_HOOKS

@@ -383,3 +383,47 @@ class TestPinAwareWrappers:
         if script.exists():
             script.unlink()
         assert update.plan_hook_updates(gator_dir, repo_root) == []
+
+
+class TestEnforcerReviewResolution:
+    """Phase 4d: enforcer-review resolves the repo from CWD and the
+    user config from the .gator/ root (canonical) with legacy fallbacks."""
+
+    def _load_enforcer(self):
+        from conftest import load_script
+        return load_script("enforcer-review",
+                           search_dir=Path(__file__).parent.parent / "src" /
+                           "gator_command" / "templates" / "gator-starter" /
+                           "scripts")
+
+    def test_config_prefers_canonical_root_location(self, tmp_path, monkeypatch):
+        er = self._load_enforcer()
+        gator = tmp_path / ".gator"
+        (gator / ".includes" / "scripts").mkdir(parents=True)
+        (gator / "enforcer-config.json").write_text("{}", encoding="utf-8")
+        (gator / ".includes" / "scripts" / "enforcer-config.json").write_text(
+            "{}", encoding="utf-8")
+        got = er._resolve_config_path(str(tmp_path))
+        assert got.replace("\\", "/").endswith(".gator/enforcer-config.json")
+        assert ".includes" not in got
+
+    def test_config_falls_back_to_legacy_includes(self, tmp_path):
+        er = self._load_enforcer()
+        gator = tmp_path / ".gator"
+        (gator / ".includes" / "scripts").mkdir(parents=True)
+        (gator / ".includes" / "scripts" / "enforcer-config.json").write_text(
+            "{}", encoding="utf-8")
+        got = er._resolve_config_path(str(tmp_path))
+        assert ".includes" in got
+
+    def test_config_default_is_canonical_when_none_exist(self, tmp_path):
+        er = self._load_enforcer()
+        (tmp_path / ".gator").mkdir()
+        got = er._resolve_config_path(str(tmp_path))
+        assert got.replace("\\", "/").endswith(".gator/enforcer-config.json")
+
+    def test_repo_root_resolves_from_cwd(self, tmp_path, monkeypatch):
+        er = self._load_enforcer()
+        (tmp_path / ".gator").mkdir()
+        monkeypatch.chdir(tmp_path)
+        assert Path(er._resolve_repo_root()) == tmp_path.resolve()

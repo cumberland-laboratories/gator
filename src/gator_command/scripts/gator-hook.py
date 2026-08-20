@@ -55,6 +55,14 @@ HOOK_MAP = {
     # constitution's enforcement path needs a machine-side invocation —
     # `gator hook enforcer-review [args...]`. Non-blocking; passthrough.
     "enforcer-review": ("enforcer-review.py", [], True),
+    # Architect-only override approval (Phase 4d): post-removal repos
+    # carry no gator-approve.py — `gator hook approve --reason ... --name
+    # ...` is the machine-side path. The AGENT must never run this
+    # (constitution: unauthorized self-approval is a governance
+    # violation); the dispatcher merely makes it reachable for the
+    # ARCHITECT. The script itself is cwd-based and interactive-safe
+    # (stdin inherited).
+    "approve": ("gator-approve.py", [], True),
 }
 
 # Hooks whose failure must block the git operation. Everything else

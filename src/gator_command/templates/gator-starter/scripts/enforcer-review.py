@@ -34,11 +34,49 @@ import json
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 from gator_core import ensure_utf8_stdout, find_gator_root, resolve_thin_link
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "enforcer-config.json")
 MODEL_TIMEOUT_SECONDS = 120
 
-# Repo root: .gator/scripts/ → .gator/ → repo root
-_REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+
+def _resolve_repo_root():
+    """Governed repo root — CWD-based first (runtime-split Phase 4d).
+
+    Post-Phase-4 this script executes from the installed wheel (via
+    `gator hook enforcer-review`), where script-position arithmetic is
+    meaningless. `find_gator_root()` walks up from the CWD; the legacy
+    script-position derivation (.gator/scripts/ → repo root) remains as
+    the fallback for direct pre-Phase-4 invocations from outside a
+    governed tree.
+    """
+    cwd_root = find_gator_root()
+    if cwd_root:
+        return str(cwd_root)
+    return os.path.dirname(os.path.dirname(SCRIPT_DIR))
+
+
+def _resolve_config_path(repo_root):
+    """User-owned enforcer config, first match wins.
+
+    Phase 4d canonical home: `.gator/enforcer-config.json` (user-owned
+    root — a user file inside the shipped scripts dir was always a
+    classification wrinkle, and the shipped dir no longer exists in
+    post-Phase-4 repos). Legacy locations probed for pre-Phase-4 repos;
+    the canonical path is returned (for creation) when nothing exists.
+    """
+    candidates = [
+        os.path.join(repo_root, ".gator", "enforcer-config.json"),
+        os.path.join(repo_root, ".gator", ".includes", "scripts",
+                     "enforcer-config.json"),
+        os.path.join(repo_root, ".gator", "scripts", "enforcer-config.json"),
+        os.path.join(SCRIPT_DIR, "enforcer-config.json"),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return candidates[0]
+
+
+_REPO_ROOT = _resolve_repo_root()
+CONFIG_PATH = _resolve_config_path(_REPO_ROOT)
 
 
 def _deep_merge(defaults, override):
@@ -323,6 +361,14 @@ def _find_verify_script():
 
     # 3. Local .gator/scripts/ (manual placement)
     candidate = os.path.join(SCRIPT_DIR, "gator-charter-verify.py")
+    if os.path.isfile(candidate):
+        return candidate
+
+    # 4. Installed-wheel sibling (Phase 4d: when this script runs from
+    # the wheel's template dir, charter-verify lives in the wheel's own
+    # scripts/ three levels up: templates/gator-starter/scripts → pkg root)
+    candidate = os.path.normpath(os.path.join(
+        SCRIPT_DIR, "..", "..", "..", "scripts", "gator-charter-verify.py"))
     if os.path.isfile(candidate):
         return candidate
 
@@ -1410,9 +1456,12 @@ def append_to_whiteboard(output, review_type="enforcer-review.py"):
     """
     from datetime import datetime, timezone
 
-    whiteboard_path = os.path.join(
-        os.path.dirname(SCRIPT_DIR), "whiteboard.md"
-    )
+    # Phase 4d fix (2026-08-19): resolve from the governed repo root, not
+    # script position. The old `dirname(SCRIPT_DIR)/whiteboard.md` was
+    # LATENTLY WRONG on v2 repos (resolved to .includes/whiteboard.md) —
+    # masked because the Architect-run external enforcer writes the
+    # whiteboard directly rather than through this script.
+    whiteboard_path = os.path.join(_REPO_ROOT, ".gator", "whiteboard.md")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     header = f"\n## Review — {timestamp} — {review_type}\n\n"
