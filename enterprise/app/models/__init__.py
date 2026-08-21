@@ -19,3 +19,4 @@ from app.models.report_run import ReportRun  # noqa: F401
 from app.models.report_snapshot import ReportSnapshot  # noqa: F401
 from app.models.transcript_session import TranscriptSession  # noqa: F401
 from app.models.commit_transcript_link import CommitTranscriptLink  # noqa: F401
+from app.models.machine_policy_state import MachinePolicyState  # noqa: F401

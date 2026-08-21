@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 4 fix: enforcer-review internal guidance names canonical config path (whiteboard 2026-08-20)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "phase-4",
+    "enforcer",
+    "enforcer-finding"
+  ],
+  "commit": "ae4c106cdd877c6e95bc9cae1b18dcc769851a50",
+  "short_commit": "ae4c106",
+  "snippet_id": "snippet-ae4c106cdd877",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "8d0b015135c39d98f485d6152dbcfd481b37422e",
+  "started_at": "2026-08-20T01:13:13Z",
+  "ended_at": "2026-08-20T01:13:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-20-gator-8d0b015135c39.json",
+    "src/gator_command/templates/gator-starter/scripts/enforcer-review.py",
+    "tests/test_hooks.py"
+  ],
+  "notes": [
+    "**Codex whiteboard finding applied (medium)**: `enforcer-review.py`'s own docstring (`Configuration: .gator/scripts/enforcer-config.json` + the five `python .gator/scripts/...` usage lines) and the Layer-2 operator guidance (\"edit .gator/scripts/enforcer-config.json\") still named the retired location — the 4c sweep covered template prose files but missed strings INSIDE the script, leaving recovery guidance pointing at a dead path exactly where an operator follows it. Docstring now names `.gator/enforcer-config.json` (with the legacy-probe note) and shows `gator hook enforcer-review` usage; the guidance string corrected.",
+    "**Test gap closed** (the finding's second half): new `test_guidance_strings_name_canonical_config_path` — greps the script source for stale config-path references (legacy probe list exempted by construction) and asserts both docstring and guidance name the canonical home. TestEnforcerReviewResolution: 5 pins; hook suite 37 pass.",
+    "Charter `scripts-cross-cutting.md` enforcer block updated with the pin + provenance.",
+    "Riding: session snippet residue for `8d0b015`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

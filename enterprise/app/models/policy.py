@@ -64,5 +64,14 @@ class PolicyVersion(Base, TimestampMixin):
 
     __table_args__ = (
         Index("ix_policy_versions_policy_number", "policy_id", "version_number", unique=True),
-        Index("ix_policy_versions_active", "policy_id", unique=True, postgresql_where=(is_active == True)),
+        # One active version per policy. sqlite_where added 2026-08-21
+        # (Phase 5): without it, SQLite create_all IGNORES the
+        # postgresql_where clause and degrades this to a FULL unique index
+        # on policy_id — any second version 500s in the in-memory test
+        # environment. Pre-existing latent limitation; surfaced by the
+        # first multi-version tests (test_policy_state.py). Production
+        # Postgres schema is unchanged.
+        Index("ix_policy_versions_active", "policy_id", unique=True,
+              postgresql_where=(is_active == True),
+              sqlite_where=(is_active == True)),
     )
