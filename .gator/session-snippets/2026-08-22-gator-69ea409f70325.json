@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 6 (docs): pinned-runtime model reflected in operator-facing docs + drift procedure policy-pin rule",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-split",
+    "phase-6"
+  ],
+  "commit": "69ea409f70325e4508f3c432809f5f9292852806",
+  "short_commit": "69ea409",
+  "snippet_id": "snippet-69ea409f70325",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "599b45e1cdb614cc05ecdc8dba871948dde96cac",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-22T23:23:29Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-22-gator-599b45e1cdb61.json",
+    "README.md",
+    "docs/governance-model.md",
+    "docs/how-gator-works.md",
+    "docs/how-to-use-gator.md",
+    "docs/refactor-with-gator.md",
+    "src/gator_command/templates/gator-starter/docs/how-gator-works.md",
+    "src/gator_command/templates/gator-starter/docs/how-to-use-gator.md",
+    "src/gator_command/templates/gator-starter/procedures/gator-version-drift.md"
+  ],
+  "notes": [
+    "**Phase 6 docs refresh** (plan §Phase 6): operator-facing docs now describe the 2.9+ pinned-runtime model instead of repo-resident scripts.",
+    "`README.md`: `.gator/` described as policy + pin (git `repositoryformatversion` pattern); update-preserve line drops \"scripts\".",
+    "`docs/how-gator-works.md` + template copy: new \"Where the machinery lives (2.9+)\" subsection under commit-time enforcement.",
+    "`docs/how-to-use-gator.md` + template copy: layout tree swaps `scripts/` for `runtime-pin.json`; post-upgrade instruction corrected from stale `gator gatorize .` to `gator update` + pin-advance story.",
+    "`docs/governance-model.md`: override invocation modernized to `gator hook approve` (pre-2.9 form noted).",
+    "`docs/refactor-with-gator.md`: enforcer invocation modernized to `gator hook enforcer-review --full`.",
+    "`templates/gator-starter/procedures/gator-version-drift.md`: §0a gains the `policy-pin.json` merge rule (take either side; `policies pull` re-converges).",
+    "Docs-only commit; no code or test changes."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
