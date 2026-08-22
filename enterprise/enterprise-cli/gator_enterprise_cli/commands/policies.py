@@ -19,6 +19,25 @@ from gator_enterprise_cli.output import print_json, print_kv, print_table
 _MACHINE_ID_FILE = Path(os.path.expanduser("~/.gator/machine-id"))
 
 
+def _find_repo_root(start=None):
+    """Walk up from `start` (default cwd) to the governed repo root.
+
+    Whiteboard 2026-08-22 Finding 1: a bare `Path.cwd() / ".gator"` check
+    silently dropped the pin + repo-scoped report from any subdirectory.
+    Local walk-up (this package cannot import gator_core) — same pattern
+    as gator-approve.py's find_gator_dir. Returns the repo root Path or
+    None.
+    """
+    d = Path(start or Path.cwd()).resolve()
+    for _ in range(10):
+        if (d / ".gator").is_dir():
+            return d
+        if d.parent == d:
+            break
+        d = d.parent
+    return None
+
+
 def _read_machine_id():
     """Best-effort `id:` field from ~/.gator/machine-id, else None."""
     try:
@@ -145,24 +164,28 @@ def _handle_pull(args, client):
     dest = _write_org_policies(enterprise_dir, items)
     print(f"  landed -> {dest}")
 
-    if not items:
-        return
-
+    # Machine-level entries; the machine scope is ALWAYS fully reported
+    # (replace semantics) so retired policies clear (Finding 2).
     entries = [{"policy_slug": i["slug"], "content_hash": i["content_hash"],
                 "repo_identifier": ""} for i in items]
+    replace_scopes = [""]
 
-    # Repo-scoped: inside a governed repo, also pin + report per-repo.
-    gator_dir = Path.cwd() / ".gator"
+    # Repo-scoped: inside a governed repo (root resolved by walk-up —
+    # Finding 1: subdirectory pulls must behave identically), pin +
+    # report per-repo. The pin is written even when items is empty —
+    # the empty pin is the honest record that NO org policy is in force.
+    repo_root = _find_repo_root()
     repo_identifier = args.repo_id
-    if gator_dir.is_dir():
+    if repo_root is not None:
         if not repo_identifier:
-            repo_identifier = f"local/{Path.cwd().name}"
-        pin_path = _write_policy_pin(gator_dir, items, machine_id)
+            repo_identifier = f"local/{repo_root.name}"
+        pin_path = _write_policy_pin(repo_root / ".gator", items, machine_id)
         print(f"  policy pin -> {pin_path} (commit this — it is the Git-side "
               f"proof of the policy in force)")
         entries += [{"policy_slug": i["slug"],
                      "content_hash": i["content_hash"],
                      "repo_identifier": repo_identifier} for i in items]
+        replace_scopes.append(repo_identifier)
 
     if not machine_id:
         print("  state report skipped: no ~/.gator/machine-id (run `gator "
@@ -170,14 +193,17 @@ def _handle_pull(args, client):
         return
 
     report = client.post("/api/v1/policy-state/report",
-                         json={"machine_id": machine_id, "entries": entries})
+                         json={"machine_id": machine_id, "entries": entries,
+                               "replace_scopes": replace_scopes})
     results = report.get("results", [])
     drifted = [r for r in results
                if r.get("status") != "error" and not r.get("in_sync")]
     errors = [r for r in results if r.get("status") == "error"]
+    cleared = report.get("cleared", 0)
     noun = "entry" if len(results) == 1 else "entries"
     print(f"  state reported: {len(results)} {noun} "
-          f"({len(drifted)} drifted, {len(errors)} errors)")
+          f"({len(drifted)} drifted, {len(errors)} errors, "
+          f"{cleared} retired cleared)")
 
 
 def _handle_drift(args, client):

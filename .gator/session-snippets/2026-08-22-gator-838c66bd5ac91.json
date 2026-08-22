@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 5c: policy-channel live smoke PASS + Migration 012 server-default fix + first live policy pin",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "item-19",
+    "phase-5",
+    "smoke",
+    "migration-fix"
+  ],
+  "commit": "838c66bd5ac91b6800f72dd5ca68af986749a192",
+  "short_commit": "838c66b",
+  "snippet_id": "snippet-838c66bd5ac91",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "ac95ce5b60e48268e52a9fb303957b1e832c2ab5",
+  "started_at": "2026-08-22T18:24:03Z",
+  "ended_at": "2026-08-22T18:24:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/policy-pin.json",
+    ".gator/session-snippets/2026-08-22-gator-ac95ce5b60e48.json",
+    "enterprise/migrations/versions/012_machine_policy_state.py"
+  ],
+  "notes": [
+    "**Phase 5c — the item-19 exit criterion executed live and PASSED** (run record: vault `2026-08-22-runtime-split-phase-5-policy-channel-smoke.md`): policy authored org-side (v1 create+activate via API) → pulled machine-side (`~/.gator/enterprise/org-policies.json`) → **pinned repo-side** (`.gator/policy-pin.json`, committed in this commit — the first live policy pin) → 2 state entries reported (machine + repo scopes) → drift clean. **Killer property verified live**: activating v2 org-side instantly flipped BOTH scopes to drifted (`Applied v1 / Active v2`) with zero client re-reports; re-pull converged everything and advanced the pin to v2's hash — git history now proves the v1→v2 transition.",
+    "**M1, found live and fixed**: Migration 012 r1 omitted `server_default=func.now()` on created_at/updated_at — every INSERT NotNullViolation'd on real Postgres while SQLite tests stayed green (create_all builds from the MODEL, which carries TimestampMixin's defaults — a migration⟷model drift class the test environment structurally cannot catch). Migration fixed + cycled locally (011→012, empty table). Class lesson recorded in the smoke artifact: new-table migrations need a real-Postgres smoke; SQLite green is not migration evidence.",
+    "**D6 posed for Architect ruling** (in the smoke artifact): session-speed policy pull — options explicit-only / fire-and-forget / staleness-nudge; recommendation (c) staleness-nudge (zero risk to the session-open latency contract, human-in-loop matching enforcer-cadence philosophy).",
+    "Plan status r8: **Phases 0-5 COMPLETE**; open: D6, Phase 6, 2.9.0 release prep (D5 recorded 2026-08-21).",
+    "Riding: the live `.gator/policy-pin.json` (v2, `d773dd2f…`) + session snippet residue for `ac95ce5`. Charter: Migration 012 note updated within the file's own header comment (charter Phase 5a/5b blocks already cover the surfaces; the migration fix is documented in-file + smoke artifact)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

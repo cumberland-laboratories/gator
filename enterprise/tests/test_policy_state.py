@@ -342,3 +342,134 @@ class TestClientPinWriters:
             (_P(__file__).resolve().parents[2] / "contracts" / "schemas" /
              "gator-policy-pin-v1.json").read_text(encoding="utf-8"))
         jsonschema.Draft202012Validator(schema).validate(pin)
+
+
+class TestReplaceScopes:
+    """Whiteboard 2026-08-22 Finding 2: full-state-per-scope semantics —
+    without replace_scopes, a policy retired org-side stayed drifted
+    forever (reports could only upsert)."""
+
+    def _second_policy(self, client, api_token):
+        r = client.post("/api/v1/policies",
+                        json={"name": "Second", "slug": "second-policy"},
+                        headers=_auth(api_token))
+        pid = r.json()["id"]
+        v = client.post(f"/api/v1/policies/{pid}/versions",
+                        json={"content": {"text": "second v1"}},
+                        headers=_auth(api_token)).json()
+        client.post(f"/api/v1/policies/{pid}/activate/{v['id']}",
+                    headers=_auth(api_token))
+        return {"policy_id": pid, "slug": "second-policy", "v": v}
+
+    def test_retired_policy_clears_on_full_state_report(
+            self, client, api_token, policy_with_versions):
+        p = policy_with_versions
+        q = self._second_policy(client, api_token)
+        # Machine reports BOTH policies.
+        client.post("/api/v1/policy-state/report", json={
+            "machine_id": "m-1",
+            "entries": [
+                {"policy_slug": p["slug"],
+                 "content_hash": p["v2"]["content_hash"],
+                 "repo_identifier": ""},
+                {"policy_slug": q["slug"],
+                 "content_hash": q["v"]["content_hash"],
+                 "repo_identifier": ""},
+            ],
+        }, headers=_auth(api_token))
+        # Later pull sees only the first policy active — full-state report.
+        r = client.post("/api/v1/policy-state/report", json={
+            "machine_id": "m-1",
+            "entries": [{"policy_slug": p["slug"],
+                         "content_hash": p["v2"]["content_hash"],
+                         "repo_identifier": ""}],
+            "replace_scopes": [""],
+        }, headers=_auth(api_token))
+        assert r.status_code == 200
+        assert r.json()["cleared"] == 1
+        items = client.get("/api/v1/policy-state",
+                           headers=_auth(api_token)).json()["items"]
+        assert {i["policy_slug"] for i in items} == {p["slug"]}
+
+    def test_empty_entries_with_replace_scopes_clears_everything(
+            self, client, api_token, policy_with_versions):
+        """The all-retired convergence case."""
+        p = policy_with_versions
+        _report(client, api_token, content_hash=p["v2"]["content_hash"])
+        r = client.post("/api/v1/policy-state/report", json={
+            "machine_id": "m-1", "entries": [], "replace_scopes": [""],
+        }, headers=_auth(api_token))
+        assert r.status_code == 200
+        assert r.json()["cleared"] == 1
+        assert client.get("/api/v1/policy-state",
+                          headers=_auth(api_token)).json()["total"] == 0
+
+    def test_unnamed_scopes_are_untouched(self, client, api_token,
+                                          policy_with_versions):
+        """Partial reports stay safe: clearing "" must not touch the
+        repo-scoped row."""
+        p = policy_with_versions
+        _report(client, api_token, content_hash=p["v2"]["content_hash"],
+                repo="local/other")
+        r = client.post("/api/v1/policy-state/report", json={
+            "machine_id": "m-1", "entries": [], "replace_scopes": [""],
+        }, headers=_auth(api_token))
+        assert r.json()["cleared"] == 0
+        items = client.get("/api/v1/policy-state",
+                           headers=_auth(api_token)).json()["items"]
+        assert len(items) == 1
+        assert items[0]["repo_identifier"] == "local/other"
+
+    def test_empty_entries_without_replace_scopes_still_400(
+            self, client, api_token):
+        r = client.post("/api/v1/policy-state/report",
+                        json={"machine_id": "m-1", "entries": []},
+                        headers=_auth(api_token))
+        assert r.status_code == 400
+
+    def test_error_entries_do_not_shield_from_clearing(
+            self, client, api_token, policy_with_versions):
+        """An entry that errors (unknown hash) is NOT part of the kept
+        set — its previously-reported row clears. Honest semantics: the
+        report says what IS in force; errors are not state."""
+        p = policy_with_versions
+        _report(client, api_token, content_hash=p["v2"]["content_hash"])
+        r = client.post("/api/v1/policy-state/report", json={
+            "machine_id": "m-1",
+            "entries": [{"policy_slug": p["slug"], "content_hash": "e" * 64,
+                         "repo_identifier": ""}],
+            "replace_scopes": [""],
+        }, headers=_auth(api_token))
+        assert r.json()["results"][0]["status"] == "error"
+        assert r.json()["cleared"] == 1
+
+
+class TestClientRepoRootWalkup:
+    """Whiteboard 2026-08-22 Finding 1: governed-repo detection must walk
+    up from subdirectories."""
+
+    def test_finds_root_from_subdir(self, tmp_path):
+        from gator_enterprise_cli.commands.policies import _find_repo_root
+        (tmp_path / ".gator").mkdir()
+        sub = tmp_path / "src" / "deep"
+        sub.mkdir(parents=True)
+        assert _find_repo_root(sub) == tmp_path.resolve()
+
+    def test_none_when_ungoverned(self, tmp_path):
+        from gator_enterprise_cli.commands.policies import _find_repo_root
+        sub = tmp_path / "a" / "b"
+        sub.mkdir(parents=True)
+        got = _find_repo_root(sub)
+        assert got is None or not str(got).startswith(str(tmp_path))
+
+    def test_empty_items_pin_still_written(self, tmp_path):
+        """Finding 2 client half: the empty pin is the honest record
+        that NO org policy is in force."""
+        import json as _json
+        from gator_enterprise_cli.commands.policies import _write_policy_pin
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        dest = _write_policy_pin(gator, [], "m-1")
+        pin = _json.loads(dest.read_text(encoding="utf-8"))
+        assert pin["policies"] == []
+        assert pin["schema"] == "gator-policy-pin-v1"

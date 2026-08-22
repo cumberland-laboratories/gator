@@ -60,22 +60,41 @@ def report_policy_state(
 
     Body: {"machine_id": str, "entries": [{"policy_slug": str,
            "content_hash": str, "repo_identifier": str (optional, "" =
-           machine-level), "applied_at": ISO (optional)}]}
+           machine-level), "applied_at": ISO (optional)}],
+           "replace_scopes": [str] (optional)}
 
     Per-entry outcomes, never a batch 500: unknown slug or a hash that
     matches no version of that policy yields status "error" for that
     entry while the rest land. Response includes `in_sync` per entry so
     the reporting client can surface drift immediately.
+
+    `replace_scopes` gives the report FULL-STATE-PER-SCOPE semantics
+    (whiteboard 2026-08-22 Finding 2 — without it, a policy retired
+    org-side stayed drifted forever because reports could only upsert):
+    for each named scope, the entries are the COMPLETE set — rows for
+    that (machine, scope) whose policy is absent from the report are
+    DELETED. Scopes not named are untouched, so partial reports stay
+    safe. Empty entries are legal when replace_scopes is present (the
+    all-retired convergence case).
     """
     machine_id = (body.get("machine_id") or "").strip()
     if not machine_id:
         raise ApiError(400, "bad_request", "machine_id is required")
+    replace_scopes = body.get("replace_scopes") or []
+    if not isinstance(replace_scopes, list) or \
+            not all(isinstance(s, str) for s in replace_scopes):
+        raise ApiError(400, "bad_request",
+                       "replace_scopes must be a list of strings")
     entries = body.get("entries")
-    if not isinstance(entries, list) or not entries:
-        raise ApiError(400, "bad_request", "entries must be a non-empty list")
+    if not isinstance(entries, list) or (not entries and not replace_scopes):
+        raise ApiError(400, "bad_request",
+                       "entries must be a non-empty list (empty is legal "
+                       "only with replace_scopes)")
 
     now = datetime.now(timezone.utc)
     results = []
+    # (scope → set of successfully-reported policy ids) for replace_scopes
+    reported_by_scope = {s: set() for s in replace_scopes}
     for entry in entries:
         if not isinstance(entry, dict):
             results.append({"status": "error", "detail": "entry not an object"})
@@ -141,6 +160,9 @@ def report_policy_state(
             row.reported_at = now
             status = "updated"
 
+        if repo_identifier in reported_by_scope:
+            reported_by_scope[repo_identifier].add(policy.id)
+
         active = _active_version(db, policy)
         results.append({
             "status": status,
@@ -151,8 +173,23 @@ def report_policy_state(
             "active_version_number": active.version_number if active else None,
         })
 
+    # Full-state clearing for the named scopes (Finding 2).
+    cleared = 0
+    for scope, kept_ids in reported_by_scope.items():
+        stale = db.execute(
+            select(MachinePolicyState).where(
+                MachinePolicyState.organization_id == token.organization_id,
+                MachinePolicyState.machine_id == machine_id,
+                MachinePolicyState.repo_identifier == scope,
+            )
+        ).scalars().all()
+        for row in stale:
+            if row.policy_id not in kept_ids:
+                db.delete(row)
+                cleared += 1
+
     db.commit()
-    return {"machine_id": machine_id, "results": results}
+    return {"machine_id": machine_id, "results": results, "cleared": cleared}
 
 
 def _state_items(db, organization_id, machine_id=None, repo_identifier=None,
