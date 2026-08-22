@@ -62,6 +62,7 @@ Runtime-split D6 decision (c), Architect-ratified 2026-08-22. Returns a one-line
 <- `gator-init.py` banner (agent-facing surface — the agent reads it at session opening and runs the pull) and `gator-session-open.py` (STDERR only — that script's contract forbids stdout)
 -> `is_enterprise_active()`
 ! NO NETWORK in any session-opening path — this is the whole point of D6 (c): freshness failures are visible staleness, never a blown hook timeout or a silent success-looking failure.
+! **Wiring pinned, not just the helper** (whiteboard 2026-08-22 r3): the original gator-init banner call referenced an undefined `gator_dir` and its blanket except swallowed the NameError — the agent-facing surface was dead code while the helper's own tests stayed green. Fix: `paths.gator_root`. Pins: `test_banner_shows_policy_nudge_wiring` (sentinel through the real `print_boot_sequence` on a minimal v2 repo) + `test_banner_survives_nudge_helper_raising`. Lesson: any call site guarded by a blanket except needs an end-to-end wiring test.
 
 ### normalize_path(raw_path)
 File: `src/gator_command/scripts/gator_core.py`

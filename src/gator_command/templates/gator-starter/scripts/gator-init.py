@@ -332,7 +332,12 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     # network in the boot path.
     try:
         from gator_core import policy_staleness_nudge
-        _nudge = policy_staleness_nudge(gator_dir)
+        # paths.gator_root, NOT a bare `gator_dir` — whiteboard 2026-08-22
+        # r3: the original wiring referenced an undefined name and the
+        # blanket except swallowed the NameError, making this surface
+        # dead code (the exact silent failure D6 exists to prevent).
+        # Wiring pinned by test_banner_shows_policy_nudge.
+        _nudge = policy_staleness_nudge(paths.gator_root)
         if _nudge:
             print(f"  ! policy          {_nudge}")
     except Exception:

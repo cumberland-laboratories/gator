@@ -608,3 +608,61 @@ class TestPolicyStalenessNudge:
         monkeypatch.setattr(Path, "home",
                             staticmethod(lambda: (_ for _ in ()).throw(OSError("boom"))))
         assert gator_core.policy_staleness_nudge(gator) is None
+
+    def test_banner_shows_policy_nudge_wiring(self, tmp_path, monkeypatch,
+                                              capsys):
+        """Whiteboard 2026-08-22 r3: the `gator init` banner wiring itself
+        — the original referenced an undefined name and the blanket
+        except swallowed the NameError, making the agent-facing D6
+        surface dead code while helper-only tests stayed green. This
+        test patches the HELPER and asserts the line lands in the
+        banner, pinning the wiring end-to-end."""
+        from conftest import load_script
+        init = load_script("gator-init")
+        gator_layout = load_script("gator_layout")
+
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        includes.mkdir(parents=True)
+        (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+        (includes / "scripts").mkdir()
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        (gator / "mission.md").write_text("# m\n", encoding="utf-8")
+        paths = gator_layout.get_gator_paths(tmp_path)
+
+        monkeypatch.setattr(gator_core, "policy_staleness_nudge",
+                            lambda gd, **kw: "WIRING-SENTINEL nudge")
+        init.print_boot_sequence(
+            tmp_path, paths,
+            {"status": "ok", "detail": "ok", "adds": 0, "updates": 0},
+            {"status": "ok", "detail": "registered"},
+        )
+        out = capsys.readouterr().out
+        assert "! policy" in out and "WIRING-SENTINEL" in out
+
+    def test_banner_survives_nudge_helper_raising(self, tmp_path,
+                                                  monkeypatch, capsys):
+        from conftest import load_script
+        init = load_script("gator-init")
+        gator_layout = load_script("gator_layout")
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        includes.mkdir(parents=True)
+        (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+        (includes / "scripts").mkdir()
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        paths = gator_layout.get_gator_paths(tmp_path)
+
+        def _boom(gd, **kw):
+            raise RuntimeError("boom")
+        monkeypatch.setattr(gator_core, "policy_staleness_nudge", _boom)
+        init.print_boot_sequence(
+            tmp_path, paths,
+            {"status": "ok", "detail": "ok", "adds": 0, "updates": 0},
+            {"status": "ok", "detail": "registered"},
+        )
+        out = capsys.readouterr().out
+        assert "! policy" not in out
+        assert "navigation coding" in out  # banner completed
