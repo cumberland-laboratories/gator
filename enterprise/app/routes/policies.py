@@ -71,6 +71,51 @@ def list_policies(
     return [_policy_response(db, p) for p in policies]
 
 
+@router.get("/active")
+def active_policies(
+    token: ApiToken = Depends(verify_token),
+    db: Session = Depends(get_db),
+):
+    """All active-status policies with their active version INCLUDING
+    content — the policy-channel pull payload (runtime-split Phase 5b).
+
+    One call gives `gator-enterprise policies pull` everything it needs:
+    slug, version number, content hash (for the state report + the
+    repo-side policy pin) and the content itself (for
+    ~/.gator/enterprise/org-policies.json).
+
+    ROUTE-ORDER TRIPWIRE: declared BEFORE /{policy_id} — FastAPI matches
+    in declaration order and parse_uuid would 400 on the literal
+    "active" otherwise (pinned by test_active_route_not_shadowed).
+    """
+    policies = db.execute(
+        select(Policy).where(
+            Policy.organization_id == token.organization_id,
+            Policy.status == "active",
+        ).order_by(Policy.slug)
+    ).scalars().all()
+
+    items = []
+    for policy in policies:
+        version = db.execute(
+            select(PolicyVersion).where(
+                PolicyVersion.policy_id == policy.id,
+                PolicyVersion.is_active == True,  # noqa: E712
+            )
+        ).scalar_one_or_none()
+        if version is None:
+            continue  # active policy without an activated version — nothing to pull
+        items.append({
+            "policy_id": str(policy.id),
+            "slug": policy.slug,
+            "name": policy.name,
+            "version_number": version.version_number,
+            "content_hash": version.content_hash,
+            "content": version.content,
+        })
+    return {"items": items, "total": len(items)}
+
+
 @router.get("/{policy_id}")
 def get_policy(
     policy_id: str,

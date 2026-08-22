@@ -142,6 +142,16 @@ def activate_version(
 
     if current_active and current_active.id != version.id:
         current_active.is_active = False
+        # Flush the deactivation BEFORE marking the new version active:
+        # the one-active-per-policy partial unique index is checked
+        # per-statement (Postgres and SQLite alike), and SQLAlchemy's
+        # unit-of-work flushes same-table UPDATEs in identity order —
+        # effectively arbitrary with UUID PKs. Without this flush the
+        # activate-UPDATE can land first and violate the index
+        # nondeterministically (latent since E3; surfaced 2026-08-22 as
+        # an intermittent test failure once the SQLite environment
+        # gained the partial index).
+        db.flush()
 
     version.is_active = True
     policy.status = "active"

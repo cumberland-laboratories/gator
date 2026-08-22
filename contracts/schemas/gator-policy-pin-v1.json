@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gator-policy-pin-v1",
+  "title": "gator-policy-pin-v1",
+  "description": "The committed record of which org policy versions were in force in a governed repo (.gator/policy-pin.json). The policy channel's Git proof surface (runtime-split Phase 5b, roadmap item 19): Enterprise's machine_policy_states answers fleet queries; this pin proves from git history alone what policy governed each commit. Written by `gator-enterprise policies pull` when run inside a governed repo. Content is NOT embedded — the content_hash is the proof; the control plane and ~/.gator/enterprise/org-policies.json hold the content. Additive-friendly per the contracts-layer invariant: additionalProperties stays true; removing or renaming a required field is a version bump.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema", "pulled_at", "policies"],
+  "properties": {
+    "schema": {
+      "const": "gator-policy-pin-v1",
+      "description": "Schema tag. Readers MUST check this before interpreting other fields."
+    },
+    "pulled_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "UTC timestamp of the pull that produced this pin."
+    },
+    "pulled_by_machine": {
+      "type": ["string", "null"],
+      "description": "Machine id (~/.gator/machine-id `id:` field) of the pulling machine, or null. Informational."
+    },
+    "policies": {
+      "type": "array",
+      "description": "One entry per active org policy applied to this repo at pull time. Empty array is legal (org had no active policies).",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["slug", "version_number", "content_hash"],
+        "properties": {
+          "slug": {"type": "string", "minLength": 1},
+          "version_number": {"type": "integer", "minimum": 1},
+          "content_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the policy version's canonical JSON content (matches policy_versions.content_hash server-side)."
+          }
+        }
+      }
+    }
+  }
+}

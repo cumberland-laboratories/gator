@@ -22,6 +22,7 @@ contracts/
   schemas/
     gator-session-snippet-v2.json      JSON Schema — per-commit snippet
     gator-runtime-pin-v1.json          JSON Schema — .gator/runtime-pin.json (runtime-split Phase 1, 2026-08-18; emitted by gator_core.write_runtime_pin; resolver-read from Phase 2)
+    gator-policy-pin-v1.json           JSON Schema — .gator/policy-pin.json (runtime-split Phase 5b, 2026-08-22; written by `gator-enterprise policies pull` in governed repos; hashes only, never content)
     enterprise-config.json             JSON Schema — .gator/enterprise.json marker (consumed by gator_core.is_enterprise_active since 2026-08-01)
     gator-commit-summary-v1.md         Markdown spec — commit-summary frontmatter + sections
     gator-session-summary-v1.md        Markdown spec — vendor-session-summary frontmatter + sections
@@ -182,6 +183,7 @@ contracts/
 | `contracts/compatibility/conftest.py` | `schemas_dir`, `fixtures_dir`, `reference_dir` fixtures | filesystem paths | nothing |
 | `contracts/compatibility/_helpers.py` | `parse_frontmatter(md_text) → (dict, str)` | nothing | nothing |
 | `contracts/compatibility/test_snippet_schema.py` | `test_schema_is_itself_valid`, `test_valid_snippet_passes`, `test_missing_required_fails`, `test_wrong_schema_tag_fails`, `test_live_repo_snippets_conform` | schema JSON, fixtures, live `.gator/session-snippets/*.json` | nothing |
+| `contracts/compatibility/test_policy_pin.py` | `test_schema_is_itself_valid`, `test_schema_identifies_itself_as_v1`, `test_schema_is_additive_friendly`, `test_valid_pin_passes`, `test_empty_policies_array_is_legal`, `test_bad_hash_format_fails`, `test_missing_policies_fails`, `test_live_repo_pin_conforms` (skips pre-first-pull) | schema JSON, fixtures, live `.gator/policy-pin.json` | nothing |
 | `contracts/compatibility/test_runtime_pin.py` | `test_schema_is_itself_valid`, `test_schema_identifies_itself_as_v1`, `test_schema_is_additive_friendly`, `test_valid_pin_passes`, `test_missing_manifest_fails`, `test_wrong_schema_tag_fails`, `test_malformed_manifest_digest_fails`, `test_live_repo_pin_conforms` (skips pre-Phase-1; no date-grandfathering — new artifact class, every instance postdates the contract) | schema JSON, fixtures, live `.gator/runtime-pin.json` | nothing |
 | `contracts/compatibility/test_summary_schema.py` | parametrized `test_commit_summary_frontmatter`, `test_commit_summary_body_sections`, `test_live_commit_summaries_conform`, `test_session_summary_frontmatter`, `test_session_summary_body_sections`, `test_live_session_summaries_conform`, spec-present checks | spec + fixture files, live `.gator/sessions/*commit*.md` and `.gator/sessions/*.md` with `schema: gator-session-summary-v1` | nothing |
 | `contracts/compatibility/test_enterprise_marker.py` | marker validity + `_is_enterprise_active` reference impl + fail-closed tests | schema JSON, fixtures, `tmp_path` | temp `.gator/enterprise.json` |

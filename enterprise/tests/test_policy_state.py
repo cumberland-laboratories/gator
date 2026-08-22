@@ -240,8 +240,10 @@ class TestStateAndDrift:
         v3 = client.post(f"/api/v1/policies/{p['policy_id']}/versions",
                          json={"content": {"text": "version three"}},
                          headers=_auth(api_token)).json()
-        client.post(f"/api/v1/policies/{p['policy_id']}/activate/{v3['id']}",
-                    headers=_auth(api_token))
+        act = client.post(
+            f"/api/v1/policies/{p['policy_id']}/activate/{v3['id']}",
+            headers=_auth(api_token))
+        assert act.status_code == 200, act.text
         drift = client.get("/api/v1/policy-state/drift",
                            headers=_auth(api_token)).json()
         assert drift["total"] == 1
@@ -259,3 +261,84 @@ class TestStateAndDrift:
         items = client.get("/api/v1/policy-state?repo=local/a",
                            headers=_auth(api_token)).json()["items"]
         assert len(items) == 1 and items[0]["repo_identifier"] == "local/a"
+
+
+class TestActivePolicies:
+    """GET /policies/active — the Phase 5b pull payload."""
+
+    def test_returns_content_and_hash(self, client, api_token,
+                                      policy_with_versions):
+        p = policy_with_versions
+        body = client.get("/api/v1/policies/active",
+                          headers=_auth(api_token)).json()
+        assert body["total"] == 1
+        item = body["items"][0]
+        assert item["slug"] == p["slug"]
+        assert item["content_hash"] == p["v2"]["content_hash"]
+        assert item["content"] == {"text": "version two"}
+        assert item["version_number"] == p["v2"]["version_number"]
+
+    def test_active_route_not_shadowed_by_policy_id(self, client, api_token):
+        """ROUTE-ORDER TRIPWIRE pin: /policies/active must not be captured
+        by /policies/{policy_id} (which would 400 on parse_uuid)."""
+        r = client.get("/api/v1/policies/active", headers=_auth(api_token))
+        assert r.status_code == 200
+        assert r.json() == {"items": [], "total": 0}
+
+    def test_policy_without_activated_version_is_skipped(self, client,
+                                                         api_token):
+        r = client.post("/api/v1/policies",
+                        json={"name": "Draft", "slug": "draft-policy"},
+                        headers=_auth(api_token))
+        assert r.status_code == 200
+        body = client.get("/api/v1/policies/active",
+                          headers=_auth(api_token)).json()
+        assert body["total"] == 0
+
+
+class TestClientPinWriters:
+    """Phase 5b client half: the pin/landing writers, unit-tested directly
+    (the pull command itself is smoke-tested against the live stack)."""
+
+    _ITEMS = [{"policy_id": "x", "slug": "org-constitution", "name": "C",
+               "version_number": 3,
+               "content_hash": "a" * 64,
+               "content": {"text": "hello"}}]
+
+    def test_org_policies_landing_file(self, tmp_path):
+        from gator_enterprise_cli.commands.policies import _write_org_policies
+        import json as _json
+        dest = _write_org_policies(tmp_path / "enterprise", self._ITEMS)
+        data = _json.loads(dest.read_text(encoding="utf-8"))
+        assert data["policies"][0]["content"] == {"text": "hello"}
+        assert data["pulled_at"].endswith("Z")
+
+    def test_policy_pin_shape_and_no_content(self, tmp_path):
+        from gator_enterprise_cli.commands.policies import _write_policy_pin
+        import json as _json
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        dest = _write_policy_pin(gator, self._ITEMS, "machine-1")
+        pin = _json.loads(dest.read_text(encoding="utf-8"))
+        assert pin["schema"] == "gator-policy-pin-v1"
+        assert pin["pulled_by_machine"] == "machine-1"
+        assert pin["policies"] == [{"slug": "org-constitution",
+                                    "version_number": 3,
+                                    "content_hash": "a" * 64}]
+        assert all(set(p.keys()) == {"slug", "version_number", "content_hash"}
+                   for p in pin["policies"]), (
+            "pin must carry hashes, never content")
+
+    def test_pin_validates_against_contract(self, tmp_path):
+        jsonschema = pytest.importorskip("jsonschema")
+        import json as _json
+        from pathlib import Path as _P
+        from gator_enterprise_cli.commands.policies import _write_policy_pin
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        dest = _write_policy_pin(gator, self._ITEMS, None)
+        pin = _json.loads(dest.read_text(encoding="utf-8"))
+        schema = _json.loads(
+            (_P(__file__).resolve().parents[2] / "contracts" / "schemas" /
+             "gator-policy-pin-v1.json").read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator(schema).validate(pin)

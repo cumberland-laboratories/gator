@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 5a: policy-channel state tracking — Migration 012 machine_policy_states + report/drift endpoints",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "item-19",
+    "phase-5",
+    "policy-channel",
+    "enterprise"
+  ],
+  "commit": "219177e879047b882422645e1dca88c48d28fe56",
+  "short_commit": "219177e",
+  "snippet_id": "snippet-219177e879047",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-21T23:29:57Z",
+  "ended_at": "2026-08-21T23:29:57Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/session-snippets/2026-08-20-gator-ae4c106cdd877.json",
+    "enterprise/app/main.py",
+    "enterprise/app/models/__init__.py",
+    "enterprise/app/models/machine_policy_state.py",
+    "enterprise/app/models/policy.py",
+    "enterprise/app/routes/policy_state.py",
+    "enterprise/migrations/versions/012_machine_policy_state.py",
+    "enterprise/tests/test_policy_state.py"
+  ],
+  "notes": [
+    "**Phase 5a of the runtime split — the policy channel's state half, opening the item-19 endgame.** D5 recorded en route: the Phases 1-4 release ships as **2.9.0** (Architect-ratified 2026-08-21). E3's `Policy`/`PolicyVersion` already provide content-addressed policy versioning; 5a adds the missing what-is-in-force-where tracking so \"which machines/repos are on which policy version, where is the drift\" is ONE query — Enterprise as the query surface, the (5b) repo-side policy pin as the Git proof surface.",
+    "**Migration 012 + model `machine_policy_states`**: one CURRENT row per (org, machine, repo_identifier, policy), upserted on report; `repo_identifier NOT NULL DEFAULT ''` for machine-level scope (the Migration 011 NULL-collision lesson applied); `machine_id` plain varchar per the commits precedent; `content_hash` denormalized for join-free drift comparison. Applied to local Postgres — head 012, table verified.",
+    "**Routes** (`policy_state.py`): `POST /policy-state/report` (per-entry outcomes — unknown slug / unmatched hash error individually, never batch-500; `in_sync` returned per entry so clients surface drift immediately), `GET /policy-state` (fleet state + filters), `GET /policy-state/drift` (stale + applied-but-retired rows; explicitly REPORT-BASED with the never-reported≠in-sync caveat documented; missing-coverage vs machine_keys is a named follow-on).",
+    "**15 new tests** (`test_policy_state.py`, per-file fixtures per house convention) incl. the channel's killer property: `test_activation_change_flips_drift_without_new_reports` — org activates a new policy version and every reported machine flips to drifted instantly, no re-reports.",
+    "**Pre-existing latent bug fixed en route**: `PolicyVersion`'s one-active-per-policy partial unique index declared only `postgresql_where` — SQLite create_all ignores it, degrading to a FULL unique on policy_id, so any second version 500'd in the test environment (masked until now: no prior test created two versions). `sqlite_where` added; production Postgres schema unchanged.",
+    "Suite: enterprise **330 pass + 1 skip** (315 → 330), zero regressions. Charter: `scripts-enterprise.md` Phase 5a block with the upsert-shape TRIPWIRE.",
+    "Riding: session snippet residue for `ae4c106`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
