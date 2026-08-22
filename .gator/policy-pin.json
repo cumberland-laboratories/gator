@@ -1,0 +1,12 @@
+{
+  "schema": "gator-policy-pin-v1",
+  "pulled_at": "2026-08-22T18:22:15Z",
+  "pulled_by_machine": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "policies": [
+    {
+      "slug": "org-constitution",
+      "version_number": 2,
+      "content_hash": "d773dd2f0372a9cf61aac929df1b54e78f198ba67f656b528058b7d39cd1a8ef"
+    }
+  ]
+}

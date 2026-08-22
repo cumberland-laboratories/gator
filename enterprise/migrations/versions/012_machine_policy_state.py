@@ -68,8 +68,15 @@ def upgrade() -> None:
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.Column("applied_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("reported_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        # server_default REQUIRED (matches TimestampMixin): the ORM relies
+        # on the DB filling these — the r1 migration omitted the defaults
+        # and every INSERT NotNullViolation'd on real Postgres (SQLite
+        # tests masked it: create_all builds from the model, which
+        # carries the defaults). Caught live in the 5c smoke, 2026-08-22.
+        sa.Column("created_at", sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True),
+                  server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint(
             "organization_id", "machine_id", "repo_identifier", "policy_id",
             name="uq_machine_policy_state_scope",
