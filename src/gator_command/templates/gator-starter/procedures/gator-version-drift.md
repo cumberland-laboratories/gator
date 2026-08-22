@@ -22,6 +22,9 @@ repo. Consequences for this procedure:
   on pinned repos — most shipped-content conflicts simply stop occurring.
 - A `runtime-pin.json` conflict resolves like any Class A file: take
   either side whole, run `gator update` on the merged result, commit.
+- The same rule covers `.gator/policy-pin.json` (Enterprise org-policy
+  pin, 2.9+): take either side whole; the next
+  `gator-enterprise policies pull` re-converges it.
 - Merging a pinned branch with a pre-2.9 branch that still carries
   scripts: resolve scripts-side conflicts with `--theirs`/`--ours`
   (either), finish the merge, run `gator update` — it re-pins and

@@ -20,10 +20,10 @@ Local-first. Git-native. Works with Claude Code, Codex, Gemini CLI. Apache 2.0 l
 
 ## Installation Notes
 
-Gator adds a `.gator/` folder to your repo — this is the governance and intelligence layer. It contains the constitution, charters, scripts, and hooks that govern AI-assisted development.
+Gator adds a `.gator/` folder to your repo — this is the governance and intelligence layer. It contains the constitution, charters, and policy that govern AI-assisted development. The enforcement runtime itself executes from the installed CLI on each machine (2.9+): the repo commits a `runtime-pin.json` recording the minimum runtime version it requires, git's own `repositoryformatversion` pattern.
 
 **What it does:**
-- Creates `.gator/` with governance scaffolding (constitution, scripts, hooks, templates)
+- Creates `.gator/` with governance scaffolding (constitution, templates, runtime pin)
 - Adds or updates `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` — Gator manages the region between `<!-- GATOR:BEGIN -->` and `<!-- GATOR:END -->` sentinels; anything outside the sentinels is your content and is preserved on every update. On a first install into a non-Gator file, `gatorize` prompts: backup & replace (recommended), append, or overwrite
 - Installs four Gator slash commands into your vendor `commands/` directory (`.claude/commands/init.md`, `update.md`, `commit.md`, `loop-join.md`; parallel for `.codex/` and `.gemini/`). Any existing non-Gator command file at the same name is backed up with a `.pre-gator` suffix before overwrite
 - Merges Gator entries into `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json` non-destructively — your permissions, environment variables, and non-Gator hooks are never touched
@@ -113,7 +113,7 @@ The easiest way is through the **Gator Dashboard**. Open the sidebar's **Updates
 
 ![Fleet view — a repo one version behind shows the highlighted Update button; up-to-date repos have their Update button disabled](docs/images/dashboard-fleet-update-button.png)
 
-Your content is always preserved — only Gator templates, scripts, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
+Your content is always preserved — only Gator templates, the runtime pin, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
 
 ---
 

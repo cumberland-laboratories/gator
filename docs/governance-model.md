@@ -66,8 +66,10 @@ Different training means different blind spots. The wall between coding and revi
 When the hook blocks a commit, it writes an `override-request.json` with a unique block ID. The Architect — not the agent — runs the approval:
 
 ```bash
-python .gator/scripts/gator-approve.py
+gator hook approve
 ```
+
+(On pre-2.9 repos that still carry repo-resident scripts: `python .gator/scripts/gator-approve.py`.)
 
 The approval flow:
 

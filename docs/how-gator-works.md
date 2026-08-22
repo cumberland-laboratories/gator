@@ -145,6 +145,10 @@ Gator uses deterministic hooks so that the important discipline is enforced:
 
 This matters because it keeps the knowledge layer synchronized with the code. Without enforcement, the maps would go stale quickly. With enforcement, the repo remains navigable and trustworthy.
 
+### Where the machinery lives (2.9+)
+
+The repository commits **policy, not machinery**. Git hooks are thin stubs; the enforcement code itself executes from the installed Gator CLI on each machine, and the repo commits a small `runtime-pin.json` recording the minimum runtime version its governance requires — the same pattern as Git's own `repositoryformatversion`. If a machine's installed CLI is older than the pin, hooks refuse with an upgrade instruction rather than run older rules; if it's newer, it runs and `gator update` advances the pin. Updating Gator across a fleet of repos is a `pipx upgrade` plus a two-file diff per repo, not a script sync. (Repos created before 2.9 carry their runtime scripts in-repo and continue to work unchanged.)
+
 ## The Human Role: The Architect
 
 Gator is not built around replacing the human.

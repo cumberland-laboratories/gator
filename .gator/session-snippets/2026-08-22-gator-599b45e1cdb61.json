@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split D6 r3: fix dead-code banner nudge (undefined name swallowed by blanket except) + end-to-end wiring pins",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "d6",
+    "enforcer-finding",
+    "wiring-test"
+  ],
+  "commit": "599b45e1cdb614cc05ecdc8dba871948dde96cac",
+  "short_commit": "599b45e",
+  "snippet_id": "snippet-599b45e1cdb61",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "5d2cf9286dc2440861f2600051ac6820c9a8dfc5",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-22T22:10:33Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-22-gator-5d2cf9286dc24.json",
+    "src/gator_command/scripts/gator-init.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-init.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "**Codex whiteboard finding applied (medium)**: the `gator init` banner nudge — the agent-facing half of D6 — was dead code in both copies: `print_boot_sequence()` called `policy_staleness_nudge(gator_dir)` with an undefined name, and the deliberate blanket `except Exception: pass` swallowed the NameError. Helper-only tests stayed green (the classic defensive-swallow + no-wiring-test hole). The failure mode was maximally ironic: D6 exists so freshness failures are VISIBLE, and the nudge's own failure was silent.",
+    "**Fix**: `paths.gator_root` (in scope, the GatorPaths field for the gator dir), both copies, with the provenance commented at the call site.",
+    "**Wiring pinned end-to-end**: `test_banner_shows_policy_nudge_wiring` patches the HELPER and asserts the `! policy` sentinel lands in the real `print_boot_sequence` output on a minimal v2 repo (proves module identity + variable resolution + formatting); plus `test_banner_survives_nudge_helper_raising` (banner completes, no nudge line). The test-shape lesson: any surface guarded by a blanket except needs a wiring test, not just helper tests.",
+    "Suites: base + contracts **902 pass** (+2), zero regressions. Charter: repo-lifecycle D6 block gains the r3 provenance.",
+    "Riding: session snippet residue for `5d2cf92`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

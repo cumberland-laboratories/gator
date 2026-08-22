@@ -45,7 +45,7 @@ your-project/
     reference-notes/       <- cognitive aids and vocabulary
     field-guides/          <- language-specific pattern sheets
     vault/                 <- sensitive files (gitignored, never committed)
-    scripts/               <- Gator's enforcement and tooling scripts
+    runtime-pin.json       <- minimum machine-side runtime version (2.9+)
     whiteboard.md          <- ephemeral surface for review findings
 ```
 
@@ -221,7 +221,7 @@ Check for updates and upgrade from the dashboard, or manually:
 pipx upgrade gator-command
 ```
 
-After upgrading, run `gator gatorize .` in each governed repo to update the scripts and templates.
+After upgrading, run `gator update` in each governed repo to refresh templates and advance the runtime pin. From 2.9 onward the enforcement runtime executes from the installed CLI — the upgrade itself is the runtime update; the per-repo refresh is a small template-and-pin diff.
 
 ## Key Concepts
 

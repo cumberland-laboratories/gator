@@ -89,7 +89,7 @@ The review is against *original intent*, not just whether the governance checks 
 git log dev..HEAD --format='%s%n  Change-Type: %(trailers:key=Gator-Change-Type,valueonly)  Significance: %(trailers:key=Gator-Significance,valueonly)'
 
 # Full charter review
-python .gator/scripts/enforcer-review.py --full
+gator hook enforcer-review --full
 ```
 
 ---

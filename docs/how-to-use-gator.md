@@ -68,14 +68,16 @@ your-project/
     field-guides/        <- language-specific pattern sheets
     docs/                <- user-authored docs travelling with the repo
     sessions/            <- committed session summaries (audit trail)
-    scripts/             <- Gator's enforcement and tooling scripts
     vault/               <- sensitive files (gitignored, never committed)
     .includes/           <- shipped Gator content (updated on `gator update`)
+    runtime-pin.json     <- minimum machine-side runtime version (2.9+)
     commit_draft.md      <- per-commit change log (gitignored, session state)
     whiteboard.md        <- ephemeral surface for review findings (gitignored)
 ```
 
-The user-content directories (`mission.md`, `roadmap.md`, `charters/`, `threads/`, etc.) live at the visible `.gator/` root — they're your content, and `gator update` never touches them. Shipped Gator content (the constitution, procedures, reference-notes ship, and scripts) lives under `.gator/.includes/` on the current v2 layout and gets refreshed on every update. A few files (`commit_draft.md`, `whiteboard.md`, `status.json`) are per-commit session state and are gitignored.
+The user-content directories (`mission.md`, `roadmap.md`, `charters/`, `threads/`, etc.) live at the visible `.gator/` root — they're your content, and `gator update` never touches them. Shipped Gator content (the constitution, procedures, and reference-notes) lives under `.gator/.includes/` on the current v2 layout and gets refreshed on every update. A few files (`commit_draft.md`, `whiteboard.md`, `status.json`) are per-commit session state and are gitignored.
+
+From 2.9 onward the enforcement scripts themselves no longer live in the repo: hooks are thin stubs and the runtime executes from the installed Gator CLI, with `runtime-pin.json` recording the minimum version the repo's governance requires (repos created before 2.9 carry a `scripts/` tree in-repo and keep working unchanged).
 
 The tracked knowledge layer travels with your repo via Git, so every person and every AI model that clones it gets the same architectural context. Your `*.local.md` companion files stay on your machine.
 
@@ -290,7 +292,7 @@ Then refresh each governed repo (from inside the repo, or via `--path`):
 gator update
 ```
 
-`gator update` operates on the current branch, in place. Your content is always preserved — only Gator templates, scripts, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
+`gator update` operates on the current branch, in place. Your content is always preserved — only Gator templates, the runtime pin, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
 
 ## Key Concepts
 
