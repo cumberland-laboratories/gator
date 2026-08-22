@@ -38,10 +38,13 @@ def _ensure_utf8_stdout():
 def find_gator_dir():
     """Walk up from cwd to find .gator/."""
     d = Path.cwd().resolve()
-    for _ in range(10):
-        if (d / ".gator").is_dir():
-            return d / ".gator"
-        d = d.parent
+    # Uncapped walk (2026-08-22 — same class as the policies.py finding:
+    # a 10-hop cap silently fails on deeply nested working dirs).
+    if (d / ".gator").is_dir():
+        return d / ".gator"
+    for parent in d.parents:
+        if (parent / ".gator").is_dir():
+            return parent / ".gator"
     return None
 
 

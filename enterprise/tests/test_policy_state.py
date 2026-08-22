@@ -455,6 +455,17 @@ class TestClientRepoRootWalkup:
         sub.mkdir(parents=True)
         assert _find_repo_root(sub) == tmp_path.resolve()
 
+    def test_finds_root_from_deeply_nested_subdir(self, tmp_path):
+        """Whiteboard 2026-08-22 r2: the r1 walk kept a 10-hop cap — a
+        deeper working dir re-triggered the silent skip. Uncapped now."""
+        from gator_enterprise_cli.commands.policies import _find_repo_root
+        (tmp_path / ".gator").mkdir()
+        deep = tmp_path
+        for i in range(14):
+            deep = deep / f"level{i}"
+        deep.mkdir(parents=True)
+        assert _find_repo_root(deep) == tmp_path.resolve()
+
     def test_none_when_ungoverned(self, tmp_path):
         from gator_enterprise_cli.commands.policies import _find_repo_root
         sub = tmp_path / "a" / "b"

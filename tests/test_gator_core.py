@@ -545,3 +545,66 @@ class TestWriteRuntimePinRuntimeDir:
             gator, version="9.9.9", runtime_dir=tmp_path / "nope")
         assert pin is not None
         assert set(pin["manifest"]) == {"x.py"}
+
+
+class TestPolicyStalenessNudge:
+    """Runtime-split D6 decision (c), Architect-ratified 2026-08-22:
+    purely LOCAL staleness check — no network in any session-opening
+    path; Enterprise-active repos only; never raises."""
+
+    def _enterprise_repo(self, tmp_path):
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        (gator / "enterprise.json").write_text(
+            '{"enabled": true, "api_url": "https://x", "org_id": "o"}',
+            encoding="utf-8")
+        return gator
+
+    def _fake_home(self, tmp_path, monkeypatch, mtime_age_days=None):
+        home = tmp_path / "home"
+        (home / ".gator" / "enterprise").mkdir(parents=True)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+        if mtime_age_days is not None:
+            import os as _os
+            import time as _time
+            f = home / ".gator" / "enterprise" / "org-policies.json"
+            f.write_text("{}", encoding="utf-8")
+            old = _time.time() - mtime_age_days * 86400
+            _os.utime(f, (old, old))
+        return home
+
+    def test_non_enterprise_repo_is_none(self, tmp_path, monkeypatch):
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        self._fake_home(tmp_path, monkeypatch, mtime_age_days=100)
+        assert gator_core.policy_staleness_nudge(gator) is None
+
+    def test_never_pulled_nudges(self, tmp_path, monkeypatch):
+        gator = self._enterprise_repo(tmp_path)
+        self._fake_home(tmp_path, monkeypatch)
+        msg = gator_core.policy_staleness_nudge(gator)
+        assert msg and "never pulled" in msg
+        assert "gator-enterprise policies pull" in msg
+
+    def test_fresh_pull_is_quiet(self, tmp_path, monkeypatch):
+        gator = self._enterprise_repo(tmp_path)
+        self._fake_home(tmp_path, monkeypatch, mtime_age_days=1)
+        assert gator_core.policy_staleness_nudge(gator) is None
+
+    def test_stale_pull_nudges_with_age(self, tmp_path, monkeypatch):
+        gator = self._enterprise_repo(tmp_path)
+        self._fake_home(tmp_path, monkeypatch, mtime_age_days=12)
+        msg = gator_core.policy_staleness_nudge(gator)
+        assert msg and "12 day(s)" in msg
+
+    def test_threshold_override(self, tmp_path, monkeypatch):
+        gator = self._enterprise_repo(tmp_path)
+        self._fake_home(tmp_path, monkeypatch, mtime_age_days=3)
+        assert gator_core.policy_staleness_nudge(gator, stale_days=2)
+        assert gator_core.policy_staleness_nudge(gator, stale_days=5) is None
+
+    def test_never_raises(self, tmp_path, monkeypatch):
+        gator = self._enterprise_repo(tmp_path)
+        monkeypatch.setattr(Path, "home",
+                            staticmethod(lambda: (_ for _ in ()).throw(OSError("boom"))))
+        assert gator_core.policy_staleness_nudge(gator) is None

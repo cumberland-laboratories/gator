@@ -29,12 +29,16 @@ def _find_repo_root(start=None):
     None.
     """
     d = Path(start or Path.cwd()).resolve()
-    for _ in range(10):
-        if (d / ".gator").is_dir():
-            return d
-        if d.parent == d:
-            break
-        d = d.parent
+    # Uncapped walk to the filesystem root — whiteboard 2026-08-22 r2:
+    # the r1 fix kept a 10-hop cap (inherited from gator-approve's
+    # pattern) while the canonical gator_core.find_gator_root walks all
+    # parents; a deeply nested working dir would re-trigger the exact
+    # silent-skip this fix was meant to eliminate.
+    if (d / ".gator").is_dir():
+        return d
+    for parent in d.parents:
+        if (parent / ".gator").is_dir():
+            return parent
     return None
 
 

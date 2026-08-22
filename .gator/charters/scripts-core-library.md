@@ -56,6 +56,13 @@ Filesystem: `.gator/runtime-pin.json` (R), shipped scripts dirs (existence probe
 ! Pin is read with `encoding="utf-8-sig"` (BOM-tolerant; reads plain UTF-8 identically). Live-caught 2026-08-18: PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM, which under plain utf-8 turned a should-refuse pin into JSONDecodeError → fail-open fallback — a Windows editor could silently disable the version gate. Pin: `test_bom_pin_still_parses_and_refuses`.
 ! The comparison is VERSION-based, not manifest-based — CRLF/autocrlf makes cross-platform manifest comparison invalid (plan §8 risk 7); manifest verification is future integrity work with git-blob-hash semantics.
 
+### policy_staleness_nudge(gator_dir, now=None, stale_days=None)
+File: `src/gator_command/scripts/gator_core.py` (block-mirrored in the template copy)
+Runtime-split D6 decision (c), Architect-ratified 2026-08-22. Returns a one-line staleness nudge for the org-policy channel, or None. Purely LOCAL: `is_enterprise_active(gator_dir)` gate → mtime of `~/.gator/enterprise/org-policies.json` vs threshold (default 7 days; `GATOR_POLICY_STALE_DAYS` env; `stale_days` arg for tests). Never raises (blanket except → None).
+<- `gator-init.py` banner (agent-facing surface — the agent reads it at session opening and runs the pull) and `gator-session-open.py` (STDERR only — that script's contract forbids stdout)
+-> `is_enterprise_active()`
+! NO NETWORK in any session-opening path — this is the whole point of D6 (c): freshness failures are visible staleness, never a blown hook timeout or a silent success-looking failure.
+
 ### normalize_path(raw_path)
 File: `src/gator_command/scripts/gator_core.py`
 Converts MSYS2/Git Bash paths (/c/Users/...) to native Windows (C:/Users/...).

@@ -553,6 +553,43 @@ def import_sibling(name):
     return mod
 
 
+def policy_staleness_nudge(gator_dir, now=None, stale_days=None):
+    """One-line staleness nudge for the org-policy channel, or None.
+
+    Runtime-split D6 decision (c), Architect-ratified 2026-08-22: NO
+    network in any session-opening path — this is a purely LOCAL check
+    of ~/.gator/enterprise/org-policies.json's mtime, shown only when
+    the repo is Enterprise-active. The nudge keeps "session-speed"
+    policy freshness honest: the agent reading it at session open runs
+    the pull; failures are visible staleness, never silent.
+
+    stale_days: threshold override (default 7; env
+    GATOR_POLICY_STALE_DAYS). Never raises.
+    """
+    import os as _os
+    import time as _time
+    try:
+        if not is_enterprise_active(gator_dir):
+            return None
+        if stale_days is None:
+            try:
+                stale_days = int(_os.environ.get("GATOR_POLICY_STALE_DAYS", "7"))
+            except ValueError:
+                stale_days = 7
+        landing = Path.home() / ".gator" / "enterprise" / "org-policies.json"
+        now = now if now is not None else _time.time()
+        if not landing.is_file():
+            return ("org policies never pulled on this machine — run "
+                    "`gator-enterprise policies pull`")
+        age_days = (now - landing.stat().st_mtime) / 86400
+        if age_days >= stale_days:
+            return (f"org policies last pulled {int(age_days)} day(s) ago — "
+                    f"run `gator-enterprise policies pull`")
+    except Exception:
+        return None
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Runtime pin (runtime-split Phase 1 — roadmap item 19)
 # ---------------------------------------------------------------------------

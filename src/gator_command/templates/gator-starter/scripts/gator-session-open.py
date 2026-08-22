@@ -27,14 +27,13 @@ def find_gator_dir():
     mistaken for a governed checkout.
     """
     d = Path.cwd().resolve()
-    for _ in range(20):
-        candidate = d / ".gator"
-        if candidate.is_dir() and (d / ".git").exists():
-            return candidate
-        parent = d.parent
-        if parent == d:
-            break
-        d = parent
+    # Uncapped walk (2026-08-22 — same class as the policies.py 10-hop
+    # finding: arbitrary depth caps silently fail on deep working dirs).
+    if (d / ".gator").is_dir() and (d / ".git").exists():
+        return d / ".gator"
+    for parent in d.parents:
+        if (parent / ".gator").is_dir() and (parent / ".git").exists():
+            return parent / ".gator"
     return None
 
 
@@ -50,11 +49,18 @@ def main():
     # during a v1→v2 update straddle and on legacy fleet repos that have not
     # migrated yet. Without this, the previous v1-only path (gator_dir /
     # "scripts") silently no-ops on every v2 repo.
+    # Runtime-split Phase 4/5 fix (2026-08-22): post-Phase-4 pinned repos
+    # carry NO repo-resident scripts — when this copy runs from the wheel
+    # (via the gator-hook dispatcher), its siblings live in its OWN
+    # directory. The old repo-dirs-only probe made session-open a silent
+    # no-op on every pinned repo (hook self-heal lost; only `gator init`
+    # healed). Own-dir fallback restores it.
     for candidate in (
         gator_dir / ".includes" / "scripts",
         gator_dir / "scripts",
+        Path(__file__).resolve().parent,
     ):
-        if candidate.is_dir():
+        if candidate.is_dir() and (candidate / "gator_core.py").is_file():
             candidate_str = str(candidate)
             if candidate_str not in sys.path:
                 sys.path.insert(0, candidate_str)
@@ -95,6 +101,19 @@ def main():
             status,
             str(result.get("detail", "")),
         )
+
+    # Org-policy staleness nudge (runtime-split D6 decision (c),
+    # Architect-ratified 2026-08-22). STDERR only — this script's
+    # contract forbids stdout (vendors treat it as hook output/context).
+    # Purely local mtime check, Enterprise-active repos only; the
+    # agent-facing copy of the nudge lives in the `gator init` banner.
+    try:
+        from gator_core import policy_staleness_nudge
+        _nudge = policy_staleness_nudge(gator_dir)
+        if _nudge:
+            print(f"gator: {_nudge}", file=sys.stderr)
+    except Exception:
+        pass
 
     return 0
 

@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 5 hardening: repo-root walk-up + replace_scopes full-state reporting (whiteboard 2026-08-22, two HIGH findings)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "runtime-split",
+    "phase-5",
+    "policy-channel",
+    "enforcer-finding"
+  ],
+  "commit": "1fe5c91511939bbf209b6c29cd4f349675afe5e7",
+  "short_commit": "1fe5c91",
+  "snippet_id": "snippet-1fe5c91511939",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "838c66bd5ac91b6800f72dd5ca68af986749a192",
+  "started_at": "2026-08-22T18:52:37Z",
+  "ended_at": "2026-08-22T18:52:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/policy-pin.json",
+    ".gator/session-snippets/2026-08-22-gator-838c66bd5ac91.json",
+    "enterprise/app/routes/policy_state.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/commands/policies.py",
+    "enterprise/tests/test_policy_state.py"
+  ],
+  "notes": [
+    "**Codex whiteboard Finding 1 (HIGH) fixed**: `policies pull` detected governance with a bare `Path.cwd()/.gator` check — from any subdirectory it silently skipped the pin write and repo-scoped report, and the `--repo-id` default would have named the subdirectory. New `_find_repo_root()` walk-up (local to the package — it cannot import gator_core; same pattern as gator-approve). Live-verified: pull from `src/gator_command/` produced the pin + both state entries.",
+    "**Finding 2 (HIGH) fixed — the channel now converges when the active set SHRINKS**: `report_policy_state` gained optional **`replace_scopes`** — full-state-per-scope semantics: for each named scope the entries are the COMPLETE set; rows for absent policies are DELETED (`cleared` in the response). Empty entries legal only with replace_scopes (the all-retired case); unnamed scopes untouched so partial reports stay safe; error entries deliberately do NOT shield their rows from clearing (the report says what IS in force — errors are not state). Client always sends replace_scopes for its covered scopes, and writes the policy pin even with zero active policies — the empty pin is the honest Git record that NO org policy is in force. Live-verified on the restarted stack: empty full-state report → `cleared: 2` → state total 0 → re-pull restored 2 in-sync rows.",
+    "**8 new pins**: `TestReplaceScopes` (5 — retired-clears, all-retired convergence, unnamed-scope safety, empty-without-replace still 400, errors-do-not-shield) + `TestClientRepoRootWalkup` (3 — subdir resolution, ungoverned None, empty-pin write). Enterprise suite: **343 pass + 2 skip**, zero regressions.",
+    "Charter `scripts-enterprise.md`: Phase 5b block extended with both findings' semantics + pins.",
+    "Riding: pin/org-policies refresh from the live verification + session snippet residue for `838c66b`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

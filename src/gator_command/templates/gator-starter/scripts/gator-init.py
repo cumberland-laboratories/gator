@@ -325,6 +325,19 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     reg_label = registry_status.get("detail", registry_status.get("status", ""))
     print(format_check("dashboard", reg_label))
 
+    # Org-policy staleness nudge (runtime-split D6 decision (c),
+    # 2026-08-22): purely local mtime check, Enterprise-active repos
+    # only. The agent reading this banner at session opening runs the
+    # pull — session-speed freshness with a visible audit trail, no
+    # network in the boot path.
+    try:
+        from gator_core import policy_staleness_nudge
+        _nudge = policy_staleness_nudge(gator_dir)
+        if _nudge:
+            print(f"  ! policy          {_nudge}")
+    except Exception:
+        pass
+
     # Tagline
     print()
     print(f"  {TAGLINE}")
