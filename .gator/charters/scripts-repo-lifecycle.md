@@ -54,6 +54,13 @@ Filesystem: reads all detection functions
 -> `count_constitution_rules()`, `count_charters()`, `count_working_set()`, `count_field_guides()`, `detect_enforcer()`, `_constitution_drift_suffix()`, `GATOR_MARK_LINES` from `gator_core`
 ! `GATOR_MARK_LINES` is the single source of truth for the ASCII logo. Never copy it into this file.
 ! The drift suffix MUST stay best-effort. Any failure inside `_constitution_drift_suffix()` — sibling script missing, template source unresolvable, unreadable files — degrades silently to no suffix. `gator init` runs at every session open; a fatal drift check would break session-opening.
+! **The banner must NOT end on the tagline** (constitution-skip finding, inbox 2026-08-23; observed on Opus 4.7): the tagline reads as "session opening done" and the ✓ constitution line is an existence-check models mistake for "constitution loaded". `print_boot_sequence` ends with `session_opening_directive()` lines between the tagline and the `▸` marker. Removing or reordering that tail reopens the skip.
+
+### session_opening_directive(repo_root, paths)
+File: `src/gator_command/scripts/gator-init.py` (block-mirrored in the template copy)
+Returns the banner's next-action lines: (1) the constitution by its ONE resolved repo-relative path (layout-aware via `paths.constitution` — v2 prints `.gator/.includes/constitution.md`, v1 `.gator/constitution.md`; no conditional two-path lookup for the model to skip), (2) `mission.md · roadmap.md · inbox.md` — the reads the constitution's Session Opening block would otherwise have to relay through the one skippable link. Fallback literals if `relative_to` fails.
+<- `print_boot_sequence()`
+! Machine-side surface: this fix reached the whole fleet in one CLI release — first agent-education payoff of the runtime split. Pins: `test_banner_ends_with_session_opening_directive` (ordering: tagline → directive → marker), `test_session_opening_directive_resolves_v2_path`.
 
 ### _constitution_drift_suffix(repo_root)
 File: `src/gator_command/scripts/gator-init.py`

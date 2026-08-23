@@ -343,11 +343,44 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     except Exception:
         pass
 
-    # Tagline
+    # Tagline + session-opening directive (inbox 2026-08-23): the banner
+    # used to END on the tagline, which reads as "session opening done" --
+    # models (observed: Opus 4.7) took the constitution existence-check
+    # tick as "constitution loaded" and skipped the read chain entirely.
+    # The tail makes the next action explicit with a blunt resolved path,
+    # no conditional two-path lookup for the model to skip. Machine-side
+    # surface: this fix reaches the whole fleet in one CLI release.
     print()
     print(f"  {TAGLINE}")
+    for line in session_opening_directive(repo_root, paths):
+        print(line)
     print(f"  \u25b8")
     print()
+
+
+def session_opening_directive(repo_root, paths):
+    """Return the banner's next-action lines (session-opening reads).
+
+    The check ticks above only verify files EXIST -- they do not mean
+    the agent has read them. These lines convert the banner from a
+    completion signal into a handoff: name the constitution by its one
+    resolved path, then the three context reads the constitution's
+    Session Opening block would otherwise have to relay.
+    """
+    try:
+        const_rel = paths.constitution.relative_to(repo_root).as_posix()
+    except Exception:
+        const_rel = ".gator/.includes/constitution.md"
+    try:
+        root_rel = paths.gator_root.relative_to(repo_root).as_posix()
+    except Exception:
+        root_rel = ".gator"
+    return [
+        "",
+        "  session opening is not finished. Read, in order:",
+        f"    1. {const_rel}  \u2014 the rules; read before your first response",
+        f"    2. {root_rel}/mission.md \u00b7 roadmap.md \u00b7 inbox.md  \u2014 what \u00b7 where \u00b7 open work",
+    ]
 
 
 def print_json(repo_root, paths, hook_status, registry_status):

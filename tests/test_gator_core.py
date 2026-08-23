@@ -666,3 +666,53 @@ class TestPolicyStalenessNudge:
         out = capsys.readouterr().out
         assert "! policy" not in out
         assert "navigation coding" in out  # banner completed
+
+    def test_banner_ends_with_session_opening_directive(self, tmp_path,
+                                                        monkeypatch, capsys):
+        """Inbox 2026-08-23 (constitution-skip finding): the banner must
+        NOT end on the tagline-as-completion. It hands off to the
+        session-opening reads with the blunt resolved constitution path
+        (no conditional two-path lookup) plus the three context reads."""
+        from conftest import load_script
+        init = load_script("gator-init")
+        gator_layout = load_script("gator_layout")
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        includes.mkdir(parents=True)
+        (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+        (includes / "scripts").mkdir()
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        paths = gator_layout.get_gator_paths(tmp_path)
+        monkeypatch.setattr(gator_core, "policy_staleness_nudge",
+                            lambda gd, **kw: None)
+        init.print_boot_sequence(
+            tmp_path, paths,
+            {"status": "ok", "detail": "ok", "adds": 0, "updates": 0},
+            {"status": "ok", "detail": "registered"},
+        )
+        out = capsys.readouterr().out
+        assert "session opening is not finished" in out
+        assert ".gator/.includes/constitution.md" in out
+        assert "mission.md" in out and "roadmap.md" in out \
+            and "inbox.md" in out
+        # directive sits between tagline and the prompt marker
+        assert out.index("terrain is mapped") \
+            < out.index("session opening is not finished")
+
+    def test_session_opening_directive_resolves_v2_path(self, tmp_path):
+        from conftest import load_script
+        init = load_script("gator-init")
+        gator_layout = load_script("gator_layout")
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        includes.mkdir(parents=True)
+        (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+        (includes / "scripts").mkdir()
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        paths = gator_layout.get_gator_paths(tmp_path)
+        lines = init.session_opening_directive(tmp_path, paths)
+        joined = "\n".join(lines)
+        assert ".gator/.includes/constitution.md" in joined
+        assert ".gator/mission.md" in joined
