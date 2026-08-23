@@ -2,6 +2,16 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.9.2] — 2026-08-23
+
+Fix trio from a single field case: a repo whose Dashboard Update button silently "did nothing."
+
+### Fixed
+
+- **User reference notes at `.gator/reference-notes/` no longer brick updates.** The docs present root `reference-notes/` as user content, but the layout resolver classified the directory as fully-shipped — one user-authored note at root made the repo resolve as `mixed`, which `gator update` refuses permanently. `reference-notes/` is now a mixed directory like `procedures/`: shipped files are detected per-filename (template-derived, with a bootstrap fallback), user notes at root are valid v2 content, and `--migrate-layout` preserves them at root instead of sweeping them into `.includes/`. Pins: `tests/test_layout.py::TestReferenceNotesReclassification`, rewritten `test_shipped_dir_duplicates_get_removed`.
+- **`--dry-run` now actually gates `--migrate-layout`.** Previously `gator update --migrate-layout --dry-run` executed the full migration — real file moves and hook regeneration under a flag that promises no changes. The combination now prints the current layout resolution and how to run for real, and changes nothing. Pin: `TestMigrateDryRunGate`.
+- **The Dashboard no longer swallows update/gatorize failures** (issue [#1](https://github.com/cumberland-laboratories/gator/issues/1)). The backend always returned the CLI's output on failure, but the Fleet view hid it in a hover-tooltip on a small red `!`. Both the Update and Gatorize handlers now surface the CLI's actual output in a visible alert (tooltip retained).
+
 ## [2.9.1] — 2026-08-23
 
 First machine-side agent-education fix delivered through the 2.9.0 runtime split: one CLI release, zero per-repo diffs.

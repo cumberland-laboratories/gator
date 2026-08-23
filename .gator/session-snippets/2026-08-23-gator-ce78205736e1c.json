@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "fix trio from the cl-strategy field case: reference-notes reclassified as mixed dir, --dry-run gates --migrate-layout, dashboard surfaces update failures",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-resolver",
+    "migrate-layout",
+    "dashboard",
+    "issue-1",
+    "field-case"
+  ],
+  "commit": "ce78205736e1c33dd990838c6ed1f54e81c8f69f",
+  "short_commit": "ce78205",
+  "snippet_id": "snippet-ce78205736e1c",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "454669257f7b4e0a8045412f71edcae595045b16",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T19:33:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-layout.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-23-gator-454669257f7b4.json",
+    "src/gator_command/scripts/dashboard/views/fleet.js",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/scripts/gator_layout.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_layout.py",
+    "tests/test_layout.py"
+  ],
+  "notes": [
+    "**Field case (cl-strategy)**: a user reference note committed at `.gator/reference-notes/` — the DOCUMENTED user location — made the resolver classify the repo `mixed`, `gator update` refused, and the Dashboard swallowed the refusal. Three fixes, Architect-directed:",
+    "**Fix 1 — resolver reclassification** (`gator_layout.py`, both copies): `reference-notes` moved from `SHIPPED_DIRECTORIES` (wholesale) to `MIXED_DIRECTORY_SHIPPED_DEFAULTS` (per-filename, template-derived preferred; 16-name bootstrap fallback). User notes at root = valid v2; shipped-named files at root = still mixed. `migrate_layout` Step 6 gains reference-notes (preserve user files at root); Step 5 no longer sweeps the dir wholesale. `test_shipped_dir_duplicates_get_removed` rewritten for the new semantics (shipped-name dup convergence + user-note preservation); new `TestReferenceNotesReclassification` (3 pins incl. the field case).",
+    "**Fix 2 — `--dry-run` gates `--migrate-layout`** (`gator-update.py`, both copies): previously the combination EXECUTED the migration (real moves + hook regeneration under a no-changes flag — it migrated a user repo during diagnosis). Gate fires in `main()` before template resolution, prints current layout + real-run instruction. Pin: `TestMigrateDryRunGate` (capfd — `ensure_utf8_stdout` re-wraps stdout).",
+    "**Fix 3 — dashboard surfaces failures** (issue #1; `fleet.js` update + gatorize handlers): backend always returned the CLI output; the frontend hid it in a hover tooltip on a red `!`. Both handlers now also `alert()` the output on error and on fetch exception.",
+    "Live-verified on cl-strategy: resolves v2 with the note at root, dry-run truly dry, update ran clean (pin 2.9.1, residue committed there as `459f96a`). Suites: base+contracts 908 pass (+4).",
+    "Charters: layout (reclassification + WHY), repo-lifecycle (Step-6 sync obligation + dry-run gate), dashboard (surface-don't-mark tripwire)."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
