@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "v2.9.0 post-release rollforward: roadmap Done row + item 19 closed + priority stack advance + inbox where-we-are",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-2.9.0",
+    "runtime-split",
+    "rollforward"
+  ],
+  "commit": "2b36a1080ffa7e87b66cfce56127f777733140fc",
+  "short_commit": "2b36a10",
+  "snippet_id": "snippet-2b36a1080ffa7",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "ddc428cea4a5db1aec8b68a590f3beaba31038c4",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T15:48:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-23-gator-ddc428cea4a5d.json"
+  ],
+  "notes": [
+    "**v2.9.0 shipped to production PyPI 2026-08-23** — first-try-green pipeline (Workflow B `32649063676`; promote `32649161818`, production smoke attempt 1); GitHub Release published `--latest`; fresh-venv verify passed (wheel carries dispatcher + §0b orientation). Tags `v2.9.0-rc1` + `v2.9.0` at `ddc428c`.",
+    "Roadmap: header rolled to post-2.9.0 (Current Priority #1 complete, stack advances); Done table gains the v2.9.0 runtime-split row (decision record D1/D5/D6, fleet dogfood, suites 902 base / 344+2 enterprise verified at release); Post-2.6 item 19 flipped to Done with residue pointers (F6-1, D4 follow-on).",
+    "Inbox: where-we-are rolled forward to the release; next-steps stack renumbered; runtime-split residue candidates named.",
+    "Phase 6 run record + plan artifact (vault): status flipped to RATIFIED / r10 per Architect ratification 2026-08-23.",
+    "Riding: session snippet residue for `ddc428c`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
