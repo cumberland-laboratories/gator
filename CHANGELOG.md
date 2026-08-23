@@ -2,6 +2,39 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.9.0] — 2026-08-23
+
+**The runtime split.** Gator-governed repos no longer carry the enforcement runtime — they commit **policy plus a pin**, and the runtime executes from the installed CLI on each machine. This is Git's own `repositoryformatversion` pattern applied to governance: the committed `.gator/runtime-pin.json` records the minimum runtime version the repo's governance requires; an older installed CLI refuses fail-closed with an upgrade instruction, a newer one runs and `gator update` advances the pin. Updating Gator across a fleet becomes one `pipx upgrade` plus a two-file diff per repo, instead of a ~30-file script sync into every repo and branch. Direction, plan, and all six phases Architect-ratified (roadmap item 19; runtime-split plan r9, fleet-wide dogfood on 12 repos).
+
+### Added
+
+- **`gator hook <name>` dispatcher** (`gator-hook.py`): machine-side entry point for `pre-commit | commit-msg | post-commit | session-open | session-start | enforcer-review | approve`. Git hooks are now thin pin-aware stubs — pin present → dispatch to the installed CLI; pin absent → byte-for-byte pre-split repo-script invocation, so old branches and old checkouts behave exactly as they always did. Pins: `tests/test_gator_hook.py`, `tests/test_hooks.py::TestPinAwareWrappers`.
+- **`.gator/runtime-pin.json`** (`gator-runtime-pin-v1` contract: schema, fixtures, live-repo conformance tests): wheel-sourced sha256 manifest + `runtime_version`, written by `gator update` and `gator gatorize`. Repos gatorized by a 2.9.0 CLI are born pinned — no scripts tree ever.
+- **`gator_core.resolve_governed_runtime()`**: fail-closed version negotiation (`current` / `cli-newer` / `refuse` / `repo-scripts` / `pin-unreadable` / `ungoverned`). Refusal is safe-by-design (`RUNTIME VERSION MISMATCH` + `pipx upgrade gator-command`); a corrupt pin fails OPEN to repo scripts — a broken file must never brick commits. BOM-tolerant pin read (`utf-8-sig`). Pins: `tests/test_gator_core.py::TestResolveGovernedRuntime`.
+- **`gator hook approve`**: the Architect override runs from the installed CLI (repo copy of `gator-approve.py` no longer ships). Agent-invocation remains forbidden by governance.
+- **Enterprise policy channel** (source-checkout Enterprise installs): Migration 012 `machine_policy_states`; `POST /policy-state/report` with `replace_scopes` full-state-per-scope semantics (retired policies clear automatically); `GET /policy-state` + `GET /policy-state/drift`; `GET /policies/active`; client `gator-enterprise policies pull` / `policies drift`; committed `.gator/policy-pin.json` (`gator-policy-pin-v1` — hashes only, never content). Org-side policy activation flips fleet drift in one query. Base installs are untouched — everything is gated fail-closed behind `~/.gator/enterprise/` activation.
+- **Policy staleness nudge** (D6 option c): purely local mtime check on `~/.gator/enterprise/org-policies.json` (7-day default, `GATOR_POLICY_STALE_DAYS`), surfaced in the `gator init` banner and session-open stderr. No network in any session-opening path, ever. Inert for non-Enterprise machines.
+- **Shipped procedures for the upgrade experience**: `gator-version-drift.md` (cross-branch Gator merge rules; §0a pinned-repo merge rules; **§0b mid-session orientation** — what an agent sees when the update lands under it mid-session, and the one rule: commit the diff, never restore deleted scripts) + runtime-split note in `committing-gator-files.md`. The v2.7.0 procedure pair (`pre-gator-residue.md`, `committing-gator-files.md`) is also backfilled into the wheel template — it had never actually shipped in the wheel.
+
+### Changed
+
+- **`gator update` sheds the repo-resident runtime**: writes the pin, deletes `.gator/.includes/scripts/` (or v1 `.gator/scripts/`), refreshes pin-aware hook stubs. The scripts-absent-with-pin layout is a valid v2 repo (S1 relaxation). Migration is per-repo and opt-in; un-updated repos and branches keep running their committed scripts indefinitely.
+- **Vendor SessionStart hooks** (Claude/Codex/Gemini settings) route via `gator hook session-open` with a four-clause fallback chain (`gator` on PATH → `python` → `python3` → `py -3`); Enterprise-provisioned machine hooks embed the absolute launcher. Fixes the dead v1 script paths Enterprise vendor hooks had carried since the `.includes` split.
+- **`enforcer-review`** is cwd-based and machine-side; user config canonicalized at `.gator/enforcer-config.json` (root, with legacy-location probes); whiteboard writes resolve the repo root correctly (fixes a latent v2 bug where findings landed in `.includes/whiteboard.md`).
+- **Prose sweep**: constitution, procedures, reference-notes, entry-point templates, README, and operator docs all describe the pinned-runtime model with CLI-first invocations (`gator hook enforcer-review`, `gator hook approve`); `enforcer-prompt.md` relocated to shipped reference-notes.
+
+### Fixed
+
+- **Base-wheel package-data gap** (Post-2.6 item 12, load-bearing under the split): 7 scripts restored to the wheel (`gator-audit`, `gator-audit-renderers`, `gator-drift`, `gator-fleet-intel`, `gator-fleet-report`, `gator-session-aggregator`, `gator_session_reader`) + a self-maintaining disk→wheel guard (`test_packaging.py::test_wheel_ships_every_top_level_script`).
+- **Session-open silent no-op on pinned repos**: the wheel copy's sys.path bootstrap now includes the own-directory fallback; repo-root walks in `gator-approve` / `gator-session-open` / `policies pull` uncapped (arbitrary hop limits silently failed on deep working dirs).
+- **`gator init` banner nudge dead-code wiring** (undefined name swallowed by a blanket except) — fixed and pinned end-to-end.
+- **Enterprise latents caught by the policy-channel work**: policy-version activation flush-order `IntegrityError`; `PolicyVersion` one-active partial index missing `sqlite_where`; Migration 012 server-side timestamp defaults (migration⟷model drift class — SQLite tests structurally can't catch it; real-Postgres smoke required).
+- Unreadable-pin degradation unified across malformed-JSON and unparseable-version branches (repo scripts present → fallback; absent → honest `ungoverned`).
+
+### Upgrading
+
+`pipx upgrade gator-command`, then `gator update` in each governed repo (Dashboard → Fleet → Update is the easiest path), one branch at a time — merges converge per `gator-version-drift.md`. **Teams: upgrade every machine's CLI before anyone pushes an updated repo** — a pinned repo refuses older CLIs by design. Repos and branches you don't update keep working unchanged on their committed scripts.
+
 ## [2.8.0] — 2026-08-16
 
 Full Claude + Codex + Gemini audit surface. Completes the Enterprise audit-surface tranche (all six phases, Architect-ratified 2026-08-16): the five canonical audit questions (Q1-Q5) now return correct answers against real transcript custody from **all three vendors** — Claude Code, Codex CLI, and Gemini CLI — verified end-to-end by the Phase 6 widened-vendor smoke test (156 sessions, ~2,420 links, 2,025 commits across 13 repos on the smoke machine).

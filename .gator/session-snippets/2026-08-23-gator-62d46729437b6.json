@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "2.9.0 prep: shipped mid-session upgrade orientation — drift procedure §0b + committing-gator-files runtime-split note",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-split",
+    "release-prep-2.9.0",
+    "agent-orientation"
+  ],
+  "commit": "62d46729437b6efb3ab0854987268f35953a9205",
+  "short_commit": "62d4672",
+  "snippet_id": "snippet-62d46729437b6",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T15:14:20Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-08-22-gator-47bafc9b3843c.json",
+    "src/gator_command/templates/gator-starter/procedures/committing-gator-files.md",
+    "src/gator_command/templates/gator-starter/procedures/gator-version-drift.md"
+  ],
+  "notes": [
+    "**Architect-directed 2.9.0 release-prep item**: the one orientation gap for agents mid-upgrade. `gator-version-drift.md` gains **§0b \"The upgrade just landed under you\"** — the four symptoms an agent sees when the Architect runs the 2.9+ update mid-session (mass script deletions, new `runtime-pin.json`, hook output shape change, refreshed managed blocks), the one rule (commit as-is; never restore deleted scripts; don't ask the operator to choose), and the reverse case (RUNTIME VERSION MISMATCH refusal → `pipx upgrade`, repo needs no change).",
+    "`committing-gator-files.md` §1 gains the matching runtime-split migration-diff paragraph, cross-linked to §0b.",
+    "Ships in the same wheel upgraders receive; `gator update` refreshes procedures in the same diff that needs explaining, so the explanation arrives with the symptom."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
