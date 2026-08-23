@@ -17,6 +17,8 @@ When a Gator command (`gator update`, `gator gatorize`, `gator init`, etc.) modi
 
 **Do not hesitate**: `gator update` producing dozens of `.gator/.includes/` file changes is expected and correct. Stage them and commit them.
 
+This includes the **2.9+ runtime-split migration diff**: a `gator update` run by a 2.9+ CLI deletes the entire repo-resident scripts tree (`.gator/.includes/scripts/` or v1 `.gator/scripts/`) and adds `.gator/runtime-pin.json` — enforcement moves to the installed CLI, and the pin records the governing runtime version. Commit the deletions together with the pin; never restore the deleted scripts (see [`gator-version-drift.md`](gator-version-drift.md) §0b for the full mid-session orientation).
+
 ## 2. Exceptions — do NOT commit these
 
 The following `.gator/` files are gitignored by design AND/OR are session-local residue that must not be committed:

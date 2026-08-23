@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "Bump to 2.9.0 — the runtime split: repos commit policy + pin, runtime executes from the installed CLI",
+  "change_type": "release",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "release-2.9.0",
+    "runtime-split"
+  ],
+  "commit": "a3c117198c2489dc82f43fff23caef16bb77de24",
+  "short_commit": "a3c1171",
+  "snippet_id": "snippet-a3c117198c248",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "62d46729437b6efb3ab0854987268f35953a9205",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T15:24:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-23-gator-62d46729437b6.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump 2.8.0 → 2.9.0 in `pyproject.toml` + `VERSION` (byte-consistent per the core-library tripwire; note updated to current: 2.9.0).",
+    "`CHANGELOG.md` gains the `[2.9.0]` section: the runtime split (roadmap item 19, all six phases Architect-ratified) — `gator hook` dispatcher + pin-aware stubs, `runtime-pin.json` + `gator-runtime-pin-v1` contract, `resolve_governed_runtime` fail-closed negotiation, `gator hook approve`, Enterprise policy channel (Migration 012 + `policies pull`/`drift` + `policy-pin.json`), D6 staleness nudge, shipped upgrade-orientation procedures (§0b), plus the Changed/Fixed tails (package-data item 12, session-open bootstrap, Enterprise latents) and the Upgrading section (CLI-first ordering rule for teams).",
+    "MINOR bump per D5 ruling (Architect, 2026-08-21): additive surface — old repos/branches run unchanged; pinned behavior is opt-in per repo via `gator update`.",
+    "Suites at bump: base + contracts 902 pass / 2 skip / 2 xfail."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

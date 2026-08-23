@@ -22,12 +22,46 @@ repo. Consequences for this procedure:
   on pinned repos — most shipped-content conflicts simply stop occurring.
 - A `runtime-pin.json` conflict resolves like any Class A file: take
   either side whole, run `gator update` on the merged result, commit.
+- The same rule covers `.gator/policy-pin.json` (Enterprise org-policy
+  pin, 2.9+): take either side whole; the next
+  `gator-enterprise policies pull` re-converges it.
 - Merging a pinned branch with a pre-2.9 branch that still carries
   scripts: resolve scripts-side conflicts with `--theirs`/`--ours`
   (either), finish the merge, run `gator update` — it re-pins and
   removes the scripts tree on the merged result.
 
 Everything below remains correct for pre-2.9 repos and mixed merges.
+
+## 0b. The upgrade just landed under you (mid-session orientation)
+
+You may be mid-session when the Architect upgrades Gator and updates this
+repo (often via the Dashboard's Update button, sometimes while you are
+working). `git status` suddenly shows some or all of:
+
+1. **Dozens of deleted files under `.gator/.includes/scripts/`** (or
+   `.gator/scripts/` on an old layout) — the entire runtime scripts tree.
+2. **A new `.gator/runtime-pin.json`** (and possibly `policy-pin.json`).
+3. **Hook output that changed shape** — commits now print via
+   `gator hook <name>` / the installed CLI instead of a repo script.
+4. **Modified managed blocks** in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`
+   and refreshed files under `.gator/.includes/`.
+
+**This is `gator update` migrating the repo to the 2.9+ machine-side
+runtime. It is correct and intentional.** The one rule:
+
+- **Commit the diff as-is** (see
+  [`committing-gator-files.md`](committing-gator-files.md);
+  `change-type: governance` or `maintenance`). Do **not** restore the
+  deleted scripts, do not treat the deletions as an accident or attack,
+  do not ask the operator to choose — enforcement now executes from the
+  installed CLI, and `runtime-pin.json` records which runtime version
+  governs this repo. The deleted files are reproducible shipped content,
+  not lost work.
+
+If a commit is instead REFUSED with `RUNTIME VERSION MISMATCH`, that is
+the reverse situation: the repo's pin is newer than this machine's
+installed CLI. The fix is exactly what the message says —
+`pipx upgrade gator-command` — nothing in the repo needs changing.
 
 ## 1. The one principle that resolves most of this
 
