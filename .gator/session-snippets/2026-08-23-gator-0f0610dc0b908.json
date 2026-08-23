@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "Bump to 2.9.1 — gator init session-opening directive tail (constitution-skip fix)",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release-2.9.1",
+    "agent-education"
+  ],
+  "commit": "0f0610dc0b90849d089ead217fafda14e6616ff8",
+  "short_commit": "0f0610d",
+  "snippet_id": "snippet-0f0610dc0b908",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "2c99de88143db0fae9a48e37b805839cad9b7589",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T17:15:32Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-23-gator-2c99de88143db.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump 2.9.0 -> 2.9.1 in pyproject.toml + VERSION (byte-consistent; core-library tripwire note updated to current: 2.9.1).",
+    "CHANGELOG [2.9.1]: the constitution-skip fix — banner ends with an explicit session-opening handoff (resolved constitution path + mission/roadmap/inbox) instead of a completion signal. PATCH: single behavioral fix, no API surface change.",
+    "First machine-side agent-education fix shipped through the runtime split: one CLI release, zero per-repo diffs."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
