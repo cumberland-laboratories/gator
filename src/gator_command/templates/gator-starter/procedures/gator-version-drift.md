@@ -32,6 +32,37 @@ repo. Consequences for this procedure:
 
 Everything below remains correct for pre-2.9 repos and mixed merges.
 
+## 0b. The upgrade just landed under you (mid-session orientation)
+
+You may be mid-session when the Architect upgrades Gator and updates this
+repo (often via the Dashboard's Update button, sometimes while you are
+working). `git status` suddenly shows some or all of:
+
+1. **Dozens of deleted files under `.gator/.includes/scripts/`** (or
+   `.gator/scripts/` on an old layout) — the entire runtime scripts tree.
+2. **A new `.gator/runtime-pin.json`** (and possibly `policy-pin.json`).
+3. **Hook output that changed shape** — commits now print via
+   `gator hook <name>` / the installed CLI instead of a repo script.
+4. **Modified managed blocks** in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`
+   and refreshed files under `.gator/.includes/`.
+
+**This is `gator update` migrating the repo to the 2.9+ machine-side
+runtime. It is correct and intentional.** The one rule:
+
+- **Commit the diff as-is** (see
+  [`committing-gator-files.md`](committing-gator-files.md);
+  `change-type: governance` or `maintenance`). Do **not** restore the
+  deleted scripts, do not treat the deletions as an accident or attack,
+  do not ask the operator to choose — enforcement now executes from the
+  installed CLI, and `runtime-pin.json` records which runtime version
+  governs this repo. The deleted files are reproducible shipped content,
+  not lost work.
+
+If a commit is instead REFUSED with `RUNTIME VERSION MISMATCH`, that is
+the reverse situation: the repo's pin is newer than this machine's
+installed CLI. The fix is exactly what the message says —
+`pipx upgrade gator-command` — nothing in the repo needs changing.
+
 ## 1. The one principle that resolves most of this
 
 Shipped Gator content is **generated, version-owned, and reproducible**. It is not source to be hand-merged — it is output that `gator update` can rewrite to canonical form at any time. Therefore a conflict in shipped content never needs a careful line-by-line merge: clear the conflict any valid way, finish the merge, run `gator update`, commit the result. The CLI is the merge tool for its own files.

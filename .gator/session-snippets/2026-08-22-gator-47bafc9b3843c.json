@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "runtime-split Phase 6 executed: fleet migration rollforward (inbox where-we-are + F6-1 product-source follow-up item)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-split",
+    "phase-6",
+    "fleet-migration"
+  ],
+  "commit": "47bafc9b3843c1bc8cc2a74b06a320409b0a21eb",
+  "short_commit": "47bafc9",
+  "snippet_id": "snippet-47bafc9b3843c",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "69ea409f70325e4508f3c432809f5f9292852806",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-22T23:46:45Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-22-gator-69ea409f70325.json"
+  ],
+  "notes": [
+    "**Phase 6 executed, pending ratification.** All 12 governed fleet repos migrated to the pinned machine-side runtime and committed through the stub→dispatcher chain (sandbox N/A — Enterprise-provisioned). Refusal path (tampered 99.0.0 pin → fail-closed with upgrade instruction) and pre-split checkout fallback (scratch clone at `331f1ef` — repo-resident runtime ran) both proven live. Run record: vault `2026-08-22-runtime-split-phase-6-fleet-migration-smoke.md`; plan artifact at r9.",
+    "**Finding F6-1 (fixed in-run)**: 9 repos' stale `product-source.json` bound the retired standalone clone — templates + pin manifest silently sourced from a 2.5-era tree. Corrected via `gator update --source` rebind in all 9; design follow-up (installed-CLI templates authoritative post-split) queued as an inbox item.",
+    "Inbox: where-we-are block rolled forward from post-v2.8.0 to post-Phase-6; F6-1 follow-up added to Open items.",
+    "Riding: session snippet residue for `69ea409`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
