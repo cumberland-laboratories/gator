@@ -3,4 +3,4 @@ installed: 2026-08-02
 updated: 2026-08-23T11:24:38
 action: install
 installer: gatorize.py
-cli-version: 2.9.1
+cli-version: 2.9.2
