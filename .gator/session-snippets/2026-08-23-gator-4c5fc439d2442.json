@@ -1,0 +1,37 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "gator update: advance runtime pin to 2.9.1",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-2.9.1"
+  ],
+  "commit": "4c5fc439d2442614df4a34935c1c53626cb53c28",
+  "short_commit": "4c5fc43",
+  "snippet_id": "snippet-4c5fc439d2442",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "0f0610dc0b90849d089ead217fafda14e6616ff8",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T17:15:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-08-23-gator-0f0610dc0b908.json"
+  ],
+  "notes": [
+    "Pin advance 2.9.0 -> 2.9.1 per the cli-newer nudge on the bump commit's hooks. Riding: snippet residue for `0f0610d`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
