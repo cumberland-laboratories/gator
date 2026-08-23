@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "gator init: session-opening directive tail — banner hands off to the constitution read instead of ending as completion",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "agent-education",
+    "gator-init",
+    "session-opening",
+    "constitution-skip"
+  ],
+  "commit": "2c99de88143db0fae9a48e37b805839cad9b7589",
+  "short_commit": "2c99de8",
+  "snippet_id": "snippet-2c99de88143db",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "8ae31e2f739ad385f74a1b9dda4100f3c774eea1",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T16:06:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-08-23-gator-8ae31e2f739ad.json",
+    "src/gator_command/scripts/gator-init.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-init.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "**Constitution-skip fix, option (a)** (Architect-directed; inbox finding 2026-08-23, observed on Opus 4.7): the `gator init` banner ended on the tagline — a completion signal — and the ✓ constitution line is an existence-check models mistake for \"constitution loaded\"; skipping that one link silently skips mission/roadmap/inbox too.",
+    "New `session_opening_directive(repo_root, paths)` in BOTH `gator-init.py` copies (wheel + template, block-mirrored): the banner now ends with \"session opening is not finished. Read, in order: 1. <layout-resolved constitution path> 2. mission.md · roadmap.md · inbox.md\" between tagline and prompt marker. Blunt resolved path (v2 prints `.gator/.includes/constitution.md`) — no conditional two-path lookup to skip.",
+    "Machine-side surface: reaches the whole fleet on the next CLI release with zero per-repo diffs — first agent-education payoff of the runtime split.",
+    "Pins: `test_banner_ends_with_session_opening_directive` (tagline → directive → marker ordering, real print_boot_sequence) + `test_session_opening_directive_resolves_v2_path`. Suites: base + contracts 904 pass (+2). Live-verified in this repo's own banner.",
+    "Charters: repo-lifecycle (new function entry + banner-must-not-end-on-tagline tripwire), cross-cutting (two-copy mirror obligation), core-library (pin cross-reference). Inbox item updated: (a) shipped, (b)/(c) held pending observed effect."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

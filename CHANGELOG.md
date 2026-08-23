@@ -2,6 +2,14 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.9.1] — 2026-08-23
+
+First machine-side agent-education fix delivered through the 2.9.0 runtime split: one CLI release, zero per-repo diffs.
+
+### Fixed
+
+- **`gator init` banner no longer reads as session-opening completion.** Field observation (Opus 4.7): models took the `✓ constitution … rules in force` existence-check as "constitution loaded" and the closing tagline as "done", skipping the constitution read — and with it the mission/roadmap/inbox reads that chain from it. The banner now ends with an explicit handoff: *"session opening is not finished. Read, in order:"* naming the constitution by its one layout-resolved path (no conditional two-path lookup) plus the three context reads. New `session_opening_directive()` in both `gator-init.py` copies; ordering pinned end-to-end (`tests/test_gator_core.py::test_banner_ends_with_session_opening_directive`).
+
 ## [2.9.0] — 2026-08-23
 
 **The runtime split.** Gator-governed repos no longer carry the enforcement runtime — they commit **policy plus a pin**, and the runtime executes from the installed CLI on each machine. This is Git's own `repositoryformatversion` pattern applied to governance: the committed `.gator/runtime-pin.json` records the minimum runtime version the repo's governance requires; an older installed CLI refuses fail-closed with an upgrade instruction, a newer one runs and `gator update` advances the pin. Updating Gator across a fleet becomes one `pipx upgrade` plus a two-file diff per repo, instead of a ~30-file script sync into every repo and branch. Direction, plan, and all six phases Architect-ratified (roadmap item 19; runtime-split plan r9, fleet-wide dogfood on 12 repos).
