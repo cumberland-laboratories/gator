@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "gator update: advance runtime pin to 2.9.0 + carry refreshed shipped procedures/docs into .includes",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-2.9.0",
+    "runtime-split"
+  ],
+  "commit": "ddc428cea4a5db1aec8b68a590f3beaba31038c4",
+  "short_commit": "ddc428c",
+  "snippet_id": "snippet-ddc428cea4a5d",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "a3c117198c2489dc82f43fff23caef16bb77de24",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T15:28:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/.includes/procedures/committing-gator-files.md",
+    ".gator/.includes/procedures/gator-version-drift.md",
+    ".gator/docs/how-gator-works.md",
+    ".gator/docs/how-to-use-gator.md",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-08-23-gator-a3c117198c248.json"
+  ],
+  "notes": [
+    "`gator update` post-bump: `runtime-pin.json` advanced 2.8.0 -> 2.9.0 (16-file wheel manifest) — the cli-newer nudge printed by the bump commit's own hooks, acted on. The release ships the monorepo pinned at its own version.",
+    "Same run carries the refreshed shipped content into `.gator/.includes/`: drift procedure §0b mid-session orientation, committing-gator-files runtime-split note, how-gator-works / how-to-use-gator pinned-runtime sections; `.gator-version` re-stamped.",
+    "Riding: session snippet residue for `a3c1171`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}
