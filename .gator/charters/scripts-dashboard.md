@@ -100,6 +100,7 @@ Filesystem: probes `<repo>/.gator/` (R); delegates the write to gator-update via
 <- `DashboardHandler.do_POST()` at `/api/repo/<name>/update`
 ! Never call `gatorize` from this endpoint. Silent branch-switch bug (repo landed on `gator-install` branch instead of the user's viewing branch) was fixed in v2.4.0 by swapping to `gator-update`. See plan `2026-07-30-retire-gator-install-branch-implementation-plan.md` (Stage 1).
 ! `gator-update.py` has no positional path argument — `--path`/`-p` is required. `run_text("gator-update", repo_path, ...)` (without `--path`) is an argparse error.
+! **Frontend must SURFACE the failure output, not just mark it** (issue #1 class, fixed 2026-08-23): the backend has always returned the CLI's `output` on failure, but `fleet.js` (`bindUpdateButtons` + `bindGatorizeButtons`) rendered it only as a hover-tooltip on a red `!` — a mixed-layout refusal read as "the Update button does nothing" (field case: cl-strategy). Both handlers now also `alert()` the CLI output (operation name taken from the button label) on error AND on fetch exception. Keep the tooltip; never regress to marker-only.
 
 ### _find_session_content(self, repo, source_kind, filename)
 File: `src/gator_command/scripts/gator-dashboard.py`

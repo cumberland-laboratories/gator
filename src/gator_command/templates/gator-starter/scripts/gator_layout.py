@@ -36,9 +36,15 @@ SHIPPED_ROOT_FILES = frozenset({
     ".charterignore",
 })
 
+# reference-notes moved to MIXED_DIRECTORY_SHIPPED_DEFAULTS 2026-08-23:
+# the docs present root .gator/reference-notes/ as a USER content dir
+# ("cognitive aids and vocabulary"), and treating it as fully-shipped made
+# any user-authored note at root resolve the repo as "mixed" — which
+# gator update refuses, permanently bricking updates for repos that did
+# the documented thing (field case: cl-strategy). Per-filename shipped
+# detection (like procedures/) is the correct model.
 SHIPPED_DIRECTORIES = frozenset({
     "scripts",
-    "reference-notes",
 })
 
 # Scaffolding files that stay at the user-visible root even on v2.
@@ -57,6 +63,21 @@ MIXED_DIRECTORY_SHIPPED_DEFAULTS = {
     }),
     "charters": frozenset(),  # only scaffolding — stays at root
     "blueprints": frozenset(),  # only scaffolding — stays at root
+    # Bootstrap fallback only — get_shipped_files_for_directory() prefers
+    # the live template listing when a template source resolves. Keep in
+    # sync with templates/gator-starter/reference-notes/ (scaffolding
+    # README.md/_template.md excluded; USER_VISIBLE_SCAFFOLDING covers those).
+    "reference-notes": frozenset({
+        "concierge-responses.md", "dangerous-patterns.md",
+        "dashboard-operations.md", "enforcer-configuration.md",
+        "enforcer-prompt.md", "example-project.md",
+        "expected-governance-residue.md",
+        "failure-modes-and-self-correction.md", "git-workflow.md",
+        "identity-and-ownership.md", "local-agent-skills.md",
+        "loop-artifact-formats.md", "refactor-approach.md",
+        "what-gator-requires-from-a-model.md",
+        "why-navigation-coding-feels-different.md", "workflow-profiles.md",
+    }),
 }
 
 USER_ROOT_FILES = frozenset({

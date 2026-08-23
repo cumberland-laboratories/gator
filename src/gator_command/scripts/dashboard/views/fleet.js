@@ -231,12 +231,20 @@
           if (data.status === "ok") {
             if (window.gatorRefreshFleet) window.gatorRefreshFleet();
           } else {
-            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(data.output || data.error || "") + '">!</span>';
+            // Issue #1: a hover-only tooltip on the "!" marker silently
+            // swallowed the refusal reason (field case: a mixed-layout
+            // refusal read as "the Update button does nothing"). Keep
+            // the marker, but surface the CLI's actual output where the
+            // operator cannot miss it.
+            const reason = (data.output || data.error || "no output from CLI").trim();
+            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
             this.disabled = false;
+            alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
           }
         } catch (err) {
           if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)">!</span>';
           this.disabled = false;
+          alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
         }
       });
     });
@@ -267,12 +275,20 @@
           if (data.status === "ok") {
             if (window.gatorRefreshFleet) window.gatorRefreshFleet();
           } else {
-            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(data.output || data.error || "") + '">!</span>';
+            // Issue #1: a hover-only tooltip on the "!" marker silently
+            // swallowed the refusal reason (field case: a mixed-layout
+            // refusal read as "the Update button does nothing"). Keep
+            // the marker, but surface the CLI's actual output where the
+            // operator cannot miss it.
+            const reason = (data.output || data.error || "no output from CLI").trim();
+            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
             this.disabled = false;
+            alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
           }
         } catch (err) {
           if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)">!</span>';
           this.disabled = false;
+          alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
         }
       });
     });

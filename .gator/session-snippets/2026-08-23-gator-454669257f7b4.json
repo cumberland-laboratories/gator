@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "v2.9.1 post-release rollforward: roadmap Done row + inbox where-we-are (next push: Blueprints 2.0)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-2.9.1",
+    "rollforward"
+  ],
+  "commit": "454669257f7b4e0a8045412f71edcae595045b16",
+  "short_commit": "4546692",
+  "snippet_id": "snippet-454669257f7b4",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "4c5fc439d2442614df4a34935c1c53626cb53c28",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T17:41:11Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-23-gator-4c5fc439d2442.json"
+  ],
+  "notes": [
+    "v2.9.1 shipped to production PyPI 2026-08-23: session-opening directive (constitution-skip fix). Pipeline: Workflow B `32654755161` (Ubuntu TestPyPI smoke hit the CDN race, rerun green), promote `32655286456` (Architect-approved; production post-publish smoke hit the CDN race, rerun green). GitHub Release published `--latest`; fresh-venv verify: `gator 2.9.1`, directive ships in wheel.",
+    "Process note recorded honestly: an earlier promote dispatch was chained on a status VIEW instead of a green CHECK and fired against the failed Workflow B — cancelled while queued, before the approval gate, nothing published; the real dispatch was conclusion-gated.",
+    "Roadmap: v2.9.1 Done row (incl. open follow-ups (b)/(c) held pending observed effect). Inbox: where-we-are rolled to v2.9.1; next push per Architect = Blueprints 2.0.",
+    "Riding: session snippet residue for `4c5fc43`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

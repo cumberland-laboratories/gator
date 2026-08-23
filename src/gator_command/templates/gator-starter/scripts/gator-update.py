@@ -1356,7 +1356,7 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
         report["moved"].append(f"git hooks regenerated ({hooks_installed})")
 
     # Step 6: mixed directories — move only shipped files
-    for dname in ("procedures", "charters", "blueprints"):
+    for dname in ("procedures", "charters", "blueprints", "reference-notes"):
         src_dir = gator_dir / dname
         if not src_dir.is_dir():
             continue
@@ -1491,6 +1491,28 @@ def main():
 
     gator_dir = repo_root / ".gator"
 
+    # --dry-run MUST gate --migrate-layout, and the gate must fire BEFORE
+    # template-source resolution (2026-08-23): previously the combination
+    # executed the full migration — real file moves and hook regeneration
+    # under a flag that promises no changes (field case: a diagnostic
+    # dry-run migrated a user repo). There is no plan-only migrate yet,
+    # so refuse loudly instead of pretending.
+    if args.migrate_layout and args.dry_run:
+        print()
+        print("  gator migrate-layout (dry run)")
+        print()
+        print("  --dry-run does not execute the migration. This repo "
+              "currently resolves as:")
+        try:
+            from gator_layout import resolve_gator_layout as _rgl
+            print(f"    layout: {_rgl(repo_root)}")
+        except Exception:
+            print("    layout: (unresolvable)")
+        print()
+        print("  Run 'gator update --migrate-layout' (without --dry-run) "
+              "to migrate.")
+        return
+
     # Channel 1: resolve template source (product-source.json, --source, or thin link fallback)
     templates_dir, gator_root = resolve_template_source(gator_dir, args.source)
     if not templates_dir:
@@ -1560,7 +1582,8 @@ def main():
         ps_file.write_text(_json.dumps(ps_data, indent=2) + "\n", encoding="utf-8")
         print(f"  Product source rebound to: {gator_root}")
 
-    # Migration mode — separate code path
+    # Migration mode — separate code path (--dry-run already gated above,
+    # before template resolution)
     if args.migrate_layout:
         report = migrate_layout(repo_root, gator_dir, templates_dir)
         # After a v1→v2 convergence the shipped script paths just moved from

@@ -572,22 +572,34 @@ class TestMigration:
         gator = tmp_path / ".gator"
         gator.mkdir()
 
+        # 2026-08-23 rewrite for the reference-notes reclassification:
+        # reference-notes is now a MIXED directory (per-filename shipped
+        # detection, like procedures/) — user-authored notes at root are
+        # valid v2 content. The duplicate-convergence regression this test
+        # pins is therefore expressed with SHIPPED filenames, and a user
+        # file is added to pin the new preserve-at-root behavior.
+
         # v2 shape: .includes/ exists with a shipped file
         includes_refnotes = gator / ".includes" / "reference-notes"
         includes_refnotes.mkdir(parents=True)
-        (includes_refnotes / "shared-file.md").write_text(
+        (includes_refnotes / "dangerous-patterns.md").write_text(
             "# Canonical version in .includes/\n"
         )
 
-        # Duplicate ALSO at root (the bug's precondition)
+        # Shipped-name duplicate ALSO at root (the bug's precondition)
         root_refnotes = gator / "reference-notes"
         root_refnotes.mkdir()
-        (root_refnotes / "shared-file.md").write_text(
+        (root_refnotes / "dangerous-patterns.md").write_text(
             "# Old duplicate at root — should be removed\n"
         )
-        # Plus a file that's only at root — should MOVE to .includes/
-        (root_refnotes / "root-only.md").write_text(
+        # Shipped-name file only at root — should MOVE to .includes/
+        (root_refnotes / "workflow-profiles.md").write_text(
             "# Only exists at root — should move\n"
+        )
+        # USER-authored note at root — must be PRESERVED at root
+        # (field case: cl-strategy's technical-document-styling.md)
+        (root_refnotes / "my-user-note.md").write_text(
+            "# User note — stays at root\n"
         )
 
         # Required v2 marker + minimum shipped content so resolver
@@ -608,13 +620,18 @@ class TestMigration:
         assert report["final_layout"] == "v2", (
             f"Migration did not converge to v2. Report: {report}"
         )
-        # Duplicate file removed from root, .includes/ version preserved
-        assert not (root_refnotes / "shared-file.md").exists()
-        canonical = (includes_refnotes / "shared-file.md").read_text()
+        # Duplicate shipped file removed from root, .includes/ version preserved
+        assert not (root_refnotes / "dangerous-patterns.md").exists()
+        canonical = (includes_refnotes / "dangerous-patterns.md").read_text()
         assert "Canonical" in canonical
-        # Root-only file moved to .includes/
-        assert not (root_refnotes / "root-only.md").exists()
-        assert (includes_refnotes / "root-only.md").exists()
+        # Root-only shipped file moved to .includes/
+        assert not (root_refnotes / "workflow-profiles.md").exists()
+        assert (includes_refnotes / "workflow-profiles.md").exists()
+        # User note preserved at root, NOT swept into .includes/
+        assert (root_refnotes / "my-user-note.md").exists()
+        assert not (includes_refnotes / "my-user-note.md").exists()
+        # And the resulting layout stays v2 with the user note at root
+        assert gator_layout.resolve_gator_layout(tmp_path) == "v2"
 
     def test_shipped_dir_pycache_conflict_removed(self, tmp_path):
         """Regression (Issue #6, 2026-08-03): mixed layout where both
@@ -807,3 +824,65 @@ class TestPinnedScriptlessV2:
         repo = self._v2_base(tmp_path)
         (repo / ".gator" / ".includes" / "scripts").mkdir()
         assert gator_layout.resolve_gator_layout(repo) == "v2"
+
+
+class TestReferenceNotesReclassification:
+    """2026-08-23: reference-notes is a MIXED directory (field case:
+    cl-strategy committed a user note at .gator/reference-notes/ — the
+    documented user location — and the resolver's fully-shipped
+    classification made the repo permanently 'mixed', bricking updates)."""
+
+    def _v2_repo_with_root_note(self, tmp_path, note_name):
+        gator = tmp_path / ".gator"
+        includes = gator / ".includes"
+        (includes / "scripts").mkdir(parents=True)
+        (includes / "constitution.md").write_text("# Constitution\n")
+        (includes / "reference-notes").mkdir()
+        rn = gator / "reference-notes"
+        rn.mkdir()
+        (rn / "README.md").write_text("# readme\n")
+        (rn / "_template.md").write_text("# tpl\n")
+        (rn / note_name).write_text("# note\n")
+        (gator / "layout-version.json").write_text('{"layout": "v2"}\n')
+        return tmp_path
+
+    def test_user_note_at_root_is_valid_v2(self, tmp_path):
+        repo = self._v2_repo_with_root_note(
+            tmp_path, "technical-document-styling.md")
+        assert gator_layout.resolve_gator_layout(repo) == "v2"
+
+    def test_shipped_note_at_root_is_still_mixed(self, tmp_path):
+        repo = self._v2_repo_with_root_note(tmp_path, "git-workflow.md")
+        assert gator_layout.resolve_gator_layout(repo) == "mixed"
+
+    def test_reference_notes_not_in_shipped_directories(self):
+        assert "reference-notes" not in gator_layout.SHIPPED_DIRECTORIES
+        assert "reference-notes" in \
+            gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS
+
+
+class TestMigrateDryRunGate:
+    """2026-08-23: `--migrate-layout --dry-run` executed the migration —
+    real file moves and hook regeneration under a flag that promises no
+    changes (field case: a diagnostic dry-run migrated a user repo).
+    The gate refuses to migrate under --dry-run."""
+
+    def test_dry_run_does_not_migrate(self, v1_repo, monkeypatch, capfd):
+        # capfd (fd-level), not capsys: main()'s ensure_utf8_stdout()
+        # re-wraps sys.stdout, which bypasses Python-level capture.
+        import sys as _sys
+        monkeypatch.setattr(_sys, "argv", [
+            "gator-update.py", "--migrate-layout", "--dry-run",
+            "--path", str(v1_repo),
+        ])
+        try:
+            _update.main()
+        except SystemExit as e:
+            assert not e.code
+        out = capfd.readouterr().out
+        # No migration happened: still v1, no .includes created
+        assert not (v1_repo / ".gator" / ".includes").exists()
+        assert (v1_repo / ".gator" / "constitution.md").exists()
+        assert gator_layout.resolve_gator_layout(v1_repo) == "v1"
+        assert "dry run" in out
+        assert "without --dry-run" in out
