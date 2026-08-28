@@ -198,8 +198,10 @@ This separation enables accurate dry-run (`--dry-run` shows exact changes withou
 
 Gator now has one authoritative managed hook strategy:
 
-- Windows: install active hooks in `.git/gator-hooks`, set `core.hooksPath=.git/gator-hooks`, use a direct `#!C:/Windows/py.exe -3` shebang
+- Windows: install active hooks in `.git/gator-hooks`, set `core.hooksPath=.git/gator-hooks`, shebang is a spaceless absolute `py.exe` path resolved dynamically by `_hook_shebang()` (probes `shutil.which("py")`, `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe`, `C:\Windows\py.exe` in that order — the historic `C:\Windows\py.exe` hardcode broke on per-user and Microsoft Store installs, field-fixed 2026-08-28)
 - Unix-like: install active hooks in the default `.git/hooks`
+
+**Shebang invariant**: the resolved shebang path must be spaceless. POSIX shebang syntax cannot quote paths with spaces, so a launcher under `C:\Users\<spaced name>\AppData\Local\...` would silently break hooks. `_hook_shebang()` space-checks every candidate; if no spaceless launcher exists it raises `HookShebangUnresolvable`, which `install_git_hooks` / `plan_hook_updates` catch and surface as a loud install-time refusal (never a silent skip).
 
 Three clusters must stay aligned:
 1. `gator-update.py` — defines the managed path helpers and performs install/repair

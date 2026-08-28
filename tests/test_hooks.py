@@ -20,14 +20,81 @@ update = load_script("gator-update")
 
 class TestHookShebang:
     def test_windows_uses_py_launcher(self):
-        """Windows shebang uses the native py launcher."""
+        """Windows shebang resolves to a real, spaceless py.exe launcher
+        path via the three-tier probe (PATH → LocalAppData → C:\\Windows).
+        Historical bug: hardcoded `C:/Windows/py.exe` broke on per-user
+        and Microsoft-Store installs where the launcher lives under
+        `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` instead
+        (field-fixed 2026-08-28)."""
         with patch.object(os, "name", "nt"):
-            assert update._hook_shebang() == "#!C:/Windows/py.exe -3"
+            with patch("shutil.which", return_value="C:\\Windows\\py.exe"):
+                with patch("os.path.isfile", return_value=True):
+                    shebang = update._hook_shebang()
+        assert shebang == "#!C:/Windows/py.exe -3"
 
     def test_unix_uses_python3(self):
         """Unix shebang uses `python3` (guaranteed Python 3 command)."""
         with patch.object(os, "name", "posix"):
             assert update._hook_shebang() == "#!/usr/bin/env python3"
+
+    def test_windows_prefers_shutil_which_when_spaceless(self):
+        """When shutil.which returns a spaceless path, use it directly —
+        it's authoritative for the current shell's PATH resolution."""
+        with patch.object(os, "name", "nt"):
+            with patch("shutil.which",
+                       return_value="C:\\Users\\dev\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"):
+                with patch("os.path.isfile", return_value=True):
+                    shebang = update._hook_shebang()
+        assert shebang == (
+            "#!C:/Users/dev/AppData/Local/Programs/Python/Launcher/py.exe -3"
+        )
+
+    def test_windows_rejects_spaced_which_result(self):
+        """A shutil.which result under a spaced Windows username
+        (e.g. `C:\\Users\\John Doe\\...`) must be skipped because POSIX
+        shebang syntax cannot quote spaces. Falls through to the next
+        tier; if nothing spaceless exists, raises."""
+        spaced = "C:\\Users\\John Doe\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"
+        with patch.object(os, "name", "nt"):
+            with patch("shutil.which", return_value=spaced):
+                # Filesystem probe also returns spaced LocalAppData; Windows path missing
+                def fake_isfile(p):
+                    return False
+                with patch("os.path.isfile", side_effect=fake_isfile):
+                    with patch.dict(os.environ,
+                                    {"LOCALAPPDATA": "C:\\Users\\John Doe\\AppData\\Local"},
+                                    clear=False):
+                        with pytest.raises(update.HookShebangUnresolvable):
+                            update._hook_shebang()
+
+    def test_windows_falls_through_to_windows_dir_when_earlier_tiers_spaced(self):
+        """Spaced which result + spaced %LOCALAPPDATA% → falls through to
+        C:\\Windows\\py.exe when it exists (spaceless by construction)."""
+        spaced = "C:\\Users\\John Doe\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"
+        with patch.object(os, "name", "nt"):
+            with patch("shutil.which", return_value=spaced):
+                def fake_isfile(p):
+                    return p == "C:\\Windows\\py.exe"
+                with patch("os.path.isfile", side_effect=fake_isfile):
+                    with patch.dict(os.environ,
+                                    {"LOCALAPPDATA": "C:\\Users\\John Doe\\AppData\\Local"},
+                                    clear=False):
+                        shebang = update._hook_shebang()
+        assert shebang == "#!C:/Windows/py.exe -3"
+
+    def test_windows_all_tiers_fail_raises_with_actionable_message(self):
+        """No py.exe anywhere → HookShebangUnresolvable with a message
+        that names each checked location and points at a fix."""
+        with patch.object(os, "name", "nt"):
+            with patch("shutil.which", return_value=None):
+                with patch("os.path.isfile", return_value=False):
+                    with pytest.raises(update.HookShebangUnresolvable) as exc_info:
+                        update._hook_shebang()
+        msg = str(exc_info.value)
+        assert "shutil.which" in msg
+        assert "LOCALAPPDATA" in msg
+        assert "C:\\Windows" in msg
+        assert "python.org" in msg or "Install" in msg
 
 
 class TestBuildGitHookWrappers:
@@ -113,10 +180,20 @@ class TestBuildGitHookWrappers:
     @patch.object(os, "name", "nt")
     @patch.object(sys, "executable", "C:/Python313/python.exe")
     def test_windows_platform_shebang(self):
-        """On Windows, generated hooks use the py launcher in shebang."""
-        hooks = update.build_git_hook_wrappers()
+        """On Windows, generated hooks use a resolved spaceless py.exe
+        launcher path in the shebang. The exact path depends on the
+        machine's install; the shape is `#!<spaceless>/py.exe -3\\n`."""
+        with patch("shutil.which", return_value="C:\\Windows\\py.exe"):
+            with patch("os.path.isfile", return_value=True):
+                hooks = update.build_git_hook_wrappers()
         for name, content in hooks.items():
-            assert content.startswith("#!C:/Windows/py.exe -3\n")
+            first = content.splitlines()[0]
+            assert first.startswith("#!")
+            assert first.endswith(" -3")
+            assert "py.exe" in first
+            assert " " not in first[2:-3], (
+                f"{name} shebang path must be spaceless (POSIX cannot quote): {first!r}"
+            )
 
     @patch.object(os, "name", "posix")
     @patch.object(sys, "executable", "/usr/bin/python3")
@@ -295,6 +372,41 @@ class TestInstallGitHooks:
             repo_root / ".git" / "gator-hooks",
             repo_root / ".git" / "hooks",
         ]
+
+
+class TestUnresolvableShebangRefusal:
+    """When `_hook_shebang()` cannot find a spaceless launcher on
+    Windows, the caller functions must refuse loudly (return 0 / [])
+    with the exception's message on stderr, never silently write a
+    broken hook. Regression pins for the 2026-08-28 fix that converted
+    the pre-existing silent-hook-install-succeeds-but-hook-broken
+    failure mode into a discoverable install-time error."""
+
+    def test_install_git_hooks_returns_zero_when_shebang_unresolvable(
+        self, mock_gator_repo, capsys
+    ):
+        repo_root, gator_dir = mock_gator_repo
+        with patch.object(update, "_hook_shebang",
+                          side_effect=update.HookShebangUnresolvable(
+                              "no launcher for test")):
+            count = update.install_git_hooks(gator_dir, repo_root)
+        assert count == 0
+        captured = capsys.readouterr()
+        assert "cannot install git hooks" in captured.err
+        assert "no launcher for test" in captured.err
+
+    def test_plan_hook_updates_returns_empty_when_shebang_unresolvable(
+        self, mock_gator_repo, capsys
+    ):
+        repo_root, gator_dir = mock_gator_repo
+        with patch.object(update, "_hook_shebang",
+                          side_effect=update.HookShebangUnresolvable(
+                              "no launcher for test")):
+            plan = update.plan_hook_updates(gator_dir, repo_root)
+        assert plan == []
+        captured = capsys.readouterr()
+        assert "cannot plan git hook updates" in captured.err
+        assert "no launcher for test" in captured.err
 
 
 class TestPinAwareWrappers:

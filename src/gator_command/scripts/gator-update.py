@@ -604,7 +604,11 @@ def plan_hook_updates(gator_dir, repo_root):
     except Exception:
         pass
 
-    expected_hooks = build_git_hook_wrappers(gator_script=script_path)
+    try:
+        expected_hooks = build_git_hook_wrappers(gator_script=script_path)
+    except HookShebangUnresolvable as exc:
+        print(f"  Error: cannot plan git hook updates — {exc}", file=sys.stderr)
+        return []
     config_needs_update = hooks_config_needs_update(repo_root)
     results = []
     for hook_name, expected_content in sorted(expected_hooks.items()):
@@ -621,9 +625,57 @@ def plan_hook_updates(gator_dir, repo_root):
     return results
 
 
+class HookShebangUnresolvable(RuntimeError):
+    """No spaceless absolute py.exe launcher path available on this
+    machine; git-hook install cannot produce a working shebang.
+
+    POSIX shebang syntax cannot quote paths with spaces, so a spaced
+    launcher path would silently break hooks — the install path treats
+    this as a refusal, not a silent skip. Callers (`install_git_hooks`,
+    `plan_hook_updates`) catch this and surface an actionable error
+    at install time instead of writing a broken hook file.
+    """
+
+
 def _hook_shebang():
-    """Return the platform-correct shebang for hook wrappers."""
-    return "#!C:/Windows/py.exe -3" if os.name == "nt" else "#!/usr/bin/env python3"
+    """Return the platform-correct shebang for hook wrappers.
+
+    Unix returns `#!/usr/bin/env python3` unchanged.
+
+    Windows probes for a spaceless absolute `py.exe` (Python Launcher)
+    path in three tiers: PATH via `shutil.which`, then
+    `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` (per-user /
+    Microsoft Store install), then `C:\\Windows\\py.exe` (system-wide
+    install). Every candidate is space-checked — POSIX shebang syntax
+    cannot quote paths with spaces, and `%LOCALAPPDATA%` expands to
+    `C:\\Users\\<username>\\...`, which contains a space when the
+    Windows username has a space. If no tier yields a usable path,
+    raises `HookShebangUnresolvable` so the install path can refuse
+    loudly rather than emit a broken hook.
+    """
+    if os.name != "nt":
+        return "#!/usr/bin/env python3"
+    candidates = []
+    which = shutil.which("py")
+    if which:
+        candidates.append(which)
+    candidates.extend([
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Python\Launcher\py.exe"),
+        r"C:\Windows\py.exe",
+    ])
+    for cand in candidates:
+        if " " in cand:
+            continue
+        if os.path.isfile(cand):
+            return f"#!{cand.replace(chr(92), '/')} -3"
+    raise HookShebangUnresolvable(
+        "No spaceless Python Launcher (py.exe) found on this machine. "
+        "Checked PATH via shutil.which, "
+        "%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe, and "
+        "C:\\Windows\\py.exe. Install the Python Launcher (python.org "
+        "installer's 'Install for all users' option places it at "
+        "C:\\Windows\\py.exe) and rerun."
+    )
 
 
 def get_managed_hooks_path_value():
@@ -813,7 +865,12 @@ def install_git_hooks(gator_dir, repo_root):
     except Exception:
         pass  # fallback to default
 
-    for name, content in build_git_hook_wrappers(gator_script=script_path).items():
+    try:
+        wrappers = build_git_hook_wrappers(gator_script=script_path)
+    except HookShebangUnresolvable as exc:
+        print(f"  Error: cannot install git hooks — {exc}", file=sys.stderr)
+        return 0
+    for name, content in wrappers.items():
         dest = git_hooks / name
         dest.write_text(content, encoding="utf-8")
         try:
