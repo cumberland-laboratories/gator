@@ -1553,18 +1553,33 @@ def main():
     # executed the full migration — real file moves and hook regeneration
     # under a flag that promises no changes (field case: a diagnostic
     # dry-run migrated a user repo). There is no plan-only migrate yet,
-    # so refuse loudly instead of pretending.
+    # so refuse loudly instead of pretending. The `--json` path emits a
+    # structured refusal (2026-08-28) so machine consumers get parseable
+    # output instead of prose; the prose path is unchanged for interactive
+    # use.
     if args.migrate_layout and args.dry_run:
+        try:
+            from gator_layout import resolve_gator_layout as _rgl
+            layout = str(_rgl(repo_root))
+        except Exception:
+            layout = None
+        if args.json:
+            json.dump({
+                "schema": "gator-update-v1",
+                "action": "migrate-layout-refused",
+                "reason": "--dry-run does not execute the migration. "
+                          "Run 'gator update --migrate-layout' without "
+                          "--dry-run to migrate.",
+                "layout": layout,
+            }, sys.stdout)
+            sys.stdout.write("\n")
+            return
         print()
         print("  gator migrate-layout (dry run)")
         print()
         print("  --dry-run does not execute the migration. This repo "
               "currently resolves as:")
-        try:
-            from gator_layout import resolve_gator_layout as _rgl
-            print(f"    layout: {_rgl(repo_root)}")
-        except Exception:
-            print("    layout: (unresolvable)")
+        print(f"    layout: {layout if layout is not None else '(unresolvable)'}")
         print()
         print("  Run 'gator update --migrate-layout' (without --dry-run) "
               "to migrate.")

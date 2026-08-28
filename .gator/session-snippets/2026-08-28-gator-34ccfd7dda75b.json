@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "fix hook shebang: resolve py.exe dynamically instead of hardcoding C:\\\\Windows\\\\py.exe",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "hooks",
+    "windows",
+    "install",
+    "tripwire"
+  ],
+  "commit": "34ccfd7dda75ba6af1fa89a1d39237191e535676",
+  "short_commit": "34ccfd7",
+  "snippet_id": "snippet-34ccfd7dda75b",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-28T09:56:28Z",
+  "ended_at": "2026-08-28T21:18:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "tests/test_hooks.py"
+  ],
+  "notes": [
+    "Field bug (per user report screenshot g1.png forwarded from another Gator user's Claude session): git hooks silently broken on per-user / Microsoft Store Python installs. Root cause: `_hook_shebang()` in both `src/gator_command/scripts/gator-update.py` and its template twin hardcoded `#!C:/Windows/py.exe -3`. That path only exists on system-wide (\"install for all users\") Python installs; per-user installs put py.exe under `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe`. Git-bash exec's the shebang, no interpreter, silent hook failure, pre-commit governance skipped.",
+    "Rewrote `_hook_shebang()` in both copies to resolve dynamically at hook-generation time: probe `shutil.which(\"py\")` → `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` → `C:\\Windows\\py.exe`. Every candidate is space-checked because POSIX shebang syntax cannot quote paths with spaces (and `%LOCALAPPDATA%` expands to `C:\\Users\\<username>\\...` which contains a space when the username has one). If no tier yields a usable spaceless launcher, raises new `HookShebangUnresolvable`.",
+    "Wrapped both `plan_hook_updates()` and `install_git_hooks()` (both copies) with try/except for `HookShebangUnresolvable`: on catch, print the exception's actionable message to stderr and return `[]` / `0`. Converts the pre-existing silent-hook-install-succeeds-but-hook-broken failure mode into a discoverable install-time error. Audited `gator-init.py::ensure_git_hooks` — it calls both wrapped functions, so the graceful-degradation is inherited without additional wrapping.",
+    "Rewrote `TestHookShebang.test_windows_uses_py_launcher` + `test_windows_platform_shebang` (both patched `shutil.which` + `os.path.isfile`). Added 3 resolver tests: `test_windows_prefers_shutil_which_when_spaceless`, `test_windows_rejects_spaced_which_result`, `test_windows_falls_through_to_windows_dir_when_earlier_tiers_spaced`, `test_windows_all_tiers_fail_raises_with_actionable_message`. Added new `TestUnresolvableShebangRefusal` class with 2 caller-refusal tests pinning the return-0/return-[] contract with actionable stderr.",
+    "Updated `.gator/charters/scripts-repo-lifecycle.md` `build_git_hook_wrappers()` entry: shebang no longer a fixed literal on Windows; added TRIPWIRE bullet on `HookShebangUnresolvable` as loud-refusal-not-silent-skip.",
+    "Updated `.gator/charters/scripts-cross-cutting.md` \"Managed Hook Path Migration\" TRIPWIRE: replaced the `#!C:/Windows/py.exe -3` literal claim with a description of the three-tier resolver; added a new \"Shebang invariant\" paragraph naming the spaceless requirement and the loud-refusal contract.",
+    "Plan: `.gator/vault/artifacts/2026-08-28-hook-shebang-py-launcher-resolution-plan.md` (r2, revised per whiteboard findings on r1: space-check every candidate, drop the unproven bare `#!py -3` last-resort in favor of the exception-driven refusal path).",
+    "Tests: base+hook suite 43/43, adjacent suites (test_layout + test_template_sync + test_update_entry_points + test_session_hooks) 116/116, total 159/159 clean."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}

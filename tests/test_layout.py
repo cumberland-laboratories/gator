@@ -886,3 +886,71 @@ class TestMigrateDryRunGate:
         assert gator_layout.resolve_gator_layout(v1_repo) == "v1"
         assert "dry run" in out
         assert "without --dry-run" in out
+
+    def test_dry_run_migrate_layout_with_json_returns_structured_refusal(
+        self, v1_repo, monkeypatch, capfd
+    ):
+        """2026-08-28: `--json --dry-run --migrate-layout` used to emit
+        prose (unreachable JSON branch), breaking the JSON contract for
+        machine consumers. Now emits a structured refusal payload."""
+        import json as _json
+        import sys as _sys
+        monkeypatch.setattr(_sys, "argv", [
+            "gator-update.py", "--json", "--migrate-layout", "--dry-run",
+            "--path", str(v1_repo),
+        ])
+        try:
+            _update.main()
+        except SystemExit as e:
+            assert not e.code
+        out = capfd.readouterr().out
+        payload = _json.loads(out)
+        assert payload["schema"] == "gator-update-v1"
+        assert payload["action"] == "migrate-layout-refused"
+        assert payload["layout"] == "v1"
+        assert "--dry-run" in payload["reason"]
+
+    def test_dry_run_migrate_layout_with_json_returns_zero_exit(
+        self, v1_repo, monkeypatch, capfd
+    ):
+        """Exit code stays 0 — parity with the prose refusal path.
+        The refusal is not an error; the JSON payload's `action` field
+        already carries the "no work happened" signal for machine
+        consumers."""
+        import sys as _sys
+        monkeypatch.setattr(_sys, "argv", [
+            "gator-update.py", "--json", "--migrate-layout", "--dry-run",
+            "--path", str(v1_repo),
+        ])
+        code = 0
+        try:
+            _update.main()
+        except SystemExit as e:
+            code = e.code or 0
+        capfd.readouterr()  # drain
+        assert code == 0
+        # No migration side-effect (mirrors test_dry_run_does_not_migrate)
+        assert not (v1_repo / ".gator" / ".includes").exists()
+        assert gator_layout.resolve_gator_layout(v1_repo) == "v1"
+
+    def test_dry_run_migrate_layout_json_never_prints_prose(
+        self, v1_repo, monkeypatch, capfd
+    ):
+        """The interactive prose ('gator migrate-layout (dry run)',
+        'Run gator update --migrate-layout') must NOT leak into the
+        JSON output — machine consumers pipe stdout to jq."""
+        import json as _json
+        import sys as _sys
+        monkeypatch.setattr(_sys, "argv", [
+            "gator-update.py", "--json", "--migrate-layout", "--dry-run",
+            "--path", str(v1_repo),
+        ])
+        try:
+            _update.main()
+        except SystemExit as e:
+            assert not e.code
+        out = capfd.readouterr().out
+        # Parses cleanly as JSON with no trailing prose
+        _json.loads(out)
+        assert "gator migrate-layout (dry run)" not in out
+        assert "currently resolves as:" not in out
