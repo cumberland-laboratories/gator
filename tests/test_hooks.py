@@ -245,10 +245,26 @@ class TestBuildGitHookWrappers:
     def test_windows_platform_shebang(self):
         """On Windows, generated hooks use a resolved spaceless py.exe
         launcher path in the shebang. The exact path depends on the
-        machine's install; the shape is `#!<spaceless>/py.exe -3\\n`."""
-        with patch("shutil.which", return_value="C:\\Windows\\py.exe"):
-            with patch("os.path.isfile", return_value=True):
-                hooks = update.build_git_hook_wrappers()
+        machine's install; the shape is `#!<spaceless>/py.exe -3\\n`.
+
+        Patches the resolver directly rather than the real `os.path.isfile`
+        + `shutil.which` — on Linux CI those helpers still see real Linux
+        paths regardless of a patched `os.name`, so a `C:\\Windows\\...`
+        candidate would fail `os.path.isabs` (Linux-side) before reaching
+        the space check. Patching the resolver seam skirts the whole
+        platform-conditional path-check chain."""
+        import gator_core
+        fake_resolved = {
+            "status": "resolved",
+            "source": "auto",
+            "path": "C:/Windows/py.exe",
+            "shebang_safe": True,
+            "reason": "test",
+            "checked": [],
+        }
+        with patch.object(gator_core, "resolve_python_launcher_for_hooks",
+                          return_value=fake_resolved):
+            hooks = update.build_git_hook_wrappers()
         for name, content in hooks.items():
             first = content.splitlines()[0]
             assert first.startswith("#!")

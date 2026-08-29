@@ -308,6 +308,15 @@ The registry format (markdown table in `registry.md` with pipe-delimited columns
 
 ! **`state == "present"` means shape-valid, not just tag-matched.** `read_preferences()` runs `_validate_preferences_shape()` after the schema-tag check to type-check every documented section and field. Without this, a tagged payload with a wrong-shape section (e.g. `{"schema": "gator-preferences-v1", "python": []}`) would slip through as `present` and crash downstream `.get()` chains with `AttributeError`, violating the resolver's "never raises" contract. Whiteboard 2026-08-29 implementation-review finding 1 caught this — the r1 shape check only covered top-level-is-object. Whiteboard follow-up finding extended the shape validator to also enforce the schema's `minLength: 1` on string paths that must name real filesystem locations (empty `python.windows_py_launcher` → malformed), because the resolver's pre-fix `if not launcher:` collapse lumped `""` with `None` and silently fell through to auto-detect — the same silent-fallback class the feature exists to prevent.
 
+## Cross-Platform Test Patterns for Path Validators
+
+Two classes of failure that CI has caught on Linux runners after a Windows-first commit:
+
+1. **Hardcoded `C:/...` in path-validator tests** — Linux's `os.path.isabs("C:/...")` returns False (drive letter is not a POSIX absolute prefix), so a validator returns `relative-path` before reaching the check the test is trying to exercise (spaces, exists, basename). Use `tmp_path` for platform-native absolute prefixes, then compose subpaths for the specific behavior being tested.
+2. **Patching `os.name` alone doesn't stop downstream `os.path.isabs`/`isfile`/`expandvars`** — those helpers respect the real platform regardless of a patched `os.name`. Tests that exercise a wrapper around a resolver should patch the resolver seam (`gator_core.resolve_python_launcher_for_hooks`) directly rather than trying to fool downstream path helpers.
+
+Both patterns land in `test_gator_core.py::TestValidateLauncherCandidate` (tmp_path) and `test_hooks.py::TestBuildGitHookWrappers::test_windows_platform_shebang` (resolver-seam patching).
+
 ! **Asymmetry with `resolve_governed_runtime()`**: a corrupt runtime pin fails OPEN to repo scripts (broken file must never brick commits); a malformed preferences file fails CLOSED (broken user override must never silently defeat itself). Both behaviors are correct for their contract — do not homogenize.
 
 ## TRIPWIRE: Trailer Backward Compatibility (Gator-Architect / Gator-PI)

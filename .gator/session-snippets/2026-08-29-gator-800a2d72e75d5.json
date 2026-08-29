@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.10.0 — machine-scoped Python launcher preference",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "2.10.0"
+  ],
+  "commit": "800a2d72e75d5be81af24553626f9a032ba6e821",
+  "short_commit": "800a2d7",
+  "snippet_id": "snippet-800a2d72e75d5",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "3ef16ed1a9c605b3aeb141f75224b8cd7a6ada41",
+  "started_at": "2026-08-29T16:01:40Z",
+  "ended_at": "2026-08-29T16:01:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-29-gator-3ef16ed1a9c60.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump: `VERSION` and `pyproject.toml` 2.9.3 → 2.10.0. MINOR bump (additive feature: new machine-preferences file, new contract, new resolver, new procedure; no breaking changes).",
+    "CHANGELOG `[2.10.0]` entry: Added (5), Changed (2), Compatibility, Notes now names all three pre-release whiteboard fixes across two commits (`5cb4197` for findings 1+2 — shape validation + `allow_for_hook_shebang` wiring; `3ef16ed` for the follow-up finding 3 — empty-launcher rejection + resolver's absent-vs-empty distinction).",
+    "Charter version-note bump in `scripts-core-library.md` `get_version()` byte-consistency tripwire: 2.9.3 → 2.10.0.",
+    "Sixth commit of the v2.10.0 release train (Phase 1 `6a28c2c` → Phase 2 `b343a67` → Phase 3 `8eb51e8` → whiteboard fixes 1+2 `5cb4197` → whiteboard fix 3 `3ef16ed` → bump). Previous bump commits `c95f890` and `07c30a5` were reset from dev as each round of whiteboard findings landed; this bump is fresh, tests all three fixes covered.",
+    "Local sweep at ship: 961 pass + 3 skipped + 2 xfailed across `tests/` + `contracts/compatibility/` (+43 net vs v2.9.3)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

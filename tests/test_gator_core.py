@@ -941,15 +941,25 @@ class TestValidateLauncherCandidate:
         assert "basename-mismatch" in reason
         assert "python.exe" in reason
 
-    def test_spaced_absolute_returns_spaced_path(self):
-        valid, reason = gator_core._validate_launcher_candidate(
-            "C:/Users/John Doe/AppData/Local/Programs/Python/Launcher/py.exe")
+    def test_spaced_absolute_returns_spaced_path(self, tmp_path):
+        # Build a truly-absolute spaced path via tmp_path (platform-
+        # native absolute prefix) + a sub-component containing a space.
+        # Python 3.13 tightened `os.path.isabs` on Windows so drive-less
+        # rooted paths like `/tmp/x` no longer count — hence tmp_path
+        # rather than a hand-written string.
+        spaced = tmp_path / "with space" / "py.exe"
+        # Deliberately do NOT create the file; the space check fires
+        # before the exists check, so the assertion still holds.
+        valid, reason = gator_core._validate_launcher_candidate(str(spaced))
         assert not valid
         assert reason == "spaced-path"
 
-    def test_missing_file_returns_file_not_found(self):
-        valid, reason = gator_core._validate_launcher_candidate(
-            "C:/nonexistent/absolutely/does-not-exist/py.exe")
+    def test_missing_file_returns_file_not_found(self, tmp_path):
+        # tmp_path gives a platform-native absolute prefix; the file at
+        # this path is never created. Order of validator checks is:
+        # absolute → basename → spaces → exists; this hits exists last.
+        missing = tmp_path / "does-not-exist" / "py.exe"
+        valid, reason = gator_core._validate_launcher_candidate(str(missing))
         assert not valid
         assert reason == "file-not-found"
 
