@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.9.3 — hook shebang + JSON gate + session-open fixes",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "2.9.3"
+  ],
+  "commit": "525f9e01412a5320ca516fb1658b300efe66226c",
+  "short_commit": "525f9e0",
+  "snippet_id": "snippet-525f9e01412a5",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "60256d1a02922f38f33e7b4ec90af714ef7c6a00",
+  "started_at": "2026-08-28T09:56:28Z",
+  "ended_at": "2026-08-29T02:04:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-29-gator-60256d1a02922.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump: `VERSION` and `pyproject.toml` 2.9.2 → 2.9.3.",
+    "CHANGELOG `[2.9.3]` entry added above `[2.9.2]`: three fixed items covering the field-fix trio landed in this release train (`34ccfd7` shebang resolver + `HookShebangUnresolvable`; `a0a6c18` `--json --dry-run --migrate-layout` structured refusal; `60256d1` `ensure_git_hooks()` surfaces the shebang refusal as `degraded` instead of collapsing to false-green `ok`).",
+    "Charter version-note bump in `.gator/charters/scripts-core-library.md` `get_version()` entry: 2.9.2 → 2.9.3 in the byte-consistency tripwire's current-version tail, satisfying the pre-commit charter-alongside-code rule triggered by touching `VERSION`.",
+    "Local sweep pre-bump: 918 pass + 2 skipped + 2 xfailed (both pre-existing) across `tests/` + `contracts/compatibility/`."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}

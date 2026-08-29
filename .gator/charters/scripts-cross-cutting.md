@@ -300,6 +300,14 @@ The registry format (markdown table in `registry.md` with pipe-delimited columns
 
 ! Do not add repos to the registry by writing the JSON directly. The helper handles path resolution, deduplication, and error isolation.
 
+## Pattern: Machine-Local Preferences — Discriminated Reader
+
+`read_preferences()` in `gator_core.py` is the canonical read path for the unified machine-local preferences file (`~/.gator/preferences.json`, schema `gator-preferences-v1`). Consumers today: the shebang resolver (Phase 2, v2.10.0) via `resolve_python_launcher_for_hooks()`. Reserved future consumer: the hook-mode resolver (follow-on plan) via the `hooks:` section.
+
+! The reader returns a **discriminated result** (`{"state": "absent" | "malformed" | "present", ...}`), never `Optional[dict]`. Callers must distinguish "absent" from "malformed" to honor the invariant that a user-declared preference override refuses loudly rather than silently falling back to auto-detection. Collapsing the two states (r1 mistake, caught by 2026-08-29 whiteboard finding 1) would make the invariant unenforceable for the malformed-file case.
+
+! **Asymmetry with `resolve_governed_runtime()`**: a corrupt runtime pin fails OPEN to repo scripts (broken file must never brick commits); a malformed preferences file fails CLOSED (broken user override must never silently defeat itself). Both behaviors are correct for their contract — do not homogenize.
+
 ## TRIPWIRE: Trailer Backward Compatibility (Gator-Architect / Gator-PI)
 
 The commit trailer `Gator-Architect:` (formerly `Gator-PI:`) carries the human role attribution. All code that reads trailers from git history must accept both names:

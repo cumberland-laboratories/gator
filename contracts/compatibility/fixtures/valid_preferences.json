@@ -1,0 +1,10 @@
+{
+  "schema": "gator-preferences-v1",
+  "updated_at": "2026-08-29T14:00:00Z",
+  "python": {
+    "source": "user",
+    "windows_py_launcher": "C:/Users/alan/AppData/Local/Programs/Python/Launcher/py.exe",
+    "allow_for_hook_shebang": true
+  },
+  "notes": "Set after auto-detect failed on this machine (spaced-username LocalAppData path)."
+}

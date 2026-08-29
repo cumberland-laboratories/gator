@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gator-preferences-v1",
+  "title": "gator-preferences-v1",
+  "description": "The unified machine-local preferences file (~/.gator/preferences.json). Machine-scoped execution reality that must NOT live in repo-scoped .gator/: which Python launcher/interpreter to use, and (reserved for a follow-on plan) local hook-mode overrides. Additive within v1 — every field and every top-level section is optional; unknown sections and fields are tolerated for forward-compat. A machine may have this file with only a `python:` section, only a (future) `hooks:` section, or both. Under the resolver's shebang path (v2.10.0+), a malformed preferences file must be surfaced as a loud degradation, never silently ignored — otherwise a user-declared override collapses back to auto-detect and the recovery UX is defeated.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema"],
+  "properties": {
+    "schema": {
+      "const": "gator-preferences-v1",
+      "description": "Schema tag. Readers MUST check this before interpreting other fields."
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "UTC timestamp of last write (ISO 8601, seconds precision, Z suffix). Writer stamps; reader ignores. Aids field debugging."
+    },
+    "python": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Machine-local Python launcher/interpreter preferences. All fields optional; absent section means 'no launcher preference set'.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["user", "repair-command"],
+          "description": "How the current value was recorded. `user` = edited by hand or via `gator prefs set-python-launcher`. `repair-command` = written by a future auto-materialization verb. Unknown values are tolerated (forward-compat)."
+        },
+        "windows_py_launcher": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute, spaceless path to a Windows Python Launcher (`py.exe`). Load-bearing for git-hook shebang generation on Windows. Forward-slash normalized on write; validator re-checks on read (existence, basename `py.exe`, absolute, spaceless — POSIX shebang cannot quote paths with spaces)."
+        },
+        "allow_for_hook_shebang": {
+          "type": "boolean",
+          "description": "When false, the configured launcher is not used for hook-shebang generation even if otherwise valid. Reserved for the future case where a launcher is a valid interpreter but not shebang-safe. Defaults to true when omitted."
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "RESERVED for the hook-mode follow-on plan (Sketch B §6/§10). The launcher-preference implementation (v2.10.0) does not read or write anything under this section. Documented in the schema so the file layout is stable before the follow-on plan starts."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form operator note; ignored by code."
+    }
+  }
+}

@@ -716,3 +716,153 @@ class TestPolicyStalenessNudge:
         joined = "\n".join(lines)
         assert ".gator/.includes/constitution.md" in joined
         assert ".gator/mission.md" in joined
+
+
+class TestReadPreferences:
+    """gator-preferences-v1 reader — the discriminated result is the
+    load-bearing invariant so callers can distinguish 'absent' (safe to
+    fall back to auto-detect) from 'malformed' (loud degradation, no
+    fallback). Regression pin for 2026-08-29 whiteboard finding 1."""
+
+    def _patched_home(self, tmp_path, monkeypatch):
+        # gator_core caches PREFERENCES_FILE at import time from Path.home();
+        # patch the constant directly to point at the tmp path.
+        prefs = tmp_path / ".gator" / "preferences.json"
+        monkeypatch.setattr(gator_core, "PREFERENCES_FILE", prefs)
+        return prefs
+
+    def test_absent_returns_absent_state(self, tmp_path, monkeypatch):
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        assert not prefs.exists()
+        result = gator_core.read_preferences()
+        assert result == {"state": "absent"}
+
+    def test_valid_file_returns_present_with_data(self, tmp_path, monkeypatch):
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        payload = {
+            "schema": "gator-preferences-v1",
+            "updated_at": "2026-08-29T00:00:00Z",
+            "python": {
+                "source": "user",
+                "windows_py_launcher": "C:/Windows/py.exe",
+            },
+        }
+        prefs.write_text(_json.dumps(payload), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "present"
+        assert result["data"]["schema"] == "gator-preferences-v1"
+        assert result["data"]["python"]["windows_py_launcher"] == "C:/Windows/py.exe"
+
+    def test_malformed_json_returns_malformed(self, tmp_path, monkeypatch):
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text("{this is not { valid JSON,", encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "parse-error" in result["reason"]
+
+    def test_wrong_schema_tag_returns_malformed(self, tmp_path, monkeypatch):
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({"schema": "gator-preferences-v999"}),
+                         encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "schema-mismatch" in result["reason"]
+
+    def test_top_level_array_returns_malformed(self, tmp_path, monkeypatch):
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps(["not", "an", "object"]),
+                         encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert result["reason"] == "top-level-not-object"
+
+    def test_valid_without_python_section_is_present(self, tmp_path, monkeypatch):
+        """A file with only `schema:` is legal — a machine may have a
+        stub file or (post-follow-on) only `hooks:` preferences."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({"schema": "gator-preferences-v1"}),
+                         encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "present"
+        assert "python" not in result["data"]
+
+    def test_utf8_bom_tolerated(self, tmp_path, monkeypatch):
+        """PowerShell 5.1's Set-Content -Encoding utf8 writes a BOM;
+        matches the utf-8-sig read pattern used by resolve_governed_runtime."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        payload = _json.dumps({"schema": "gator-preferences-v1"})
+        prefs.write_bytes(b"\xef\xbb\xbf" + payload.encode("utf-8"))
+        result = gator_core.read_preferences()
+        assert result["state"] == "present"
+
+
+class TestValidateLauncherCandidate:
+    """The four rules that any candidate py.exe path must satisfy to be
+    usable for hook-shebang generation on Windows. Existence is checked
+    last so configuration reasons (basename, relative, spaces) surface
+    even when the file is missing."""
+
+    def test_empty_returns_empty_path(self):
+        valid, reason = gator_core._validate_launcher_candidate("")
+        assert not valid
+        assert reason == "empty-path"
+
+    def test_none_returns_empty_path(self):
+        valid, reason = gator_core._validate_launcher_candidate(None)
+        assert not valid
+        assert reason == "empty-path"
+
+    def test_relative_returns_relative_path(self):
+        valid, reason = gator_core._validate_launcher_candidate("py.exe")
+        assert not valid
+        assert reason == "relative-path"
+
+    def test_wrong_basename_returns_basename_mismatch(self, tmp_path):
+        target = tmp_path / "python.exe"
+        target.write_text("")
+        valid, reason = gator_core._validate_launcher_candidate(str(target))
+        assert not valid
+        assert "basename-mismatch" in reason
+        assert "python.exe" in reason
+
+    def test_spaced_absolute_returns_spaced_path(self):
+        valid, reason = gator_core._validate_launcher_candidate(
+            "C:/Users/John Doe/AppData/Local/Programs/Python/Launcher/py.exe")
+        assert not valid
+        assert reason == "spaced-path"
+
+    def test_missing_file_returns_file_not_found(self):
+        valid, reason = gator_core._validate_launcher_candidate(
+            "C:/nonexistent/absolutely/does-not-exist/py.exe")
+        assert not valid
+        assert reason == "file-not-found"
+
+    def test_valid_returns_true_empty_reason(self, tmp_path):
+        target = tmp_path / "py.exe"
+        target.write_text("")
+        valid, reason = gator_core._validate_launcher_candidate(str(target))
+        assert valid
+        assert reason == ""
+
+    def test_for_shebang_false_permits_spaces(self, tmp_path):
+        """When called for non-shebang uses (e.g. future subprocess seams),
+        spaces are acceptable — subprocess.call([...]) handles them."""
+        spaced_dir = tmp_path / "with space"
+        spaced_dir.mkdir()
+        target = spaced_dir / "py.exe"
+        target.write_text("")
+        valid, reason = gator_core._validate_launcher_candidate(
+            str(target), for_shebang=False)
+        assert valid
+        assert reason == ""

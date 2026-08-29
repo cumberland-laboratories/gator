@@ -17,6 +17,7 @@ Not a standalone script — imported by other gator-* scripts.
 
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -390,6 +391,97 @@ def parse_registry(command_post):
                 })
 
     return repos
+
+
+# ---------------------------------------------------------------------------
+# Machine-local preferences (gator-preferences-v1)
+# ---------------------------------------------------------------------------
+
+PREFERENCES_FILE = Path.home() / ".gator" / "preferences.json"
+PREFERENCES_SCHEMA = "gator-preferences-v1"
+
+
+def read_preferences():
+    """Read ~/.gator/preferences.json as a discriminated result.
+
+    The discriminated return is load-bearing: callers must distinguish
+    "file absent" from "file present but unreadable" to honor the
+    invariant that a user-declared override refuses loudly rather than
+    silently falling back to auto-detection. Collapsing the two states
+    to a single None (r1 mistake, caught by 2026-08-29 whiteboard
+    finding 1) would make that invariant unenforceable for the
+    malformed-file case.
+
+    Returns one of:
+      {"state": "absent"}
+          File does not exist. Caller may proceed to the next tier
+          (auto-detection).
+      {"state": "malformed", "reason": "<why>"}
+          File exists but is not readable JSON, or does not match the
+          gator-preferences-v1 schema tag. Caller MUST treat this as a
+          loud degradation — a user configured the file and it is
+          broken; falling back to auto-detection would silently defeat
+          their override. Reasons: "read-error: <detail>",
+          "parse-error: <detail>", "schema-mismatch: <got>",
+          "top-level-not-object".
+      {"state": "present", "data": {...}}
+          File exists, parses as JSON, has the correct schema tag.
+          `data` is the raw dict; caller extracts whichever sections
+          it cares about.
+
+    Never raises. Callers can rely on always getting one of the three
+    shapes above.
+
+    @reads: ~/.gator/preferences.json
+    """
+    if not PREFERENCES_FILE.exists():
+        return {"state": "absent"}
+    try:
+        raw = PREFERENCES_FILE.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        return {"state": "malformed", "reason": f"read-error: {exc}"}
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as exc:
+        return {"state": "malformed", "reason": f"parse-error: {exc}"}
+    if not isinstance(data, dict):
+        return {"state": "malformed", "reason": "top-level-not-object"}
+    got_schema = data.get("schema")
+    if got_schema != PREFERENCES_SCHEMA:
+        return {
+            "state": "malformed",
+            "reason": f"schema-mismatch: expected {PREFERENCES_SCHEMA!r}, got {got_schema!r}",
+        }
+    return {"state": "present", "data": data}
+
+
+def _validate_launcher_candidate(path, for_shebang=True):
+    """Validate a candidate Python launcher path against hook-shebang rules.
+
+    Returns (valid: bool, reason: str). On valid, reason is "".
+
+    Rules (all required, checked in order for consistent reason ordering):
+      - non-empty string
+      - absolute path
+      - basename equals "py.exe" (case-insensitive on Windows)
+      - if for_shebang=True: contains no spaces (POSIX shebang cannot quote)
+      - file exists at the path
+
+    Existence is checked last so the specific-configuration reasons
+    (basename, spaces, relative) surface even when the file is missing.
+    """
+    if not path or not isinstance(path, str):
+        return False, "empty-path"
+    if not os.path.isabs(path):
+        return False, "relative-path"
+    basename = os.path.basename(path)
+    if basename.lower() != "py.exe":
+        return False, f"basename-mismatch: {basename!r}"
+    if for_shebang and " " in path:
+        return False, "spaced-path"
+    if not os.path.isfile(path):
+        return False, "file-not-found"
+    return True, ""
 
 
 # ---------------------------------------------------------------------------
