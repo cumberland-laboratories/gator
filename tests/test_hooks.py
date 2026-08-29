@@ -19,82 +19,145 @@ update = load_script("gator-update")
 
 
 class TestHookShebang:
-    def test_windows_uses_py_launcher(self):
-        """Windows shebang resolves to a real, spaceless py.exe launcher
-        path via the three-tier probe (PATH → LocalAppData → C:\\Windows).
-        Historical bug: hardcoded `C:/Windows/py.exe` broke on per-user
-        and Microsoft-Store installs where the launcher lives under
-        `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` instead
-        (field-fixed 2026-08-28)."""
-        with patch.object(os, "name", "nt"):
-            with patch("shutil.which", return_value="C:\\Windows\\py.exe"):
-                with patch("os.path.isfile", return_value=True):
-                    shebang = update._hook_shebang()
-        assert shebang == "#!C:/Windows/py.exe -3"
+    """v2.10.0 Phase 2: `_hook_shebang()` is now a thin wrapper around
+    `gator_core.resolve_python_launcher_for_hooks()`. Tests target the
+    resolver seam via `update.resolve_python_launcher_for_hooks` (the
+    name gator-update.py imports from gator_core at call time)."""
+
+    def _mock_resolver(self, monkeypatch, result):
+        """Patch the resolver where _hook_shebang() looks it up.
+
+        `_hook_shebang` does `from gator_core import resolve_python_launcher_for_hooks`
+        inside the function, so patching gator_core directly is the
+        durable seam.
+        """
+        import gator_core
+        monkeypatch.setattr(
+            gator_core, "resolve_python_launcher_for_hooks",
+            lambda: result,
+        )
 
     def test_unix_uses_python3(self):
-        """Unix shebang uses `python3` (guaranteed Python 3 command)."""
+        """Unix shebang uses `python3` (guaranteed Python 3 command).
+        Resolver is not consulted on non-Windows."""
         with patch.object(os, "name", "posix"):
             assert update._hook_shebang() == "#!/usr/bin/env python3"
 
-    def test_windows_prefers_shutil_which_when_spaceless(self):
-        """When shutil.which returns a spaceless path, use it directly —
-        it's authoritative for the current shell's PATH resolution."""
+    def test_windows_resolved_returns_shebang_with_path(self, monkeypatch):
+        """Resolver returns a resolved result → _hook_shebang emits the
+        `#!<path> -3` line unchanged."""
         with patch.object(os, "name", "nt"):
-            with patch("shutil.which",
-                       return_value="C:\\Users\\dev\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"):
-                with patch("os.path.isfile", return_value=True):
-                    shebang = update._hook_shebang()
+            self._mock_resolver(monkeypatch, {
+                "status": "resolved",
+                "source": "auto",
+                "path": "C:/Windows/py.exe",
+                "shebang_safe": True,
+                "reason": "test",
+                "checked": [],
+            })
+            shebang = update._hook_shebang()
+        assert shebang == "#!C:/Windows/py.exe -3"
+
+    def test_windows_resolved_from_user_preference(self, monkeypatch):
+        """When the resolver reports source=user (preference file), the
+        shebang uses that path — Phase 2 machine-preferences wiring."""
+        with patch.object(os, "name", "nt"):
+            self._mock_resolver(monkeypatch, {
+                "status": "resolved",
+                "source": "user",
+                "path": "C:/Users/dev/AppData/Local/Programs/Python/Launcher/py.exe",
+                "shebang_safe": True,
+                "reason": "using launcher from preferences",
+                "checked": [],
+            })
+            shebang = update._hook_shebang()
         assert shebang == (
             "#!C:/Users/dev/AppData/Local/Programs/Python/Launcher/py.exe -3"
         )
 
-    def test_windows_rejects_spaced_which_result(self):
-        """A shutil.which result under a spaced Windows username
-        (e.g. `C:\\Users\\John Doe\\...`) must be skipped because POSIX
-        shebang syntax cannot quote spaces. Falls through to the next
-        tier; if nothing spaceless exists, raises."""
-        spaced = "C:\\Users\\John Doe\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"
+    def test_windows_degraded_raises_with_reason_and_checked_trail(self, monkeypatch):
+        """Resolver-degraded → HookShebangUnresolvable whose message
+        includes the resolver's `reason` AND a Checked: audit trail
+        rendering the tiers the resolver tried."""
         with patch.object(os, "name", "nt"):
-            with patch("shutil.which", return_value=spaced):
-                # Filesystem probe also returns spaced LocalAppData; Windows path missing
-                def fake_isfile(p):
-                    return False
-                with patch("os.path.isfile", side_effect=fake_isfile):
-                    with patch.dict(os.environ,
-                                    {"LOCALAPPDATA": "C:\\Users\\John Doe\\AppData\\Local"},
-                                    clear=False):
-                        with pytest.raises(update.HookShebangUnresolvable):
-                            update._hook_shebang()
-
-    def test_windows_falls_through_to_windows_dir_when_earlier_tiers_spaced(self):
-        """Spaced which result + spaced %LOCALAPPDATA% → falls through to
-        C:\\Windows\\py.exe when it exists (spaceless by construction)."""
-        spaced = "C:\\Users\\John Doe\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe"
-        with patch.object(os, "name", "nt"):
-            with patch("shutil.which", return_value=spaced):
-                def fake_isfile(p):
-                    return p == "C:\\Windows\\py.exe"
-                with patch("os.path.isfile", side_effect=fake_isfile):
-                    with patch.dict(os.environ,
-                                    {"LOCALAPPDATA": "C:\\Users\\John Doe\\AppData\\Local"},
-                                    clear=False):
-                        shebang = update._hook_shebang()
-        assert shebang == "#!C:/Windows/py.exe -3"
-
-    def test_windows_all_tiers_fail_raises_with_actionable_message(self):
-        """No py.exe anywhere → HookShebangUnresolvable with a message
-        that names each checked location and points at a fix."""
-        with patch.object(os, "name", "nt"):
-            with patch("shutil.which", return_value=None):
-                with patch("os.path.isfile", return_value=False):
-                    with pytest.raises(update.HookShebangUnresolvable) as exc_info:
-                        update._hook_shebang()
+            self._mock_resolver(monkeypatch, {
+                "status": "degraded",
+                "source": "none",
+                "path": None,
+                "shebang_safe": False,
+                "reason": "No spaceless launcher found on this machine.",
+                "checked": [
+                    {"tier": "preference-file", "path": "~/.gator/preferences.json", "outcome": "absent"},
+                    {"tier": "shutil-which", "path": "", "outcome": "not-on-PATH"},
+                    {"tier": "localappdata", "path": "C:/x/py.exe", "outcome": "invalid: file-not-found"},
+                    {"tier": "windows-dir", "path": "C:\\Windows\\py.exe", "outcome": "invalid: file-not-found"},
+                ],
+            })
+            with pytest.raises(update.HookShebangUnresolvable) as exc_info:
+                update._hook_shebang()
         msg = str(exc_info.value)
-        assert "shutil.which" in msg
-        assert "LOCALAPPDATA" in msg
-        assert "C:\\Windows" in msg
-        assert "python.org" in msg or "Install" in msg
+        assert "No spaceless launcher found" in msg
+        assert "Checked:" in msg
+        assert "preference-file" in msg
+        assert "shutil-which" in msg
+        assert "localappdata" in msg
+        assert "windows-dir" in msg
+
+    def test_windows_malformed_preference_refuses_no_fallback(self, monkeypatch):
+        """LOAD-BEARING (Finding 1 pin at the resolver-wrapper layer):
+        the resolver signals malformed with source=user; `_hook_shebang`
+        raises. If auto-detect also would have succeeded on this
+        machine, that result is IRRELEVANT — the user configured a
+        broken preference and the refusal must not silently fall back.
+        The resolver enforces this; this test pins the wrapper's
+        contract that a degraded result of any kind raises."""
+        with patch.object(os, "name", "nt"):
+            self._mock_resolver(monkeypatch, {
+                "status": "degraded",
+                "source": "user",
+                "path": None,
+                "shebang_safe": False,
+                "reason": (
+                    "~/.gator/preferences.json is malformed "
+                    "(parse-error: Expecting property name enclosed in double quotes). "
+                    "This is a loud refusal — never silently fall back."
+                ),
+                "checked": [
+                    {"tier": "preference-file",
+                     "path": "~/.gator/preferences.json",
+                     "outcome": "malformed: parse-error: ..."},
+                ],
+            })
+            with pytest.raises(update.HookShebangUnresolvable) as exc_info:
+                update._hook_shebang()
+        msg = str(exc_info.value)
+        assert "malformed" in msg
+        assert "loud refusal" in msg
+        assert "preferences.json" in msg
+
+    def test_windows_invalid_preference_refuses_no_fallback(self, monkeypatch):
+        """LOAD-BEARING: preference points at a nonexistent file. Even
+        though auto-detect would find `C:\\Windows\\py.exe` in the real
+        world, the resolver refuses (source=user); wrapper raises."""
+        with patch.object(os, "name", "nt"):
+            self._mock_resolver(monkeypatch, {
+                "status": "degraded",
+                "source": "user",
+                "path": None,
+                "shebang_safe": False,
+                "reason": (
+                    "~/.gator/preferences.json python.windows_py_launcher "
+                    "is invalid (file-not-found): 'C:/nowhere/py.exe'. "
+                    "Loud refusal."
+                ),
+                "checked": [
+                    {"tier": "preference-file",
+                     "path": "C:/nowhere/py.exe",
+                     "outcome": "invalid: file-not-found"},
+                ],
+            })
+            with pytest.raises(update.HookShebangUnresolvable):
+                update._hook_shebang()
 
 
 class TestBuildGitHookWrappers:

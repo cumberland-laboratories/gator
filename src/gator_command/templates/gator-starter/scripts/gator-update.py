@@ -780,45 +780,51 @@ class HookShebangUnresolvable(RuntimeError):
     """
 
 
+def _format_shebang_refusal(result):
+    """Render a resolver-degraded result into an actionable HookShebangUnresolvable message.
+
+    Includes the resolver's own reason string plus a compact rendering
+    of the `checked` audit trail so operators can see every tier the
+    resolver tried and why each failed.
+    """
+    lines = [result.get("reason", "hook launcher resolver returned no usable path.")]
+    checked = result.get("checked") or []
+    if checked:
+        lines.append("Checked:")
+        for entry in checked:
+            tier = entry.get("tier", "?")
+            outcome = entry.get("outcome", "?")
+            path = entry.get("path") or ""
+            if path:
+                lines.append(f"  - {tier}: {outcome} ({path})")
+            else:
+                lines.append(f"  - {tier}: {outcome}")
+    return "\n".join(lines)
+
+
 def _hook_shebang():
     """Return the platform-correct shebang for hook wrappers.
 
     Unix returns `#!/usr/bin/env python3` unchanged.
 
-    Windows probes for a spaceless absolute `py.exe` (Python Launcher)
-    path in three tiers: PATH via `shutil.which`, then
-    `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` (per-user /
-    Microsoft Store install), then `C:\\Windows\\py.exe` (system-wide
-    install). Every candidate is space-checked — POSIX shebang syntax
-    cannot quote paths with spaces, and `%LOCALAPPDATA%` expands to
-    `C:\\Users\\<username>\\...`, which contains a space when the
-    Windows username has a space. If no tier yields a usable path,
-    raises `HookShebangUnresolvable` so the install path can refuse
-    loudly rather than emit a broken hook.
+    Windows delegates the actual launcher probe to
+    `gator_core.resolve_python_launcher_for_hooks()`, which unified
+    the shebang resolver with the future launcher-consuming seams
+    (v2.10.0 Phase 2, from `2026-08-29-machine-python-preference-implementation-plan.md`).
+    The resolver honors `~/.gator/preferences.json`
+    python.windows_py_launcher first, then falls back to auto-detect;
+    a malformed preference or invalid configured path refuses loudly
+    (never silent fallback). On refusal this function raises
+    `HookShebangUnresolvable` with the resolver's structured reason +
+    checked-tier audit trail.
     """
     if os.name != "nt":
         return "#!/usr/bin/env python3"
-    candidates = []
-    which = shutil.which("py")
-    if which:
-        candidates.append(which)
-    candidates.extend([
-        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Python\Launcher\py.exe"),
-        r"C:\Windows\py.exe",
-    ])
-    for cand in candidates:
-        if " " in cand:
-            continue
-        if os.path.isfile(cand):
-            return f"#!{cand.replace(chr(92), '/')} -3"
-    raise HookShebangUnresolvable(
-        "No spaceless Python Launcher (py.exe) found on this machine. "
-        "Checked PATH via shutil.which, "
-        "%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe, and "
-        "C:\\Windows\\py.exe. Install the Python Launcher (python.org "
-        "installer's 'Install for all users' option places it at "
-        "C:\\Windows\\py.exe) and rerun."
-    )
+    from gator_core import resolve_python_launcher_for_hooks
+    result = resolve_python_launcher_for_hooks()
+    if result["status"] == "resolved":
+        return f"#!{result['path']} -3"
+    raise HookShebangUnresolvable(_format_shebang_refusal(result))
 
 
 def get_managed_hooks_path_value():

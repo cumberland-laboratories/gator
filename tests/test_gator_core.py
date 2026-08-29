@@ -866,3 +866,188 @@ class TestValidateLauncherCandidate:
             str(target), for_shebang=False)
         assert valid
         assert reason == ""
+
+
+class TestResolvePythonLauncherForHooks:
+    """resolve_python_launcher_for_hooks() — the canonical launcher
+    resolver used by _hook_shebang() and (later) any other seam that
+    needs a spaceless absolute py.exe. Contract:
+
+      - Windows-only; non-Windows returns not-applicable.
+      - Preference file precedence: valid → resolved user; invalid →
+        degraded user (NEVER fall through — Sketch §9 Rule 2); absent
+        or no python section → auto-detect.
+      - Auto-detect: shutil.which → LocalAppData → C:\\Windows,
+        each space-checked.
+      - Nothing usable → degraded none, checked trail populated.
+
+    Windows-only tests skip on non-Windows because they patch
+    os.path.expandvars / shutil.which in ways that require the nt
+    branch of the resolver to execute; on Unix the resolver short-circuits.
+    """
+
+    def _patch_prefs(self, monkeypatch, tmp_path):
+        prefs = tmp_path / ".gator" / "preferences.json"
+        monkeypatch.setattr(gator_core, "PREFERENCES_FILE", prefs)
+        return prefs
+
+    def test_non_windows_returns_not_applicable(self, monkeypatch):
+        import os as _os
+        monkeypatch.setattr(_os, "name", "posix")
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "not-applicable"
+        assert result["source"] == "none"
+        assert result["path"] is None
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver uses os.path.isfile on Windows-style "
+               "paths; patching os.name is not enough on POSIX.",
+    )
+    def test_preference_absent_auto_succeeds(self, tmp_path, monkeypatch):
+        self._patch_prefs(monkeypatch, tmp_path)
+        # Force shutil.which to return a spaceless real path
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "resolved"
+        assert result["source"] == "auto"
+        assert result["path"].replace("\\", "/") == str(launcher).replace("\\", "/")
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_valid_preference_wins_over_auto(self, tmp_path, monkeypatch):
+        """Preference file with a valid launcher must win even when
+        auto-detect would also succeed."""
+        import json as _json
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"windows_py_launcher": str(launcher).replace("\\", "/")},
+        }), encoding="utf-8")
+        # Auto-detect would ALSO succeed — we're proving preference wins
+        other = tmp_path / "other-py.exe"
+        other.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(other))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "resolved"
+        assert result["source"] == "user"
+        assert "py.exe" in result["path"]
+        assert "other-py.exe" not in result["path"]
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_malformed_preference_refuses_no_fallback(self, tmp_path, monkeypatch):
+        """LOAD-BEARING (Finding 1 pin at the resolver): a malformed
+        preferences file must degrade with source=user, NEVER silently
+        fall through to auto-detect. If auto WOULD succeed on this
+        machine, that's irrelevant — the user configured the file and
+        it's broken; falling back would defeat their override."""
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text("{malformed", encoding="utf-8")
+        # Auto-detect WOULD succeed — proving the refusal doesn't fall through
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "degraded"
+        assert result["source"] == "user"
+        assert result["path"] is None
+        assert "malformed" in result["reason"]
+        assert "loud refusal" in result["reason"]
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_invalid_preference_refuses_no_fallback(self, tmp_path, monkeypatch):
+        """LOAD-BEARING: a valid-JSON but points-at-nonexistent-file
+        preference must degrade with source=user, NEVER fall through."""
+        import json as _json
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"windows_py_launcher": "C:/nowhere/does-not-exist/py.exe"},
+        }), encoding="utf-8")
+        # Auto-detect WOULD succeed
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "degraded"
+        assert result["source"] == "user"
+        assert "invalid" in result["reason"]
+        assert "file-not-found" in result["reason"]
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_present_preference_but_no_python_section_falls_through(
+        self, tmp_path, monkeypatch
+    ):
+        """Sketch B forward-compat pin: a preferences file that exists
+        for other reasons (e.g. future `hooks:` section) but has no
+        python.windows_py_launcher must fall through to auto-detect."""
+        import json as _json
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "hooks": {"_": "reserved"},
+        }), encoding="utf-8")
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "resolved"
+        assert result["source"] == "auto"
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_all_tiers_fail_returns_degraded_none_with_checked_trail(
+        self, tmp_path, monkeypatch
+    ):
+        """No launcher anywhere → degraded, source=none, checked array
+        populated with every tier the resolver tried.
+
+        On the developer's machine C:\\Windows\\py.exe may actually
+        exist (system-wide Python install), so we also patch os.path.isfile
+        to force the auto-detect probes to fail. Preserves the validator's
+        distinction between "exists at path" vs "well-known location" —
+        _validate_launcher_candidate itself is unpatched (its own tests
+        cover it).
+        """
+        self._patch_prefs(monkeypatch, tmp_path)
+        import shutil as _shutil
+        import os as _os
+        monkeypatch.setattr(_shutil, "which", lambda n: None)
+        # Force ALL isfile checks the resolver makes to say False. The
+        # reader also uses .exists() for the preferences file check, which
+        # is unaffected because we pointed PREFERENCES_FILE at tmp_path.
+        monkeypatch.setattr(_os.path, "isfile", lambda p: False)
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "degraded"
+        assert result["source"] == "none"
+        assert result["path"] is None
+        assert any(c["tier"] == "preference-file" for c in result["checked"])
+        assert any(c["tier"] == "shutil-which" for c in result["checked"])
+        assert "preferences.json" in result["reason"]
+        assert "configure-machine-preferences" in result["reason"]

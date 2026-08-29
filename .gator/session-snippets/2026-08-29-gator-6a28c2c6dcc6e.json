@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Phase 1: gator-preferences-v1 contract + discriminated reader + validator",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "machine-preferences",
+    "contract",
+    "phase-1"
+  ],
+  "commit": "6a28c2c6dcc6e69809c3aa5fd2b19c557ebbe2ac",
+  "short_commit": "6a28c2c",
+  "snippet_id": "snippet-6a28c2c6dcc6e",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-29T15:00:46Z",
+  "ended_at": "2026-08-29T15:00:46Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-29-gator-525f9e01412a5.json",
+    "contracts/compatibility/fixtures/valid_preferences.json",
+    "contracts/compatibility/test_preferences_schema.py",
+    "contracts/schemas/gator-preferences-v1.json",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "New contract `gator-preferences-v1` for the unified machine-local preferences file at `~/.gator/preferences.json`. This plan (`.gator/vault/artifacts/2026-08-29-machine-python-preference-implementation-plan.md` r3) implements the `python:` section of Sketch B's unified-preferences architecture; the reserved `hooks:` stub is documented in the schema so the follow-on hook-mode plan can extend the same file additively without a v2 bump.",
+    "`contracts/schemas/gator-preferences-v1.json`: schema with three sections (`python:` fully specified, `hooks:` reserved stub, `notes` free-form), `additionalProperties: true` at every level for additive forward-compat. Only `schema` is required.",
+    "`contracts/compatibility/test_preferences_schema.py` (13 tests, 12 pass + 1 machine-local skip): validates schema conformance, additive-friendliness, and forward-compat cases (missing python section, hooks-only file, unknown top-level section tolerated). Follows the pattern from `test_runtime_pin.py`.",
+    "`contracts/compatibility/fixtures/valid_preferences.json`: canonical fixture populated with the field-report example (LocalAppData py.exe path).",
+    "`gator_core.PREFERENCES_FILE` + `PREFERENCES_SCHEMA` constants adjacent to `DASHBOARD_REGISTRY` (both copies).",
+    "`gator_core.read_preferences()` returns a **discriminated result**: `{\"state\": \"absent\"}` / `{\"state\": \"malformed\", \"reason\": ...}` / `{\"state\": \"present\", \"data\": {...}}`. The distinction is the load-bearing fix for r1 whiteboard finding 1 — collapsing to `Optional[dict]` would make the \"invalid override refuses loudly, no fallback\" invariant unenforceable for the malformed-file case. BOM-tolerant (`utf-8-sig`, same pattern as `resolve_governed_runtime`). Never raises. Both copies.",
+    "`gator_core._validate_launcher_candidate(path, for_shebang=True)` returns `(valid, reason)` with reasons `empty-path` / `relative-path` / `basename-mismatch: <got>` / `spaced-path` / `file-not-found`. Existence checked LAST so configuration reasons surface even when the file is missing. Both copies.",
+    "`os` added to gator_core.py imports (both copies) — needed for `os.path.isabs/isfile/basename`."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -484,6 +484,230 @@ def _validate_launcher_candidate(path, for_shebang=True):
     return True, ""
 
 
+def resolve_python_launcher_for_hooks():
+    """Return a structured result naming which py.exe to bake into
+    Windows git-hook shebangs, or a degraded result naming why not.
+
+    Windows only. On non-Windows returns not-applicable so callers can
+    keep the Unix shebang path (`#!/usr/bin/env python3`) unchanged.
+
+    Resolution order (Windows):
+
+      1. Preferences file `~/.gator/preferences.json`:
+         - state == "absent"       → proceed to auto-detect
+         - state == "malformed"    → refuse (source="user"); NEVER fall
+                                     through — user configured the file
+                                     and it's broken. Silent fallback
+                                     would defeat the override.
+         - state == "present" with no python.windows_py_launcher → proceed
+         - state == "present" with launcher path → validate it. Valid →
+                                     resolved (source="user"). Invalid →
+                                     refuse (source="user") with the
+                                     validator's reason. NEVER fall
+                                     through — same reasoning.
+
+      2. Auto-detect (same three tiers as the v2.9.3 inline probe, each
+         space-checked): `shutil.which("py")`, then
+         `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe`, then
+         `C:\\Windows\\py.exe`. First spaceless-exists wins with
+         source="auto".
+
+      3. Nothing works → degraded (source="none"), `checked` array
+         populated so the caller's refusal message can name every
+         attempted tier.
+
+    Returns a dict with keys `status` (`"resolved"` | `"degraded"` |
+    `"not-applicable"`), `source` (`"user"` | `"auto"` | `"none"`),
+    `path` (str or None), `shebang_safe` (bool), `reason` (str), and
+    `checked` (list of {tier, path, outcome} dicts). Never raises.
+    """
+    import shutil
+
+    if os.name != "nt":
+        return {
+            "status": "not-applicable",
+            "source": "none",
+            "path": None,
+            "shebang_safe": False,
+            "reason": "non-Windows platform; shebang uses /usr/bin/env python3",
+            "checked": [],
+        }
+
+    checked = []
+
+    # Tier 1: preferences file
+    prefs = read_preferences()
+    prefs_outcome_path = str(PREFERENCES_FILE).replace("\\", "/")
+    if prefs["state"] == "absent":
+        checked.append({
+            "tier": "preference-file",
+            "path": prefs_outcome_path,
+            "outcome": "absent",
+        })
+    elif prefs["state"] == "malformed":
+        checked.append({
+            "tier": "preference-file",
+            "path": prefs_outcome_path,
+            "outcome": f"malformed: {prefs['reason']}",
+        })
+        return {
+            "status": "degraded",
+            "source": "user",
+            "path": None,
+            "shebang_safe": False,
+            "reason": (
+                f"~/.gator/preferences.json is malformed ({prefs['reason']}). "
+                "This is a loud refusal — a broken user-configured "
+                "preference must never silently fall back to auto-detect. "
+                "Fix the file or remove it."
+            ),
+            "checked": checked,
+        }
+    else:  # state == "present"
+        launcher = (prefs.get("data", {}).get("python") or {}).get("windows_py_launcher")
+        if not launcher:
+            checked.append({
+                "tier": "preference-file",
+                "path": prefs_outcome_path,
+                "outcome": "no-python-section",
+            })
+        else:
+            valid, reason = _validate_launcher_candidate(launcher, for_shebang=True)
+            if valid:
+                normalized = launcher.replace("\\", "/")
+                checked.append({
+                    "tier": "preference-file",
+                    "path": prefs_outcome_path,
+                    "outcome": "valid",
+                })
+                return {
+                    "status": "resolved",
+                    "source": "user",
+                    "path": normalized,
+                    "shebang_safe": True,
+                    "reason": (
+                        "using launcher from ~/.gator/preferences.json "
+                        "python.windows_py_launcher"
+                    ),
+                    "checked": checked,
+                }
+            checked.append({
+                "tier": "preference-file",
+                "path": launcher,
+                "outcome": f"invalid: {reason}",
+            })
+            return {
+                "status": "degraded",
+                "source": "user",
+                "path": None,
+                "shebang_safe": False,
+                "reason": (
+                    f"~/.gator/preferences.json python.windows_py_launcher "
+                    f"is invalid ({reason}): {launcher!r}. This is a loud "
+                    f"refusal — a broken user-configured preference must "
+                    f"never silently fall back to auto-detect. Fix the path "
+                    f"or clear the preference."
+                ),
+                "checked": checked,
+            }
+
+    # Tier 2: auto-detect
+    which = shutil.which("py")
+    if which:
+        valid, reason = _validate_launcher_candidate(which, for_shebang=True)
+        if valid:
+            normalized = which.replace("\\", "/")
+            checked.append({
+                "tier": "shutil-which",
+                "path": which,
+                "outcome": "valid",
+            })
+            return {
+                "status": "resolved",
+                "source": "auto",
+                "path": normalized,
+                "shebang_safe": True,
+                "reason": "auto-detected via shutil.which('py')",
+                "checked": checked,
+            }
+        checked.append({
+            "tier": "shutil-which",
+            "path": which,
+            "outcome": f"invalid: {reason}",
+        })
+    else:
+        checked.append({
+            "tier": "shutil-which",
+            "path": "",
+            "outcome": "not-on-PATH",
+        })
+
+    localappdata_launcher = os.path.expandvars(
+        r"%LOCALAPPDATA%\Programs\Python\Launcher\py.exe"
+    )
+    valid, reason = _validate_launcher_candidate(localappdata_launcher, for_shebang=True)
+    if valid:
+        normalized = localappdata_launcher.replace("\\", "/")
+        checked.append({
+            "tier": "localappdata",
+            "path": localappdata_launcher,
+            "outcome": "valid",
+        })
+        return {
+            "status": "resolved",
+            "source": "auto",
+            "path": normalized,
+            "shebang_safe": True,
+            "reason": "auto-detected at %LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe",
+            "checked": checked,
+        }
+    checked.append({
+        "tier": "localappdata",
+        "path": localappdata_launcher,
+        "outcome": f"invalid: {reason}",
+    })
+
+    windows_launcher = r"C:\Windows\py.exe"
+    valid, reason = _validate_launcher_candidate(windows_launcher, for_shebang=True)
+    if valid:
+        normalized = windows_launcher.replace("\\", "/")
+        checked.append({
+            "tier": "windows-dir",
+            "path": windows_launcher,
+            "outcome": "valid",
+        })
+        return {
+            "status": "resolved",
+            "source": "auto",
+            "path": normalized,
+            "shebang_safe": True,
+            "reason": "auto-detected at C:\\Windows\\py.exe",
+            "checked": checked,
+        }
+    checked.append({
+        "tier": "windows-dir",
+        "path": windows_launcher,
+        "outcome": f"invalid: {reason}",
+    })
+
+    # Tier 3: nothing usable
+    return {
+        "status": "degraded",
+        "source": "none",
+        "path": None,
+        "shebang_safe": False,
+        "reason": (
+            "No spaceless Python Launcher (py.exe) found on this machine. "
+            "See ~/.gator/preferences.json (schema gator-preferences-v1) "
+            "to configure one manually, or install the Python Launcher "
+            "(python.org installer's 'Install for all users' places it at "
+            "C:\\Windows\\py.exe). Procedure: "
+            "configure-machine-preferences.md."
+        ),
+        "checked": checked,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Machine-local dashboard registry
 # ---------------------------------------------------------------------------

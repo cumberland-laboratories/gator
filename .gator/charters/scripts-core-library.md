@@ -194,6 +194,15 @@ Filesystem: `~/.gator/preferences.json` (R), candidate launcher path (R via `os.
 ! `PREFERENCES_FILE` is captured at import time from `Path.home()`. Tests that need to relocate it must monkeypatch the module attribute, not the user's home directory.
 ! Reader tolerates unknown top-level sections (`hooks:` is reserved for the follow-on plan; future sections are additive within v1 by construction).
 
+### resolve_python_launcher_for_hooks()
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy)
+Canonical Windows Python-launcher resolver — the single seam every launcher-consuming site on the machine goes through (v2.10.0 Phase 2). Windows only; non-Windows returns `not-applicable` so callers keep the Unix shebang path. Returns a structured dict: `{"status": "resolved" | "degraded" | "not-applicable", "source": "user" | "auto" | "none", "path": <str> | None, "shebang_safe": bool, "reason": <str>, "checked": [{tier, path, outcome}, ...]}`. Never raises. Resolution order: (1) `~/.gator/preferences.json` python.windows_py_launcher — valid → resolved user, invalid or malformed file → degraded user (NEVER fall through), absent or no-python-section → proceed; (2) auto-detect tiers `shutil.which("py")` → `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe` → `C:\Windows\py.exe`, each space-checked; (3) nothing usable → degraded none with the full checked audit trail. The `checked` array is load-bearing for the refusal message caller (`_hook_shebang` renders it via `_format_shebang_refusal`).
+Filesystem: `~/.gator/preferences.json` (R via `read_preferences`), candidate launcher paths (R via `_validate_launcher_candidate`)
+<- `gator-update.py::_hook_shebang()` (only current consumer); future: any launcher-consuming machine-side seam
+-> `read_preferences()`, `_validate_launcher_candidate()`, `shutil.which`, `os.path.expandvars`, `os.path.isfile`
+! **`source == "user" && status == "degraded"` is the invariant Sketch §9 Rule 2 enforces**: a broken user-configured preference (malformed JSON OR invalid path) refuses loudly rather than silently falling back to auto-detect. Downstream refusal messages must preserve this distinction — the caller learned something specific about the user's intent that a "not found" auto-detect result would not communicate.
+! Delegates to `read_preferences()` for the discriminated absent/malformed/present result — the resolver's malformed-refuses-no-fallback semantics depend on that reader NOT collapsing the two states. If the reader ever changes shape, this resolver's tier-1 dispatch is the load-bearing consumer.
+
 ### gator_runtime.py (module)
 File: `src/gator_command/scripts/gator_runtime.py`
 Runtime context resolver for Gator. Detects runtime mode (source-checkout, public-clone, installed-package) and resolves scripts dir, templates dir, repo root, and command post root. This is the seam that makes pipx-installed Gator possible — scripts import this instead of doing SCRIPTS_DIR.parent.parent arithmetic.
