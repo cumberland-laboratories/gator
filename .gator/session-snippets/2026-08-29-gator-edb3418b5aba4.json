@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "CI fix: cross-platform absolute paths in validator tests + patch resolver in hook-wrapper test",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "ci",
+    "cross-platform",
+    "tests"
+  ],
+  "commit": "edb3418b5aba45357283aeee0ec010e4afea90ed",
+  "short_commit": "edb3418",
+  "snippet_id": "snippet-edb3418b5aba4",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "800a2d72e75d5be81af24553626f9a032ba6e821",
+  "started_at": "2026-08-29T16:14:37Z",
+  "ended_at": "2026-08-29T16:14:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-29-gator-800a2d72e75d5.json",
+    "tests/test_gator_core.py",
+    "tests/test_hooks.py"
+  ],
+  "notes": [
+    "`800a2d7` (the v2.10.0 bump) pushed dev, source-ci ran run `33262093184`, Windows cells green, both Ubuntu cells (py3.9 + py3.13) FAILED with 3 tests. All failures traced to my Windows-only path assumptions leaking through nominal cross-platform tests.",
+    "**Cause 1**: `test_spaced_absolute_returns_spaced_path` and `test_missing_file_returns_file_not_found` in `TestValidateLauncherCandidate` used hardcoded `C:/Users/John Doe/...` and `C:/nonexistent/...` strings. On Linux, `os.path.isabs(\"C:/...\")` returns False (drive letter isn't a Linux absolute prefix), so the validator returned `relative-path` before reaching the spaces or exists check. My in-flight attempt at `/tmp/John Doe/...` (POSIX-absolute) failed on Windows Python 3.13, which tightened `os.path.isabs` — drive-less rooted paths are no longer absolute on Windows py3.13+.",
+    "**Fix 1**: use `tmp_path` fixture to get a platform-native absolute prefix, then compose with `\"with space\"` subdir + `\"py.exe\"` (spaced test) or `\"does-not-exist\" / \"py.exe\"` (missing-file test). Deliberately don't create the file — validator's check order is absolute → basename → spaces → exists, so both tests hit their intended assertion before the exists check.",
+    "**Cause 2**: `TestBuildGitHookWrappers::test_windows_platform_shebang` patched `os.name` to `\"nt\"` but the resolver internally calls real `os.path.isabs`/`os.path.isfile`/`os.path.expandvars` — those helpers don't honor the patched `os.name`, so `C:\\Windows\\py.exe` fails `os.path.isabs` on Linux CI and the resolver returned `degraded`, propagating `HookShebangUnresolvable` up through the wrapper.",
+    "**Fix 2**: patch `gator_core.resolve_python_launcher_for_hooks` directly (via `patch.object`) to return a synthesized `resolved` result. Skirts the entire platform-conditional path-check chain — the test was always about \"wrapper emits `#!<path> -3`\", not about the resolver's internal probes. TestHookShebang's other tests already patch the resolver seam this way; this brings TestBuildGitHookWrappers into the same pattern.",
+    "Local re-verify after the fixes: `test_gator_core.py` + `test_hooks.py` = 144/144. Full sweep pending after Windows-side reruns land, but the three Ubuntu regressions should be resolved.",
+    "Rides the v2.10.0 release train; nothing tagged yet, so this is just an additional commit — no reset needed."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
