@@ -38,12 +38,13 @@ Filesystem: `.gator/field-guides/` (R)
 
 ### ensure_git_hooks(repo_root, paths)
 File: `src/gator_command/scripts/gator-init.py`
-Self-heals git hooks at session start by importing `gator-update.py`, checking whether the generated Python wrappers match the managed hook directory, and reinstalling them when missing or stale. On Windows this also repairs `core.hooksPath`. Returns a status dict used by both text and JSON boot output. Reports `degraded` when `gator-pre-commit.py` is missing — never false-green `ok`.
+Self-heals git hooks at session start by importing `gator-update.py`, checking whether the generated Python wrappers match the managed hook directory, and reinstalling them when missing or stale. On Windows this also repairs `core.hooksPath`. Returns a status dict used by both text and JSON boot output. Reports `degraded` when `gator-pre-commit.py` is missing OR when `_hook_shebang()` raises `HookShebangUnresolvable` — never false-green `ok`.
 Filesystem: managed hook dir (RW), `.git/config` (RW on Windows), `.gator/scripts/gator-pre-commit.py` (R)
 <- `main()`
--> `gator-update.plan_hook_updates()`, `gator-update.install_git_hooks()`
+-> `gator-update.plan_hook_updates()`, `gator-update.install_git_hooks()`, `gator-update._hook_shebang()` (defensive probe)
 ! This is intentionally side-effecting at session start. `.gator/` travels in Git; `.git/hooks/` does not. Cloned repos need a reliable self-heal point.
 ! Missing `gator-pre-commit.py` must return `degraded`, not `ok`. Without the target script, hooks can't work even if installed — silent false-green is the failure mode this feature exists to prevent.
+! **`_hook_shebang()` must be probed directly** before calling `plan_hook_updates()`. `plan_hook_updates()` catches `HookShebangUnresolvable` and returns `[]` to keep the main `gator update` path clean, but `[]` is indistinguishable from "no changes needed" here — without the defensive probe, the loud install-time refusal collapses into `ok` at session-open on exactly the machines the shebang fix protects (2026-08-28 whiteboard finding + regression pin `tests/test_init.py::test_unresolvable_shebang_reports_degraded_not_ok`). The probe uses `getattr(..., None)` fallback so pre-fix template copies without the exception class still work.
 
 ### print_boot_sequence(repo_root, paths, hook_status, registry_status)
 File: `src/gator_command/scripts/gator-init.py`

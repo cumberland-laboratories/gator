@@ -236,6 +236,24 @@ def ensure_git_hooks(repo_root, paths):
             "updates": 0,
         }
 
+    # 2026-08-28: probe the shebang resolver directly. plan_hook_updates()
+    # swallows HookShebangUnresolvable and returns [] to keep the main
+    # `gator update` path clean, but for session-open we must distinguish
+    # "hook install refused" from "no changes needed" — otherwise the
+    # loud install-time refusal collapses into a false-green `ok` here
+    # on exactly the machines the shebang fix is meant to protect.
+    _hookshebang_exc = getattr(gator_update, "HookShebangUnresolvable", None)
+    if _hookshebang_exc is not None:
+        try:
+            gator_update._hook_shebang()
+        except _hookshebang_exc as exc:
+            return {
+                "status": "degraded",
+                "detail": f"hook shebang unresolvable: {exc}",
+                "adds": 0,
+                "updates": 0,
+            }
+
     plan = gator_update.plan_hook_updates(paths.gator_root, repo_root)
     adds = sum(1 for _, action in plan if action == "add")
     updates = sum(1 for _, action in plan if action == "update")

@@ -155,6 +155,42 @@ class TestEnsureGitHooks:
         assert status["status"] == "degraded"
         assert "missing" in status["detail"]
 
+    def test_unresolvable_shebang_reports_degraded_not_ok(self, mock_gator_repo):
+        """2026-08-28 whiteboard finding: `_hook_shebang()` raising
+        HookShebangUnresolvable must NOT collapse into false-green `ok`
+        at session-open on exactly the machines the shebang fix
+        protects. plan_hook_updates() swallows the exception and
+        returns [] (which is indistinguishable from "no changes
+        needed"), so ensure_git_hooks() must probe the resolver
+        directly and surface a degraded status.
+
+        Patches init.import_sibling because ensure_git_hooks resolves
+        gator-update via a fresh import_sibling() call (no sys.modules
+        caching) — patching the test's module-level `update` reference
+        wouldn't reach the copy ensure_git_hooks actually uses."""
+        from unittest.mock import patch
+
+        repo_root, gator_dir = mock_gator_repo
+        paths = gator_layout.get_gator_paths(repo_root)
+
+        real_update = init.import_sibling("gator-update")
+
+        def _raising_shebang():
+            raise real_update.HookShebangUnresolvable("no launcher for test")
+
+        real_update._hook_shebang = _raising_shebang
+
+        with patch.object(init, "import_sibling", return_value=real_update):
+            status = init.ensure_git_hooks(repo_root, paths)
+
+        assert status["status"] == "degraded", (
+            f"session-open must surface shebang refusal, got {status!r}"
+        )
+        assert "shebang" in status["detail"].lower()
+        assert "no launcher for test" in status["detail"]
+        assert status["adds"] == 0
+        assert status["updates"] == 0
+
 
 # ---------------------------------------------------------------------------
 # Stage 5 — constitution drift suffix in the boot output

@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "fix --json --dry-run --migrate-layout: emit structured refusal instead of prose",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "json-contract",
+    "migrate-layout",
+    "cli"
+  ],
+  "commit": "a0a6c188a19e13ed52c596a0fdbbb96f6b7dbdbf",
+  "short_commit": "a0a6c18",
+  "snippet_id": "snippet-a0a6c188a19e1",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "34ccfd7dda75ba6af1fa89a1d39237191e535676",
+  "started_at": "2026-08-28T09:56:28Z",
+  "ended_at": "2026-08-28T21:22:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-28-gator-34ccfd7dda75b.json",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "tests/test_layout.py"
+  ],
+  "notes": [
+    "v2.9.2 regression: the 2026-08-23 `--dry-run --migrate-layout` gate at `gator-update.py:1357-1371` returns unconditionally after prose, so `gator update --json --dry-run --migrate-layout` reached the gate before the JSON branch (~107 lines further down at :1478) and emitted human text where machine consumers expect `{\"schema\": \"gator-update-v1\", ...}`. `TestMigrateDryRunGate` didn't cover the `--json` combination, so this shipped uncaught in v2.9.2.",
+    "Added `if args.json:` branch inside the gate (both copies): emits a structured refusal payload `{\"schema\": \"gator-update-v1\", \"action\": \"migrate-layout-refused\", \"reason\": ..., \"layout\": ...}` and returns 0. Exit-code parity with the prose refusal path — the payload's `action` field carries the \"no work happened\" signal. Prose path unchanged for interactive use.",
+    "Grepped `src/gator_command/scripts/dashboard/` for the flag combination — no consumers found, so no Dashboard code needs a `tolerate-unknown-action` change in this release. Plan §10 open question resolved.",
+    "Added 3 tests to `TestMigrateDryRunGate` in `tests/test_layout.py`: `test_dry_run_migrate_layout_with_json_returns_structured_refusal` (payload shape + `layout` field), `test_dry_run_migrate_layout_with_json_returns_zero_exit` (parity + no side-effects), `test_dry_run_migrate_layout_json_never_prints_prose` (no interactive-text leakage into stdout).",
+    "Plan: `.gator/vault/artifacts/2026-08-28-migrate-layout-dry-run-json-gate-plan.md` (r1).",
+    "Tests: TestMigrateDryRunGate 4/4, adjacent sweep (test_layout + test_template_sync + test_hooks + test_update_entry_points + test_session_hooks) 162/162 clean.",
+    "Second commit on the shebang-fix release train (companion to `34ccfd7`). Both ride the next patch release."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}
