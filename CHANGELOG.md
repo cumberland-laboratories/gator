@@ -2,6 +2,16 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.9.3] — 2026-08-28
+
+Field-fix trio for Windows hook installation and the v2.9.2 `--dry-run --migrate-layout` JSON contract, with a whiteboard-follow-up so the shebang refusal actually surfaces at session-open.
+
+### Fixed
+
+- **Git hooks no longer silently break on per-user / Microsoft Store Python installs** (field report). The pre-commit / commit-msg / post-commit hook wrappers hardcoded `#!C:/Windows/py.exe -3` in their shebang, and `C:\Windows\py.exe` only exists on system-wide ("install for all users") Python installs — per-user and Microsoft-Store installs put the launcher under `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe`. Git-bash tried to exec the shebang, found no interpreter, and every hook silently failed to invoke, skipping pre-commit governance entirely. `_hook_shebang()` in both `gator-update.py` copies now resolves the launcher dynamically at hook-generation time: `shutil.which("py")` → `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe` → `C:\Windows\py.exe`. Every candidate is space-checked (POSIX shebang syntax cannot quote paths with spaces, and `%LOCALAPPDATA%` under a spaced username would produce a broken shebang). If no tier yields a spaceless launcher, hook install refuses loudly via a new `HookShebangUnresolvable` exception — never silently writes a broken hook. Pins: `tests/test_hooks.py::TestHookShebang` (5 new tests) + `TestUnresolvableShebangRefusal`.
+- **`gator update --json --dry-run --migrate-layout` returns structured JSON** instead of the interactive prose it emitted in v2.9.2. The 2026-08-23 gate that refused the flag combination returned unconditionally before the JSON branch could fire, breaking the JSON contract for Dashboard and scripting consumers. The gate now emits `{"schema": "gator-update-v1", "action": "migrate-layout-refused", "reason": ..., "layout": ...}` with exit 0 when `--json` is set; interactive prose path unchanged. Pins: `tests/test_layout.py::TestMigrateDryRunGate` (3 new tests).
+- **`ensure_git_hooks()` surfaces the shebang refusal at session-open**. Whiteboard-caught follow-up: `plan_hook_updates()` catches `HookShebangUnresolvable` and returns `[]` to keep the `gator update` path clean, but `[]` is indistinguishable from "no changes needed" at `ensure_git_hooks()`'s call site — so on machines the shebang fix is meant to protect, session-open silently returned `{'status': 'ok'}` instead of the intended loud refusal. `ensure_git_hooks()` (both copies) now probes `_hook_shebang()` directly before calling `plan_hook_updates()`; on `HookShebangUnresolvable` it returns `{'status': 'degraded', 'detail': 'hook shebang unresolvable: ...'}`. Pin: `tests/test_init.py::TestEnsureGitHooks::test_unresolvable_shebang_reports_degraded_not_ok`.
+
 ## [2.9.2] — 2026-08-23
 
 Fix trio from a single field case: a repo whose Dashboard Update button silently "did nothing."

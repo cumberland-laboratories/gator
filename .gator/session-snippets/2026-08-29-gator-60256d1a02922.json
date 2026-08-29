@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "fix ensure_git_hooks: surface HookShebangUnresolvable as degraded, not false-green ok",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "hooks",
+    "session-open",
+    "whiteboard-followup"
+  ],
+  "commit": "60256d1a02922f38f33e7b4ec90af714ef7c6a00",
+  "short_commit": "60256d1",
+  "snippet_id": "snippet-60256d1a02922",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-08-28T09:56:28Z",
+  "ended_at": "2026-08-29T01:50:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-28-gator-a0a6c188a19e1.json",
+    "src/gator_command/scripts/gator-init.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-init.py",
+    "tests/test_init.py"
+  ],
+  "notes": [
+    "Whiteboard finding on the 34ccfd7 hook-shebang commit (2026-08-28): `plan_hook_updates()` catches `HookShebangUnresolvable` and returns `[]`, but `[]` is indistinguishable from \"no changes needed\" at `ensure_git_hooks()`'s call site — so on machines the shebang fix is meant to protect, session-open returned `{'status': 'ok', 'detail': 'ok'}` instead of surfacing the refusal. My earlier audit (\"graceful-degradation is inherited without additional wrapping\") was wrong; the wrapping-at-plan/install-layer only helps the `gator update` path, not the session-open path.",
+    "Fix: `ensure_git_hooks()` in both `src/gator_command/scripts/gator-init.py` and its template twin now probes `gator_update._hook_shebang()` directly before calling `plan_hook_updates()`. If it raises `HookShebangUnresolvable`, returns `{'status': 'degraded', 'detail': 'hook shebang unresolvable: <exception message>', 'adds': 0, 'updates': 0}` — parallel shape to the pre-existing \"gator-pre-commit.py missing\" degraded case. Uses `getattr(gator_update, \"HookShebangUnresolvable\", None)` fallback so pre-fix template copies (which don't have the exception class) still work.",
+    "Regression pin: `tests/test_init.py::TestEnsureGitHooks::test_unresolvable_shebang_reports_degraded_not_ok`. Patches `init.import_sibling` to return a module with a raising `_hook_shebang` (not `patch.object(update, ...)` — `import_sibling` creates fresh module objects per call, no `sys.modules` caching, so patching the test's own reference wouldn't reach the copy `ensure_git_hooks` uses).",
+    "Updated `.gator/charters/scripts-repo-lifecycle.md` `ensure_git_hooks()` entry: added `HookShebangUnresolvable` to the degraded-triggers list, added `_hook_shebang()` as a defensive-probe callee, added a new TRIPWIRE bullet explaining why the probe is separate from the plan/install call and pointing at the whiteboard-finding date and pin.",
+    "Tests: `TestEnsureGitHooks` 4/4, broader adjacent sweep (test_init + test_hooks + test_layout + test_template_sync + test_session_hooks + test_session_open + test_update_entry_points) 195/195, zero regressions.",
+    "Third commit on the shebang-fix release train (34ccfd7 → a0a6c18 → this)."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}
