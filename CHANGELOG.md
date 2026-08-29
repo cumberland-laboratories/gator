@@ -2,6 +2,36 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.10.0] — 2026-08-29
+
+Machine-scoped Python launcher preference. First feature release built on the v2.9.3 hook-shebang fix: instead of re-auto-detecting on every hook regeneration, an operator (or agent) can now record a durable machine-local override in `~/.gator/preferences.json` — the file every future machine-preferences feature will extend rather than replace.
+
+### Added
+
+- **Unified machine-preferences file at `~/.gator/preferences.json`** (schema `gator-preferences-v1`, contracts/schemas/gator-preferences-v1.json). Phase 1 of the machine-preferences architecture: this release populates the `python:` section; the schema also reserves a `hooks:` section for a follow-on release, so the file layout is stable before further work extends it. `additionalProperties: true` at every level for additive forward-compat. Contract test: `contracts/compatibility/test_preferences_schema.py` (13 checks).
+- **`gator_core.read_preferences()`** returns a discriminated result — `{"state": "absent"}` / `{"state": "malformed", "reason": ...}` / `{"state": "present", "data": {...}}` — never `Optional[dict]`. The distinction is load-bearing: callers can distinguish "no preference set" (safe to fall back) from "user configured something and it's broken" (must be surfaced loudly, never silently ignored). BOM-tolerant. Never raises.
+- **`gator_core._validate_launcher_candidate(path, for_shebang=True)`** — the four hook-shebang rules (basename `py.exe`, absolute, spaceless, exists) as a single function returning `(valid, reason)`. Existence checked last so configuration reasons (basename-mismatch, relative-path, spaced-path) surface even when the file is missing.
+- **`gator_core.resolve_python_launcher_for_hooks()`** — canonical Windows Python-launcher resolver. Windows only; non-Windows returns `not-applicable`. Preference file wins over auto-detect; a malformed OR invalid user preference refuses loudly with `source="user"` (never silent fallback — falling back would defeat the override the user just wrote). Returns a structured result with a `checked` audit trail listing every tier the resolver tried and why each succeeded or failed.
+- **Shipped procedure `procedures/configure-machine-preferences.md`** — operator/agent recovery documentation for setting `~/.gator/preferences.json` by hand. Named for the unified file so the future hook-mode section extends the same document. Available immediately on next `gator update`.
+
+### Changed
+
+- **`gator-update.py::_hook_shebang()` is now a thin wrapper** around `resolve_python_launcher_for_hooks()`. Every existing v2.9.3 behavior on machines without a preferences file is preserved byte-for-byte — the change is that a preferences file, if present, now overrides auto-detection. Refusal messages gain a rendered `checked:` audit trail so operators can see every tier the resolver tried. Both `src/gator_command/scripts/gator-update.py` and its template twin.
+- Charter TRIPWIREs: `scripts-cross-cutting.md` Managed Hook Path Migration now names the resolver as the source of truth; `scripts-repo-lifecycle.md::build_git_hook_wrappers` gains a "do not re-inline the shebang probe" invariant so future callers route through the resolver.
+
+### Compatibility
+
+- No breaking changes. Machines without `~/.gator/preferences.json` behave exactly as they did in v2.9.3.
+- Existing Windows repos get their hook stubs regenerated on the next `gator update` (content diff — the new refusal-message shape is a rendered `checked:` trail rather than an inline description).
+- Deferred to follow-on releases: `gator prefs` CLI (Phase 4); `hooks:` section content and hook-mode resolver (companion `2026-08-29-machine-scoped-hook-mode-and-preferences-sketch.md`); `gator init` boot-payload `hooks.launcher_*` diagnostic fields (Phase 5).
+
+### Notes
+
+- The initial implementation was reviewed pre-release and three whiteboard findings were fixed on the same train before this bump:
+  - `5cb4197`: (1) `read_preferences()`'s shape check was tag-only, so a tagged-but-wrongly-shaped payload like `{"schema": "gator-preferences-v1", "python": []}` slipped through as `present` and crashed the resolver's `.get()` chain — now `_validate_preferences_shape()` type-checks every documented section and field, and wrong shape returns `state: "malformed"`; (2) `python.allow_for_hook_shebang` was published in the schema/fixture/procedure but the resolver ignored it — resolver now honors the field (default `true`; `false` opts out and falls through to auto-detect).
+  - `3ef16ed`: (3) `python.windows_py_launcher: ""` violated the shipped schema's `minLength: 1` at runtime — the shape validator accepted empty strings (they ARE strings), then the resolver's `if not launcher:` shortcut lumped `""` with the field-missing case and silently fell through to auto-detect. Recreated the silent-fallback class the feature is specifically meant to forbid. Two-layer fix: shape validator now rejects empty `windows_py_launcher` at the reader boundary (returns `state: "malformed"`); resolver replaces `if not launcher:` with `if launcher is None:` so any empty string that ever reaches it routes through the validator (`empty-path`) and refuses loudly with `source: "user"`.
+  All three fixes have regression pins.
+
 ## [2.9.3] — 2026-08-28
 
 Field-fix trio for Windows hook installation and the v2.9.2 `--dry-run --migrate-layout` JSON contract, with a whiteboard-follow-up so the shebang refusal actually surfaces at session-open.

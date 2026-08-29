@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Whiteboard follow-up: reject empty windows_py_launcher + resolver never conflates absent-vs-empty",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "machine-preferences",
+    "whiteboard-followup-2"
+  ],
+  "commit": "3ef16ed1a9c605b3aeb141f75224b8cd7a6ada41",
+  "short_commit": "3ef16ed",
+  "snippet_id": "snippet-3ef16ed1a9c60",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "07c30a5b6f330d8e6967fbf0434957b2bc04b61f",
+  "started_at": "2026-08-29T16:01:00Z",
+  "ended_at": "2026-08-29T16:01:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-29-gator-5cb4197d2b02f.json",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "Whiteboard 2026-08-29 follow-up finding: `python.windows_py_launcher: \"\"` (empty string) violated the shipped schema's `minLength: 1` at runtime. The shape validator accepted it (empty IS a string), then the resolver's `if not launcher:` shortcut lumped it with the field-missing case and silently fell through to auto-detect — recreating the silent-fallback class the whole feature exists to prevent. An operator writing an explicitly-broken `\"\"` override would see auto-detect quietly take over, exactly the mystery this design forbids.",
+    "Two-layer fix (belt + suspenders):",
+    "**Reader (`_validate_preferences_shape`, both copies)**: after the type check, if `python.windows_py_launcher` is present and equal to `\"\"`, return `False, \"python.windows_py_launcher must be non-empty when present (schema minLength: 1)\"`. Reader now returns `state: \"malformed\"` on empty-string. Load-bearing: this is where the bytes coming in from disk are gated against the shipped schema.",
+    "**Resolver (`resolve_python_launcher_for_hooks`, both copies)**: replace `if not launcher:` with `if launcher is None:`. Precise-None check means an empty string (if it ever reached the resolver via a reader bypass) would route through `_validate_launcher_candidate`, which already returns `(False, \"empty-path\")`, and the resolver's existing `source=\"user\"` degraded branch would fire correctly. Ensures the silent-fallback bug cannot recur even if the reader-layer guard is bypassed.",
+    "Two regression tests:",
+    "`TestReadPreferences::test_empty_windows_py_launcher_returns_malformed` — writes `{\"python\": {\"windows_py_launcher\": \"\"}}` to `preferences.json`, asserts reader returns `state: \"malformed\"` with `\"windows_py_launcher\"` and `\"non-empty\"` in the reason.",
+    "`TestResolvePythonLauncherForHooks::test_empty_launcher_refuses_no_fallback_even_if_reader_bypassed` — patches `read_preferences` to return a synthesized `present` result carrying an empty launcher (bypasses the reader), asserts resolver returns `status: \"degraded\"` with `source: \"user\"` and does NOT fall through even though a mocked `shutil.which` would auto-detect a valid launcher.",
+    "Charter `scripts-core-library.md` `resolve_python_launcher_for_hooks` entry: added TRIPWIRE bullet documenting empty-string handling + pointing at both regression pins."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
