@@ -193,6 +193,7 @@ Filesystem: `~/.gator/preferences.json` (R), candidate launcher path (R via `os.
 ! **Malformed-file case must NEVER fall through to auto-detect.** The resolver's caller (`_hook_shebang`) refuses loudly (`HookShebangUnresolvable`) on any malformed preference file, because falling back to auto-detect is exactly what the user overrode by writing the file in the first place. Deviates from `resolve_governed_runtime()`'s fail-OPEN-on-corrupt-pin behavior on purpose — a broken runtime pin must never brick commits, but a broken user preference must never silently defeat the user's own configuration.
 ! `PREFERENCES_FILE` is captured at import time from `Path.home()`. Tests that need to relocate it must monkeypatch the module attribute, not the user's home directory.
 ! Reader tolerates unknown top-level sections (`hooks:` is reserved for the follow-on plan; future sections are additive within v1 by construction).
+! Operator-facing recovery documentation lives in the shipped procedure `procedures/configure-machine-preferences.md` — when the resolver refuses, the refusal message points at that procedure by name so an operator or agent can recover without CLI availability (v2.10.0 Phase 3).
 
 ### resolve_python_launcher_for_hooks()
 File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy)

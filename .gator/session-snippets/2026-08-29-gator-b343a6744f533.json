@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Phase 2: hook launcher resolver + _hook_shebang cutover",
+  "change_type": "refactor",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "machine-preferences",
+    "resolver",
+    "phase-2"
+  ],
+  "commit": "b343a6744f533dfbe00d6156b744cf9f0fec838d",
+  "short_commit": "b343a67",
+  "snippet_id": "snippet-b343a6744f533",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "6a28c2c6dcc6e69809c3aa5fd2b19c557ebbe2ac",
+  "started_at": "2026-08-29T15:07:51Z",
+  "ended_at": "2026-08-29T15:07:51Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-08-29-gator-6a28c2c6dcc6e.json",
+    "src/gator_command/scripts/gator-update.py",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-update.py",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py",
+    "tests/test_hooks.py"
+  ],
+  "notes": [
+    "`gator_core.resolve_python_launcher_for_hooks()` (both copies): the canonical Windows launcher resolver — the single seam every launcher-consuming site on the machine goes through (v2.10.0 Phase 2). Returns a structured dict with `status/source/path/shebang_safe/reason/checked[]`. Windows-only; non-Windows returns `not-applicable`. Resolution order: (1) `~/.gator/preferences.json` python.windows_py_launcher (via `read_preferences` + `_validate_launcher_candidate`); valid → resolved user, invalid or malformed file → degraded user (NEVER fall through — Sketch §9 Rule 2); absent or no-python-section → proceed. (2) auto-detect tiers `shutil.which(\"py\")` → `%LOCALAPPDATA%\\Programs\\Python\\Launcher\\py.exe` → `C:\\Windows\\py.exe`, each space-checked. (3) nothing usable → degraded none with the full checked audit trail. Never raises.",
+    "`_hook_shebang()` in both `gator-update.py` copies refactored to a thin wrapper: on Windows imports the resolver, returns `#!<resolver.path> -3` on resolved, raises `HookShebangUnresolvable(_format_shebang_refusal(result))` on degraded. New `_format_shebang_refusal(result)` renders the resolver's `reason` + `checked` trail into an operator-actionable multi-line message. Unix branch unchanged (short-circuits before consulting resolver).",
+    "`tests/test_hooks.py::TestHookShebang` completely retargeted at the resolver seam: patches `gator_core.resolve_python_launcher_for_hooks` directly (the durable seam — `_hook_shebang` does an inside-function import so this is where the patch takes effect). Six tests: Unix-python3 (unchanged), resolved-emits-shebang, resolved-from-user-preference, degraded-raises-with-checked-trail, malformed-preference-refuses-no-fallback (Finding 1 pin at wrapper layer), invalid-preference-refuses-no-fallback.",
+    "`tests/test_gator_core.py::TestResolvePythonLauncherForHooks` — new class, 7 tests for the resolver's own contract: non-Windows returns not-applicable; preference-absent-auto-succeeds; valid-preference-wins-over-auto; **malformed-preference-refuses-no-fallback (Finding 1 pin at the resolver layer — even when auto WOULD succeed)**; invalid-preference-refuses-no-fallback (same); present-preference-but-no-python-section-falls-through (Sketch B forward-compat pin); all-tiers-fail-returns-degraded-none-with-checked-trail. Windows-only branches are @pytest.mark.skipif(os.name != \"nt\")-gated. Test caught a real machine-truth quirk in-flight (my Windows machine has C:\\Windows\\py.exe from a system-wide install), fixed by explicitly patching `os.path.isfile` in the all-tiers-fail case.",
+    "Charter updates: `scripts-core-library.md` gets a new `### resolve_python_launcher_for_hooks()` entry with the Sketch §9 Rule 2 TRIPWIRE (`source=\"user\" && status=\"degraded\"` semantics); `scripts-repo-lifecycle.md::build_git_hook_wrappers` entry updated with the new callee, the do-not-re-inline TRIPWIRE, and the \"v2.9.3 inline probe replaced by resolver\" history; `scripts-cross-cutting.md` Managed Hook Path Migration TRIPWIRE updated to name the resolver as the source of truth.",
+    "Tests at ship: test_gator_core.py + test_hooks.py = 135/135 pass, zero regressions. Exit criteria for Phase 2: every existing v2.9.3 behavior preserved on machines with no preference file (default state); valid preference overrides auto-detect; invalid and malformed refuse loudly with no fallback; resolver returns checked audit trail; suite green."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
