@@ -53,6 +53,8 @@ Any of those signal that this machine needs a durable local override rather than
    }
    ```
 
+   About `allow_for_hook_shebang`: defaults to `true` when omitted. Setting it to `false` tells Gator "this launcher is valid for other uses but must NOT be used for the git-hook shebang" — Gator then ignores your `windows_py_launcher` for hook generation and falls through to auto-detect. Useful when you've configured a launcher for a future non-shebang consumer but the shebang has to come from elsewhere.
+
 4. **Checkpoint — validation.** The path in `windows_py_launcher` must satisfy all four rules:
    - **Basename is `py.exe`** (case-insensitive).
    - **Absolute path** (starts with a drive letter or `/`, not relative).

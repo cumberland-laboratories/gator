@@ -806,6 +806,88 @@ class TestReadPreferences:
         result = gator_core.read_preferences()
         assert result["state"] == "present"
 
+    def test_python_section_as_list_returns_malformed(self, tmp_path, monkeypatch):
+        """LOAD-BEARING (2026-08-29 whiteboard finding 1): a tagged file
+        whose `python:` is a JSON list rather than an object would slip
+        through the top-level-not-object + schema-tag checks, then crash
+        the resolver's `.get(...)` chain with AttributeError. Reader
+        must return malformed here so the resolver's 'never raises'
+        contract holds."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": [],
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "shape" in result["reason"]
+        assert "python" in result["reason"]
+
+    def test_hooks_section_as_string_returns_malformed(self, tmp_path, monkeypatch):
+        """Same defense for the reserved `hooks:` section — the follow-on
+        plan will consume this section directly; a wrong-type shape must
+        surface as malformed, not crash the future hook-mode resolver."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "hooks": "not-an-object",
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "hooks" in result["reason"]
+
+    def test_windows_py_launcher_as_int_returns_malformed(self, tmp_path, monkeypatch):
+        """Nested field type check: `python.windows_py_launcher: 42`
+        would slip past the section-level check and crash the validator
+        when it calls `os.path.isabs(42)`."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"windows_py_launcher": 42},
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "windows_py_launcher" in result["reason"]
+
+    def test_allow_for_hook_shebang_as_string_returns_malformed(
+        self, tmp_path, monkeypatch
+    ):
+        """Nested boolean field type check: `python.allow_for_hook_shebang:
+        "yes"` is truthy but not a bool; without shape validation the
+        resolver would silently treat it as True."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"allow_for_hook_shebang": "yes"},
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "allow_for_hook_shebang" in result["reason"]
+
+    def test_unknown_top_level_section_tolerated_in_reader(
+        self, tmp_path, monkeypatch
+    ):
+        """Shape validator must NOT reject unknown sections — schema
+        contract is additive-friendly. Only DOCUMENTED sections get
+        type-checked."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "future_section": {"anything": "goes"},
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "present"
+
 
 class TestValidateLauncherCandidate:
     """The four rules that any candidate py.exe path must satisfy to be
@@ -992,6 +1074,80 @@ class TestResolvePythonLauncherForHooks:
         assert result["source"] == "user"
         assert "invalid" in result["reason"]
         assert "file-not-found" in result["reason"]
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_allow_for_hook_shebang_false_falls_through_to_auto(
+        self, tmp_path, monkeypatch
+    ):
+        """LOAD-BEARING (2026-08-29 whiteboard finding 2): the
+        `allow_for_hook_shebang: false` opt-out was documented in the
+        schema, fixture, and operator procedure but the resolver
+        ignored it. With this pin, a launcher preference marked
+        opt-out falls through to auto-detect (the operator is signaling
+        the launcher is valid for other uses but not for shebang).
+
+        Both launchers use the mandated `py.exe` basename in different
+        subdirectories — the basename check would reject `auto-py.exe`
+        etc. even without the opt-out logic."""
+        import json as _json
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        opted_dir = tmp_path / "opted-out"
+        opted_dir.mkdir()
+        opted_launcher = opted_dir / "py.exe"
+        opted_launcher.write_text("")
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {
+                "windows_py_launcher": str(opted_launcher).replace("\\", "/"),
+                "allow_for_hook_shebang": False,
+            },
+        }), encoding="utf-8")
+        # Auto-detect finds a DIFFERENT launcher in a different subdir
+        auto_dir = tmp_path / "auto"
+        auto_dir.mkdir()
+        auto_launcher = auto_dir / "py.exe"
+        auto_launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(auto_launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "resolved"
+        assert result["source"] == "auto", (
+            f"opt-out must fall through to auto, not use user preference. "
+            f"Got: {result!r}"
+        )
+        assert "/auto/py.exe" in result["path"]
+        assert "/opted-out/" not in result["path"]
+        # Audit trail must record the opt-out so it's inspectable
+        pref_check = next(
+            c for c in result["checked"] if c["tier"] == "preference-file"
+        )
+        assert "opted-out" in pref_check["outcome"]
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_allow_for_hook_shebang_true_default_uses_preference(
+        self, tmp_path, monkeypatch
+    ):
+        """The opt-out field defaults true — a valid launcher without
+        the field set must still be used."""
+        import json as _json
+        prefs = self._patch_prefs(monkeypatch, tmp_path)
+        prefs.parent.mkdir(parents=True)
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"windows_py_launcher": str(launcher).replace("\\", "/")},
+        }), encoding="utf-8")
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "resolved"
+        assert result["source"] == "user"
 
     @pytest.mark.skipif(
         __import__("os").name != "nt",

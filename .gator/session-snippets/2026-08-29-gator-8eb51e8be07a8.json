@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Phase 3: ship configure-machine-preferences operator procedure",
+  "change_type": "docs",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "machine-preferences",
+    "procedure",
+    "phase-3"
+  ],
+  "commit": "8eb51e8be07a846e747b31b7f29885b468379bf2",
+  "short_commit": "8eb51e8",
+  "snippet_id": "snippet-8eb51e8be07a8",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "b343a6744f533dfbe00d6156b744cf9f0fec838d",
+  "started_at": "2026-08-29T15:09:57Z",
+  "ended_at": "2026-08-29T15:09:57Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-29-gator-b343a6744f533.json",
+    "src/gator_command/templates/gator-starter/procedures/configure-machine-preferences.md"
+  ],
+  "notes": [
+    "New shipped procedure `src/gator_command/templates/gator-starter/procedures/configure-machine-preferences.md`. Propagates to fleet on next `gator update`. Named for the unified file (not `-python-launcher`) so the hook-mode follow-on plan extends the same document rather than adding a second procedure (Sketch B §12 alignment).",
+    "Sections: when-to-use (three failure signals), how-to-locate-a-working-py.exe (three options ordered by ease), file-format examples (minimal + full), the four validation rules with explicit \"Gator will not silently fall back\" callout, how to verify with a resolver run, and Notes covering malformed-is-loud, remove-to-revert, backslash-escaping, forward-compat with future sections, launcher-vs-interpreter distinction, and a forward-pointer to the not-yet-shipped `gator prefs` CLI (Phase 4, later release).",
+    "Added a pointer to the procedure in the `scripts-core-library.md` PREFERENCES_FILE charter entry so the recovery path is discoverable from the module docs.",
+    "Zero code changes in this commit — the procedure ships in the wheel via the existing `SHIPPED_TEMPLATE_DIRS` machinery; no build-system wiring needed.",
+    "Third commit of the v2.10.0 release train (`6a28c2c` Phase 1 → `b343a67` Phase 2 → this Phase 3)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

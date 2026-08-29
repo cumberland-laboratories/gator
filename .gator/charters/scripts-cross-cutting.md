@@ -306,6 +306,8 @@ The registry format (markdown table in `registry.md` with pipe-delimited columns
 
 ! The reader returns a **discriminated result** (`{"state": "absent" | "malformed" | "present", ...}`), never `Optional[dict]`. Callers must distinguish "absent" from "malformed" to honor the invariant that a user-declared preference override refuses loudly rather than silently falling back to auto-detection. Collapsing the two states (r1 mistake, caught by 2026-08-29 whiteboard finding 1) would make the invariant unenforceable for the malformed-file case.
 
+! **`state == "present"` means shape-valid, not just tag-matched.** `read_preferences()` runs `_validate_preferences_shape()` after the schema-tag check to type-check every documented section and field. Without this, a tagged payload with a wrong-shape section (e.g. `{"schema": "gator-preferences-v1", "python": []}`) would slip through as `present` and crash downstream `.get()` chains with `AttributeError`, violating the resolver's "never raises" contract. Whiteboard 2026-08-29 implementation-review finding 1 caught this — the r1 shape check only covered top-level-is-object.
+
 ! **Asymmetry with `resolve_governed_runtime()`**: a corrupt runtime pin fails OPEN to repo scripts (broken file must never brick commits); a malformed preferences file fails CLOSED (broken user override must never silently defeat itself). Both behaviors are correct for their contract — do not homogenize.
 
 ## TRIPWIRE: Trailer Backward Compatibility (Gator-Architect / Gator-PI)

@@ -416,7 +416,51 @@ def read_preferences():
             "state": "malformed",
             "reason": f"schema-mismatch: expected {PREFERENCES_SCHEMA!r}, got {got_schema!r}",
         }
+    shape_ok, shape_reason = _validate_preferences_shape(data)
+    if not shape_ok:
+        return {"state": "malformed", "reason": f"shape: {shape_reason}"}
     return {"state": "present", "data": data}
+
+
+def _validate_preferences_shape(data):
+    """Validate the type of every documented field in a schema-tagged
+    preferences payload. Returns (valid, reason).
+
+    Load-bearing: prevents the resolver from downstream `AttributeError`
+    on structurally-invalid payloads like `{"schema": "gator-preferences-v1",
+    "python": []}` — a payload that passes the tag check but crashes any
+    caller that does `data["python"].get(...)`. Whiteboard 2026-08-29
+    finding: without this check, a tagged-but-wrongly-shaped file becomes
+    a hard exception instead of the intended loud degraded result, and
+    the resolver's "never raises" contract is violated.
+
+    Only checks types of known sections/fields — unknown top-level
+    sections are additive-friendly per the schema and pass through.
+    """
+    for section, expected_type, type_name in (
+        ("python", dict, "object"),
+        ("hooks", dict, "object"),
+        ("notes", str, "string"),
+        ("updated_at", str, "string"),
+    ):
+        if section in data and not isinstance(data[section], expected_type):
+            return False, (
+                f"{section!r} must be a JSON {type_name}, "
+                f"got {type(data[section]).__name__}"
+            )
+    python = data.get("python")
+    if isinstance(python, dict):
+        for field, expected_type, type_name in (
+            ("windows_py_launcher", str, "string"),
+            ("source", str, "string"),
+            ("allow_for_hook_shebang", bool, "boolean"),
+        ):
+            if field in python and not isinstance(python[field], expected_type):
+                return False, (
+                    f"python.{field} must be a JSON {type_name}, "
+                    f"got {type(python[field]).__name__}"
+                )
+    return True, ""
 
 
 def _validate_launcher_candidate(path, for_shebang=True):
@@ -528,12 +572,26 @@ def resolve_python_launcher_for_hooks():
             "checked": checked,
         }
     else:  # state == "present"
-        launcher = (prefs.get("data", {}).get("python") or {}).get("windows_py_launcher")
+        python_section = prefs.get("data", {}).get("python") or {}
+        launcher = python_section.get("windows_py_launcher")
+        # Honor `allow_for_hook_shebang: false` — the operator is signaling
+        # that this launcher is valid for other uses (subprocess seams,
+        # future non-shebang consumers) but must NOT be baked into the git
+        # hook shebang. Treat as if no launcher was configured; fall
+        # through to auto-detect. Default true (backward-compat + matches
+        # the schema default and the operator procedure's stated behavior).
+        allow_for_shebang = python_section.get("allow_for_hook_shebang", True)
         if not launcher:
             checked.append({
                 "tier": "preference-file",
                 "path": prefs_outcome_path,
                 "outcome": "no-python-section",
+            })
+        elif not allow_for_shebang:
+            checked.append({
+                "tier": "preference-file",
+                "path": launcher,
+                "outcome": "opted-out: allow_for_hook_shebang=false",
             })
         else:
             valid, reason = _validate_launcher_candidate(launcher, for_shebang=True)
