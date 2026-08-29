@@ -460,6 +460,16 @@ def _validate_preferences_shape(data):
                     f"python.{field} must be a JSON {type_name}, "
                     f"got {type(python[field]).__name__}"
                 )
+        # Match the schema's minLength: 1 on string paths that must
+        # name a real filesystem location. Without this, empty strings
+        # slip past type-check and (pre-2026-08-29 whiteboard fix) the
+        # resolver silently treated them as "no launcher configured"
+        # instead of "user configured a broken launcher".
+        if "windows_py_launcher" in python and python["windows_py_launcher"] == "":
+            return False, (
+                "python.windows_py_launcher must be non-empty when present "
+                "(schema minLength: 1)"
+            )
     return True, ""
 
 
@@ -581,7 +591,18 @@ def resolve_python_launcher_for_hooks():
         # through to auto-detect. Default true (backward-compat + matches
         # the schema default and the operator procedure's stated behavior).
         allow_for_shebang = python_section.get("allow_for_hook_shebang", True)
-        if not launcher:
+        # Distinguish "field missing" (None → fall through, no opinion
+        # expressed) from "field present but empty string" (falsy but
+        # user-configured — must reach the validator, which returns
+        # empty-path, so the operator gets a loud user-scoped refusal).
+        # The 2026-08-29 whiteboard `if not launcher:` collapse lumped
+        # empty strings with absent fields, silently falling back to
+        # auto-detect — exactly the class this feature exists to prevent.
+        # Belt: the shape validator now rejects empty strings at the
+        # reader layer (so this branch should never see them post-fix);
+        # suspenders: this precise-None check ensures a bypass would
+        # still route through the validator and refuse loudly.
+        if launcher is None:
             checked.append({
                 "tier": "preference-file",
                 "path": prefs_outcome_path,

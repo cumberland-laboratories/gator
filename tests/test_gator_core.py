@@ -888,6 +888,29 @@ class TestReadPreferences:
         result = gator_core.read_preferences()
         assert result["state"] == "present"
 
+    def test_empty_windows_py_launcher_returns_malformed(
+        self, tmp_path, monkeypatch
+    ):
+        """LOAD-BEARING (2026-08-29 whiteboard follow-up finding):
+        `python.windows_py_launcher: ""` is a string (passes isinstance)
+        but violates the shipped schema's `minLength: 1`. Without a
+        runtime enforcement of that constraint, the empty string slips
+        through as `present`, then the resolver's `if not launcher:`
+        shortcut treats it as "no launcher configured" and silently
+        falls through to auto-detect — recreating the silent-fallback
+        class this feature exists to prevent. Reader must catch it."""
+        import json as _json
+        prefs = self._patched_home(tmp_path, monkeypatch)
+        prefs.parent.mkdir(parents=True)
+        prefs.write_text(_json.dumps({
+            "schema": "gator-preferences-v1",
+            "python": {"windows_py_launcher": ""},
+        }), encoding="utf-8")
+        result = gator_core.read_preferences()
+        assert result["state"] == "malformed"
+        assert "windows_py_launcher" in result["reason"]
+        assert "non-empty" in result["reason"] or "minLength" in result["reason"]
+
 
 class TestValidateLauncherCandidate:
     """The four rules that any candidate py.exe path must satisfy to be
@@ -1173,6 +1196,46 @@ class TestResolvePythonLauncherForHooks:
         result = gator_core.resolve_python_launcher_for_hooks()
         assert result["status"] == "resolved"
         assert result["source"] == "auto"
+
+    @pytest.mark.skipif(
+        __import__("os").name != "nt",
+        reason="Windows resolver branch",
+    )
+    def test_empty_launcher_refuses_no_fallback_even_if_reader_bypassed(
+        self, tmp_path, monkeypatch
+    ):
+        """Belt-and-suspenders (2026-08-29 whiteboard follow-up
+        finding): the reader now rejects `windows_py_launcher: ""`
+        (returns malformed), so this branch shouldn't fire in normal
+        flow. This test bypasses the reader — synthesizes a `present`
+        result carrying an empty launcher — to prove the resolver
+        would ALSO refuse loudly if the empty string ever reached it.
+
+        The pre-fix resolver did `if not launcher:` which lumped `""`
+        with None and silently fell through to auto-detect. The post-fix
+        resolver does `if launcher is None:` — an empty string now
+        routes through `_validate_launcher_candidate` which returns
+        `empty-path` and the resolver refuses with `source="user"`."""
+        monkeypatch.setattr(gator_core, "read_preferences", lambda: {
+            "state": "present",
+            "data": {
+                "schema": "gator-preferences-v1",
+                "python": {"windows_py_launcher": ""},
+            },
+        })
+        # Auto-detect WOULD succeed — proving no fallback
+        launcher = tmp_path / "py.exe"
+        launcher.write_text("")
+        import shutil as _shutil
+        monkeypatch.setattr(_shutil, "which", lambda n: str(launcher))
+        result = gator_core.resolve_python_launcher_for_hooks()
+        assert result["status"] == "degraded", (
+            f"empty launcher must refuse (source=user), not fall through. "
+            f"Got: {result!r}"
+        )
+        assert result["source"] == "user"
+        assert result["path"] is None
+        assert "empty-path" in result["reason"] or "invalid" in result["reason"]
 
     @pytest.mark.skipif(
         __import__("os").name != "nt",

@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Whiteboard fixes: shape-validate preferences + wire allow_for_hook_shebang",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "machine-preferences",
+    "whiteboard-followup",
+    "phase-1",
+    "phase-2"
+  ],
+  "commit": "5cb4197d2b02ff2f029a6f7c79f6a25d29534f57",
+  "short_commit": "5cb4197",
+  "snippet_id": "snippet-5cb4197d2b02f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "c95f89085a59b8518a7aeefb09a2c760ac712ef5",
+  "started_at": "2026-08-29T15:49:52Z",
+  "ended_at": "2026-08-29T15:49:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-08-29-gator-8eb51e8be07a8.json",
+    "src/gator_command/scripts/gator_core.py",
+    "src/gator_command/templates/gator-starter/procedures/configure-machine-preferences.md",
+    "src/gator_command/templates/gator-starter/scripts/gator_core.py",
+    "tests/test_gator_core.py"
+  ],
+  "notes": [
+    "Whiteboard 2026-08-29 finding 1: `read_preferences()` only validated top-level-is-dict + schema-tag, so a tagged payload with a wrong-shape section (e.g. `{\"schema\": \"gator-preferences-v1\", \"python\": []}`) slipped through as `present`; the resolver's `data[\"python\"].get(...)` then crashed with `AttributeError`, violating the \"never raises\" contract and turning a broken preference into a hard failure instead of a loud degraded result.",
+    "Fix: new `_validate_preferences_shape(data)` in both `gator_core.py` copies. Type-checks every documented section (`python:` object, `hooks:` object, `notes:` string, `updated_at:` string) and every documented nested field (`python.windows_py_launcher`: string, `python.source`: string, `python.allow_for_hook_shebang`: bool). Reader runs it after the schema-tag check; wrong shape → `{state: \"malformed\", reason: \"shape: <detail>\"}`. Unknown sections still pass through (schema is additive-friendly). 5 new tests in `TestReadPreferences`: python-as-list, hooks-as-string, windows_py_launcher-as-int, allow_for_hook_shebang-as-string, unknown-top-level-section-tolerated.",
+    "Whiteboard 2026-08-29 finding 2: `python.allow_for_hook_shebang` was published in the schema, fixture, and operator procedure but the resolver ignored it — an operator could set `false` and Gator would still bake the launcher into the shebang.",
+    "Fix: resolver now reads `python.allow_for_hook_shebang` (default `true`). When `false`, treats the preference as opted-out and falls through to auto-detect. Adds `\"opted-out: allow_for_hook_shebang=false\"` outcome to the `checked` audit trail so operators can see the opt-out took effect. 2 new tests: `test_allow_for_hook_shebang_false_falls_through_to_auto` (mocked auto-detect returns different launcher; opt-out ensures auto wins), `test_allow_for_hook_shebang_true_default_uses_preference` (backward-compat pin — absent field defaults true, preference still used).",
+    "Operator procedure `configure-machine-preferences.md` gains a paragraph after the full-schema example explaining the actual live behavior of `allow_for_hook_shebang` (which the earlier version documented as a field without saying what it does).",
+    "Charter `scripts-core-library.md` `resolve_python_launcher_for_hooks` entry gains two new TRIPWIRE bullets: (1) `allow_for_hook_shebang: false` is live and points at its regression pin; (2) wrong-shape preference sections must degrade, not crash, and points at Finding 1 pin.",
+    "Test flake caught in-flight: my new `allow_for_hook_shebang` opt-out test initially used `auto-py.exe` as the mocked launcher filename — `_validate_launcher_candidate` rejected it with `basename-mismatch: 'auto-py.exe'` (basename must be exactly `py.exe`) and my machine's real `C:\\Windows\\py.exe` won tier 3 auto-detect, masking whether the opt-out logic actually fired. Fixed by using proper `py.exe` basenames in subdirectories (auto/py.exe vs opted-out/py.exe) so the assertion tests the resolver behavior, not the filename-validator side-effect.",
+    "These fixes ride the v2.10.0 release train — the bump commit (previously `c95f890`) was reset from dev when the whiteboard findings landed; I'll redo it fresh with an extended CHANGELOG note in the next commit."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
