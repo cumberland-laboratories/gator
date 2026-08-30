@@ -306,6 +306,8 @@ Dashboard endpoints under `/api/repo/<name>/...` are per-repo scoped by construc
 
 Applies to any future per-repo Dashboard endpoint that lacks universal data availability. When in doubt, prefer the empty-state.
 
+**Sub-invariant** (2026-08-30 whiteboard follow-up finding): a `status: "unavailable"` payload MUST carry a distinct `reason` for each condition it represents, and the frontend MUST branch on `reason`, not collapse every unavailable-state into the same "not available yet" empty card. Blueprints' first pass used the same shape for both the intentional Release A gate (`release-b-pending`) and real degradation (`shipped-data-unreadable`), which would have presented corrupt-shipped-data failures as a "Release B ships it" teaser — a message that both hides the actual bug and promises a fix that doesn't apply. Empty-state and error-state are different UX classes; keep them distinguishable at the wire.
+
 ## Pattern: Machine-Local Preferences — Discriminated Reader
 
 `read_preferences()` in `gator_core.py` is the canonical read path for the unified machine-local preferences file (`~/.gator/preferences.json`, schema `gator-preferences-v1`). Consumers today: the shebang resolver (Phase 2, v2.10.0) via `resolve_python_launcher_for_hooks()`. Reserved future consumer: the hook-mode resolver (follow-on plan) via the `hooks:` section.

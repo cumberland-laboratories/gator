@@ -294,7 +294,19 @@
       })
       .then(function (payload) {
         if (payload.status === "unavailable") {
-          renderEmptyState(container, payload);
+          // Branch on `reason` — the endpoint uses the same status shape for
+          // both the intentional Release A gate and real failures. Only
+          // release-b-pending is the informational empty-state; every other
+          // reason is a genuine degradation and must NOT be dressed as
+          // "Release B will fix it" (whiteboard 2026-08-30 finding).
+          if (payload.reason === "release-b-pending") {
+            renderEmptyState(container, payload);
+          } else {
+            var detail = payload.detail
+              ? payload.message + " (" + payload.detail + ")"
+              : payload.message;
+            renderErrorState(container, detail || ("Blueprint unavailable: " + payload.reason));
+          }
           return;
         }
         if (payload.error) {

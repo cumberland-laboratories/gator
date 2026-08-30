@@ -232,3 +232,84 @@ class TestBlueprintEndpointOtherLevels:
         handler = _dispatch(dashboard_module, "/api/repo/gator/blueprint?level=2")
         assert handler.sent_status == 501
         assert "not yet implemented" in handler.sent_json.get("error", "")
+
+
+class TestBlueprintEndpointShippedDataUnreadable:
+    """LOAD-BEARING (2026-08-30 whiteboard finding): the `status: "unavailable"`
+    response shape is used for BOTH the intentional Release A gate
+    (`reason: "release-b-pending"`, informational empty-state) AND for
+    real degradation (`reason: "shipped-data-unreadable"`, actual error).
+    The frontend must branch on `reason` and NOT dress a corrupt-shipped-
+    data failure as a "Release B will fix it" message. This test pins the
+    endpoint-side distinction; the frontend branch is in `views/blueprint.js`
+    and can only be exercised through a browser session, so this
+    regression pin at least guarantees the differentiating `reason`
+    field is present in the payload."""
+
+    def test_shipped_data_unreadable_returns_distinct_reason(
+        self, dashboard_module, monkeypatch, tmp_path
+    ):
+        # Point the dashboard's DASHBOARD_DIR at a tmp dir where the
+        # shipped blueprint files don't exist — the OSError → JSONDecodeError
+        # chain triggers the shipped-data-unreadable branch.
+        empty_dashboard = tmp_path / "fake-dashboard"
+        empty_dashboard.mkdir()
+        monkeypatch.setattr(dashboard_module, "DASHBOARD_DIR", empty_dashboard)
+        # Registry still points at THIS repo so the Gator-source-repo gate
+        # passes (the gate looks at repo path, not at DASHBOARD_DIR).
+        monkeypatch.setattr(dashboard_module, "_REGISTRY_REPOS", [
+            {"name": "gator", "path": str(REPO_ROOT)},
+        ])
+        handler = _dispatch(dashboard_module, "/api/repo/gator/blueprint?level=1")
+        assert handler.sent_json is not None
+        payload = handler.sent_json
+        assert payload.get("status") == "unavailable"
+        assert payload.get("reason") == "shipped-data-unreadable", (
+            f"corrupt/missing shipped data must produce a DISTINCT reason "
+            f"from the release-b-pending gate, not the same shape. "
+            f"Got: {payload!r}"
+        )
+        assert "message" in payload, (
+            "message field required so frontend renderErrorState can display "
+            "operator-actionable copy (not the empty-state 'Release B ships' "
+            "text)"
+        )
+        assert "detail" in payload
+        # And critically: MUST NOT carry the release-b-pending reason,
+        # which the frontend routes to renderEmptyState with wrong copy.
+        assert payload.get("reason") != "release-b-pending"
+
+    def test_release_b_pending_and_shipped_data_unreadable_are_different_reasons(
+        self, dashboard_module, monkeypatch, tmp_path
+    ):
+        """Guardrail: the two 'unavailable' branches must use different
+        `reason` values. If someone unifies them, the frontend loses the
+        ability to distinguish informational-empty-state from real-error."""
+        # release-b-pending path (non-Gator repo)
+        fake_repo = tmp_path / "non-gator-repo"
+        fake_repo.mkdir()
+        (fake_repo / ".gator").mkdir()
+        monkeypatch.setattr(dashboard_module, "_REGISTRY_REPOS", [
+            {"name": "non-gator-repo", "path": str(fake_repo)},
+        ])
+        handler_a = _dispatch(
+            dashboard_module, "/api/repo/non-gator-repo/blueprint?level=1"
+        )
+        reason_a = handler_a.sent_json.get("reason")
+        # shipped-data-unreadable path
+        empty_dashboard = tmp_path / "fake-dashboard-2"
+        empty_dashboard.mkdir()
+        monkeypatch.setattr(dashboard_module, "DASHBOARD_DIR", empty_dashboard)
+        monkeypatch.setattr(dashboard_module, "_REGISTRY_REPOS", [
+            {"name": "gator", "path": str(REPO_ROOT)},
+        ])
+        handler_b = _dispatch(
+            dashboard_module, "/api/repo/gator/blueprint?level=1"
+        )
+        reason_b = handler_b.sent_json.get("reason")
+        assert reason_a != reason_b, (
+            f"the two branches must carry distinct reasons; "
+            f"non-gator={reason_a!r} shipped-unreadable={reason_b!r}"
+        )
+        assert reason_a == "release-b-pending"
+        assert reason_b == "shipped-data-unreadable"

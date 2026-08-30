@@ -338,6 +338,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "level": 1,
                     "status": "unavailable",
                     "reason": "shipped-data-unreadable",
+                    "message": (
+                        "Couldn't read the shipped Blueprints data files. "
+                        "This is a Gator install-integrity problem, not a "
+                        "release-progress limitation. Reinstalling gator-command "
+                        "(pipx reinstall gator-command) usually restores them."
+                    ),
                     "detail": str(exc),
                 })
                 return
