@@ -2,6 +2,34 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.11.0] — 2026-08-30
+
+Blueprints 2.0 Release A — first shipped increment of the roadmap Priority 2 track. A new Dashboard-native `Blueprints` view renders the Gator source repo's Level 1 charter map inside the Dashboard shell, ported from the vault experiment at `.gator/vault/blueprints/charter-flowchart-high-level.html`. This release ships the browse surface, the endpoint, and the shipped data files that the Release B charter parser will supersede without changing the frontend contract.
+
+### Added
+
+- **Dashboard `Blueprints` view** under the Knowledge sidebar group (peer of `Docs`). Renders the L1 charter map as an SVG canvas + absolute-positioned nodes with click-to-isolate 1-hop-neighborhood interaction, a right-side detail panel (summary, covered files, representative functions, depends-on, used-by), and an "experimental" topbar label. New file `src/gator_command/scripts/dashboard/views/blueprint.js`, ~300 lines, plain-callable `window.GatorViews.blueprint = function (data, container, repoName)` matching the actual shell contract.
+- **Endpoint** `GET /api/repo/<name>/blueprint?level=1` in `gator-dashboard.py`. Non-1 level returns HTTP 501 (Release B+ ships higher levels). Gator-source-repo detection is on-disk artifact discovery (per plan D3): if `<repo_path>/src/gator_command/scripts/dashboard/blueprint/l1-data.json` exists, the endpoint serves the merged L1 payload. Otherwise it returns a structured empty-state (`{status: "unavailable", reason: "release-b-pending"}`) and the frontend renders an information card explaining Release B is the enabler. The empty-state contract is load-bearing: never falls back to Gator's dataset for a non-Gator repo (whiteboard finding pin — teaching users wrong data at the per-repo Knowledge seam is exactly the failure mode this contract exists to prevent).
+- **Shipped data**: `dashboard/blueprint/l1-data.json` (13 nodes / 29 edges, one-time hand-extraction from the vault HTML) + `dashboard/blueprint/l1-positions.json` (hand-tuned `{x, y}` per node id, kept as a separate overlay so the Release B parser can regenerate data without stomping positions).
+- **Charter TRIPWIREs**: `scripts-cross-cutting.md` gets a new pattern entry ("Repo-Scoped Dashboard Endpoints — Per-Repo Data or Structured Empty-State") that applies to any future per-repo Dashboard endpoint; `scripts-dashboard.md` gains a Blueprints view function entry with three TRIPWIRE bullets pinning the single-slot invariant, the no-silent-fallback contract, and the empty-state-vs-error-state reason branching.
+
+### Changed
+
+- `dashboard/snapshot.py` — the offline HTML snapshot inliner extended to include the new `views/blueprint.js` in its expected script sequence. Without this, the inliner's regex fell through with no match and produced un-inlined HTML (caught by 4-test regression in `test_snapshot.py` during the release sweep, fixed before commit).
+- Sidebar item dimming logic in `dashboard.js` extended so `blueprint-tab` un-dims when a repo is active, matching how `docs-tab` behaves.
+
+### Compatibility
+
+- No breaking changes. Existing Dashboard views (fleet, history, repo, docs, updates, settings) are untouched.
+- Machines pipx-upgraded from v2.10.0 gain the new sidebar item automatically. The view is only functionally populated for the Gator source repo in Release A; all other repos see the structured empty-state.
+- Snapshot HTML now inlines the blueprint view alongside the others (no change to the snapshot output for non-Gator repos in Release A — the empty-state renders offline the same way it does live).
+- Deferred to Release B (v2.12.0): `gator-blueprint.py` charter parser. Deferred to later releases: L1 tooltip pack + edge-type visual distinction + snapshot L1 payload (Release C, v2.13.0); L2 drill-down (Release D, v2.14.0); L3 curated function map + L4 drift map (Release E).
+
+### Notes
+
+- Plan chain: `.gator/vault/artifacts/2026-08-30-blueprints-2-0-implementation-plan.md` (r3, Architect-ratified 2026-08-30) synthesized from the Codex "dashboard-first" sketch (`2026-08-30-blueprints-2-0-dashboard-first-sketch.md`) plus the prior Opus r1 draft (`.gator/artifacts/2026-08-25-blueprints-2-0-implementation-plan.md`). The r2/r3 whiteboard revisions specifically fixed a fabricated view-registration contract (r1 invented `{init, render, cleanup}` and a separate `bp-view` slot that don't exist) and a wrong-data-under-another-repo's-name recommendation that would have shipped had the enforcer not caught it.
+- **Post-Release-A whiteboard fix landed pre-bump** (`0100933`): the initial Release A implementation used the same `status: "unavailable"` response shape for both the intentional gate (`reason: "release-b-pending"`) and real degradation (`reason: "shipped-data-unreadable"`), and the frontend collapsed both into the same "Release B ships it" empty-state card. Enforcer flagged this as presenting genuine breakage as a product-progress teaser — misleading + hides the fix path. Fixed by branching on `reason` in the frontend (`views/blueprint.js`), adding a self-contained `message` field to the shipped-data-unreadable payload with actionable copy ("Reinstalling gator-command usually restores them"), and pinning both branches with two regression tests (`TestBlueprintEndpointShippedDataUnreadable::test_shipped_data_unreadable_returns_distinct_reason` + `test_release_b_pending_and_shipped_data_unreadable_are_different_reasons`).
+
 ## [2.10.0] — 2026-08-29
 
 Machine-scoped Python launcher preference. First feature release built on the v2.9.3 hook-shebang fix: instead of re-auto-detecting on every hook regeneration, an operator (or agent) can now record a durable machine-local override in `~/.gator/preferences.json` — the file every future machine-preferences feature will extend rather than replace.

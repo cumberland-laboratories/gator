@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Blueprints Release A whiteboard fix: split unavailable-state into gate vs error",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "blueprints-2-0",
+    "whiteboard-followup"
+  ],
+  "commit": "010093315ba5ad5ff46d973cc19c1ad2b521f9c6",
+  "short_commit": "0100933",
+  "snippet_id": "snippet-010093315ba5a",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "73ace0d594e9cae13e0848c01c5c6fb2df7232dc",
+  "started_at": "2026-08-30T22:33:27Z",
+  "ended_at": "2026-08-30T22:33:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    "src/gator_command/scripts/dashboard/views/blueprint.js",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_blueprint_view.py"
+  ],
+  "notes": [
+    "Whiteboard 2026-08-30 finding on Release A (`77fd365`): the endpoint used the same `status: \"unavailable\"` response shape for BOTH the intentional Release A gate (`reason: \"release-b-pending\"`) and for real degradation (`reason: \"shipped-data-unreadable\"`), but the view routed EVERY `status === \"unavailable\"` payload through `renderEmptyState()`, whose copy hardcodes \"Blueprints for this repo aren't available yet\" + a Release B teaser. Result: if the shipped dataset were missing or corrupt, operators would see a misleading product-progress message (\"Release B ships the parser\") instead of the actual breakage they need to fix (usually `pipx reinstall gator-command`). The single-branch test suite pinned `release-b-pending` but the `shipped-data-unreadable` branch had no coverage and no distinct rendering — the class of drift the enforcer specifically caught.",
+    "**Frontend fix** (`views/blueprint.js`): the `status === \"unavailable\"` handler now branches on `reason`. `release-b-pending` → `renderEmptyState()` (informational, unchanged copy). Anything else → `renderErrorState()` with the payload's `message` + `detail` (or a generic \"Blueprint unavailable: <reason>\" fallback if either is missing). Preserves the existing empty-state UX for the intentional gate; genuine failures now surface as errors with operator-actionable content.",
+    "**Backend fix** (`gator-dashboard.py`): the `shipped-data-unreadable` branch now includes a `message` field (\"Couldn't read the shipped Blueprints data files. This is a Gator install-integrity problem, not a release-progress limitation. Reinstalling gator-command (pipx reinstall gator-command) usually restores them.\") so the frontend has copy to render. The `release-b-pending` branch's message stays unchanged.",
+    "**Two new regression pins** in `tests/test_blueprint_view.py::TestBlueprintEndpointShippedDataUnreadable`:",
+    "`test_shipped_data_unreadable_returns_distinct_reason` — monkeypatches `DASHBOARD_DIR` to an empty tmp dir so the shipped-file reads fail, then asserts response has `reason == \"shipped-data-unreadable\"` (NOT `release-b-pending`), a `message` field, and a `detail` field.",
+    "`test_release_b_pending_and_shipped_data_unreadable_are_different_reasons` — guardrail: exercises both branches and asserts they carry DISTINCT `reason` values. If a future refactor accidentally unifies them, the frontend loses the ability to route to the right renderer.",
+    "**Charter TRIPWIRE** in `scripts-dashboard.md::Blueprints view` — new bullet naming the `status: \"unavailable\"` overload, the reason-based branch contract, and pointer to the regression pins.",
+    "Rides the v2.11.0 release train — bump commit `73ace0d` was reset from dev to make room; re-bumped in the next commit with an extended CHANGELOG Notes section."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
