@@ -119,14 +119,21 @@
     wrap.className = "bp-wrap";
     container.appendChild(wrap);
 
-    // Left: canvas + edges
+    // Canvas is a responsive scrollable frame; stage inside holds the
+    // fixed intrinsic authored dimensions (v2.11.1 fix — pre-fix the
+    // canvas itself was pinned at 1180x880 which pushed the detail panel
+    // off-screen on <1500px viewports at 100% zoom).
     const canvas = document.createElement("div");
     canvas.className = "bp-canvas";
-    canvas.style.width = canvasSize.width + "px";
-    canvas.style.height = canvasSize.height + "px";
     wrap.appendChild(canvas);
 
-    // SVG for edges — full canvas overlay, pointer-events on paths only.
+    const stage = document.createElement("div");
+    stage.className = "bp-stage";
+    stage.style.width = canvasSize.width + "px";
+    stage.style.height = canvasSize.height + "px";
+    canvas.appendChild(stage);
+
+    // SVG for edges — full stage overlay, pointer-events on paths only.
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "bp-edges");
@@ -179,9 +186,10 @@
         svg.appendChild(text);
       }
     }
-    canvas.appendChild(svg);
+    stage.appendChild(svg);
 
-    // Nodes
+    // Nodes (positioned within the fixed-dimension stage, not the
+    // responsive outer canvas frame)
     for (const n of nodes) {
       const art = document.createElement("article");
       art.className = "bp-node";
@@ -193,7 +201,7 @@
       art.innerHTML =
         '<div class="bp-node-title">' + escHtml(n.title || n.id) + '</div>' +
         kind;
-      canvas.appendChild(art);
+      stage.appendChild(art);
     }
 
     // Right: detail panel

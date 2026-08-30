@@ -2,6 +2,19 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.11.1] — 2026-08-30
+
+Blueprints view canvas hardening — v2.11.0 shipped with the canvas frame pinned at the vault-HTML authored 1180×880 dimensions, which pushed the detail panel off-screen at normal browser zoom on <1500px viewports (the Architect had to reduce browser zoom to ~80% to see the whole surface). Fix restructures the frontend layout so the outer frame is responsive and the fixed dimensions live on an inner stage.
+
+### Fixed
+
+- **Blueprints view canvas is now responsive.** `bp-canvas` becomes a scrollable outer frame that grows/shrinks with available viewport space (`flex: 1 1 auto; min-width: 0; overflow: auto`). New inner `bp-stage` container carries the fixed intrinsic dimensions from the payload's `canvas` field. Nodes and SVG edges live inside the stage. When the stage exceeds the frame's visible area, the frame scrolls internally instead of pushing the detail panel off-screen. Tighter chrome elsewhere (16px gap/padding vs 20px, detail panel fixed at 360px with tighter min/max) so both panels fit at normal zoom on 1440-wide laptop screens. Charter TRIPWIRE added in `scripts-dashboard.md::Blueprints view` naming the canvas-vs-stage split so future edits don't accidentally re-pin fixed dimensions on `bp-canvas`.
+
+### Compatibility
+
+- No breaking changes. Endpoint contract unchanged; only the frontend's DOM structure changed.
+- Pre-fix `l1-data.json`/`l1-positions.json` files are unchanged and continue to serve.
+
 ## [2.11.0] — 2026-08-30
 
 Blueprints 2.0 Release A — first shipped increment of the roadmap Priority 2 track. A new Dashboard-native `Blueprints` view renders the Gator source repo's Level 1 charter map inside the Dashboard shell, ported from the vault experiment at `.gator/vault/blueprints/charter-flowchart-high-level.html`. This release ships the browse surface, the endpoint, and the shipped data files that the Release B charter parser will supersede without changing the frontend contract.

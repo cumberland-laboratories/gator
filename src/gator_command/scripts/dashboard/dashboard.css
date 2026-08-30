@@ -1424,21 +1424,34 @@ mark.search-hit {
 
 .bp-wrap {
   display: flex;
-  gap: 20px;
-  padding: 20px;
-  align-items: flex-start;
-  height: calc(100vh - 140px);
+  gap: 16px;
+  padding: 16px;
+  align-items: stretch;
+  height: calc(100vh - var(--topbar-height) - 32px);
   overflow: hidden;
 }
 
+/* Responsive frame: grows/shrinks with the available space, scrolls
+   internally when the fixed-dimension stage inside exceeds the frame.
+   (v2.11.1 hardening — pre-fix the canvas itself was pinned at the
+   authored 1180x880 and pushed the detail panel off-screen at normal
+   browser zoom on <1500px viewports.) */
 .bp-canvas {
-  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   background: var(--bp-canvas-bg);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  flex-shrink: 0;
   overflow: auto;
+}
+
+/* Fixed intrinsic stage — SVG edges + absolute-positioned nodes live
+   here at their authored coordinates. Width/height set inline by JS
+   from the payload's `canvas` field. */
+.bp-stage {
+  position: relative;
 }
 
 .bp-edges {
@@ -1521,15 +1534,15 @@ mark.search-hit {
 }
 
 .bp-detail {
-  flex: 1;
-  min-width: 300px;
-  max-width: 420px;
+  flex: 0 0 360px;
+  min-width: 260px;
+  max-width: 400px;
   background: var(--bp-detail-bg);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 16px 20px;
   overflow-y: auto;
-  max-height: 100%;
+  align-self: stretch;
   font-family: -apple-system, "Segoe UI", sans-serif;
 }
 

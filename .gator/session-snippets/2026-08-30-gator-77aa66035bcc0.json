@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.11.0 — Blueprints 2.0 Release A",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "2.11.0",
+    "blueprints-2-0"
+  ],
+  "commit": "77aa66035bcc0e35da4daa872290d60c4da54b89",
+  "short_commit": "77aa660",
+  "snippet_id": "snippet-77aa66035bcc0",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "010093315ba5ad5ff46d973cc19c1ad2b521f9c6",
+  "started_at": "2026-08-30T22:34:20Z",
+  "ended_at": "2026-08-30T22:34:20Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-08-30-gator-010093315ba5a.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump: `VERSION` and `pyproject.toml` 2.10.0 → 2.11.0. MINOR bump per plan §D9 (Release A = new Dashboard view + new endpoint + shipped data = additive feature).",
+    "CHANGELOG `[2.11.0]` entry: Added (5 items), Changed (2 items), Compatibility (no breaking changes), Notes (plan-chain + post-Release-A whiteboard fix at `0100933`).",
+    "Charter version-note bump in `scripts-core-library.md`: 2.10.0 → 2.11.0.",
+    "Third commit of the v2.11.0 release train (`77fd365` Release A → `0100933` whiteboard fix → bump). Previous bump commit `73ace0d` was reset from dev when the whiteboard finding landed; this bump is fresh with the extended CHANGELOG Notes section naming the fix.",
+    "Local sweep at ship: **977 pass + 3 skip + 2 xfail** across `tests/` + `contracts/compatibility/` (+16 net vs v2.10.0)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
