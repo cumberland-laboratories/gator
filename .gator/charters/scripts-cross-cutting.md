@@ -300,6 +300,12 @@ The registry format (markdown table in `registry.md` with pipe-delimited columns
 
 ! Do not add repos to the registry by writing the JSON directly. The helper handles path resolution, deduplication, and error isolation.
 
+## Pattern: Repo-Scoped Dashboard Endpoints — Per-Repo Data or Structured Empty-State
+
+Dashboard endpoints under `/api/repo/<name>/...` are per-repo scoped by construction. When the requested data isn't available for the resolved repo, the correct response is a structured **empty-state** (`{status: "unavailable", reason: "<why>", message: "..."}`), NEVER a fallback that serves another repo's data under this repo's name. Blueprints 2.0 Release A (v2.11.0) is the reference example: the `l1-data.json` payload is Gator's own charter map, and non-Gator repos receive `{status: "unavailable", reason: "release-b-pending", ...}` rather than Gator's dataset with a disclaimer — the disclaimer approach was flagged by whiteboard review as teaching users wrong data at the exact seam whose value proposition is repo-scoped inspection. Pinned by `tests/test_blueprint_view.py::TestBlueprintEndpointNonGatorRepo`.
+
+Applies to any future per-repo Dashboard endpoint that lacks universal data availability. When in doubt, prefer the empty-state.
+
 ## Pattern: Machine-Local Preferences — Discriminated Reader
 
 `read_preferences()` in `gator_core.py` is the canonical read path for the unified machine-local preferences file (`~/.gator/preferences.json`, schema `gator-preferences-v1`). Consumers today: the shebang resolver (Phase 2, v2.10.0) via `resolve_python_launcher_for_hooks()`. Reserved future consumer: the hook-mode resolver (follow-on plan) via the `hooks:` section.

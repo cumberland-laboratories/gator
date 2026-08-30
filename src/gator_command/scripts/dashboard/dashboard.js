@@ -27,12 +27,13 @@
   // ── view metadata ─────────────────────────────────────────────────────────
 
   const VIEW_META = {
-    fleet:    { title: "Fleet",    subtitle: "" },
-    history:  { title: "History",  subtitle: "" },
-    repo:     { title: "Repo",     subtitle: "" },
-    docs:     { title: "Docs",     subtitle: "" },
-    updates:  { title: "Updates",  subtitle: "" },
-    settings: { title: "Settings", subtitle: "" },
+    fleet:     { title: "Fleet",     subtitle: "" },
+    history:   { title: "History",   subtitle: "" },
+    repo:      { title: "Repo",      subtitle: "" },
+    docs:      { title: "Docs",      subtitle: "" },
+    blueprint: { title: "Blueprints", subtitle: "" },
+    updates:   { title: "Updates",   subtitle: "" },
+    settings:  { title: "Settings",  subtitle: "" },
   };
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@
   const refreshBtn     = document.getElementById("refresh-btn");
   const repoTab        = document.getElementById("repo-tab");
   const docsTab        = document.getElementById("docs-tab");
+  const blueprintTab   = document.getElementById("blueprint-tab");
   const topbarTitle    = document.getElementById("topbar-title");
 
   // ── sidebar toggle ────────────────────────────────────────────────────────
@@ -157,6 +159,7 @@
       repoTab.appendChild(document.createTextNode(" " + repoName));
       repoTab.classList.remove("dimmed");
       if (docsTab) docsTab.classList.remove("dimmed");
+      if (blueprintTab) blueprintTab.classList.remove("dimmed");
       // Find branch from fleet data
       const fleetRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
       const repoInfo = fleetRepos.find(r => r.name === repoName);
@@ -243,6 +246,22 @@
           }
         });
         document.addEventListener("click", function () { branchDropdown.style.display = "none"; });
+      }
+      return;
+    }
+
+    if (name === "blueprint") {
+      const repoName = state.activeRepo;
+      if (!repoName) {
+        updateTopbar("blueprint", "Select a repo from Fleet");
+        viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view first.</p>";
+        return;
+      }
+      updateTopbar("blueprint", repoName + ' <span class="muted" style="font-weight:normal">Level 1: charter map (experimental)</span>');
+      if (views.blueprint) {
+        views.blueprint(state.data, viewSlot, repoName);
+      } else {
+        viewSlot.innerHTML = "<p class='muted'>Blueprints view not available.</p>";
       }
       return;
     }

@@ -1,6 +1,6 @@
 # Charter: Dashboard
 
-**Covers**: `src/gator_command/scripts/gator-dashboard.py`, `src/gator_command/scripts/dashboard/helpers.py`, `src/gator_command/scripts/dashboard/updates.py`, `src/gator_command/scripts/dashboard/snapshot.py`, `src/gator_command/scripts/dashboard/data.py`, `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/views/fleet.js`, `src/gator_command/scripts/dashboard/views/history.js`, `src/gator_command/scripts/dashboard/views/audit.js`, `src/gator_command/scripts/dashboard/views/repo.js`, `src/gator_command/scripts/dashboard/views/updates.js`, `src/gator_command/scripts/dashboard/views/settings.js`
+**Covers**: `src/gator_command/scripts/gator-dashboard.py`, `src/gator_command/scripts/dashboard/helpers.py`, `src/gator_command/scripts/dashboard/updates.py`, `src/gator_command/scripts/dashboard/snapshot.py`, `src/gator_command/scripts/dashboard/data.py`, `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/views/fleet.js`, `src/gator_command/scripts/dashboard/views/history.js`, `src/gator_command/scripts/dashboard/views/audit.js`, `src/gator_command/scripts/dashboard/views/repo.js`, `src/gator_command/scripts/dashboard/views/updates.js`, `src/gator_command/scripts/dashboard/views/settings.js`, `src/gator_command/scripts/dashboard/views/blueprint.js`, `src/gator_command/scripts/dashboard/blueprint/l1-data.json`, `src/gator_command/scripts/dashboard/blueprint/l1-positions.json`
 
 ## Owns
 
@@ -323,6 +323,16 @@ CLI entry point. Args: `--port`, `--no-open`, `--snapshot`, `--repo <name>`. Col
 Filesystem: none
 <- CLI
 ! Port conflict: tries 8420 through 8429, then raises with a clear error. If `--repo` is given, opens browser directly to `/?repo=<name>`.
+
+### Blueprints view (v2.11.0 Release A of the Blueprints 2.0 track)
+File: `src/gator_command/scripts/dashboard/views/blueprint.js`, `src/gator_command/scripts/dashboard/blueprint/l1-data.json`, `src/gator_command/scripts/dashboard/blueprint/l1-positions.json`
+Dashboard-native inspection surface for the human Architect: L1 charter map ported from the vault experiment (`.gator/vault/blueprints/charter-flowchart-high-level.html`) into a real Dashboard view. Sidebar item `Blueprints` in the Knowledge group (dimmed until a repo is active). Endpoint `GET /api/repo/<name>/blueprint?level=1` in `gator-dashboard.py::do_GET`. Data-vs-positions split (`l1-data.json` + `l1-positions.json`): Release B's parser will regenerate the data while positions stay hand-tuned as a repo-local overlay.
+Filesystem: `dashboard/blueprint/l1-data.json` (R), `dashboard/blueprint/l1-positions.json` (R)
+<- `dashboard.js::showView('blueprint')`, `/api/repo/<name>/blueprint` endpoint
+! **Repo scoping (r2 whiteboard finding 2 pin — DO NOT REGRESS)**: the endpoint's Gator-source-repo detection uses on-disk artifact discovery — is `<repo_path>/src/gator_command/scripts/dashboard/blueprint/l1-data.json` present? If yes, return the shipped payload. If no, return `{level, status:"unavailable", reason:"release-b-pending", message:...}` and let the frontend render an information card. **Never fall back to the shipped Gator dataset when the active repo isn't the Gator source** — rendering Gator's charter map under another repo's name teaches users knowingly-wrong data at the per-repo Knowledge seam, which is the exact failure mode the r2 plan revision fixed. Pinned by `tests/test_blueprint_view.py::TestBlueprintEndpointNonGatorRepo`.
+! **Single-slot invariant** (r2 whiteboard finding 1 pin): every view — including `blueprint` — renders into the shared `#view-slot` at `dashboard.html`. Views register as plain callables `window.GatorViews.<name> = function (data, container, ...)` (see `views/repo.js:521`). There is no `{init, render, cleanup}` object shape and no per-view slot; do not invent one.
+! Non-1 level returns HTTP 501 with `{error, reason:"release-b-plus"}`. Release B ships parser-derived L1 for any gatorized repo + can add `level=2..4` handling. Release C+ extends the frontend's rendering path (tooltips, edge-type distinction, snapshot integration).
+! Honesty framing: subtitle reads "Level 1: charter map (experimental)" so users see the surface without pretending it's more precise than it is (mixed-type edges, hand-curated Release A data). Codex sketch's "important product rule."
 
 ---
 

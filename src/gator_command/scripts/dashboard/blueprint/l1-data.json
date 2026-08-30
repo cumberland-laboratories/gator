@@ -1,0 +1,190 @@
+{
+  "level": 1,
+  "generated_at": "2026-08-30T00:00:00Z",
+  "source": "shipped-snapshot",
+  "notes": "One-time extraction from .gator/vault/blueprints/charter-flowchart-high-level.html for v2.11.0 Release A. Release B's gator-blueprint.py parser will supersede this with live charter-derived data.",
+  "nodes": [
+    {
+      "id": "cross-cutting",
+      "title": "Cross-Cutting",
+      "kind": "Governance spine",
+      "color": "var(--bp-governance)",
+      "summary": "Global invariants across scripts: charter surface resolution, import patterns, git contracts, schema discipline, and cross-module tripwires.",
+      "covers": [".gator/charters/scripts-cross-cutting.md"],
+      "functions": ["resolve_charter_surface()", "import_sibling()", "parse_committed_summary()", "ensure_utf8_stdout()"]
+    },
+    {
+      "id": "core-library",
+      "title": "Core Library",
+      "kind": "Shared runtime",
+      "color": "var(--bp-core)",
+      "summary": "Shared infrastructure used by most scripts: gator_core, session-common, machine identity, remote repo access, runtime helpers, and version resolution.",
+      "covers": [
+        "src/gator_command/scripts/gator_core.py",
+        "src/gator_command/scripts/gator-session-common.py",
+        "src/gator_command/scripts/gator-machine-id.py",
+        "src/gator_command/scripts/gator_remote.py"
+      ],
+      "functions": ["get_version()", "git()", "find_gator_root()", "resolve_charter_surface()", "ensure_dashboard_registry_entry()"]
+    },
+    {
+      "id": "contracts",
+      "title": "Contracts",
+      "kind": "Boundary contract",
+      "color": "var(--bp-legacy)",
+      "summary": "Executable schemas and compatibility tests for the base-to-enterprise handshake and other high-risk structured interfaces.",
+      "covers": ["contracts/"],
+      "functions": ["JSON schemas", "compatibility pytest checks", "marker contracts"]
+    },
+    {
+      "id": "release-pipeline",
+      "title": "Release Pipeline",
+      "kind": "Delivery boundary",
+      "color": "var(--bp-legacy)",
+      "summary": "GitHub Actions release topology for CI, RC publication, and PyPI promotion.",
+      "covers": [".github/workflows/source-ci.yml", ".github/workflows/release-candidate.yml", ".github/workflows/promote-to-pypi.yml"],
+      "functions": ["Workflow A", "Workflow B", "Workflow C"]
+    },
+    {
+      "id": "layout",
+      "title": "Layout Resolver",
+      "kind": "Path model",
+      "color": "var(--bp-runtime)",
+      "summary": "Resolves v1, v2, mixed, and invalid .gator layouts and returns canonical paths for callers.",
+      "covers": ["src/gator_command/scripts/gator_layout.py"],
+      "functions": ["resolve_gator_layout()", "get_gator_paths()", "template-derived path families"]
+    },
+    {
+      "id": "installer",
+      "title": "Installer and Boot",
+      "kind": "Provisioning path",
+      "color": "var(--bp-runtime)",
+      "summary": "Initial gatorization, vendor hook installation, entry-point rendering, and repo bootstrapping.",
+      "covers": [
+        "src/gator_command/scripts/gatorize.py",
+        "src/gator_command/scripts/gatorize/entry_points.py",
+        ".gator/scripts/gator-session-start.py"
+      ],
+      "functions": ["gatorize.main()", "detect_scenario()", "render_entry_content()", "ensure_repo_gitignore()"]
+    },
+    {
+      "id": "managed-state",
+      "title": "Managed State",
+      "kind": "Entry-point hygiene",
+      "color": "var(--bp-runtime)",
+      "summary": "Reports and repairs managed AGENTS/CLAUDE/GEMINI entry-point regions and constitution drift.",
+      "covers": ["src/gator_command/scripts/gator-state.py"],
+      "functions": ["main_status()", "main_repair()", "_plan_action_for_state()", "_execute_one()"]
+    },
+    {
+      "id": "repo-lifecycle",
+      "title": "Repo Lifecycle",
+      "kind": "Day-2 operations",
+      "color": "var(--bp-runtime)",
+      "summary": "Session init, updates, charter lint/draft/verify, pulse generation, and policy sync for governed repos.",
+      "covers": [
+        "src/gator_command/scripts/gator-init.py",
+        "src/gator_command/scripts/gator-update.py",
+        "src/gator_command/scripts/gator-charter-verify.py",
+        "src/gator_command/scripts/gator-pulse.py"
+      ],
+      "functions": ["gator init", "plan_updates()", "execute_updates()", "build_pulse()", "validate_charter()"]
+    },
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "kind": "Thin renderer",
+      "color": "var(--bp-analysis)",
+      "summary": "Local HTTP server and browser frontend that renders governance state from CLI JSON outputs without owning business logic.",
+      "covers": [
+        "src/gator_command/scripts/gator-dashboard.py",
+        "src/gator_command/scripts/dashboard/data.py",
+        "src/gator_command/scripts/dashboard/views/*.js"
+      ],
+      "functions": ["collect_standalone_data()", "resolve_audit_sessions()", "build_snapshot()", "upgrade_and_restart()"]
+    },
+    {
+      "id": "session-archaeology",
+      "title": "Session Archaeology",
+      "kind": "Evidence capture",
+      "color": "var(--bp-analysis)",
+      "summary": "Discovers and normalizes vendor sessions, emits summaries, feeds sinks, and provides session-block extraction.",
+      "covers": [
+        "src/gator_command/scripts/gator_session_reader.py"
+      ],
+      "functions": ["read_committed_summaries()", "parse_committed_summary()", "get_machine_identity()"]
+    },
+    {
+      "id": "fleet-intelligence",
+      "title": "Fleet Intelligence",
+      "kind": "Governance analysis",
+      "color": "var(--bp-analysis)",
+      "summary": "Cross-repo reporting, drift detection, audit assembly, and per-repo governance status scans.",
+      "covers": [
+        "src/gator_command/scripts/gator-fleet-report.py",
+        "src/gator_command/scripts/gator-drift.py",
+        "src/gator_command/scripts/gator-audit.py",
+        "src/gator_command/scripts/gator-repo-status.py"
+      ],
+      "functions": ["scan_fleet()", "check_repo_drift()", "assemble_audit_data()", "repo-status JSON surface"]
+    },
+    {
+      "id": "loop",
+      "title": "Gator Loop",
+      "kind": "Planning protocol",
+      "color": "var(--bp-governance)",
+      "summary": "CLI-mediated planning loop with role tokens, event logs, state transitions, and governed debate flow.",
+      "covers": [
+        "src/gator_command/scripts/loop/session.py",
+        "src/gator_command/scripts/loop/state_machine.py",
+        "src/gator_command/scripts/gator-loop.py"
+      ],
+      "functions": ["start", "submit-draft", "submit-review", "escalate", "wait", "pause"]
+    },
+    {
+      "id": "enterprise",
+      "title": "Enterprise",
+      "kind": "Optional capability",
+      "color": "var(--bp-enterprise)",
+      "summary": "Thin base-wheel dispatcher plus the consolidated enterprise CLI, service, migrations, and transcript-custody workflows.",
+      "covers": [
+        "src/gator_command/scripts/gator-enterprise.py",
+        "enterprise/enterprise-cli/",
+        "enterprise/app/",
+        "enterprise/migrations/"
+      ],
+      "functions": ["thin dispatcher", "transcripts pull", "ingest routes", "alembic migrations"]
+    }
+  ],
+  "edges": [
+    { "from": "cross-cutting", "to": "core-library", "label": "shared contracts" },
+    { "from": "contracts", "to": "cross-cutting", "label": "governance obligations" },
+    { "from": "release-pipeline", "to": "contracts", "label": "CI contract gate" },
+    { "from": "release-pipeline", "to": "cross-cutting", "label": "packaging tests" },
+    { "from": "layout", "to": "cross-cutting", "label": "layout pattern" },
+    { "from": "layout", "to": "core-library", "label": "root discovery" },
+    { "from": "installer", "to": "core-library", "label": "registry + generation" },
+    { "from": "installer", "to": "repo-lifecycle", "label": "day-2 handoff" },
+    { "from": "installer", "to": "cross-cutting", "label": "import convention" },
+    { "from": "managed-state", "to": "installer", "label": "entry-point API" },
+    { "from": "managed-state", "to": "repo-lifecycle", "label": "update reuse" },
+    { "from": "managed-state", "to": "cross-cutting", "label": "plan/execute" },
+    { "from": "managed-state", "to": "layout", "label": "v1/v2 paths" },
+    { "from": "repo-lifecycle", "to": "core-library", "label": "root + branding" },
+    { "from": "repo-lifecycle", "to": "cross-cutting", "label": "skip + plans" },
+    { "from": "dashboard", "to": "fleet-intelligence", "label": "JSON consumers" },
+    { "from": "dashboard", "to": "core-library", "label": "version/runtime" },
+    { "from": "session-archaeology", "to": "core-library", "label": "reader helpers" },
+    { "from": "session-archaeology", "to": "fleet-intelligence", "label": "audit input" },
+    { "from": "session-archaeology", "to": "cross-cutting", "label": "parser contract" },
+    { "from": "fleet-intelligence", "to": "core-library", "label": "gator_core + remote" },
+    { "from": "fleet-intelligence", "to": "session-archaeology", "label": "summaries" },
+    { "from": "fleet-intelligence", "to": "cross-cutting", "label": "fallback/import rules" },
+    { "from": "fleet-intelligence", "to": "dashboard", "label": "tier data" },
+    { "from": "loop", "to": "cross-cutting", "label": "CLI conventions" },
+    { "from": "loop", "to": "core-library", "label": "utf8 + version" },
+    { "from": "loop", "to": "installer", "label": "entry-point join flow" },
+    { "from": "enterprise", "to": "cross-cutting", "label": "dispatch pattern" },
+    { "from": "enterprise", "to": "contracts", "label": "marker contract" }
+  ]
+}

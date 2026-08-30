@@ -38,6 +38,7 @@ def build_snapshot(fast_data):
     else:
         history_or_audit_js = ""
     repo_js = _read_asset("views/repo.js")
+    blueprint_js = _read_asset("views/blueprint.js")
     updates_js = _read_asset("views/updates.js")
     settings_js = _read_asset("views/settings.js")
     shell_js = _read_asset("dashboard.js")
@@ -63,6 +64,7 @@ def build_snapshot(fast_data):
         f"\n<script>\n{fleet_js}\n</script>\n"
         f"<script>\n{history_or_audit_js}\n</script>\n"
         f"<script>\n{repo_js}\n</script>\n"
+        f"<script>\n{blueprint_js}\n</script>\n"
         f"<script>\n{updates_js}\n</script>\n"
         f"<script>\n{settings_js}\n</script>\n"
         f"{data_block}\n"
@@ -72,6 +74,7 @@ def build_snapshot(fast_data):
         r'\s*<script src="views/fleet\.js"></script>\s*'
         r'<script src="views/history\.js"></script>\s*'
         r'<script src="views/repo\.js"></script>\s*'
+        r'<script src="views/blueprint\.js"></script>\s*'
         r'<script src="views/updates\.js"></script>\s*'
         r'<script src="views/settings\.js"></script>\s*'
         r'<script src="dashboard\.js"></script>',

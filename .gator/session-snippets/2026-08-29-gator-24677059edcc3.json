@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "v2.10.0 post-release rollforward: roadmap Done rows (v2.9.3 + v2.10.0) + inbox where-we-are + 3 new open items from the release retro",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "rollforward",
+    "release-2.10.0"
+  ],
+  "commit": "24677059edcc3a2fa6f14a665e80b2a9c68da9f5",
+  "short_commit": "2467705",
+  "snippet_id": "snippet-24677059edcc3",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 10,
+  "previous_commit_in_session": "edb3418b5aba45357283aeee0ec010e4afea90ed",
+  "started_at": "2026-08-29T16:42:56Z",
+  "ended_at": "2026-08-29T16:42:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-29-gator-edb3418b5aba4.json"
+  ],
+  "notes": [
+    "Roadmap header updated: date 2026-08-23 → 2026-08-29; header prose names v2.10.0 as the latest ship (with v2.9.3 named as the prior fix release) and reframes the recent release chain.",
+    "Added two new Done rows above the existing v2.9.2 row (v2.10.0 wasn't the only backfill needed — v2.9.3 was still missing from the prior session's rollforward-deferred slot):",
+    "**v2.9.3** — hook shebang + JSON gate + session-open fixes; three field-caught bugs at `525f9e0` end. Names all three commits and links both vault plans.",
+    "**v2.10.0** — machine-scoped Python launcher preference; Phase 1 of the unified-preferences architecture. Full six-commit train breakdown, three whiteboard fixes named individually with their commit SHAs (`5cb4197` findings 1+2, `3ef16ed` finding 3, `edb3418` CI fix), release pipeline retro (Sigstore TUF transient + double CDN race), test count deltas, deferred follow-ons (`gator prefs` CLI Phase 4, hook-mode `hooks:` section, Phase 5 diagnostics), plan-chain vault links.",
+    "Inbox \"Where we are\" replaced with a v2.10.0-centered rollup — latest release as the primary paragraph, v2.9.3 as the intermediate step, v2.9.x block as the older recent context. Next-steps line preserves the Blueprints 2.0 direction plus names the machine-preferences follow-ons.",
+    "Three new open items captured from the v2.10.0 release retro:",
+    "**Windows-first test drift → Linux CI break** (new class of paper-cut, first hit today). Documents the failure mode, the fix commit `edb3418`, the compounding Python 3.13 `os.path.isabs` tightening, and three prevention options for the Architect to pick from.",
+    "**Sigstore TUF metadata HTTP 403 during production publish** (first-time hit today). Upstream transient, rerun succeeded. Documents the recipe for the next operator so it doesn't look like a Gator bug."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
