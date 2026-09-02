@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.11.1 — Blueprints canvas responsive frame + stage split",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "2.11.1",
+    "blueprints-2-0",
+    "hardening"
+  ],
+  "commit": "ec372640c9a99fb96715a1d929ef81aa229f1737",
+  "short_commit": "ec37264",
+  "snippet_id": "snippet-ec372640c9a99",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "77aa66035bcc0e35da4daa872290d60c4da54b89",
+  "started_at": "2026-08-30T23:18:34Z",
+  "ended_at": "2026-08-30T23:18:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-08-30-gator-77aa66035bcc0.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/blueprint.js"
+  ],
+  "notes": [
+    "v2.11.0 shipped with the Blueprints canvas frame pinned at the vault-HTML authored dimensions (1180×880), which meant on <1500px viewports the detail panel was pushed off-screen or clipped. Architect flagged the UX (had to reduce browser zoom to ~80% to see the full surface + sidebar + scroll behavior together). Small post-release hardening pass per Architect direction (\"`v2.11.1` is the right kind of vehicle\").",
+    "**Frontend restructure** (`views/blueprint.js`): `renderCanvas` now creates an inner `bp-stage` element inside `bp-canvas`. Stage carries the fixed authored width/height from the payload; SVG edges + all `<article class=\"bp-node\">` positioned nodes are appended to the stage instead of the outer canvas. Interaction handlers unchanged — descendant selectors + event bubbling continue to work because stage lives inside canvas.",
+    "**CSS restructure** (`dashboard.css`): `bp-canvas` becomes a responsive scrollable frame (`flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto`) — no longer carries fixed dimensions. New `bp-stage` block (`position: relative`; width/height set inline from JS). `bp-wrap` gap/padding tightened from 20px → 16px, height calc uses `var(--topbar-height)` instead of a magic 140 number. `bp-detail` becomes fixed-width `flex: 0 0 360px` with tighter min/max bounds (260/400 vs 300/420) so the detail panel doesn't fight the canvas for space.",
+    "**Charter TRIPWIRE** in `scripts-dashboard.md::Blueprints view`: new bullet naming the canvas-vs-stage split and warning against putting fixed pixel dimensions on `bp-canvas` (the pre-fix state).",
+    "**Version bump**: VERSION + pyproject.toml + charter version-note 2.11.0 → 2.11.1. PATCH bump (UX polish, no API change, no data change).",
+    "**CHANGELOG** `[2.11.1]` entry names the pre-fix root cause + the frame/stage split + compat note (endpoint contract unchanged; shipped data files unchanged).",
+    "Test coverage: existing `test_blueprint_view.py` tests validate the endpoint payload shape which is unchanged; no frontend-DOM tests exist (would need a real browser). Full sweep 977 pass + 3 skip + 2 xfail, zero regressions.",
+    "**Single-commit release train** — hardening is small enough to bundle the fix + bump into one commit rather than splitting."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

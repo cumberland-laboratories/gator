@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<!--
+  gator-blueprint-html-v1 · NON-BLUEPRINT NARRATIVE TEMPLATE
+  ──────────────────────────────────────────────────────────
+
+  Use this template for HTML artifacts whose content is prose-heavy,
+  step-sequenced, or otherwise NOT well-served by an interactive node graph.
+  Doc classes: procedure-visual, reference-explainer.
+
+  For content with a natural node-and-edge structure that benefits from
+  click-to-isolate exploration, use _template.html (interactive blueprint)
+  instead.
+
+  Fill every TODO placeholder before publishing. Delete the ==TODO== marker
+  once each section is real. The compat test walks .gator/blueprints/*.html
+  and will fail if the <meta> block is incomplete.
+
+  See:
+    contracts/schemas/gator-blueprint-html-v1.md          — the protocol
+    src/gator_command/templates/gator-starter/procedures/
+      authoring-html-artifacts.md                         — the procedure
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- REQUIRED: gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="==TODO== short human title, under 80 chars">
+  <meta name="gator-repo" content="==TODO== repo name">
+  <meta name="gator-doc-class" content="==TODO== procedure-visual | reference-explainer">
+  <meta name="gator-status" content="==TODO== current | historical | exploratory | generated">
+  <meta name="gator-updated-at" content="==TODO== 2026-09-02T00:00:00Z">
+  <meta name="gator-generated-by" content="==TODO== claude-opus-4-7 | codex-gpt-5 | your-handle">
+  <meta name="gator-question" content="==TODO== the exact question this artifact answers">
+
+  <title>==TODO== short human title</title>
+
+  <style>
+    :root {
+      --bg: #f8f6f0;
+      --panel: #ffffff;
+      --ink: #1f2a2e;
+      --muted: #55666d;
+      --line: #d0d7de;
+      --accent: #4f7c78;
+      --accent-soft: #e8f0ef;
+
+      /* Semantic accents for callouts */
+      --caution: #b8860b;
+      --warning: #a02020;
+      --info: #305480;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--accent); }
+    code { font-size: 0.92em; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; }
+    pre { background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+      padding: 12px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+    pre code { background: none; padding: 0; }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 24px 32px; }
+
+    /* Header */
+    .head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+    .head h1 { margin: 0 0 8px 0; font-size: 26px; letter-spacing: -0.01em; }
+    .head .subtitle { color: var(--muted); font-size: 15px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px 20px; margin-top: 14px; font-size: 12px; }
+    .meta-row .label { color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-right: 6px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      background: #eef7e6; color: #2d6a2d; }
+    .status-badge.exploratory { background: #fef4e0; color: #8a5a00; }
+    .status-badge.generated { background: #eef3fa; color: #305480; }
+    .status-badge.historical { background: #f3eaef; color: #6c3560; }
+
+    /* Table of contents */
+    .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+      padding: 12px 18px; margin-bottom: 32px; font-size: 13px; }
+    .toc h3 { margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+    .toc ol { margin: 0; padding-left: 18px; line-height: 1.7; }
+    .toc a { color: var(--ink); text-decoration: none; }
+    .toc a:hover { color: var(--accent); text-decoration: underline; }
+
+    /* Narrative sections */
+    section.doc { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 6px; padding: 20px 26px; margin-bottom: 20px; }
+    section.doc h2 { margin: 0 0 12px 0; font-size: 20px; letter-spacing: -0.01em;
+      padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    section.doc p { font-size: 15px; line-height: 1.65; margin: 0 0 12px 0; }
+    section.doc ul, section.doc ol { font-size: 15px; line-height: 1.65;
+      padding-left: 22px; margin: 0 0 12px 0; }
+    section.doc li { margin-bottom: 4px; }
+
+    /* Callouts */
+    .callout { border-left: 4px solid var(--info); background: var(--accent-soft);
+      padding: 10px 16px; margin: 12px 0; border-radius: 0 4px 4px 0; font-size: 14px; }
+    .callout.caution { border-left-color: var(--caution); background: #fef4e0; }
+    .callout.warning { border-left-color: var(--warning); background: #fbeaea; }
+    .callout .callout-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--info); margin-right: 8px; }
+    .callout.caution .callout-label { color: var(--caution); }
+    .callout.warning .callout-label { color: var(--warning); }
+
+    /* Step numbering (for procedure-visual doc-class) */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; }
+    .steps > li { counter-increment: step; padding-left: 44px; position: relative;
+      margin-bottom: 14px; min-height: 30px; }
+    .steps > li::before { content: counter(step); position: absolute; left: 0; top: 0;
+      width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+      color: white; font-weight: 700; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; }
+
+    /* Static diagram slot (optional — use for procedure-visual flows) */
+    .diagram { background: var(--panel); border: 1px dashed var(--line);
+      border-radius: 6px; padding: 20px; margin: 12px 0;
+      text-align: center; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <h1>==TODO== short human title</h1>
+    <div class="subtitle">==TODO== one-sentence orientation</div>
+    <div class="meta-grid">
+      <div class="meta-row"><span class="label">Doc class:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Repo:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Status:</span> <span class="status-badge">==TODO==</span></div>
+      <div class="meta-row"><span class="label">Updated:</span> ==TODO== 2026-09-02</div>
+      <div class="meta-row"><span class="label">Question:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h3>Contents</h3>
+    <ol>
+      <li><a href="#question">Question / purpose</a></li>
+      <li><a href="#summary">Executive summary</a></li>
+      <li><a href="#flow">Flow</a></li>
+      <li><a href="#why">Why this matters</a></li>
+      <li><a href="#refs">References</a></li>
+      <li><a href="#open">Open questions</a></li>
+    </ol>
+  </nav>
+
+  <section class="doc" id="question">
+    <h2>Question / purpose</h2>
+    <p>==TODO== the exact question or need this artifact answers. Restate the <code>gator-question</code> meta value in fuller form here — the reader has already skimmed it in the header; this section gives it the space to breathe.</p>
+  </section>
+
+  <section class="doc" id="summary">
+    <h2>Executive summary</h2>
+    <p>==TODO== 1-3 paragraphs answering the question in prose. What is the reader's takeaway if they only read this section?</p>
+  </section>
+
+  <section class="doc" id="flow">
+    <h2>Flow</h2>
+    <p>==TODO== for procedure-visual: step-by-step sequence. For reference-explainer: sequential exposition of the concept.</p>
+    <!-- For procedure-visual, use the step list: -->
+    <ol class="steps">
+      <li>==TODO== first step or stage.</li>
+      <li>==TODO== second step.</li>
+      <li>==TODO== third step. Include a <strong>checkpoint</strong> — what must be true before proceeding.</li>
+    </ol>
+    <!-- Optional static diagram / illustration slot: -->
+    <div class="diagram">==TODO== optional static diagram (ASCII, embedded SVG, or delete this block)</div>
+  </section>
+
+  <section class="doc" id="why">
+    <h2>Why this matters</h2>
+    <p>==TODO== what breaks or slips if this procedure/concept is misunderstood or skipped.</p>
+    <div class="callout">
+      <span class="callout-label">Note</span>
+      ==TODO== useful context that isn't a tripwire but helps the reader.
+    </div>
+    <div class="callout caution">
+      <span class="callout-label">Caution</span>
+      ==TODO== non-obvious behavior or a common mistake.
+    </div>
+    <div class="callout warning">
+      <span class="callout-label">Warning</span>
+      ==TODO== a real tripwire or invariant that must not be violated. Delete this block if none applies.
+    </div>
+  </section>
+
+  <section class="doc" id="refs">
+    <h2>References</h2>
+    <ul>
+      <li>==TODO== related charter or procedure: <code>.gator/charters/&lt;name&gt;.md</code></li>
+      <li>==TODO== related file or function: <code>src/&lt;path&gt;.py::&lt;fn&gt;</code></li>
+    </ul>
+  </section>
+
+  <section class="doc" id="open">
+    <h2>Open questions</h2>
+    <ul>
+      <li>==TODO== what the author could not determine cleanly. Delete this section if empty.</li>
+    </ul>
+  </section>
+
+  <section class="doc">
+    <h2>Protocol notes</h2>
+    <p>
+      This document conforms to <code>gator-blueprint-html-v1</code> (narrative template).
+      See <code>contracts/schemas/gator-blueprint-html-v1.md</code> for the full contract
+      and <code>src/gator_command/templates/gator-starter/procedures/authoring-html-artifacts.md</code>
+      for the authoring procedure.
+    </p>
+  </section>
+</div>
+</body>
+</html>

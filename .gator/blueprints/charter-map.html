@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Gator — Level 1 Charter Map">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="charter-map">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-09-02T00:00:00Z">
+  <meta name="gator-generated-by" content="claude-opus-4-7">
+  <meta name="gator-question" content="What is the overall shape of the Gator repo — which charter regions exist and how are they connected?">
+
+  <title>Gator — Level 1 Charter Map</title>
+
+  <style>
+    :root {
+      --bg: #f8f6f0;
+      --panel: #ffffff;
+      --ink: #1f2a2e;
+      --muted: #55666d;
+      --line: #d0d7de;
+      --grid: rgba(51, 78, 86, 0.06);
+      --accent: #4f7c78;
+
+      --bp-core:       #d96f3b;
+      --bp-governance: #4f7c78;
+      --bp-runtime:    #ddb85f;
+      --bp-analysis:   #6b8db5;
+      --bp-legacy:     #b08d7d;
+      --bp-enterprise: #8c5f91;
+
+      --edge: rgba(42, 60, 66, 0.35);
+      --edge-active: rgba(217, 111, 59, 0.95);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--accent); }
+
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Header */
+    .head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+    .head h1 { margin: 0 0 8px 0; font-size: 24px; letter-spacing: -0.01em; }
+    .head .subtitle { color: var(--muted); font-size: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px 20px; margin-top: 14px; font-size: 12px; }
+    .meta-row .label { color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-right: 6px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      background: #eef7e6; color: #2d6a2d; }
+
+    /* Main workspace: map + sidebar */
+    .work { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start;
+      margin-bottom: 32px; }
+    @media (max-width: 1100px) { .work { grid-template-columns: 1fr; } }
+
+    .canvas-frame { position: relative; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+      overflow: auto; min-height: 400px; max-height: 900px; }
+
+    .stage { position: relative; width: 1180px; height: 880px; }
+    .stage-hint { position: absolute; top: 8px; right: 12px; font-size: 11px;
+      color: var(--muted); pointer-events: none; }
+
+    svg.edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .edge { fill: none; stroke: var(--edge); stroke-width: 1.5;
+      transition: stroke 0.15s, stroke-width 0.15s, opacity 0.15s; }
+    .edge.active { stroke: var(--edge-active); stroke-width: 2.5; }
+    .edge.faded { opacity: 0.12; }
+    .edge-label { font-size: 11px; fill: var(--muted); pointer-events: none;
+      letter-spacing: 0.02em; }
+    .arrow-head { fill: var(--edge); }
+
+    .node { position: absolute; width: 200px; min-height: 60px;
+      background: var(--panel); border: 2px solid var(--line);
+      border-left: 4px solid var(--node-accent, var(--bp-core));
+      border-radius: 6px; padding: 8px 12px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
+    .node:hover { transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10); }
+    .node.active { box-shadow: 0 4px 14px rgba(217, 111, 59, 0.25); }
+    .node.faded { opacity: 0.22; }
+    .node-title { font-weight: 600; font-size: 14px; line-height: 1.25; }
+    .node-kind { display: block; font-size: 11px; color: var(--muted);
+      margin-top: 3px; letter-spacing: 0.02em; }
+
+    /* Sidebar */
+    .side { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 6px; padding: 16px 18px; align-self: stretch;
+      max-height: 900px; overflow-y: auto; }
+    .side h3 { margin: 0 0 4px 0; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+    .side .hint { font-size: 12px; color: var(--muted);
+      border-bottom: 1px solid var(--line); padding-bottom: 12px;
+      margin-bottom: 12px; cursor: pointer; }
+    .side .hint:hover { color: var(--accent); }
+    .detail-title { margin: 0 0 4px 0; font-size: 17px; color: var(--ink); }
+    .detail-kind { font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .detail-summary { font-size: 13px; line-height: 1.5; margin: 0 0 12px 0; }
+    .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
+    .side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+    .side code { font-size: 12px; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; color: var(--ink); }
+    .rel-muted { color: var(--muted); font-size: 12px; }
+
+    /* Narrative */
+    .narrative section { border-top: 1px solid var(--line); padding-top: 20px;
+      margin-top: 24px; }
+    .narrative section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+    .narrative h2 { margin: 0 0 8px 0; font-size: 18px; letter-spacing: -0.01em; }
+    .narrative p { font-size: 14px; line-height: 1.6; }
+    .narrative ul { font-size: 14px; line-height: 1.6; }
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px;
+      color: var(--muted); margin-top: 8px; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+      margin-right: 5px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <h1>Gator — Level 1 Charter Map</h1>
+    <div class="subtitle">Repo-wide architectural orientation: which charter regions exist, and how they connect.</div>
+    <div class="meta-grid">
+      <div class="meta-row"><span class="label">Doc class:</span> Charter map</div>
+      <div class="meta-row"><span class="label">Repo:</span> gator</div>
+      <div class="meta-row"><span class="label">Status:</span> <span class="status-badge">Current</span></div>
+      <div class="meta-row"><span class="label">Updated:</span> 2026-09-02</div>
+      <div class="meta-row"><span class="label">Question:</span> What is the overall shape of the repo?</div>
+      <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--bp-core)"></span>Shared runtime</span>
+      <span><span class="swatch" style="background: var(--bp-governance)"></span>Governance spine</span>
+      <span><span class="swatch" style="background: var(--bp-runtime)"></span>Repo lifecycle</span>
+      <span><span class="swatch" style="background: var(--bp-analysis)"></span>Analysis / dashboard</span>
+      <span><span class="swatch" style="background: var(--bp-enterprise)"></span>Enterprise</span>
+      <span><span class="swatch" style="background: var(--bp-legacy)"></span>Boundary / contract</span>
+    </div>
+  </header>
+
+  <div class="work">
+    <div class="canvas-frame">
+      <div class="stage" id="stage">
+        <div class="stage-hint">Click any node to isolate its 1-hop neighborhood. Double-click empty area to reset.</div>
+        <svg class="edges" id="edges" width="1180" height="880">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <aside class="side">
+      <h3>Level 1: charter map</h3>
+      <div class="hint" id="reset">Click any node in the map to isolate its neighborhood. Click here (or double-click empty canvas) to reset.</div>
+      <div id="detail"></div>
+    </aside>
+  </div>
+
+  <section class="narrative">
+    <section>
+      <h2>What this shows</h2>
+      <p>
+        Each node is a chartered region of Gator — a semantic module whose contract
+        is documented in <code>.gator/charters/</code>. Each edge is a declared
+        cross-region relationship taken from the charters' <code>## Connections</code>
+        sections, function-entry <code>&larr;</code>/<code>&rarr;</code> markers, or
+        cross-cutting tripwires. The map is an <em>orientation surface</em>: it
+        answers "what are the parts, and how do they hang together?" It is not a
+        precision runtime call graph — mixed edge types (runtime, governance,
+        packaging, conceptual) are drawn uniformly at Level 1.
+      </p>
+    </section>
+
+    <section>
+      <h2>Why these regions exist</h2>
+      <ul>
+        <li><strong>Cross-Cutting</strong> is the governance spine: shared invariants across every script (charter-surface resolver, import convention, git contracts, schema discipline).</li>
+        <li><strong>Core Library</strong> is the shared runtime other scripts depend on (version resolution, repo discovery, dashboard registry, git helper).</li>
+        <li><strong>Contracts</strong> and <strong>Release Pipeline</strong> are boundary surfaces that gate what leaves the wheel and how.</li>
+        <li><strong>Layout Resolver</strong>, <strong>Installer &amp; Boot</strong>, <strong>Managed State</strong>, and <strong>Repo Lifecycle</strong> are the day-2 operations layer.</li>
+        <li><strong>Dashboard</strong>, <strong>Session Archaeology</strong>, and <strong>Fleet Intelligence</strong> are the analysis and reporting surfaces.</li>
+        <li><strong>Gator Loop</strong> is the multi-agent planning protocol; <strong>Enterprise</strong> is the optional capability layer.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Reading order</h2>
+      <ol>
+        <li>Start with the Cross-Cutting node — its charter defines the invariants every other charter builds on.</li>
+        <li>Follow the edges outward from Core Library — most other regions depend on it.</li>
+        <li>Trace Installer &amp; Boot &rarr; Repo Lifecycle to see the day-2 flow.</li>
+        <li>Trace Dashboard &larr; Fleet Intelligence &larr; Session Archaeology to see the analysis flow.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Boundaries and tripwires</h2>
+      <ul>
+        <li>The map deliberately shows <em>declared</em> relationships, not <em>observed</em> code references. If a charter says a region depends on another, that edge exists here; if a runtime import exists that no charter declares, it does not appear at Level 1 (drift belongs to a future Level 4 view).</li>
+        <li>Enterprise is intentionally on the periphery: it is a source-checkout-only capability, not part of the base wheel's runtime chain.</li>
+        <li>Contracts and Release Pipeline are drawn on the boundary to signal that they gate the wheel's public surface — changes there ripple through every other region's shipping story.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Open questions</h2>
+      <ul>
+        <li>Are there charter regions whose declared connections have drifted from actual code references? (Future L4 drift map territory.)</li>
+        <li>Which of these regions have the highest tripwire density, and does that predict where changes should be reviewed more carefully?</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Protocol notes</h2>
+      <p>
+        This document is authored under the <code>gator-blueprint-html-v1</code>
+        protocol shipped in v2.12.0. It is the Gator source repo's reference
+        implementation of the <code>charter-map</code> doc class. Fleet repos do
+        not receive this file; they can hand-author their own using
+        <code>.gator/blueprints/_template.html</code> and the shipped
+        <code>authoring-html-artifacts.md</code> procedure. See
+        <code>.gator/vault/artifacts/2026-09-02-html-artifact-protocol-implementation-plan.md</code>
+        for the plan that produced this file.
+      </p>
+    </section>
+  </section>
+</div>
+
+<script>
+  // Node + edge data — one-time extraction from v2.11.0's shipped
+  // dashboard/blueprint/l1-data.json (retired in v2.12.0). Positions come
+  // from the same release's l1-positions.json. Frozen here as this document
+  // is a snapshot artifact; regenerate on architecture shifts by re-authoring.
+  const NODES = [
+    {"id":"cross-cutting","title":"Cross-Cutting","kind":"Governance spine","color":"var(--bp-governance)","x":470,"y":24,"summary":"Global invariants across scripts: charter surface resolution, import patterns, git contracts, schema discipline, and cross-module tripwires.","covers":[".gator/charters/scripts-cross-cutting.md"],"functions":["resolve_charter_surface()","import_sibling()","parse_committed_summary()","ensure_utf8_stdout()"]},
+    {"id":"core-library","title":"Core Library","kind":"Shared runtime","color":"var(--bp-core)","x":470,"y":178,"summary":"Shared infrastructure used by most scripts: gator_core, session-common, machine identity, remote repo access, runtime helpers, and version resolution.","covers":["src/gator_command/scripts/gator_core.py","src/gator_command/scripts/gator-session-common.py","src/gator_command/scripts/gator-machine-id.py","src/gator_command/scripts/gator_remote.py"],"functions":["get_version()","git()","find_gator_root()","resolve_charter_surface()","ensure_dashboard_registry_entry()"]},
+    {"id":"contracts","title":"Contracts","kind":"Boundary contract","color":"var(--bp-legacy)","x":122,"y":172,"summary":"Executable schemas and compatibility tests for the base-to-enterprise handshake and other high-risk structured interfaces.","covers":["contracts/"],"functions":["JSON schemas","compatibility pytest checks","marker contracts"]},
+    {"id":"release-pipeline","title":"Release Pipeline","kind":"Delivery boundary","color":"var(--bp-legacy)","x":848,"y":166,"summary":"GitHub Actions release topology for CI, RC publication, and PyPI promotion.","covers":[".github/workflows/source-ci.yml",".github/workflows/release-candidate.yml",".github/workflows/promote-to-pypi.yml"],"functions":["Workflow A","Workflow B","Workflow C"]},
+    {"id":"layout","title":"Layout Resolver","kind":"Path model","color":"var(--bp-runtime)","x":128,"y":356,"summary":"Resolves v1, v2, mixed, and invalid .gator layouts and returns canonical paths for callers.","covers":["src/gator_command/scripts/gator_layout.py"],"functions":["resolve_gator_layout()","get_gator_paths()","template-derived path families"]},
+    {"id":"installer","title":"Installer and Boot","kind":"Provisioning path","color":"var(--bp-runtime)","x":122,"y":552,"summary":"Initial gatorization, vendor hook installation, entry-point rendering, and repo bootstrapping.","covers":["src/gator_command/scripts/gatorize.py","src/gator_command/scripts/gatorize/entry_points.py",".gator/scripts/gator-session-start.py"],"functions":["gatorize.main()","detect_scenario()","render_entry_content()","ensure_repo_gitignore()"]},
+    {"id":"managed-state","title":"Managed State","kind":"Entry-point hygiene","color":"var(--bp-runtime)","x":364,"y":550,"summary":"Reports and repairs managed AGENTS/CLAUDE/GEMINI entry-point regions and constitution drift.","covers":["src/gator_command/scripts/gator-state.py"],"functions":["main_status()","main_repair()","_plan_action_for_state()","_execute_one()"]},
+    {"id":"repo-lifecycle","title":"Repo Lifecycle","kind":"Day-2 operations","color":"var(--bp-runtime)","x":606,"y":548,"summary":"Session init, updates, charter lint/draft/verify, pulse generation, and policy sync for governed repos.","covers":["src/gator_command/scripts/gator-init.py","src/gator_command/scripts/gator-update.py","src/gator_command/scripts/gator-charter-verify.py","src/gator_command/scripts/gator-pulse.py"],"functions":["gator init","plan_updates()","execute_updates()","build_pulse()","validate_charter()"]},
+    {"id":"dashboard","title":"Dashboard","kind":"Thin renderer","color":"var(--bp-analysis)","x":850,"y":552,"summary":"Local HTTP server and browser frontend that renders governance state from CLI JSON outputs without owning business logic.","covers":["src/gator_command/scripts/gator-dashboard.py","src/gator_command/scripts/dashboard/data.py","src/gator_command/scripts/dashboard/views/*.js"],"functions":["collect_standalone_data()","resolve_audit_sessions()","build_snapshot()","upgrade_and_restart()"]},
+    {"id":"session-archaeology","title":"Session Archaeology","kind":"Evidence capture","color":"var(--bp-analysis)","x":122,"y":754,"summary":"Discovers and normalizes vendor sessions, emits summaries, feeds sinks, and provides session-block extraction.","covers":["src/gator_command/scripts/gator_session_reader.py"],"functions":["read_committed_summaries()","parse_committed_summary()","get_machine_identity()"]},
+    {"id":"fleet-intelligence","title":"Fleet Intelligence","kind":"Governance analysis","color":"var(--bp-analysis)","x":364,"y":754,"summary":"Cross-repo reporting, drift detection, audit assembly, and per-repo governance status scans.","covers":["src/gator_command/scripts/gator-fleet-report.py","src/gator_command/scripts/gator-drift.py","src/gator_command/scripts/gator-audit.py","src/gator_command/scripts/gator-repo-status.py"],"functions":["scan_fleet()","check_repo_drift()","assemble_audit_data()","repo-status JSON surface"]},
+    {"id":"loop","title":"Gator Loop","kind":"Planning protocol","color":"var(--bp-governance)","x":606,"y":752,"summary":"CLI-mediated planning loop with role tokens, event logs, state transitions, and governed debate flow.","covers":["src/gator_command/scripts/loop/session.py","src/gator_command/scripts/loop/state_machine.py","src/gator_command/scripts/gator-loop.py"],"functions":["start","submit-draft","submit-review","escalate","wait","pause"]},
+    {"id":"enterprise","title":"Enterprise","kind":"Optional capability","color":"var(--bp-enterprise)","x":848,"y":748,"summary":"Thin base-wheel dispatcher plus the consolidated enterprise CLI, service, migrations, and transcript-custody workflows.","covers":["src/gator_command/scripts/gator-enterprise.py","enterprise/enterprise-cli/","enterprise/app/","enterprise/migrations/"],"functions":["thin dispatcher","transcripts pull","ingest routes","alembic migrations"]}
+  ];
+  const EDGES = [
+    {"from":"cross-cutting","to":"core-library","label":"shared contracts"},
+    {"from":"contracts","to":"cross-cutting","label":"governance obligations"},
+    {"from":"release-pipeline","to":"contracts","label":"CI contract gate"},
+    {"from":"release-pipeline","to":"cross-cutting","label":"packaging tests"},
+    {"from":"layout","to":"cross-cutting","label":"layout pattern"},
+    {"from":"layout","to":"core-library","label":"root discovery"},
+    {"from":"installer","to":"core-library","label":"registry + generation"},
+    {"from":"installer","to":"repo-lifecycle","label":"day-2 handoff"},
+    {"from":"installer","to":"cross-cutting","label":"import convention"},
+    {"from":"managed-state","to":"installer","label":"entry-point API"},
+    {"from":"managed-state","to":"repo-lifecycle","label":"update reuse"},
+    {"from":"managed-state","to":"cross-cutting","label":"plan/execute"},
+    {"from":"managed-state","to":"layout","label":"v1/v2 paths"},
+    {"from":"repo-lifecycle","to":"core-library","label":"root + branding"},
+    {"from":"repo-lifecycle","to":"cross-cutting","label":"skip + plans"},
+    {"from":"dashboard","to":"fleet-intelligence","label":"JSON consumers"},
+    {"from":"dashboard","to":"core-library","label":"version/runtime"},
+    {"from":"session-archaeology","to":"core-library","label":"reader helpers"},
+    {"from":"session-archaeology","to":"fleet-intelligence","label":"audit input"},
+    {"from":"session-archaeology","to":"cross-cutting","label":"parser contract"},
+    {"from":"fleet-intelligence","to":"core-library","label":"gator_core + remote"},
+    {"from":"fleet-intelligence","to":"session-archaeology","label":"summaries"},
+    {"from":"fleet-intelligence","to":"cross-cutting","label":"fallback/import rules"},
+    {"from":"fleet-intelligence","to":"dashboard","label":"tier data"},
+    {"from":"loop","to":"cross-cutting","label":"CLI conventions"},
+    {"from":"loop","to":"core-library","label":"utf8 + version"},
+    {"from":"loop","to":"installer","label":"entry-point join flow"},
+    {"from":"enterprise","to":"cross-cutting","label":"dispatch pattern"},
+    {"from":"enterprise","to":"contracts","label":"marker contract"}
+  ];
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const stage = document.getElementById("stage");
+  const svg = document.getElementById("edges");
+  const detail = document.getElementById("detail");
+  const nodesById = {};
+
+  // Render nodes
+  NODES.forEach(function (n) {
+    nodesById[n.id] = n;
+    const el = document.createElement("article");
+    el.className = "node";
+    el.dataset.id = n.id;
+    el.style.left = n.x + "px";
+    el.style.top = n.y + "px";
+    if (n.color) el.style.setProperty("--node-accent", n.color);
+    el.innerHTML = '<div class="node-title">' + escHtml(n.title) + '</div>'
+      + (n.kind ? '<span class="node-kind">' + escHtml(n.kind) + '</span>' : '');
+    stage.appendChild(el);
+  });
+
+  // Render edges
+  EDGES.forEach(function (e, i) {
+    const from = nodesById[e.from];
+    const to = nodesById[e.to];
+    if (!from || !to) return;
+    const pathId = "path-" + i;
+    const p = document.createElementNS(svgNS, "path");
+    p.setAttribute("id", pathId);
+    p.setAttribute("d", edgePath(from, to));
+    p.setAttribute("class", "edge");
+    p.setAttribute("marker-end", "url(#arrow)");
+    p.dataset.from = e.from;
+    p.dataset.to = e.to;
+    svg.appendChild(p);
+    if (e.label) {
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("class", "edge-label");
+      text.setAttribute("dy", "-4");
+      const tp = document.createElementNS(svgNS, "textPath");
+      tp.setAttribute("href", "#" + pathId);
+      tp.setAttribute("startOffset", "50%");
+      tp.setAttribute("text-anchor", "middle");
+      tp.textContent = e.label;
+      text.appendChild(tp);
+      svg.appendChild(text);
+    }
+  });
+
+  // Interaction
+  stage.addEventListener("click", function (ev) {
+    const nodeEl = ev.target.closest(".node");
+    if (nodeEl) isolate(nodeEl.dataset.id);
+  });
+  stage.addEventListener("dblclick", function (ev) {
+    if (!ev.target.closest(".node")) reset();
+  });
+  document.getElementById("reset").addEventListener("click", reset);
+
+  function isolate(id) {
+    const neigh = new Set([id]);
+    EDGES.forEach(function (e) {
+      if (e.from === id) neigh.add(e.to);
+      if (e.to === id) neigh.add(e.from);
+    });
+    stage.querySelectorAll(".node").forEach(function (el) {
+      const nid = el.dataset.id;
+      el.classList.toggle("active", nid === id);
+      el.classList.toggle("faded", !neigh.has(nid));
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      const on = p.dataset.from === id || p.dataset.to === id;
+      p.classList.toggle("active", on);
+      p.classList.toggle("faded", !on);
+    });
+    renderDetail(id);
+  }
+
+  function reset() {
+    stage.querySelectorAll(".node").forEach(function (el) {
+      el.classList.remove("active", "faded");
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      p.classList.remove("active", "faded");
+    });
+    detail.innerHTML = '';
+  }
+
+  function renderDetail(id) {
+    const n = nodesById[id];
+    if (!n) return;
+    const outs = EDGES.filter(function (e) { return e.from === id; })
+      .map(function (e) { return { t: nodesById[e.to], label: e.label }; });
+    const ins = EDGES.filter(function (e) { return e.to === id; })
+      .map(function (e) { return { t: nodesById[e.from], label: e.label }; });
+
+    let html = '<h4 class="detail-title">' + escHtml(n.title) + '</h4>';
+    if (n.kind) html += '<div class="detail-kind">' + escHtml(n.kind) + '</div>';
+    if (n.summary) html += '<p class="detail-summary">' + escHtml(n.summary) + '</p>';
+    if (n.covers && n.covers.length) {
+      html += '<div class="section-label">Covers</div><ul>';
+      n.covers.forEach(function (c) { html += '<li><code>' + escHtml(c) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (n.functions && n.functions.length) {
+      html += '<div class="section-label">Representative functions</div><ul>';
+      n.functions.forEach(function (f) { html += '<li><code>' + escHtml(f) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (outs.length) {
+      html += '<div class="section-label">Depends on</div><ul>';
+      outs.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    if (ins.length) {
+      html += '<div class="section-label">Used by</div><ul>';
+      ins.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    detail.innerHTML = html;
+  }
+
+  function edgePath(from, to) {
+    const fx = from.x + 100, fy = from.y + 30;
+    const tx = to.x + 100, ty = to.y + 30;
+    const mx = (fx + tx) / 2;
+    return "M " + fx + " " + fy + " C " + mx + " " + fy + ", " + mx + " " + ty + ", " + tx + " " + ty;
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+</script>
+</body>
+</html>

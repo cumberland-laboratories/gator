@@ -257,6 +257,40 @@ class TestLayoutDetection:
         (gator / "layout-version.json").write_text('{"layout": "v2"}\n')
         assert gator_layout.resolve_gator_layout(tmp_path) == "mixed"
 
+    def test_v2_clean_when_blueprints_has_only_html_scaffolding(self, tmp_path):
+        """v2.12.0 D11 pin: `_template.html` and `_template-narrative.html` are
+        user-visible scaffolding (peers of `_template.md` + `README.md`) under
+        blueprints/. A blueprints/ directory at root containing only these four
+        scaffolding files must NOT trigger the mixed-layout state — same
+        deadlock risk that reference-notes had before the v2.5.2 fix, now for
+        the HTML templates the gator-blueprint-html-v1 protocol ships.
+        """
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        includes = gator / ".includes"
+        includes.mkdir()
+        (includes / "scripts").mkdir()
+        (includes / "constitution.md").write_text("# Constitution\n")
+        # blueprints/ at root holds ONLY scaffolding (all four filenames)
+        (gator / "blueprints").mkdir()
+        (gator / "blueprints" / "README.md").write_text("# readme\n")
+        (gator / "blueprints" / "_template.md").write_text("# tpl md\n")
+        (gator / "blueprints" / "_template.html").write_text("<!DOCTYPE html>\n")
+        (gator / "blueprints" / "_template-narrative.html").write_text("<!DOCTYPE html>\n")
+        (gator / "layout-version.json").write_text('{"layout": "v2"}\n')
+        assert gator_layout.resolve_gator_layout(tmp_path) == "v2"
+
+    def test_user_visible_scaffolding_includes_both_html_templates(self):
+        """v2.12.0 D11: both HTML template filenames must be in the frozenset.
+        Regression pin — additions to USER_VISIBLE_SCAFFOLDING are silent
+        drift (nothing observes the set beyond `_dir_is_scaffolding_only`);
+        an accidental removal would cause the templates to be routed to
+        `.includes/blueprints/` on v2 repos, invisible where agents look."""
+        assert "_template.html" in gator_layout.USER_VISIBLE_SCAFFOLDING
+        assert "_template-narrative.html" in gator_layout.USER_VISIBLE_SCAFFOLDING
+        assert "README.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
+        assert "_template.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
+
 
 # ===========================================================================
 # GatorPaths resolution

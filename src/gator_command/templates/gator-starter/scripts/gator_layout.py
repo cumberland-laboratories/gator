@@ -50,8 +50,13 @@ SHIPPED_DIRECTORIES = frozenset({
 # Scaffolding files that stay at the user-visible root even on v2.
 # These are shipped by templates but serve as user-facing reference —
 # agents look for _template.md and README.md when creating new content.
+# v2.12.0: added _template.html + _template-narrative.html for the
+# gator-blueprint-html-v1 protocol (interactive + narrative HTML templates
+# under blueprints/). TRIPWIRE: additions must be filename-exact + paired
+# with a tests/test_layout.py fixture. See scripts-layout.md charter.
 USER_VISIBLE_SCAFFOLDING = frozenset({
     "README.md", "_template.md",
+    "_template.html", "_template-narrative.html",
 })
 
 MIXED_DIRECTORY_SHIPPED_DEFAULTS = {

@@ -61,14 +61,16 @@ The four categories (shipped, user, runtime, mixed) are exhaustive. Every file a
 
 ## TRIPWIRE: User-Visible Scaffolding
 
-`_template.md` and `README.md` in mixed directories (charters, blueprints, procedures) are classified as `USER_VISIBLE_SCAFFOLDING` — they stay at the `.gator/` root on v2 repos, never move to `.includes/`. Agents look for these files when creating new content. Moving them to `.includes/` breaks agent workflows (templates become invisible).
+`_template.md`, `_template.html`, `_template-narrative.html`, and `README.md` in mixed directories (charters, blueprints, procedures) are classified as `USER_VISIBLE_SCAFFOLDING` — they stay at the `.gator/` root on v2 repos, never move to `.includes/`. Agents look for these files when creating new content. Moving them to `.includes/` breaks agent workflows (templates become invisible).
 
 Three code paths must respect this:
 1. `gatorize.py` fresh install — puts scaffolding at root, shipped content in `.includes/`
 2. `gator-update.py` overlay — routes scaffolding to root, shipped content to `.includes/`
 3. `migrate_layout()` — preserves scaffolding at root during v1→v2 migration
 
-`MIXED_DIRECTORY_SHIPPED_DEFAULTS` must NOT include `README.md` or `_template.md`. Those are in `USER_VISIBLE_SCAFFOLDING` instead.
+`MIXED_DIRECTORY_SHIPPED_DEFAULTS` must NOT include any file that appears in `USER_VISIBLE_SCAFFOLDING`.
+
+! **TRIPWIRE: additions to `USER_VISIBLE_SCAFFOLDING` are silent drift.** Nothing observes the set beyond `_dir_is_scaffolding_only()` — an accidental removal or misspelling causes a v2 mixed-directory-classifier failure that a user doesn't see until their layout gets misclassified as `mixed` on next `gator update`. Additions must be filename-exact and paired with a `tests/test_layout.py` fixture (see `TestResolveGatorLayout::test_v2_clean_when_blueprints_has_only_html_scaffolding` for the pattern). v2.12.0 added `_template.html` and `_template-narrative.html` for the `gator-blueprint-html-v1` HTML artifact protocol; the set is now four entries (`README.md`, `_template.md`, `_template.html`, `_template-narrative.html`).
 
 ## v1 Deprecation Warning
 

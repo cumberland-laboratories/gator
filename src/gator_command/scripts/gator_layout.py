@@ -49,9 +49,22 @@ SHIPPED_DIRECTORIES = frozenset({
 
 # Scaffolding files that stay at the user-visible root even on v2.
 # These are shipped by templates but serve as user-facing reference —
-# agents look for _template.md and README.md when creating new content.
+# agents look for _template.md, README.md, and the HTML templates when
+# creating new content.
+#
+# v2.12.0: added _template.html + _template-narrative.html for the
+# gator-blueprint-html-v1 protocol (interactive + narrative HTML templates
+# under blueprints/). Routing them to .includes/ would hide them from the
+# scaffolding-adjacent location where agents look for templates.
+#
+# TRIPWIRE: additions here must be filename-exact and paired with a
+# tests/test_layout.py fixture — the mixed-directory classifier depends
+# on this set for _dir_is_scaffolding_only() disambiguation, so drift is
+# silent (a repo containing only these files won't be classified as
+# scaffolding-only and gets misrouted). See scripts-layout.md charter.
 USER_VISIBLE_SCAFFOLDING = frozenset({
     "README.md", "_template.md",
+    "_template.html", "_template-narrative.html",
 })
 
 MIXED_DIRECTORY_SHIPPED_DEFAULTS = {
