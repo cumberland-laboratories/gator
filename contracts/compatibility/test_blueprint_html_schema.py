@@ -3,7 +3,7 @@
 The gator-blueprint-html-v1 protocol (shipped v2.12.0) defines the metadata
 block, doc classes, and status vocabulary for HTML artifacts. This compat
 test walks `.gator/blueprints/*.html` in the current repo and validates that
-every file carries:
+every real artifact carries:
 
     - the schema meta tag with the exact value "gator-blueprint-html-v1"
     - a legal doc-class value (charter-map | feature-blueprint | procedure-visual | reference-explainer)
@@ -11,13 +11,20 @@ every file carries:
     - a well-formed updated-at (ISO-8601 UTC, seconds precision, Z suffix)
     - all required <meta> tags present
 
+Scaffolding files are excluded from validation. The `USER_VISIBLE_SCAFFOLDING`
+set in `gator_layout.py` lands `_template.html` and `_template-narrative.html`
+at `.gator/blueprints/` on v2 repos so agents find them when authoring — those
+files ship with `==TODO==` placeholders and illegal placeholder meta values
+by design. Discovery filters them out (see `SCAFFOLDING_FILENAMES`) so the
+compat check runs against real published artifacts only.
+
 The test does NOT walk `.gator/vault/artifacts/*.html` (D6, r4-r5 pin): vault
 is exploratory-by-design; artifacts there may be intentionally non-conformant
 sketches. Manual review handles vault conformance.
 
-Skips gracefully when the current repo has no `.gator/blueprints/*.html`
-(the default state for fleet repos in Release A — only the Gator source
-repo ships `charter-map.html`).
+Skips gracefully when the current repo has no non-scaffolding
+`.gator/blueprints/*.html` (the default state for fleet repos in Release A —
+only the Gator source repo ships `charter-map.html`).
 
 No jsonschema dependency; the protocol is HTML-defined so regex + string
 matching is the natural check.
@@ -48,6 +55,11 @@ LEGAL_STATUSES = {
     "generated",
 }
 
+SCAFFOLDING_FILENAMES = frozenset({
+    "_template.html",
+    "_template-narrative.html",
+})
+
 REQUIRED_META = (
     "gator-schema",
     "gator-title",
@@ -76,15 +88,30 @@ def _extract_meta(html: str) -> dict:
     return out
 
 
-def _discover_blueprints():
-    """Discover .html files under .gator/blueprints/ (non-recursive).
+def _discover_blueprints(root: Path | None = None):
+    """Discover real .html artifacts under .gator/blueprints/ (non-recursive).
 
     Blueprints don't nest into subdirectories today; keep the check shallow
     to avoid accidentally validating vaulted or unrelated HTML.
+
+    Filenames in `SCAFFOLDING_FILENAMES` are excluded — those are authoring
+    templates that live at the user-visible root by design (see
+    `USER_VISIBLE_SCAFFOLDING` in `gator_layout.py`) and carry `==TODO==`
+    placeholders + illegal placeholder meta values that a real artifact must
+    replace. Validating them would fail every fleet repo the moment it
+    scaffolded, before any real artifact exists.
+
+    `root` defaults to the module-level `BLUEPRINTS_DIR` (the current repo's
+    `.gator/blueprints/`). Tests pass a temporary directory to exercise
+    discovery in isolation.
     """
-    if not BLUEPRINTS_DIR.is_dir():
+    target = root if root is not None else BLUEPRINTS_DIR
+    if not target.is_dir():
         return []
-    return sorted(BLUEPRINTS_DIR.glob("*.html"))
+    return sorted(
+        p for p in target.glob("*.html")
+        if p.name not in SCAFFOLDING_FILENAMES
+    )
 
 
 def _load(path: Path) -> str:
@@ -99,9 +126,10 @@ def blueprint_files():
     files = _discover_blueprints()
     if not files:
         pytest.skip(
-            "no .gator/blueprints/*.html in this repo — the default state "
-            "for fleet repos in v2.12.0 Release A (only the Gator source "
-            "repo ships charter-map.html)"
+            "no non-scaffolding .gator/blueprints/*.html in this repo — the "
+            "default state for fleet repos in v2.12.0 Release A (only the "
+            "Gator source repo ships charter-map.html; scaffolding templates "
+            "are excluded from the compat check by design)"
         )
     return files
 
@@ -216,3 +244,53 @@ class TestBlueprintHtmlDiscovery:
             )
         # Sanity: it must be discovered by _discover_blueprints
         assert charter_map in _discover_blueprints()
+
+
+class TestBlueprintHtmlScaffoldingExclusion:
+    """Scaffolding templates (`_template.html`, `_template-narrative.html`)
+    land at `.gator/blueprints/` on v2 repos as USER_VISIBLE_SCAFFOLDING. They
+    carry `==TODO==` placeholders and illegal placeholder meta values by
+    design. Discovery MUST exclude them, or every gatorized fleet repo would
+    fail the compat check the moment `gator update` scaffolds those files.
+
+    This class pins the exclusion contract — a regression would surface here
+    before it broke every fleet repo's compat run."""
+
+    def test_scaffolding_filenames_set_matches_layout_contract(self):
+        """`SCAFFOLDING_FILENAMES` here must cover every HTML entry in
+        `USER_VISIBLE_SCAFFOLDING` from `gator_layout.py`. If the layout set
+        grows with a new HTML template, this test also grows — the
+        cross-module rule is: any HTML scaffolding filename must be excluded
+        from the compat walk."""
+        assert "_template.html" in SCAFFOLDING_FILENAMES
+        assert "_template-narrative.html" in SCAFFOLDING_FILENAMES
+
+    def test_discovery_excludes_scaffolding_when_present(self, tmp_path):
+        """Simulated fleet-repo layout: scaffolding templates present, no
+        real artifact. Discovery must return empty (which causes the fixture
+        to skip cleanly)."""
+        fake_blueprints = tmp_path / ".gator" / "blueprints"
+        fake_blueprints.mkdir(parents=True)
+        (fake_blueprints / "_template.html").write_text(
+            "<html><meta name='gator-doc-class' content='==TODO=='></html>",
+            encoding="utf-8",
+        )
+        (fake_blueprints / "_template-narrative.html").write_text(
+            "<html><meta name='gator-doc-class' content='==TODO=='></html>",
+            encoding="utf-8",
+        )
+        assert _discover_blueprints(root=fake_blueprints) == []
+
+    def test_discovery_includes_real_artifact_alongside_scaffolding(self, tmp_path):
+        """Simulated fleet-repo layout after the user authors a real
+        blueprint: scaffolding still present, plus one hand-authored artifact.
+        Discovery must return only the real artifact."""
+        fake_blueprints = tmp_path / ".gator" / "blueprints"
+        fake_blueprints.mkdir(parents=True)
+        (fake_blueprints / "_template.html").write_text("<html></html>", encoding="utf-8")
+        (fake_blueprints / "_template-narrative.html").write_text(
+            "<html></html>", encoding="utf-8"
+        )
+        real = fake_blueprints / "my-charter-map.html"
+        real.write_text("<html></html>", encoding="utf-8")
+        assert _discover_blueprints(root=fake_blueprints) == [real]

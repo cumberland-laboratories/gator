@@ -91,8 +91,11 @@ Every conformant artifact carries these `<meta>` tags near the top of `<head>`
   Never generic ("architecture overview"); always specific to what the artifact
   actually answers.
 
-The full contract is at
-[`../../../../contracts/schemas/gator-blueprint-html-v1.md`](../../../../contracts/schemas/gator-blueprint-html-v1.md).
+The full requirements are enumerated above (schema tag, doc classes, statuses,
+required fields, ISO-8601 format). This procedure is the authoritative reference
+in your repo; the contract's canonical form lives in the Gator source tree
+(`contracts/schemas/gator-blueprint-html-v1.md`) and is not shipped to fleet
+repos.
 
 ### 4. Fill the content
 
@@ -133,8 +136,11 @@ Before you consider the artifact done:
   pulling from a CDN. All CSS + JS inlined.
 - **Renders in a plain browser.** Open the file directly (`file://...`) —
   it should render correctly with no console errors.
-- **Passes the compat test** if it lives under `.gator/blueprints/`. Run
-  `pytest contracts/compatibility/test_blueprint_html_schema.py` locally.
+- **Compat-ready** if it lives under `.gator/blueprints/`. The Gator source
+  repo's compat suite runs `test_blueprint_html_schema.py` against every
+  `.gator/blueprints/*.html` (scaffolding templates excluded). Your fleet
+  repo won't carry that test, but the checkpoints above cover the same
+  contract — meta block complete, question specific, self-contained.
 
 ## Notes
 
@@ -160,8 +166,11 @@ Before you consider the artifact done:
 
 ## Connections
 
-- [`../../../../contracts/schemas/gator-blueprint-html-v1.md`](../../../../contracts/schemas/gator-blueprint-html-v1.md) — the protocol contract
 - [`../blueprints/_template.html`](../blueprints/_template.html) — interactive template
 - [`../blueprints/_template-narrative.html`](../blueprints/_template-narrative.html) — narrative template
 - [`../blueprints/README.md`](../blueprints/README.md) — blueprint directory README with the triage summary
 - [`./artifact-freshness.md`](./artifact-freshness.md) — the source of the status label vocabulary
+- **Protocol** `gator-blueprint-html-v1` — the shape you're conforming to; the
+  full requirements are enumerated in the "Fill the `<meta>` block" section
+  above. Canonical contract lives in the Gator source tree
+  (`contracts/schemas/gator-blueprint-html-v1.md`) and is not shipped here.
