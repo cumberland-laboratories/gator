@@ -2,6 +2,33 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.12.1] — 2026-09-03
+
+Blueprints 2.0 Release A follow-up patch — fixes a fleet-visible routing bug in v2.12.0 where the two new HTML scaffolding templates landed at the wrong path on v2 repos running `gator update`, defeating the whole point of the `USER_VISIBLE_SCAFFOLDING` extension the same release added.
+
+### Fixed
+
+- **`_template.html` + `_template-narrative.html` now route to the user-visible root on v2 repos.** In v2.12.0, `gator update` on a v2 repo placed both HTML scaffolding templates at `.gator/.includes/blueprints/` instead of `.gator/blueprints/` — invisible where agents look for authoring inputs. Root cause: `gator-update.py` carried two hardcoded local literal sets (`{"README.md", "_template.md"}`) duplicating `USER_VISIBLE_SCAFFOLDING` from `gator_layout.py` — one in `plan_updates()` (v2 update routing), one in `migrate_layout()` (v1→v2 migration). The v2.12.0 change added the HTML filenames to the frozenset but didn't touch either routing site. Fix: both routing sites now `from gator_layout import USER_VISIBLE_SCAFFOLDING` and consult the single source of truth. Applied in both wheel copy and template mirror. Fleet repos on v2.12.0: run `gator update` after upgrading, then manually remove `.gator/.includes/blueprints/_template*.html` — the update installs correctly to root but doesn't clean up prior misroutes.
+
+### Added
+
+- **`TestScaffoldingRoutingRoundTrip`** in `tests/test_layout.py` (3 tests). Real end-to-end pins that invoke `plan_updates()` + `migrate_layout()` and assert files land at `.gator/blueprints/`, not `.gator/.includes/blueprints/`, plus a source-grep pin that rejects the two-filename literal patterns in `gator-update.py` source. The pre-fix pin (`test_user_visible_scaffolding_includes_both_html_templates`) asserted the SET was correct — it passed cleanly through v2.12.0 — but never invoked the routing code. The new class fills the coverage gap the shipping bug exposed.
+
+### Changed
+
+- **`scripts-layout.md` TRIPWIRE rewritten** — from "one observer" to "THREE-observer contract" (classifier + two routing sites), naming each observer + the pin class it requires. The pre-fix text ("nothing observes the set beyond `_dir_is_scaffolding_only()`") was factually wrong: two routing sites in `gator-update.py` also read equivalent-but-drifted sets. The updated TRIPWIRE tells the truth about the surface area.
+- **`scripts-repo-lifecycle.md` `plan_updates()` bang** — extended with the v2.12.1 routing-consistency clause, naming both routing sites, the `USER_VISIBLE_SCAFFOLDING` consult rule, and the new pin class reference.
+
+### Compatibility
+
+- No breaking changes. Contract for `USER_VISIBLE_SCAFFOLDING` is unchanged (same four filenames). Only the routing sites' code path changed.
+- Test suite: **978 pass + 3 skip + 2 xfail** (v2.12.0 was 975; +3 new `TestScaffoldingRoutingRoundTrip` pins).
+
+### Notes
+
+- Fix landed on `dev` as `eb1b57d`, bump as this commit. Same-day patch (v2.12.0 published 2026-09-02, v2.12.1 published 2026-09-03).
+- Codifies the coverage gap: any future addition to `USER_VISIBLE_SCAFFOLDING` requires TWO pin classes (classifier fixture + `TestScaffoldingRoutingRoundTrip`). Silent-drift class closed.
+
 ## [2.12.0] — 2026-09-02
 
 HTML Artifact Protocol — Release A. Blueprints 2.0 pivots to an artifact-first architecture: the Dashboard is a thin browser, blueprints are self-contained HTML documents opened through the existing v2.4.5 `.html` file surface. This release ships the `gator-blueprint-html-v1` protocol, two HTML templates (interactive + narrative), an authoring procedure, a compat test, and Gator's own charter map as the canonical reference implementation. Simultaneously retires the v2.11.0 Blueprints sidebar view + endpoint + shipped data files that this direction supersedes.
