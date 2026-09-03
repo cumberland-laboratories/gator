@@ -6,9 +6,11 @@ region of the system benefits from a dedicated, browsable explanation.
 
 ## HTML is the medium for new blueprints (as of v2.12.0)
 
-New blueprint content is authored in HTML under the
-[`gator-blueprint-html-v1`](../../../../contracts/schemas/gator-blueprint-html-v1.md)
-protocol. Two shipped templates cover the two lanes:
+New blueprint content is authored in HTML under the `gator-blueprint-html-v1`
+protocol. The full requirements are enumerated in the
+[authoring procedure](../procedures/authoring-html-artifacts.md); the
+canonical contract lives in the Gator source tree and is not shipped to
+fleet repos. Two shipped templates cover the two lanes:
 
 | Template | Doc classes | Use when |
 |---|---|---|
@@ -22,10 +24,10 @@ non-graph content into the interactive shell.
 
 The full authoring procedure is at
 [`../procedures/authoring-html-artifacts.md`](../procedures/authoring-html-artifacts.md).
-
-The contract for the metadata block, doc classes, status values, and layout
-invariants is at
-[`../../../../contracts/schemas/gator-blueprint-html-v1.md`](../../../../contracts/schemas/gator-blueprint-html-v1.md).
+The metadata block, doc classes, status values, and layout invariants are
+enumerated there; the canonical `gator-blueprint-html-v1` contract lives in
+the Gator source tree (`contracts/schemas/gator-blueprint-html-v1.md`) and
+is not shipped to fleet repos.
 
 ## Where blueprints live
 
@@ -79,5 +81,4 @@ legacy shape. New blueprints should use one of the HTML templates instead.
 ## See also
 
 - [Charter README](../charters/README.md) — charter notation used in function references
-- [Authoring procedure](../procedures/authoring-html-artifacts.md) — when + how to choose HTML over markdown, the two-lane triage, storage rules, status labeling
-- [Protocol contract](../../../../contracts/schemas/gator-blueprint-html-v1.md) — required metadata, layout invariants, doc classes, status values
+- [Authoring procedure](../procedures/authoring-html-artifacts.md) — when + how to choose HTML over markdown, the two-lane triage, storage rules, status labeling; also enumerates the protocol requirements (metadata, layout invariants, doc classes, status values)

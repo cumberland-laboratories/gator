@@ -178,6 +178,25 @@ contracts/
   `.gator/session-snippets/` directory, no post-lockdown files to
   scan) — never as a swallow for an installer regression.
 
+- **! Shipped-template surfaces reference governed-repo paths only.**
+  Any file under `src/gator_command/templates/gator-starter/` that
+  lands in a fleet repo — README, HTML template bodies, procedures,
+  scaffolding comments — MUST reference paths that exist in a
+  gatorized repo (`.gator/procedures/…`, `.gator/blueprints/…`,
+  `.gator/charters/…`). Source-tree paths (`contracts/schemas/…`,
+  `src/gator_command/…`, `pytest contracts/compatibility/…`) don't
+  exist in fleet repos and are dead links at the point of use. The
+  ONE accepted exception is descriptive-not-prescriptive framing:
+  the source-tree path may be NAMED as context ("the canonical
+  contract lives in the Gator source tree at `X` and is not shipped
+  here") but never as a clickable link or "go here" pointer.
+  Reviewed twice in the Release A whiteboard cycle (`af6163d` +
+  round-2 follow-up): round 1 caught the procedure references, round
+  2 caught three README links + two template `<body>` sections that
+  render into every published artifact. The higher-severity class is
+  template body text — it becomes part of every newly-authored
+  artifact unless the author manually rewrites it.
+
 ## Files → functions
 
 | File | Key symbols | Reads | Writes |
