@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.12.3 — four HTML blueprints + narrative-template diagram fix",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release-2-12-3"
+  ],
+  "commit": "15bc6d9d6d35f73425e3a1355ccde466b4aa0337",
+  "short_commit": "15bc6d9",
+  "snippet_id": "snippet-15bc6d9d6d35f",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "ea82992d7f46d45d907ba036571cd66a7dcc259f",
+  "started_at": "2026-09-02T23:01:19Z",
+  "ended_at": "2026-09-03T20:54:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for the v2.12.3 dogfood-pass release. Content commit: `ea82992` (four HTML blueprints + `.diagram-edge` flex fix in the shipped template + charter note).",
+    "`VERSION` 2.12.2 → 2.12.3.",
+    "`pyproject.toml` version field 2.12.2 → 2.12.3.",
+    "`CHANGELOG.md` — new `[2.12.3] — 2026-09-03` entry: Added (four blueprints across three doc classes), Fixed (narrative-template diagram-edge flex), Compatibility (no breaking, unchanged test count), Notes (two authoring-pass observations surfaced, third same-day patch on the Release A arc).",
+    "`scripts-core-library.md` version-note extended: `..., 2.12.2 (2026-09-03), 2.12.3 (2026-09-03, current: **2.12.3** in both files)`."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}

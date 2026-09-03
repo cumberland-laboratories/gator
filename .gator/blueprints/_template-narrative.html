@@ -367,7 +367,11 @@
       margin-top: 0.2rem;
     }
     .diagram-edge {
-      flex: 0 0 auto;
+      /* flex-grow: 1 lets edges consume slack in the container so nodes
+         distribute evenly across the available width, instead of clustering
+         at the left with all whitespace piled on the right. min-width keeps
+         the arrow legible when the diagram overflows into horizontal scroll. */
+      flex: 1 1 auto;
       min-width: 2rem;
       height: 2px;
       background: var(--gray-400);
