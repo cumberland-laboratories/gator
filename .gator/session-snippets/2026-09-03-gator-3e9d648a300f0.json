@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.12.2 — HTML template restyle",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release-2-12-2"
+  ],
+  "commit": "3e9d648a300f015334e5788df4ecd89c1bafd4d5",
+  "short_commit": "3e9d648",
+  "snippet_id": "snippet-3e9d648a300f0",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "c08beb912db3b8fcfa6b008940b158ae5fdb7a94",
+  "started_at": "2026-09-02T23:01:19Z",
+  "ended_at": "2026-09-03T19:33:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for the v2.12.2 styling patch (Architect feedback: v2.12.0's shipped template styling was \"gray tones only, doesn't fit the Blueprints 2.0 aesthetic\"). Restyle commit: `c08beb9`.",
+    "`VERSION` 2.12.1 → 2.12.2.",
+    "`pyproject.toml` version field 2.12.1 → 2.12.2.",
+    "`CHANGELOG.md` — new `[2.12.2] — 2026-09-03` entry: Changed (both templates restyled + charter-map reference impl updated + palette convention codified in charter), Fixed (`_template.html` narrative left-indent), Compatibility (no breaking, new classes additive, `--bp-a/b/c/...` → `--bp-core/governance/...` rename), Notes (same-day second patch on the Blueprints 2.0 Release A arc).",
+    "`scripts-core-library.md` version-note extended: `..., 2.12.1 (2026-09-03), 2.12.2 (2026-09-03, current: **2.12.2** in both files)`."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}

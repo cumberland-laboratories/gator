@@ -39,185 +39,563 @@
 
   <style>
     :root {
-      --bg: #f8f6f0;
-      --panel: #ffffff;
-      --ink: #1f2a2e;
-      --muted: #55666d;
-      --line: #d0d7de;
-      --accent: #4f7c78;
-      --accent-soft: #e8f0ef;
+      /* Primary palette — teal + red + blue for structure, amber + green for status */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
 
-      /* Semantic accents for callouts */
-      --caution: #b8860b;
-      --warning: #a02020;
-      --info: #305480;
+      /* Neutral scale */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
-      font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-    a { color: var(--accent); }
-    code { font-size: 0.92em; background: var(--bg); padding: 1px 5px;
-      border-radius: 3px; }
-    pre { background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
-      padding: 12px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
-    pre code { background: none; padding: 0; }
-
-    .page { max-width: 900px; margin: 0 auto; padding: 24px 32px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
 
     /* Header */
-    .head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
-    .head h1 { margin: 0 0 8px 0; font-size: 26px; letter-spacing: -0.01em; }
-    .head .subtitle { color: var(--muted); font-size: 15px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 10px 20px; margin-top: 14px; font-size: 12px; }
-    .meta-row .label { color: var(--muted); text-transform: uppercase;
-      letter-spacing: 0.05em; margin-right: 6px; }
-    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
-      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-      background: #eef7e6; color: #2d6a2d; }
-    .status-badge.exploratory { background: #fef4e0; color: #8a5a00; }
-    .status-badge.generated { background: #eef3fa; color: #305480; }
-    .status-badge.historical { background: #f3eaef; color: #6c3560; }
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.75rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 0.95rem;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p { margin-bottom: 0.8rem; }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+
+    /* Callouts — teal (default/summary), red (warn), amber (info/caution), green (ok), blue (note) */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+
+    /* Tables — colored header variants for scannability
+       Default: neutral gray header
+       .table-blue: blue-tinted header (informational, comparative)
+       .table-red:  red-tinted header (failure modes, warnings)
+       .table-teal: teal-tinted header (verified, positive baseline) */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* Pills — for status/verdict cells within tables */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light); color: var(--green); }
+    .pill.info  { background: var(--blue-light);  color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);   color: var(--red); }
+    .pill.alt   { background: var(--teal-light);  color: var(--teal-dark); }
+    .pill.na    { background: var(--gray-100);    color: var(--gray-600); }
 
     /* Table of contents */
-    .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-      padding: 12px 18px; margin-bottom: 32px; font-size: 13px; }
-    .toc h3 { margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
-    .toc ol { margin: 0; padding-left: 18px; line-height: 1.7; }
-    .toc a { color: var(--ink); text-decoration: none; }
-    .toc a:hover { color: var(--accent); text-decoration: underline; }
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
 
-    /* Narrative sections */
-    section.doc { background: var(--panel); border: 1px solid var(--line);
-      border-radius: 6px; padding: 20px 26px; margin-bottom: 20px; }
-    section.doc h2 { margin: 0 0 12px 0; font-size: 20px; letter-spacing: -0.01em;
-      padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-    section.doc p { font-size: 15px; line-height: 1.65; margin: 0 0 12px 0; }
-    section.doc ul, section.doc ol { font-size: 15px; line-height: 1.65;
-      padding-left: 22px; margin: 0 0 12px 0; }
-    section.doc li { margin-bottom: 4px; }
+    /* Step numbering (procedure-visual doc-class) */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
 
-    /* Callouts */
-    .callout { border-left: 4px solid var(--info); background: var(--accent-soft);
-      padding: 10px 16px; margin: 12px 0; border-radius: 0 4px 4px 0; font-size: 14px; }
-    .callout.caution { border-left-color: var(--caution); background: #fef4e0; }
-    .callout.warning { border-left-color: var(--warning); background: #fbeaea; }
-    .callout .callout-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--info); margin-right: 8px; }
-    .callout.caution .callout-label { color: var(--caution); }
-    .callout.warning .callout-label { color: var(--warning); }
+    /* Diagram slot — horizontal flowchart with colored nodes and connectors */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
+    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
+    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
+    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      flex: 0 0 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red { background: var(--red); }
+    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
 
-    /* Step numbering (for procedure-visual doc-class) */
-    .steps { counter-reset: step; padding-left: 0; list-style: none; }
-    .steps > li { counter-increment: step; padding-left: 44px; position: relative;
-      margin-bottom: 14px; min-height: 30px; }
-    .steps > li::before { content: counter(step); position: absolute; left: 0; top: 0;
-      width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
-      color: white; font-weight: 700; font-size: 14px;
-      display: flex; align-items: center; justify-content: center; }
-
-    /* Static diagram slot (optional — use for procedure-visual flows) */
-    .diagram { background: var(--panel); border: 1px dashed var(--line);
-      border-radius: 6px; padding: 20px; margin: 12px 0;
-      text-align: center; color: var(--muted); font-size: 13px; }
+    /* Footer */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-<div class="page">
 
-  <header class="head">
-    <h1>==TODO== short human title</h1>
-    <div class="subtitle">==TODO== one-sentence orientation</div>
-    <div class="meta-grid">
-      <div class="meta-row"><span class="label">Doc class:</span> ==TODO==</div>
-      <div class="meta-row"><span class="label">Repo:</span> ==TODO==</div>
-      <div class="meta-row"><span class="label">Status:</span> <span class="status-badge">==TODO==</span></div>
-      <div class="meta-row"><span class="label">Updated:</span> ==TODO== 2026-09-02</div>
-      <div class="meta-row"><span class="label">Question:</span> ==TODO==</div>
-      <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+<header class="doc-head">
+  <h1>==TODO== short human title</h1>
+  <div class="subtitle">==TODO== one-sentence orientation — what this document does for the reader.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> ==TODO==</div>
+    <div><span class="label">Repo:</span> ==TODO==</div>
+    <div><span class="label">Status:</span> <span class="status-badge">==TODO==</span></div>
+    <div><span class="label">Updated:</span> ==TODO== 2026-09-02</div>
+    <div><span class="label">Question:</span> ==TODO==</div>
+    <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+  </div>
+  <div class="metaline">==TODO== optional footer line — authors, related documents, cross-refs.</div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#question">Question / purpose</a></li>
+    <li><a href="#flow">Flow</a></li>
+    <li><a href="#why">Why this matters</a></li>
+    <li><a href="#refs">References</a></li>
+    <li><a href="#open">Open questions</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>==TODO== 1-3 sentences that answer the question at the top of the page. If the reader only reads this box, what do they leave knowing?</p>
+  </div>
+</section>
+
+<section id="question">
+  <h2>Question / purpose</h2>
+  <p>==TODO== the exact question or need this artifact answers. Restate the <code>gator-question</code> meta value in fuller form — the reader has already skimmed it in the header; this section gives it the space to breathe.</p>
+</section>
+
+<section id="flow">
+  <h2>Flow</h2>
+  <p>==TODO== one paragraph introducing the flow. For a <code>procedure-visual</code>, this is a numbered sequence. For a <code>reference-explainer</code>, this is sequential exposition that builds understanding.</p>
+
+  <!-- Numbered steps — remove class variants (step-alt/warn/done) or delete
+       the whole block if narrative prose fits better than a step list. -->
+  <ol class="steps">
+    <li>==TODO== first step. Short heading, one or two sentences of body.</li>
+    <li class="step-alt">==TODO== second step (using the blue variant for emphasis or branching).</li>
+    <li>==TODO== third step.</li>
+    <li class="step-done">==TODO== final step (green variant marks completion / done state).</li>
+  </ol>
+
+  <!-- Optional static diagram — colored flowchart nodes + labeled edges.
+       Delete the whole .diagram block if the section is prose-only, or
+       swap horizontal-flow for your own SVG/ASCII diagram inside. -->
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node">
+        ==TODO== Stage A
+        <span class="kind">input</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">==TODO==</span></div>
+      <div class="diagram-node blue">
+        ==TODO== Stage B
+        <span class="kind">transform</span>
+      </div>
+      <div class="diagram-edge blue"></div>
+      <div class="diagram-node green">
+        ==TODO== Stage C
+        <span class="kind">output</span>
+      </div>
     </div>
-  </header>
+  </div>
 
-  <nav class="toc">
-    <h3>Contents</h3>
-    <ol>
-      <li><a href="#question">Question / purpose</a></li>
-      <li><a href="#summary">Executive summary</a></li>
-      <li><a href="#flow">Flow</a></li>
-      <li><a href="#why">Why this matters</a></li>
-      <li><a href="#refs">References</a></li>
-      <li><a href="#open">Open questions</a></li>
-    </ol>
-  </nav>
+  <!-- Callout variants — pick the color to match severity, delete unused. -->
+  <div class="callout note">
+    <span class="label">Note</span>
+    <p>==TODO== a neutral aside — related context that doesn't fit inline.</p>
+  </div>
+  <div class="callout info">
+    <span class="label">Caution</span>
+    <p>==TODO== something to watch out for — a subtle constraint or a gotcha.</p>
+  </div>
+  <div class="callout warn">
+    <span class="label">Warning</span>
+    <p>==TODO== a hard failure mode — mis-step here breaks something visible.</p>
+  </div>
+  <div class="callout ok">
+    <span class="label">Confirmed</span>
+    <p>==TODO== a verified outcome — checked, works, safe to rely on.</p>
+  </div>
+</section>
 
-  <section class="doc" id="question">
-    <h2>Question / purpose</h2>
-    <p>==TODO== the exact question or need this artifact answers. Restate the <code>gator-question</code> meta value in fuller form here — the reader has already skimmed it in the header; this section gives it the space to breathe.</p>
-  </section>
+<section id="why">
+  <h2>Why this matters</h2>
+  <p>==TODO== the load-bearing "so what?" answer. If the reader skips this, they can act on the flow above but won't know when to reach for it or when to reach past it.</p>
 
-  <section class="doc" id="summary">
-    <h2>Executive summary</h2>
-    <p>==TODO== 1-3 paragraphs answering the question in prose. What is the reader's takeaway if they only read this section?</p>
-  </section>
+  <!-- Sample table with colored header variants — pick the class that matches
+       the table's role, or leave off the variant class for neutral gray. -->
+  <h3>Comparison / options</h3>
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>Option</th>
+        <th>When to use</th>
+        <th>Trade-off</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill ok">Recommended</span></td>
+      </tr>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill alt">Alternate</span></td>
+      </tr>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill na">Not applicable</span></td>
+      </tr>
+    </tbody>
+  </table>
 
-  <section class="doc" id="flow">
-    <h2>Flow</h2>
-    <p>==TODO== for procedure-visual: step-by-step sequence. For reference-explainer: sequential exposition of the concept.</p>
-    <!-- For procedure-visual, use the step list: -->
-    <ol class="steps">
-      <li>==TODO== first step or stage.</li>
-      <li>==TODO== second step.</li>
-      <li>==TODO== third step. Include a <strong>checkpoint</strong> — what must be true before proceeding.</li>
-    </ol>
-    <!-- Optional static diagram / illustration slot: -->
-    <div class="diagram">==TODO== optional static diagram (ASCII, embedded SVG, or delete this block)</div>
-  </section>
+  <h3>Failure modes</h3>
+  <table class="table-red">
+    <thead>
+      <tr>
+        <th>What breaks</th>
+        <th>Symptom</th>
+        <th>Fallback</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill warn">==TODO==</span></td>
+      </tr>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill info">==TODO==</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
 
-  <section class="doc" id="why">
-    <h2>Why this matters</h2>
-    <p>==TODO== what breaks or slips if this procedure/concept is misunderstood or skipped.</p>
-    <div class="callout">
-      <span class="callout-label">Note</span>
-      ==TODO== useful context that isn't a tripwire but helps the reader.
-    </div>
-    <div class="callout caution">
-      <span class="callout-label">Caution</span>
-      ==TODO== non-obvious behavior or a common mistake.
-    </div>
-    <div class="callout warning">
-      <span class="callout-label">Warning</span>
-      ==TODO== a real tripwire or invariant that must not be violated. Delete this block if none applies.
-    </div>
-  </section>
+<section id="refs">
+  <h2>References</h2>
+  <ul>
+    <li>==TODO== <code>path/to/file.py</code> — one-line description.</li>
+    <li>==TODO== <a href="#">Related document</a> — one-line description.</li>
+  </ul>
+</section>
 
-  <section class="doc" id="refs">
-    <h2>References</h2>
-    <ul>
-      <li>==TODO== related charter or procedure: <code>.gator/charters/&lt;name&gt;.md</code></li>
-      <li>==TODO== related file or function: <code>src/&lt;path&gt;.py::&lt;fn&gt;</code></li>
-    </ul>
-  </section>
+<section id="open">
+  <h2>Open questions</h2>
+  <ul>
+    <li>==TODO== what the author could not determine cleanly. Delete this section if there are none.</li>
+  </ul>
+</section>
 
-  <section class="doc" id="open">
-    <h2>Open questions</h2>
-    <ul>
-      <li>==TODO== what the author could not determine cleanly. Delete this section if empty.</li>
-    </ul>
-  </section>
+<!-- ==TODO== Delete this <section> if you don't want protocol notes
+     to appear in the published artifact. If you keep it, the default
+     text below points readers at the shipped authoring procedure. -->
+<section id="protocol">
+  <h2>Protocol notes</h2>
+  <p>
+    This document conforms to the <code>gator-blueprint-html-v1</code>
+    protocol (narrative template). See
+    <code>.gator/procedures/authoring-html-artifacts.md</code> for the
+    required metadata, doc classes, and status vocabulary.
+  </p>
+</section>
 
-  <!-- ==TODO== Delete this <section> if you don't want protocol notes
-       to appear in the published artifact. If you keep it, the default
-       text below points readers at the shipped authoring procedure. -->
-  <section class="doc">
-    <h2>Protocol notes</h2>
-    <p>
-      This document conforms to the <code>gator-blueprint-html-v1</code>
-      protocol (narrative template). See
-      <code>.gator/procedures/authoring-html-artifacts.md</code> for the
-      required metadata, doc classes, and status vocabulary.
-    </p>
-  </section>
-</div>
+<footer class="doc-foot">
+  ==TODO== short footer — repo · doc class · date. Delete if not wanted.
+</footer>
+
 </body>
 </html>

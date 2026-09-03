@@ -38,22 +38,25 @@
 
   <style>
     :root {
-      --bg: #f8f6f0;
-      --panel: #ffffff;
-      --ink: #1f2a2e;
-      --muted: #55666d;
-      --line: #d0d7de;
-      --accent: #4f7c78;
+      /* Neutral scale — matches v2.11.0 shipped palette */
+      --bg:         #fafbfc;
+      --panel:      #ffffff;
+      --ink:        #1a1a1a;
+      --muted:      #6b7280;
+      --line:       #e1e4e8;
+      --line-soft:  #eef1f4;
+      --accent:     #1a5fa8;
 
-      /* Semantic node colors — override per artifact if the domain has different regions */
-      --bp-a: #d96f3b;   /* orange   — structure / primary  */
-      --bp-b: #4f7c78;   /* teal     — governance / spine   */
-      --bp-c: #ddb85f;   /* gold     — lifecycle / provision */
-      --bp-d: #6b8db5;   /* blue     — analysis / readout    */
-      --bp-e: #8c5f91;   /* purple   — optional / peripheral */
-      --bp-f: #b08d7d;   /* clay     — boundary / contract   */
+      /* Semantic node colors — v2.11.0 vault palette (charter-flowchart-high-level).
+         Override per artifact if the domain has different regions. */
+      --bp-core:       #d96f3b;   /* orange   — structural / primary  */
+      --bp-governance: #4f7c78;   /* teal     — governance / spine    */
+      --bp-runtime:    #ddb85f;   /* gold     — runtime / lifecycle   */
+      --bp-analysis:   #6b8db5;   /* blue     — analysis / readout    */
+      --bp-legacy:     #b08d7d;   /* clay     — legacy / boundary     */
+      --bp-enterprise: #8c5f91;   /* purple   — optional / peripheral */
 
-      --edge: rgba(42, 60, 66, 0.35);
+      --edge:        rgba(42, 60, 66, 0.35);
       --edge-active: rgba(217, 111, 59, 0.95);
     }
     * { box-sizing: border-box; }
@@ -64,8 +67,10 @@
     .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
 
     /* Header */
-    .head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
-    .head h1 { margin: 0 0 8px 0; font-size: 24px; letter-spacing: -0.01em; }
+    .head { border-bottom: 2px solid var(--bp-governance); padding-bottom: 16px;
+      margin-bottom: 24px; }
+    .head h1 { margin: 0 0 8px 0; font-size: 24px; letter-spacing: -0.01em;
+      color: var(--ink); font-weight: 700; }
     .head .subtitle { color: var(--muted); font-size: 14px; }
     .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 10px 20px; margin-top: 14px; font-size: 12px; }
@@ -78,76 +83,90 @@
     .status-badge.generated { background: #eef3fa; color: #305480; }
     .status-badge.historical { background: #f3eaef; color: #6c3560; }
 
-    /* Main workspace: map + sidebar */
-    .work { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start;
-      margin-bottom: 32px; }
+    /* Main workspace: map + sidebar (matches v2.11.0 Dashboard layout) */
+    .work { display: grid; grid-template-columns: 1fr 360px; gap: 16px;
+      align-items: stretch; margin-bottom: 32px; }
     @media (max-width: 1100px) { .work { grid-template-columns: 1fr; } }
 
-    .canvas-frame { position: relative; background: var(--panel);
-      border: 1px solid var(--line); border-radius: 6px; padding: 12px;
-      overflow: auto; min-height: 400px; max-height: 900px; }
+    /* Responsive frame — grows/shrinks with available space, scrolls internally
+       when the fixed-dimension stage inside exceeds the frame. v2.11.1 hardening
+       pattern: pre-fix the canvas itself was pinned at authored 1180x880 and
+       pushed the sidebar off-screen at normal browser zoom on <1500px viewports. */
+    .canvas-frame { position: relative; background: var(--bg);
+      border: 1px solid var(--line); border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      overflow: auto; min-height: 400px; max-height: calc(100vh - 220px); }
 
-    /* The stage is fixed-dimension; the canvas-frame around it is responsive.
-       See v2.11.1 hardening pattern for why. */
+    /* Fixed intrinsic stage — SVG edges + absolute-positioned nodes at authored
+       coordinates. Adjust width/height if the graph needs more room. */
     .stage { position: relative; width: 1180px; height: 880px; }
     .stage-hint { position: absolute; top: 8px; right: 12px; font-size: 11px;
-      color: var(--muted); pointer-events: none; }
+      color: var(--muted); pointer-events: none;
+      background: rgba(255, 255, 255, 0.85); padding: 2px 8px; border-radius: 3px; }
 
     svg.edges { position: absolute; top: 0; left: 0; pointer-events: none; }
     .edge { fill: none; stroke: var(--edge); stroke-width: 1.5;
       transition: stroke 0.15s, stroke-width 0.15s, opacity 0.15s; }
     .edge.active { stroke: var(--edge-active); stroke-width: 2.5; }
-    .edge.faded { opacity: 0.12; }
+    .edge.faded { opacity: 0.15; }
     .edge-label { font-size: 11px; fill: var(--muted); pointer-events: none;
-      letter-spacing: 0.02em; }
+      letter-spacing: 0.02em; font-family: -apple-system, "Segoe UI", sans-serif; }
     .arrow-head { fill: var(--edge); }
 
     .node { position: absolute; width: 200px; min-height: 60px;
-      background: var(--panel); border: 2px solid var(--line);
-      border-left: 4px solid var(--node-accent, var(--bp-a));
+      background: var(--panel); border: 2px solid #d0d7de;
+      border-left: 4px solid var(--node-accent, var(--bp-core));
       border-radius: 6px; padding: 8px 12px; cursor: pointer;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s, border-color 0.15s;
+      font-family: -apple-system, "Segoe UI", sans-serif; }
     .node:hover { transform: translateY(-1px);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10); }
-    .node.active { box-shadow: 0 4px 14px rgba(217, 111, 59, 0.25); }
-    .node.faded { opacity: 0.22; }
-    .node-title { font-weight: 600; font-size: 14px; line-height: 1.25; }
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+    .node.active { border-color: var(--node-accent, var(--bp-core));
+      box-shadow: 0 4px 14px rgba(217, 111, 59, 0.25); }
+    .node.faded { opacity: 0.25; }
+    .node-title { font-weight: 600; font-size: 14px; color: var(--ink); line-height: 1.3; }
     .node-kind { display: block; font-size: 11px; color: var(--muted);
-      margin-top: 3px; letter-spacing: 0.02em; }
+      margin-top: 4px; letter-spacing: 0.02em; }
 
-    /* Sidebar */
+    /* Sidebar detail panel (matches v2.11.0 shipped layout) */
     .side { background: var(--panel); border: 1px solid var(--line);
-      border-radius: 6px; padding: 16px 18px; align-self: stretch;
-      max-height: 900px; overflow-y: auto; }
-    .side h3 { margin: 0 0 4px 0; font-size: 12px; text-transform: uppercase;
+      border-radius: 6px; padding: 16px 20px; overflow-y: auto;
+      align-self: stretch; max-height: calc(100vh - 220px);
+      font-family: -apple-system, "Segoe UI", sans-serif; }
+    .side h3 { margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;
       letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
-    .side .hint { font-size: 12px; color: var(--muted);
-      border-bottom: 1px solid var(--line); padding-bottom: 12px;
-      margin-bottom: 12px; cursor: pointer; }
+    .side .hint { font-size: 12px; color: var(--muted); cursor: pointer;
+      padding-bottom: 12px; border-bottom: 1px solid var(--line);
+      margin-bottom: 12px; }
     .side .hint:hover { color: var(--accent); }
-    .detail-title { margin: 0 0 4px 0; font-size: 17px; color: var(--ink); }
-    .detail-kind { font-size: 11px; color: var(--muted);
+    .detail-title { margin: 0 0 4px 0; font-size: 18px; color: var(--ink); font-weight: 600; }
+    .detail-kind { font-size: 12px; color: var(--muted);
       text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .detail-summary { font-size: 13px; line-height: 1.5; margin: 0 0 12px 0; }
-    .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase;
+    .detail-summary { font-size: 13px; line-height: 1.5; color: var(--ink); margin: 0 0 14px 0; }
+    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
       letter-spacing: 0.05em; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
-    .side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+    .side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;
+      color: var(--ink); }
     .side code { font-size: 12px; background: var(--bg); padding: 1px 5px;
       border-radius: 3px; color: var(--ink); }
     .rel-muted { color: var(--muted); font-size: 12px; }
 
-    /* Narrative */
-    .narrative section { border-top: 1px solid var(--line); padding-top: 20px;
+    /* Narrative — sits below the interactive map */
+    .narrative section { border-top: 1px solid var(--line-soft); padding-top: 20px;
       margin-top: 24px; }
     .narrative section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
-    .narrative h2 { margin: 0 0 8px 0; font-size: 18px; letter-spacing: -0.01em; }
-    .narrative p { font-size: 14px; line-height: 1.6; }
-    .narrative ul, .narrative ol { font-size: 14px; line-height: 1.6; }
+    .narrative h2 { margin: 0 0 10px 0; font-size: 19px; letter-spacing: -0.01em;
+      color: var(--ink); font-weight: 600; }
+    .narrative p { font-size: 14px; line-height: 1.6; color: var(--ink); }
+    .narrative ul, .narrative ol { font-size: 14px; line-height: 1.6; color: var(--ink);
+      padding-left: 22px; }
+    .narrative code { font-size: 0.9em; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; color: var(--ink); }
 
-    /* Legend */
+    /* Legend under the header */
     .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px;
-      color: var(--muted); margin-top: 8px; }
+      color: var(--muted); margin-top: 10px; }
     .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px;
       margin-right: 5px; vertical-align: middle; }
   </style>
@@ -166,11 +185,14 @@
       <div class="meta-row"><span class="label">Question:</span> ==TODO==</div>
       <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
     </div>
-    <!-- Optional legend — customize or delete. -->
+    <!-- Optional legend — customize or delete. Available named colors:
+         --bp-core (orange), --bp-governance (teal), --bp-runtime (gold),
+         --bp-analysis (blue), --bp-legacy (clay), --bp-enterprise (purple).
+         Use hex directly if the domain calls for something else. -->
     <div class="legend">
-      <span><span class="swatch" style="background: var(--bp-a)"></span>==TODO== category A</span>
-      <span><span class="swatch" style="background: var(--bp-b)"></span>==TODO== category B</span>
-      <span><span class="swatch" style="background: var(--bp-c)"></span>==TODO== category C</span>
+      <span><span class="swatch" style="background: var(--bp-core)"></span>==TODO== category A</span>
+      <span><span class="swatch" style="background: var(--bp-governance)"></span>==TODO== category B</span>
+      <span><span class="swatch" style="background: var(--bp-analysis)"></span>==TODO== category C</span>
     </div>
   </header>
 
@@ -249,7 +271,8 @@
   // ==TODO== Fill NODES and EDGES with the domain data.
   //
   // NODES: array of node objects. Required keys: id, title, x, y.
-  //        Optional: kind (short subtitle), color (var(--bp-<letter>) or hex),
+  //        Optional: kind (short subtitle), color (var(--bp-core|governance|
+  //        runtime|analysis|legacy|enterprise) or hex),
   //        summary (paragraph for the sidebar), covers (array of file paths),
   //        functions (array of function names). Positions are in the
   //        1180x880 stage coordinate space; adjust the SVG size + stage
@@ -259,7 +282,7 @@
   //        Optional: label (short edge caption).
   const NODES = [
     // Example — replace with real content:
-    // { id: "alpha", title: "Alpha Region", kind: "Structure", color: "var(--bp-a)",
+    // { id: "alpha", title: "Alpha Region", kind: "Structure", color: "var(--bp-core)",
     //   x: 200, y: 100, summary: "...", covers: ["path/to/file.py"], functions: ["fn_one()"] },
   ];
   const EDGES = [
