@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Enterprise — Architect Guide">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="reference-explainer">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-09-03T21:00:00Z">
+  <meta name="gator-generated-by" content="claude-opus-4-7">
+  <meta name="gator-question" content="What is Enterprise, what are its three scopes, how does an Architect activate and use it, what are the hook modes, and where does base Gator end and Enterprise begin?">
+
+  <title>Enterprise — Architect Guide</title>
+
+  <style>
+    :root {
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.75rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 0.95rem;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p { margin-bottom: 0.8rem; }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+    table.table-blue th { background: var(--blue-light); color: var(--blue-dark); border-bottom-color: var(--blue); }
+    table.table-red  th { background: var(--red-light);  color: var(--red);       border-bottom-color: var(--red); }
+    table.table-teal th { background: var(--teal-light); color: var(--teal-dark); border-bottom-color: var(--teal); }
+
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok   { background: var(--green-light); color: var(--green); }
+    .pill.info { background: var(--blue-light);  color: var(--blue-dark); }
+    .pill.warn { background: var(--red-light);   color: var(--red); }
+    .pill.alt  { background: var(--teal-light);  color: var(--teal-dark); }
+    .pill.na   { background: var(--gray-100);    color: var(--gray-600); }
+
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+    .steps > li h4 {
+      display: inline;
+      font-size: 1.02rem;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .steps > li p { margin: 0.35rem 0 0.5rem; }
+    .steps > li pre { margin: 0.5rem 0; }
+
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
+    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
+    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
+    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red { background: var(--red); }
+    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>Enterprise &mdash; Architect Guide</h1>
+  <div class="subtitle">What Enterprise adds on top of base Gator, how the three scopes cooperate, and how the Architect activates, syncs, provisions repos, and reads what the fleet is doing.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> Reference explainer</div>
+    <div><span class="label">Repo:</span> gator</div>
+    <div><span class="label">Status:</span> <span class="status-badge">Current</span></div>
+    <div><span class="label">Updated:</span> 2026-09-03</div>
+    <div><span class="label">Question:</span> What is Enterprise, how do I use it?</div>
+    <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+  </div>
+  <div class="metaline">Supersedes the historical <code>enterprise-configuration.md</code> for the current transcripts-first architecture. That doc is retained for legacy code-path tracing; this doc is for what to do today.</div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#scopes">The three scopes</a></li>
+    <li><a href="#activation">Activation, sync, repo provisioning</a></li>
+    <li><a href="#modes">Hook modes: off / evidence_only / warning / strict</a></li>
+    <li><a href="#evidence">Evidence flow (transcripts-first)</a></li>
+    <li><a href="#verbs">Subcommand surface</a></li>
+    <li><a href="#state">Where state lives on disk</a></li>
+    <li><a href="#gotchas">Common gotchas</a></li>
+    <li><a href="#status">Integration status &amp; what&rsquo;s deferred</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>Enterprise is an <em>optional</em> layer on top of base Gator. Base Gator works standalone on a single machine with one developer; Enterprise adds cross-machine and cross-repo governance: a control plane that owns policy, credentials it can revoke, hook modes an operator can dial per repo, and evidence custody (transcripts) that lives in Enterprise-managed storage rather than in Git. The base install (<code>pipx install gator-command</code>) ships only a thin <code>gator enterprise</code> dispatcher; the real command bodies live in the source-checkout <code>enterprise/enterprise-cli/</code> package and the FastAPI service under <code>enterprise/app/</code>. Both are explicitly aspirational — the Architect direction is <em>"the enterprise portions do not need to work right now"</em> — so most fleet-scale features are wired but not required for base-wheel releases.</p>
+  </div>
+</section>
+
+<section id="scopes">
+  <h2>The three scopes</h2>
+
+  <p>Enterprise&rsquo;s configuration lives in three distinct places, on purpose. Every design decision hinges on which scope owns what.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node blue">
+        Server
+        <span class="kind">control plane</span>
+      </div>
+      <div class="diagram-edge blue"><span class="diagram-edge-label">sync</span></div>
+      <div class="diagram-node">
+        Machine
+        <span class="kind">~/.gator/</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">provisions</span></div>
+      <div class="diagram-node green">
+        Repo
+        <span class="kind">.gator/</span>
+      </div>
+    </div>
+  </div>
+
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>Scope</th>
+        <th>Owns</th>
+        <th>Never owns</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Server</strong><br><code>enterprise/app/</code></td>
+        <td>API auth, provider integrations, repo inventory, hook-policy authority, org policy documents, machine-key registry, org encryption keys, evidence indexing, drift evaluation, fleet reports.</td>
+        <td>Anything a machine or repo owns locally &mdash; the server doesn&rsquo;t reach into a machine at commit time.</td>
+      </tr>
+      <tr>
+        <td><strong>Machine</strong><br><code>~/.gator/</code></td>
+        <td>Credentials, machine identity, hook-policy cache, org-policy cache, crypto-policy cache, global git-hook wrappers (via <code>core.hooksPath</code>), machine keypair (if crypto is on).</td>
+        <td>Repo identity or repo-scoped policy &mdash; those come from the repo it&rsquo;s currently inside.</td>
+      </tr>
+      <tr>
+        <td><strong>Repo</strong><br><code>.gator/</code></td>
+        <td>Repo identity (<code>repo-id</code>), org-policy pointer, bundled repo-local scripts, evidence landing zones, agent entry files (<code>CLAUDE.md</code> / <code>AGENTS.md</code>).</td>
+        <td>Credentials, machine private keys, hook-policy authority &mdash; those stay off-repo permanently.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <span class="label">Why this split matters</span>
+    <p>Commit-time behavior is deliberately mostly-local. The global hook wrapper reads the machine&rsquo;s cached hook-policy at every commit &mdash; it does <em>not</em> call the server. Server availability at commit time is a nice-to-have, not a load-bearing requirement. Policy changes propagate on the next <code>sync</code>; hook mode never depends on server reachability.</p>
+  </div>
+</section>
+
+<section id="activation">
+  <h2>Activation, sync, repo provisioning</h2>
+
+  <p>Three phases, conceptually. In practice <code>activate</code> calls <code>sync</code> at the end and <code>repo init</code> triggers another sync, so the operator usually types two commands, not three.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>gator enterprise activate</h4>
+      <p>One-time machine setup. Creates <code>~/.gator/enterprise/</code>, installs global git hooks under <code>~/.gator/hooks/</code>, sets <code>git config --global core.hooksPath</code>, writes machine identity + keypair (crypto), registers the machine with the server, calls <code>sync</code> at the end.</p>
+      <pre>gator enterprise activate</pre>
+    </li>
+    <li class="step-alt">
+      <h4>gator enterprise sync (usually implicit)</h4>
+      <p>Refresh machine-local caches from the server: hook policy, org policy documents, crypto policy, org public key. The wrappers rely on these caches at commit time. Called automatically at the end of <code>activate</code> and at the end of <code>repo init</code>. Run manually when the operator knows the server has new policy.</p>
+      <pre>gator enterprise sync</pre>
+    </li>
+    <li>
+      <h4>gator enterprise repo init &lt;path&gt;</h4>
+      <p>Provision a specific repo. Writes <code>.gator/repo-id</code> (derived from <code>git remote origin</code> if not supplied), copies the bundled hook + session scripts into <code>.gator/scripts/</code>, creates evidence landing zones, creates agent entry files, and writes the requested hook mode locally so the wrapper honors it even if the server hasn&rsquo;t heard of the repo yet.</p>
+      <pre>gator enterprise repo init . --mode strict</pre>
+    </li>
+    <li class="step-done">
+      <h4>Everything after that is normal git</h4>
+      <p>Commit as usual. The global hook wrapper fires, reads the repo&rsquo;s canonical id, looks up the hook mode in the local policy cache, and dispatches to the repo-local <code>.gator/scripts/gator-pre-commit.py</code>. Nothing else operator-facing changes.</p>
+    </li>
+  </ol>
+
+  <div class="callout warn">
+    <span class="label">Warning &mdash; <code>--force</code> semantics</span>
+    <p><code>activate --force</code> is safe for redeploying hook wrappers after a source change. It does <strong>not</strong> rotate the machine keypair (that&rsquo;s <code>--regenerate-keys</code>) and does <strong>not</strong> wipe the hook-policy cache (locally-written repo-init intent-modes survive). Rotating the keypair on every wrapper redeploy would invalidate every previously-encrypted session block and desync the server&rsquo;s registered public key. Regression pins live at <code>enterprise/tests/test_activate_hooks.py::TestActivateKeyPreservation</code>.</p>
+  </div>
+</section>
+
+<section id="modes">
+  <h2>Hook modes: off / evidence_only / warning / strict</h2>
+
+  <p>Every governed commit runs in one of four modes. The mode determines whether missing evidence (a <code>commit_draft.md</code>) blocks the commit, downgrades to a warning, still records evidence silently, or does nothing.</p>
+
+  <table class="table-teal">
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Missing commit_draft</th>
+        <th>Evidence captured</th>
+        <th>When to use</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>strict</code> <span class="pill ok">Default</span></td>
+        <td><span class="pill warn">BLOCKS</span> the commit</td>
+        <td>Yes</td>
+        <td>Any repo where a human/bot should be able to explain the commit. Per Architect direction 2026-08-07: this is the default because commits shouldn&rsquo;t go silently.</td>
+      </tr>
+      <tr>
+        <td><code>warning</code></td>
+        <td>Prints warning, commit proceeds</td>
+        <td>Yes</td>
+        <td>CI or bot repos that can&rsquo;t interactively respond to a block. Explicit opt-in only.</td>
+      </tr>
+      <tr>
+        <td><code>evidence_only</code></td>
+        <td>Silent, commit proceeds</td>
+        <td>Yes</td>
+        <td>Deliberate low-ceremony repos where evidence still flows but the enforcement gate is disabled.</td>
+      </tr>
+      <tr>
+        <td><code>off</code></td>
+        <td>Silent, commit proceeds</td>
+        <td>No</td>
+        <td>Effectively disable Enterprise governance for this repo without disconnecting. Rare.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <span class="label">Where the mode lives</span>
+    <p>The mode is stored in <code>~/.gator/enterprise/hook-policy.json</code>, keyed by the repo&rsquo;s canonical identifier. Set locally by <code>repo init --mode &lt;X&gt;</code>. Server-side registration overlays on top when the sync runs, with the merge rule: <em>server wins on overlapping keys, local-only entries survive</em>. That means a freshly-provisioned repo the server doesn&rsquo;t know about yet still runs in the requested mode &mdash; the sync doesn&rsquo;t wipe the local intent.</p>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">Fail-safe default</span>
+    <p>Any exception during mode lookup (missing policy file, malformed JSON, missing env var, path resolution failure) falls through to <code>strict</code>. This is intentional &mdash; a broken policy state must not relax enforcement below the strictest option. Consequence: if <code>hook-policy.json</code> is corrupted, every commit runs in strict until the operator restores it.</p>
+  </div>
+</section>
+
+<section id="evidence">
+  <h2>Evidence flow (transcripts-first)</h2>
+
+  <p>Post-2026-08-08 the evidence path is <em>transcripts-first</em>. This is the biggest change from the historical <code>enterprise-configuration.md</code> shape.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node">
+        commit
+        <span class="kind">.gator/session-snippets/</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">operator triggers</span></div>
+      <div class="diagram-node blue">
+        transcripts pull
+        <span class="kind">enterprise-cli</span>
+      </div>
+      <div class="diagram-edge blue"><span class="diagram-edge-label">POST /ingest</span></div>
+      <div class="diagram-node green">
+        server storage
+        <span class="kind">DB + blob</span>
+      </div>
+    </div>
+  </div>
+
+  <p>What changed vs. the historical model:</p>
+
+  <ul>
+    <li><strong>Per-commit session-block generation retired</strong> from the post-commit hook (2026-08-09). The hook no longer runs a block generator on every commit; it just cleans up.</li>
+    <li><strong>Evidence flows on operator schedule</strong>, not commit schedule. The operator (or a scheduled job) runs <code>gator enterprise transcripts pull</code>, which discovers vendor session files (Claude Code, Codex, etc.), uploads them to the server via <code>POST /api/v1/transcripts/ingest</code>, and records the machine attribution trailer.</li>
+    <li><strong><code>.gator/session-blocks/</code> stays gitignored globally.</strong> The historical design committed evidence to Git; the current design keeps evidence in Enterprise-managed storage and Git in the repo.</li>
+    <li><strong>Session snippets still flow at commit time</strong> — the base-Gator pre-commit hook writes a <code>.gator/session-snippets/&lt;date&gt;.json</code> entry per commit. Snippets are lightweight commit-time evidence; transcripts are the fuller after-the-fact record.</li>
+  </ul>
+
+  <div class="callout note">
+    <span class="label">What this means for the Architect</span>
+    <p>Nothing changes at commit time. The change is entirely on the evidence-ingest side: instead of the post-commit hook doing crypto and writing artifacts, the operator (or a cron) runs <code>transcripts pull</code> when it&rsquo;s time to update the server. Base Gator hooks stay lightweight; Enterprise handles the fuller custody chain.</p>
+  </div>
+</section>
+
+<section id="verbs">
+  <h2>Subcommand surface</h2>
+
+  <p>Base install lists every verb via <code>gator enterprise --help</code>. Without the enterprise-cli package, every verb returns <code>EX_UNAVAILABLE = 69</code> with a stable sentinel <code>[gator-enterprise-unavailable]</code>. With it, delegation is transparent.</p>
+
+  <h3>Client-side (developer / repo operator)</h3>
+
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>Verb</th>
+        <th>What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>activate</code></td><td>One-time machine setup. Installs global hooks, generates machine keypair, registers with server, runs sync.</td></tr>
+      <tr><td><code>sync</code></td><td>Refresh machine-local caches (hook policy, org policy, crypto policy) from the server.</td></tr>
+      <tr><td><code>repo</code></td><td>Provision or reconfigure a repo. <code>repo init &lt;path&gt; --mode &lt;X&gt;</code> is the common form.</td></tr>
+      <tr><td><code>transcripts</code></td><td>Discover local vendor session files and upload them to the server. The transcripts-first evidence path.</td></tr>
+      <tr><td><code>commits</code></td><td>Query the server for commit records tied to this machine or repo. Read-side of the ingest pipe.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Server-side (operator / admin)</h3>
+
+  <table class="table-teal">
+    <thead>
+      <tr>
+        <th>Verb</th>
+        <th>What it does</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>auth</code></td><td>API-token management. Issue, list, revoke.</td></tr>
+      <tr><td><code>repos</code></td><td>Server-side repo inventory. List, query, reconcile.</td></tr>
+      <tr><td><code>providers</code></td><td>Provider integrations (GitHub, GitLab, etc.).</td></tr>
+      <tr><td><code>policies</code></td><td>Org policy documents. CRUD on the source-of-truth surface.</td></tr>
+      <tr><td><code>reports</code></td><td>Fleet-scale reporting. Drift, activity, evidence coverage.</td></tr>
+      <tr><td><code>machines</code></td><td>Machine registry &mdash; the machines that have <code>activate</code>d.</td></tr>
+      <tr><td><code>blocks</code></td><td>Legacy session-block operations. Historical; transcripts-first is the current path.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <span class="label">Verb-mapping guard</span>
+    <p>The base-wheel dispatcher carries a frozenset (<code>ENTERPRISE_CLI_VERBS</code>) of what the enterprise-cli package actually handles. Every advertised verb must be in that set; a mismatch surfaces as a contributor-error guard rather than a runtime failure. Adding or removing a verb in enterprise-cli requires updating the dispatcher constant in the same commit. Regression pin: <code>tests/test_gator_enterprise.py::TestConstants::test_every_advertised_verb_is_mapped</code>.</p>
+  </div>
+</section>
+
+<section id="state">
+  <h2>Where state lives on disk</h2>
+
+  <h3>Machine (<code>~/.gator/</code>)</h3>
+
+  <pre>~/.gator/
+  machine-id                             # stable machine identity
+  hooks/                                 # global git hooks (activated core.hooksPath)
+    pre-commit
+    commit-msg
+    post-commit
+  enterprise/
+    config.json                          # server URL + activation timestamp
+    hook-policy.json                     # local mode cache, keyed by repo-id
+    crypto-policy.json                   # crypto policy cache
+    cli-python-path                      # pinned interpreter for enterprise-cli
+    credentials.json                     # API bearer (chmod 600 on POSIX)
+    policies/&lt;slug&gt;.md               # cached org policy documents
+    org-keys/org-public-key.pem          # server-side org public key (crypto)
+    keys/machine-private-key.pem         # never leaves this machine
+    keys/machine-public-key.pem          # registered with server</pre>
+
+  <h3>Repo (<code>.gator/</code>)</h3>
+
+  <pre>.gator/
+  repo-id                                # canonical repo identifier
+  org-policy.md                          # pointer to org policy (repo-visible)
+  scripts/                               # bundled hook + session-capture scripts
+    gator-pre-commit.py
+    gator-session-open.py
+    ...
+  session-snippets/                      # commit-time snippets (tracked)
+  session-blocks/                        # gitignored under transcripts-first
+CLAUDE.md                                # agent entry file (Claude Code)
+AGENTS.md                                # agent entry file (Codex, Gemini, ...)</pre>
+
+  <div class="callout ok">
+    <span class="label">Clean separation</span>
+    <p>Secrets never enter the repo. Credentials, machine private keys, and cached policy all stay on the machine. The repo carries participation markers and repo-visible guidance for agents &mdash; nothing an attacker cloning the repo would find valuable.</p>
+  </div>
+</section>
+
+<section id="gotchas">
+  <h2>Common gotchas</h2>
+
+  <table class="table-red">
+    <thead>
+      <tr>
+        <th>Symptom</th>
+        <th>What&rsquo;s actually happening</th>
+        <th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Every <code>gator enterprise &lt;verb&gt;</code> returns exit 69 with <code>[gator-enterprise-unavailable]</code></td>
+        <td>The enterprise-cli package isn&rsquo;t importable. Base install alone doesn&rsquo;t include command bodies.</td>
+        <td>Install the enterprise-cli package from source: <code>pip install ./enterprise/enterprise-cli/</code>. Or accept that base Gator is what you need and ignore Enterprise.</td>
+      </tr>
+      <tr>
+        <td>Windows commits run in <code>strict</code> no matter what <code>repo init --mode</code> requested</td>
+        <td>Bug fixed 2026-08-06 &mdash; earlier hook wrappers shell-interpolated <code>$HOME</code>, which gave MSYS-form paths Windows Python couldn&rsquo;t open. Wrapper caught the error and fell through to <code>strict</code>.</td>
+        <td>Re-run <code>gator enterprise activate --force</code> on the machine to redeploy hooks with the fixed wrapper. Machines activated after 2026-08-06 aren&rsquo;t affected.</td>
+      </tr>
+      <tr>
+        <td>Sync wipes a locally-set repo mode</td>
+        <td>Would happen if <code>_do_sync</code> replaced instead of merged. It merges (server-wins on overlapping keys), so this shouldn&rsquo;t happen &mdash; but if it did, the local intent-write on <code>repo init</code> is the guard.</td>
+        <td>Re-run <code>repo init --mode &lt;X&gt;</code>. The mode is re-written locally before the sync fires.</td>
+      </tr>
+      <tr>
+        <td>Commit hook can&rsquo;t find <code>python</code> on Windows</td>
+        <td>Windows&rsquo;s stock <code>python3</code> App Execution Alias passes <code>command -v</code> but exits non-zero when actually invoked. Every hook probes candidates with <code>-V</code> before accepting them; a machine with only the alias fails with a clear stderr message.</td>
+        <td>Install a real Python (from python.org or Microsoft Store, not just the alias) and re-run <code>gator enterprise activate --force</code>.</td>
+      </tr>
+      <tr>
+        <td>Post-commit hook makes no session blocks</td>
+        <td>Retired 2026-08-09 as part of the transcripts-first pivot. This is intentional, not broken.</td>
+        <td>Use <code>gator enterprise transcripts pull</code> for evidence ingest. Post-commit only runs cleanup now.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="status">
+  <h2>Integration status &amp; what&rsquo;s deferred</h2>
+
+  <div class="callout info">
+    <span class="label">Aspirational-by-Architect-direction</span>
+    <p>Per the Architect: <em>"the enterprise portions do not need to work right now ... we are not requiring it to work out of the gate."</em> Base-wheel releases don&rsquo;t wait on Enterprise green tests. <code>enterprise/tests/</code> can be red without blocking a ship. Base CI (<code>tests/</code> + <code>contracts/compatibility/</code>) is the release gate; Enterprise CI is scoped independently.</p>
+  </div>
+
+  <p>Concretely deferred:</p>
+
+  <ul>
+    <li><strong>Server deployment</strong> &mdash; the FastAPI service is source-checkout only. No hosted instance today.</li>
+    <li><strong>Dashboard integration</strong> &mdash; the base-Gator Dashboard doesn&rsquo;t surface Enterprise state (per-repo mode, transcript ingest status, etc.). Blueprints 2.0 Release C-adjacent territory.</li>
+    <li><strong>Encryption roundtrip</strong> &mdash; migration 007 shipped the key columns; the client-side encryption path was scoped down when transcripts-first replaced the block-first design. Envelope-encryption code lives in <code>enterprise/app/routes/crypto.py</code> and is exercised by <code>enterprise/tests/</code> but isn&rsquo;t on the base-wheel release path.</li>
+    <li><strong>Full audit surface</strong> &mdash; five canonical audit questions all technically answerable via the current CLI + API pair, but the fleet-scale reporting shape is still evolving (2026-08-14 Phase 2 tranche extended it; more coming).</li>
+  </ul>
+
+  <p>Concretely working (per current release):</p>
+
+  <ul>
+    <li>Base-wheel dispatcher with stable exit-code + sentinel contract.</li>
+    <li>Machine activation with hook install, keypair generation, machine-key registration, config write.</li>
+    <li>Local hook-policy cache with the merge-preserves-local rule.</li>
+    <li>All four hook modes with the strict-default + fail-safe-strict semantics.</li>
+    <li>Bundled scripts stay byte-identical with the shipped and template copies (regression pin: <code>tests/test_multi_session.py::TestByteIdentityAcrossThreeCopies</code>).</li>
+    <li>Windows-safe python resolver + mode lookup (2026-08-06 fix arc, regression pins in <code>test_activate_hooks.py</code>).</li>
+    <li>Transcripts-first pull path (client-side <code>transcripts pull</code>, server-side ingest endpoint, DB schema).</li>
+  </ul>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ul>
+    <li><code>.gator/charters/scripts-enterprise.md</code> &mdash; the authoritative charter. Every TRIPWIRE lives here; this guide summarizes.</li>
+    <li><code>src/gator_command/scripts/gator-enterprise.py</code> &mdash; the base-wheel dispatcher. Only file base install ships for the Enterprise surface.</li>
+    <li><code>enterprise/enterprise-cli/gator_enterprise_cli/</code> &mdash; real command bodies. Read <code>main.py</code> for the argparse root, <code>commands/activate.py</code> for the machine setup logic, <code>commands/repo_init.py</code> for repo provisioning.</li>
+    <li><code>enterprise/app/</code> &mdash; FastAPI service. Routes under <code>app/routes/</code>, services under <code>app/services/</code>, migrations under <code>enterprise/migrations/versions/</code>.</li>
+    <li><code>.gator/blueprints/enterprise-configuration.md</code> &mdash; historical pre-transcripts-first configuration document. Useful for tracing legacy code paths; do not use as guidance for new work.</li>
+    <li><code>.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md</code> &mdash; the ADR that pivoted the evidence path.</li>
+    <li><code>.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-implementation-plan.md</code> &mdash; the bring-up arc where the Windows-safe fixes landed.</li>
+  </ul>
+</section>
+
+<section id="protocol">
+  <h2>Protocol notes</h2>
+  <p>This document conforms to the <code>gator-blueprint-html-v1</code> protocol (narrative template, <code>reference-explainer</code> doc class). See <code>.gator/procedures/authoring-html-artifacts.md</code> for the required metadata, doc classes, and status vocabulary.</p>
+</section>
+
+<footer class="doc-foot">
+  Gator &middot; reference-explainer &middot; Enterprise Architect guide &middot; 2026-09-03
+</footer>
+
+</body>
+</html>

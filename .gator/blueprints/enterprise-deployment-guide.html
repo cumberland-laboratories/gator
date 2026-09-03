@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Enterprise Deployment Guide">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="procedure-visual">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-09-03T21:30:00Z">
+  <meta name="gator-generated-by" content="claude-opus-4-7">
+  <meta name="gator-question" content="Starting from an empty machine and no server, how do I stand up an Enterprise instance, activate a developer machine, provision a repo, and verify the evidence pipe end-to-end?">
+
+  <title>Enterprise Deployment Guide</title>
+
+  <style>
+    :root {
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.75rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 0.95rem;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p { margin-bottom: 0.8rem; }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+    table.table-blue th { background: var(--blue-light); color: var(--blue-dark); border-bottom-color: var(--blue); }
+    table.table-red  th { background: var(--red-light);  color: var(--red);       border-bottom-color: var(--red); }
+    table.table-teal th { background: var(--teal-light); color: var(--teal-dark); border-bottom-color: var(--teal); }
+
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok   { background: var(--green-light); color: var(--green); }
+    .pill.info { background: var(--blue-light);  color: var(--blue-dark); }
+    .pill.warn { background: var(--red-light);   color: var(--red); }
+    .pill.alt  { background: var(--teal-light);  color: var(--teal-dark); }
+    .pill.na   { background: var(--gray-100);    color: var(--gray-600); }
+
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+    .steps > li h4 {
+      display: inline;
+      font-size: 1.02rem;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .steps > li p { margin: 0.35rem 0 0.5rem; }
+    .steps > li pre { margin: 0.5rem 0; }
+
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
+    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
+    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
+    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red { background: var(--red); }
+    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>Enterprise Deployment Guide</h1>
+  <div class="subtitle">From an empty machine and no server to a working evidence pipe: stand up the server, install the enterprise-cli, activate a machine, provision a repo, verify with a real commit.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> Procedure visual</div>
+    <div><span class="label">Repo:</span> gator</div>
+    <div><span class="label">Status:</span> <span class="status-badge">Current</span></div>
+    <div><span class="label">Updated:</span> 2026-09-03</div>
+    <div><span class="label">Question:</span> How do I stand up Enterprise from scratch?</div>
+    <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+  </div>
+  <div class="metaline">Companion to <code>enterprise-guide.html</code> (the capability &amp; architecture reference). This guide is the operations walkthrough. Read the capability guide first if you want to understand what you are deploying; read this one when you are ready to actually deploy it.</div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#pipeline">The whole pipeline at a glance</a></li>
+    <li><a href="#before">Before you start</a></li>
+    <li><a href="#choose">Choose a deployment path</a></li>
+    <li><a href="#fly">Path A: Fly.io deployment</a></li>
+    <li><a href="#local">Path B: Local development server</a></li>
+    <li><a href="#bootstrap">Bootstrap the admin token</a></li>
+    <li><a href="#cli">Install the enterprise-cli package</a></li>
+    <li><a href="#activate">Activate the developer machine</a></li>
+    <li><a href="#repo">Provision your first repo</a></li>
+    <li><a href="#verify">Verify the evidence pipe</a></li>
+    <li><a href="#next">Where you go from here</a></li>
+    <li><a href="#trouble">Common problems</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>Enterprise has two independently-installable pieces: a FastAPI server (source checkout under <code>enterprise/app/</code>, deployed to Fly.io or run locally) and an operator CLI (<code>enterprise/enterprise-cli/</code>, installed alongside base Gator on each developer machine). You bring up the server first, bootstrap an admin token, hand that token to a developer machine, run <code>gator enterprise activate</code>, then <code>gator enterprise repo init</code> per repo you want under Enterprise governance. First-commit verification confirms the whole pipe works end-to-end. Expect an hour for the first machine + first repo once the server is up; subsequent machines and repos are minutes.</p>
+  </div>
+</section>
+
+<section id="pipeline">
+  <h2>The whole pipeline at a glance</h2>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node">
+        Server up
+        <span class="kind">Fly.io or local</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">bootstrap</span></div>
+      <div class="diagram-node blue">
+        Admin token
+        <span class="kind">issued once</span>
+      </div>
+      <div class="diagram-edge blue"><span class="diagram-edge-label">activate</span></div>
+      <div class="diagram-node amber">
+        Machine ready
+        <span class="kind">~/.gator/</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">repo init</span></div>
+      <div class="diagram-node green">
+        Repo governed
+        <span class="kind">.gator/</span>
+      </div>
+    </div>
+  </div>
+
+  <p>Four phases, six commands total (server bring-up plus four on the developer side). Every phase leaves durable state on disk you can inspect, so partial progress is always recoverable.</p>
+</section>
+
+<section id="before">
+  <h2>Before you start</h2>
+
+  <p>Confirm each of these before spinning up the server. Missing any of them will show up as a confusing failure later.</p>
+
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>Prerequisite</th>
+        <th>Where you need it</th>
+        <th>How to get it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Python 3.11+</td>
+        <td>Server host AND every developer machine</td>
+        <td>python.org, package manager, or Microsoft Store (not just the Windows App Execution Alias &mdash; that trips the wrapper resolver).</td>
+      </tr>
+      <tr>
+        <td>Git</td>
+        <td>Every developer machine</td>
+        <td>Standard install. On Windows, prefer Git for Windows with Git Bash.</td>
+      </tr>
+      <tr>
+        <td>Base <code>gator-command</code></td>
+        <td>Every developer machine</td>
+        <td><code>pipx install gator-command</code>. Confirm with <code>gator --version</code>.</td>
+      </tr>
+      <tr>
+        <td>Source checkout of the Gator monorepo</td>
+        <td>Server host AND every developer machine that will run enterprise-cli</td>
+        <td><code>git clone</code> the monorepo. Enterprise pieces are source-checkout-only today.</td>
+      </tr>
+      <tr>
+        <td>A hosting decision</td>
+        <td>Server side</td>
+        <td>Fly.io (documented, has <code>fly.toml</code>) or run locally under uvicorn. Anything else works if it can host a Python web app + Postgres, but you are on your own for deploy config.</td>
+      </tr>
+      <tr>
+        <td>PostgreSQL access</td>
+        <td>Server side</td>
+        <td>Fly Postgres via <code>fly postgres create</code>, or any Postgres URL you can reach from the server host.</td>
+      </tr>
+      <tr>
+        <td><code>flyctl</code> installed and authenticated <em>(Fly path only)</em></td>
+        <td>Wherever you deploy from</td>
+        <td><a href="https://fly.io/docs/flyctl/install/">Fly install docs</a>. Then <code>fly auth login</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <span class="label">Windows caveat &mdash; python resolution</span>
+    <p>Windows ships a stub <code>python3</code> App Execution Alias that passes <code>command -v</code> but exits non-zero when invoked. The Enterprise hook wrappers probe every candidate with <code>-V</code> before accepting it, so a machine with only the stub fails loudly at <code>activate</code> with a clear message. Install a real Python (from python.org or the Microsoft Store, not just the alias) before running <code>gator enterprise activate</code>.</p>
+  </div>
+</section>
+
+<section id="choose">
+  <h2>Choose a deployment path</h2>
+
+  <table class="table-teal">
+    <thead>
+      <tr>
+        <th>Path</th>
+        <th>When to use</th>
+        <th>What you get</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>A. Fly.io</strong> <span class="pill ok">Documented</span></td>
+        <td>Multi-machine team, evaluators outside your local network, anything that outlives your laptop.</td>
+        <td>Persistent HTTPS URL, managed Postgres, one-command redeploys, migrations on every deploy.</td>
+      </tr>
+      <tr>
+        <td><strong>B. Local development</strong> <span class="pill alt">Fast iteration</span></td>
+        <td>Kicking the tires solo, integration testing, air-gapped experiments.</td>
+        <td>Runs on <code>localhost</code>. You manage Postgres. Only reachable from your machine unless you tunnel.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <span class="label">Both paths are supported</span>
+    <p>The <code>enterprise/README.md</code> covers both. The rest of this guide walks through each in its own section &mdash; skip the one you are not using.</p>
+  </div>
+</section>
+
+<section id="fly">
+  <h2>Path A: Fly.io deployment</h2>
+
+  <p>From a source checkout of the monorepo, <code>cd enterprise</code>. All commands below assume that working directory.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Create the Fly app</h4>
+      <p>Pick a name unique across Fly.io. The included <code>fly.toml</code> uses <code>gator-enterprise-dev</code>; clone the file and rename for staging or prod.</p>
+      <pre>fly apps create gator-enterprise-dev</pre>
+    </li>
+    <li class="step-alt">
+      <h4>Create and attach Postgres</h4>
+      <p>Fly Postgres in the same region as the app. Attach sets <code>DATABASE_URL</code> as a Fly secret automatically &mdash; no manual secret setup for E1.</p>
+      <pre>fly postgres create --name gator-enterprise-dev-db --region iad
+fly postgres attach gator-enterprise-dev-db -a gator-enterprise-dev</pre>
+    </li>
+    <li>
+      <h4>Deploy</h4>
+      <p>Builds the container from <code>Dockerfile</code>, runs Alembic migrations via the <code>release_command</code> in <code>fly.toml</code>, starts the API + worker processes.</p>
+      <pre>fly deploy</pre>
+    </li>
+    <li class="step-done">
+      <h4>Verify the server is up</h4>
+      <p>Health endpoint should return HTTP 200 with no auth required.</p>
+      <pre>curl https://gator-enterprise-dev.fly.dev/healthz</pre>
+    </li>
+  </ol>
+
+  <div class="callout ok">
+    <span class="label">What is running now</span>
+    <p>Two processes: <code>api</code> (gunicorn + uvicorn workers on port 8000, TLS-terminated by Fly on 443) and <code>worker</code> (background poller of the <code>ingest_jobs</code> table). Migrations ran once at deploy time. Every subsequent <code>fly deploy</code> re-runs migrations then rolls the containers.</p>
+  </div>
+</section>
+
+<section id="local">
+  <h2>Path B: Local development server</h2>
+
+  <p>From a source checkout, <code>cd enterprise</code>. You need a Postgres reachable from your machine &mdash; either a local install, a Docker container, or a proxied Fly Postgres.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Install server deps</h4>
+      <pre>pip install -r requirements.txt</pre>
+    </li>
+    <li class="step-alt">
+      <h4>Point at your database</h4>
+      <p>Set <code>DATABASE_URL</code>. Standard libpq format. For a Fly Postgres via proxy, use the URL <code>fly proxy</code> prints.</p>
+      <pre>export DATABASE_URL="postgresql://user:pass@localhost:5432/gator_enterprise"</pre>
+    </li>
+    <li>
+      <h4>Run migrations</h4>
+      <pre>alembic upgrade head</pre>
+    </li>
+    <li>
+      <h4>Start the API</h4>
+      <p><code>--reload</code> is helpful for local development. Drop it in anything resembling production.</p>
+      <pre>uvicorn app.main:app --reload --port 8000</pre>
+    </li>
+    <li class="step-alt">
+      <h4>Start the worker (separate terminal)</h4>
+      <pre>python -m app.worker</pre>
+    </li>
+    <li class="step-done">
+      <h4>Verify</h4>
+      <pre>curl http://localhost:8000/healthz</pre>
+    </li>
+  </ol>
+
+  <div class="callout info">
+    <span class="label">Local server, remote machines</span>
+    <p>A local server only accepts connections from your machine unless you tunnel or expose it. For evaluating with a second machine or another user, either use the Fly path or set up a tunnel (ngrok, cloudflared, ssh -R) explicitly. Do not paste the plain <code>localhost:8000</code> URL into another machine and expect it to work.</p>
+  </div>
+</section>
+
+<section id="bootstrap">
+  <h2>Bootstrap the admin token</h2>
+
+  <p>The first admin token is generated <em>on the server host</em>, printed to stdout, and never persisted retrievably. Copy it immediately to a secrets manager &mdash; you cannot get it back.</p>
+
+  <div class="callout warn">
+    <span class="label">Single-shot output</span>
+    <p>The bootstrap command prints the token once. If you lose the terminal output before saving it, you cannot recover the token &mdash; you have to run bootstrap again to issue a new one. Have your paste target open before running the command.</p>
+  </div>
+
+  <h3>On Fly.io</h3>
+  <pre>fly ssh console -a gator-enterprise-dev -C "python -m app.admin bootstrap"</pre>
+
+  <h3>Local</h3>
+  <p>From the same shell where <code>DATABASE_URL</code> is set:</p>
+  <pre>python -m app.admin bootstrap</pre>
+
+  <h3>Confirm it works</h3>
+  <p>Use the token to hit the &ldquo;whoami&rdquo; endpoint. Should return a small JSON payload identifying the token.</p>
+  <pre>curl -H "Authorization: Bearer &lt;paste-token-here&gt;" \
+  https://gator-enterprise-dev.fly.dev/api/v1/tokens/me</pre>
+</section>
+
+<section id="cli">
+  <h2>Install the enterprise-cli package</h2>
+
+  <p>The base wheel (<code>pipx install gator-command</code>) ships only the thin <code>gator enterprise</code> dispatcher. Without the enterprise-cli package installed, every <code>gator enterprise &lt;verb&gt;</code> returns exit code 69 with sentinel <code>[gator-enterprise-unavailable]</code>. Install the CLI on every developer machine that needs Enterprise capability.</p>
+
+  <p>From a source checkout on the developer machine:</p>
+
+  <pre>pipx inject gator-command ./enterprise/enterprise-cli/</pre>
+
+  <div class="callout note">
+    <span class="label">Why <code>pipx inject</code></span>
+    <p>Base Gator is installed via pipx into an isolated venv. <code>pipx inject</code> installs the enterprise-cli package <em>into that same venv</em>, so the dispatcher can import it. A plain <code>pip install</code> would go into your system Python and the dispatcher would not see it. Alternate approaches (<code>pipx install ./enterprise/enterprise-cli/</code> as a second app) work but leave the base dispatcher unable to delegate.</p>
+  </div>
+
+  <p>Verify:</p>
+  <pre>gator enterprise --help</pre>
+
+  <p>Should list every advertised verb. If any verb still returns exit 69 after this step, the inject did not land &mdash; check with <code>pipx list</code> and confirm <code>gator_enterprise_cli</code> shows under the <code>gator-command</code> venv.</p>
+</section>
+
+<section id="activate">
+  <h2>Activate the developer machine</h2>
+
+  <p>One-time machine setup. Creates <code>~/.gator/enterprise/</code>, installs global git hooks under <code>~/.gator/hooks/</code>, points git at them via <code>core.hooksPath</code>, writes machine identity + keypair, registers the machine with the server, and runs <code>sync</code> to pull down initial policy.</p>
+
+  <pre>gator enterprise activate \
+  --server-url https://gator-enterprise-dev.fly.dev \
+  --token &lt;paste-admin-token&gt;</pre>
+
+  <div class="callout warn">
+    <span class="label">Global hook install</span>
+    <p><code>activate</code> sets <code>git config --global core.hooksPath ~/.gator/hooks</code>. That is machine-wide: every repo on the machine will now dispatch to Enterprise hook wrappers. The wrappers no-op on ungoverned repos (they check for <code>.gator/repo-id</code> and exit cleanly if absent) so this does not break unrelated projects, but be aware you are making a machine-scoped change.</p>
+  </div>
+
+  <p>What lands on disk after this step:</p>
+
+  <pre>~/.gator/
+  machine-id
+  hooks/
+    pre-commit
+    commit-msg
+    post-commit
+  enterprise/
+    config.json              # server URL + activation timestamp
+    hook-policy.json         # local mode cache (empty until repo init)
+    crypto-policy.json
+    credentials.json         # chmod 600, contains the API bearer
+    keys/machine-private-key.pem
+    keys/machine-public-key.pem
+    policies/                # cached org policies
+    org-keys/</pre>
+
+  <p>Confirm the machine is registered with the server:</p>
+  <pre>gator enterprise status</pre>
+
+  <div class="callout ok">
+    <span class="label">Idempotent</span>
+    <p><code>activate</code> is safe to re-run. <code>--force</code> redeploys the hook wrappers after a source-side wrapper change without rotating the machine keypair or wiping the hook-policy cache. Use <code>--regenerate-keys</code> only when you intentionally want a fresh keypair (rare &mdash; that invalidates every previously-encrypted session block on this machine).</p>
+  </div>
+</section>
+
+<section id="repo">
+  <h2>Provision your first repo</h2>
+
+  <p>Per repo you want under Enterprise governance. Run from the repo root, or pass the path as the first positional argument.</p>
+
+  <pre>cd /path/to/your-repo
+gator enterprise repo init . --mode strict</pre>
+
+  <p>What this does, in order:</p>
+
+  <ol>
+    <li>Verifies the target has a <code>.git/</code> directory.</li>
+    <li>Derives a canonical repo identifier from <code>git remote origin</code> (SSH and HTTPS forms are normalized to the same canonical form).</li>
+    <li>Writes <code>.gator/repo-id</code> with the canonical identifier.</li>
+    <li>Copies the bundled hook + session-capture scripts into <code>.gator/scripts/</code>.</li>
+    <li>Creates <code>CLAUDE.md</code> and <code>AGENTS.md</code> if missing (agent entry files pointing to org + repo policy).</li>
+    <li>Writes the requested mode locally to <code>~/.gator/enterprise/hook-policy.json</code>, keyed by the canonical id &mdash; so the wrapper honors the mode even if the server does not yet know about this repo.</li>
+    <li>Attempts server-side registration of the hook mode (best-effort &mdash; no-ops silently for repos the server does not know yet, which is fine).</li>
+    <li>Runs <code>sync</code> so the local cache picks up any resulting server-side policy.</li>
+    <li>Auto-stages the newly provisioned files with <code>git add</code>.</li>
+  </ol>
+
+  <h3>Choosing a mode</h3>
+  <p><code>strict</code> is the default and the right choice for most repos. See the capability guide for the full <code>off</code> / <code>evidence_only</code> / <code>warning</code> / <code>strict</code> comparison. In brief:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Missing commit_draft</th>
+        <th>Best for</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>strict</code> <span class="pill ok">default</span></td><td><span class="pill warn">Blocks</span></td><td>Any repo where the human or bot should explain the commit.</td></tr>
+      <tr><td><code>warning</code></td><td>Warns, proceeds</td><td>CI or bot repos that cannot interactively respond.</td></tr>
+      <tr><td><code>evidence_only</code></td><td>Silent, proceeds</td><td>Explicit low-ceremony repos.</td></tr>
+      <tr><td><code>off</code></td><td>Silent, proceeds, no evidence</td><td>Effectively disable Enterprise for this repo without disconnecting.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <span class="label">Repo-init self-repair</span>
+    <p>Re-running <code>repo init</code> on a repo that already has partial provisioning fixes what is missing without wiping what already works. The mode-write is a merge into <code>hook-policy.json</code>, not a replace. If a sync happens after you write a local mode, the sync merges server-wins-on-conflict; local-only entries survive.</p>
+  </div>
+</section>
+
+<section id="verify">
+  <h2>Verify the evidence pipe</h2>
+
+  <p>Nothing proves the whole chain works like a real commit + a real transcripts pull.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Make a small commit in the provisioned repo</h4>
+      <p>Any non-trivial edit. If you provisioned in <code>strict</code> mode, you need a <code>.gator/commit_draft.md</code> with a body; otherwise the pre-commit hook will block.</p>
+      <pre>echo "test" &gt;&gt; README.md
+echo "message: Test commit under Enterprise" &gt; .gator/commit_draft.md
+git add . &amp;&amp; git commit -m "Enterprise verification test"</pre>
+      <p>You should see the base-Gator pre-commit output plus the Enterprise wrapper picking up the repo-id and dispatching. No block, no error &mdash; commit lands.</p>
+    </li>
+    <li class="step-alt">
+      <h4>Confirm the snippet was written</h4>
+      <p>Base Gator writes a session snippet for every commit. Check that one landed:</p>
+      <pre>ls .gator/session-snippets/ | tail -3</pre>
+    </li>
+    <li>
+      <h4>Pull transcripts to the server</h4>
+      <p>Discovers vendor session files (Claude Code, Codex, etc.), uploads them to the server, records the machine attribution.</p>
+      <pre>gator enterprise transcripts pull</pre>
+    </li>
+    <li class="step-done">
+      <h4>Confirm the server sees your commit</h4>
+      <p>Query the commits list for the repo. Should include the SHA of the commit you just made.</p>
+      <pre>gator enterprise commits list --repo &lt;canonical-id-from-repo-id-file&gt;</pre>
+    </li>
+  </ol>
+
+  <div class="callout ok">
+    <span class="label">If this all works</span>
+    <p>The pipe is live end-to-end: developer machine ↔ repo hook wrapper ↔ machine-local cache ↔ server ↔ database. Every subsequent commit under this repo flows through the same path automatically. The evidence flow (<code>transcripts pull</code>) is operator-triggered &mdash; run it on whatever cadence fits your governance policy: manually, cron, CI, or a scheduled job on the server host itself.</p>
+  </div>
+</section>
+
+<section id="next">
+  <h2>Where you go from here</h2>
+
+  <p>With the pipe live, the natural next moves:</p>
+
+  <ul>
+    <li><strong>Second developer machine</strong> &mdash; on a fresh machine, run steps 8-9-10 (install enterprise-cli, activate with the same server URL and a token issued for that person, provision the same or a different repo). No server-side work needed.</li>
+    <li><strong>Additional repos</strong> &mdash; run <code>gator enterprise repo init</code> per repo. Each gets its own canonical id and its own mode entry.</li>
+    <li><strong>Issue per-user tokens</strong> &mdash; the bootstrap token is an admin token. For team use, issue narrower tokens via <code>gator enterprise auth</code> (see the server-side subcommand surface).</li>
+    <li><strong>Provider integrations</strong> &mdash; wire GitHub or GitLab under <code>gator enterprise providers</code> so the server can enrich commit data with PR context and branch info.</li>
+    <li><strong>Scheduled transcripts pull</strong> &mdash; put <code>gator enterprise transcripts pull</code> on a cron or CI schedule so evidence flows without manual runs.</li>
+    <li><strong>Fleet reporting</strong> &mdash; <code>gator enterprise reports</code> for cross-machine and cross-repo visibility once you have &gt;1 machine or &gt;1 repo enrolled.</li>
+  </ul>
+
+  <div class="callout note">
+    <span class="label">Aspirational reality check</span>
+    <p>Per Architect direction, Enterprise integration is explicitly deferred &mdash; some surfaces above (fleet reports, provider integrations at scale) are wired but not battle-tested. If you hit rough edges, they are known rough edges; log them and expect them to smooth out as the surface hardens. Base-wheel releases do not wait on Enterprise green tests.</p>
+  </div>
+</section>
+
+<section id="trouble">
+  <h2>Common problems</h2>
+
+  <table class="table-red">
+    <thead>
+      <tr>
+        <th>Symptom</th>
+        <th>Cause</th>
+        <th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>gator enterprise --help</code> shows the verbs but every verb returns exit 69 with <code>[gator-enterprise-unavailable]</code></td>
+        <td>The enterprise-cli package is not importable from the base-Gator venv.</td>
+        <td>Run <code>pipx inject gator-command ./enterprise/enterprise-cli/</code>. Confirm with <code>pipx list</code>.</td>
+      </tr>
+      <tr>
+        <td><code>fly deploy</code> fails at <code>release_command</code> with an Alembic error</td>
+        <td>Migration chain conflict or missing revision.</td>
+        <td>Check <code>enterprise/migrations/versions/</code> for gaps. Run <code>alembic history</code> locally against the same DB URL to see the actual state. Re-deploy after fixing.</td>
+      </tr>
+      <tr>
+        <td><code>activate</code> fails with a Python-resolver error on Windows</td>
+        <td>Only the Windows App Execution Alias for <code>python3</code> is on PATH; no real Python.</td>
+        <td>Install a real Python (python.org or Microsoft Store). Re-run <code>activate</code>. The wrapper probes candidates with <code>-V</code> before accepting them.</td>
+      </tr>
+      <tr>
+        <td>Commit runs in <code>strict</code> even though you ran <code>repo init --mode evidence_only</code></td>
+        <td>On machines activated before the 2026-08-06 fix arc, the mode-lookup shell-interpolated <code>$HOME</code>, which broke on Git Bash for Windows. Wrapper fell through to strict.</td>
+        <td>Run <code>gator enterprise activate --force</code> to redeploy the fixed wrapper. Machines activated after 2026-08-06 are unaffected.</td>
+      </tr>
+      <tr>
+        <td><code>transcripts pull</code> reports zero transcripts uploaded</td>
+        <td>No vendor session files under the discovery paths (Claude Code&rsquo;s <code>~/.claude/projects/</code>, Codex&rsquo;s equivalent, etc.), or the session files are older than any recorded commit.</td>
+        <td>Make a fresh commit from inside an AI session, then re-run <code>transcripts pull</code>. Discovery is time-scoped to recent commits.</td>
+      </tr>
+      <tr>
+        <td>Bootstrap token lost before saving</td>
+        <td>Terminal buffer overrun, closed the window, whatever.</td>
+        <td>Run <code>python -m app.admin bootstrap</code> again. Issues a new token. Old token is not automatically revoked &mdash; if the old one might be in a bad actor&rsquo;s hands, revoke explicitly via <code>gator enterprise auth</code>.</td>
+      </tr>
+      <tr>
+        <td>Second machine cannot reach the local dev server</td>
+        <td>Local server listens on <code>localhost</code> only. Not exposed to your LAN, let alone the internet.</td>
+        <td>Either use the Fly path, or set up a tunnel (ngrok, cloudflared, ssh -R). Do not paste your local URL into another machine and expect it to work.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ul>
+    <li><code>enterprise/README.md</code> &mdash; canonical README for the enterprise server, updated in step with deploy config. The commands in this guide are drawn from it.</li>
+    <li><code>enterprise/fly.toml</code> &mdash; Fly deployment configuration. Copy this file when standing up staging or prod (change app name and region).</li>
+    <li><code>enterprise/Dockerfile</code> &mdash; build recipe. Fly builds from this on every <code>fly deploy</code>.</li>
+    <li><code>enterprise/alembic.ini</code> and <code>enterprise/migrations/versions/</code> &mdash; database schema and migration chain.</li>
+    <li><code>enterprise/enterprise-cli/pyproject.toml</code> &mdash; the operator CLI package. Dependencies: <code>httpx</code>, <code>cryptography</code>.</li>
+    <li><code>.gator/blueprints/enterprise-guide.html</code> &mdash; capability and architecture reference (companion to this guide).</li>
+    <li><code>.gator/charters/scripts-enterprise.md</code> &mdash; the authoritative charter with every TRIPWIRE and regression pin.</li>
+  </ul>
+</section>
+
+<section id="protocol">
+  <h2>Protocol notes</h2>
+  <p>This document conforms to the <code>gator-blueprint-html-v1</code> protocol (narrative template, <code>procedure-visual</code> doc class). See <code>.gator/procedures/authoring-html-artifacts.md</code> for the required metadata, doc classes, and status vocabulary.</p>
+</section>
+
+<footer class="doc-foot">
+  Gator &middot; procedure-visual &middot; Enterprise deployment guide &middot; 2026-09-03
+</footer>
+
+</body>
+</html>

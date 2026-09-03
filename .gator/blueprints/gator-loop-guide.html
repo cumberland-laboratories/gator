@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Gator Loop — Architect Guide">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="procedure-visual">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-09-03T20:30:00Z">
+  <meta name="gator-generated-by" content="claude-opus-4-7">
+  <meta name="gator-question" content="How does the Architect actually run a gator loop end-to-end — start it, orient the models, watch it, unblock stalls, and read the residue?">
+
+  <title>Gator Loop — Architect Guide</title>
+
+  <style>
+    :root {
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.75rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 0.95rem;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p { margin-bottom: 0.8rem; }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+    table.table-blue th { background: var(--blue-light); color: var(--blue-dark); border-bottom-color: var(--blue); }
+    table.table-red  th { background: var(--red-light);  color: var(--red);       border-bottom-color: var(--red); }
+    table.table-teal th { background: var(--teal-light); color: var(--teal-dark); border-bottom-color: var(--teal); }
+
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok   { background: var(--green-light); color: var(--green); }
+    .pill.info { background: var(--blue-light);  color: var(--blue-dark); }
+    .pill.warn { background: var(--red-light);   color: var(--red); }
+    .pill.alt  { background: var(--teal-light);  color: var(--teal-dark); }
+    .pill.na   { background: var(--gray-100);    color: var(--gray-600); }
+
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+    .steps > li h4 {
+      display: inline;
+      font-size: 1.02rem;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+    .steps > li p { margin: 0.35rem 0 0.5rem; }
+    .steps > li pre { margin: 0.5rem 0; }
+
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
+    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
+    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
+    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red { background: var(--red); }
+    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>Gator Loop — Architect Guide</h1>
+  <div class="subtitle">How to run a governed planning debate between two AI models: setup, launch, orientation, monitoring, unblock, and reading the residue.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> Procedure visual</div>
+    <div><span class="label">Repo:</span> gator</div>
+    <div><span class="label">Status:</span> <span class="status-badge">Current</span></div>
+    <div><span class="label">Updated:</span> 2026-09-03</div>
+    <div><span class="label">Question:</span> How do I run a loop?</div>
+    <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+  </div>
+  <div class="metaline">Companion to <code>gator-loop.html</code> (interactive blueprint of the state machine) — this document is the architect-facing operations guide.</div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#before">Before you start</a></li>
+    <li><a href="#launch">Launching the loop</a></li>
+    <li><a href="#orient">Orienting the models</a></li>
+    <li><a href="#watch">Watching the loop run</a></li>
+    <li><a href="#control">Architect controls (pause, interject, unblock, end)</a></li>
+    <li><a href="#end">When the loop ends</a></li>
+    <li><a href="#trouble">What can go wrong</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>Gator loop is a CLI-mediated debate between two AI models under human oversight. You write a short sketch, run <code>gator loop start</code>, hand each model its role token, and watch. The loop runs on file-based handoffs — models submit artifacts through the CLI, never talk to each other directly. The Architect can watch, pause, interject a message without pausing, unblock stalls, or stop a loop cold. Every event is durable in <code>.gator/loops/&lt;loop-id&gt;/</code>; nothing gets Git-committed automatically.</p>
+  </div>
+</section>
+
+<section id="before">
+  <h2>Before you start</h2>
+  <p>Four things you need before the loop is worth starting:</p>
+
+  <ol class="steps">
+    <li>
+      <h4>A feature slug</h4>
+      <p>Short identifier, kebab-case. Example: <code>dashboard-html-preview</code>, <code>session-block-recovery</code>. Used in the loop ID and directory name.</p>
+    </li>
+    <li class="step-alt">
+      <h4>A sketch file</h4>
+      <p>Markdown file describing what you want built. This is the scope contract — models cannot exceed what the sketch describes. Can be brief (a few paragraphs) or detailed (a full design sketch); the draftor expands it into a plan. Save it anywhere in the repo.</p>
+    </li>
+    <li>
+      <h4>Two AI sessions</h4>
+      <p>One for the draftor, one for the reviewer. Claude Code, Codex CLI, Gemini CLI — anything that can run <code>gator</code> subcommands works. Different models are fine (often better — you want independent perspectives, not two copies of the same voice).</p>
+    </li>
+    <li>
+      <h4>A monitoring terminal</h4>
+      <p>The <code>gator loop start</code> process blocks until the loop is terminal. That terminal is your primary event stream. Leave it open for the duration.</p>
+    </li>
+  </ol>
+
+  <div class="callout note">
+    <span class="label">Note</span>
+    <p>You do <em>not</em> need to prep the models in advance. Each model reads its role, the protocol, and the sketch as soon as it joins. The Architect's job is scope + supervision, not model briefing.</p>
+  </div>
+</section>
+
+<section id="launch">
+  <h2>Launching the loop</h2>
+
+  <p>From the repo root, in your monitoring terminal:</p>
+
+  <pre>gator loop start --feature dashboard-html-preview --sketch path/to/sketch.md</pre>
+
+  <p>Common options:</p>
+
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>Flag</th>
+        <th>Default</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>--max-rounds N</code></td>
+        <td>3</td>
+        <td>Revision cycles before the loop stops with <code>max_rounds_exceeded</code>. Increase for complex plans; decrease for tight sketches.</td>
+      </tr>
+      <tr>
+        <td><code>--turn-timeout SECONDS</code></td>
+        <td>300</td>
+        <td>Seconds a model has to submit before the host fires <code>turn_timed_out</code>. Bump higher if models are slow to respond.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The host prints a banner with three tokens (draftor, reviewer, architect) and enters watch mode:</p>
+
+  <pre>  gator loop
+
+  Loop: dashboard-html-preview-2026-09-03T14-30-00Z
+  Feature: dashboard-html-preview
+  Max rounds: 3
+  Turn timeout: 5m
+
+  -- Tokens ------------------------------------------------
+
+  DRAFTOR:
+    gator loop status --token glp_ZGFzaGJv...
+
+  REVIEWER:
+    gator loop status --token glp_ZGFzaGJv...
+
+  ARCHITECT:
+    gator loop status --token glp_ZGFzaGJv...
+
+  -- Watching -----------------------------------------------
+
+  [14:30:01] loop started
+  next: draftor (plan_drafting)
+  waiting...</pre>
+
+  <div class="callout warn">
+    <span class="label">Warning</span>
+    <p>The three tokens are the entire access-control system. The architect token in particular is what gates <code>pause</code>, <code>interject</code>, <code>unblock</code>, and <code>end</code>. Never paste the architect token into a model session — that's the whole point of role separation. Keep it in a separate terminal or a note.</p>
+  </div>
+</section>
+
+<section id="orient">
+  <h2>Orienting the models</h2>
+
+  <p>Open a second (draftor) and third (reviewer) terminal. Give each model its role token. Two entry points:</p>
+
+  <h3>Claude Code — slash command</h3>
+  <pre>/loop-join glp_ZGFzaGJv...</pre>
+
+  <h3>Any other AI (Codex, Gemini, etc.) — orientation prompt</h3>
+  <pre>I'm giving you a gator loop token. Follow the "gator loop join" instructions
+in your entry point. Your token is: glp_ZGFzaGJv...</pre>
+
+  <p>Each model then:</p>
+
+  <ol>
+    <li>Reads <code>procedures/gator-loop-protocol.md</code> — the behavioral contract.</li>
+    <li>Runs <code>gator loop status --token &lt;token&gt;</code> — sees its role and whether it's its turn.</li>
+    <li>Reads the sketch and any prior turn artifact (draftor reads <code>sketch.md</code>; reviewer also reads <code>plan.current.md</code>).</li>
+    <li>Writes a submission and submits via <code>gator loop submit-draft</code> or <code>gator loop submit-review</code>.</li>
+  </ol>
+
+  <div class="callout ok">
+    <span class="label">Confirmed shape</span>
+    <p>The entire orientation is in the vendor entry-point file (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>). If a model reads its entry point, it knows exactly what to do with the token. If it doesn't, the token is inert — the model can't accidentally do damage because every write goes through <code>gator loop</code>.</p>
+  </div>
+</section>
+
+<section id="watch">
+  <h2>Watching the loop run</h2>
+
+  <p>Five surfaces, all read-only from the Architect's perspective. Pick the one that fits what you're trying to see.</p>
+
+  <table class="table-teal">
+    <thead>
+      <tr>
+        <th>Surface</th>
+        <th>Best for</th>
+        <th>Kind</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The host terminal (<code>gator loop start</code>'s stdout)</td>
+        <td>Real-time event stream while the loop runs. Primary monitoring surface.</td>
+        <td><span class="pill alt">Stream</span></td>
+      </tr>
+      <tr>
+        <td><code>gator loop tail --loop &lt;id&gt;</code></td>
+        <td>Same event stream in a different terminal — useful when the host is backgrounded or you're on another machine.</td>
+        <td><span class="pill alt">Stream</span></td>
+      </tr>
+      <tr>
+        <td><code>gator loop status --token &lt;architect-token&gt;</code></td>
+        <td>Snapshot: current state, both models' join status, turn history, allowed commands. <code>--json</code> for machine reads.</td>
+        <td><span class="pill info">Snapshot</span></td>
+      </tr>
+      <tr>
+        <td><code>gator loop list</code></td>
+        <td>Every loop this machine knows about — stage, round, whether blocked. For "which of my loops need attention?"</td>
+        <td><span class="pill info">Snapshot</span></td>
+      </tr>
+      <tr>
+        <td>Reading files in <code>.gator/loops/&lt;id&gt;/</code> directly</td>
+        <td>Any editor, <code>cat</code>, <code>tail -f</code>. All state is on disk — no hidden API.</td>
+        <td><span class="pill na">Direct</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <span class="label">Why this works</span>
+    <p>The host is a <em>reader</em> of <code>events.jsonl</code> (with one write exception: timeout enforcement, protected by an exclusive file lock). There's no privileged "host view" vs. "Architect view" — they see the same event stream, observed at different times. Anything you build around the file surface stays in sync automatically.</p>
+  </div>
+
+  <h3>What the loop directory contains</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Contents</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>session.json</code></td><td>Full session state: stage, round, turn history, deadlines, resume state.</td></tr>
+      <tr><td><code>events.jsonl</code></td><td>Append-only event log. One JSON line per event.</td></tr>
+      <tr><td><code>sketch.md</code></td><td>The original scope document (copied at <code>gator loop start</code>).</td></tr>
+      <tr><td><code>plan.current.md</code></td><td>Latest draftor submission — the plan under review.</td></tr>
+      <tr><td><code>findings.current.md</code></td><td>Latest reviewer submission — findings or approval body.</td></tr>
+      <tr><td><code>.tokens.json</code></td><td>Gitignored. Holds the secret nonces used to validate role tokens.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="control">
+  <h2>Architect controls</h2>
+
+  <p>Four Architect-only commands. All require the architect token.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node blue">
+        Active state
+        <span class="kind">running</span>
+      </div>
+      <div class="diagram-edge blue"><span class="diagram-edge-label">pause</span></div>
+      <div class="diagram-node amber">
+        paused_by_architect
+        <span class="kind">deadline frozen</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">unblock</span></div>
+      <div class="diagram-node green">
+        Active state
+        <span class="kind">resumed</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>pause</h3>
+  <p>Freeze a running loop from any active state. Deadline stops counting. Saves the resume state so you can pick up exactly where you left off.</p>
+  <pre>gator loop pause --token &lt;architect-token&gt; --message "Stopping for the day"</pre>
+
+  <h3>interject</h3>
+  <p>Inject guidance without pausing. Message shown in the next <code>gator loop status</code> the active model runs; cleared when they submit. No state change, no deadline change.</p>
+  <pre>gator loop interject --token &lt;architect-token&gt; --message "Prefer the pandas approach over pyreadstat"</pre>
+
+  <h3>unblock</h3>
+  <p>Move the loop out of a paused state (<code>blocked_on_architect</code> or <code>paused_by_architect</code>) back to active. By default resumes the saved stage; override with <code>--stage</code> and <code>--next-role</code> if the situation changed.</p>
+  <pre>gator loop unblock --loop &lt;id&gt; --message "Yes, check the v2 API docs, that's the right source"</pre>
+
+  <h3>end</h3>
+  <p>Stop the loop cold from any non-terminal state. Records a reason. Different from <code>plan_approved</code> — there's no plan blessing, just a deliberate stop.</p>
+  <pre>gator loop end --token &lt;architect-token&gt; --reason "Scope changed, starting over with a new sketch"</pre>
+
+  <div class="callout info">
+    <span class="label">Distinction worth knowing</span>
+    <p><code>blocked_on_architect</code> and <code>paused_by_architect</code> both land you at "waiting for architect unblock," but the origin differs — the first is a model calling <code>escalate</code> because it's stuck; the second is the Architect calling <code>pause</code> deliberately. The residue tells you which happened, so you can debrief accordingly.</p>
+  </div>
+</section>
+
+<section id="end">
+  <h2>When the loop ends</h2>
+
+  <p>Four ways a loop can terminate. The residue directory persists in every case — reading it is how you learn what happened.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Terminal state</th>
+        <th>What it means</th>
+        <th>What to do</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>plan_approved</code></td>
+        <td>Reviewer approved with <code>--approve</code>. Plan is signed off.</td>
+        <td>Use <code>plan.current.md</code> to guide implementation. Optionally commit the loop directory as governance residue.</td>
+      </tr>
+      <tr>
+        <td><code>max_rounds_exceeded</code></td>
+        <td>Revision ceiling hit without approval.</td>
+        <td>Read final plan + findings. Either accept as-is, or start a new loop with <code>--max-rounds</code> bumped and the current plan as the new sketch.</td>
+      </tr>
+      <tr>
+        <td><code>turn_timed_out</code></td>
+        <td>A model didn't submit within <code>--turn-timeout</code>.</td>
+        <td>Start a new loop with a longer timeout, or check whether the model actually joined.</td>
+      </tr>
+      <tr>
+        <td><code>ended_by_architect</code></td>
+        <td>You called <code>gator loop end</code>.</td>
+        <td>Reason is in the session record. Do whatever comes next based on why you stopped.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok">
+    <span class="label">No autonomous commits</span>
+    <p>The loop never commits anything to Git on its own. The residue directory is tracked-safe (session state + events are non-secret), but the <code>.tokens.json</code> file is gitignored. When and whether to commit the loop residue is entirely the Architect's call.</p>
+  </div>
+</section>
+
+<section id="trouble">
+  <h2>What can go wrong</h2>
+
+  <table class="table-red">
+    <thead>
+      <tr>
+        <th>Symptom</th>
+        <th>What's actually happening</th>
+        <th>Fix</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Model submits garbage or edits loop files directly</td>
+        <td>Model didn't read the protocol; skipped <code>gator loop status</code>.</td>
+        <td>Re-orient the model. Protocol lives at <code>procedures/gator-loop-protocol.md</code>. Rule 2: the CLI is the only authorized writer.</td>
+      </tr>
+      <tr>
+        <td>"requires role 'draftor', got 'reviewer'" (or similar)</td>
+        <td>You gave a model the wrong token.</td>
+        <td>Check the banner. Draftor token to the draftor session, reviewer token to the reviewer session. Architect token stays with the Architect.</td>
+      </tr>
+      <tr>
+        <td>Model claims to have submitted but nothing shows in the host</td>
+        <td>Model called something other than <code>submit-draft</code>/<code>submit-review</code>.</td>
+        <td>Have the model re-run <code>gator loop status</code>. It'll show the actual state; the model can retry with the right command.</td>
+      </tr>
+      <tr>
+        <td>Timeout fires but the model was mid-response</td>
+        <td><code>--turn-timeout</code> is too short for how slowly the model is responding.</td>
+        <td>Loop ended in <code>turn_timed_out</code> — start a new one with a bigger timeout. Model latency varies a lot by vendor and load.</td>
+      </tr>
+      <tr>
+        <td>Two loops in flight, mixed up which is which</td>
+        <td>Multiple loops running concurrently, tokens got confused.</td>
+        <td><code>gator loop list</code> to see them all. Loop IDs are date-stamped; the banner from <code>gator loop start</code> shows the ID clearly.</td>
+      </tr>
+      <tr>
+        <td>Model escalates repeatedly</td>
+        <td>Sketch is genuinely ambiguous, or the model doesn't have enough context.</td>
+        <td>Unblock with a <code>--message</code> that resolves the ambiguity. If it keeps happening, <code>end</code> the loop and rewrite the sketch.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ul>
+    <li><code>.gator/blueprints/gator-loop.html</code> — interactive state-machine map (roles, states, transitions). Complementary to this guide.</li>
+    <li><code>.gator/charters/scripts-loop.md</code> — module ownership, function map, TRIPWIREs.</li>
+    <li><code>.gator/blueprints/gator-loop.md</code> — legacy markdown walkthrough (predates the HTML pair, retained per D2 coexist).</li>
+    <li><code>procedures/gator-loop-protocol.md</code> — the behavioral contract every model reads when joining.</li>
+    <li><code>src/gator_command/scripts/loop/</code> — the seven module files (<code>session.py</code>, <code>state_machine.py</code>, <code>events.py</code>, <code>submit.py</code>, <code>host.py</code>, <code>cli.py</code>, <code>__init__.py</code>).</li>
+  </ul>
+</section>
+
+<section id="protocol">
+  <h2>Protocol notes</h2>
+  <p>This document conforms to the <code>gator-blueprint-html-v1</code> protocol (narrative template, <code>procedure-visual</code> doc class). See <code>.gator/procedures/authoring-html-artifacts.md</code> for the required metadata, doc classes, and status vocabulary.</p>
+</section>
+
+<footer class="doc-foot">
+  Gator · procedure-visual · Architect's guide to running the loop · 2026-09-03
+</footer>
+
+</body>
+</html>

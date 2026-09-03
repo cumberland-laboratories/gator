@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Gator Loop — Roles, States, and Transitions">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="feature-blueprint">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-09-03T20:00:00Z">
+  <meta name="gator-generated-by" content="claude-opus-4-7">
+  <meta name="gator-question" content="What is the Gator loop, which states does it move through, which role drives each state, and how does the loop leave every state — including the paused and terminal ones?">
+
+  <title>Gator Loop — Roles, States, and Transitions</title>
+
+  <style>
+    :root {
+      --bg: #fafbfc;
+      --panel: #ffffff;
+      --ink: #1a1a1a;
+      --muted: #6b7280;
+      --line: #e1e4e8;
+      --line-soft: #eef1f4;
+      --accent: #1a5fa8;
+
+      --bp-core:       #d96f3b;   /* orange   — Draftor        */
+      --bp-governance: #4f7c78;   /* teal     — Host / success  */
+      --bp-runtime:    #ddb85f;   /* gold     — Active states   */
+      --bp-analysis:   #6b8db5;   /* blue     — Reviewer        */
+      --bp-legacy:     #b08d7d;   /* clay     — Paused / stall  */
+      --bp-enterprise: #8c5f91;   /* purple   — Architect       */
+
+      --edge: rgba(42, 60, 66, 0.35);
+      --edge-active: rgba(217, 111, 59, 0.95);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--accent); }
+
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Header */
+    .head { border-bottom: 2px solid var(--bp-governance); padding-bottom: 16px;
+      margin-bottom: 24px; }
+    .head h1 { margin: 0 0 8px 0; font-size: 24px; letter-spacing: -0.01em;
+      color: var(--ink); font-weight: 700; }
+    .head .subtitle { color: var(--muted); font-size: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px 20px; margin-top: 14px; font-size: 12px; }
+    .meta-row .label { color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-right: 6px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      background: #eef7e6; color: #2d6a2d; }
+
+    /* Main workspace: map + sidebar */
+    .work { display: grid; grid-template-columns: 1fr 360px; gap: 16px;
+      align-items: stretch; margin-bottom: 32px; }
+    @media (max-width: 1100px) { .work { grid-template-columns: 1fr; } }
+
+    .canvas-frame { position: relative; background: var(--bg);
+      border: 1px solid var(--line); border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      overflow: auto; min-height: 400px; max-height: calc(100vh - 240px); }
+    .stage { position: relative; width: 1180px; height: 880px; }
+    .stage-hint { position: absolute; top: 8px; right: 12px; font-size: 11px;
+      color: var(--muted); pointer-events: none;
+      background: rgba(255, 255, 255, 0.85); padding: 2px 8px; border-radius: 3px; }
+
+    svg.edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .edge { fill: none; stroke: var(--edge); stroke-width: 1.5;
+      transition: stroke 0.15s, stroke-width 0.15s, opacity 0.15s; }
+    .edge.active { stroke: var(--edge-active); stroke-width: 2.5; }
+    .edge.faded { opacity: 0.15; }
+    .edge-label { font-size: 11px; fill: var(--muted); pointer-events: none;
+      letter-spacing: 0.02em; font-family: -apple-system, "Segoe UI", sans-serif; }
+    .arrow-head { fill: var(--edge); }
+
+    .node { position: absolute; width: 200px; min-height: 60px;
+      background: var(--panel); border: 2px solid #d0d7de;
+      border-left: 4px solid var(--node-accent, var(--bp-core));
+      border-radius: 6px; padding: 8px 12px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s, border-color 0.15s;
+      font-family: -apple-system, "Segoe UI", sans-serif; }
+    .node:hover { transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); }
+    .node.active { border-color: var(--node-accent, var(--bp-core));
+      box-shadow: 0 4px 14px rgba(217, 111, 59, 0.25); }
+    .node.faded { opacity: 0.25; }
+    .node-title { font-weight: 600; font-size: 14px; color: var(--ink); line-height: 1.3; }
+    .node-kind { display: block; font-size: 11px; color: var(--muted);
+      margin-top: 4px; letter-spacing: 0.02em; }
+
+    /* Sidebar */
+    .side { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 6px; padding: 16px 20px; overflow-y: auto;
+      align-self: stretch; max-height: calc(100vh - 240px);
+      font-family: -apple-system, "Segoe UI", sans-serif; }
+    .side h3 { margin: 0 0 6px 0; font-size: 13px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+    .side .hint { font-size: 12px; color: var(--muted); cursor: pointer;
+      padding-bottom: 12px; border-bottom: 1px solid var(--line);
+      margin-bottom: 12px; }
+    .side .hint:hover { color: var(--accent); }
+    .detail-title { margin: 0 0 4px 0; font-size: 18px; color: var(--ink); font-weight: 600; }
+    .detail-kind { font-size: 12px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .detail-summary { font-size: 13px; line-height: 1.5; color: var(--ink); margin: 0 0 14px 0; }
+    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
+    .side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5;
+      color: var(--ink); }
+    .side code { font-size: 12px; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; color: var(--ink); }
+    .rel-muted { color: var(--muted); font-size: 12px; }
+
+    /* Narrative */
+    .narrative section { border-top: 1px solid var(--line-soft); padding-top: 20px;
+      margin-top: 24px; }
+    .narrative section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+    .narrative h2 { margin: 0 0 10px 0; font-size: 19px; letter-spacing: -0.01em;
+      color: var(--ink); font-weight: 600; }
+    .narrative p { font-size: 14px; line-height: 1.6; color: var(--ink); }
+    .narrative ul, .narrative ol { font-size: 14px; line-height: 1.6; color: var(--ink);
+      padding-left: 22px; }
+    .narrative code { font-size: 0.9em; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; color: var(--ink); }
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px;
+      color: var(--muted); margin-top: 10px; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+      margin-right: 5px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <h1>Gator Loop — Roles, States, and Transitions</h1>
+    <div class="subtitle">A governed CLI-mediated debate between two AI models under human oversight. Shows every role, every state, and every way the loop leaves each state.</div>
+    <div class="meta-grid">
+      <div class="meta-row"><span class="label">Doc class:</span> Feature blueprint</div>
+      <div class="meta-row"><span class="label">Repo:</span> gator</div>
+      <div class="meta-row"><span class="label">Status:</span> <span class="status-badge">Current</span></div>
+      <div class="meta-row"><span class="label">Updated:</span> 2026-09-03</div>
+      <div class="meta-row"><span class="label">Question:</span> How does the loop move?</div>
+      <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--bp-core)"></span>Draftor</span>
+      <span><span class="swatch" style="background: var(--bp-analysis)"></span>Reviewer</span>
+      <span><span class="swatch" style="background: var(--bp-enterprise)"></span>Architect</span>
+      <span><span class="swatch" style="background: var(--bp-governance)"></span>Host / success</span>
+      <span><span class="swatch" style="background: var(--bp-runtime)"></span>Active state</span>
+      <span><span class="swatch" style="background: var(--bp-legacy)"></span>Paused / stalled state</span>
+    </div>
+  </header>
+
+  <div class="work">
+    <div class="canvas-frame">
+      <div class="stage" id="stage">
+        <div class="stage-hint">Click any node to isolate its 1-hop neighborhood. Double-click empty area to reset.</div>
+        <svg class="edges" id="edges" width="1180" height="880">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <aside class="side">
+      <h3>Level 1: Role + state map</h3>
+      <div class="hint" id="reset">Click any node in the map to isolate its neighborhood. Click here (or double-click empty canvas) to reset.</div>
+      <div id="detail"></div>
+    </aside>
+  </div>
+
+  <section class="narrative">
+    <section>
+      <h2>What this shows</h2>
+      <p>Every entity that participates in the loop, and every arrow the loop can travel. Four <strong>role</strong> nodes across the top (Draftor, Reviewer, Architect, Host). Three <strong>active states</strong> in the middle band (<code>plan_drafting</code>, <code>plan_review</code>, <code>plan_revision</code>). Two <strong>paused states</strong> below that (<code>blocked_on_architect</code>, <code>paused_by_architect</code>). Four <strong>terminal states</strong> along the bottom (<code>plan_approved</code>, <code>max_rounds_exceeded</code>, <code>turn_timed_out</code>, <code>ended_by_architect</code>). Edges are labeled with the action or event that fires the transition.</p>
+      <p>Click any node to see everything it touches: for a state, the transitions in and out of it plus the role that owns it; for a role, the states that role writes to.</p>
+    </section>
+
+    <section>
+      <h2>Why these regions matter</h2>
+      <ul>
+        <li><strong>Three active states + one revision loop</strong> — the plan bounces between <code>plan_drafting</code>/<code>plan_revision</code> (draftor) and <code>plan_review</code> (reviewer) until the reviewer approves or <code>max_rounds</code> is exhausted. This is the load-bearing debate cycle.</li>
+        <li><strong>Two paused states, not one</strong> — <code>blocked_on_architect</code> is model-triggered (a stuck model calls <code>escalate</code>). <code>paused_by_architect</code> is human-triggered (the Architect calls <code>pause</code>). Same "wait for human unblock" shape, distinct origins so the residue tells you who paused it.</li>
+        <li><strong>Four terminal states, three of them "unresolved"</strong> — only <code>plan_approved</code> ends with a plan the reviewer signed off on. <code>max_rounds_exceeded</code>, <code>turn_timed_out</code>, and <code>ended_by_architect</code> are all "loop stopped without approval" — the residue still tells you how far it got, but the plan isn't blessed.</li>
+        <li><strong>The Host has exactly one write path</strong> — timeout enforcement. Everywhere else it's a reader of <code>events.jsonl</code>. That's the "Host Write Authority" TRIPWIRE in the charter; it's why <code>turn_timed_out</code> is the only terminal the Host reaches into.</li>
+        <li><strong>Architect can reach every terminal-side state</strong> — <code>unblock</code>, <code>pause</code>, <code>interject</code>, <code>end</code>. The Architect role is intentionally the most powerful. Models can only submit, escalate, or wait.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Reading order</h2>
+      <ol>
+        <li>Click <strong>Draftor</strong> — see the two active states the draftor writes to and how <code>submit_draft</code> connects them.</li>
+        <li>Click <strong>plan_review</strong> — the highest-fan-out node in the graph. See the four transitions <em>out</em> of it (approve, findings, max-rounds, escalate/pause/end/timeout).</li>
+        <li>Click <strong>blocked_on_architect</strong> — see the three active states that can enter it (via <code>escalate</code>) and the three active states <code>unblock</code> can restore to.</li>
+        <li>Click <strong>plan_approved</strong> — the happy-path terminal. Reachable only from <code>plan_review</code>. Everything else is either "loop stopped early" or "loop never resolved".</li>
+        <li>Click <strong>Host</strong> — see the single write path (<code>turn_timed_out</code>). Compare to Architect for the contrast.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Boundaries and tripwires</h2>
+      <ul>
+        <li><strong>Stage-role consistency</strong> — <code>plan_drafting</code> and <code>plan_revision</code> require the draftor; <code>plan_review</code> requires the reviewer. <code>advance_unblocked()</code> enforces this on the restore path so <code>unblock</code> can't send the loop into an impossible state.</li>
+        <li><strong>Escalate bypasses the turn check</strong> — either model role can escalate from any active state, even if it's not their turn. Intentional: a model stuck waiting for a submit that will never come needs the ability to break out.</li>
+        <li><strong>Terminal states are terminal</strong> — no transitions out. The Architect cannot "un-approve" a plan or resurrect a timed-out loop. Start a new loop instead. This is why the residue directory is the durable record.</li>
+        <li><strong>Session lock write ordering</strong> — every writer (submit, escalate, unblock, timeout) saves <code>session.json</code> before appending to <code>events.jsonl</code>, both inside the exclusive lock. Prevents the Host from observing a terminal event whose session state isn't yet durable.</li>
+        <li><strong>Token nonce separation</strong> — tokens carry a secret nonce that lives only in gitignored <code>.tokens.json</code>. Committed <code>session.json</code> holds only role names. Tokens can't be reconstructed from git history.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Open questions</h2>
+      <ul>
+        <li>Should <code>blocked_on_architect</code> and <code>paused_by_architect</code> converge into a single "paused" state with a <code>paused_by</code> field, or is the distinct-state shape worth the extra state-machine surface? (Currently two states — kept distinct because the CLI validators branch on the state name.)</li>
+        <li>Dashboard integration is deferred (charter: "Does Not Own"). Whether the loop map surfaces in the Dashboard as a live view, or the Dashboard just links out to this blueprint, is an open UX call for the Blueprints 2.0 follow-on releases.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>References</h2>
+      <ul>
+        <li><code>src/gator_command/scripts/loop/state_machine.py</code> — <code>ACTIVE_STAGES</code>, <code>PAUSED_STAGES</code>, <code>TERMINAL_STAGES</code>, plus every <code>advance_*</code> transition function.</li>
+        <li><code>src/gator_command/scripts/loop/submit.py</code> — <code>handle_submit_draft</code>, <code>handle_submit_review</code>, <code>handle_escalate</code>, <code>handle_unblock</code>, <code>handle_pause</code>, <code>handle_interject</code>, <code>handle_end</code>.</li>
+        <li><code>src/gator_command/scripts/loop/host.py</code> — <code>start_loop</code>, <code>watch_loop</code>, <code>_try_enforce_timeout</code>.</li>
+        <li><code>.gator/charters/scripts-loop.md</code> — module ownership, function map, five TRIPWIREs (session lock write ordering, token nonce separation, host write authority, stage-role consistency, escalate-bypasses-turn-check, RBAC).</li>
+        <li><code>.gator/blueprints/gator-loop.md</code> — companion narrative walkthrough for the Architect's "how do I actually use gator loop?" question.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Protocol notes</h2>
+      <p>This document conforms to the <code>gator-blueprint-html-v1</code> protocol. See <code>.gator/procedures/authoring-html-artifacts.md</code> for the required metadata, doc classes, and status vocabulary.</p>
+    </section>
+  </section>
+</div>
+
+<script>
+  const NODES = [
+    // Roles — top row
+    { id: "draftor",   title: "Draftor",   kind: "Model role",   color: "var(--bp-core)",
+      x: 60,   y: 60,
+      summary: "One of the two model roles. Owns plan_drafting (initial plan) and plan_revision (after reviewer findings). Submits via `gator loop submit-draft`; can also escalate. Rejected from architect commands by RBAC.",
+      covers: ["src/gator_command/scripts/loop/submit.py::handle_submit_draft", "src/gator_command/scripts/loop/state_machine.py::validate_action"],
+      functions: ["submit_draft", "escalate"] },
+
+    { id: "reviewer",  title: "Reviewer",  kind: "Model role",   color: "var(--bp-analysis)",
+      x: 340,  y: 60,
+      summary: "The other model role. Owns plan_review — reads the draftor's plan.current.md, submits findings.current.md, and either approves (--approve → plan_approved) or requests revisions (→ plan_revision).",
+      covers: ["src/gator_command/scripts/loop/submit.py::handle_submit_review"],
+      functions: ["submit_review", "submit_review --approve", "escalate"] },
+
+    { id: "architect", title: "Architect", kind: "Human role",   color: "var(--bp-enterprise)",
+      x: 620,  y: 60,
+      summary: "The human role. Holds the architect token (kept out of model sessions). Can pause a running loop, interject a message without pausing, unblock a stalled loop, end a loop prematurely, or just watch. Never a turn-taker; always authorized on active loops.",
+      covers: ["src/gator_command/scripts/loop/submit.py::handle_pause", "src/gator_command/scripts/loop/submit.py::handle_interject", "src/gator_command/scripts/loop/submit.py::handle_unblock", "src/gator_command/scripts/loop/submit.py::handle_end"],
+      functions: ["pause", "interject", "unblock", "end"] },
+
+    { id: "host",      title: "Host",      kind: "System process", color: "var(--bp-governance)",
+      x: 900,  y: 60,
+      summary: "The `gator loop start` process. Prints the banner with three tokens, watches events.jsonl in real time, renders log lines to the terminal. READER by default — the single write exception is timeout enforcement.",
+      covers: ["src/gator_command/scripts/loop/host.py::start_loop", "src/gator_command/scripts/loop/host.py::watch_loop", "src/gator_command/scripts/loop/host.py::_try_enforce_timeout"],
+      functions: ["start_loop", "watch_loop", "_try_enforce_timeout"] },
+
+    // Active states — center row
+    { id: "plan_drafting",  title: "plan_drafting",  kind: "Active state · Draftor turn", color: "var(--bp-runtime)",
+      x: 60,   y: 340,
+      summary: "The loop's starting active state. Draftor reads sketch.md, writes an initial plan, submits via `gator loop submit-draft`. Advances to plan_review. Also reachable via unblock from a paused state.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::ACTIVE_STAGES"],
+      functions: ["advance_draft_submitted", "advance_unblocked"] },
+
+    { id: "plan_review",    title: "plan_review",    kind: "Active state · Reviewer turn", color: "var(--bp-runtime)",
+      x: 460,  y: 340,
+      summary: "Reviewer's turn. Reads plan.current.md + sketch.md, writes findings.current.md, submits via `gator loop submit-review`. --approve advances to plan_approved (terminal). Findings advance to plan_revision (or max_rounds_exceeded if the round ceiling is hit).",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::advance_review_submitted"],
+      functions: ["advance_review_submitted"] },
+
+    { id: "plan_revision",  title: "plan_revision",  kind: "Active state · Draftor turn", color: "var(--bp-runtime)",
+      x: 860,  y: 340,
+      summary: "Draftor gets a second (or third...) turn to revise the plan against reviewer findings. Same submit path as plan_drafting → advances to plan_review. The round counter increments here before the round check in the next reviewer turn.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::ACTIVE_STAGES"],
+      functions: ["advance_draft_submitted", "advance_unblocked"] },
+
+    // Paused states — middle-lower
+    { id: "blocked_on_architect", title: "blocked_on_architect", kind: "Paused · Model-triggered", color: "var(--bp-legacy)",
+      x: 260,  y: 555,
+      summary: "A model called `gator loop escalate --reason ...`. Reason is stored; deadline paused. Only architect action can move the loop out (unblock restores to the resume_stage saved when escalate fired).",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::advance_escalated", "src/gator_command/scripts/loop/state_machine.py::advance_unblocked"],
+      functions: ["advance_escalated", "advance_unblocked"] },
+
+    { id: "paused_by_architect",  title: "paused_by_architect",  kind: "Paused · Architect-triggered", color: "var(--bp-legacy)",
+      x: 680,  y: 555,
+      summary: "Architect called `gator loop pause` from an active state. Resume state saved, deadline paused. Same unblock path as escalate-triggered pause — different origin so the residue tells you who paused it.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::advance_paused_by_architect", "src/gator_command/scripts/loop/state_machine.py::advance_unblocked"],
+      functions: ["advance_paused_by_architect", "advance_unblocked"] },
+
+    // Terminal states — bottom row
+    { id: "plan_approved",       title: "plan_approved",       kind: "Terminal · Success",             color: "var(--bp-governance)",
+      x: 60,   y: 760,
+      summary: "The happy path. Reviewer called `submit-review --approve`. plan.current.md is the final approved plan. Unresolved findings cleared. Only terminal reachable through the normal loop cycle; every other terminal is a stall or an early stop.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::TERMINAL_STAGES"],
+      functions: ["advance_review_submitted (approve branch)"] },
+
+    { id: "max_rounds_exceeded", title: "max_rounds_exceeded", kind: "Terminal · Unresolved",         color: "var(--bp-legacy)",
+      x: 340,  y: 760,
+      summary: "Reviewer submitted findings on the final allowed round. Loop stopped without approval. Plan and last findings are on disk; Architect decides whether to accept as-is, start a new loop with --max-rounds bumped, or abandon.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::advance_review_submitted"],
+      functions: ["advance_review_submitted (max_rounds branch)"] },
+
+    { id: "turn_timed_out",      title: "turn_timed_out",      kind: "Terminal · Host-enforced",       color: "var(--bp-legacy)",
+      x: 620,  y: 760,
+      summary: "Whoever was on turn didn't submit within --turn-timeout. Host's timeout enforcer reads deadline, acquires lock, re-checks, fires. Race-safe: if a submit landed first, the enforcement is silently skipped.",
+      covers: ["src/gator_command/scripts/loop/host.py::_try_enforce_timeout", "src/gator_command/scripts/loop/state_machine.py::advance_turn_timed_out"],
+      functions: ["_try_enforce_timeout", "advance_turn_timed_out"] },
+
+    { id: "ended_by_architect",  title: "ended_by_architect",  kind: "Terminal · Architect-initiated", color: "var(--bp-enterprise)",
+      x: 900,  y: 760,
+      summary: "Architect called `gator loop end` with a reason. Reachable from every non-terminal state including the two paused states. Distinct from plan_approved: no approval, just a deliberate stop with a recorded reason.",
+      covers: ["src/gator_command/scripts/loop/state_machine.py::advance_ended_by_architect"],
+      functions: ["advance_ended_by_architect"] },
+  ];
+
+  const EDGES = [
+    // Role → state ownership
+    { from: "draftor",  to: "plan_drafting",  label: "owns" },
+    { from: "draftor",  to: "plan_revision",  label: "owns" },
+    { from: "reviewer", to: "plan_review",    label: "owns" },
+    { from: "host",     to: "turn_timed_out", label: "enforces" },
+    { from: "architect", to: "blocked_on_architect", label: "unblocks" },
+    { from: "architect", to: "paused_by_architect",  label: "unblocks / paused" },
+    { from: "architect", to: "ended_by_architect",   label: "ends" },
+
+    // Happy-path cycle
+    { from: "plan_drafting",  to: "plan_review",    label: "submit-draft" },
+    { from: "plan_review",    to: "plan_revision",  label: "findings" },
+    { from: "plan_revision",  to: "plan_review",    label: "submit-draft" },
+    { from: "plan_review",    to: "plan_approved",  label: "--approve" },
+    { from: "plan_review",    to: "max_rounds_exceeded", label: "round > max" },
+
+    // Escalate → blocked
+    { from: "plan_drafting",  to: "blocked_on_architect", label: "escalate" },
+    { from: "plan_review",    to: "blocked_on_architect", label: "escalate" },
+    { from: "plan_revision",  to: "blocked_on_architect", label: "escalate" },
+    { from: "blocked_on_architect", to: "plan_drafting", label: "unblock" },
+    { from: "blocked_on_architect", to: "plan_review",   label: "unblock" },
+    { from: "blocked_on_architect", to: "plan_revision", label: "unblock" },
+
+    // Architect pause → paused_by_architect
+    { from: "plan_drafting",  to: "paused_by_architect", label: "pause" },
+    { from: "plan_review",    to: "paused_by_architect", label: "pause" },
+    { from: "plan_revision",  to: "paused_by_architect", label: "pause" },
+    { from: "paused_by_architect", to: "plan_drafting", label: "unblock" },
+    { from: "paused_by_architect", to: "plan_review",   label: "unblock" },
+    { from: "paused_by_architect", to: "plan_revision", label: "unblock" },
+
+    // Timeout
+    { from: "plan_drafting",  to: "turn_timed_out", label: "deadline" },
+    { from: "plan_review",    to: "turn_timed_out", label: "deadline" },
+    { from: "plan_revision",  to: "turn_timed_out", label: "deadline" },
+
+    // End
+    { from: "plan_drafting",  to: "ended_by_architect", label: "end" },
+    { from: "plan_review",    to: "ended_by_architect", label: "end" },
+    { from: "plan_revision",  to: "ended_by_architect", label: "end" },
+    { from: "blocked_on_architect", to: "ended_by_architect", label: "end" },
+    { from: "paused_by_architect",  to: "ended_by_architect", label: "end" },
+  ];
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const stage = document.getElementById("stage");
+  const svg = document.getElementById("edges");
+  const detail = document.getElementById("detail");
+  const nodesById = {};
+
+  NODES.forEach(function (n) {
+    nodesById[n.id] = n;
+    const el = document.createElement("article");
+    el.className = "node";
+    el.dataset.id = n.id;
+    el.style.left = n.x + "px";
+    el.style.top = n.y + "px";
+    if (n.color) el.style.setProperty("--node-accent", n.color);
+    el.innerHTML = '<div class="node-title">' + escHtml(n.title) + '</div>'
+      + (n.kind ? '<span class="node-kind">' + escHtml(n.kind) + '</span>' : '');
+    stage.appendChild(el);
+  });
+
+  EDGES.forEach(function (e, i) {
+    const from = nodesById[e.from];
+    const to = nodesById[e.to];
+    if (!from || !to) return;
+    const pathId = "path-" + i;
+    const p = document.createElementNS(svgNS, "path");
+    p.setAttribute("id", pathId);
+    p.setAttribute("d", edgePath(from, to));
+    p.setAttribute("class", "edge");
+    p.setAttribute("marker-end", "url(#arrow)");
+    p.dataset.from = e.from;
+    p.dataset.to = e.to;
+    svg.appendChild(p);
+    if (e.label) {
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("class", "edge-label");
+      text.setAttribute("dy", "-4");
+      const tp = document.createElementNS(svgNS, "textPath");
+      tp.setAttribute("href", "#" + pathId);
+      tp.setAttribute("startOffset", "50%");
+      tp.setAttribute("text-anchor", "middle");
+      tp.textContent = e.label;
+      text.appendChild(tp);
+      svg.appendChild(text);
+    }
+  });
+
+  stage.addEventListener("click", function (ev) {
+    const nodeEl = ev.target.closest(".node");
+    if (nodeEl) isolate(nodeEl.dataset.id);
+  });
+  stage.addEventListener("dblclick", function (ev) {
+    if (!ev.target.closest(".node")) reset();
+  });
+  document.getElementById("reset").addEventListener("click", reset);
+
+  function isolate(id) {
+    const neigh = new Set([id]);
+    EDGES.forEach(function (e) {
+      if (e.from === id) neigh.add(e.to);
+      if (e.to === id) neigh.add(e.from);
+    });
+    stage.querySelectorAll(".node").forEach(function (el) {
+      const nid = el.dataset.id;
+      el.classList.toggle("active", nid === id);
+      el.classList.toggle("faded", !neigh.has(nid));
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      const on = p.dataset.from === id || p.dataset.to === id;
+      p.classList.toggle("active", on);
+      p.classList.toggle("faded", !on);
+    });
+    renderDetail(id);
+  }
+  function reset() {
+    stage.querySelectorAll(".node").forEach(function (el) {
+      el.classList.remove("active", "faded");
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      p.classList.remove("active", "faded");
+    });
+    detail.innerHTML = '';
+  }
+  function renderDetail(id) {
+    const n = nodesById[id];
+    if (!n) return;
+    const outs = EDGES.filter(function (e) { return e.from === id; })
+      .map(function (e) { return { t: nodesById[e.to], label: e.label }; });
+    const ins = EDGES.filter(function (e) { return e.to === id; })
+      .map(function (e) { return { t: nodesById[e.from], label: e.label }; });
+    let html = '<h4 class="detail-title">' + escHtml(n.title) + '</h4>';
+    if (n.kind) html += '<div class="detail-kind">' + escHtml(n.kind) + '</div>';
+    if (n.summary) html += '<p class="detail-summary">' + escHtml(n.summary) + '</p>';
+    if (n.covers && n.covers.length) {
+      html += '<div class="section-label">Covers</div><ul>';
+      n.covers.forEach(function (c) { html += '<li><code>' + escHtml(c) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (n.functions && n.functions.length) {
+      html += '<div class="section-label">Representative functions</div><ul>';
+      n.functions.forEach(function (f) { html += '<li><code>' + escHtml(f) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (outs.length) {
+      html += '<div class="section-label">Depends on</div><ul>';
+      outs.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    if (ins.length) {
+      html += '<div class="section-label">Used by</div><ul>';
+      ins.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    detail.innerHTML = html;
+  }
+  function edgePath(from, to) {
+    const fx = from.x + 100, fy = from.y + 30;
+    const tx = to.x + 100, ty = to.y + 30;
+    const mx = (fx + tx) / 2;
+    return "M " + fx + " " + fy + " C " + mx + " " + fy + ", " + mx + " " + ty + ", " + tx + " " + ty;
+  }
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+</script>
+</body>
+</html>
