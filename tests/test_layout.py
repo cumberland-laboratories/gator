@@ -285,11 +285,125 @@ class TestLayoutDetection:
         Regression pin — additions to USER_VISIBLE_SCAFFOLDING are silent
         drift (nothing observes the set beyond `_dir_is_scaffolding_only`);
         an accidental removal would cause the templates to be routed to
-        `.includes/blueprints/` on v2 repos, invisible where agents look."""
+        `.includes/blueprints/` on v2 repos, invisible where agents look.
+
+        NOTE: this pin only asserts the SET; the actual routing invariant
+        (that plan_updates + migrate_layout honor the set) is covered by
+        TestScaffoldingRoutingRoundTrip below — that class was added
+        v2.12.1 after v2.12.0 shipped with three hardcoded routing sites
+        that ignored the frozenset."""
         assert "_template.html" in gator_layout.USER_VISIBLE_SCAFFOLDING
         assert "_template-narrative.html" in gator_layout.USER_VISIBLE_SCAFFOLDING
         assert "README.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
         assert "_template.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
+
+
+class TestScaffoldingRoutingRoundTrip:
+    """v2.12.1 fix: real end-to-end pins that USER_VISIBLE_SCAFFOLDING is
+    HONORED by the routing functions, not just PRESENT in the frozenset.
+
+    v2.12.0 shipped with three hardcoded local sets in `gator-update.py`
+    (lines 101, 181, 1295 at the time) that duplicated USER_VISIBLE_SCAFFOLDING
+    and drifted from it when the two HTML templates were added. Result: fleet
+    repos running `gator update` got `_template.html` and
+    `_template-narrative.html` at `.gator/.includes/blueprints/` instead of
+    `.gator/blueprints/`, invisible where agents look. The pre-fix regression
+    pin `test_user_visible_scaffolding_includes_both_html_templates` asserted
+    the SET was correct — it passed — but never invoked the routing code.
+    These pins do."""
+
+    def _real_templates_dir(self):
+        """The actual source-repo templates dir. Uses the byte-identical
+        template hierarchy the wheel ships to fleet repos so the pin
+        catches any real-world routing drift."""
+        return (
+            Path(__file__).parent.parent
+            / "src" / "gator_command" / "templates" / "gator-starter"
+        )
+
+    def test_plan_updates_routes_html_scaffolding_to_root_on_v2(self, v2_repo):
+        """v2 layout: plan_updates() MUST plan `_template.html` and
+        `_template-narrative.html` to land at `.gator/blueprints/`, not
+        `.gator/.includes/blueprints/`."""
+        gator_dir = v2_repo / ".gator"
+        plan = _update.plan_updates(self._real_templates_dir(), gator_dir, v2_repo)
+
+        # plan_file_update returns (action, src, dest) tuples. Extract every
+        # planned destination path whose parent lineage includes blueprints/.
+        dests = [entry[2] for entry in plan if "blueprints" in str(entry[2])]
+
+        expected_root = gator_dir / "blueprints" / "_template.html"
+        expected_root_narrative = gator_dir / "blueprints" / "_template-narrative.html"
+        forbidden = gator_dir / ".includes" / "blueprints" / "_template.html"
+        forbidden_narrative = gator_dir / ".includes" / "blueprints" / "_template-narrative.html"
+
+        assert expected_root in dests, (
+            f"_template.html must land at user-visible root, not .includes/. "
+            f"Blueprint plan entries: {[str(d) for d in dests]}"
+        )
+        assert expected_root_narrative in dests, (
+            f"_template-narrative.html must land at user-visible root, not "
+            f".includes/. Blueprint plan entries: {[str(d) for d in dests]}"
+        )
+        assert forbidden not in dests, (
+            "_template.html was misrouted to .includes/blueprints/ — routing "
+            "site is using a hardcoded set instead of USER_VISIBLE_SCAFFOLDING"
+        )
+        assert forbidden_narrative not in dests, (
+            "_template-narrative.html was misrouted to .includes/blueprints/"
+        )
+
+    def test_migrate_layout_preserves_html_scaffolding_at_root(self, v1_repo):
+        """v1→v2 migration: `_template.html` and `_template-narrative.html`
+        at `.gator/blueprints/` in a v1 repo MUST stay at
+        `.gator/blueprints/` (not be moved to `.gator/.includes/blueprints/`)
+        during migrate_layout()."""
+        # v1_repo's blueprints/ carries a README.md by default; add both
+        # HTML templates alongside so migration has something to route.
+        bp = v1_repo / ".gator" / "blueprints"
+        (bp / "_template.html").write_text("<!DOCTYPE html>\n", encoding="utf-8")
+        (bp / "_template-narrative.html").write_text("<!DOCTYPE html>\n", encoding="utf-8")
+
+        _update.migrate_layout(v1_repo, v1_repo / ".gator", None)
+
+        # Files must remain at user-visible root
+        assert (v1_repo / ".gator" / "blueprints" / "_template.html").exists(), (
+            "_template.html was moved to .includes/blueprints/ during migration"
+        )
+        assert (v1_repo / ".gator" / "blueprints" / "_template-narrative.html").exists(), (
+            "_template-narrative.html was moved to .includes/blueprints/"
+        )
+        # And must NOT exist at the .includes/ path
+        assert not (v1_repo / ".gator" / ".includes" / "blueprints" / "_template.html").exists()
+        assert not (
+            v1_repo / ".gator" / ".includes" / "blueprints" / "_template-narrative.html"
+        ).exists()
+
+    def test_plan_updates_and_migrate_layout_consult_same_source_of_truth(self):
+        """Both routing sites must consult `USER_VISIBLE_SCAFFOLDING` from
+        `gator_layout`, not a local hardcoded set. Grep-style regression:
+        the two known-drift sentinel filenames MUST NOT appear as a
+        hardcoded literal set in gator-update.py source (allowed only as
+        the value of USER_VISIBLE_SCAFFOLDING in gator_layout.py).
+
+        A future addition of another HTML/interactive template to
+        USER_VISIBLE_SCAFFOLDING would silently drift again if a hardcoded
+        `{"README.md", "_template.md"}` local set reappeared."""
+        source = (SCRIPTS_DIR / "gator-update.py").read_text(encoding="utf-8")
+        # Reject the two known-drift literal patterns from the v2.12.0 bug
+        forbidden_patterns = (
+            '{"README.md", "_template.md"}',
+            "('README.md', '_template.md')",
+            '("README.md", "_template.md")',
+        )
+        offending = [p for p in forbidden_patterns if p in source]
+        assert not offending, (
+            f"gator-update.py contains hardcoded scaffolding literals "
+            f"{offending} — routing must consult "
+            f"gator_layout.USER_VISIBLE_SCAFFOLDING instead. This is the "
+            f"exact drift class that shipped in v2.12.0 and was fixed in "
+            f"v2.12.1."
+        )
 
 
 # ===========================================================================

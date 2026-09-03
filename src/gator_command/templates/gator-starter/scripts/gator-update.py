@@ -320,8 +320,15 @@ def plan_updates(templates_dir, gator_dir, repo_root):
         if src.exists():
             plan.append(plan_file_update(src, dest))
 
-    # Shipped directories → shipped_base (but scaffolding stays at root)
-    _SCAFFOLDING = {"README.md", "_template.md"}
+    # Shipped directories → shipped_base (but scaffolding stays at root).
+    # USER_VISIBLE_SCAFFOLDING is the single source of truth: any filename
+    # in the layout resolver's set MUST land at the user-visible root on v2,
+    # not in .includes/. See scripts-layout.md TRIPWIRE — this used to be a
+    # hardcoded local set that drifted from the layout constant, silently
+    # misrouting new scaffolding filenames added there (fleet-visible bug
+    # in v2.12.0 where the two HTML templates landed at .includes/blueprints/
+    # despite USER_VISIBLE_SCAFFOLDING naming them; fixed v2.12.1).
+    from gator_layout import USER_VISIBLE_SCAFFOLDING
     for src_subdir, dest_subdir in SHIPPED_TEMPLATE_DIRS.items():
         if src_subdir == "scripts":
             # Runtime-split Phase 4 (2026-08-19): runtime scripts are no
@@ -334,7 +341,7 @@ def plan_updates(templates_dir, gator_dir, repo_root):
             continue
         for src_file in sorted(src_dir.iterdir()):
             if src_file.is_file():
-                if layout == "v2" and src_file.name in _SCAFFOLDING:
+                if layout == "v2" and src_file.name in USER_VISIBLE_SCAFFOLDING:
                     # Scaffolding stays at user-visible root
                     dest_file = gator_dir / dest_subdir / src_file.name
                 else:
@@ -1431,11 +1438,16 @@ def migrate_layout(repo_root, gator_dir, templates_dir):
         dest_dir = includes / dname
         dest_dir.mkdir(exist_ok=True)
 
+        # USER_VISIBLE_SCAFFOLDING is the single source of truth (see
+        # scripts-layout.md TRIPWIRE). Hardcoded local sets here drifted
+        # from the layout constant in v2.12.0 and silently sent the two
+        # HTML scaffolding templates to .includes/; fixed v2.12.1.
+        from gator_layout import USER_VISIBLE_SCAFFOLDING as _SCAFFOLDING
         for f in sorted(src_dir.iterdir()):
             if not f.is_file():
                 continue
             # Scaffolding stays at user-visible root
-            if f.name in ("README.md", "_template.md"):
+            if f.name in _SCAFFOLDING:
                 report["preserved"].append(f"{dname}/{f.name} (scaffolding)")
                 continue
             if f.name in shipped_files:
