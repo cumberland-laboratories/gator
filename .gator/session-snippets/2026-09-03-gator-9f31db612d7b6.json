@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Release A whiteboard fix round 2: retarget remaining shipped user-facing references",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "blueprints-2-0",
+    "html-artifact-protocol",
+    "release-a",
+    "whiteboard-fix"
+  ],
+  "commit": "9f31db612d7b6a123c1274a26ca08e9a5a0bf980",
+  "short_commit": "9f31db6",
+  "snippet_id": "snippet-9f31db612d7b6",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "d202f844ee1a9b6be3a9ad6d8f39ac262cc35925",
+  "started_at": "2026-09-02T23:01:19Z",
+  "ended_at": "2026-09-03T00:01:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    "src/gator_command/templates/gator-starter/blueprints/README.md",
+    "src/gator_command/templates/gator-starter/blueprints/_template-narrative.html",
+    "src/gator_command/templates/gator-starter/blueprints/_template.html"
+  ],
+  "notes": [
+    "Round-2 whiteboard finding from the second review pass: round-1's \"retarget shipped docs at governed-repo paths\" fix (`af6163d`) was incomplete. Three more references pointed at source-tree-only paths in shipped surfaces the reviewer flagged as higher-severity because the template-body ones become part of every newly-authored artifact unless the author manually rewrites them.",
+    "**`blueprints/README.md`** — three `../../../../contracts/schemas/gator-blueprint-html-v1.md` links removed. Replaced with: (1) a plain reference to the protocol name plus a link at the shipped authoring procedure with an explicit \"canonical contract lives in Gator source tree and is not shipped to fleet repos\" clause, (2) the same treatment on the \"The contract is at ...\" block, (3) merged the \"See also → Protocol contract\" bullet into the \"See also → Authoring procedure\" bullet so the See-also list no longer offers a broken link.",
+    "**`_template.html` body `<section>Protocol notes</section>`** — this section renders in every published artifact unless the author deletes it. Was pointing at `contracts/schemas/gator-blueprint-html-v1.md` and `src/gator_command/templates/gator-starter/procedures/authoring-html-artifacts.md`. Now points at `.gator/procedures/authoring-html-artifacts.md` (governed-repo path). Added a template-comment `==TODO==` above the section telling the author to delete the section entirely if they don't want protocol notes to appear in the published artifact.",
+    "**`_template-narrative.html` body `<section>Protocol notes</section>`** — same problem, same fix, same delete-if-unwanted comment.",
+    "Left intact: three \"canonical contract lives in the Gator source tree (`contracts/schemas/gator-blueprint-html-v1.md`) and is not shipped\" informational phrasings in `README.md` and `authoring-html-artifacts.md`. Round-1 review accepted this framing because it's descriptive-not-prescriptive: the source-tree path is named as context, immediately followed by the \"not shipped\" clause telling the reader NOT to look there. Round-2 review didn't flag these — only the clickable/prescriptive links and body-text pointers.",
+    "Test suite: still **975 pass + 3 skip + 2 xfail**. No test change (this round fixes shipped-doc text only, no code)."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}
