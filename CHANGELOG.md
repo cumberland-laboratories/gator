@@ -2,6 +2,32 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.12.2] — 2026-09-03
+
+HTML template + reference-implementation restyle. Architect feedback on v2.12.0's shipped template styling ("gray tones only, doesn't fit the Blueprints 2.0 aesthetic") drives a palette + class-vocabulary refresh with two reference points: the snowpark-guide narrative style (for `_template-narrative.html`) with additional red/blue color the Architect specifically requested for tables and flowcharts, and the retired v2.11.0 shipped Blueprints view (for `_template.html` and Gator's own `charter-map.html` reference impl).
+
+### Changed
+
+- **`_template-narrative.html`** — rewritten to the snowpark-guide palette. New primary teal (`--teal: #19aeb8`) + Architect-requested blue (`--blue: #4a72b0`) alongside existing red/amber/green + gray-50→900 neutral scale. New class vocabulary: `table.table-blue` / `table-red` / `table-teal` colored-header table variants (default remains neutral gray), `.callout.note` blue variant alongside existing teal/warn/info/ok, `.diagram` slot with colored `.diagram-node` (teal default + blue/red/amber/green variants) + colored `.diagram-edge` connectors for horizontal flowcharts, `.steps` variants (`.step-alt` blue, `.step-warn` red, `.step-done` green), `.pill.info` blue alongside existing ok/alt/warn/na. Body layout tightened per Architect: `padding: 2rem 1.25rem` (was `2rem`) and `max-width: 1120px` (was `960px`). Body content restructured to demonstrate each new visual element.
+- **`_template.html`** — restyled to match v2.11.0's shipped Blueprints view aesthetic. Neutral background `--bg: #fafbfc` (was `#f8f6f0` beige). Semantic node colors renamed from lettered variables (`--bp-a/b/c/d/e/f`) to the v2.11.0 vault names: `--bp-core` (orange), `--bp-governance` (teal), `--bp-runtime` (gold), `--bp-analysis` (blue), `--bp-legacy` (clay), `--bp-enterprise` (purple). Body legend + JS example comments updated to match. Header underline: 2px teal-governance accent replacing plain gray. Sidebar detail panel: 360px column width, `max-height: calc(100vh - 220px)`. Stage hint pill gains translucent white background so it stays legible over nodes.
+- **`.gator/blueprints/charter-map.html`** (Gator's own reference impl) — same visual updates applied surgically. Data (13 nodes / 29 edges) and click-to-isolate interaction unchanged; only visual chrome shifted.
+
+### Fixed
+
+- **`_template.html` narrative-section left indent** — initial restyle centered the narrative below the interactive map with `.narrative { max-width: 900px; margin: 0 auto; }`, giving the section a non-obvious extra left margin that didn't match `charter-map.html`. Removed after Architect review; narrative now aligns to the same page width as the header, matching charter-map.
+
+### Compatibility
+
+- No breaking changes. All three files remain schema-valid per `gator-blueprint-html-v1`. Compat test 12/12 pass. No meta-block changes.
+- Existing artifacts authored against pre-v2.12.2 templates continue to work. Structural class names (`.head`, `.callout`, `section`, `.meta-grid`, `.status-badge`, `.narrative`) are preserved; new classes are purely additive (`.callout.note`, `.diagram-flow`, `.diagram-node`, `.diagram-edge`, `.table-blue`/`red`/`teal`, `.step-alt`/`warn`/`done`, `.pill.info`).
+- The renaming of interactive-template node color variables (`--bp-a` → `--bp-core` etc.) affects only artifacts that referenced the lettered variables directly; artifacts using hex color values or the default node color are unaffected. The retired lettered names are not carried forward — grep `var(--bp-a)` in any hand-authored blueprints and update to the semantic names before running `gator update`.
+- Test suite: **978 pass + 3 skip + 2 xfail** (unchanged from v2.12.1 — no test change, styling only).
+
+### Notes
+
+- Palette convention codified in `scripts-repo-lifecycle.md::plan_updates()` bang so future template edits don't regress it without explicit intent.
+- Same-day patch (v2.12.1 shipped earlier 2026-09-03; this is second patch of the day on the Blueprints 2.0 Release A arc).
+
 ## [2.12.1] — 2026-09-03
 
 Blueprints 2.0 Release A follow-up patch — fixes a fleet-visible routing bug in v2.12.0 where the two new HTML scaffolding templates landed at the wrong path on v2 repos running `gator update`, defeating the whole point of the `USER_VISIBLE_SCAFFOLDING` extension the same release added.
