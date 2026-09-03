@@ -2,6 +2,32 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.12.3] — 2026-09-03
+
+First real dogfood pass on the HTML artifact protocol. Four new blueprints authored under the two shipped templates, exercising every doc class the protocol defines except one. Plus a narrative-template `.diagram` layout fix the Architect surfaced during review.
+
+### Added
+
+- **`.gator/blueprints/gator-loop.html`** — `feature-blueprint` doc class, interactive template. 13-node / 31-edge state-machine map for the Gator loop: 4 roles + 3 active states + 2 paused states + 4 terminal states, every constant verified against `src/gator_command/scripts/loop/state_machine.py`. Click-to-isolate 1-hop-neighborhood + sidebar detail. Narrative sections cover what the map shows, why regions matter, reading order, boundaries + TRIPWIREs, open questions, references.
+- **`.gator/blueprints/gator-loop-guide.html`** — `procedure-visual` doc class, narrative template. Companion how-to-run walkthrough. Sections: summary, prerequisites, launch, orient models, watch (5 monitoring surfaces in a colored table), Architect controls (`pause`/`interject`/`unblock`/`end` with a horizontal `.diagram` flow), terminal states, common gotchas.
+- **`.gator/blueprints/enterprise-guide.html`** — `reference-explainer` doc class, narrative template. Supersedes the historical `enterprise-configuration.md` for the current transcripts-first architecture. Three-scope diagram (Server / Machine / Repo), owns-vs-never-owns matrix, activation flow, hook-mode comparison, transcripts-first evidence flow, subcommand tables (client-side + server-side), disk-state trees.
+- **`.gator/blueprints/enterprise-deployment-guide.html`** — `procedure-visual` doc class, narrative template. From-empty-machine-and-no-server walkthrough: prerequisites, Fly.io path (4 steps), local-dev path (6 steps), admin-token bootstrap, `pipx inject` install, machine activation, per-repo provisioning, evidence-pipe verification, expansion moves, 7-row troubleshooting table.
+
+### Fixed
+
+- **Narrative template `.diagram-edge` layout** — Architect noticed nodes clustering on the left of horizontal `.diagram` flows with whitespace piling up on the right (labels crowded, blank space wasted). Root cause: `.diagram-edge` was `flex: 0 0 auto` (fixed at `min-width`, no grow), so container slack sat idle instead of distributing. Fix: `flex: 1 1 auto` — edges consume slack while still shrinking to `min-width: 2rem` when the diagram overflows into horizontal scroll. Same inline fix applied to the three narrative HTMLs shipping in this release. Charter note in `scripts-repo-lifecycle.md::plan_updates()` bang preserves the intent for future template edits.
+
+### Compatibility
+
+- No breaking changes. All five blueprints validate against `gator-blueprint-html-v1` (compat test 12/12 pass). Structural class names preserved; `.diagram-edge` behavior change is purely visual (edges now grow) with no semantic impact.
+- Existing artifacts using `.diagram-flow` on wide viewports will spread better after the fix — reads as an improvement, not a regression.
+- Test suite: **978 pass + 3 skip + 2 xfail** (unchanged from v2.12.2 — new artifacts are data, not code).
+
+### Notes
+
+- Two authoring-pass observations surfaced for future procedure-hardening (both noted in the commit, not addressed here): (1) the compat test's `<meta>` regex rejects apostrophes in `content="..."` values — worked around with HTML entities and rephrasing; (2) the "narrative HTML under `.gator/blueprints/`" tension — the directory name suggests interactive blueprints only, and four of the five HTML files now under `.gator/blueprints/` are narrative-template.
+- Third same-day patch on the Blueprints 2.0 Release A arc: v2.12.1 routing fix → v2.12.2 restyle → v2.12.3 dogfood pass + diagram fix.
+
 ## [2.12.2] — 2026-09-03
 
 HTML template + reference-implementation restyle. Architect feedback on v2.12.0's shipped template styling ("gray tones only, doesn't fit the Blueprints 2.0 aesthetic") drives a palette + class-vocabulary refresh with two reference points: the snowpark-guide narrative style (for `_template-narrative.html`) with additional red/blue color the Architect specifically requested for tables and flowcharts, and the retired v2.11.0 shipped Blueprints view (for `_template.html` and Gator's own `charter-map.html` reference impl).
