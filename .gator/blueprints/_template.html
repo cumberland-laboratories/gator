@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<!--
+  gator-blueprint-html-v1 · INTERACTIVE BLUEPRINT TEMPLATE
+  ─────────────────────────────────────────────────────────
+
+  Use this template for HTML artifacts whose content has a natural
+  node-and-edge structure that benefits from interactive click-to-isolate
+  exploration. Doc classes: charter-map, feature-blueprint.
+
+  For prose-heavy or step-sequence content without a natural graph, use
+  _template-narrative.html instead.
+
+  Fill every TODO placeholder before publishing. Delete the ==TODO== marker
+  once each section is real. This scaffolding file is EXCLUDED from the
+  gator-blueprint-html-v1 compat check by filename — real artifacts you
+  author under .gator/blueprints/ are validated; this template is not.
+
+  See (paths as they exist in your gatorized repo):
+    .gator/procedures/authoring-html-artifacts.md         — the procedure
+    .gator/blueprints/README.md                           — triage summary
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- REQUIRED: gator-blueprint-html-v1 protocol metadata -->
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="==TODO== short human title, under 80 chars">
+  <meta name="gator-repo" content="==TODO== repo name">
+  <meta name="gator-doc-class" content="==TODO== charter-map | feature-blueprint">
+  <meta name="gator-status" content="==TODO== current | historical | exploratory | generated">
+  <meta name="gator-updated-at" content="==TODO== 2026-09-02T00:00:00Z">
+  <meta name="gator-generated-by" content="==TODO== claude-opus-4-7 | codex-gpt-5 | your-handle">
+  <meta name="gator-question" content="==TODO== the exact question this artifact answers">
+
+  <title>==TODO== short human title</title>
+
+  <style>
+    :root {
+      --bg: #f8f6f0;
+      --panel: #ffffff;
+      --ink: #1f2a2e;
+      --muted: #55666d;
+      --line: #d0d7de;
+      --accent: #4f7c78;
+
+      /* Semantic node colors — override per artifact if the domain has different regions */
+      --bp-a: #d96f3b;   /* orange   — structure / primary  */
+      --bp-b: #4f7c78;   /* teal     — governance / spine   */
+      --bp-c: #ddb85f;   /* gold     — lifecycle / provision */
+      --bp-d: #6b8db5;   /* blue     — analysis / readout    */
+      --bp-e: #8c5f91;   /* purple   — optional / peripheral */
+      --bp-f: #b08d7d;   /* clay     — boundary / contract   */
+
+      --edge: rgba(42, 60, 66, 0.35);
+      --edge-active: rgba(217, 111, 59, 0.95);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    a { color: var(--accent); }
+
+    .page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Header */
+    .head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+    .head h1 { margin: 0 0 8px 0; font-size: 24px; letter-spacing: -0.01em; }
+    .head .subtitle { color: var(--muted); font-size: 14px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px 20px; margin-top: 14px; font-size: 12px; }
+    .meta-row .label { color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-right: 6px; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      background: #eef7e6; color: #2d6a2d; }
+    .status-badge.exploratory { background: #fef4e0; color: #8a5a00; }
+    .status-badge.generated { background: #eef3fa; color: #305480; }
+    .status-badge.historical { background: #f3eaef; color: #6c3560; }
+
+    /* Main workspace: map + sidebar */
+    .work { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start;
+      margin-bottom: 32px; }
+    @media (max-width: 1100px) { .work { grid-template-columns: 1fr; } }
+
+    .canvas-frame { position: relative; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+      overflow: auto; min-height: 400px; max-height: 900px; }
+
+    /* The stage is fixed-dimension; the canvas-frame around it is responsive.
+       See v2.11.1 hardening pattern for why. */
+    .stage { position: relative; width: 1180px; height: 880px; }
+    .stage-hint { position: absolute; top: 8px; right: 12px; font-size: 11px;
+      color: var(--muted); pointer-events: none; }
+
+    svg.edges { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .edge { fill: none; stroke: var(--edge); stroke-width: 1.5;
+      transition: stroke 0.15s, stroke-width 0.15s, opacity 0.15s; }
+    .edge.active { stroke: var(--edge-active); stroke-width: 2.5; }
+    .edge.faded { opacity: 0.12; }
+    .edge-label { font-size: 11px; fill: var(--muted); pointer-events: none;
+      letter-spacing: 0.02em; }
+    .arrow-head { fill: var(--edge); }
+
+    .node { position: absolute; width: 200px; min-height: 60px;
+      background: var(--panel); border: 2px solid var(--line);
+      border-left: 4px solid var(--node-accent, var(--bp-a));
+      border-radius: 6px; padding: 8px 12px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
+    .node:hover { transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10); }
+    .node.active { box-shadow: 0 4px 14px rgba(217, 111, 59, 0.25); }
+    .node.faded { opacity: 0.22; }
+    .node-title { font-weight: 600; font-size: 14px; line-height: 1.25; }
+    .node-kind { display: block; font-size: 11px; color: var(--muted);
+      margin-top: 3px; letter-spacing: 0.02em; }
+
+    /* Sidebar */
+    .side { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 6px; padding: 16px 18px; align-self: stretch;
+      max-height: 900px; overflow-y: auto; }
+    .side h3 { margin: 0 0 4px 0; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+    .side .hint { font-size: 12px; color: var(--muted);
+      border-bottom: 1px solid var(--line); padding-bottom: 12px;
+      margin-bottom: 12px; cursor: pointer; }
+    .side .hint:hover { color: var(--accent); }
+    .detail-title { margin: 0 0 4px 0; font-size: 17px; color: var(--ink); }
+    .detail-kind { font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .detail-summary { font-size: 13px; line-height: 1.5; margin: 0 0 12px 0; }
+    .section-label { font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-top: 14px; margin-bottom: 4px; }
+    .side ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+    .side code { font-size: 12px; background: var(--bg); padding: 1px 5px;
+      border-radius: 3px; color: var(--ink); }
+    .rel-muted { color: var(--muted); font-size: 12px; }
+
+    /* Narrative */
+    .narrative section { border-top: 1px solid var(--line); padding-top: 20px;
+      margin-top: 24px; }
+    .narrative section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+    .narrative h2 { margin: 0 0 8px 0; font-size: 18px; letter-spacing: -0.01em; }
+    .narrative p { font-size: 14px; line-height: 1.6; }
+    .narrative ul, .narrative ol { font-size: 14px; line-height: 1.6; }
+
+    /* Legend */
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px;
+      color: var(--muted); margin-top: 8px; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+      margin-right: 5px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <h1>==TODO== short human title</h1>
+    <div class="subtitle">==TODO== one-sentence orientation</div>
+    <div class="meta-grid">
+      <div class="meta-row"><span class="label">Doc class:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Repo:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Status:</span> <span class="status-badge">==TODO==</span></div>
+      <div class="meta-row"><span class="label">Updated:</span> ==TODO== 2026-09-02</div>
+      <div class="meta-row"><span class="label">Question:</span> ==TODO==</div>
+      <div class="meta-row"><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+    </div>
+    <!-- Optional legend — customize or delete. -->
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--bp-a)"></span>==TODO== category A</span>
+      <span><span class="swatch" style="background: var(--bp-b)"></span>==TODO== category B</span>
+      <span><span class="swatch" style="background: var(--bp-c)"></span>==TODO== category C</span>
+    </div>
+  </header>
+
+  <div class="work">
+    <div class="canvas-frame">
+      <div class="stage" id="stage">
+        <div class="stage-hint">Click any node to isolate its 1-hop neighborhood. Double-click empty area to reset.</div>
+        <svg class="edges" id="edges" width="1180" height="880">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <aside class="side">
+      <h3>==TODO== level label (e.g. "Level 1: charter map")</h3>
+      <div class="hint" id="reset">Click any node in the map to isolate its neighborhood. Click here (or double-click empty canvas) to reset.</div>
+      <div id="detail"></div>
+    </aside>
+  </div>
+
+  <section class="narrative">
+    <section>
+      <h2>What this shows</h2>
+      <p>==TODO== one paragraph orienting the reader to the visual. What are the nodes? What are the edges? What does "click to isolate" reveal?</p>
+    </section>
+
+    <section>
+      <h2>Why these regions matter</h2>
+      <ul>
+        <li>==TODO== one sentence per major node explaining why it deserves attention.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Reading order</h2>
+      <ol>
+        <li>==TODO== which node to click first, and why.</li>
+        <li>==TODO== which edges to follow next.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Boundaries and tripwires</h2>
+      <ul>
+        <li>==TODO== does-not-own surfaces or non-obvious invariants.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Open questions</h2>
+      <ul>
+        <li>==TODO== what the author could not determine cleanly.</li>
+      </ul>
+    </section>
+
+    <!-- ==TODO== Delete this <section> if you don't want protocol notes
+         to appear in the published artifact. If you keep it, the default
+         text below points readers at the shipped authoring procedure. -->
+    <section>
+      <h2>Protocol notes</h2>
+      <p>
+        This document conforms to the <code>gator-blueprint-html-v1</code>
+        protocol. See <code>.gator/procedures/authoring-html-artifacts.md</code>
+        for the required metadata, doc classes, and status vocabulary.
+      </p>
+    </section>
+  </section>
+</div>
+
+<script>
+  // ==TODO== Fill NODES and EDGES with the domain data.
+  //
+  // NODES: array of node objects. Required keys: id, title, x, y.
+  //        Optional: kind (short subtitle), color (var(--bp-<letter>) or hex),
+  //        summary (paragraph for the sidebar), covers (array of file paths),
+  //        functions (array of function names). Positions are in the
+  //        1180x880 stage coordinate space; adjust the SVG size + stage
+  //        width/height CSS above if the graph needs more room.
+  //
+  // EDGES: array of edge objects. Required keys: from (node id), to (node id).
+  //        Optional: label (short edge caption).
+  const NODES = [
+    // Example — replace with real content:
+    // { id: "alpha", title: "Alpha Region", kind: "Structure", color: "var(--bp-a)",
+    //   x: 200, y: 100, summary: "...", covers: ["path/to/file.py"], functions: ["fn_one()"] },
+  ];
+  const EDGES = [
+    // { from: "alpha", to: "beta", label: "consumes" },
+  ];
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const stage = document.getElementById("stage");
+  const svg = document.getElementById("edges");
+  const detail = document.getElementById("detail");
+  const nodesById = {};
+
+  NODES.forEach(function (n) {
+    nodesById[n.id] = n;
+    const el = document.createElement("article");
+    el.className = "node";
+    el.dataset.id = n.id;
+    el.style.left = n.x + "px";
+    el.style.top = n.y + "px";
+    if (n.color) el.style.setProperty("--node-accent", n.color);
+    el.innerHTML = '<div class="node-title">' + escHtml(n.title) + '</div>'
+      + (n.kind ? '<span class="node-kind">' + escHtml(n.kind) + '</span>' : '');
+    stage.appendChild(el);
+  });
+
+  EDGES.forEach(function (e, i) {
+    const from = nodesById[e.from];
+    const to = nodesById[e.to];
+    if (!from || !to) return;
+    const pathId = "path-" + i;
+    const p = document.createElementNS(svgNS, "path");
+    p.setAttribute("id", pathId);
+    p.setAttribute("d", edgePath(from, to));
+    p.setAttribute("class", "edge");
+    p.setAttribute("marker-end", "url(#arrow)");
+    p.dataset.from = e.from;
+    p.dataset.to = e.to;
+    svg.appendChild(p);
+    if (e.label) {
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("class", "edge-label");
+      text.setAttribute("dy", "-4");
+      const tp = document.createElementNS(svgNS, "textPath");
+      tp.setAttribute("href", "#" + pathId);
+      tp.setAttribute("startOffset", "50%");
+      tp.setAttribute("text-anchor", "middle");
+      tp.textContent = e.label;
+      text.appendChild(tp);
+      svg.appendChild(text);
+    }
+  });
+
+  stage.addEventListener("click", function (ev) {
+    const nodeEl = ev.target.closest(".node");
+    if (nodeEl) isolate(nodeEl.dataset.id);
+  });
+  stage.addEventListener("dblclick", function (ev) {
+    if (!ev.target.closest(".node")) reset();
+  });
+  document.getElementById("reset").addEventListener("click", reset);
+
+  function isolate(id) {
+    const neigh = new Set([id]);
+    EDGES.forEach(function (e) {
+      if (e.from === id) neigh.add(e.to);
+      if (e.to === id) neigh.add(e.from);
+    });
+    stage.querySelectorAll(".node").forEach(function (el) {
+      const nid = el.dataset.id;
+      el.classList.toggle("active", nid === id);
+      el.classList.toggle("faded", !neigh.has(nid));
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      const on = p.dataset.from === id || p.dataset.to === id;
+      p.classList.toggle("active", on);
+      p.classList.toggle("faded", !on);
+    });
+    renderDetail(id);
+  }
+  function reset() {
+    stage.querySelectorAll(".node").forEach(function (el) {
+      el.classList.remove("active", "faded");
+    });
+    svg.querySelectorAll(".edge").forEach(function (p) {
+      p.classList.remove("active", "faded");
+    });
+    detail.innerHTML = '';
+  }
+  function renderDetail(id) {
+    const n = nodesById[id];
+    if (!n) return;
+    const outs = EDGES.filter(function (e) { return e.from === id; })
+      .map(function (e) { return { t: nodesById[e.to], label: e.label }; });
+    const ins = EDGES.filter(function (e) { return e.to === id; })
+      .map(function (e) { return { t: nodesById[e.from], label: e.label }; });
+    let html = '<h4 class="detail-title">' + escHtml(n.title) + '</h4>';
+    if (n.kind) html += '<div class="detail-kind">' + escHtml(n.kind) + '</div>';
+    if (n.summary) html += '<p class="detail-summary">' + escHtml(n.summary) + '</p>';
+    if (n.covers && n.covers.length) {
+      html += '<div class="section-label">Covers</div><ul>';
+      n.covers.forEach(function (c) { html += '<li><code>' + escHtml(c) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (n.functions && n.functions.length) {
+      html += '<div class="section-label">Representative functions</div><ul>';
+      n.functions.forEach(function (f) { html += '<li><code>' + escHtml(f) + '</code></li>'; });
+      html += '</ul>';
+    }
+    if (outs.length) {
+      html += '<div class="section-label">Depends on</div><ul>';
+      outs.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    if (ins.length) {
+      html += '<div class="section-label">Used by</div><ul>';
+      ins.forEach(function (o) {
+        html += '<li>' + escHtml(o.t ? o.t.title : '?') + ' <span class="rel-muted">— ' + escHtml(o.label || '') + '</span></li>';
+      });
+      html += '</ul>';
+    }
+    detail.innerHTML = html;
+  }
+  function edgePath(from, to) {
+    const fx = from.x + 100, fy = from.y + 30;
+    const tx = to.x + 100, ty = to.y + 30;
+    const mx = (fx + tx) / 2;
+    return "M " + fx + " " + fy + " C " + mx + " " + fy + ", " + mx + " " + ty + ", " + tx + " " + ty;
+  }
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.12.1 — HTML scaffolding routing fix",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release-2-12-1"
+  ],
+  "commit": "0fbc2dfb0c81846dccb1d4ab8a94ffbf68abe51e",
+  "short_commit": "0fbc2df",
+  "snippet_id": "snippet-0fbc2dfb0c818",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "eb1b57d44985044972dc91b73338c0d11ae22779",
+  "started_at": "2026-09-02T23:01:19Z",
+  "ended_at": "2026-09-03T02:12:08Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for the v2.12.1 patch fixing the fleet-visible routing bug from v2.12.0 (the two HTML scaffolding templates landed at `.gator/.includes/blueprints/` instead of `.gator/blueprints/` on v2 repos because `gator-update.py` carried hardcoded local sets duplicating `USER_VISIBLE_SCAFFOLDING`). Fix commit: `eb1b57d`.",
+    "`VERSION` 2.12.0 → 2.12.1.",
+    "`pyproject.toml` version field 2.12.0 → 2.12.1.",
+    "`CHANGELOG.md` — new `[2.12.1] — 2026-09-03` entry: Fixed (both routing sites consult `USER_VISIBLE_SCAFFOLDING` directly + fleet-repo cleanup note), Added (`TestScaffoldingRoutingRoundTrip` — 3 end-to-end pins), Changed (`scripts-layout.md` TRIPWIRE rewritten one-observer→THREE-observer + `scripts-repo-lifecycle.md` plan_updates bang extended), Compatibility (no breaking, test count 978), Notes (silent-drift coverage-gap class closed).",
+    "`scripts-core-library.md` version-note extended: `..., 2.12.0 (2026-09-02), 2.12.1 (2026-09-03, current: **2.12.1** in both files)`."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}
