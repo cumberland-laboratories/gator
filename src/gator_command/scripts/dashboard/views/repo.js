@@ -273,6 +273,29 @@
   // must NOT clear this — only lifecycle resources (timers/listeners).
   const _treeState = { repoName: null, expandedDirs: new Set(), selectedFile: null };
 
+  // Debug seam (v2.13.0) — meta-tag gated. Server injects
+  // <meta name="gator-debug" content="1"> when GATOR_DASHBOARD_DEBUG=1
+  // is set at spawn time; in production the meta is absent and this
+  // block is a no-op. The top-level `__gator_debug` object is frozen
+  // (no setters, no adding methods); each getter builds a FRESH plain
+  // object snapshot per call — the returned snapshot is intentionally
+  // NOT frozen so tests can spoof-mutate it to prove the getter
+  // doesn't hand back a live reference. See scripts-dashboard.md
+  // TRIPWIRE (debug seam).
+  const _DEBUG =
+    document.querySelector('meta[name="gator-debug"]')?.content === "1";
+  if (_DEBUG) {
+    window.__gator_debug = Object.freeze({
+      get sidebar() {
+        return {
+          expandedDirs: Array.from(_treeState.expandedDirs),
+          selectedFile: _treeState.selectedFile,
+          repoName: _treeState.repoName,
+        };
+      },
+    });
+  }
+
   function resetTreeStateFor(repoName) {
     if (_treeState.repoName !== repoName) {
       _treeState.repoName = repoName;

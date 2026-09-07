@@ -264,6 +264,8 @@ Rules:
 - Every new POST endpoint must call `_check_post_auth()` first
 - Every new JS `fetch()` to a POST endpoint must include `headers: { "X-Gator-Dashboard": "1" }`
 - Do NOT weaken this to Origin-only checking — Origin can be absent on some browser form POSTs
+
+**v2.13.0 addition** — the debug GET endpoint `/api/__gator_debug/registry_state` (introduced by Plan A of the Dashboard UX track) uses a separate gating axis: it checks `os.environ.get("GATOR_DASHBOARD_DEBUG") == "1"` per request and returns 404 when the env var is unset. The endpoint does NOT exist in production. GET routes do not go through `_check_post_auth()`; the env-var gate is the only trust boundary and is complete because it is set only by the test harness's Popen env, never by any production launch path. See [Dashboard charter](scripts-dashboard.md) `### do_GET(self)` and `### _send_dashboard_html(self)` for the full contract, and `### Dashboard UI test harness (Playwright, v2.13.0)` for the harness pins that guard both the presence-when-set and absence-when-unset cases.
 - Do NOT add CORS headers to the server — no cross-origin access is intentional
 
 ## Pattern: Two-Channel Update Architecture

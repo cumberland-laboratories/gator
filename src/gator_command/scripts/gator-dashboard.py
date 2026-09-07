@@ -142,6 +142,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    def _send_dashboard_html(self):
+        # Serve dashboard.html with an optional debug meta tag
+        # injected into <head>. Injection is env-var checked per
+        # request (not cached at startup) so the harness selects
+        # the seam per-child at spawn time. See scripts-dashboard.md
+        # TRIPWIRE (debug seam).
+        path = DASHBOARD_DIR / "dashboard.html"
+        try:
+            html = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            self.send_error(404, f"Not found: {path}")
+            return
+        if os.environ.get("GATOR_DASHBOARD_DEBUG") == "1":
+            html = html.replace(
+                "</head>",
+                '  <meta name="gator-debug" content="1">\n</head>',
+                1,
+            )
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError,
+                BrokenPipeError):
+            pass  # Client disconnected (matches _send_file).
+
     def _handle_audit_sessions(self):
         """Handle GET /api/audit/sessions — lazy session summary aggregation."""
         from urllib.parse import urlparse, parse_qs
@@ -160,9 +189,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0].rstrip("/") or "/"
 
-        # Root — serve dashboard shell
+        # Root — serve dashboard shell (with optional debug meta
+        # injection when GATOR_DASHBOARD_DEBUG=1).
         if path == "/" or path == "/index.html":
-            self._send_file(DASHBOARD_DIR / "dashboard.html")
+            self._send_dashboard_html()
+            return
+
+        # Debug seam — exposes live _REGISTRY_REPOS so the test
+        # harness can prove read-side isolation (the actual state
+        # every handler operates on, not a recomputed Path.home()
+        # shortcut). Gated per-request on GATOR_DASHBOARD_DEBUG=1
+        # so the endpoint DOES NOT EXIST in production. See
+        # scripts-dashboard.md TRIPWIRE (debug seam).
+        if path == "/api/__gator_debug/registry_state":
+            if os.environ.get("GATOR_DASHBOARD_DEBUG") != "1":
+                self.send_error(404, "Not found")
+                return
+            self._send_json({
+                "registry_repos": [
+                    {"name": r.get("name"), "path": r.get("path")}
+                    for r in _REGISTRY_REPOS
+                ],
+                "count": len(_REGISTRY_REPOS),
+                "command_post_root": str(COMMAND_POST_ROOT),
+            })
             return
 
         # Tier 1 data
@@ -1054,13 +1104,33 @@ def main():
 
     DashboardHandler.fast_data = fast_data
 
-    port = find_free_port(args.port)
-    base_url = f"http://localhost:{port}"
+    if args.port == 0:
+        # Kernel picks — bind directly and read the actual port back
+        # from server_address. `find_free_port(0)` returns 0 (the
+        # input value) not the assigned port, so skip it on the zero
+        # path.
+        server = HTTPServer(("127.0.0.1", 0), DashboardHandler)
+    else:
+        port = find_free_port(args.port)
+        server = HTTPServer(("127.0.0.1", port), DashboardHandler)
+    actual_port = server.server_address[1]
+    base_url = f"http://127.0.0.1:{actual_port}"
     open_url = f"{base_url}/?repo={args.repo}" if args.repo else base_url
 
-    server = HTTPServer(("127.0.0.1", port), DashboardHandler)
-
-    print(f"  Ready: {open_url}")
+    # Ready protocol — column 0, `127.0.0.1` literal, printed
+    # AFTER bind (URL is real) and BEFORE serve_forever (harness
+    # gets it before request handling). flush=True so the reader
+    # thread sees it under stdout buffering. This exact line is a
+    # public interface between the dashboard and test harnesses /
+    # tooling; see scripts-dashboard.md TRIPWIRE.
+    print(f"Ready on {base_url}/", flush=True)
+    # Human-oriented `Open:` line — when `--repo NAME` was passed,
+    # show the repo-scoped URL so `--no-open --repo <name>` gives
+    # the operator the URL they actually want to paste. Kept
+    # indented + printed AFTER the Ready line so it doesn't
+    # collide with the machine-readable protocol contract.
+    if args.repo:
+        print(f"  Open: {open_url}", flush=True)
     print(f"  Ctrl+C to stop\n", flush=True)
 
     if not args.no_open:

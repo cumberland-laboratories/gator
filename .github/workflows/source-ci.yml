@@ -74,6 +74,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pytest
           python -m pip install -r contracts/requirements.txt
+          python -m pip install -e .
 
       - name: Run tests + contracts (excluding slow packaging suite)
         run: >
@@ -81,7 +82,40 @@ jobs:
           tests
           contracts/compatibility
           --ignore=tests/test_packaging.py
+          --ignore=tests/test_dashboard_ui
           -q
+
+  dashboard-ui:
+    name: dashboard-ui (${{ matrix.os }} · py3.12)
+    needs: fast
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Preserve the least-privilege rule the `fast` and `packaging`
+          # jobs use — read-only CI never pushes, so credentials should
+          # not outlive the checkout step.
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          playwright install --with-deps chromium
+
+      - name: Run dashboard-ui suite
+        run: python -m pytest tests/test_dashboard_ui/ -v --tb=short
 
   packaging:
     name: packaging (ubuntu · py3.13, wheel build + venv install)

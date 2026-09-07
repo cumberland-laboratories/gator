@@ -45,6 +45,15 @@ enterprise-server = [
     "uvicorn[standard]>=0.30",
     "psycopg[binary]>=3.2",
 ]
+# Dev-only deps for the dashboard-ui Playwright harness (v2.13.0,
+# Plan A). Not shipped in the wheel; installed by contributors
+# via `pip install -e ".[dev]"` and by the `dashboard-ui` CI job
+# (see .github/workflows/source-ci.yml).
+dev = [
+    "playwright>=1.40",
+    "pytest-playwright",
+    "psutil>=5.9",
+]
 
 [tool.setuptools]
 # Only the top-level package is a Python package. scripts/ and templates/
