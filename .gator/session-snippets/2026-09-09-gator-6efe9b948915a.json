@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 third-round remediation: cross-platform in-process F3 branch pins via injected _contained_repo_path seam",
+  "change_type": "test",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-remediation",
+    "codex-third-review",
+    "dashboard-content-transport",
+    "security-critical"
+  ],
+  "commit": "6efe9b948915ae16ef27841fc7a8062ba0fb393e",
+  "short_commit": "6efe9b9",
+  "snippet_id": "snippet-6efe9b948915a",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "78c73b823889b0961b2d0f09a52eb65e0195f715",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T23:49:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-09-gator-78c73b823889b.json",
+    "tests/test_dashboard_ui/test_content_transport_slice3.py"
+  ],
+  "notes": [
+    "**Codex third-review LOW finding** — the second-round F3 remediation relied on POSIX `chmod 0` pins that can be bypassed by a privileged reader (root, container with `DAC_OVERRIDE`), and the `FileNotFoundError` branch was still impossible to reach via filesystem state alone (`_contained_repo_path.resolve(strict=True)` catches missing files before `read_bytes()` runs). Source-grep pin was the only guard against removing either exception class from the specific clause. The charter's \"deterministic\" claim was stronger than the tests provided.",
+    "**Fix** — added 6 cross-platform in-process branch pins in `tests/test_dashboard_ui/test_content_transport_slice3.py`. Each pin injects a `MagicMock` target through the `_contained_repo_path` seam (`is_file() → True`, `read_bytes()` raising the exception under test, `stat()` raising `OSError` so `_mtime_iso` returns None). The mock passes containment + `is_file()` gates and reaches the read step deterministically, on any platform, any Python version. Both handlers × 3 exception classes = 6 pins: `test_file_permission_error_branch_returns_404`, `test_file_file_not_found_branch_returns_404`, `test_file_general_oserror_stays_500`, `test_raw_permission_error_branch_returns_404`, `test_raw_file_not_found_branch_returns_404`, `test_raw_general_oserror_stays_500`. The `_stays_500` complementary pins prove the general-`OSError` branch was preserved (a `TypeError` or `ValueError` would still surface as 500; only `FileNotFoundError`/`PermissionError` reroute to 404).",
+    "Introduced shared test utilities: `_RecordingShim` (minimum request-handler shim with `send_response`/`send_header`/`end_headers`/`wfile` covering the surface both `_send_json_error` and `_raw_error_direct` touch), `_bind_all(dashboard_module, shim, names)` (binds unbound handler methods to the shim so `self.X()` resolves), `_install_stubs(dashboard_module, monkeypatch, target)` (patches `_contained_repo_path` to return the faulty target + `_resolve_repo_path` to return a benign path), plus per-handler runners `_run_file_handler` / `_run_raw_handler`. These utilities are strictly local to Slice 3.",
+    "Charter update in `scripts-dashboard.md::do_GET`: rewrote the \"Error-taxonomy TRIPWIRE\" text to name the 6 in-process branch pins as the deterministic guarantee, with the POSIX `chmod 0` pins + containment-path pins + source-grep pin all documented as belt-and-suspenders.",
+    "Test results: `tests/test_dashboard_ui/` 148 pass + 11 skipped on Windows (Python 3.13). +6 net vs. prior state (all in-process branch pins). No regressions in Slice 1 (70/70), Slice 2 (46/46), harness (22+1skip). All 6 new pins pass first-run.",
+    "The Codex feedback loop closes on this pass: the `except (FileNotFoundError, PermissionError)` clause in both handlers is now guarded by deterministic runtime pins that would fail if the clause is removed OR reordered, complementing the source-grep pin that guards the ordering invariant."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}

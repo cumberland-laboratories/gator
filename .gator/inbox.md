@@ -3,91 +3,51 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
-## READ FIRST - Current handoff (2026-09-08, updated after r6 review)
+## Where we are (2026-09-09, post-B1)
 
-**Immediate task for the next Opus session: implement Dashboard Plan B1 in
-three bounded slices behind Plan A's harness.** The planning phase is closed.
-Read `.gator/whiteboard.md` first, then the execution errata, then start
-Slice 1.
+**Dashboard UI Plan A + Plan B1 landed on `main`, unreleased (slated
+v2.13.0).** Codex converged after three review rounds — the final
+whiteboard pass returned "No findings." Test state on Windows / Python
+3.13: `tests/test_dashboard_ui/` **148 pass + 11 skipped**. Ubuntu CI
+exercises the POSIX-only pins.
 
-Authoritative sources, in read order:
+Landed commits (in order):
 
-1. **Execution errata (authoritative for E1-E5):**
-   `.gator/vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md`.
-   This document wins on any contradiction with the r6 plan. It carries the
-   final five corrections from the 2026-09-08 r6 whiteboard plus one
-   non-blocking tightening (the explicit-elif serializer;
-   the E3 `parse_qs` fallback was suggested and left as-is per the reviewer's
-   own note), and defines the three implementation slices with
-   charter-alongside-code sequencing baked in.
-2. **B1 r6 plan (frozen design record):**
-   `.gator/vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md`.
-   Frontmatter carries `status: frozen-reference` and `superseded-by` pointing
-   at the errata. Read for design intent only; do not amend for implementation
-   details.
+- `8f2b9c9` Plan A: Dashboard UI harness foundation
+- `dcf3a16` B1 Slice 1: parser + policy helpers + response helpers
+- `880d2a3` B1 Slice 2: `do_GET` in-place migration + handlers
+- `4369f86` B1 Slice 3: platform-symmetry pins + charter reconciliation
+- `9f05a81` B1 Codex R1: reparse-alias + no-store + 404 + E1 fixture split
+- `78c73b8` B1 Codex R2: py3.9 stat kwarg crash + F3 tests reach the branch
+- `6efe9b9` B1 Codex R3: cross-platform in-process F3 branch pins
 
-Current state:
+Next dashboard-UI work (choose one when a session picks it up):
 
-- **Plan A is complete and committed** at `8f2b9c9` (`Plan A: Dashboard UI
-  harness foundation`). Its `dashboard-ui` CI acceptance gate passed on Ubuntu
-  and Windows.
-- **Plan B1 is planning-complete and implementation-ready.** No B1 code or B1
-  tests have landed. B1 owns the security-critical server-side content
-  transport and authorization layer.
-- **The r6 plan cycled through r4 → r5 → r6 reviews.** r6 review declined an
-  r7 revision block and directed a concise errata + three-slice
-  implementation instead. The errata addresses:
-  - E1 (High): `/files` wire schema — one shared `_serialize_listing_entry`
-    preserves shipped `path`/`source`/`dir` shape.
-  - E2 (Med): parser normalizes `raw_path.rstrip("/") or "/"` to match
-    shipped `do_GET`.
-  - E3 (Med): version-key detection via `parse_qs` at start (catches
-    `%76ersion=abc`).
-  - E4 (Med): parser-shape rejects on `/file` are 400; debug-seam pins pinned
-    to `dashboard_fleet_debug_off` / `dashboard_fleet`.
-  - E5 (Med): `_is_reserved_windows_component` layer 1 strips trailing
-    spaces so `NUL .txt`, `COM1 .md`, `CONIN$ .txt` are caught without the
-    deprecated stdlib.
-- **Three implementation slices, each with charter-alongside-code updates**
-  per constitution:
-  1. Parser + `content_policy` + Windows-name normalization + response
-     helpers + unit tests. Charter updates for `scripts-dashboard.md` helper
-     entries, `scripts-cross-cutting.md`, `contracts.md` — landed alongside
-     the files.
-  2. In-place `do_GET` migration (delete four B1 route blocks; insert parser
-     + 4-way dispatch; preserve legacy branches). E1 wire-schema
-     live + historical round-trip pins. Charter updates for the `do_GET`
-     route inventory and every §12 TRIPWIRE.
-  3. Junction/platform tests, POSIX parser-symmetry, final charter
-     reconciliation, full Plan A `dashboard-ui` gate green on Ubuntu +
-     Windows.
-- The `seed_history_commits(repo, name)` harness seam is intentionally part of
-  B1; not in committed Plan A. Preserve Plan A's existing
-  `seed_sidebar_fixtures` seam.
+1. **B2 — HTML preview**, not yet reviewed for implementation:
+   `.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`.
+   Depends on B1's security floor (transport headers +
+   `apply_response_headers`); adds the browser-trust model (CSP,
+   iframe sandboxing).
+2. **C — responsive shell/sidebar:**
+   `.gator/vault/artifacts/2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`.
+   Independent of B2; the harness seam `seed_sidebar_fixtures` is
+   reserved for it.
 
-Dashboard work remains deliberately sequenced:
-
-1. **A - complete:**
-   `.gator/vault/artifacts/2026-09-06-dashboard-harness-foundation-plan.md`
-2. **B1 - implement in three slices (errata authoritative):**
-   `.gator/vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md` +
-   frozen r6 plan
-   `.gator/vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md`
-3. **B2 - downstream, not yet reviewed for implementation:**
-   `.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`
-4. **C - downstream responsive shell/sidebar work:**
-   `.gator/vault/artifacts/2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`
-
-The monolithic parent
+The frozen parent plans remain reference-only:
 `.gator/vault/artifacts/2026-09-06-dashboard-safe-content-transport-plan.md`
-and the earlier
-`.gator/vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md` are
-frozen design records. **Do not implement either frozen plan directly.**
+and `.gator/vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md`.
+Do not implement either directly.
 
-Two sibling plans remain open but are not part of the immediate B1 sequence:
+Two sibling plans remain open, not on the dashboard-UI sequence:
 
 - `.gator/vault/artifacts/2026-09-05-field-guides-retirement-implementation-plan.md`
 - `.gator/vault/artifacts/2026-09-05-legacy-git-hooks-cleanup-implementation-plan.md`
+
+**Release readiness for v2.13.0**: the Dashboard UI arc's changes are
+release-worthy; the next release train can bundle Plan A + Plan B1 into
+v2.13.0 whenever the Architect chooses to cut. Blueprints 2.0 Release B
+(feature-blueprint generation procedure), previously slated for v2.13.0,
+moves to v2.14.0 or later.
 
 ## Unscheduled open backlog
 
@@ -120,6 +80,16 @@ Two sibling plans remain open but are not part of the immediate B1 sequence:
   period.
 - Decide whether the vaulted `scripts-command-post.md` charter should be
   restored for the monorepo or intentionally remain retired.
+- **Post-B1 authoring observations** (nice-to-have, not blocking): (a) the
+  `pre-commit charter-index-gap` rule requires ALL charters in a matching
+  INDEX row to be updated, not "at least one" as the INDEX.md preamble
+  claims — this bit every B1 slice commit and adds friction to changes that
+  legitimately only touch one charter's surface; consider aligning
+  `_required_charters_for_files` to the documented "at least one" rule, or
+  updating INDEX.md's preamble to match the implementation. (b) The
+  `new-functions-undocumented` warning fires on test functions (each
+  `test_*` in a new test file), which is noise — consider a filename-based
+  filter that skips `tests/**` for that warning.
 
 ## Machine state (persistent operational reference)
 
