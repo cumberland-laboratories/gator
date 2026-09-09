@@ -178,6 +178,60 @@ contracts/
   `.gator/session-snippets/` directory, no post-lockdown files to
   scan) — never as a swallow for an installer regression.
 
+- **! B1 Dashboard content-transport response contract (v2.13.0).**
+  Every response from a B1-owned endpoint (`/files`, `/file`,
+  `/raw`, `/history/<file>`) MUST satisfy the following invariants,
+  enforced by Slice 1 helpers in `gator-dashboard.py` and Slice 2's
+  in-place `do_GET` migration:
+  - **Parse-once invariant.** `_parse_request(handler)` runs
+    EXACTLY ONCE per request from `do_GET` before any handler
+    dispatch. B1-owned handlers (`_handle_files`, `_handle_file`,
+    `_handle_raw`, `_handle_history`) accept `req` as an argument
+    and MUST NOT read `handler.path` or invoke `_parse_request`
+    again. Legacy pass-through branches (existing shipped
+    `if path.startswith(...)` chain) are exempt only because they
+    predate B1.
+  - **Wire-schema invariant.** Every `/files` response entry —
+    live OR historical — is minted by
+    `_serialize_listing_entry(namespace_root, disk_rel, name,
+    size, mtime=None)` in `dashboard/content_policy.py`. Three
+    namespace shapes exist; an unknown value raises `ValueError`
+    (no silent mislabel at the security boundary):
+    - source (`""`) → `path="source/<disk_rel>"`, `source="repo"`
+    - `.gator` → `path="<disk_rel>"`, `source=".gator"`
+    - `gator-command` → `path="gator-command/<disk_rel>"`,
+      `source="gator-command"`
+  - **One-canonical-path invariant.** Every governance document
+    has EXACTLY ONE canonical URL under `/file`, `/raw`,
+    `/history`, and `/files`. `parse_logical_path` rejects explicit
+    `.gator/` prefixes (namespace is implicit); `is_browsable`
+    rejects `source/.gator/…` and `source/gator-command/…`
+    aliases. A `source/` URL MUST NOT resolve to a governance
+    document even if the underlying file exists.
+  - **Discovery-serving visibility invariant.** For every
+    `(endpoint, path, ?version=)` tuple, the answer returned by
+    discovery (`/files`, `/files?version=`) MUST agree with the
+    answer returned by serving (`/file`, `/raw`, `/file?version=`,
+    `/raw?version=`). Live-scanner entries pass through
+    `parse_logical_path` + `is_browsable` before emit; the
+    historical `git ls-tree` re-parse uses the same predicate.
+  - **Transport-headers invariant.** Every B1-owned response
+    (raw or JSON, success or error) carries
+    `X-Content-Type-Options: nosniff` unconditionally. JSON
+    responses use exact Content-Type
+    `application/json; charset=utf-8` via the extended
+    `_send_json`. Any response that consumed a `?version=` key
+    carries `Cache-Control: no-store` — the version-key detection
+    uses `parse_qs` at parser step 0.5 (errata E3), so
+    `%76ersion=abc` and other percent-encoded key spellings are
+    caught even when the path itself fails to parse. `/file`
+    error paths ALWAYS emit a JSON envelope via
+    `_send_json_error`; `/raw` error paths use the
+    self-contained `_raw_error_direct` (no `send_error`
+    delegation).
+  Pinned by `tests/test_dashboard_ui/test_content_transport_slice1.py`
+  (Slice 1 unit) plus Slice 2/3 HTTP integration tests.
+
 - **! Shipped-template surfaces reference governed-repo paths only.**
   Any file under `src/gator_command/templates/gator-starter/` that
   lands in a fleet repo — README, HTML template bodies, procedures,

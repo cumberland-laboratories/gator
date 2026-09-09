@@ -22,15 +22,22 @@ Flags:
 """
 
 import argparse
+import collections
+import http as _http
 import json
+import logging
 import os
+import re
 import socket
 import subprocess
 import sys
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from html import escape as _html_escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from urllib.parse import parse_qs, unquote
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 
@@ -85,9 +92,389 @@ def _is_denied_path(file_path):
     Denies access to loop secret files and override internals.
     Checks the final filename component against the deny set.
     """
-    from pathlib import PurePosixPath
     name = PurePosixPath(file_path).name
     return name in _DENIED_FILENAMES
+
+
+# ── B1 Slice 1 (v2.13.0): safe content transport helpers ──────────
+#
+# Pure-Python helpers introduced in Slice 1: URL parsing, logical-path
+# parsing, Windows-reserved-name check, response helpers. Not yet wired
+# into `do_GET` (Slice 2 owns that migration). Consumed by the future
+# `_handle_files` / `_handle_file` / `_handle_raw` / `_handle_history`
+# methods and by unit tests via the `dashboard_module` fixture.
+#
+# See:
+#   - vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md
+#     (r6, frozen design record)
+#   - vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md
+#     (E1-E5, authoritative for corrections)
+
+from dashboard import content_policy as _content_policy  # noqa: E402
+
+
+# ── Logical-path parse (r6 §4 + errata E5) ────────────────────────
+
+LogicalPath = collections.namedtuple(
+    "LogicalPath", "namespace_root disk_rel git_rel")
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f]")
+
+# r4 F1 — Win32 trailing-dot/space aliases.
+_WIN_TRAILING_STRIP = " \t\n\r\v\f."
+
+
+def _strip_trailing_dots_spaces(segment):
+    """Strip trailing ASCII whitespace and dots. r4 F1 helper."""
+    return segment.rstrip(_WIN_TRAILING_STRIP)
+
+
+# r5 F4 → r6 durability → errata E5. Explicit set is the PRIMARY
+# reserved-name check; `PureWindowsPath.is_reserved()` is a
+# secondary belt-and-suspenders check that may disappear in a
+# future Python. The set covers ASCII digits, superscript-digit
+# forms (U+00B9 / U+00B2 / U+00B3), and console-device names.
+_WIN_RESERVED_STEMS_EXPLICIT = frozenset({
+    "con", "prn", "aux", "nul",
+    "com1", "com2", "com3", "com4", "com5",
+    "com6", "com7", "com8", "com9",
+    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5",
+    "lpt6", "lpt7", "lpt8", "lpt9",
+    "com¹", "com²", "com³",
+    "lpt¹", "lpt²", "lpt³",
+    "conin$", "conout$",
+})
+
+
+def _casefold_segment(s):
+    """Case-fold a single path segment for policy comparison.
+    Do NOT substitute the folded form back into disk_rel / git_rel.
+    """
+    return s.casefold()
+
+
+def _is_reserved_windows_component(candidate):
+    """Authoritative Windows-reserved check with two-layer rule
+    (r6 durability + errata E5).
+
+    Layer 1 (PRIMARY): consult `_WIN_RESERVED_STEMS_EXPLICIT`
+    against the case-folded stem (basename minus first extension).
+    Errata E5: strip trailing ASCII spaces before splitting — Win32
+    ignores them, so `NUL .txt`, `COM1 .md`, `CONIN$ .txt` must be
+    caught by layer 1 alone.
+
+    Layer 2 (SECONDARY): consult `PureWindowsPath.is_reserved()`
+    while available. Deprecated in Python 3.13. Divergence between
+    layers logs `dashboard.security` for operator visibility so the
+    explicit set gets updated in a follow-on release.
+
+    Runs unconditionally (not gated on `sys.platform == "win32"`)
+    so a Windows-reserved name cannot enter through a cross-platform
+    development fixture.
+    """
+    if not candidate:
+        return False
+
+    # Layer 1 — trailing-space normalized stem lookup.
+    raw_stem = candidate.split(".", 1)[0]
+    stem = raw_stem.rstrip(" \t").casefold()
+    if stem in _WIN_RESERVED_STEMS_EXPLICIT:
+        return True
+    # Console-device names have no extension; also check the full
+    # trailing-space-stripped candidate.
+    if candidate.rstrip(" \t").casefold() in _WIN_RESERVED_STEMS_EXPLICIT:
+        return True
+
+    # Layer 2 — stdlib probe (advisory, may vanish on future Python).
+    # r6 durability: PureWindowsPath.is_reserved() emits a
+    # DeprecationWarning on Python 3.13+ and is scheduled for removal
+    # in 3.15. Suppress the warning here — layer 1 is the primary
+    # check and the warning would fire once per parsed segment (very
+    # noisy). Errata E5 pins prove layer 1 alone covers every
+    # documented family without the stdlib.
+    import warnings as _warnings
+    try:
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore", DeprecationWarning)
+            stdlib_reserved = PureWindowsPath(
+                candidate).is_reserved()
+    except (TypeError, ValueError):
+        return True  # Defensive: unparseable → refuse.
+    except AttributeError:
+        return False  # Method removed in a future Python.
+
+    if stdlib_reserved:
+        logging.getLogger("dashboard.security").warning(
+            "reserved_name_only_in_stdlib candidate=%s — "
+            "extend _WIN_RESERVED_STEMS_EXPLICIT",
+            candidate)
+        return True
+    return False
+
+
+def parse_logical_path(logical):
+    """Parse a decoded URL path into a
+    (namespace_root, disk_rel, git_rel) triple. Returns None on
+    any reject condition (caller responds 400).
+
+    Ordering matters — each check runs on the value produced by
+    the previous one.
+    """
+    if not isinstance(logical, str) or not logical:
+        return None
+
+    # 1. Namespace parse — three canonical shapes (exact-case;
+    # r3 F1 rejects case aliases so URL contract stays honest).
+    if logical.startswith("source/"):
+        namespace_root = ""
+        tail = logical[len("source/"):]
+        git_prefix = ""
+    elif logical.startswith("gator-command/"):
+        namespace_root = "gator-command"
+        tail = logical[len("gator-command/"):]
+        git_prefix = "gator-command/"
+    else:
+        cf = logical.casefold()
+        if (logical.startswith(".gator/") or logical == ".gator"
+                or cf.startswith(".gator/") or cf == ".gator"
+                or cf.startswith("source/")
+                or cf.startswith("gator-command/")):
+            return None
+        namespace_root = ".gator"
+        tail = logical
+        git_prefix = ".gator/"
+
+    if not tail:
+        return None
+
+    # Windows drive-relative (`C:x`) has drive `C:` even without a root.
+    if PureWindowsPath(tail).drive:
+        return None
+    # Backslash reject on any platform.
+    if "\\" in tail:
+        return None
+    # Control chars and tilde prefix.
+    if _CONTROL_CHARS_RE.search(tail):
+        return None
+    if tail.startswith("~"):
+        return None
+
+    # Segment shape checks.
+    parts = tail.split("/")
+    if any(p in ("", "..", ".") for p in parts):
+        return None
+
+    # 6a. ADS colons.
+    if any(":" in p for p in parts):
+        return None
+
+    # 6b. Win32 trailing-dot/space.
+    for p in parts:
+        stripped = _strip_trailing_dots_spaces(p)
+        if stripped != p or stripped == "":
+            return None
+
+    # 6c. Windows-reserved device names on EVERY segment (delegated
+    # to the E5 helper). Checked on both original and
+    # trailing-stripped forms for defense-in-depth.
+    for p in parts:
+        for candidate in (p, _strip_trailing_dots_spaces(p)):
+            if not candidate:
+                continue
+            if _is_reserved_windows_component(candidate):
+                return None
+
+    # Cross-platform rooted check.
+    if (PurePosixPath(tail).is_absolute()
+            or PureWindowsPath(tail).is_absolute()):
+        return None
+
+    disk_rel = tail
+    git_rel = git_prefix + tail
+    return LogicalPath(namespace_root, disk_rel, git_rel)
+
+
+# ── URL parser (r6 §8b.1 + errata E2 + E3) ────────────────────────
+
+# Every `%` in the raw path MUST be immediately followed by two hex
+# digits. `%ZZ` and dangling `%` fail this fullmatch.
+_WELL_FORMED_PCT_RE = re.compile(r"[^%]*(%[0-9a-fA-F]{2}[^%]*)*")
+# Encoded slash / backslash reject on raw path (routing boundary).
+_ENCODED_SEP_RE = re.compile(r"%2[fF]|%5[cC]")
+# After decoding, any surviving `%` is a double-encoded input.
+_ANY_PCT_IN_DECODED_RE = re.compile(r"%")
+
+
+@dataclass(frozen=True)
+class Request:
+    endpoint: str          # "files"|"file"|"raw"|"history"|"other"
+    repo_name: str
+    logical_path: str      # None for endpoints without one
+    version_present: bool
+    version_value: str
+    query: dict
+
+
+@dataclass(frozen=True)
+class ParseError:
+    """Structured pre-dispatch parse failure (r6 F2). Carries only
+    safely derivable info — no decoding of untrusted path
+    components. Populates `response_kind` and `version_present` so
+    `do_GET` can pick the correct error responder before the URL
+    is fully classified.
+    """
+    status: int
+    message: str
+    response_kind: str    # "json" | "raw"
+    version_present: bool
+
+
+def _infer_response_kind_raw(raw_path):
+    """Cheap safe classification of a raw path. Only inspects ASCII
+    bytes; no unquote, no parse_qs.
+
+    Returns "json" if the raw path's endpoint segment is `/files`,
+    `/file`, or `/history` (all JSON endpoints in B1); returns
+    "raw" otherwise or when the endpoint cannot be read cleanly.
+    """
+    parts = raw_path.split("/")
+    if len(parts) < 5:
+        return "raw"
+    if parts[0] != "" or parts[1] != "api" or parts[2] != "repo":
+        return "raw"
+    ep = parts[4]
+    if ep in ("files", "file", "history"):
+        return "json"
+    return "raw"
+
+
+def _parse_request(handler):
+    """Single URL-parser. Returns `(Request, None)` on success or
+    `(None, ParseError)` on failure (r6 F2 — structured error;
+    errata E2 all-slash normalization; errata E3 `parse_qs` at
+    start).
+    """
+    raw = handler.path
+    q_idx = raw.find("?")
+    if q_idx >= 0:
+        raw_path = raw[:q_idx]
+        raw_query = raw[q_idx + 1:]
+    else:
+        raw_path = raw
+        raw_query = ""
+
+    # E2 — match shipped `do_GET` normalization at line 189-194
+    # exactly. Strip ALL trailing slashes, collapse empty to "/".
+    raw_path = raw_path.rstrip("/") or "/"
+
+    # E3 — parse the query once at the start. `parse_qs` never
+    # touches path components, so this is safe even when the path
+    # is malformed. Reused for both `ParseError.version_present`
+    # and the final `Request.query`.
+    try:
+        query_map = parse_qs(raw_query, keep_blank_values=True)
+    except (ValueError, UnicodeDecodeError):
+        query_map = {}
+    version_present = "version" in query_map
+
+    def _fail(status, message):
+        return (None, ParseError(
+            status=status,
+            message=message,
+            response_kind=_infer_response_kind_raw(raw_path),
+            version_present=version_present,
+        ))
+
+    # Step 2 — validate `%XX` well-formedness on raw_path.
+    if not _WELL_FORMED_PCT_RE.fullmatch(raw_path):
+        return _fail(400, "malformed percent-escape in path")
+
+    # Step 3 — reject encoded slashes / backslashes on raw_path.
+    if _ENCODED_SEP_RE.search(raw_path):
+        return _fail(400, "encoded slash or backslash in path")
+
+    # Step 4 — structural split on unencoded `/`.
+    raw_parts = raw_path.split("/")
+
+    # Step 5 — EXACT endpoint shape enforcement.
+    if (len(raw_parts) < 4 or raw_parts[0] != ""
+            or raw_parts[1] != "api" or raw_parts[2] != "repo"):
+        # Not our namespace — pass through as "other".
+        version_value = (query_map.get("version", [""])[0]
+                         if version_present else "")
+        return (Request("other", "", None,
+                        version_present, version_value, query_map),
+                None)
+
+    raw_repo_name = raw_parts[3]
+    if not raw_repo_name:
+        return _fail(400, "repo name required")
+
+    if len(raw_parts) == 4:
+        endpoint = "other"
+        raw_logical_parts = None
+    else:
+        raw_endpoint = raw_parts[4]
+        if raw_endpoint == "files":
+            if len(raw_parts) != 5:
+                return _fail(404, "unknown endpoint")
+            endpoint = "files"
+            raw_logical_parts = None
+        elif raw_endpoint == "history" and len(raw_parts) == 5:
+            # /api/repo/<name>/history (repo-scope) — legacy route,
+            # not owned by B1.
+            endpoint = "other"
+            raw_logical_parts = None
+        elif raw_endpoint in ("file", "raw", "history"):
+            if len(raw_parts) < 6:
+                return _fail(400, "logical path required")
+            endpoint = raw_endpoint
+            raw_logical_parts = raw_parts[5:]
+        else:
+            # Unknown endpoint name (search, check, commits, ...)
+            # — pass through as "other"; legacy dispatcher owns it.
+            endpoint = "other"
+            raw_logical_parts = None
+
+    # Step 6 — decode each surviving RAW component EXACTLY ONCE.
+    try:
+        repo_name = unquote(raw_repo_name,
+                            encoding="utf-8", errors="strict")
+        decoded_logical_parts = (
+            [unquote(p, encoding="utf-8", errors="strict")
+             for p in raw_logical_parts]
+            if raw_logical_parts is not None else None
+        )
+    except UnicodeDecodeError:
+        return _fail(400, "malformed UTF-8 in URL")
+
+    # Step 7 — defense in depth. `%25xx` decodes to `%xx`; refuse.
+    if _ANY_PCT_IN_DECODED_RE.search(repo_name):
+        return _fail(400, "double-encoded input")
+    if decoded_logical_parts is not None:
+        for p in decoded_logical_parts:
+            if _ANY_PCT_IN_DECODED_RE.search(p):
+                return _fail(400, "double-encoded input")
+
+    logical = ("/".join(decoded_logical_parts)
+               if decoded_logical_parts is not None else None)
+
+    version_value = (query_map.get("version", [""])[0]
+                     if version_present else "")
+
+    return (Request(endpoint, repo_name, logical,
+                    version_present, version_value, query_map),
+            None)
+
+
+# ── Raw-error HTML template (r6 F3) ───────────────────────────────
+
+_RAW_ERROR_HTML_TEMPLATE = (
+    "<!DOCTYPE html>\n"
+    "<html><head><title>{status} {short}</title></head>"
+    "<body><h1>{status} {short}</h1>"
+    "<p>{explain}</p></body></html>"
+)
 
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
@@ -108,17 +495,110 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass  # Expected during restart — old socket closing
 
-    def _send_json(self, data, status=200):
+    def _send_json(self, data, status=200, *, cache_control=None):
+        """JSON response. Uniform Content-Type
+        `application/json; charset=utf-8` (r4 F6 — the charset is
+        required so browsers do not sniff), unconditional
+        `X-Content-Type-Options: nosniff` (r3 F4), and
+        `Cache-Control` set from the keyword arg (defaults to
+        `no-cache` — the shipped sidebar-poll behavior; B1
+        callers pass `no-store` for `?version=` responses to
+        prevent caching of immutable historical content).
+        """
         body = json.dumps(data, default=str).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type",
+                         "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control",
+                         cache_control or "no-cache")
         self.end_headers()
         try:
             self.wfile.write(body)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass  # Client disconnected (e.g., during restart)
+
+    # ── B1 Slice 1 response helpers ──────────────────────────────
+
+    def _send_json_error(self, status, message, *,
+                         cache_control=None):
+        """JSON-envelope error responder. `/files`, `/file`,
+        `/history/<file>`, and every JSON `/api/repo/*` endpoint
+        MUST call this on error — `send_error` returns HTML and
+        would fail a client that expects the JSON envelope shape.
+        `cache_control` propagates onto the response so
+        `?version=` errors carry `no-store`.
+        """
+        self._send_json(
+            {"error": message, "code": status},
+            status=status, cache_control=cache_control)
+
+    def _raw_error_direct(self, status, message, version_present):
+        """Concrete self-contained raw-body error responder
+        (r6 F3). Writes status + headers + body ONCE via
+        `send_response` + explicit `send_header` + `end_headers`
+        + `wfile.write`. NO delegation to `send_error`. NO
+        dependency on undefined helper methods.
+
+        Guarantees:
+        - Status line sent EXACTLY ONCE.
+        - Content-Type is `text/html;charset=utf-8`.
+        - Content-Length matches encoded body bytes.
+        - `X-Content-Type-Options: nosniff` is unconditional.
+        - `Cache-Control: no-store` iff `version_present`.
+        - Body write is guarded against
+          `ConnectionAbortedError` / `BrokenPipeError`.
+        """
+        try:
+            short = _http.HTTPStatus(status).phrase
+        except ValueError:
+            short = "Error"
+        body_text = _RAW_ERROR_HTML_TEMPLATE.format(
+            status=status,
+            short=_html_escape(short),
+            explain=_html_escape(str(message)),
+        )
+        body = body_text.encode("utf-8", errors="replace")
+        self.send_response(status, message)
+        self.send_header("Content-Type",
+                         "text/html;charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        if version_present:
+            self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError,
+                BrokenPipeError):
+            pass
+
+    def _raw_error_from_req(self, status, message, req):
+        """Thin adapter for handlers holding a `Request`. Reads
+        `req.version_present` and delegates to
+        `_raw_error_direct`.
+        """
+        version_present = (req is not None
+                           and req.version_present)
+        self._raw_error_direct(status, message, version_present)
+
+    def _dispatch_parse_error(self, perr):
+        """Route-aware pre-dispatch error responder (r6 F2).
+        Reads `perr.response_kind` and picks `_send_json_error`
+        (JSON endpoints) or `_raw_error_direct` (raw endpoints
+        and everything the parser cannot classify safely).
+        Cache-Control policy is uniform: `no-store` iff
+        `perr.version_present`.
+        """
+        cache_ctl = ("no-store" if perr.version_present
+                     else None)
+        if perr.response_kind == "json":
+            return self._send_json_error(
+                perr.status, perr.message,
+                cache_control=cache_ctl)
+        return self._raw_error_direct(
+            perr.status, perr.message, perr.version_present)
 
     def _send_file(self, path):
         try:

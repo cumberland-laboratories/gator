@@ -1,85 +1,154 @@
 # Inbox
 
-Drop anything here. No formatting needed.
+Keep only open work and current operational context here. Finished work belongs
+in Git history, the changelog, and the roadmap.
 
-**House rule (2026-08-11)**: keep only OPEN items. Finished work is captured in Git commits, CHANGELOG, and the roadmap. If an item ships or gets promoted to the roadmap, remove it from here.
+## READ FIRST - Current handoff (2026-09-08, updated after r6 review)
 
----
+**Immediate task for the next Opus session: implement Dashboard Plan B1 in
+three bounded slices behind Plan A's harness.** The planning phase is closed.
+Read `.gator/whiteboard.md` first, then the execution errata, then start
+Slice 1.
 
-## Where we are (2026-09-07)
+Authoritative sources, in read order:
 
-**Dashboard UX v2.13.0 — Plan A implemented (r6→r9 through 7 whiteboard rounds), Plans B/C not yet started.** Plan A ships the Playwright + pytest harness (isolated fleet, `--port 0` Ready protocol, in-process module loader, debug seam, seed-extension seams for B/C, deterministic teardown probe, kill-escalation pins). Local suite: **21 pass + 1 skip** (POSIX-only real-child smoke skipped on Windows); aggregate with the pre-existing fast lane: **982 pass + 4 skip + 2 xfail**, zero regressions. Not yet committed — waiting on the r9 review/commit decision. The plan artifact is `vault/artifacts/2026-09-06-dashboard-harness-foundation-plan.md` (r9; frontmatter revision bumped as of the r9 pass). Acceptance gate for B/C is the `dashboard-ui` CI job green on both Ubuntu and Windows — needs the CI run after commit.
+1. **Execution errata (authoritative for E1-E5):**
+   `.gator/vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md`.
+   This document wins on any contradiction with the r6 plan. It carries the
+   final five corrections from the 2026-09-08 r6 whiteboard plus one
+   non-blocking tightening (the explicit-elif serializer;
+   the E3 `parse_qs` fallback was suggested and left as-is per the reviewer's
+   own note), and defines the three implementation slices with
+   charter-alongside-code sequencing baked in.
+2. **B1 r6 plan (frozen design record):**
+   `.gator/vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md`.
+   Frontmatter carries `status: frozen-reference` and `superseded-by` pointing
+   at the errata. Read for design intent only; do not amend for implementation
+   details.
 
-**Plans B and C are next**, and both consume Plan A's harness verbatim:
-- **`2026-09-06-dashboard-safe-content-transport-plan.md`** (929 lines) — **security-critical**: shared `_contained_repo_path` resolver closing a real path-traversal in the current `/raw/`, `/file/`, `/history/` handlers. Also historical-ref helpers, binary-safe `/raw/`, HTML iframe + sandbox + explicit CSP. Updated in r9 to use the extracted `_harness.seed_content_fixtures` extension seam (module-level reassignment pattern) instead of the previously-planned `conftest.py::_seed_repo` monkey-patch. Depends on Plan A.
-- **`2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`** (616 lines) — route-scoped scroll, removal of viewport-math sizing (v2.11.1 80%-zoom regression), sidebar collapse/resize/persistence via canonical render helper. Updated in r9 to use `_harness.seed_sidebar_fixtures` on the same reassignment seam. Depends on Plan A; iframe pins soft-depend on Plan B.
+Current state:
 
-**Sequence**: A → B → C, each with its own acceptance gate before the next starts. Plan A's green `dashboard-ui` CI job is the go-signal for B and C. Target: v2.13.0. Field-guides retirement + Legacy Git-hooks cleanup (both `2026-09-05-*.md`) remain the sibling plans from the earlier three-way split.
+- **Plan A is complete and committed** at `8f2b9c9` (`Plan A: Dashboard UI
+  harness foundation`). Its `dashboard-ui` CI acceptance gate passed on Ubuntu
+  and Windows.
+- **Plan B1 is planning-complete and implementation-ready.** No B1 code or B1
+  tests have landed. B1 owns the security-critical server-side content
+  transport and authorization layer.
+- **The r6 plan cycled through r4 → r5 → r6 reviews.** r6 review declined an
+  r7 revision block and directed a concise errata + three-slice
+  implementation instead. The errata addresses:
+  - E1 (High): `/files` wire schema — one shared `_serialize_listing_entry`
+    preserves shipped `path`/`source`/`dir` shape.
+  - E2 (Med): parser normalizes `raw_path.rstrip("/") or "/"` to match
+    shipped `do_GET`.
+  - E3 (Med): version-key detection via `parse_qs` at start (catches
+    `%76ersion=abc`).
+  - E4 (Med): parser-shape rejects on `/file` are 400; debug-seam pins pinned
+    to `dashboard_fleet_debug_off` / `dashboard_fleet`.
+  - E5 (Med): `_is_reserved_windows_component` layer 1 strips trailing
+    spaces so `NUL .txt`, `COM1 .md`, `CONIN$ .txt` are caught without the
+    deprecated stdlib.
+- **Three implementation slices, each with charter-alongside-code updates**
+  per constitution:
+  1. Parser + `content_policy` + Windows-name normalization + response
+     helpers + unit tests. Charter updates for `scripts-dashboard.md` helper
+     entries, `scripts-cross-cutting.md`, `contracts.md` — landed alongside
+     the files.
+  2. In-place `do_GET` migration (delete four B1 route blocks; insert parser
+     + 4-way dispatch; preserve legacy branches). E1 wire-schema
+     live + historical round-trip pins. Charter updates for the `do_GET`
+     route inventory and every §12 TRIPWIRE.
+  3. Junction/platform tests, POSIX parser-symmetry, final charter
+     reconciliation, full Plan A `dashboard-ui` gate green on Ubuntu +
+     Windows.
+- The `seed_history_commits(repo, name)` harness seam is intentionally part of
+  B1; not in committed Plan A. Preserve Plan A's existing
+  `seed_sidebar_fixtures` seam.
 
-**Frozen reference for the design cycle**: `vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md` r9 remains `status: frozen-reference` (design/decision record, DO NOT IMPLEMENT DIRECTLY). Plan A r9 supersedes its harness-scope decisions.
+Dashboard work remains deliberately sequenced:
 
-**Freeze precedent noted for future rounds**: when a plan crosses ~2000 lines OR ~5 review rounds without the new-blocker rate dropping, prefer freeze + split over another in-place revision. Plan A demonstrates the alternative — 7 focused rounds against a lean scope, each bounded, converging to green tests on the sixth revision without ballooning the doc.
+1. **A - complete:**
+   `.gator/vault/artifacts/2026-09-06-dashboard-harness-foundation-plan.md`
+2. **B1 - implement in three slices (errata authoritative):**
+   `.gator/vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md` +
+   frozen r6 plan
+   `.gator/vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md`
+3. **B2 - downstream, not yet reviewed for implementation:**
+   `.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`
+4. **C - downstream responsive shell/sidebar work:**
+   `.gator/vault/artifacts/2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`
 
-## Where we are (2026-09-03)
+The monolithic parent
+`.gator/vault/artifacts/2026-09-06-dashboard-safe-content-transport-plan.md`
+and the earlier
+`.gator/vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md` are
+frozen design records. **Do not implement either frozen plan directly.**
 
-**Released: v2.12.3 on PyPI (2026-09-03) — four HTML blueprints + narrative-template diagram fix.** First real dogfood pass on the HTML artifact protocol. The Architect walked the authoring flow end-to-end for four blueprints spanning both templates and three of the four defined doc classes: `gator-loop.html` (`feature-blueprint`, interactive — 13 nodes / 31 edges covering the state-machine), `gator-loop-guide.html` (`procedure-visual`, narrative — how to run a loop as the Architect), `enterprise-guide.html` (`reference-explainer`, narrative — supersedes the historical `enterprise-configuration.md` for the current transcripts-first architecture), `enterprise-deployment-guide.html` (`procedure-visual`, narrative — from-empty-machine deployment walkthrough). Template fix: `.diagram-edge` changed from `flex: 0 0 auto` to `flex: 1 1 auto` after Architect surfaced nodes clustering on the left with whitespace on the right; edges now consume slack while still shrinking to `min-width` on horizontal-scroll overflow. Charter note in `scripts-repo-lifecycle.md::plan_updates()` preserves the intent. Commits: `ea82992` (content) + `15bc6d9` (bump). Tags `v2.12.3-rc1` + `v2.12.3`. Pipeline: TestPyPI Ubuntu smoke CDN race (rerun→green) AND production post-publish smoke CDN race (rerun→green after verifying 2.12.3 on the simple index) — pattern now **5-for-9 on TestPyPI + first production-side hit in a while**; 240s widen is well past due. GitHub Release published. Suites at ship: **978 pass + 3 skip + 2 xfail** (unchanged — new artifacts are data). PyPI verified `2.12.3`; local `gator --version` → `gator 2.12.3`. **Two authoring-pass observations noted for future procedure-hardening** (not addressed this release): (1) compat-test `<meta>` regex rejects apostrophes in `content="..."` values — worked around with HTML entities and rephrasing; (2) directory-name/content-shape tension — 4 of 5 HTML files under `.gator/blueprints/` are narrative-template, and the directory name suggests interactive-only. Worth watching if the pattern spreads.
+Two sibling plans remain open but are not part of the immediate B1 sequence:
 
-Earlier (2026-09-03 earlier): **v2.12.2 — HTML template + reference-implementation restyle.** Architect feedback on v2.12.0's shipped template styling ("gray tones only, doesn't fit the Blueprints 2.0 aesthetic") drives a palette + class-vocabulary refresh with two reference points: `code/donoriq/.gator/vault/artifacts/2026-08-26-snowpark-udtf-materialization-guide.html` as the narrative-template model + the retired v2.11.0 shipped Blueprints view as the interactive-template model. **`_template-narrative.html`** rewritten to the snowpark palette (teal primary + new red/blue/amber/green semantic accents) with additive classes the Architect asked for: `table.table-blue`/`red`/`teal` colored-header variants, `.callout.note`, `.diagram` slot with colored horizontal flowchart nodes and edges, `.steps` variants, `.pill.info`. Body layout tightened (`padding: 2rem 1.25rem`, `max-width: 1120px`). **`_template.html`** + **`.gator/blueprints/charter-map.html`** restyled to v2.11.0 aesthetic (`--bg #fafbfc`, semantic node color names, teal-governance header underline, 360px sidebar). Post-preview fix: `_template.html`'s narrative had a stray `max-width: 900px; margin: 0 auto` rule giving it extra left indent — removed after Architect side-by-side comparison against charter-map. Charter update: `scripts-repo-lifecycle.md::plan_updates()` bang extended with the styling convention. Commits `c08beb9` (restyle) + `3e9d648` (bump). Tags `v2.12.2-rc1` + `v2.12.2`. Pipeline: **first-try green** — no CDN-race hit (breaks the pattern; now 5-for-8, still worth the 240s widen but no urgency). GitHub Release published. Suites at ship: **978 pass + 3 skip + 2 xfail** (unchanged — styling only). Second same-day patch on the Blueprints 2.0 Release A arc.
+- `.gator/vault/artifacts/2026-09-05-field-guides-retirement-implementation-plan.md`
+- `.gator/vault/artifacts/2026-09-05-legacy-git-hooks-cleanup-implementation-plan.md`
 
-Earlier (2026-09-03 earlier): **v2.12.1 — HTML scaffolding routing fix.** Same-day patch for a fleet-visible bug in v2.12.0 where `gator update` on v2 repos placed `_template.html` + `_template-narrative.html` at `.gator/.includes/blueprints/` instead of `.gator/blueprints/`, invisible where agents look. Root cause: `gator-update.py` carried two hardcoded local literal sets (`{"README.md", "_template.md"}`) duplicating `USER_VISIBLE_SCAFFOLDING` from `gator_layout.py` — one in `plan_updates()` (v2 routing), one in `migrate_layout()` (v1→v2 migration). v2.12.0 added the HTML filenames to the frozenset but didn't touch either routing site. Exactly the silent-drift class the `scripts-layout.md` TRIPWIRE was written to prevent — and the TRIPWIRE's own guidance was factually wrong ("nothing observes the set beyond `_dir_is_scaffolding_only`" — two routing sites in `gator-update.py` also read equivalent-but-drifted sets). Fix at `eb1b57d`: both routing sites now `from gator_layout import USER_VISIBLE_SCAFFOLDING` and consult the single source of truth (wheel copy + template mirror per sync obligation). Regression pins: new `TestScaffoldingRoutingRoundTrip` class — three end-to-end tests that actually invoke `plan_updates()` + `migrate_layout()` and assert routing, plus a source-grep pin that rejects the two-filename literal patterns. Charter TRIPWIRE rewritten from "one observer" to "THREE-observer contract" naming all three sites. Bump at `0fbc2df`. Tags `v2.12.1-rc1` + `v2.12.1`. Pipeline: TestPyPI Ubuntu smoke CDN race (rerun→green — **5-for-7 now** on TestPyPI Ubuntu; adjacency to existing CDN-race inbox item is worth the 240s widen now, not later); production promote clean first attempt. GitHub Release published. Suites at ship: **978 pass + 3 skip + 2 xfail** (+3 net vs v2.12.0 baseline). PyPI verified `2.12.1`; local `gator --version` → `gator 2.12.1`. **Fleet-repo cleanup for v2.12.0-installed repos**: after upgrading and running `gator update`, manually delete `.gator/.includes/blueprints/_template*.html` — the update installs correctly to root but doesn't clean up prior misroutes.
+## Unscheduled open backlog
 
-Earlier (2026-09-02): **v2.12.0 — HTML Artifact Protocol Release A.** Blueprints 2.0 architecture pivot from v2.11.0's Dashboard-native rendering to artifact-first: Dashboard is a thin browser; blueprints are self-contained HTML documents opened through the v2.4.5 `.html` file surface in a new browser tab. Ships: (1) `gator-blueprint-html-v1` protocol contract; (2) two HTML templates per **D11 two-lane triage** (`_template.html` interactive, `_template-narrative.html` narrative); (3) `USER_VISIBLE_SCAFFOLDING` extended (with the routing-bug consequence fixed in v2.12.1); (4) reference impl `.gator/blueprints/charter-map.html` (13 nodes / 29 edges, one-time conversion from retired v2.11.0 data); (5) authoring procedure; (6) compat test (12 tests including scaffolding-exclusion contract); (7) new `contracts.md` invariant "Shipped-template surfaces reference governed-repo paths only". **Retires v2.11.0 surface fully** (D1): deleted `dashboard/views/blueprint.js` (~322 lines), shipped data files, view test file (16 tests), endpoint, sidebar item, ~262 lines of `bp-*` CSS. **D2 coexist**: existing `*.md` blueprints untouched. **D4 new-tab**: no iframe, no dedicated view. Two whiteboard fixes landed pre-bump: round 1 (`af6163d`) added scaffolding-exclusion + retargeted procedure/template comments; round 2 (`9f31db6`) caught three README links + two template `<body>` sections that render into every newly-authored artifact + added the codifying `contracts.md` invariant. Commits: `937d890` + `af6163d` + `9f31db6` + `d136833`. Suites at ship: **975 pass + 3 skip + 2 xfail**. Plan chain: [HTML artifact protocol plan r5](vault/artifacts/2026-09-02-html-artifact-protocol-implementation-plan.md) synthesized from 5 Codex HTML-document sketches. **Deferred**: Release B (v2.13.0) feature-blueprint generation procedure; Release C (v2.14.0) Dashboard HTML artifact index; Release D (v2.15.0+) procedure-visual + reference-explainer worked examples.
+- Widen the TestPyPI and production PyPI poll windows from 120 seconds to 240
+  seconds in release workflows B and C. Repeated CDN propagation races have
+  established this as a real release reliability issue.
+- Continue hardening session opening if the shipped `gator init` directive does
+  not stop models from skipping the constitution: make the entry-point reads
+  blunt and explicit, remove the vestigial two-path conditional, and avoid
+  rendering unread files as successful checks.
+- Define post-runtime-split authority for `product-source.json`. Installed CLI
+  templates should be authoritative; consider honoring the file only as an
+  explicit development override when its version matches the CLI.
+- Clarify agent guidance that `.gator/commit_draft.md` is the commit-message
+  source of truth; agents should not invent a separate bespoke `git commit -m`
+  message.
+- Add a diagnostic when session-snippet emission cannot find a live registry
+  identity. The current fallback silently uses the `agent:` value from
+  `commit_draft.md` and loses the session ID.
+- Stop `gator update` and gatorize overlay copies from shipping
+  `__pycache__/*.pyc` files from templates.
+- Fix `stale-charter-refs` parsing of compound headings such as
+  `AUTO_YES / set_auto_yes(value) / get_auto_yes()`; current false positives
+  weaken trust in the warning.
+- Rewrite the vaulted pre-monorepo installation, upgrade, getting-started, and
+  docs-index pages for the pipx-first monorepo workflow.
+- After the Architect archives the legacy
+  `cumberland-laboratories/gator-command` GitHub repository, treat the local
+  standalone clone as reference-only and remove it after the agreed retention
+  period.
+- Decide whether the vaulted `scripts-command-post.md` charter should be
+  restored for the monorepo or intentionally remain retired.
 
-Earlier (2026-08-30): **v2.11.1 — Blueprints canvas responsive frame + stage split** (frontend hardening for v2.11.0: `bp-canvas` becomes scrollable outer frame that grows/shrinks with viewport, new inner `bp-stage` carries fixed intrinsic dimensions from payload's `canvas` field; TRIPWIRE added). **v2.11.0 — Blueprints 2.0 Release A: Dashboard-native L1 charter map** (Dashboard view with click-to-isolate 1-hop-neighborhood, endpoint with **D3 no-wrong-data-at-per-repo-seam** structured empty-state, shipped data files). Both surfaces fully retired in v2.12.0 in favor of the artifact-first direction — the v2.11.x arc is preserved for historical clarity and gave us the design cycle to reach D1/D2/D4/D11.
+## Machine state (persistent operational reference)
 
-Earlier (2026-08-29): **v2.10.0 — machine-scoped Python launcher preference** (`~/.gator/preferences.json` schema `gator-preferences-v1`, canonical resolver, shipped operator procedure).
+This section is reference data for Enterprise development and smoke tests, not
+backlog or release history.
 
-Earlier (2026-08-28): **v2.9.3 — hook shebang + JSON gate + session-open fixes** (field-caught bugs at `525f9e0`).
-
-Earlier (2026-08-23): **v2.9.2 — field-case fix trio** (reference-notes reclassification, `--dry-run` gates `--migrate-layout`, Dashboard surfaces update failures); **v2.9.1 — session-opening directive** (constitution-skip fix, first machine-side agent-education fix through the split); **v2.9.0 — the runtime split** (roadmap item 19 / Current Priority #1 COMPLETE — repos commit policy + `runtime-pin.json`, enforcement executes from the installed CLI).
-
-**Next steps**: #1 Gator + Enterprise polished and ready for lots of users (single-pipx item 5 = announcement blocker; onboarding/UX table; vaulted-docs rewrite), **#2 Blueprints 2.0 Release B** (feature-blueprint generation procedure — the on-demand "how does X work?" case; v2.13.0), #3 Gator Loop polish, #4 transcript index (item 18). Blueprints 2.0 follow-ons post-v2.12.1: Release C (v2.14.0) Dashboard HTML artifact index; Release D (v2.15.0+) procedure-visual + reference-explainer worked examples. Machine-preferences follow-ons still open post-v2.10.0: `gator prefs` CLI (Phase 4), hook-mode `hooks:` section (Sketch B follow-on plan), Phase 5 diagnostics. Runtime-split residue worth a near-term ride-along: F6-1 product-source authority rule (open item below), migrate-layout two-command dance UX, cp1252 mojibake in migrate error. Open work lives in the roadmap tables + GitHub issues #1, #3-8 (#4 Node.js actions bump is deadline-driven and now annotating every run). **CDN-race poll window** is 5-for-9 on TestPyPI Ubuntu, plus first production-side hit in months (both sides tripped on v2.12.3, both recovered by `gh run rerun --failed`). Widen 120s → 240s on Workflow B AND Workflow C — the case is now unambiguous; ride-along on the next unrelated release.
-
----
-
-## Open items
-
-- **Windows-first test drift → Linux CI break (new class of paper-cut, first hit 2026-08-29).** Pattern: test author writes a Windows-shaped path literal (`C:/Users/.../py.exe`) or patches `os.name = "nt"` without also patching real `os.path.isabs`/`isfile`/`expandvars`, local Windows test suite passes, Ubuntu CI catches it. Bit the v2.10.0 release-candidate push (`33262093184`) with three regressions: two `TestValidateLauncherCandidate` tests where hardcoded `C:/...` failed Linux's `os.path.isabs` (returned `relative-path` before reaching the space/exists check), plus `test_windows_platform_shebang` which patched `os.name` but the resolver's real `os.path.isabs("C:\\Windows\\py.exe")` on Linux still said False. Fixed in `edb3418` by using `tmp_path` for platform-native absolute prefixes + patching the resolver seam directly rather than downstream path helpers. Charter TRIPWIRE landed in `scripts-cross-cutting.md § Cross-Platform Test Patterns for Path Validators` and `scripts-core-library.md::_validate_launcher_candidate`. Prevention candidates: (a) pre-push lint that spots hardcoded `C:/` in test files; (b) a local Linux smoke lane (Docker or WSL) exercised before pushing anything path-heavy; (c) leave it as a documentation contract and rely on CI as the trap. Python 3.13's tightening of Windows `os.path.isabs` (drive-less rooted paths no longer count) is a compounding factor — it broke my in-flight `/tmp/...` attempt on Windows py3.13 CI cells even before Ubuntu. Watch: does the TRIPWIRE alone stop the next occurrence, or does this need automation? (2026-08-29)
-
-- **Sigstore TUF metadata HTTP 403 during production PyPI publish (first-time hit 2026-08-29).** v2.10.0 promote workflow `33262710646` failed the `publish to production PyPI` step with `tuf.api.exceptions.DownloadHTTPError: HTTP error occurred with status 403` → `sigstore.errors.TUFError: Failed to refresh TUF metadata` deep in `pypa/gh-action-pypi-publish`'s attestation-signing path. Not our code — upstream Sigstore transient. Rerun succeeded cleanly (no re-approval needed for same workflow instance; publish step retried the OIDC flow and got a fresh TUF fetch). If this recurs, worth naming as a known-transient in `procedures/release-and-deploy.md` step 5 alongside the CDN-race note, so the next operator knows the recipe: check `pypi.org/pypi/gator-command/json` first (if version-not-there, `gh run rerun --failed`; if version-is-there, only the smoke needs rerun). No action beyond documentation unless it becomes chronic. (2026-08-29)
-
-- **CDN-race poll window widening (from v2.9.1/v2.9.2/v2.10.0/v2.12.0/v2.12.1/v2.12.3 pattern — 5-for-9 on TestPyPI Ubuntu smoke, plus first production-side hit in months on v2.12.3).** Named as a small-item candidate in v2.9.2 rollforward, still open. v2.12.3 hit TestPyPI Ubuntu (`33805213524`, rerun→green) AND production post-publish smoke (`33805462689`, verified 2.12.3 on the simple index before rerun→green). This is the first release where both sides tripped; typical pattern has been TestPyPI-only. v2.12.2 was a one-release reprieve; the base rate remains that 120s is too short for typical propagation. Now visible on BOTH workflows; the widen (120s → 240s on Workflow B and Workflow C) should be a ride-along on the next unrelated release. Adjacent to GitHub issue #3. (2026-09-03)
-
-- **Models skipping the constitution read at `gator init` (Opus 4.7 observed; structural causes confirmed 2026-08-23).** Architect-reported: Opus 4.7 sometimes runs `gator init`, shows the banner, and proceeds WITHOUT reading the constitution — which silently also skips mission/roadmap/inbox, since those reads chain from the constitution's Session Opening block ("one skippable link → skip all four"). Mined 2026-08-23; verdicts: **(1) NOT an update regression** — `.pre-gator-update` diff proves the entry-point constitution line was unchanged by the 2.9 refresh (only the CLI-invocation phrasing moved). **(2) Two-path conditional lookup confirmed** (`gatorize/entry_points.py:67`): "find `constitution.md` in `.gator/` or `.gator/.includes/` (whichever exists)" is easier to skip than a blunt fixed path, and the line sits after the four bold operational paragraphs in the managed block. Post-2.9 the conditional is nearly vestigial — updated repos are always `.includes/`. **(3) Banner reads as completion, confirmed**: `✓ constitution  14 rules in force` is existence+count dressed as a done-tick, and the closing `oriented. the terrain is mapped.` (gator-init.py `TAGLINE`) ends the agent-facing output with no next-action directive. **(4) Model-literalness shift** (4.7 doesn't invent un-asked work): plausible hypothesis, unverifiable from one session. **Fix (a) SHIPPED 2026-08-23** (same-day standalone commit): `session_opening_directive()` in both `gator-init.py` copies — the banner now ends "session opening is not finished. Read, in order: 1. <resolved constitution path> 2. mission.md · roadmap.md · inbox.md" between the tagline and the `▸` marker; blunt layout-resolved path, no conditional lookup; pinned by `test_banner_ends_with_session_opening_directive`. Reaches the fleet on the next CLI release (repos need nothing). **Still open**: (b) entry-point block enumerates the reads directly with a blunt path (rides `gator update` per repo; also retire the vestigial two-path conditional in `entry_points.py:67`); (c) ✓-semantics — don't render an unread file as a green check. Watch whether (a) alone stops the observed skips before spending (b)/(c). Same product class as the `git commit -m` vs `commit_draft.md` confusion item below. (2026-08-23)
-
-- **Post-split `product-source.json` authority rule (F6-1 design follow-up).** Phase 6 fleet migration found 9 repos whose stale `product-source.json` bound the retired standalone `gator-command` clone — `gator update` refreshed `.includes` shipped content AND sourced the pin manifest from that 2.5-era template tree while stamping the CLI's own `runtime_version`. Enforcement was never stale (stubs dispatch to the installed CLI), but the pin's manifest claimed files that are not the executing runtime. Candidate rule: an installed-CLI update treats its own packaged templates as authoritative; `product-source.json` becomes a dev-mode override honored only when its version matches the CLI (else ignored with a warning). Also: `--migrate-layout` on a repo that reaches v2 mid-run exits without the pin pass (two-command dance), and the sandbox-refusal error message mojibakes an em-dash on cp1252 consoles. Details: vault Phase 6 run record §2/§4. (2026-08-22)
-
-- **Agent confusion around `git commit -m` vs `commit_draft.md`.** Some models are still behaving as if they need to invent or supply a specific `git commit -m "..."` message even though Gator's commit path already uses `.gator/commit_draft.md` as the source of truth for the final commit summary/body. Need to make this clearer in the right surfaces (entry points, docs, reference notes, maybe hook-facing wording) so models understand: populate `commit_draft.md`; do not treat a bespoke `-m` string as required. The recurrence suggests this is a product/agent-education issue, not just one-off model error. (2026-08-18)
-
-- **Session-snippet identity fallback: registry-miss is silent, degrades to commit_draft `agent:` string.** Surfaced 2026-08-16 by enforcer whiteboard finding on the `331f1ef` residue snippet (`session_group_key: null`, `model_inferred: "claude"`). Traced: NOT a code regression — two stacked conditions. (1) `session_group_key`/`transcript_session_id` are null whenever no live PID-matched entry exists in `.gator/active-vendor-session.json` at commit time — pre-existing and intermittent (most 08-10→08-15 snippets are also null); why the 08-16 session had no registry entry is unknowable post-hoc. (2) On registry miss, `render_snippet_json` → `_infer_vendor_from_agent()` (`precommit_session.py:748`) passes the commit_draft `agent:` string through as `model_inferred` verbatim — Opus sessions wrote `claude-opus-4-7` so misses looked precise; Fable sessions wrote `claude` so misses look generic. **Convention adopted 2026-08-16 (Architect-ratified)**: agents write the precise model name in commit_draft `agent:` (e.g. `claude-fable-5`), restoring fallback specificity at zero code cost. **Code fix for a future hook-hardening commit**: emit a `gator_diagnostics.log_hook_event`-style registry-miss diagnostic at snippet-emit time so silent SessionStart-registration failures become visible; optionally enrich the fallback. Rides naturally with the `stale-charter-refs` item below. Audit impact of misses is mitigated — Enterprise still links via `exact_sha_in_transcript` + `strong_machine_repo_time`; only the `session_id_in_snippet` basis is lost. (2026-08-16)
-
-- **`gator update` ships template `__pycache__/*.pyc` into repos.** Spotted 2026-08-18 during the Phase 1 pin dogfood: the update plan listed `~ gator-pre-commit.cpython-313.pyc` etc. — `plan_updates()`'s nested-subdir walk treats the template's `__pycache__/` as a shippable subdir. Harmless-ish (gitignored in most repos) but it's junk in the overlay and noise in update output. Fix: exclude `__pycache__` in the nested-subdir loop (`gator-update.py::plan_updates` + gatorize's `copy_tree_overlay` call site). Small; ride a future maintenance commit. Pre-existing, unrelated to the pin work (the pin manifest already excludes pycache). (2026-08-18)
-
-- **Pre-commit `stale-charter-refs` checker: compound `###` headings false-positive.** Surfaced 2026-08-16 on commit `25f2e6e`: warned `AUTO_YES / set_auto_yes` not found in covered files, but all three names in the compound heading `### AUTO_YES / set_auto_yes(value) / get_auto_yes()` (scripts-installer.md) exist in `gatorize/helpers.py`. The checker apparently treats slash-joined heading segments as one identifier instead of splitting on ` / ` and stripping signatures. Warning-only (never blocks), so low urgency — but false positives train agents to ignore the warning, which is how the REAL catch this same day (`memex_formatters` phantom entries) could get missed next time. Fix belongs in `gator-pre-commit.py`'s charter-validation phase; ride a future hook-hardening commit. (2026-08-16)
-
-- **Docs rewrite for install/upgrade/getting-started/index.** 12 pre-monorepo docs vaulted to `.gator/vault/docs-not-ready/` in v2.5.2 described the retired `gator-engine/scripts/gatorize.sh` install path. Need fresh versions for the pipx-first monorepo world. Priorities: `installation.md` (`pipx install gator-command` → `gator dashboard`), `upgrade.md` (`pipx upgrade`), `getting-started.md` (dashboard-first walkthrough), `index.md` (Home page for docs site). Vault copies preserve OLD prose as reference for what to rewrite / NOT reintroduce. (2026-08-02)
-
-- **Legacy `cumberland-laboratories/gator-command` GitHub repo — plan for removal.** Architect will archive on GitHub. Once done, local `C:\Users\curator\code2\gator-command\` becomes reference-only. Contents already vaulted to `.gator/vault/gator-command-archive/`. Safe to `mv` to `gator-command-retired/` anytime; safe to delete after a few weeks of monorepo-only work with no missed content. (2026-08-02)
-
-- **Charter promotion decision from vault.** Vault archive at `.gator/vault/gator-command-archive/charters/` has 18 charters; monorepo has 17 (`scripts-command-post.md` was Cat 3-excluded during bootstrap). Decide whether to restore/rewrite `scripts-command-post.md` for the monorepo context or leave the coverage gap. (2026-08-02)
-
----
-
-## Machine state (persistent operational reference — not backlog, not history)
-
-Kept here so any session has a single lookup surface for the state Enterprise smoke-tests and dev work assume.
-
-- Postgres 18.4 on `localhost:5434`; DB `gator_enterprise`; superuser `postgres`; password `gator123`; alembic head `011` (Migration 011 `session_qualifier` applied 2026-08-15)
-- Env file at repo root: `.env-enterprise-local` (gitignored) — has `DATABASE_URL`, `GATOR_ENTERPRISE_URL=http://localhost:8000`, `GATOR_ENTERPRISE_TOKEN=<one-shot admin token>`. Token is machine-local and non-recoverable — if lost, `DELETE FROM api_tokens WHERE label='bootstrap-admin';` then re-bootstrap with `python -m app.admin bootstrap`.
-- Enterprise venv: `.venv-enterprise-local/` at repo root (gitignored). Use `.venv-enterprise-local/Scripts/{python,alembic,uvicorn,gator-enterprise}.exe` by absolute path; never activate. `psycopg[binary]` + editable install of `enterprise/enterprise-cli/` both required (smoke-test protocol §2.2).
-- `~/.gator/machine-id` = `c5c707f5-155a-422f-9b1b-d9e8a10fea08`.
-- `~/.gator/hooks/{pre,commit-msg,post}-commit` (Enterprise-owned machine git hooks); `~/.gator/enterprise/{config,hook-policy,crypto-policy}.json` + `keys/*.pem` + `cli-python-path`.
-- Global `core.hooksPath = C:\Users\curator\.gator\hooks`. Monorepo unaffected (local `core.hooksPath = .git/gator-hooks` wins).
-- Sandbox repo at `C:\Users\curator\code2\gator-enterprise-local-sandbox\` (provisioned via `gator-enterprise repo init --canonical-id local/gator-enterprise-local-sandbox`).
-- Enterprise stack (uvicorn API + worker) tears down at session end. Startup commands are in the smoke-test protocol §2.4 (two terminals: uvicorn.exe on `:8000`, `python -m app.worker`).
-- `BLOB_STORE_ROOT` must be set to a Windows-writable path (this machine uses `C:\Users\curator\code2\gator\.tmp\enterprise-blobs`) — the default `/var/lib/gator-enterprise/blobs` is POSIX and crashes on Windows.
+- Postgres 18.4 runs on `localhost:5434`; database `gator_enterprise`;
+  superuser `postgres`; password `gator123`; Alembic head `011`.
+- Repo-root `.env-enterprise-local` is gitignored and contains `DATABASE_URL`,
+  `GATOR_ENTERPRISE_URL=http://localhost:8000`, and the machine-local
+  `GATOR_ENTERPRISE_TOKEN`. If the one-shot token is lost, delete the
+  `bootstrap-admin` row from `api_tokens`, then run
+  `python -m app.admin bootstrap`.
+- Repo-root `.venv-enterprise-local/` is gitignored. Use executables beneath
+  `.venv-enterprise-local/Scripts/` by absolute path; do not activate it.
+  `psycopg[binary]` and an editable install of `enterprise/enterprise-cli/`
+  are required.
+- `~/.gator/machine-id` is
+  `c5c707f5-155a-422f-9b1b-d9e8a10fea08`.
+- Enterprise-owned hooks are in
+  `~/.gator/hooks/{pre,commit-msg,post}-commit`; policy/configuration is in
+  `~/.gator/enterprise/`, including `config.json`, `hook-policy.json`,
+  `crypto-policy.json`, `keys/*.pem`, and `cli-python-path`.
+- Global `core.hooksPath` is `C:\Users\curator\.gator\hooks`. This repository's
+  local `core.hooksPath = .git/gator-hooks` takes precedence.
+- Enterprise sandbox repository:
+  `C:\Users\curator\code2\gator-enterprise-local-sandbox\`.
+- The Enterprise API and worker are normally stopped between sessions. Startup
+  commands are in the smoke-test protocol section 2.4.
+- Set `BLOB_STORE_ROOT` to a Windows-writable path. This machine uses
+  `C:\Users\curator\code2\gator\.tmp\enterprise-blobs`; the POSIX default is
+  invalid on Windows.
