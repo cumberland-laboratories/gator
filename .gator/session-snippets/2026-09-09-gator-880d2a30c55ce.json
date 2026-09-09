@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 Slice 2: do_GET in-place migration + safe content-transport handlers (r6 F1/F2/F3/F4 + errata E1/E4b)",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-slice-2",
+    "dashboard-content-transport",
+    "security-critical",
+    "do-get-migration"
+  ],
+  "commit": "880d2a30c55ce2915fed86a28700b622e62662bf",
+  "short_commit": "880d2a3",
+  "snippet_id": "snippet-880d2a30c55ce",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "dcf3a166d06996e6003d054b0e8e7adc89dc3139",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T22:42:59Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-09-gator-dcf3a166d0699.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_ui/_harness.py",
+    "tests/test_dashboard_ui/conftest.py",
+    "tests/test_dashboard_ui/content_transport_seed.py",
+    "tests/test_dashboard_ui/test_content_transport_slice2.py"
+  ],
+  "notes": [
+    "Added ~12 module-scope helpers to `gator-dashboard.py`: `_contained_repo_path` (two-resolve containment gate, r6 §5.1), `_contained_namespace_root` (r3 F5 + r4 F4 `for_history_only` absent-namespace via `_NAMESPACE_ABSENT_OK` sentinel), `_is_denied_segment` (case-folded segment deny), `is_text_for_file_endpoint_ext`, `is_browsable` (endpoint-dispatched allowlist, r5 F3 governance-root guard for source namespace), `_is_reparse_point` (Windows junction/reparse-tag rejection with 3.9-3.11 stat fallback), `_iter_scanner_files` (top-down `os.scandir` walk that skips reparse points BEFORE descent, prunes denied dirs, prunes governance roots for source namespace, r6 F4 collapses dot-directory rule inline), `_ns_prefix_for` (r5 T2 historical symmetry helper), `_canonical_logical_for` (r6 F4 live-branch inverse), `_reparse_ls_tree_entry` (historical entry → parsed logical path with same authorization gate as live), `_object_format` (per-repo `git rev-parse --show-object-format` with `_functools.lru_cache`), `resolve_version_ref` (immutable object-ID resolver — full-length via `cat-file -e <sha>^{commit}`, abbreviated via `rev-parse --disambiguate=`; NEVER ref-name lookup, F2), `git_show_at_ref` (bytes-mode subprocess — no `text=`, no `encoding=`, no `.strip()`, F3), `_git_commit_iso_date`, `_mtime_iso`, `_mime_for` (shared `_MIME_MAP` lookup), `apply_response_headers` (Content-Type + Content-Length + nosniff + optional Cache-Control).",
+    "Added four handler methods to `DashboardHandler`: `_handle_files(self, req)` (live via `_iter_scanner_files` + `_contained_repo_path` + `is_browsable` + `_serialize_listing_entry`; historical via `git ls-tree -r --name-only <sha>` + `_reparse_ls_tree_entry` iterated over `_HISTORICAL_NAMESPACES`), `_handle_file(self, req)` (JSON envelope for success AND error, byte-preserving read with UTF-8 `errors=\"replace\"` no-strip, `content_type` advertises `text/plain`/`image/svg+xml`), `_handle_raw(self, req)` (bytes via `apply_response_headers`, errors via `_raw_error_from_req` → `_raw_error_direct`), `_handle_history(self, req)` (rejects `?version=` with 400, uses `_contained_namespace_root(for_history_only=True)` for absent-namespace support, `git log --format=%H%n%h%n%ai%n%s -50 -- <git_rel>`).",
+    "Modified `do_GET` in place per r6 F1 (no `_legacy_dispatch` extraction): inserted `_parse_request(self)` call + `_dispatch_parse_error` branch + 4-way dispatch table on `req.endpoint in {\"files\",\"file\",\"raw\",\"history\"}` immediately after the shipped `path = self.path.split(\"?\")[0].rstrip(\"/\") or \"/\"` local. Deleted four shipped B1 route blocks in place (~350 lines total): the `/files` block including live filesystem walker + historical `git ls-tree` mapper (lines 336-503 pre-Slice-2), the `/raw/` block, the `/history/<file>` block, the `/file/` block. Every other shipped `do_GET` branch — root shell, debug seam, `/api/data`, `/api/refresh`, `/api/audit/sessions`, repo-scope `/history`, `/search`, `/api/updates/check`, `/check`, `/commits`, Tier-2 generic repo-status, `/api/repos/discover`, static-file service, trailing 404 fallback — is preserved untouched.",
+    "Extended imports: `dashboard.content_policy` constants (`_ALLOWED_TEXT_EXTS_SOURCE/GOVERNANCE`, `_ALLOWED_RAW_ASSET_EXTS`, `_DENIED_*`, `_MIME_MAP`, `_text_exts_for`, `_serialize_listing_entry`), `functools as _functools`, `stat as _stat`.",
+    "Extended `_harness.py` with `seed_history_commits(repo, name)` post-seed hook — module-level stub that Plan B's `content_transport_seed` reassigns. `seed_repo` now merges its return into the `commits` dict so version-scoped tests can address specific historical SHAs by label.",
+    "Created `tests/test_dashboard_ui/content_transport_seed.py` — registers `seed_content_fixtures` (adds `.gator/blueprints/sample.svg`, `.gator/blueprints/hero.png`, `.gator/sessions/_active/token.json`, `.gator/.override-approved.json`, `gator-command/README.md`, `example.py`, `private.pem`, `.env.local` to the seed commit) and `seed_history_commits` (adds `mission-r2` overwrite commit + `gc-deleted` remove-`gator-command/` commit). Deterministic module-scope import added to `tests/test_dashboard_ui/conftest.py`.",
+    "Created `tests/test_dashboard_ui/test_content_transport_slice2.py` — 42 HTTP integration tests hitting the actual subprocess dashboard. Coverage: E1 wire-schema round-trip (live + historical for all three namespaces including gc-deleted case), cache-control headers (no-cache live / no-store versioned), secret material never listed (`private.pem`, `.env.local`, `sessions/_active/`, `.override-approved.json`), `/file` JSON envelope with `content_type` advertisement, versioned reads via `mission-r2` SHA, SVG-as-text on `/file` + SVG-as-bytes on `/raw`, governance-root alias denial (`source/.gator/...` + `source/gator-command/...` → 404), `/file` traversal → 400 JSON envelope, `/raw` traversal → 400 HTML, `/file` and `/raw` version-error `no-store`, `/history` for deleted `gator-command/README.md`, `/history` rejects `?version=`, legacy pass-through (root shell, `/api/data`, repo-scope `/history`, `/search`, `/commits`, `/api/updates/check`, `/api/repos/discover`, debug seam gated-on and gated-off), `/files/extra` 404 JSON, E2 trailing-slash normalization on `/files/` and `/history/`.",
+    "Charter update in `scripts-dashboard.md::do_GET(self)`: rewrote route inventory to reflect the Slice 2 dispatch structure. Added five §12 TRIPWIREs — parse-once, transport-headers, discovery-serving symmetry, governance-root aliasing, historical symmetry."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}
