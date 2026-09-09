@@ -16,6 +16,10 @@ from pathlib import Path
 import pytest
 
 from ._harness import build_dashboard_fleet
+# B1 Slice 2 (v2.13.0) — deterministic module-scope import
+# registers `seed_content_fixtures` + `seed_history_commits` on
+# the harness BEFORE any fixture builds the fleet.
+from . import content_transport_seed  # noqa: F401
 
 
 # ── §4.1: in-process dashboard module loader ──────────────────────

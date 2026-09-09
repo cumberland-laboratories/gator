@@ -69,16 +69,32 @@ Filesystem: none (subprocess call)
 
 ### do_GET(self)
 File: `src/gator_command/scripts/gator-dashboard.py`
-Routes incoming HTTP requests:
-- `GET /` → `dashboard.html` served via `_send_dashboard_html()` (with debug meta injection when enabled)
+Routes incoming HTTP requests. **v2.13.0 B1 Slice 2 restructure**: the four content-transport endpoints (`/files`, `/file/`, `/raw/`, `/history/<file>`) are now dispatched via a parse-once table at the top of the method — `_parse_request(self)` runs EXACTLY ONCE, then `req.endpoint in {"files","file","raw","history"}` selects the corresponding `_handle_X(req)` method. Legacy branches below the dispatch continue to read `path` and `self.path` unchanged.
+- **Parse-once dispatch (top of body)** — `_parse_request(self)` → `_dispatch_parse_error(perr)` on failure OR handler dispatch on `req.endpoint in {"files","file","raw","history"}`. `req.endpoint == "other"` falls through to legacy branches.
+- `GET /` / `/index.html` → `dashboard.html` served via `_send_dashboard_html()` (with debug meta injection when enabled)
 - `GET /api/__gator_debug/registry_state` → live `_REGISTRY_REPOS` JSON, gated on `GATOR_DASHBOARD_DEBUG=1` (404 when unset). Read-only. See `_send_dashboard_html()` and TRIPWIRE (debug seam) below.
 - `GET /api/data` → `fast_data` JSON (Tier 1, or standalone payload)
-- `GET /api/settings` → dashboard settings JSON
 - `GET /api/refresh` → starts background Tier 1 re-collection, returns `{"status":"refreshing"}`
-- `GET /api/repo/<name>` → runs `gator-repo-status --path <resolved_path>` (Tier 2, lazy). Resolves name→path from registry for standalone compatibility.
+- `GET /api/audit/sessions` → `_handle_audit_sessions()` (Enterprise-only lazy aggregation)
+- `GET /api/repo/<name>/history` (repo-scope, no logical path) → legacy 50-commit list from `_get_repo_history()`
+- `GET /api/repo/<name>/search?q=...` → `_search_repo_files()`
+- `GET /api/repo/<name>/check` → dry-run gator-update JSON
+- `GET /api/repo/<name>/commits` → `git log --format=%H%n%h%n%ai%n%s -50`
+- `GET /api/repo/<name>/files[?version=<sha>]` → **`_handle_files(req)`** (Slice 2). Live path uses `_iter_scanner_files` + `_contained_repo_path` + `is_browsable`; historical path uses `git ls-tree` + `_reparse_ls_tree_entry`. Both mint entries via `_serialize_listing_entry` (errata E1 single-source wire schema).
+- `GET /api/repo/<name>/file/<logical>[?version=<sha>]` → **`_handle_file(req)`** (Slice 2). JSON envelope always — success and error. `content_type` field advertises `text/plain` or `image/svg+xml`.
+- `GET /api/repo/<name>/raw/<logical>[?version=<sha>]` → **`_handle_raw(req)`** (Slice 2). Bytes response via `apply_response_headers`; errors via `_raw_error_from_req` → `_raw_error_direct` (no `send_error` delegation).
+- `GET /api/repo/<name>/history/<logical>` → **`_handle_history(req)`** (Slice 2). `?version=` REJECTED (400) — `/history/<file>` has one contract. Namespace containment via `_contained_namespace_root(for_history_only=True)` so deleted files still return their commits.
+- `GET /api/updates/check` → PyPI update check
+- `GET /api/repo/<name>` (Tier 2 fallback) → runs `gator-repo-status --path <resolved_path>` (lazy). Resolves name→path from registry for standalone compatibility.
+- `GET /api/repos/discover` → `_handle_repo_discover()`
 - `GET /<any>` → static file from `dashboard/` via `_send_file()`. MIME map covers `.html`, `.css`, `.js`, `.jpg`, `.jpeg`, `.png`, `.svg`; unknown extensions fall back to `application/octet-stream`.
-Filesystem: `dashboard/` (R), subprocess for Tier 2
+Filesystem: `dashboard/` (R), subprocess for Tier 2 + B1 handlers
 ! Tier 2 timeout is 30s per repo. On timeout or error, returns `{"error":"..."}` — the Repo view JS handles the degraded state.
+! **Parse-once TRIPWIRE (B1, v2.13.0)**: `_parse_request` runs EXACTLY ONCE per request from the top of `do_GET`. B1-owned handlers (`_handle_files`, `_handle_file`, `_handle_raw`, `_handle_history`) MUST NOT invoke `_parse_request(` or read `self.path` — they receive `req` as an argument. A source grep for `_parse_request(` or `self.path` inside these four methods is a contract violation.
+! **Transport-headers TRIPWIRE (B1, v2.13.0)**: every B1-owned response (raw or JSON, success or error) carries `X-Content-Type-Options: nosniff` unconditionally. JSON responses use exact `Content-Type: application/json; charset=utf-8` via `_send_json`. Any response that consumed `?version=` carries `Cache-Control: no-store` — via `_send_json(cache_control="no-store")`, `_send_json_error(cache_control="no-store")`, `_raw_error_direct(..., version_present=True)`, or `apply_response_headers(cache_control="no-store")`. `/file` errors ALWAYS use `_send_json_error`; `/raw` errors ALWAYS use `_raw_error_from_req` — NEVER `send_error` (which would emit HTML with no cache header and no nosniff).
+! **Discovery-serving symmetry TRIPWIRE (B1, v2.13.0)**: every `/files` entry — live OR historical — MUST round-trip to a 200 via `/file/<path>` or `/raw/<path>`. Live scanner passes each candidate through `_canonical_logical_for` → `parse_logical_path` → `is_browsable` → `_contained_repo_path`; historical path uses `_reparse_ls_tree_entry` (the same `parse_logical_path` + `is_browsable` predicate). If either fails, the entry is silently omitted — never listed. Reparse points (Windows junctions, mount points, symlinks) are rejected before descent by `_iter_scanner_files`; the belt-and-suspenders `_contained_repo_path` runs on every survivor.
+! **Governance-root aliasing TRIPWIRE (B1, v2.13.0)**: `/file/source/.gator/mission.md` and `/file/source/gator-command/README.md` MUST return 404. `is_browsable` (namespace_root == "" case) rejects `.gator/` and `gator-command/` top-level segments; `_iter_scanner_files` prunes the same segments before descent. `.gator/` and `gator-command/` documents have EXACTLY ONE canonical URL — the implicit `.gator/` form for governance, `gator-command/…` for the secondary namespace, `source/…` for repo code only.
+! **Historical symmetry TRIPWIRE (B1, v2.13.0)**: `/files?version=<sha>` iterates `_HISTORICAL_NAMESPACES = (".gator", "gator-command", "")`. Each raw `git ls-tree -r --name-only` entry goes through `_reparse_ls_tree_entry(entry, ns)` which composes the canonical logical path via `_ns_prefix_for(ns)` and re-parses through `parse_logical_path` + `is_browsable`. A Git tree cannot list a path that the matching `/file?version=` or `/raw?version=` would reject.
 
 ### _send_dashboard_html(self)
 File: `src/gator_command/scripts/gator-dashboard.py`

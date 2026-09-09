@@ -111,6 +111,21 @@ def _is_denied_path(file_path):
 #     (E1-E5, authoritative for corrections)
 
 from dashboard import content_policy as _content_policy  # noqa: E402
+from dashboard.content_policy import (  # noqa: E402
+    _ALLOWED_TEXT_EXTS_SOURCE,
+    _ALLOWED_TEXT_EXTS_GOVERNANCE,
+    _ALLOWED_RAW_ASSET_EXTS,
+    _DENIED_DIR_SEGMENTS,
+    _DENIED_HIDDEN_PREFIXES,
+    _DENIED_BASENAME_SUFFIXES,
+    _DENIED_EXACT_BASENAMES,
+    _MIME_MAP,
+    _text_exts_for,
+    _serialize_listing_entry,
+)
+
+import functools as _functools  # noqa: E402
+import stat as _stat  # noqa: E402
 
 
 # ── Logical-path parse (r6 §4 + errata E5) ────────────────────────
@@ -477,6 +492,540 @@ _RAW_ERROR_HTML_TEMPLATE = (
 )
 
 
+# ── B1 Slice 2 (v2.13.0): containment, authorization, discovery ──
+#
+# Live-disk containment (`_contained_repo_path`,
+# `_contained_namespace_root`), the endpoint-dispatched
+# authorization allowlist (`is_browsable`), the reparse-point-aware
+# walker (`_iter_scanner_files`), the historical `git ls-tree`
+# symmetry helpers (`_ns_prefix_for`, `_reparse_ls_tree_entry`),
+# the live-branch canonical-logical composition
+# (`_canonical_logical_for`), the immutable-object-id resolver
+# (`resolve_version_ref`), byte-preserving reader
+# (`git_show_at_ref`), and the transport-header helper
+# (`apply_response_headers`).
+#
+# See:
+#   - vault/artifacts/2026-09-07-dashboard-safe-content-transport-b1-plan.md
+#     (r6 §5.1, §5.1a, §5.1a-historical, §5.2, §6, §7, §8, §8b)
+#   - vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md
+#     (E1-E5)
+
+
+# r4 F4 sentinel — distinguishable from a real Path and from
+# None. Never leaks past `/history/<file>`; consumers that
+# receive this MUST NOT do disk I/O against `namespace_root`.
+_NAMESPACE_ABSENT_OK = object()
+
+# r5 T2 — symmetric with `parse_logical_path`'s three namespace
+# roots. Iterated by the historical `/files?version=` handler.
+_HISTORICAL_NAMESPACES = (".gator", "gator-command", "")
+
+# Win32 FILE_ATTRIBUTE_REPARSE_POINT flag per Win32 SDK.
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+
+# Bounded git subprocess timeouts (seconds).
+_GIT_META_TIMEOUT = 10
+_GIT_SHOW_TIMEOUT = 30
+
+
+def _contained_repo_path(repo_path, namespace_root, disk_rel):
+    """Return the resolved absolute Path or None on any reject.
+
+    Two resolves, two containment checks. Live-disk gate — called
+    for endpoints WITHOUT `?version=`. `disk_rel` is trusted to
+    have already passed `parse_logical_path`'s syntactic gates.
+    """
+    try:
+        repo_root_r = Path(repo_path).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+
+    # (1) Namespace root: catches a symlinked `.gator/` or
+    # `gator-command/` that points outside the repo.
+    try:
+        base_r = (Path(repo_path) / namespace_root).resolve(
+            strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if base_r != repo_root_r and repo_root_r not in base_r.parents:
+        return None
+
+    # (2) Target: catches disk-relative symlinks that escape.
+    try:
+        target_r = (base_r / disk_rel).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if target_r != base_r and base_r not in target_r.parents:
+        return None
+
+    return target_r
+
+
+def _contained_namespace_root(repo_path, namespace_root,
+                              *, for_history_only=False):
+    """r3 F5 addition — namespace-root-only containment.
+
+    r4 F4: when `for_history_only=True`, an absent namespace
+    directory returns `_NAMESPACE_ABSENT_OK` (git log needs only
+    repo root + git_rel, not the current disk state of the
+    namespace root). When it exists, strict-resolve containment
+    still applies — a real namespace root that resolves outside
+    the repo is rejected.
+    """
+    try:
+        repo_root_r = Path(repo_path).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+
+    ns_path = Path(repo_path) / namespace_root
+    if for_history_only and not ns_path.exists():
+        return _NAMESPACE_ABSENT_OK
+
+    try:
+        base_r = ns_path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if base_r != repo_root_r and repo_root_r not in base_r.parents:
+        return None
+    return base_r
+
+
+def _is_denied_segment(cf_part, namespace_root, is_leaf):
+    """Case-folded segment-level deny. `_DENIED_HIDDEN_PREFIXES`
+    for explicit-name coverage; every other dot-prefixed segment
+    is denied by default (r6 F4 — collapse to a single rule so the
+    walker and serve time agree).
+    """
+    if not cf_part.startswith("."):
+        return False
+    if cf_part == ".gator" and namespace_root == ".gator":
+        return False  # never appears here anyway; safety net
+    for prefix in _DENIED_HIDDEN_PREFIXES:
+        if cf_part.startswith(prefix):
+            return True
+    return True  # every other dot-file / dot-dir denied by default
+
+
+def is_text_for_file_endpoint_ext(ext, namespace_root):
+    """r3 F6 — text eligibility on /file/ is decided by the
+    extension allowlist, NOT by MIME family. `.svg` is in the
+    text allowlist so it IS servable via /file/."""
+    return ext in _text_exts_for(namespace_root)
+
+
+def is_browsable(namespace_root, disk_rel, endpoint):
+    """Authorization policy for file-serving endpoints.
+
+    endpoint in {"files", "file", "raw", "history"}. Returns True
+    iff `(namespace, path, endpoint)` is allowed. False means the
+    caller responds 404 (never 403 — the response cannot be used
+    as an existence oracle). All comparisons are case-folded so a
+    case-aliased `Sessions/_ACTIVE/x.json` cannot bypass a deny.
+    """
+    parts = disk_rel.split("/")
+    cf_parts = [_casefold_segment(p) for p in parts]
+
+    # Hidden-segment check applies to EVERY component (r6 F4 —
+    # walker and serve time agree).
+    for i, cf_part in enumerate(cf_parts):
+        if _is_denied_segment(cf_part, namespace_root,
+                              is_leaf=(i == len(cf_parts) - 1)):
+            return False
+
+    # Intermediate denied directory segments.
+    for cf_part in cf_parts[:-1]:
+        if cf_part in _DENIED_DIR_SEGMENTS:
+            return False
+
+    # `.gator` namespace never exposes _active session state.
+    cf_disk_rel = "/".join(cf_parts)
+    if namespace_root == ".gator" and cf_disk_rel.startswith(
+            "sessions/_active/"):
+        return False
+
+    # Basename policy — suffix rules (`.pem`, `.key`, `.pfx`,
+    # `.env.local`, ...).
+    cf_leaf = cf_parts[-1]
+    for suffix in _DENIED_BASENAME_SUFFIXES:
+        if cf_leaf.endswith(suffix):
+            return False
+    if cf_leaf in _DENIED_EXACT_BASENAMES:
+        return False
+
+    # r5 F3 — governance-root guard for the source namespace.
+    if namespace_root == "" and cf_parts:
+        if cf_parts[0] in (".gator", "gator-command"):
+            return False
+
+    # Extension allowlist dispatched by endpoint.
+    ext = PurePosixPath(cf_leaf).suffix  # already folded
+    allowed_text = _text_exts_for(namespace_root)
+
+    if endpoint in ("files", "history"):
+        return ext in allowed_text
+    if endpoint == "file":
+        return is_text_for_file_endpoint_ext(ext, namespace_root)
+    if endpoint == "raw":
+        return ext in allowed_text or ext in _ALLOWED_RAW_ASSET_EXTS
+    return False
+
+
+# ── Live-scanner walker (r4 F2 + r5 T1 + r5 F3 + r6 F4) ─────────
+
+def _is_reparse_point(entry_or_path):
+    """True if the given DirEntry OR Path is a Windows reparse
+    point (junction, mount point, symlink dir/file, other reparse
+    tag) OR a POSIX symlink.
+
+    `Path.is_symlink()` alone returns False on Windows directory
+    junctions — `rglob` therefore silently traverses them. This
+    helper answers the broader "should the walker refuse to cross
+    this filesystem boundary?".
+    """
+    try:
+        if hasattr(entry_or_path, "is_symlink") \
+                and entry_or_path.is_symlink():
+            return True
+    except OSError:
+        return True  # unreadable → refuse to cross.
+
+    try:
+        if hasattr(entry_or_path, "stat"):
+            st = entry_or_path.stat(follow_symlinks=False)
+        else:
+            st = os.stat(os.fspath(entry_or_path),
+                         follow_symlinks=False)
+    except OSError:
+        return True
+
+    reparse_tag = getattr(st, "st_reparse_tag", 0)
+    if reparse_tag:
+        return True
+
+    file_attrs = getattr(st, "st_file_attributes", 0)
+    if file_attrs & _FILE_ATTRIBUTE_REPARSE_POINT:
+        return True
+
+    return False
+
+
+def _iter_scanner_files(namespace_root_path, namespace_root):
+    """Top-down `os.scandir` walk that skips reparse-point
+    directories BEFORE descent and reparse-point files at the
+    file level. Prunes denied directories BEFORE descent so
+    `.git`, `node_modules`, virtualenvs, and caches are never
+    scanned. For `namespace_root == ""`, prunes top-level
+    `.gator` and `gator-command` (r5 F3) so the source
+    enumeration cannot alias governance content.
+
+    r6 F4 collapses the dot-directory rule: EVERY dot-prefixed
+    segment is pruned at descent (matching serve-time policy in
+    `_is_denied_segment`), with a `namespace_root == ".gator"`
+    safety-net exception for the walker's own root name.
+
+    Yields file DirEntry objects. Callers MUST still run
+    `_contained_repo_path` on the yielded entry as the F2
+    belt-and-suspenders invariant.
+    """
+    stack = [namespace_root_path]
+    reserved_top = frozenset(
+        (".gator", "gator-command")
+        if namespace_root == "" else ())
+    is_top = True
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    if _is_reparse_point(entry):
+                        logging.getLogger(
+                            "dashboard.discovery").warning(
+                            "reparse_point_rejected path=%s",
+                            entry.path)
+                        continue
+                    try:
+                        is_dir = entry.is_dir(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if is_dir:
+                        cf_name = entry.name.casefold()
+                        if is_top and cf_name in reserved_top:
+                            logging.getLogger(
+                                "dashboard.discovery").warning(
+                                "source_alias_denied path=%s "
+                                "reason=governance_root",
+                                entry.path)
+                            continue
+                        if cf_name in _DENIED_DIR_SEGMENTS:
+                            continue
+                        # r6 F4 — every dot-prefixed directory is
+                        # denied at descent. Exception: the
+                        # namespace-root case where the walker's
+                        # own root is `.gator`.
+                        if cf_name.startswith(".") and not (
+                                cf_name == ".gator"
+                                and namespace_root == ".gator"
+                                and is_top):
+                            continue
+                        stack.append(entry.path)
+                        continue
+                    try:
+                        is_file = entry.is_file(
+                            follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if is_file:
+                        yield entry
+        except OSError:
+            continue
+        is_top = False
+
+
+# ── Historical `git ls-tree` symmetry (r5 T2 + r6 F4 live-side) ─
+
+def _ns_prefix_for(namespace_root):
+    """r5 T2 — symmetric inverse of `parse_logical_path`'s
+    namespace enum. Returns `(git_prefix, logical_prefix)`.
+    """
+    if namespace_root == ".gator":
+        return (".gator/", "")
+    if namespace_root == "gator-command":
+        return ("gator-command/", "gator-command/")
+    return ("", "source/")
+
+
+def _canonical_logical_for(ns_root, disk_rel):
+    """r6 F4 — build the canonical URL a client would submit for
+    a file discovered under `ns_root`. Symmetric with
+    `_ns_prefix_for` (r5 T2); live scanner + historical branch
+    share the same predicate.
+    """
+    if ns_root == "":
+        return "source/" + disk_rel
+    if ns_root == ".gator":
+        return disk_rel
+    if ns_root == "gator-command":
+        return "gator-command/" + disk_rel
+    return None
+
+
+def _reparse_ls_tree_entry(entry, namespace_root):
+    """r5 T2 — turn a raw `git ls-tree -r --name-only` line into
+    the logical path the client sees at `/files?version=`,
+    re-parsed through the same rules the live URL parser applies.
+    Returns None if the entry does NOT belong to this namespace
+    or if it fails parse or authorization.
+    """
+    git_prefix, logical_prefix = _ns_prefix_for(namespace_root)
+    if git_prefix and not entry.startswith(git_prefix):
+        return None
+    if namespace_root == "":
+        # Source namespace excludes governance roots — those
+        # entries map via their own namespaces instead.
+        if entry.startswith(".gator/") or entry.startswith(
+                "gator-command/"):
+            return None
+    trimmed = entry[len(git_prefix):] if git_prefix else entry
+    logical = logical_prefix + trimmed
+    lp = parse_logical_path(logical)
+    if lp is None:
+        return None
+    if not is_browsable(lp.namespace_root, lp.disk_rel, "files"):
+        return None
+    return lp
+
+
+# ── Immutable-ref resolver + byte-preserving reads (§6, §7) ─────
+
+@_functools.lru_cache(maxsize=64)
+def _object_format(repo_path):
+    """Cached per-repo `git rev-parse --show-object-format`.
+    Returns "sha1" or "sha256" on success; "sha1" as a defensive
+    default when git errors (matches the pre-B1 assumption).
+    """
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse",
+             "--show-object-format"],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=_GIT_META_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return "sha1"
+    if r.returncode != 0:
+        return "sha1"
+    fmt = r.stdout.strip()
+    return fmt if fmt in ("sha1", "sha256") else "sha1"
+
+
+def resolve_version_ref(repo_path, version_raw, object_format):
+    """Validate `?version=` and return the canonical object ID.
+
+    Returns `(sha_hex, error_message, http_status)`. `sha_hex`
+    populated on success; error triple on failure. Uses object-ID
+    lookup only (`cat-file -e <sha>^{commit}` for full-length;
+    `rev-parse --disambiguate=` for prefixes). NEVER accepts a
+    ref name — a branch named `<hex>` cannot mask the object.
+    """
+    if version_raw is None:
+        return (None, "missing version parameter", 400)
+    if version_raw == "":
+        return (None, "version parameter must not be empty", 400)
+    if not re.fullmatch(r"[0-9a-fA-F]+", version_raw):
+        return (None, "version must be hex only", 400)
+    sha_input = version_raw.lower()
+
+    expected_len = 40 if object_format == "sha1" else (
+        64 if object_format == "sha256" else 0)
+    if expected_len == 0:
+        return (None, "unknown object format", 500)
+
+    if len(sha_input) == expected_len:
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(repo_path), "cat-file", "-e",
+                 f"{sha_input}^{{commit}}"],
+                capture_output=True,
+                timeout=_GIT_META_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            return (None, "git cat-file timed out after 10s", 500)
+        except OSError as exc:
+            return (None, f"git cat-file failed to launch: {exc}",
+                    500)
+        if r.returncode == 0:
+            return (sha_input, None, None)
+        return (None, f"version not found: {sha_input}", 404)
+
+    if len(sha_input) < 7:
+        return (None, "version prefix too short (min 7)", 400)
+    if len(sha_input) >= expected_len:
+        return (None, "version longer than object format", 400)
+
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse",
+             f"--disambiguate={sha_input}"],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=_GIT_META_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return (None, "git rev-parse timed out after 10s", 500)
+    except OSError as exc:
+        return (None, f"git rev-parse failed to launch: {exc}",
+                500)
+    if r.returncode != 0:
+        return (None, f"version not found: {sha_input}", 404)
+
+    candidates = [line.strip() for line in r.stdout.splitlines()
+                  if line.strip()]
+    commit_candidates = []
+    for cand in candidates:
+        try:
+            probe = subprocess.run(
+                ["git", "-C", str(repo_path), "cat-file", "-t",
+                 cand],
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=_GIT_META_TIMEOUT,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            return (None, f"git cat-file failed: {exc}", 500)
+        if probe.returncode == 0 and probe.stdout.strip() == (
+                "commit"):
+            commit_candidates.append(cand)
+
+    if len(commit_candidates) == 0:
+        return (None, f"version not found: {sha_input}", 404)
+    if len(commit_candidates) > 1:
+        return (None, "version prefix is ambiguous", 400)
+    return (commit_candidates[0], None, None)
+
+
+def git_show_at_ref(repo_path, sha, git_rel):
+    """Byte-preserving `git show <sha>:<git_rel>`. Returns
+    `(bytes, None)` on success or `(None, (status, message))` on
+    failure. No `text=`, no `encoding=`, no `.strip()` on stdout
+    — leading whitespace, trailing spaces, CRLF, and final
+    newlines survive byte-for-byte.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_path), "show",
+             f"{sha}:{git_rel}"],
+            capture_output=True,
+            timeout=_GIT_SHOW_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return (None, (504, "git show timed out after 30s"))
+    except OSError as exc:
+        return (None, (500, f"git show failed to launch: {exc}"))
+    if r.returncode != 0:
+        return (None, (404, f"file not present at version {sha}"))
+    return (r.stdout, None)
+
+
+def _git_commit_iso_date(repo_path, sha):
+    """Return commit-date ISO string for `sha`, or None on any
+    failure. Used to populate `last_modified` on historical
+    `/file` responses.
+    """
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(repo_path), "log", "-1",
+             "--format=%ai", sha],
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=_GIT_META_TIMEOUT,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
+def _mtime_iso(target):
+    """UTC-ish ISO 8601 mtime string for a live Path. Uses the
+    filesystem `st_mtime` epoch, formatted as
+    `YYYY-MM-DD HH:MM:SS +ZZZZ` for consistency with git's
+    `%ai` format on `/file` version responses.
+    """
+    try:
+        st = target.stat()
+    except OSError:
+        return None
+    dt = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S +0000")
+
+
+def _mime_for(ext_lower):
+    """MIME lookup from the shared `_MIME_MAP`. Returns None
+    when the extension is not in the map — callers must have
+    already checked `is_browsable`, so a miss here is a bug.
+    """
+    return _MIME_MAP.get(ext_lower)
+
+
+def apply_response_headers(handler, mime, body_len, *,
+                           cache_control=None):
+    """Emit the transport headers B1 owns for RAW-body endpoints
+    (`/raw`, `/file` binary paths — though `/file` is JSON now).
+    B1 owns Content-Type, Content-Length,
+    X-Content-Type-Options: nosniff, and Cache-Control on
+    `?version=` responses. B1 does NOT emit
+    Content-Security-Policy — B2 §4 owns it.
+    """
+    handler.send_header("Content-Type", mime)
+    handler.send_header("Content-Length", str(body_len))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    if cache_control:
+        handler.send_header("Cache-Control", cache_control)
+
+
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -600,6 +1149,286 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return self._raw_error_direct(
             perr.status, perr.message, perr.version_present)
 
+    # ── B1 Slice 2 handler methods (r6 F1 dispatch targets) ──────
+
+    def _handle_files(self, req):
+        """`/api/repo/<name>/files[?version=<sha>]` — JSON list of
+        browsable files across the three namespaces. Live path uses
+        the reparse-point-aware walker + `is_browsable`; historical
+        path uses `git ls-tree -r --name-only` + the r5 T2 re-parse.
+        Both branches mint response entries via
+        `_serialize_listing_entry` so the wire schema is single-
+        sourced (errata E1).
+        """
+        cache_ctl = "no-store" if req.version_present else None
+        repo_path = _resolve_repo_path(req.repo_name,
+                                        _REGISTRY_REPOS)
+        if not repo_path or not Path(repo_path).is_dir():
+            return self._send_json_error(
+                400, "repo not accessible",
+                cache_control=cache_ctl)
+
+        if req.version_present:
+            sha, msg, status = resolve_version_ref(
+                repo_path, req.version_value,
+                _object_format(repo_path))
+            if msg:
+                return self._send_json_error(
+                    status, msg, cache_control=cache_ctl)
+            try:
+                r = subprocess.run(
+                    ["git", "-C", str(repo_path),
+                     "ls-tree", "-r", "--name-only", sha],
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                    timeout=_GIT_META_TIMEOUT,
+                )
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                return self._send_json_error(
+                    500, f"git ls-tree failed: {exc}",
+                    cache_control=cache_ctl)
+            if r.returncode != 0:
+                return self._send_json_error(
+                    404, f"version not found: {sha}",
+                    cache_control=cache_ctl)
+
+            files = []
+            for line in r.stdout.splitlines():
+                raw = line.strip()
+                if not raw:
+                    continue
+                for ns in _HISTORICAL_NAMESPACES:
+                    lp = _reparse_ls_tree_entry(raw, ns)
+                    if lp is None:
+                        continue
+                    name = lp.disk_rel.rsplit("/", 1)[-1]
+                    files.append(_serialize_listing_entry(
+                        lp.namespace_root, lp.disk_rel,
+                        name, 0))
+                    break
+            return self._send_json(
+                {"files": files, "version": sha},
+                cache_control=cache_ctl)
+
+        # Live path — three namespaces enumerated symmetrically.
+        files = []
+        for ns in _HISTORICAL_NAMESPACES:
+            base = _contained_namespace_root(repo_path, ns)
+            if base is None or base is _NAMESPACE_ABSENT_OK:
+                continue
+            for entry in _iter_scanner_files(str(base), ns):
+                try:
+                    disk_rel = os.path.relpath(
+                        entry.path, str(base)).replace(os.sep, "/")
+                except ValueError:
+                    continue
+                logical = _canonical_logical_for(ns, disk_rel)
+                if logical is None:
+                    continue
+                lp = parse_logical_path(logical)
+                if lp is None:
+                    continue
+                if not is_browsable(lp.namespace_root, lp.disk_rel,
+                                    "files"):
+                    continue
+                # F2 belt-and-suspenders — resolved-path
+                # containment on every survivor.
+                target = _contained_repo_path(
+                    repo_path, lp.namespace_root, lp.disk_rel)
+                if target is None:
+                    logging.getLogger(
+                        "dashboard.discovery").warning(
+                        "symlink_or_junction_candidate_rejected "
+                        "repo=%s path=%s reason=containment",
+                        req.repo_name, disk_rel)
+                    continue
+                try:
+                    st = entry.stat()
+                except OSError:
+                    continue
+                files.append(_serialize_listing_entry(
+                    lp.namespace_root, lp.disk_rel,
+                    entry.name, st.st_size, mtime=st.st_mtime))
+        return self._send_json({"files": files})
+
+    def _handle_file(self, req):
+        """`/api/repo/<name>/file/<logical>[?version=<sha>]` — JSON
+        envelope with `content` (UTF-8-decoded with errors=replace,
+        no `.strip()`), `content_type` advertisement (`text/plain`
+        or `image/svg+xml`), `last_modified`, `version`. Errors are
+        JSON envelopes via `_send_json_error`.
+        """
+        cache_ctl = "no-store" if req.version_present else None
+        lp = parse_logical_path(req.logical_path)
+        if lp is None:
+            return self._send_json_error(
+                400, "invalid path", cache_control=cache_ctl)
+        if not is_browsable(lp.namespace_root, lp.disk_rel,
+                            "file"):
+            return self._send_json_error(
+                404, "not found", cache_control=cache_ctl)
+        repo_path = _resolve_repo_path(req.repo_name,
+                                        _REGISTRY_REPOS)
+        if not repo_path:
+            return self._send_json_error(
+                404, "repo not found", cache_control=cache_ctl)
+
+        if req.version_present:
+            sha, msg, status = resolve_version_ref(
+                repo_path, req.version_value,
+                _object_format(repo_path))
+            if msg:
+                return self._send_json_error(
+                    status, msg, cache_control=cache_ctl)
+            raw_bytes, ferr = git_show_at_ref(
+                repo_path, sha, lp.git_rel)
+            if ferr:
+                return self._send_json_error(
+                    ferr[0], ferr[1], cache_control=cache_ctl)
+            mtime_iso = _git_commit_iso_date(repo_path, sha)
+            version_out = sha
+        else:
+            target = _contained_repo_path(
+                repo_path, lp.namespace_root, lp.disk_rel)
+            if target is None or not target.is_file():
+                return self._send_json_error(
+                    404, "not found", cache_control=cache_ctl)
+            try:
+                raw_bytes = target.read_bytes()
+            except OSError as exc:
+                return self._send_json_error(
+                    500, f"read failed: {exc}",
+                    cache_control=cache_ctl)
+            mtime_iso = _mtime_iso(target)
+            version_out = None
+
+        text = raw_bytes.decode("utf-8", errors="replace")
+        ext = PurePosixPath(lp.disk_rel).suffix.casefold()
+        content_type = ("image/svg+xml" if ext == ".svg"
+                        else "text/plain")
+        payload = {
+            "path": req.logical_path,
+            "content": text,
+            "content_type": content_type,
+            "last_modified": mtime_iso,
+            "version": version_out,
+        }
+        self._send_json(payload, cache_control=cache_ctl)
+
+    def _handle_raw(self, req):
+        """`/api/repo/<name>/raw/<logical>[?version=<sha>]` — bytes.
+        Success uses `apply_response_headers`; errors use
+        `_raw_error_from_req` (thin adapter → `_raw_error_direct`).
+        `Cache-Control: no-store` on `?version=` responses.
+        """
+        lp = parse_logical_path(req.logical_path)
+        if lp is None:
+            return self._raw_error_from_req(
+                400, "invalid path", req)
+        if not is_browsable(lp.namespace_root, lp.disk_rel,
+                            "raw"):
+            return self._raw_error_from_req(
+                404, "not found", req)
+        repo_path = _resolve_repo_path(req.repo_name,
+                                        _REGISTRY_REPOS)
+        if not repo_path:
+            return self._raw_error_from_req(
+                404, "repo not found", req)
+
+        if req.version_present:
+            sha, msg, status = resolve_version_ref(
+                repo_path, req.version_value,
+                _object_format(repo_path))
+            if msg:
+                return self._raw_error_from_req(
+                    status, msg, req)
+            body, ferr = git_show_at_ref(
+                repo_path, sha, lp.git_rel)
+            if ferr:
+                return self._raw_error_from_req(
+                    ferr[0], ferr[1], req)
+        else:
+            target = _contained_repo_path(
+                repo_path, lp.namespace_root, lp.disk_rel)
+            if target is None or not target.is_file():
+                return self._raw_error_from_req(
+                    404, "not found", req)
+            try:
+                body = target.read_bytes()
+            except OSError as exc:
+                return self._raw_error_from_req(
+                    500, f"read failed: {exc}", req)
+
+        ext = PurePosixPath(lp.disk_rel).suffix.casefold()
+        mime = _mime_for(ext)
+        if mime is None:
+            # is_browsable said yes but no MIME — bug. Refuse the
+            # response rather than emit octet-stream.
+            return self._raw_error_from_req(
+                500, "no MIME for browsable extension", req)
+        cache = "no-store" if req.version_present else None
+        self.send_response(200)
+        apply_response_headers(self, mime, len(body),
+                               cache_control=cache)
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError,
+                BrokenPipeError):
+            pass
+
+    def _handle_history(self, req):
+        """`/api/repo/<name>/history/<logical>` — commit list for a
+        single file. `?version=` is REJECTED (400) — history has one
+        contract (F5). Namespace containment via
+        `_contained_namespace_root(..., for_history_only=True)` so
+        pre-deletion commits for a file inside a deleted namespace
+        directory still return.
+        """
+        if req.version_present:
+            return self._send_json_error(
+                400, "version not supported on /history")
+        lp = parse_logical_path(req.logical_path)
+        if lp is None:
+            return self._send_json_error(400, "invalid path")
+        if not is_browsable(lp.namespace_root, lp.disk_rel,
+                            "history"):
+            return self._send_json_error(404, "not found")
+        repo_path = _resolve_repo_path(req.repo_name,
+                                        _REGISTRY_REPOS)
+        if not repo_path:
+            return self._send_json_error(404, "repo not found")
+
+        base = _contained_namespace_root(
+            repo_path, lp.namespace_root, for_history_only=True)
+        if base is None:
+            return self._send_json_error(404, "not found")
+
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(repo_path), "log",
+                 "--format=%H%n%h%n%ai%n%s", "-50",
+                 "--", lp.git_rel],
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=_GIT_META_TIMEOUT,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            return self._send_json_error(
+                500, f"git log failed: {exc}")
+        commits = []
+        if r.returncode == 0 and r.stdout:
+            lines = r.stdout.splitlines()
+            for i in range(0, len(lines) - 3, 4):
+                commits.append({
+                    "hash": lines[i],
+                    "short_hash": lines[i + 1],
+                    "date": lines[i + 2],
+                    "message": lines[i + 3],
+                })
+        self._send_json(
+            {"path": req.logical_path, "commits": commits})
+
     def _send_file(self, path):
         try:
             content = path.read_bytes()
@@ -668,6 +1497,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0].rstrip("/") or "/"
+
+        # ── B1 Slice 2 (v2.13.0) — parse once + 4-way dispatch ──
+        # Parser runs EXACTLY ONCE per request (§12 TRIPWIRE:
+        # request parser). Result is consulted ONLY by the four
+        # B1-owned endpoints; legacy branches below continue to
+        # read `path` and `self.path` unchanged.
+        req, perr = _parse_request(self)
+        if perr is not None:
+            return self._dispatch_parse_error(perr)
+        if req.endpoint in ("files", "file", "raw", "history"):
+            handler_by_endpoint = {
+                "files":   self._handle_files,
+                "file":    self._handle_file,
+                "raw":     self._handle_raw,
+                "history": self._handle_history,
+            }
+            return handler_by_endpoint[req.endpoint](req)
+
+        # req.endpoint == "other" — control falls through to the
+        # existing shipped legacy branches BELOW, unchanged.
 
         # Root — serve dashboard shell (with optional debug meta
         # injection when GATOR_DASHBOARD_DEBUG=1).
@@ -813,351 +1662,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"commits": commits})
             return
 
-        if path.startswith("/api/repo/") and "/files" in path and path.endswith("/files"):
-            repo_name = path[len("/api/repo/"):-len("/files")]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
-                return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path or not Path(repo_path).is_dir():
-                self._send_json({"error": "repo not accessible"}, 400)
-                return
-
-            # Check for ?version=<hash> — use git ls-tree instead of filesystem
-            from urllib.parse import urlparse, parse_qs as _parse_qs
-            qs = _parse_qs(urlparse(self.path).query)
-            version = qs.get("version", [None])[0]
-
-            if version:
-                import re as _re
-                if not _re.match(r'^[0-9a-fA-F]+$', version):
-                    self._send_json({"error": "invalid version hash"}, 400)
-                    return
-                tree_output, ok = _git_run(
-                    "ls-tree", "-r", "--name-only", version,
-                    cwd=repo_path,
-                )
-                if not ok:
-                    self._send_json({"error": f"version not found: {version}"}, 404)
-                    return
-                files = []
-                _SRC_EXT = {".py", ".js", ".ts", ".jsx", ".tsx", ".md", ".txt",
-                            ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
-                            ".sh", ".bash", ".css", ".html", ".sql", ".rs",
-                            ".go", ".java", ".rb", ".c", ".h", ".cpp", ".hpp"}
-                _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv",
-                              "venv", ".env", "dist", "build"}
-                for line in tree_output.splitlines():
-                    fpath = line.strip()
-                    if not fpath:
-                        continue
-                    parts = fpath.split("/")
-                    if any(p in _SKIP_DIRS or (p.startswith(".") and p not in (".gator",)) for p in parts[:-1]):
-                        continue
-                    fname = parts[-1]
-                    ext = ("." + fname.rsplit(".", 1)[1]) if "." in fname else ""
-                    # Route to the same three sources as the filesystem walker
-                    if fpath.startswith(".gator/"):
-                        if "sessions/_active/" in fpath:
-                            continue
-                        if ext.lower() not in (".md", ".json", ".jsonl", ".html", ".htm"):
-                            continue
-                        if _is_denied_path(fpath):
-                            continue
-                        rel = fpath[len(".gator/"):]
-                        dir_part = "/".join(rel.split("/")[:-1])
-                        files.append({
-                            "path": rel,
-                            "name": fname,
-                            "dir": dir_part,
-                            "size": 0,
-                            "source": ".gator",
-                        })
-                    elif fpath.startswith("gator-command/"):
-                        if "sessions/_active/" in fpath:
-                            continue
-                        if ext.lower() not in (".md", ".json"):
-                            continue
-                        dir_part = "/".join(fpath.split("/")[:-1])
-                        files.append({
-                            "path": fpath,
-                            "name": fname,
-                            "dir": dir_part,
-                            "size": 0,
-                            "source": "gator-command",
-                        })
-                    else:
-                        if ext.lower() not in _SRC_EXT:
-                            continue
-                        dir_part = "/".join(parts[:-1])
-                        files.append({
-                            "path": "source/" + fpath,
-                            "name": fname,
-                            "dir": ("source/" + dir_part) if dir_part else "source",
-                            "size": 0,
-                            "source": "repo",
-                        })
-                self._send_json({"files": files, "version": version})
-                return
-
-            repo_root = Path(repo_path)
-            gator_dir = repo_root / ".gator"
-            gc_dir = repo_root / "gator-command"
-            if not gator_dir.is_dir() and not gc_dir.is_dir():
-                self._send_json({"files": []})
-                return
-            files = []
-            # Scan .gator/ (all repos)
-            if gator_dir.is_dir():
-                for f in sorted(
-                    list(gator_dir.rglob("*.md"))
-                    + list(gator_dir.rglob("*.json"))
-                    + list(gator_dir.rglob("*.jsonl"))
-                    + list(gator_dir.rglob("*.html"))
-                    + list(gator_dir.rglob("*.htm"))
-                ):
-                    rel = f.relative_to(gator_dir)
-                    rel_str = str(rel).replace("\\", "/")
-                    if rel_str.startswith("sessions/_active/"):
-                        continue
-                    if _is_denied_path(rel_str):
-                        continue
-                    st = f.stat()
-                    files.append({
-                        "path": rel_str,
-                        "name": f.name,
-                        "dir": str(rel.parent).replace("\\", "/") if str(rel.parent) != "." else "",
-                        "size": st.st_size,
-                        "mtime": st.st_mtime,
-                        "source": ".gator",
-                    })
-            # Scan gator-command/ (repos with command-post knowledge layer)
-            if gc_dir.is_dir():
-                for f in sorted(list(gc_dir.rglob("*.md")) + list(gc_dir.rglob("*.json"))):
-                    rel = f.relative_to(gc_dir)
-                    rel_str = str(rel).replace("\\", "/")
-                    if rel_str.startswith("sessions/_active/"):
-                        continue
-                    st = f.stat()
-                    files.append({
-                        "path": "gator-command/" + rel_str,
-                        "name": f.name,
-                        "dir": ("gator-command/" + str(rel.parent).replace("\\", "/")).rstrip("/") if str(rel.parent) != "." else "gator-command",
-                        "size": st.st_size,
-                        "mtime": st.st_mtime,
-                        "source": "gator-command",
-                    })
-            # Also list source files (project code, read-only browsing)
-            repo_root_path = Path(repo_path)
-            source_files = []
-            # Common source extensions to include
-            _SRC_EXT = {".py", ".js", ".ts", ".jsx", ".tsx", ".md", ".txt",
-                        ".json", ".yaml", ".yml", ".toml", ".cfg", ".ini",
-                        ".sh", ".bash", ".css", ".html", ".sql", ".rs",
-                        ".go", ".java", ".rb", ".c", ".h", ".cpp", ".hpp"}
-            _SKIP_DIRS = {".gator", "gator-command", ".git", "node_modules",
-                          "__pycache__", ".venv", "venv", ".env", "dist", "build"}
-            for item in sorted(repo_root_path.rglob("*")):
-                if not item.is_file():
-                    continue
-                if item.suffix.lower() not in _SRC_EXT:
-                    continue
-                # Skip governance and hidden dirs
-                parts = item.relative_to(repo_root_path).parts
-                if any(p in _SKIP_DIRS or p.startswith(".") for p in parts[:-1]):
-                    continue
-                rel = item.relative_to(repo_root_path)
-                rel_str = str(rel).replace("\\", "/")
-                dir_str = str(rel.parent).replace("\\", "/") if str(rel.parent) != "." else ""
-                st = item.stat()
-                source_files.append({
-                    "path": "source/" + rel_str,
-                    "name": item.name,
-                    "dir": "source/" + dir_str if dir_str else "source",
-                    "size": st.st_size,
-                    "mtime": st.st_mtime,
-                    "source": "repo",
-                })
-            files.extend(source_files)
-            self._send_json({"files": files})
-            return
-
-        # Serve a binary file (images) from a repo — GET /api/repo/<name>/raw/<path>
-        if path.startswith("/api/repo/") and "/raw/" in path:
-            after_repo = path[len("/api/repo/"):]
-            raw_marker = "/raw/"
-            idx = after_repo.find(raw_marker)
-            if idx < 0:
-                self.send_error(400, "invalid path")
-                return
-            from urllib.parse import unquote
-            repo_name = unquote(after_repo[:idx])
-            file_path = unquote(after_repo[idx + len(raw_marker):])
-            if not repo_name or not file_path or ".." in file_path:
-                self.send_error(400, "invalid path")
-                return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path:
-                self.send_error(404, "repo not found")
-                return
-            # Resolve: source/ → repo root, gator-command/ → gator-command, else .gator/
-            if file_path.startswith("source/"):
-                full_path = Path(repo_path) / file_path[len("source/"):]
-            elif file_path.startswith("gator-command/"):
-                full_path = Path(repo_path) / file_path
-            else:
-                full_path = Path(repo_path) / ".gator" / file_path
-            # Deny loop secret files
-            if _is_denied_path(file_path):
-                self.send_error(403, "access denied")
-                return
-            if not full_path.is_file():
-                self.send_error(404, f"not found: {file_path}")
-                return
-            ext = full_path.suffix.lower()
-            mime = {
-                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
-                ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
-            }.get(ext, "application/octet-stream")
-            content = full_path.read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", mime)
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
-            return
-
-        # Read a specific .gator/ file from a repo
-        # GET /api/repo/<name>/history/<filepath> — git log for a file
-        if path.startswith("/api/repo/") and "/history/" in path:
-            after_repo = path[len("/api/repo/"):]
-            hist_marker = "/history/"
-            idx = after_repo.find(hist_marker)
-            if idx < 0:
-                self._send_json({"error": "invalid path"}, 400)
-                return
-            from urllib.parse import unquote
-            repo_name = unquote(after_repo[:idx])
-            file_path = unquote(after_repo[idx + len(hist_marker):])
-            if not repo_name or not file_path:
-                self._send_json({"error": "repo name and file path required"}, 400)
-                return
-            if ".." in file_path:
-                self._send_json({"error": "invalid file path"}, 400)
-                return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path:
-                self._send_json({"error": "repo not found"}, 404)
-                return
-            # Resolve to absolute path (same logic as /file/)
-            if file_path.startswith("source/"):
-                full_path = Path(repo_path) / file_path[len("source/"):]
-            elif file_path.startswith("gator-command/"):
-                full_path = Path(repo_path) / file_path
-            else:
-                full_path = Path(repo_path) / ".gator" / file_path
-            # Get git log for this file
-            log_output, ok = _git_run(
-                "log", "--format=%H%n%h%n%ai%n%s", "-50", "--", str(full_path),
-                cwd=repo_path,
-            )
-            commits = []
-            if ok and log_output:
-                lines = log_output.splitlines()
-                # Each commit is 4 lines: full_hash, short_hash, date, subject
-                for i in range(0, len(lines) - 3, 4):
-                    commits.append({
-                        "hash": lines[i],
-                        "short_hash": lines[i + 1],
-                        "date": lines[i + 2],
-                        "message": lines[i + 3],
-                    })
-            self._send_json({"path": file_path, "commits": commits})
-            return
-
-        # GET /api/repo/<name>/file/<filepath>[?version=<hash>]
-        if path.startswith("/api/repo/") and "/file/" in path:
-            # Parse: /api/repo/<name>/file/<filepath>
-            after_repo = path[len("/api/repo/"):]
-            file_marker = "/file/"
-            idx = after_repo.find(file_marker)
-            if idx < 0:
-                self._send_json({"error": "invalid path"}, 400)
-                return
-            from urllib.parse import unquote
-            repo_name = unquote(after_repo[:idx])
-            file_path = unquote(after_repo[idx + len(file_marker):])
-            if not repo_name or not file_path:
-                self._send_json({"error": "repo name and file path required"}, 400)
-                return
-            # Security: no path traversal
-            if ".." in file_path:
-                self._send_json({"error": "invalid file path"}, 400)
-                return
-            # Deny loop secret files
-            if _is_denied_path(file_path):
-                self._send_json({"error": "access denied"}, 403)
-                return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path:
-                self._send_json({"error": "repo not found"}, 404)
-                return
-            # Resolve file: source/ → repo root, gator-command/ → gator-command dir, else .gator/
-            if file_path.startswith("source/"):
-                full_path = Path(repo_path) / file_path[len("source/"):]
-            elif file_path.startswith("gator-command/"):
-                full_path = Path(repo_path) / file_path
-            else:
-                full_path = Path(repo_path) / ".gator" / file_path
-            # Check for ?version=<hash> query param
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            version = qs.get("version", [None])[0]
-
-            if version:
-                # Validate: version must be hex only (git hash)
-                import re as _re
-                if not _re.match(r'^[0-9a-fA-F]+$', version):
-                    self._send_json({"error": "invalid version hash"}, 400)
-                    return
-                # Compute git-relative path directly from file_path
-                # (avoid Path.resolve().relative_to() which breaks on Windows)
-                if file_path.startswith("source/"):
-                    git_rel = file_path[len("source/"):]
-                elif file_path.startswith("gator-command/"):
-                    git_rel = file_path
-                else:
-                    git_rel = ".gator/" + file_path
-                content, ok = _git_run("show", f"{version}:{git_rel}", cwd=repo_path)
-                if not ok:
-                    self._send_json({"error": f"version not found: {version}"}, 404)
-                    return
-                # Get the commit date for this version
-                git_date, _ = _git_run("log", "-1", "--format=%ai", version, cwd=repo_path)
-                self._send_json({
-                    "path": file_path,
-                    "content": content,
-                    "last_modified": git_date or None,
-                    "version": version,
-                })
-                return
-
-            if not full_path.is_file():
-                self._send_json({"error": f"file not found: {file_path}"}, 404)
-                return
-            content = full_path.read_text(encoding="utf-8", errors="replace")
-            # Get git last-modified date for this file
-            git_date, _ = _git_run(
-                "log", "-1", "--format=%ai", "--", str(full_path),
-                cwd=repo_path,
-            )
-            self._send_json({
-                "path": file_path,
-                "content": content,
-                "last_modified": git_date or None,
-            })
-            return
+        # B1 Slice 2 (v2.13.0): `/files`, `/raw/`, `/history/<file>`,
+        # `/file/` are handled by the parse-once dispatch at the top
+        # of do_GET. The four shipped route blocks that lived here
+        # (~350 lines) were retired in favor of `_handle_files`,
+        # `_handle_raw`, `_handle_history`, `_handle_file` as part
+        # of the safe-content-transport migration.
 
         # Tier 2 — per-repo deep status (lazy, on demand)
         if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/check", "/topology", "/files")):

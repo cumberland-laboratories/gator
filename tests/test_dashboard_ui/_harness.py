@@ -326,12 +326,30 @@ def seed_repo(fleet_root, name):
 
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", f"seed {name}")
-    return {"repo": repo, "commits": {"seed": _rev_parse_head(repo)}}
+    commits = {"seed": _rev_parse_head(repo)}
+    # B1 Slice 2 (v2.13.0) — post-seed hook for history commits.
+    # Plan B's `content_transport_seed` module reassigns
+    # `seed_history_commits` to add extra commits (e.g. a
+    # `.gator/mission.md` overwrite so `?version=<sha>` has a
+    # prior blob to serve). Returns a `{label: sha}` dict merged
+    # into `commits` so tests can reference specific historical
+    # SHAs by label.
+    extra = seed_history_commits(repo, name) or {}
+    commits.update(extra)
+    return {"repo": repo, "commits": commits}
 
 
 def seed_content_fixtures(repo):
     """No-op stub. Plan B (safe-content-transport) reassigns this
     in `_harness` to add files its pins need.
+    """
+    return None
+
+
+def seed_history_commits(repo, name):
+    """No-op stub. Plan B reassigns this in `_harness` to add
+    post-seed commits (edits + deletions) so version-scoped
+    endpoints have an inspectable git history.
     """
     return None
 

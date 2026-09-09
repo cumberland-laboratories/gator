@@ -427,7 +427,9 @@ Explicit `.gator/` in a URL and any case-aliased spelling of the three roots (`S
 
 The wire-schema serializer `_serialize_listing_entry` in `dashboard/content_policy.py` is the SYMMETRIC inverse: it turns a `(namespace_root, disk_rel)` pair BACK into the URL client would submit (via the `path` field). Live and historical `/files` responses MUST both flow through this serializer so discovery and serving agree on the canonical URL by construction.
 
-Pinned by `test_content_transport_slice1.py` parser + serializer tests.
+Pinned by `test_content_transport_slice1.py` parser + serializer tests, and by `test_content_transport_slice2.py` HTTP integration round-trip pins (live + historical listings, discovery-serving symmetry, governance-root aliasing 404, one-canonical-path contract).
+
+**v2.13.0 B1 Slice 2** — Slice 2 wires the parse contract into `do_GET`: `_parse_request` runs EXACTLY ONCE per request from the top of the method; the four B1-owned endpoints dispatch through `_handle_files`/`_handle_file`/`_handle_raw`/`_handle_history` on `req.endpoint`. Handler methods take `req` as an argument and MUST NOT read `handler.path` or invoke `_parse_request` again — a source grep on those four methods is the mechanical guard. The wire-schema serializer's live + historical branches share the same predicate (`_reparse_ls_tree_entry` for git tree entries; `_canonical_logical_for` + `parse_logical_path` for live scanner entries) so `/files` and `/file`/`/raw` cannot desynchronize.
 
 ## Connections
 

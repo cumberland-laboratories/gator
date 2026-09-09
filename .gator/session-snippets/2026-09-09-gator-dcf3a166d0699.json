@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 Slice 1: content-transport helpers (parser, Windows-reserved-name check, response helpers, wire-schema serializer)",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-slice-1",
+    "dashboard-content-transport",
+    "security-critical"
+  ],
+  "commit": "dcf3a166d06996e6003d054b0e8e7adc89dc3139",
+  "short_commit": "dcf3a16",
+  "snippet_id": "snippet-dcf3a166d0699",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T22:28:46Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-09-07-gator-8f2b9c9d3f933.json",
+    "src/gator_command/scripts/dashboard/content_policy.py",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_ui/test_content_transport_slice1.py"
+  ],
+  "notes": [
+    "Created `src/gator_command/scripts/dashboard/content_policy.py` — pure policy layer with the r6 §5.3 constants (`_ALLOWED_TEXT_EXTS_SOURCE/GOVERNANCE`, `_ALLOWED_RAW_ASSET_EXTS`, `_DENIED_*`, `_MIME_MAP` with import-time completeness assertion), `_text_exts_for(namespace_root)`, and the errata E1 canonical `_serialize_listing_entry(namespace_root, disk_rel, name, size, mtime=None)` with explicit-elif branching and `ValueError` on unknown namespace.",
+    "Added B1 Slice 1 helpers to module scope of `gator-dashboard.py` (not yet wired into `do_GET` — Slice 2 owns that): `LogicalPath` namedtuple, `Request`/`ParseError` dataclasses, `parse_logical_path` (r4/r5 shape rejects), `_is_reserved_windows_component` with r6 durability two-layer check (`_WIN_RESERVED_STEMS_EXPLICIT` PRIMARY + `PureWindowsPath.is_reserved()` SECONDARY, DeprecationWarning suppressed inline), errata E5 trailing-space normalization on the layer-1 stem, `_infer_response_kind_raw`, `_parse_request` with errata E2 all-slash normalization (`rstrip(\"/\") or \"/\"` matching shipped `do_GET:189-194` exactly) and errata E3 `parse_qs` at parser start (catches percent-encoded version keys like `%76ersion=abc`), `_RAW_ERROR_HTML_TEMPLATE`.",
+    "Extended `DashboardHandler._send_json` in place: `Content-Type: application/json; charset=utf-8`, unconditional `X-Content-Type-Options: nosniff`, `Cache-Control` from keyword arg (defaults to shipped `no-cache` — additive, no behavior change for existing consumers).",
+    "Added four new handler methods: `_send_json_error(status, message, *, cache_control=None)`, `_raw_error_direct(status, message, version_present)` (concrete self-contained raw-error responder — writes status/headers/body ONCE, no `send_error` delegation, no `_html_error_body` dependency, HTML-escapes body text), `_raw_error_from_req(status, message, req)` (thin adapter reading `req.version_present`), `_dispatch_parse_error(perr)` (route-aware JSON-vs-raw error selection based on `perr.response_kind` with `no-store` when `perr.version_present`).",
+    "Charter updates alongside the code files (constitution rule enforced):",
+    "`scripts-dashboard.md`: added `content_policy.py` to Covers; added \"Content-transport policy\" module entry with three tripwires; added `_parse_request`, `parse_logical_path`, `_is_reserved_windows_component`, and B1 response helpers entries with tripwires.",
+    "`scripts-cross-cutting.md`: added `## TRIPWIRE: Logical-Path Parse Contract (B1, v2.13.0)` documenting the `(namespace_root, disk_rel, git_rel)` canonical triple, the three exact-case namespace roots, the reject list, and the symmetric wire-schema serializer.",
+    "`contracts.md`: added `! B1 Dashboard content-transport response contract (v2.13.0)` invariant covering parse-once, wire-schema, one-canonical-path, discovery-serving-visibility, and transport-headers invariants."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}
