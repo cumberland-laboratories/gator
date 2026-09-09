@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 second-round remediation: 3.9 stat kwarg crash fix + F3 tests that actually reach the remediated branch",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-remediation",
+    "codex-re-review",
+    "dashboard-content-transport",
+    "python-3-9-compat",
+    "security-critical"
+  ],
+  "commit": "78c73b823889b0961b2d0f09a52eb65e0195f715",
+  "short_commit": "78c73b8",
+  "snippet_id": "snippet-78c73b823889b",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "9f05a81ad27a2994e49c862b8610240ad9f2cc65",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T23:37:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-09-gator-9f05a81ad27a2.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_ui/test_content_transport_slice3.py"
+  ],
+  "notes": [
+    "**F1 (HIGH — Python 3.9 crash in `_is_reparse_point`)** — `pyproject.toml` declares `requires-python = \">=3.9\"`. The pre-fix helper called `entry_or_path.stat(follow_symlinks=False)` on ANY object with a `stat` attribute — including plain `pathlib.Path` objects, which arrive from `_contained_repo_path`'s per-component walk. `pathlib.Path.stat(follow_symlinks=)` is 3.10+; on 3.9 that call raises `TypeError` (not caught by the surrounding `except OSError`), which would crash every live `/files`, `/file`, `/raw` request. Fix: gate the DirEntry-native fast path behind `isinstance(entry_or_path, os.DirEntry)`, and route Path/str inputs through `os.stat(os.fspath(x), follow_symlinks=False)` (3.3+ API). Two new pins in `test_content_transport_slice3.py`: `test_reparse_check_uses_python_3_9_compatible_stat` (source-grep — asserts the isinstance gate exists), `test_reparse_check_uses_os_stat_for_path_inputs` (functional — records `os.stat` calls during `_is_reparse_point(Path)` and asserts the 3.3+ shape was used).",
+    "**F2 (MEDIUM — F3 tests did not reach the remediated exception branch)** — The prior `test_file_concurrently_removed_returns_404` and `test_raw_concurrently_removed_returns_404` pins deleted the file BEFORE the HTTP request, so `_contained_repo_path.resolve(strict=True)` returned None and the handler emitted 404 via the `target is None` check rather than the `except (FileNotFoundError, PermissionError)` branch inside `_handle_file`/`_handle_raw`. Codex proved this by observation: removing the specific `except` clause would leave the tests passing. Remediation:",
+    "Renamed the misleading pins to `test_file_missing_target_returns_404_via_containment` and `test_raw_missing_target_returns_404_via_containment`. Still valuable — they cover the containment-resolve 404 path — but no longer claim to exercise the read-time exception branch.",
+    "Added `test_file_unreadable_target_returns_404_on_posix` and `test_raw_unreadable_target_returns_404_on_posix` (POSIX-only via `pytest.mark.skipif(sys.platform == \"win32\")`). Each seeds a file, `os.chmod(str(path), 0)`, then GETs the endpoint. Containment resolve and `is_file()` both succeed on the readable-parent + present-target state; `read_bytes()` raises `PermissionError`, which now reaches the remediated branch and returns 404. Cleanup in `finally` via `os.chmod(..., 0o644)`.",
+    "Added `test_read_exception_clause_names_both_error_classes` — source-grep on `gator-dashboard.py` locating `def _handle_file` and `def _handle_raw` bodies and asserting each contains `except (FileNotFoundError, PermissionError)` BEFORE `except OSError`. The ordering is load-bearing: `PermissionError` is an `OSError` subclass, so a bare `OSError` clause above the specific one would silently swallow the 404 taxonomy. Static guard that catches removal of either exception class from the clause.",
+    "Charter update in `scripts-dashboard.md::do_GET`: rewrote the \"Error-taxonomy TRIPWIRE\" text to name the correct pin set (source-grep + POSIX-branch + containment-path) and to document the ordering-matters property; added a new \"Python 3.9 compat TRIPWIRE for `_is_reparse_point`\" documenting the 3.10+ kwarg crash class and the isinstance-gated fix. Both TRIPWIREs cite the executable pins.",
+    "Test results: `tests/test_dashboard_ui/` 142 pass + 11 skipped on Windows (Python 3.13). +3 net vs. prior state (rename +0, added POSIX unreadable-target ×2, source-grep ×1, functional os.stat ×1 = +4; renamed pins ×0). POSIX-only pins (8 skipped locally, exercised on Ubuntu CI) include the two new chmod-permission tests. No regressions in Slice 1 (70/70) or Slice 2 (46/46).",
+    "The 3.9 crash is now catchable by CI without an explicit 3.9 matrix run — the source-grep + `os.stat`-call-recording pins fail on ANY Python version if the fix regresses."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}

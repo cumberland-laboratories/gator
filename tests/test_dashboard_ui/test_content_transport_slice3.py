@@ -554,6 +554,198 @@ def test_reparse_check_uses_python_3_9_compatible_stat():
         "Path.stat(follow_symlinks=) kwarg on 3.9")
 
 
+# ── F3 in-process branch pins (Codex 3rd-review LOW, 2026-09-09) ─
+#
+# The chmod-0 pins are POSIX-only AND can be bypassed by a
+# privileged reader (root, container with DAC_OVERRIDE), and the
+# `FileNotFoundError` branch is impossible to reach via filesystem
+# state alone — `_contained_repo_path.resolve(strict=True)` catches
+# missing files first. Solve both with cross-platform in-process
+# tests that inject a faulty target through the `_contained_repo_path`
+# seam so `target.is_file()` returns True while `target.read_bytes()`
+# raises the exception. This deterministically reaches the
+# remediated `except (FileNotFoundError, PermissionError)` clause
+# on ANY platform, ANY Python version.
+
+
+class _RecordingShim:
+    """Minimum request-handler shim covering the surface both
+    `_handle_file` and `_handle_raw` (and their delegatees
+    `_send_json`, `_send_json_error`, `_raw_error_direct`,
+    `_raw_error_from_req`) touch. Records status/headers/body so
+    tests can assert exact 404 shapes.
+    """
+
+    def __init__(self):
+        import io as _io
+        self.wfile = _io.BytesIO()
+        self.status_calls = []
+        self.headers = []
+        self.end_headers_calls = 0
+
+    def send_response(self, status, message=None):
+        self.status_calls.append((status, message))
+
+    def send_header(self, name, value):
+        self.headers.append((name, value))
+
+    def end_headers(self):
+        self.end_headers_calls += 1
+
+
+def _bind_all(dashboard_module, shim, names):
+    """Bind unbound handler methods to the shim so `self.X()` works
+    for every method the handler-under-test invokes.
+    """
+    Handler = dashboard_module.DashboardHandler
+    for name in names:
+        method = getattr(Handler, name)
+        object.__setattr__(shim, name,
+                           method.__get__(shim, Handler))
+
+
+def _make_faulty_target(exception_cls):
+    """Return a mock target that behaves like a real file
+    ready to be read, then raises `exception_cls` on
+    `read_bytes()`.  Also raises on `stat()` so `_mtime_iso`
+    returns None (matches the JSON envelope shape for
+    unreadable-mtime cases).
+    """
+    from unittest.mock import MagicMock
+    m = MagicMock()
+    m.is_file.return_value = True
+    m.read_bytes.side_effect = exception_cls("test-induced")
+    m.stat.side_effect = OSError("stat suppressed for test")
+    return m
+
+
+def _make_req(dashboard_module, endpoint, logical_path, *,
+              version_present=False, version_value=""):
+    return dashboard_module.Request(
+        endpoint=endpoint,
+        repo_name="alpha",
+        logical_path=logical_path,
+        version_present=version_present,
+        version_value=version_value,
+        query=({"version": [version_value]} if version_present
+               else {}),
+    )
+
+
+def _install_stubs(dashboard_module, monkeypatch, target):
+    """Patch `_contained_repo_path` to return `target` and
+    `_resolve_repo_path` to return a benign non-empty value so
+    both handlers reach the read step.
+    """
+    monkeypatch.setattr(
+        dashboard_module, "_contained_repo_path",
+        lambda *a, **kw: target)
+    monkeypatch.setattr(
+        dashboard_module, "_resolve_repo_path",
+        lambda *a, **kw: "/synthetic/repo")
+
+
+def _run_file_handler(dashboard_module, monkeypatch, exception_cls):
+    target = _make_faulty_target(exception_cls)
+    _install_stubs(dashboard_module, monkeypatch, target)
+    shim = _RecordingShim()
+    _bind_all(dashboard_module, shim,
+              ("_send_json", "_send_json_error", "_handle_file"))
+    req = _make_req(dashboard_module, "file", "source/x.py")
+    shim._handle_file(req)
+    return shim
+
+
+def _run_raw_handler(dashboard_module, monkeypatch, exception_cls):
+    target = _make_faulty_target(exception_cls)
+    _install_stubs(dashboard_module, monkeypatch, target)
+    shim = _RecordingShim()
+    _bind_all(dashboard_module, shim,
+              ("_send_json", "_send_json_error",
+               "_raw_error_direct", "_raw_error_from_req",
+               "_handle_raw"))
+    req = _make_req(dashboard_module, "raw", "source/x.py")
+    shim._handle_raw(req)
+    return shim
+
+
+def test_file_permission_error_branch_returns_404(
+        dashboard_module, monkeypatch):
+    """F3 in-process branch pin — `PermissionError` on `read_bytes`
+    (after containment succeeds) MUST return 404 JSON envelope
+    from `_handle_file`. Cross-platform; not dependent on
+    filesystem permissions or platform.
+    """
+    shim = _run_file_handler(
+        dashboard_module, monkeypatch, PermissionError)
+    assert shim.status_calls == [(404, None)]
+    body = json.loads(shim.wfile.getvalue().decode("utf-8"))
+    assert body == {"error": "not found", "code": 404}
+    values = dict(shim.headers)
+    assert values["Content-Type"] == (
+        "application/json; charset=utf-8")
+
+
+def test_file_file_not_found_branch_returns_404(
+        dashboard_module, monkeypatch):
+    """F3 in-process branch pin — `FileNotFoundError` on
+    `read_bytes` (containment already succeeded; the file was
+    concurrently removed) MUST return 404 from `_handle_file`.
+    This is the branch that filesystem state cannot reach
+    deterministically.
+    """
+    shim = _run_file_handler(
+        dashboard_module, monkeypatch, FileNotFoundError)
+    assert shim.status_calls == [(404, None)]
+    body = json.loads(shim.wfile.getvalue().decode("utf-8"))
+    assert body == {"error": "not found", "code": 404}
+
+
+def test_file_general_oserror_stays_500(
+        dashboard_module, monkeypatch):
+    """Complementary pin — a non-FileNotFoundError,
+    non-PermissionError `OSError` still returns 500 (the
+    remediation preserved the general branch).
+    """
+    shim = _run_file_handler(
+        dashboard_module, monkeypatch, OSError)
+    assert shim.status_calls == [(500, None)]
+
+
+def test_raw_permission_error_branch_returns_404(
+        dashboard_module, monkeypatch):
+    """F3 in-process branch pin — `PermissionError` on
+    `read_bytes` MUST return 404 HTML envelope from
+    `_handle_raw` (via `_raw_error_from_req` → `_raw_error_direct`).
+    """
+    shim = _run_raw_handler(
+        dashboard_module, monkeypatch, PermissionError)
+    assert shim.status_calls == [(404, "not found")]
+    values = dict(shim.headers)
+    assert values["Content-Type"] == "text/html;charset=utf-8"
+    assert values["X-Content-Type-Options"] == "nosniff"
+
+
+def test_raw_file_not_found_branch_returns_404(
+        dashboard_module, monkeypatch):
+    """F3 in-process branch pin — `FileNotFoundError` on
+    `read_bytes` MUST return 404 from `_handle_raw`.
+    """
+    shim = _run_raw_handler(
+        dashboard_module, monkeypatch, FileNotFoundError)
+    assert shim.status_calls == [(404, "not found")]
+
+
+def test_raw_general_oserror_stays_500(
+        dashboard_module, monkeypatch):
+    """Complementary pin for `_handle_raw` — non-remediated
+    `OSError` subclasses still surface as 500.
+    """
+    shim = _run_raw_handler(
+        dashboard_module, monkeypatch, OSError)
+    assert shim.status_calls == [(500, "read failed: test-induced")]
+
+
 def test_reparse_check_uses_os_stat_for_path_inputs(
         dashboard_module, tmp_path):
     """F1 functional pin: for Path inputs, `_is_reparse_point` must
