@@ -392,41 +392,209 @@ def test_file_rejects_in_repo_symlink_alias(
     assert status == 404
 
 
-# ── F3 (2026-09-09 Codex finding) — FileNotFoundError → 404 ────
+# ── F3 (2026-09-09 Codex findings) — 404 error taxonomy ─────────
+#
+# The remediation caught the plan's §8b.3 taxonomy: live-read
+# handlers must return 404 (not 500) on `FileNotFoundError` and
+# `PermissionError` from `read_bytes()`.  Testing the branches
+# splits into two problems:
+#
+# 1. `PermissionError`: deterministic on POSIX via `chmod 0`, which
+#    lets `_contained_repo_path.resolve(strict=True)` and
+#    `target.is_file()` both succeed while `read_bytes()` raises
+#    `PermissionError`. That reaches the remediated branch.
+#
+# 2. `FileNotFoundError`: hard to hit deterministically because
+#    `_contained_repo_path.resolve(strict=True)` catches the missing
+#    file BEFORE `read_bytes()` runs. The two exception classes are
+#    handled by the SAME `except (FileNotFoundError, PermissionError)`
+#    clause, so the POSIX permission pin proves the branch works.
+#    A source-grep pin below guards against silent removal of
+#    `FileNotFoundError` from the clause.
+#
+# The prior tests named `test_*_concurrently_removed_returns_404`
+# were renamed to reflect what they actually exercise (containment
+# resolve → 404) and repurposed to preserve their taxonomy value.
 
-def test_file_concurrently_removed_returns_404(
+
+def test_file_missing_target_returns_404_via_containment(
         dashboard_fleet_mutable):
-    """A file present at `is_browsable` time but removed before
-    `read_bytes` runs must return 404 (no oracle), not 500.
-    Simulate by having the handler open a file that doesn't
-    exist mid-flight via a delete-after-list pattern.
+    """A URL that names a missing file returns 404 through the
+    `target is None` branch of `_contained_repo_path.resolve(strict=
+    True)`. Not the `read_bytes` exception branch — this pin covers
+    the containment-resolve path only.
+    """
+    fleet = dashboard_fleet_mutable
+    status, _, _ = _get(
+        fleet, "/api/repo/alpha/file/source/does_not_exist.py")
+    assert status == 404
+
+
+def test_raw_missing_target_returns_404_via_containment(
+        dashboard_fleet_mutable):
+    fleet = dashboard_fleet_mutable
+    status, _, _ = _get(
+        fleet, "/api/repo/alpha/raw/source/does_not_exist.py")
+    assert status == 404
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX chmod-0 pattern; Windows permission model "
+           "does not readily produce PermissionError from read.",
+)
+def test_file_unreadable_target_returns_404_on_posix(
+        dashboard_fleet_mutable):
+    """F3 branch pin: an existing but unreadable file makes
+    `_contained_repo_path` succeed (parent readable, target
+    exists, `is_file()` True) while `read_bytes()` raises
+    `PermissionError` — reaching the remediated
+    `except (FileNotFoundError, PermissionError)` branch in
+    `_handle_file`. Response must be 404 (no oracle), not 500.
     """
     fleet = dashboard_fleet_mutable
     alpha = fleet["repos"]["alpha"]["path"]
+    target = alpha / "unreadable.py"
+    target.write_text("secret\n", encoding="utf-8")
+    os.chmod(str(target), 0)
 
-    # Seed a file, list it, remove it, then hit `/file`.
-    target = alpha / "ephemeral.py"
-    target.write_text("print('bye')\n", encoding="utf-8")
-    _, listing, _ = _get_json(fleet, "/api/repo/alpha/files")
-    assert any(f["path"] == "source/ephemeral.py"
-               for f in listing["files"])
+    try:
+        status, body, _ = _get(
+            fleet, "/api/repo/alpha/file/source/unreadable.py")
+    finally:
+        try:
+            os.chmod(str(target), 0o644)
+        except OSError:
+            pass
 
-    target.unlink()
-    status, body, _ = _get(
-        fleet, "/api/repo/alpha/file/source/ephemeral.py")
     assert status == 404, (
-        f"concurrent-removal F3: {status} body={body!r}")
+        f"F3 PermissionError branch failed: {status} body={body!r}")
 
 
-def test_raw_concurrently_removed_returns_404(
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX chmod-0 pattern.",
+)
+def test_raw_unreadable_target_returns_404_on_posix(
         dashboard_fleet_mutable):
-    """F3 companion for `/raw`."""
+    """F3 branch pin for `/raw`."""
     fleet = dashboard_fleet_mutable
     alpha = fleet["repos"]["alpha"]["path"]
+    target = alpha / "unreadable.py"
+    target.write_text("secret\n", encoding="utf-8")
+    os.chmod(str(target), 0)
 
-    target = alpha / "ephemeral.py"
-    target.write_text("print('bye')\n", encoding="utf-8")
-    target.unlink()
-    status, _, _ = _get(
-        fleet, "/api/repo/alpha/raw/source/ephemeral.py")
+    try:
+        status, _, _ = _get(
+            fleet, "/api/repo/alpha/raw/source/unreadable.py")
+    finally:
+        try:
+            os.chmod(str(target), 0o644)
+        except OSError:
+            pass
+
     assert status == 404
+
+
+def test_read_exception_clause_names_both_error_classes():
+    """Source-grep guard: the F3 fix relies on catching BOTH
+    `FileNotFoundError` and `PermissionError` before the general
+    `OSError` clause in `_handle_file` and `_handle_raw`. Since
+    `FileNotFoundError` is hard to hit deterministically at the
+    read-bytes call site (containment resolve normally catches
+    missing files first), this static pin guards against silent
+    removal of either exception class from either clause.
+    """
+    from pathlib import Path as _Path
+    src = (_Path(__file__).resolve().parents[2]
+           / "src" / "gator_command" / "scripts"
+           / "gator-dashboard.py").read_text(encoding="utf-8")
+    # Both handlers must catch (FileNotFoundError, PermissionError)
+    # BEFORE the general OSError branch.  The order matters:
+    # PermissionError is an OSError subclass, so a bare OSError
+    # first would swallow the 404 taxonomy.
+    for handler_name in ("_handle_file", "_handle_raw"):
+        # Locate the handler body.
+        idx = src.find(f"def {handler_name}(self, req):")
+        assert idx >= 0, f"missing handler {handler_name}"
+        # Slice to the next handler def or ~5000 chars.
+        body = src[idx:idx + 5000]
+        specific_idx = body.find(
+            "except (FileNotFoundError, PermissionError)")
+        general_idx = body.find("except OSError")
+        assert specific_idx >= 0, (
+            f"{handler_name} missing "
+            f"except (FileNotFoundError, PermissionError) clause")
+        assert general_idx > specific_idx, (
+            f"{handler_name}: specific clause must precede "
+            f"general OSError so subclasses aren't swallowed")
+
+
+def test_reparse_check_uses_python_3_9_compatible_stat():
+    """F1 (2026-09-09 Codex re-review) source-grep: the reparse
+    walker must NOT call `Path.stat(follow_symlinks=False)` — that
+    kwarg is 3.10+ and would crash on the declared 3.9 floor. The
+    fix routes Path/str objects through `os.stat(os.fspath(x),
+    follow_symlinks=False)` and preserves the DirEntry cache-hit
+    only when the input `isinstance(entry_or_path, os.DirEntry)`.
+    """
+    from pathlib import Path as _Path
+    src = (_Path(__file__).resolve().parents[2]
+           / "src" / "gator_command" / "scripts"
+           / "gator-dashboard.py").read_text(encoding="utf-8")
+    # Locate _is_reparse_point.
+    idx = src.find("def _is_reparse_point(")
+    assert idx >= 0
+    body = src[idx:idx + 3000]
+    # DirEntry branch must be gated on isinstance so a Path never
+    # reaches the follow_symlinks= call.
+    assert "isinstance(entry_or_path, os.DirEntry)" in body, (
+        "_is_reparse_point must gate DirEntry-specific stat call "
+        "behind isinstance so Path inputs don't hit the 3.10+ "
+        "Path.stat(follow_symlinks=) kwarg on 3.9")
+
+
+def test_reparse_check_uses_os_stat_for_path_inputs(
+        dashboard_module, tmp_path):
+    """F1 functional pin: for Path inputs, `_is_reparse_point` must
+    route the second stat call (after `is_symlink()`) through
+    `os.stat(os.fspath(path), follow_symlinks=False)` — a 3.3+ API
+    — NOT through `Path.stat(follow_symlinks=False)` which is 3.10+
+    and would crash on the declared 3.9 floor with `TypeError`.
+
+    Observe by recording every `os.stat` call inside the helper.
+    Note: `Path.is_symlink()` on 3.13 internally calls `Path.stat`
+    with the kwarg, but on 3.9 it uses `os.lstat` directly — so
+    mocking `Path.stat` breaks the 3.13 test path. Recording
+    `os.stat` calls avoids the version-specific `is_symlink()`
+    plumbing and directly proves the fix contract: the fallback
+    stat for Path inputs uses the 3.3+ `os.stat` call.
+    """
+    import os as _os
+    from unittest import mock
+
+    ordinary_file = tmp_path / "regular.py"
+    ordinary_file.write_text("x = 1\n", encoding="utf-8")
+
+    original_os_stat = _os.stat
+    calls = []
+
+    def _record_stat(*args, **kwargs):
+        calls.append((args, kwargs))
+        return original_os_stat(*args, **kwargs)
+
+    with mock.patch.object(_os, "stat", _record_stat):
+        result = dashboard_module._is_reparse_point(ordinary_file)
+
+    assert result is False
+    # For a Path input the helper must invoke os.stat with
+    # follow_symlinks=False at least once — the 3.9-safe path.
+    fspath_str = str(ordinary_file)
+    matched = [
+        (a, kw) for (a, kw) in calls
+        if a and str(a[0]) == fspath_str
+        and kw.get("follow_symlinks") is False]
+    assert matched, (
+        "expected _is_reparse_point to call "
+        "os.stat(os.fspath(path), follow_symlinks=False) for "
+        f"Path input; recorded calls: {calls}")

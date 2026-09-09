@@ -736,6 +736,17 @@ def _is_reparse_point(entry_or_path):
     junctions — `rglob` therefore silently traverses them. This
     helper answers the broader "should the walker refuse to cross
     this filesystem boundary?".
+
+    Python 3.9 compatibility (2026-09-09 Codex re-review, HIGH):
+    `Path.stat(follow_symlinks=False)` was added in Python 3.10;
+    on 3.9 it raises `TypeError` (uncaught before this fix), which
+    would crash normal live handlers on the declared runtime floor
+    (`pyproject.toml: requires-python = ">=3.9"`). Route through
+    `os.stat(os.fspath(x), follow_symlinks=False)` uniformly — the
+    stdlib `os.stat` has `follow_symlinks=` since 3.3 and works
+    for BOTH `os.DirEntry` and `pathlib.Path` via `__fspath__`.
+    `DirEntry.stat(follow_symlinks=False)` cache-hits when
+    available, so preserve it via `isinstance(...)` check.
     """
     try:
         if hasattr(entry_or_path, "is_symlink") \
@@ -745,9 +756,13 @@ def _is_reparse_point(entry_or_path):
         return True  # unreadable → refuse to cross.
 
     try:
-        if hasattr(entry_or_path, "stat"):
+        if isinstance(entry_or_path, os.DirEntry):
+            # DirEntry.stat(follow_symlinks=False) has existed
+            # since Python 3.6 and cache-hits the scandir stat.
             st = entry_or_path.stat(follow_symlinks=False)
         else:
+            # Path or bare string — os.stat works on both via
+            # __fspath__ and has follow_symlinks= since 3.3.
             st = os.stat(os.fspath(entry_or_path),
                          follow_symlinks=False)
     except OSError:

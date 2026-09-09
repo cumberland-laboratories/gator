@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 post-Codex remediation: reparse-point alias fix + no-store on /history?version + FileNotFoundError→404 + E1 fixture split",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-remediation",
+    "codex-review",
+    "dashboard-content-transport",
+    "security-critical"
+  ],
+  "commit": "9f05a81ad27a2994e49c862b8610240ad9f2cc65",
+  "short_commit": "9f05a81",
+  "snippet_id": "snippet-9f05a81ad27a2",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 4,
+  "previous_commit_in_session": "4369f86241574423bf8eb0eb04f85c82187c3536",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T23:18:49Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-09-gator-4369f86241574.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_ui/content_transport_seed.py",
+    "tests/test_dashboard_ui/test_content_transport_slice2.py",
+    "tests/test_dashboard_ui/test_content_transport_slice3.py"
+  ],
+  "notes": [
+    "**F1 (HIGH — in-repo reparse-point alias bypass)** — `_contained_repo_path` in `gator-dashboard.py` now walks the UNRESOLVED path components from the namespace base to the target and rejects on the first `_is_reparse_point` hit, before the resolve step. Codex demonstrated a policy alias where a symlink like `source/public → .gator/sessions/_active` stays inside the repo (so the two-resolve containment check passed) but authorizes via the LOGICAL path (`is_browsable(\"\", \"public/token.json\", \"raw\")` → True) while the RESOLVED target sits in a protected namespace. The unresolved-component walk catches the alias before resolve. Two-resolve containment retained as belt-and-suspenders for external escape. Introduced `_path_exists(p)` (lstat-based existence probe) so a dangling reparse target still trips the walk. New pins in `test_content_transport_slice3.py`: `test_raw_rejects_in_repo_junction_alias` (Windows `mklink /J`), `test_raw_rejects_in_repo_symlink_alias` (POSIX), `test_file_rejects_in_repo_symlink_alias` (POSIX). Junction pin executed and passed on this Windows session.",
+    "**F2 (MEDIUM — `/history?version=…` no-store)** — `_handle_history`'s version-key rejection now passes `cache_control=\"no-store\"` to `_send_json_error`. Updated `test_history_rejects_version_key` to assert the header. New pin `test_history_rejects_percent_encoded_version_key` proves the percent-encoded `%76ersion` spelling triggers the same branch via the parser's `parse_qs` normalization at step 0.5.",
+    "**F3 (MEDIUM — existence/permission oracle)** — Both `_handle_file` and `_handle_raw` now catch `FileNotFoundError` and `PermissionError` before the general `OSError` branch and return 404 (per r6 §8b.3 error taxonomy — no oracle). New pins `test_file_concurrently_removed_returns_404` and `test_raw_concurrently_removed_returns_404` seed a file, list it, remove it mid-flight, GET the endpoint, and assert 404.",
+    "**F4 (MEDIUM — E1 acceptance test misalignment)** — `seed_history_commits` now deletes `gator-command/` ONLY on `alpha`; `beta` preserves the namespace so the E1 positive live pin has a repo to exercise. Test rewrites in `test_content_transport_slice2.py`: `test_files_live_gator_command_wire_schema` asserts POSITIVE presence on beta + round-trips via `/file/gator-command/README.md`; new `test_files_live_gator_command_absent_after_delete` covers the alpha deleted case with a round-trip 404 assertion; three `test_files_historical_*_wire_schema` pins now execute the required `/file?version=<seed>` round trip.",
+    "**F5 (MEDIUM — charter reconciliation)** — `scripts-dashboard.md` updates: retired the octet-stream fallback claim and the \"no `/raw` `?version=` handler\" claim in `### HTML file support` (both false post-Slice 2); replaced \"(future, Slice 2)\" annotations in `### B1 URL parser`, `### B1 response helpers`, `### Content-transport policy`, and `### B1 logical-path parser` with live-caller lists; removed the fabricated \"runtime counter test\" claim on the parse-once invariant (structural handler signature guards it; no such runtime test exists). Added three new TRIPWIREs on `do_GET`: in-repo reparse-point alias (F1 fix), error-taxonomy 404 (F3 fix), uniform no-store on version-consuming responses (F2 fix).",
+    "Test results after remediation: `tests/test_dashboard_ui/` 139 pass + 9 skipped on Windows (POSIX-only pins skip locally; Ubuntu CI exercises them). Slice 1 unit tests: 70/70. Slice 2 integration: 46/46 (+4 net for F2 percent-encoded + F4 absent-after-delete + `beta`-side round-trips). Slice 3 platform pins: 6 execute + 6 skip on Windows (+5 net for F1 alias pins + F3 concurrent-removal pins)."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}
