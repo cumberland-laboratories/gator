@@ -84,47 +84,117 @@ def test_files_live_gator_wire_schema(dashboard_fleet):
 
 
 def test_files_live_gator_command_wire_schema(dashboard_fleet):
-    # `gator-command/` was deleted in `gc-deleted`. On the live
-    # tree it is absent, so /files should NOT list it. This pin
-    # is complementary to the versioned pin below.
+    """F4 (2026-09-09 Codex finding): the E1 pin requires a
+    POSITIVE gator-command live listing + round-trip. `beta`
+    preserves `gator-command/` (only `alpha` deletes it for the
+    deleted-history pin) so this test asserts the presence and
+    the correct wire shape, then round-trips via `/file`.
+    """
+    _, data, _ = _get_json(dashboard_fleet, "/api/repo/beta/files")
+    entry = next(
+        (f for f in data["files"]
+         if f["path"] == "gator-command/README.md"),
+        None)
+    assert entry is not None, (
+        f"gator-command/README.md missing from beta /files")
+    assert entry["source"] == "gator-command"
+    assert entry["dir"] == "gator-command"
+    assert entry["name"] == "README.md"
+    assert entry["size"] > 0
+    # Round-trip: /file/ must serve the entry it listed.
+    round_status, _, _ = _get(
+        dashboard_fleet,
+        "/api/repo/beta/file/gator-command/README.md")
+    assert round_status == 200
+
+
+def test_files_live_gator_command_absent_after_delete(
+        dashboard_fleet):
+    """Complementary pin — `alpha` DID delete `gator-command/` in
+    the `gc-deleted` commit, so its live listing must NOT include
+    the namespace (discovery/serving still agree — /file for the
+    same path returns 404 too).
+    """
     _, data, _ = _get_json(dashboard_fleet, "/api/repo/alpha/files")
     gc_entries = [
         f for f in data["files"]
         if f["source"] == "gator-command"]
     assert gc_entries == []
+    round_status, _, _ = _get(
+        dashboard_fleet,
+        "/api/repo/alpha/file/gator-command/README.md")
+    assert round_status == 404
 
 
 # ── E1 wire-schema round-trip (historical) ──────────────────────
 
 def test_files_historical_source_repo_wire_schema(dashboard_fleet):
+    """F4 (2026-09-09 Codex finding) — the E1 historical pin
+    requires a list-to-read ROUND TRIP, not just a shape assertion.
+    """
     seed = dashboard_fleet["repos"]["alpha"]["commits"]["seed"]
     _, data, _ = _get_json(
         dashboard_fleet,
         f"/api/repo/alpha/files?version={seed}")
     assert data["version"] == seed
-    paths = {(f["path"], f["source"]) for f in data["files"]}
-    assert ("source/example.py", "repo") in paths
+    entry = next(
+        (f for f in data["files"]
+         if f["path"] == "source/example.py"),
+        None)
+    assert entry is not None
+    assert entry["source"] == "repo"
+    assert entry["dir"] == "source"
+    # Historical round-trip: /file?version=<seed> must serve the
+    # entry the /files?version=<seed> listing named.
+    round_status, round_data, _ = _get_json(
+        dashboard_fleet,
+        f"/api/repo/alpha/file/source/example.py?version={seed}")
+    assert round_status == 200
+    assert round_data["version"] == seed
 
 
 def test_files_historical_gator_wire_schema(dashboard_fleet):
+    """F4 historical round-trip for .gator namespace."""
     seed = dashboard_fleet["repos"]["alpha"]["commits"]["seed"]
     _, data, _ = _get_json(
         dashboard_fleet,
         f"/api/repo/alpha/files?version={seed}")
-    assert ("mission.md", ".gator") in {
-        (f["path"], f["source"]) for f in data["files"]}
+    entry = next(
+        (f for f in data["files"]
+         if f["path"] == "mission.md"), None)
+    assert entry is not None
+    assert entry["source"] == ".gator"
+    assert entry["dir"] == ""
+    round_status, round_data, _ = _get_json(
+        dashboard_fleet,
+        f"/api/repo/alpha/file/mission.md?version={seed}")
+    assert round_status == 200
+    # At the seed commit the mission still had the initial body.
+    assert round_data["content"] == "# alpha mission\n\nSeed body.\n"
 
 
 def test_files_historical_gator_command_wire_schema(
         dashboard_fleet):
-    seed = dashboard_fleet["repos"]["alpha"]["commits"]["seed"]
+    """F4 historical round-trip for gator-command namespace. Uses
+    beta because alpha deletes gator-command in `gc-deleted`; beta
+    preserves it, so the seed-commit listing + round-trip both
+    succeed regardless of any later fixture edits.
+    """
+    seed = dashboard_fleet["repos"]["beta"]["commits"]["seed"]
     _, data, _ = _get_json(
         dashboard_fleet,
-        f"/api/repo/alpha/files?version={seed}")
-    # `gator-command/README.md` was present at the seed commit
-    # (before gc-deleted).
-    assert ("gator-command/README.md", "gator-command") in {
-        (f["path"], f["source"]) for f in data["files"]}
+        f"/api/repo/beta/files?version={seed}")
+    entry = next(
+        (f for f in data["files"]
+         if f["path"] == "gator-command/README.md"), None)
+    assert entry is not None
+    assert entry["source"] == "gator-command"
+    assert entry["dir"] == "gator-command"
+    round_status, _, _ = _get_json(
+        dashboard_fleet,
+        f"/api/repo/beta/file/gator-command/README.md?version="
+        f"{seed}")
+    assert round_status == 200
 
 
 def test_files_historical_no_store_header(dashboard_fleet):
@@ -323,13 +393,34 @@ def test_history_returns_commits_for_deleted_file(dashboard_fleet):
 
 
 def test_history_rejects_version_key(dashboard_fleet):
+    """F2 (2026-09-09 Codex finding) — the version-key rejection
+    on /history MUST carry Cache-Control: no-store, matching the
+    uniform transport-headers rule. Assert on the LITERAL
+    `version` key.
+    """
     seed = dashboard_fleet["repos"]["alpha"]["commits"]["seed"]
-    status, body, _ = _get(
+    status, body, headers = _get(
         dashboard_fleet,
         f"/api/repo/alpha/history/mission.md?version={seed}")
     assert status == 400
     envelope = json.loads(body.decode("utf-8"))
     assert "not supported" in envelope["error"]
+    assert headers.get("Cache-Control") == "no-store"
+    assert headers.get("X-Content-Type-Options") == "nosniff"
+
+
+def test_history_rejects_percent_encoded_version_key(
+        dashboard_fleet):
+    """F2 — the percent-encoded `%76ersion` spelling must also be
+    caught by the parser's `parse_qs` normalization and trigger
+    the no-store branch. Prevents a bypass via URL escaping.
+    """
+    seed = dashboard_fleet["repos"]["alpha"]["commits"]["seed"]
+    status, _, headers = _get(
+        dashboard_fleet,
+        f"/api/repo/alpha/history/mission.md?%76ersion={seed}")
+    assert status == 400
+    assert headers.get("Cache-Control") == "no-store"
 
 
 # ── Legacy pass-through (E4b + F1 preserve-shipped) ─────────────

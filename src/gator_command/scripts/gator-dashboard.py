@@ -532,9 +532,24 @@ _GIT_SHOW_TIMEOUT = 30
 def _contained_repo_path(repo_path, namespace_root, disk_rel):
     """Return the resolved absolute Path or None on any reject.
 
-    Two resolves, two containment checks. Live-disk gate — called
-    for endpoints WITHOUT `?version=`. `disk_rel` is trusted to
-    have already passed `parse_logical_path`'s syntactic gates.
+    Two resolves, two containment checks, PLUS a per-component
+    reparse-point rejection walk (2026-09-09 Codex F1 finding).
+    Live-disk gate — called for endpoints WITHOUT `?version=`.
+    `disk_rel` is trusted to have already passed
+    `parse_logical_path`'s syntactic gates.
+
+    F1 fix: the two-resolve containment check catches external
+    escape (a symlink pointing OUTSIDE the repo), but on its own
+    it does NOT catch an IN-REPO alias — a symlink or junction
+    like `source/public -> .gator/sessions/_active` whose target
+    stays inside the repo but corresponds to a namespace whose
+    real policy denies serving. Authorization ran on the LOGICAL
+    path (`source/public/token.json`), so `is_browsable` said yes;
+    the resolved target is `.gator/sessions/_active/token.json`
+    which the handler would then serve. To close the alias, walk
+    the unresolved path from repo root and reject if any component
+    is a reparse point (Windows junction, mount point, POSIX
+    symlink, or any other reparse tag).
     """
     try:
         repo_root_r = Path(repo_path).resolve(strict=True)
@@ -542,16 +557,43 @@ def _contained_repo_path(repo_path, namespace_root, disk_rel):
         return None
 
     # (1) Namespace root: catches a symlinked `.gator/` or
-    # `gator-command/` that points outside the repo.
+    # `gator-command/` that points outside the repo. Also
+    # rejects the namespace root itself being a reparse point
+    # inside the repo (belt-and-suspenders — the namespace-root
+    # resolve already fails on a broken symlink; this rejects
+    # the pathological case of a valid in-repo target).
+    ns_path = Path(repo_path) / namespace_root if namespace_root \
+        else Path(repo_path)
+    if namespace_root and _path_exists(ns_path) and (
+            _is_reparse_point(ns_path)):
+        return None
     try:
-        base_r = (Path(repo_path) / namespace_root).resolve(
-            strict=True)
+        base_r = ns_path.resolve(strict=True)
     except (OSError, RuntimeError):
         return None
     if base_r != repo_root_r and repo_root_r not in base_r.parents:
         return None
 
-    # (2) Target: catches disk-relative symlinks that escape.
+    # (1b) F1 fix — reject ANY in-repo reparse point along the
+    # unresolved path from the namespace base down to the target.
+    # Walking unresolved components means a `source/public`
+    # junction into `.gator/sessions/_active/` is caught here even
+    # though its resolved target is technically inside the repo.
+    current = ns_path
+    for segment in disk_rel.split("/"):
+        if not segment:
+            continue
+        current = current / segment
+        if _path_exists(current) and _is_reparse_point(current):
+            logging.getLogger("dashboard.security").warning(
+                "reparse_point_in_live_request path=%s",
+                str(current))
+            return None
+
+    # (2) Target: catches disk-relative symlinks that escape
+    # OUTSIDE the repo (still needed even after 1b because a
+    # dangling symlink pointing outside would be caught here
+    # rather than the reparse walk).
     try:
         target_r = (base_r / disk_rel).resolve(strict=True)
     except (OSError, RuntimeError):
@@ -560,6 +602,18 @@ def _contained_repo_path(repo_path, namespace_root, disk_rel):
         return None
 
     return target_r
+
+
+def _path_exists(p):
+    """`Path.exists()` follows symlinks; `lstat()` does not. Use
+    lstat so a dangling or reparse-target-unreachable path still
+    reports existence for the reparse-point check.
+    """
+    try:
+        p.lstat()
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def _contained_namespace_root(repo_path, namespace_root,
@@ -1295,6 +1349,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     404, "not found", cache_control=cache_ctl)
             try:
                 raw_bytes = target.read_bytes()
+            except (FileNotFoundError, PermissionError):
+                # F3 (2026-09-09 Codex finding) — collapse to 404
+                # per r6 §8b.3 error taxonomy so an unreadable or
+                # concurrently removed target is indistinguishable
+                # from the ordinary 404 path (no oracle).
+                return self._send_json_error(
+                    404, "not found", cache_control=cache_ctl)
             except OSError as exc:
                 return self._send_json_error(
                     500, f"read failed: {exc}",
@@ -1355,6 +1416,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     404, "not found", req)
             try:
                 body = target.read_bytes()
+            except (FileNotFoundError, PermissionError):
+                # F3 (2026-09-09 Codex finding) — 404 per r6
+                # §8b.3 taxonomy (no existence/permission oracle).
+                return self._raw_error_from_req(
+                    404, "not found", req)
             except OSError as exc:
                 return self._raw_error_from_req(
                     500, f"read failed: {exc}", req)
@@ -1386,8 +1452,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         directory still return.
         """
         if req.version_present:
+            # F2 (2026-09-09 Codex finding) — every response that
+            # consumed a `?version=` key carries no-store, even
+            # this contract-shape rejection. Matches the uniform
+            # transport-headers rule (§8.1, §12 TRIPWIRE).
             return self._send_json_error(
-                400, "version not supported on /history")
+                400, "version not supported on /history",
+                cache_control="no-store")
         lp = parse_logical_path(req.logical_path)
         if lp is None:
             return self._send_json_error(400, "invalid path")

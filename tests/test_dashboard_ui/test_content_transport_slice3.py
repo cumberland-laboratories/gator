@@ -273,3 +273,160 @@ def test_files_rejects_symlink_directory_on_posix(
             f"symlink dir leaked into /files: {f}")
         assert "external-leak" not in f["path"], (
             f"symlink descendant leaked: {f}")
+
+
+# ── F1 (2026-09-09 Codex finding) — in-repo reparse alias ──────
+#
+# Direct-route pins for the in-repo policy alias. The scanner
+# already rejects reparse points, so /files discovery is clean.
+# The bypass was via a GUESSED direct URL — `is_browsable` runs
+# on the LOGICAL path, `_contained_repo_path` resolves through
+# the alias, and the handler serves the aliased target. F1 fix
+# walks the unresolved path from the namespace base rejecting
+# any reparse-point component.
+
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Junctions are Windows-only.",
+)
+def test_raw_rejects_in_repo_junction_alias(
+        dashboard_fleet_mutable):
+    """Create an in-repo junction that aliases into a protected
+    namespace (`.gator/sessions/_active`). Direct URL request
+    for the aliased path MUST NOT serve the protected content.
+    """
+    fleet = dashboard_fleet_mutable
+    alpha = fleet["repos"]["alpha"]["path"]
+
+    # Namespace-root guard rejects `source/` prefixed by
+    # `.gator/` or `gator-command/`, so the alias uses a
+    # plausible-but-benign source-namespace directory name.
+    junction_path = alpha / "public"
+    target = alpha / ".gator" / "sessions" / "_active"
+    r = subprocess.run(
+        ["cmd", "/c", "mklink", "/J",
+         str(junction_path), str(target)],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        pytest.skip(
+            f"mklink /J failed (permission?): {r.stderr!r}")
+
+    try:
+        status, body, _ = _get(
+            fleet,
+            "/api/repo/alpha/raw/source/public/token.json")
+    finally:
+        subprocess.run(
+            ["cmd", "/c", "rmdir", str(junction_path)],
+            capture_output=True)
+
+    assert status == 404, (
+        f"F1 alias bypass: {status} body={body!r}")
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX symlink test — Windows path uses junctions.",
+)
+def test_raw_rejects_in_repo_symlink_alias(
+        dashboard_fleet_mutable):
+    """POSIX equivalent — an in-repo symlink aliasing into
+    `.gator/sessions/_active` MUST NOT serve via `/raw`.
+    """
+    fleet = dashboard_fleet_mutable
+    alpha = fleet["repos"]["alpha"]["path"]
+
+    symlink_path = alpha / "public"
+    target = alpha / ".gator" / "sessions" / "_active"
+    try:
+        os.symlink(str(target), str(symlink_path),
+                   target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation failed: {exc}")
+
+    try:
+        status, _, _ = _get(
+            fleet,
+            "/api/repo/alpha/raw/source/public/token.json")
+    finally:
+        try:
+            os.unlink(str(symlink_path))
+        except OSError:
+            pass
+
+    assert status == 404, (
+        f"F1 alias bypass on POSIX: {status}")
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX symlink test.",
+)
+def test_file_rejects_in_repo_symlink_alias(
+        dashboard_fleet_mutable):
+    """F1 companion for `/file` — the JSON envelope endpoint must
+    also refuse to serve the aliased protected content.
+    """
+    fleet = dashboard_fleet_mutable
+    alpha = fleet["repos"]["alpha"]["path"]
+
+    symlink_path = alpha / "public"
+    target = alpha / ".gator" / "sessions" / "_active"
+    try:
+        os.symlink(str(target), str(symlink_path),
+                   target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation failed: {exc}")
+
+    try:
+        status, _, _ = _get(
+            fleet,
+            "/api/repo/alpha/file/source/public/token.json")
+    finally:
+        try:
+            os.unlink(str(symlink_path))
+        except OSError:
+            pass
+
+    assert status == 404
+
+
+# ── F3 (2026-09-09 Codex finding) — FileNotFoundError → 404 ────
+
+def test_file_concurrently_removed_returns_404(
+        dashboard_fleet_mutable):
+    """A file present at `is_browsable` time but removed before
+    `read_bytes` runs must return 404 (no oracle), not 500.
+    Simulate by having the handler open a file that doesn't
+    exist mid-flight via a delete-after-list pattern.
+    """
+    fleet = dashboard_fleet_mutable
+    alpha = fleet["repos"]["alpha"]["path"]
+
+    # Seed a file, list it, remove it, then hit `/file`.
+    target = alpha / "ephemeral.py"
+    target.write_text("print('bye')\n", encoding="utf-8")
+    _, listing, _ = _get_json(fleet, "/api/repo/alpha/files")
+    assert any(f["path"] == "source/ephemeral.py"
+               for f in listing["files"])
+
+    target.unlink()
+    status, body, _ = _get(
+        fleet, "/api/repo/alpha/file/source/ephemeral.py")
+    assert status == 404, (
+        f"concurrent-removal F3: {status} body={body!r}")
+
+
+def test_raw_concurrently_removed_returns_404(
+        dashboard_fleet_mutable):
+    """F3 companion for `/raw`."""
+    fleet = dashboard_fleet_mutable
+    alpha = fleet["repos"]["alpha"]["path"]
+
+    target = alpha / "ephemeral.py"
+    target.write_text("print('bye')\n", encoding="utf-8")
+    target.unlink()
+    status, _, _ = _get(
+        fleet, "/api/repo/alpha/raw/source/ephemeral.py")
+    assert status == 404

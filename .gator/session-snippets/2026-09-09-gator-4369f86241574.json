@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B1 Slice 3: platform-symmetry pins (POSIX parser rejects + Windows junction) + final charter reconciliation",
+  "change_type": "test",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b1-slice-3",
+    "dashboard-content-transport",
+    "platform-symmetry",
+    "security-critical"
+  ],
+  "commit": "4369f86241574423bf8eb0eb04f85c82187c3536",
+  "short_commit": "4369f86",
+  "snippet_id": "snippet-4369f86241574",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 3,
+  "previous_commit_in_session": "880d2a30c55ce2915fed86a28700b622e62662bf",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T22:46:32Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-09-gator-880d2a30c55ce.json",
+    "tests/test_dashboard_ui/test_content_transport_slice3.py"
+  ],
+  "notes": [
+    "Added `tests/test_dashboard_ui/test_content_transport_slice3.py` — 7 platform-specific integration tests (5 POSIX-only, 1 Windows-only junction, 1 POSIX-only symlink). Fixture: `dashboard_fleet_mutable` (function-scoped) so each destructive test gets a fresh subprocess dashboard + fresh fleet.",
+    "**POSIX pins (skip on Windows because Win32 can't create these filenames)**: `test_files_omits_dos_device_filename_on_posix` (seed `source/CON.txt` — a legitimate POSIX filename; assert absent from `/files` AND `/file/source/CON.txt` returns 400 per errata E4a, NOT 404 — the split matters because 400 says \"parser said no\" while 404 would say \"authorized target absent\"), `test_files_omits_ads_colon_filename_on_posix` (`source/foo:bar.py`), `test_files_omits_trailing_dot_filename_on_posix` (`source/trailing.py.`), `test_files_omits_control_char_filename_on_posix` (bell-char in leaf), `test_parser_symmetry_scanner_and_url_agree_on_posix` (composite pin: `source/legit.py` listed + round-trips 200; `source/CON.md` absent + round-trips 400 — the r6 F4 canonical-logical + `parse_logical_path` predicate exercised end-to-end).",
+    "**Windows junction pin** (skips on POSIX): `test_files_rejects_windows_junction` creates an external directory containing `smuggled.md`, junctions it into `<alpha>/.gator/junctioned` via `cmd /c mklink /J`, GETs `/files`, asserts NEITHER `junctioned` NOR `smuggled.md` appears. Cleanup in `finally` via `cmd /c rmdir` (removes the junction only, not the target). Skips with a permission-message on `mklink /J` failure. Exercises `_is_reparse_point` — `rglob` on Windows silently traverses junctions (`is_symlink()` returns False), which is the F2 bypass class the r4 walker rewrite closes.",
+    "**POSIX symlink-dir pin** (skips on Windows): `test_files_rejects_symlink_directory_on_posix` — cross-platform belt-and-suspenders companion to the junction pin. Creates an external directory containing `external-leak.md`, symlinks it into `<alpha>/.gator/symlinked`, GETs `/files`, asserts NEITHER path appears. Cleanup via `os.unlink` in `finally`.",
+    "Charter update in `scripts-dashboard.md::do_GET(self)`: added a sixth §12 TRIPWIRE — platform-symmetry — documenting the 400-vs-404 split on parser rejections and the junction/symlink walker gate.",
+    "**Test results on Windows (this session)**: `tests/test_dashboard_ui/` 134 pass + 7 skipped (6 POSIX-only from Slice 3 + 1 pre-existing skip from Plan A test_harness). The Windows junction pin PASSED. Slice 1 (70/70) and Slice 2 (42/42) remain green. Dashboard-adjacent suites (`test_dashboard_module_import`, `test_kill`, `test_dashboard_sessions`) all pass (59/59).",
+    "**Ubuntu CI expectation**: the 5 POSIX pins that skip on this machine will execute on the Ubuntu `dashboard-ui` matrix; the junction + POSIX-symlink pins invert (junction skips, symlink runs). Full cross-platform gate is the CI matrix job.",
+    "Slice 3 concludes B1. The parse-once + wire-schema + governance-root-alias + junction-safe + POSIX-symmetric content transport is now inspectable at three layers: pure-helper unit pins (70), HTTP integration pins (42), platform-specific pins (7). Total B1 test count: 119 across three modules, all green on Windows."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}

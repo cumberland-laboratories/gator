@@ -78,6 +78,12 @@ def seed_history_commits(repo, name):
     """Post-seed commits so version-scoped tests have inspectable
     history. Returns a `{label: sha}` map merged into the fleet
     fixture's `commits`.
+
+    F4 fixture split (2026-09-09 Codex finding): only `alpha`
+    deletes `gator-command/` so the deleted-file `/history/` pin
+    has a repo to exercise. `beta` preserves `gator-command/`
+    intact so the live E1 wire-schema pin has a positive
+    `source == "gator-command"` case to assert.
     """
     def _git(*args):
         subprocess.run(
@@ -97,16 +103,14 @@ def seed_history_commits(repo, name):
     _git("commit", "-q", "-m", "mission r2")
     mission_r2 = _rev()
 
-    import shutil
-    shutil.rmtree(repo / "gator-command")
-    _git("add", "-A")
-    _git("commit", "-q", "-m", "remove gator-command/")
-    gc_deleted = _rev()
-
-    return {
-        "mission-r2": mission_r2,
-        "gc-deleted": gc_deleted,
-    }
+    result = {"mission-r2": mission_r2}
+    if name == "alpha":
+        import shutil
+        shutil.rmtree(repo / "gator-command")
+        _git("add", "-A")
+        _git("commit", "-q", "-m", "remove gator-command/")
+        result["gc-deleted"] = _rev()
+    return result
 
 
 _h.seed_content_fixtures = seed_content_fixtures
