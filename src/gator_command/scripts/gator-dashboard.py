@@ -1095,6 +1095,66 @@ def apply_response_headers(handler, mime, body_len, *,
         handler.send_header("Cache-Control", cache_control)
 
 
+# ── B2 Slice 1 (v2.13.0): sandboxed HTML preview CSP ──────────────
+#
+# `apply_html_csp_headers(handler, *, external)` is the ONLY seam
+# B2 uses to add CSP to a `/raw` HTML response. It is called ONLY
+# from `_handle_raw` when the resolved MIME is `text/html*`, AFTER
+# `apply_response_headers` and BEFORE `end_headers`. It emits two
+# additional headers on top of what `apply_response_headers`
+# already wrote:
+#
+#   Content-Security-Policy:  (see _B2_CSP_EMBEDDED / _B2_CSP_EXTERNAL)
+#   Vary: Sec-Fetch-Dest
+#
+# The Vary header is UNCONDITIONAL (even when the request did not
+# carry Sec-Fetch-Dest): intermediaries cache based on the response
+# Vary contract, not the request shape, so omitting it on the
+# fallback response would let a cached fallback be served later to
+# an iframe-context request and vice versa.
+#
+# Directives (r14 plan §4.1, audited across the 9 shipped
+# blueprint HTML files 2026-09-09 — no `Function(...)` / `eval(...)`
+# / string-arg timer usage found, so `'unsafe-eval'` is NOT
+# permitted; only `'unsafe-inline'` for inline scripts and styles
+# that shipped interactive blueprints require).
+
+_B2_CSP_DIRECTIVES = (
+    "default-src 'none'; "
+    "script-src 'unsafe-inline'; "
+    "style-src 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self' data:; "
+    "media-src 'self' data:; "
+    "form-action 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'; "
+    "frame-ancestors 'self'"
+)
+
+# External-open (top-level navigation) additionally prepends
+# `sandbox allow-scripts;` so the browser applies an opaque origin
+# even at the top level, mirroring the iframe null-origin.
+_B2_CSP_EMBEDDED = _B2_CSP_DIRECTIVES
+_B2_CSP_EXTERNAL = "sandbox allow-scripts; " + _B2_CSP_DIRECTIVES
+
+
+def apply_html_csp_headers(handler, *, external):
+    """Emit CSP + Vary headers for a `/raw` `text/html` response.
+
+    Called from `_handle_raw` AFTER `apply_response_headers` and
+    BEFORE `end_headers`. Never emitted for non-HTML MIMEs. The
+    `external` flag selects between the embedded (iframe) CSP and
+    the external (top-level navigation) CSP — the latter prepends
+    `sandbox allow-scripts;` so the top-level document runs as
+    opaque-origin.
+    """
+    handler.send_header(
+        "Content-Security-Policy",
+        _B2_CSP_EXTERNAL if external else _B2_CSP_EMBEDDED)
+    handler.send_header("Vary", "Sec-Fetch-Dest")
+
+
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -1448,9 +1508,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return self._raw_error_from_req(
                 500, "no MIME for browsable extension", req)
         cache = "no-store" if req.version_present else None
+        # B2 Slice 1 (v2.13.0): HTML responses get an additional
+        # CSP + Vary header set. The Sec-Fetch-Dest request header
+        # selects between iframe-context (embedded) and top-level
+        # navigation (external); missing → external (safer default
+        # per r1 §3.2). `apply_response_headers` stays byte-exact
+        # unchanged — B2's headers are additive-only via the
+        # dedicated seam.
+        is_html = mime.startswith("text/html")
+        if is_html:
+            sfd = self.headers.get("Sec-Fetch-Dest", "")
+            external = sfd != "iframe"
         self.send_response(200)
         apply_response_headers(self, mime, len(body),
                                cache_control=cache)
+        if is_html:
+            apply_html_csp_headers(self, external=external)
         self.end_headers()
         try:
             self.wfile.write(body)

@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "Post-B1 housekeeping: roadmap Done row for Dashboard UI Plan A + Plan B1; inbox rewrite pointing at B2/C as next",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "b1-post-remediation-housekeeping",
+    "roadmap",
+    "inbox"
+  ],
+  "commit": "9c0dbbfe071f7c62432d8cefc93c43b3dacd9a06",
+  "short_commit": "9c0dbbf",
+  "snippet_id": "snippet-9c0dbbfe071f7",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 7,
+  "previous_commit_in_session": "6efe9b948915ae16ef27841fc7a8062ba0fb393e",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-09T23:56:06Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-09-gator-6efe9b948915a.json"
+  ],
+  "notes": [
+    "Roadmap update in `.gator/roadmap.md`:",
+    "Extended the top-of-file preamble to record the Dashboard UI Plan A + Plan B1 landing on `main` (unreleased, slated v2.13.0) across seven commits `8f2b9c9..6efe9b9` — Plan A harness + three B1 slices + three Codex remediation rounds. Noted that Blueprints 2.0 Release B, previously slated for v2.13.0, moves to v2.14.0 or later.",
+    "Added a new Done row above v2.12.3 (an unreleased row scoped by commit range rather than tag) that documents Plan A + Plan B1's full delivery: harness foundation, single URL-parser + logical-path parser + Windows-reserved check, containment + `is_browsable` allowlist + walker + resolver + `git_show_at_ref`, `do_GET` in-place migration, four handler methods, transport-header invariants, and the Codex feedback loop that drove the F1 reparse-alias fix, F2 no-store propagation, F3 error-taxonomy branch pins (cross-platform in-process via `_contained_repo_path` seam injection), and the Python 3.9 compat fix in `_is_reparse_point`. Charter TRIPWIREs enumerated. Test totals cited (148 pass + 11 skipped on Windows / 3.13). Plan chain referenced.",
+    "Inbox rewrite in `.gator/inbox.md`:",
+    "Replaced the \"READ FIRST — Current handoff\" B1 implementation directive (now completed) with a \"Where we are (2026-09-09, post-B1)\" section that records the landed commit chain and points at B2 (HTML preview) and C (responsive shell/sidebar) as the next dashboard-UI work options.",
+    "Preserved the \"Unscheduled open backlog\" and \"Machine state (persistent operational reference)\" sections unchanged.",
+    "Added two post-B1 authoring observations to the backlog (both nice-to-have, not blocking): (a) the `pre-commit charter-index-gap` rule requires ALL charters in a matching INDEX row (not \"at least one\" as INDEX.md's preamble states); (b) `new-functions-undocumented` warns on test functions in new test files, which is noise.",
+    "No code changes, no test changes. Docs-only."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}
