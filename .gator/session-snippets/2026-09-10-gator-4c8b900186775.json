@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B2 Slice 1: server-side CSP + Vary emit for /raw text/html responses + fast-matrix unsafe-eval audit",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b2-slice-1",
+    "dashboard-html-preview",
+    "csp",
+    "security-critical",
+    "plan-r14"
+  ],
+  "commit": "4c8b90018677520acca52d79be5175212e9c3879",
+  "short_commit": "4c8b900",
+  "snippet_id": "snippet-4c8b900186775",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-10T15:45:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-09-gator-9c0dbbfe071f7.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_shipped_template_audit.py"
+  ],
+  "notes": [
+    "Added `apply_html_csp_headers(handler, *, external)` at module scope in `gator-dashboard.py`, co-located with `apply_response_headers` — the sole seam B2 uses to emit `Content-Security-Policy` + `Vary: Sec-Fetch-Dest` on `text/html` responses from `/raw/`. B1's `apply_response_headers` stays BYTE-EXACT preserved (H1 seam-guard invariant per r14 §H1); B2 is additive-only. Two module constants: `_B2_CSP_EMBEDDED` (iframe context) and `_B2_CSP_EXTERNAL` (top-level, prepends `sandbox allow-scripts;` for opaque-origin). Directives: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self' data:; form-action 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'`. NO `'unsafe-eval'` — the 2026-09-09 shipped-template audit ratified all nine files as free of `Function(...)`, `eval(...)`, and string-arg timers.",
+    "Wired the conditional into `_handle_raw`: after mime lookup and before `send_response`, `is_html = mime.startswith(\"text/html\")` gates a `Sec-Fetch-Dest` read (`iframe` → embedded, else external — safer default per r14 §M1 for non-browser clients like curl). After `apply_response_headers`, `apply_html_csp_headers(self, external=external)` fires when `is_html`. `Vary: Sec-Fetch-Dest` is UNCONDITIONAL on every HTML response so intermediaries cache correctly regardless of request shape.",
+    "Added `tests/test_shipped_template_audit.py` — fast-matrix audit that runs in Python 3.9 + 3.13, Ubuntu + Windows (per r4 §L1 relocation; the Dashboard-UI directory is `--ignore`'d by the fast job). Three pins: (a) `test_no_shipped_template_uses_dynamic_code_execution` walks both shipped-template roots (`.gator/blueprints/*.html`, `src/gator_command/templates/gator-starter/blueprints/*.html`) via `Path.glob('*.html')` and greps for the three-pattern set `\\bFunction\\s*\\(`, `\\beval\\s*\\(`, `\\bset(?:Timeout|Interval|Immediate)\\s*\\(\\s*['\\\"]`; (b) `test_dynamic_code_regex_matches_all_documented_patterns` — 12 positive + 4 negative fixtures pinning pattern coverage per r5 §M1 + r6 §M1 fixture list; (c) `test_out_of_scope_bypasses_documented` — sanity pin over the indirect-eval bypass inventory (comma-operator eval/Function, property-string constructor access, Reflect.apply, aliased-identifier) so future contributors extending the inventory update the audit prose in the same PR.",
+    "Charter updates:",
+    "`scripts-dashboard.md::do_GET`: extended the `/raw/<logical>[?version=<sha>]` route entry to name the B2 Slice 1 CSP emission path. Added four new TRIPWIREs: **B2 CSP seam** (additive-only, byte-exact preservation of `apply_response_headers`), **B2 `Sec-Fetch-Dest` context routing** (embedded/external selection + unconditional Vary), **B2 CSP-`'unsafe-eval'` non-permission** (audit contract, three-pattern regex set, exclusions), **B2 CSP-L3 directive-name taxonomy** (r14 corrected taxonomy: element/attr → specific `-elem`/`-attr` names; fetch/resource → specific fetch-directive names; string/Wasm compilation → generic `script-src` with `blockedURI` distinguishing JS-eval `'eval'` from Wasm-eval `'wasm-eval'`).",
+    "`scripts-cross-cutting.md`: post-B1 remediation section extended with a B2 Slice 1 note.",
+    "`scripts-fleet-intelligence.md`: same.",
+    "Test results: `tests/test_shipped_template_audit.py` 3/3 pass; `tests/test_dashboard_ui/` unchanged (127 pass + 10 skip on Windows / Python 3.13, no regressions). No modifications to B1's transport surface — the H1 seam-guard invariant is honored by construction."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}

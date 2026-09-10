@@ -19,6 +19,88 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ── B2 Slice 2 (v2.13.0): shared path/URL helpers ─────────────
+  //
+  // These helpers exist at module scope for future adoption by the
+  // markdown branch. Slice 2 wires the HTML branch only — the
+  // markdown branch keeps its own inline path assembly (r10 §L1
+  // narrowed the r5 factoring claim to "seam only, not migration").
+
+  // Build the /raw URL, preserving `?version=` when the caller
+  // passes one. Encodes each path segment individually so slashes
+  // are preserved as structural separators.
+  function buildRawUrl(repoName, filePath, version) {
+    const encPath = filePath.split("/").map(encodeURIComponent).join("/");
+    let url = "/api/repo/" + encodeURIComponent(repoName) + "/raw/" + encPath;
+    if (version) {
+      url += "?version=" + encodeURIComponent(version);
+    }
+    return url;
+  }
+
+  // The path the user expects when copying to clipboard — strip
+  // the `source/` namespace prefix (it becomes the repo root),
+  // preserve `gator-command/` (already repo-relative), and add
+  // `.gator/` for the implicit-namespace default (governance).
+  function copyPathFor(filePath) {
+    if (filePath.startsWith("source/")) {
+      return filePath.slice("source/".length);
+    }
+    if (filePath.startsWith("gator-command/")) {
+      return filePath;
+    }
+    return ".gator/" + filePath;
+  }
+
+  // Bind the three HTML-preview control buttons (Copy path,
+  // Refresh, Open externally) that the iframe branch renders.
+  // Refresh reseats the iframe `src` with a cache-buster query
+  // parameter (preserving `?version=`) so it issues a real HTTP
+  // request; a fragment-only change would be same-document nav.
+  function bindHtmlPreviewControls(contentEl, repoName, filePath, version) {
+    const copyBtn = contentEl.querySelector(".copy-path-btn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const text = e.currentTarget.dataset.path;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            const original = e.currentTarget.innerHTML;
+            e.currentTarget.textContent = "✓";
+            setTimeout(function () {
+              e.currentTarget.innerHTML = original;
+            }, 1500);
+          });
+        }
+      });
+    }
+
+    const refreshBtn = contentEl.querySelector(".refresh-file-btn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", function () {
+        const iframe = contentEl.querySelector(".repo-iframe");
+        if (!iframe) return;
+        const base = iframe.dataset.baseUrl;
+        const sep = base.includes("?") ? "&" : "?";
+        iframe.src = base + sep + "_r=" + Date.now();
+      });
+    }
+
+    const openBtn = contentEl.querySelector(".open-external-btn");
+    if (openBtn) {
+      openBtn.addEventListener("click", function (e) {
+        const url = e.currentTarget.dataset.url;
+        // noopener + noreferrer: the new-tab document must not
+        // retain a handle to the Dashboard window and must not
+        // send the Dashboard URL as its Referer. The response
+        // itself carries `Content-Security-Policy: sandbox
+        // allow-scripts` per B2 §4.2 so the top-level document
+        // runs opaque-origin.
+        window.open(url, "_blank", "noopener,noreferrer");
+      });
+    }
+  }
+
   // ── simple markdown renderer ──────────────────────────────────────────────
   // Handles: headers, bold, italic, links, code blocks, inline code,
   // lists, blockquotes, horizontal rules, tables. No external deps.
@@ -802,14 +884,40 @@
   }
 
   async function loadFile(repoName, filePath, contentEl, version) {
-    // HTML files render themselves — open the raw endpoint in a new tab
-    // instead of routing through the markdown renderer. Version-pinned
-    // HTML is not supported (the raw endpoint has no ?version= handler).
+    // B2 Slice 2 (v2.13.0): HTML files render inline in a
+    // sandboxed iframe with an Open-externally escape hatch.
+    // The `/raw/` endpoint carries B2's CSP (embedded variant
+    // via Sec-Fetch-Dest: iframe); the sandbox attribute is
+    // exactly `allow-scripts` — no allow-same-origin, no
+    // allow-top-navigation, no allow-forms, no allow-popups
+    // (r7 §H2 charter TRIPWIRE). In-frame link navigation is
+    // accepted as sandboxed behavior; Open-externally is the
+    // supported path for a top-level view (opaque-origin per
+    // r13 §M1: the response also carries
+    // `Content-Security-Policy: sandbox allow-scripts` at the
+    // top level).
     if (/\.html?$/i.test(filePath)) {
-      const encoded = filePath.split("/").map(encodeURIComponent).join("/");
-      const rawUrl = `/api/repo/${encodeURIComponent(repoName)}/raw/${encoded}`;
-      window.open(rawUrl, "_blank", "noopener");
-      contentEl.innerHTML = `<div class="muted" style="padding:24px 32px">Opened <code>${escHtml(filePath)}</code> in a new tab.</div>`;
+      const rawUrl = buildRawUrl(repoName, filePath, version);
+      const copyPath = copyPathFor(filePath);
+      contentEl.innerHTML = `
+        <div class="repo-file-header">
+          <span class="repo-file-path">${escHtml(copyPath)}
+            <button class="copy-path-btn" title="Copy path"
+                    data-path="${escHtml(copyPath)}">&#9112;</button>
+            <button class="refresh-file-btn"
+                    title="Refresh">&#8635;</button>
+            <button class="open-external-btn"
+                    data-url="${escHtml(rawUrl)}"
+                    title="Open in new tab (full-screen, sandboxed)">&#8599; Open in new tab (full-screen, sandboxed)</button>
+          </span>
+        </div>
+        <div class="repo-iframe-wrapper">
+          <iframe class="repo-iframe"
+                  sandbox="allow-scripts"
+                  data-base-url="${escHtml(rawUrl)}"
+                  src="${escHtml(rawUrl)}"></iframe>
+        </div>`;
+      bindHtmlPreviewControls(contentEl, repoName, filePath, version);
       return;
     }
     contentEl.innerHTML = '<div class="muted" style="padding:40px;text-align:center">Loading...</div>';
