@@ -156,6 +156,47 @@ def seed_content_fixtures(repo):
         / "_csp_negative_control.html").write_text(
             _CSP_NEGATIVE_CONTROL_HTML, encoding="utf-8")
 
+    # B2 Slice 3 (v2.13.0) — Playwright-pin fixtures.
+    # `inline-script.html` proves scripts execute inside the
+    # sandbox by setting a `data-marker` attribute on load.
+    (repo / ".gator" / "blueprints"
+        / "inline-script.html").write_text(
+        "<!DOCTYPE html>\n"
+        "<html><head><title>inline script</title></head>\n"
+        "<body>\n"
+        "<script>document.body.dataset.marker = 'ran';</script>\n"
+        "</body></html>\n", encoding="utf-8")
+    # `plain.html` has no scripts — minimal payload for the
+    # open-externally + parent-isolation pins.
+    (repo / ".gator" / "blueprints" / "plain.html").write_text(
+        "<!DOCTYPE html>\n"
+        "<html><head><title>plain</title></head>\n"
+        "<body><p>plain body</p></body></html>\n",
+        encoding="utf-8")
+    # `with-form.html` proves `form-action 'none'` blocks the
+    # target navigation.
+    (repo / ".gator" / "blueprints"
+        / "with-form.html").write_text(
+        "<!DOCTYPE html>\n"
+        "<html><head><title>form</title></head>\n"
+        "<body>\n"
+        "<form action=\"/api/data\" method=\"POST\">\n"
+        "  <input name=\"x\" value=\"1\">\n"
+        "  <button type=\"submit\">submit</button>\n"
+        "</form>\n"
+        "</body></html>\n", encoding="utf-8")
+    # `refresh-marker.html` sets a per-load epoch-ms marker so
+    # the Refresh pin can prove a new HTTP request was issued.
+    (repo / ".gator" / "blueprints"
+        / "refresh-marker.html").write_text(
+        "<!DOCTYPE html>\n"
+        "<html><head><title>refresh marker</title></head>\n"
+        "<body>\n"
+        "<script>\n"
+        "document.body.dataset.mark = String(Date.now());\n"
+        "</script>\n"
+        "</body></html>\n", encoding="utf-8")
+
     gc = repo / "gator-command"
     gc.mkdir()
     (gc / "README.md").write_text(

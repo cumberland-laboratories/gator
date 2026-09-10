@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B2 Slice 2: inline sandboxed iframe rendering in views/repo.js + iframe CSS + shipped-blueprint + negative-control fixtures",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b2-slice-2",
+    "dashboard-html-preview",
+    "frontend",
+    "security-critical",
+    "plan-r14"
+  ],
+  "commit": "a22e311411109a1028772d090657584233232eab",
+  "short_commit": "a22e311",
+  "snippet_id": "snippet-a22e311411109",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "4c8b90018677520acca52d79be5175212e9c3879",
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-10T15:51:26Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-10-gator-4c8b900186775.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/repo.js",
+    "tests/test_dashboard_ui/content_transport_seed.py"
+  ],
+  "notes": [
+    "**Frontend `views/repo.js`**: replaced `loadFile()`'s HTML branch. Instead of `window.open(rawUrl, \"_blank\", \"noopener\")` (v2.4.5 fallback), `.html?$` files now render INLINE via `<iframe sandbox=\"allow-scripts\">` in the repo content pane. Three control buttons in the file header row: Copy path, Refresh, Open in new tab (full-screen, sandboxed). Sandbox attribute is EXACTLY `allow-scripts` per r7 §H2 charter contract — no `allow-same-origin`, no `allow-forms`, no `allow-popups`, no `allow-top-navigation`, no `allow-top-navigation-by-user-activation`. In-frame link navigation is accepted as sandboxed behavior; Open-in-new-tab is the supported path for a top-level view (opaque-origin via server-emitted `sandbox allow-scripts;` CSP directive per B2 Slice 1).",
+    "**Module-scope helpers** in `views/repo.js`: `buildRawUrl(repoName, filePath, version)` (per-segment `encodeURIComponent`; preserves `?version=`), `copyPathFor(filePath)` (strips `source/`, preserves `gator-command/`, adds `.gator/` for implicit-namespace default), `bindHtmlPreviewControls(contentEl, repoName, filePath, version)` (attaches the three click handlers). Refresh reseats `iframe.src` with a QUERY cache-buster (`_r=<epoch-ms>`) — not a fragment, per r1 §5 correction — reading `data-base-url` from the iframe so successive Refresh clicks don't accumulate parameters. Open-externally uses `window.open(url, \"_blank\", \"noopener,noreferrer\")` — no window handle, no Referer leak.",
+    "**CSS in `dashboard.css`**: added `.repo-iframe-wrapper` (flex 1 1 auto, min-height 400px, overflow hidden), `.repo-iframe` (width/height 100%, min-height 400px, border 0), `.repo-file-header .open-external-btn/.copy-path-btn/.refresh-file-btn` (margin + cursor). B2 alone ships a usable floor; Plan C amends the responsive flex chain per M4 §r2.",
+    "**Fixtures in `tests/test_dashboard_ui/content_transport_seed.py`**: added `_copy_shipped_blueprints(repo)` helper that walks up from the test file to find the repo root, then uses `shutil.copy2` to copy every `.gator/blueprints/*.html` and `src/gator_command/templates/gator-starter/blueprints/*.html` into `<test-repo>/.gator/blueprints/shipped/` and `<test-repo>/gator-command/shipped-templates/` respectively (per r14 §M1 seed→URL mapping). Silently skips when running from an installed wheel (degraded coverage, not hard fail). Added `_CSP_NEGATIVE_CONTROL_HTML` module constant + fixture write: an HTML file deliberately violating three CSP directives (external `<link rel=\"stylesheet\">`, cross-origin `<img>`, cross-origin `fetch()`) targeting `https://example.invalid/` (IANA-reserved TLD, no accidental real-network traffic). `seed_content_fixtures` now writes the negative-control file and calls `_copy_shipped_blueprints` before the seed commit — both fixtures land at HEAD in the test repo.",
+    "**Charter updates**:",
+    "`scripts-dashboard.md::HTML file support`: rewrote the section to describe the new inline-iframe rendering. Retired the v2.4.5 `window.open` behavior description. Added three new TRIPWIREs: **B2 iframe sandbox** (character-exact `allow-scripts`), **B2 Open-externally label** (must not contain \"same-origin\" language), **B2 Refresh cache-buster** (query parameter, not fragment).",
+    "`scripts-cross-cutting.md`: post-B1 section extended with the B2 Slice 2 note (helper factoring, sandbox contract, fixture surfaces).",
+    "`scripts-fleet-intelligence.md`: same."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}
