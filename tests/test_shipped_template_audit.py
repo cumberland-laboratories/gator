@@ -4,12 +4,29 @@ Runs in the Python 3.9 + 3.13, Ubuntu + Windows fast matrix — no
 Playwright dependency. Guards two invariants at the shipped-template
 layer that B2's CSP relies on:
 
-1. **No dynamic code execution.** The B2 CSP forbids `'unsafe-eval'`
-   in the `script-src` directive (r14 §4.1 audit ratified nine
-   shipped HTML files as clean 2026-09-09). If a future template
-   introduces `Function(...)`, `eval(...)`, or a string-valued timer,
-   the CSP would need `'unsafe-eval'` to render it — which we do not
-   grant. The audit catches this before browsers do.
+1. **No dynamic code execution (JS-eval sinks only).** The B2 CSP
+   forbids `'unsafe-eval'` in the `script-src` directive (r14 §4.1
+   audit ratified nine shipped HTML files as clean 2026-09-09). If a
+   future template introduces `Function(...)`, `eval(...)`, or a
+   string-valued timer, the CSP would need `'unsafe-eval'` to render
+   it — which we do not grant. The audit catches this before
+   browsers do.
+
+   **Wasm compilation sinks are OUT OF SCOPE for the source-level
+   audit** (2026-09-10 Codex R1 F3). `new WebAssembly.Module(bytes)`,
+   `WebAssembly.compile(bytes)`, `WebAssembly.instantiate(bytes,…)`,
+   `WebAssembly.compileStreaming(response)`, and
+   `WebAssembly.instantiateStreaming(response,…)` all require
+   `'unsafe-eval'` in `script-src` per CSP-L3 §4.5.1, and B2's CSP
+   does not grant it — so the browser runtime is the authoritative
+   backstop for Wasm compilation. Adding regex coverage here would
+   be speculative on the small editorially-controlled corpus and
+   would create a false sense of security against reflective /
+   aliased forms the same way indirect-eval bypasses already do
+   for the JS sinks. Code review is the intended catch for both
+   families; the Playwright CSP-compat integration pin
+   (`test_shipped_template_csp_compat`) is the effective runtime
+   guard against a Wasm-using template shipping.
 
 2. **Regex-coverage self-test.** Documents the exact set of patterns
    the audit matches and pins each spelling that must (or must not)
@@ -166,6 +183,23 @@ _OUT_OF_SCOPE_BYPASSES = [
     "const F = Function; F('code')()",
 ]
 
+# Documented Wasm-compilation sinks — a separate out-of-scope
+# family (2026-09-10 Codex R1 F3). CSP-L3 §4.5.1 requires
+# `'unsafe-eval'` for every one of these; B2 does not grant it, so
+# the browser runtime blocks them regardless of what a shipped
+# template contains. Source-level regex coverage would be
+# speculative on the small corpus and easily bypassed by aliased /
+# reflective forms — the same argument that keeps indirect-eval
+# bypasses above out of the audit. Listed here so a contributor
+# adding a Wasm-using template sees the design decision inline.
+_OUT_OF_SCOPE_WASM_SINKS = [
+    "new WebAssembly.Module(bytes)",
+    "WebAssembly.compile(bytes)",
+    "WebAssembly.instantiate(bytes, imports)",
+    "WebAssembly.compileStreaming(response)",
+    "WebAssembly.instantiateStreaming(response, imports)",
+]
+
 _NEGATIVE_FIXTURES = [
     'document.write("<b>x</b>")',   # `'unsafe-inline'` policy family
     "myFunction()",                  # user identifier ending Function
@@ -208,3 +242,36 @@ def test_out_of_scope_bypasses_documented():
     assert "'constructor'" in joined, "property-string bypass missing"
     assert "Reflect.apply" in joined, "Reflect.apply bypass missing"
     assert "const F = Function" in joined, "aliased-identifier missing"
+
+
+def test_out_of_scope_wasm_sinks_documented():
+    """Sanity pin — the Wasm-compilation inventory covers all five
+    sinks named by the charter's B2 CSP-L3 directive-name TRIPWIRE
+    (2026-09-10 Codex R1 F3). A contributor adding coverage for a
+    Wasm-using template must extend this inventory AND update the
+    module docstring's Wasm out-of-scope prose so the design
+    decision does not silently drift.
+    """
+    joined = " ".join(_OUT_OF_SCOPE_WASM_SINKS)
+    assert "new WebAssembly.Module" in joined, (
+        "WebAssembly.Module constructor missing")
+    assert "WebAssembly.compile(" in joined, (
+        "WebAssembly.compile missing")
+    assert "WebAssembly.instantiate(" in joined, (
+        "WebAssembly.instantiate (bytes form) missing")
+    assert "WebAssembly.compileStreaming" in joined, (
+        "WebAssembly.compileStreaming missing")
+    assert "WebAssembly.instantiateStreaming" in joined, (
+        "WebAssembly.instantiateStreaming missing")
+
+    # None of the Wasm sinks trigger the JS-eval audit patterns —
+    # confirms the runtime CSP is the actual guard (not this
+    # module) and prevents an accidental double-scope where a
+    # future regex quietly matches these strings.
+    for sink in _OUT_OF_SCOPE_WASM_SINKS:
+        matched = [p.pattern for p in _DYNAMIC_CODE_COMPILED
+                   if p.search(sink)]
+        assert not matched, (
+            f"Wasm sink unexpectedly matches JS-eval audit "
+            f"pattern: {sink!r} -> {matched}. This audit must not "
+            f"claim to cover Wasm — CSP is the backstop.")

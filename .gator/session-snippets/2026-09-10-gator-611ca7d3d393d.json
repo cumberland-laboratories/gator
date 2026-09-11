@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "gillette",
+  "agent": "opus-4-7",
+  "intent": "B2 Slice 3: Playwright pins for sandboxed HTML preview + CSP violation detector + shipped-template compat matrix",
+  "change_type": "test",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "b2-slice-3",
+    "dashboard-html-preview",
+    "playwright",
+    "security-critical",
+    "plan-r14"
+  ],
+  "commit": "611ca7d3d393da968dd605c736ad27a907a195e4",
+  "short_commit": "611ca7d",
+  "snippet_id": "snippet-611ca7d3d393d",
+  "session_group_key": "anthropic:bde241e9-c560-4855-8ab0-783615929473",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-09T22:11:49Z",
+  "ended_at": "2026-09-10T20:41:19Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/session-snippets/2026-09-10-gator-a22e311411109.json",
+    "tests/test_dashboard_ui/content_transport_seed.py",
+    "tests/test_dashboard_ui/test_html_preview.py"
+  ],
+  "notes": [
+    "Added `tests/test_dashboard_ui/test_html_preview.py` — 13 Playwright pins locking the B2 sandboxed-HTML-preview contract end-to-end. Function-scoped `csp_violation_listener` fixture (per r8 §M2 — pytest-playwright's `context` is function-scoped) installs a `securitypolicyviolation` DOM event listener via `context.add_init_script` on every per-test context so both the liveness pin and every compat pin capture violations on the exact context they run against.",
+    "**Pin inventory**:",
+    "`test_apply_response_headers_unchanged_by_b2` — H1 seam invariant. Source-grep asserts B1's `apply_response_headers` body still contains its four shipped `send_header` calls and does NOT emit `Content-Security-Policy` from within itself (the CSP seam is the dedicated `apply_html_csp_headers` helper).",
+    "`test_html_response_missing_sec_fetch_dest_gets_external_csp` — L2 pin. `urllib.request` GET (no `Sec-Fetch-Dest`) → external CSP with leading `sandbox allow-scripts;`.",
+    "`test_html_response_vary_header` — M1 pin. Both embedded (Sec-Fetch-Dest: iframe) and external requests carry `Vary: Sec-Fetch-Dest`.",
+    "`test_html_response_embedded_csp_variant` / `test_html_response_external_csp_variant` — CSP directive contents pinned per r14 §4.1 (no `'unsafe-eval'`); external prepends `sandbox allow-scripts;`.",
+    "`test_non_html_response_has_no_csp` — non-HTML `/raw/` responses (e.g. `hero.png`) do NOT get CSP or Vary; B2 headers are HTML-only.",
+    "`test_compat_urls_use_canonical_namespace_prefixes` — r14 §M1 static guard. Line-by-line source scan asserts no test URL uses `source/gator-command/` or `source/.gator/` alias prefixes. Runtime-constructed forbidden literals avoid self-reference."
+  ],
+  "transcript_session_id": "bde241e9-c560-4855-8ab0-783615929473",
+  "transcript_ref": null
+}

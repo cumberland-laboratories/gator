@@ -62,13 +62,18 @@
     if (copyBtn) {
       copyBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        const text = e.currentTarget.dataset.path;
+        // Capture the button synchronously — `e.currentTarget` is
+        // cleared after listener dispatch, so a later Promise
+        // microtask or `setTimeout` callback that reads it would
+        // hit `null` and throw (leaving the button stuck on ✓).
+        const button = e.currentTarget;
+        const text = button.dataset.path;
         if (navigator.clipboard && navigator.clipboard.writeText) {
+          const original = button.innerHTML;
           navigator.clipboard.writeText(text).then(function () {
-            const original = e.currentTarget.innerHTML;
-            e.currentTarget.textContent = "✓";
+            button.textContent = "✓";
             setTimeout(function () {
-              e.currentTarget.innerHTML = original;
+              button.innerHTML = original;
             }, 1500);
           });
         }
