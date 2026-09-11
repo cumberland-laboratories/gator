@@ -626,41 +626,50 @@ def test_sidebar_width_does_not_leak_between_repos_on_spa_nav(
 
 def test_sidebar_state_falls_back_to_defaults_when_storage_throws(
         page, dashboard_fleet):
-    """R2 HIGH regression pin (2026-09-11 Codex): if `localStorage.getItem`
-    throws (e.g., `SecurityError` when storage is unavailable),
-    `restoreSidebarState` MUST leave `_sidebarCollapsed = false` and
-    `--repo-sidebar-width` UNSET so the CSS base rule's 220px
-    fallback applies. Without setting defaults BEFORE the try block,
-    a throw on the first getItem call would leave the prior repo's
-    state in place — the same SPA leak R1 F2 was meant to close,
-    just via a different failure path.
+    """R2 HIGH + R3 F2 regression pin (2026-09-11 Codex): if
+    `localStorage.getItem` throws on the FIRST read (e.g.,
+    `SecurityError` when storage is unavailable), `restoreSidebarState`
+    MUST leave `_sidebarCollapsed = false` AND `--repo-sidebar-width`
+    UNSET so the CSS base rule's 220px fallback applies.
 
-    Reproduces by (a) navigating to alpha with a saved 400px width
-    to seed the leaky state, then (b) stubbing
-    `Storage.prototype.getItem` to throw, then (c) SPA-navigating
-    to beta and asserting beta renders at ~220px (base).
+    R3 F2 tightening (2026-09-11): the R2 first-cut of this pin
+    had alpha EXPANDED with collapsed keys removed pre-throw,
+    which meant `_sidebarCollapsed` was already `false` at the
+    throw — the collapsed-reset assertion was vacuous. This pin
+    now seeds alpha COLLAPSED (with saved width 400) before
+    stubbing, so both defaults must be freshly restored on beta
+    for the assertions to hold.
     """
     origin = dashboard_fleet["url"].rstrip("/") + "/"
     page.goto(origin + "?repo=alpha", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
-    # Seed alpha's stored width so `--repo-sidebar-width` is set.
+    # Seed alpha COLLAPSED with a saved width. Both branches of
+    # restore state must be reset for beta.
     page.evaluate("""
         () => {
+            localStorage.setItem('gator-sidebar-collapsed:alpha', '1');
             localStorage.setItem('gator-sidebar-width:alpha', '400');
-            localStorage.removeItem('gator-sidebar-collapsed:alpha');
             localStorage.removeItem('gator-sidebar-collapsed:beta');
             localStorage.removeItem('gator-sidebar-width:beta');
         }
     """)
     page.reload()
-    page.wait_for_selector(".repo-file-item", timeout=15000)
-    alpha_w = page.locator(".repo-sidebar").evaluate(
-        "el => el.getBoundingClientRect().width")
-    assert 395 <= alpha_w <= 405, (
-        f"alpha did not seed at 400px; got {alpha_w}")
+    # Alpha renders with sidebar collapsed → `.repo-file-item` is
+    # display:none. Wait for the collapse button instead.
+    page.wait_for_selector(".repo-sidebar-collapse-btn", timeout=15000)
+    # Precondition: alpha IS collapsed (proves the seed took).
+    assert page.locator(".repo-sidebar.collapsed").count() == 1, (
+        "Precondition failed: alpha should render collapsed after "
+        "seeding collapsed=1 + reload")
+    # And the root CSS variable IS set to alpha's saved width.
+    root_width = page.evaluate(
+        "() => document.documentElement.style"
+        ".getPropertyValue('--repo-sidebar-width')")
+    assert root_width == "400px", (
+        f"Precondition failed: --repo-sidebar-width should be 400px "
+        f"after alpha restore; got {root_width!r}")
     # Stub Storage.prototype.getItem to throw a SecurityError-shaped
-    # exception. The stub applies to every localStorage.getItem call
-    # made after this evaluate() returns.
+    # exception for the NEXT restoreSidebarState call.
     page.evaluate("""
         () => {
             const err = new Error('SecurityError: storage disabled');
@@ -668,24 +677,93 @@ def test_sidebar_state_falls_back_to_defaults_when_storage_throws(
             Storage.prototype.getItem = function () { throw err; };
         }
     """)
-    # SPA navigation to beta — restoreSidebarState will call the
-    # stubbed getItem and take the throw path.
+    # SPA navigation to beta.
     page.evaluate("() => window.gatorNavToRepo('beta')")
-    page.wait_for_selector(".repo-file-item", timeout=15000)
-    beta_w = page.locator(".repo-sidebar").evaluate(
-        "el => el.getBoundingClientRect().width")
-    # With defaults established BEFORE the throw:
-    # - _sidebarCollapsed = false (sidebar not collapsed)
-    # - --repo-sidebar-width removed (base 220px applies)
-    assert 215 <= beta_w <= 225, (
-        f"beta rendered at width {beta_w} after SPA nav under "
-        f"storage-throw; expected ~220px (base). The prior repo's "
-        f"--repo-sidebar-width leaked because defaults were not "
-        f"established before the getItem throw. R2 HIGH regression.")
+    page.wait_for_selector(".repo-sidebar-collapse-btn", timeout=15000)
+    # Both defaults must be restored:
+    # - `.repo-sidebar.collapsed` count == 0 (collapsed-reset ran)
     assert page.locator(".repo-sidebar.collapsed").count() == 0, (
         "beta appears collapsed after SPA nav under storage-throw; "
-        "prior _sidebarCollapsed value survived because defaults "
-        "were not established before the getItem throw.")
+        "alpha's collapsed=1 leaked because `_sidebarCollapsed = false` "
+        "was not executed before the getItem throw.")
+    # - CSS var absent, sidebar renders at base ~220px
+    beta_w = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 215 <= beta_w <= 225, (
+        f"beta rendered at width {beta_w} after SPA nav under "
+        f"storage-throw; expected ~220px (base). alpha's 400px "
+        f"leaked because --repo-sidebar-width was not cleared before "
+        f"the getItem throw.")
+
+
+def test_sidebar_state_atomic_when_second_read_throws(
+        page, dashboard_fleet):
+    """R3 HIGH regression pin (2026-09-11 Codex): `restoreSidebarState`
+    MUST commit atomically — either both stored values commit or
+    neither does. If the FIRST getItem (collapsed) succeeds but the
+    SECOND getItem (width) throws, the intermediate state must NOT
+    persist. The R2 shape mutated `_sidebarCollapsed` immediately
+    after the first successful read, then read width — a throw on
+    the second read left `_sidebarCollapsed` overlaid while
+    `--repo-sidebar-width` was still cleared. R3 fix: read both
+    into locals, validate, then commit both only after all reads
+    succeeded.
+
+    This pin stubs `getItem` to return "1" for the collapsed key
+    and throw on the width key, exercising the exact partial-
+    overlay path.
+    """
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Seed alpha with a saved width so `--repo-sidebar-width` is
+    # non-default going into beta's restore.
+    page.evaluate("""
+        () => {
+            localStorage.setItem('gator-sidebar-width:alpha', '400');
+            localStorage.removeItem('gator-sidebar-collapsed:alpha');
+        }
+    """)
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Precondition: alpha at 400px, expanded.
+    alpha_w = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 395 <= alpha_w <= 405, (
+        f"Precondition failed: alpha should render at 400px; got "
+        f"{alpha_w}")
+    # Stub: first getItem returns "1" (collapsed=true), second
+    # throws on the width key. Exactly the partial-overlay case.
+    page.evaluate("""
+        () => {
+            const err = new Error('SecurityError: storage disabled');
+            err.name = 'SecurityError';
+            Storage.prototype.getItem = function (key) {
+                if (typeof key === 'string' &&
+                    key.startsWith('gator-sidebar-collapsed:')) {
+                    return '1';
+                }
+                throw err;
+            };
+        }
+    """)
+    # SPA-navigate to beta. restoreSidebarState will read collapsed
+    # successfully as "1", then throw on width.
+    page.evaluate("() => window.gatorNavToRepo('beta')")
+    page.wait_for_selector(".repo-sidebar-collapse-btn", timeout=15000)
+    # Atomic commit: because width read threw, collapsed must NOT
+    # have been applied either. beta stays expanded at 220px.
+    assert page.locator(".repo-sidebar.collapsed").count() == 0, (
+        "beta appears collapsed after SPA nav where the width read "
+        "threw. The first-read succeeded and applied collapsed=true "
+        "before the second read failed — partial overlay violating "
+        "the atomic-commit contract. R3 HIGH regression.")
+    beta_w = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 215 <= beta_w <= 225, (
+        f"beta width {beta_w} after partial-overlay throw; expected "
+        f"~220px (base). alpha's 400px should have been cleared by "
+        f"the pre-try removeProperty.")
 
 
 def test_sidebar_collapse_state_persists_per_repo(page, dashboard_fleet):

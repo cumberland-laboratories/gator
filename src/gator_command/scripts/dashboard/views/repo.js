@@ -536,13 +536,21 @@
         btn.textContent = _sidebarCollapsed ? "▸" : "◂";
         btn.title = _sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar";
       }
-      // Inline `style.width` from a prior resize stays put across
-      // collapse/expand cycles: on COLLAPSE the CSS
-      // `.repo-sidebar.collapsed { width: 32px !important; ... }`
-      // beats the inline style; on EXPAND the class is removed and
-      // the inline width naturally reapplies, restoring the user's
-      // resized width. Do NOT clear inline width on either
-      // transition — that would nuke a valid saved width.
+      // Sidebar width lives on the document-root CSS variable
+      // `--repo-sidebar-width` (set by `initResizeHandle` on drag,
+      // restored by `restoreSidebarState` on mount). Do NOT touch
+      // the variable on collapse/expand: on COLLAPSE the CSS
+      // `.repo-sidebar.collapsed { width: 32px }` rule beats
+      // `var(--repo-sidebar-width, 220px)` by normal specificity
+      // (no `!important` needed); on EXPAND the class is removed
+      // and the variable's value naturally applies again,
+      // restoring the user's resized width. The R3 F3 rewrite
+      // (2026-09-11) replaced this comment's earlier claim that
+      // `sidebar.style.width` was the source of truth — inline
+      // width is NOT used post-Slice-2 and reintroducing it would
+      // force `!important` on the collapse rule (the CSS-var-not-
+      // inline design choice is documented in the "Single-source-
+      // of-truth sidebar width" TRIPWIRE).
     }
   }
 
@@ -553,37 +561,45 @@
   // CSS variable `--repo-sidebar-width` (falls back to 220px per
   // base rule).
   function restoreSidebarState(repoName) {
-    // Plan C Slice 3 R2 HIGH fix (2026-09-11 Codex): defaults MUST
-    // be established BEFORE any localStorage read. `localStorage.getItem`
-    // can throw (e.g., `SecurityError` when storage is unavailable
-    // — cookies disabled, private-mode restrictions, sandbox
-    // policy). If the very first `getItem` throws, control jumps
-    // straight to the catch and the prior repo's `_sidebarCollapsed`
-    // and `--repo-sidebar-width` both survive — exactly the SPA
-    // width-leak Codex R1 F2 fix was meant to close, just via the
-    // storage-throw path instead of the missing-key path. Set
-    // defaults FIRST, then attempt to overlay valid stored values
-    // inside the guarded block.
+    // Plan C Slice 3 R2 HIGH + R3 HIGH fix (2026-09-11 Codex):
+    // defaults MUST be established BEFORE any localStorage read,
+    // AND the stored-value overlay must be ATOMIC — either both
+    // stored values commit or neither does. Failure modes closed:
+    //
+    //   R2 HIGH: `getItem` on the FIRST read throws (SecurityError
+    //     under storage-disabled contexts). Pre-try defaults are
+    //     what survives.
+    //   R3 HIGH: FIRST read succeeds and the SECOND read throws.
+    //     Without atomic commit, `_sidebarCollapsed` was already
+    //     mutated to the stored value while `--repo-sidebar-width`
+    //     was still cleared — partial overlay contradicting the
+    //     chartered "defaults survive" contract.
+    //
+    // Pattern: (1) set defaults; (2) inside the try, read BOTH
+    // stored values into locals + validate; (3) commit both to
+    // module state / DOM only after both reads have succeeded.
     _sidebarCollapsed = false;
     document.documentElement.style.removeProperty("--repo-sidebar-width");
     try {
-      _sidebarCollapsed =
-        localStorage.getItem("gator-sidebar-collapsed:" + repoName) === "1";
-      // The width branch below is a "clear+conditional-set" pattern:
-      // the removeProperty above already cleared the prior repo's
-      // value; if the new repo has a valid stored width, the
-      // setProperty here overlays it. If not — or if getItem
-      // throws — the CSS base rule's 220px fallback takes over.
-      const stored = localStorage.getItem("gator-sidebar-width:" + repoName);
-      if (stored) {
-        const px = parseInt(stored, 10);
-        if (px >= 120 && px <= 500) {
-          document.documentElement.style.setProperty(
-            "--repo-sidebar-width", px + "px"
-          );
-        }
+      const collapsedRaw = localStorage.getItem(
+        "gator-sidebar-collapsed:" + repoName);
+      const widthRaw = localStorage.getItem(
+        "gator-sidebar-width:" + repoName);
+      // Both reads succeeded. Validate.
+      const collapsedNext = collapsedRaw === "1";
+      let widthNext = null;
+      if (widthRaw) {
+        const px = parseInt(widthRaw, 10);
+        if (px >= 120 && px <= 500) widthNext = px;
       }
-    } catch (e) { /* storage unavailable — defaults established above */ }
+      // Commit atomically — if we reach this point, no getItem
+      // threw; the overlay is safe to apply.
+      _sidebarCollapsed = collapsedNext;
+      if (widthNext !== null) {
+        document.documentElement.style.setProperty(
+          "--repo-sidebar-width", widthNext + "px");
+      }
+    } catch (e) { /* storage unavailable — pre-try defaults survive */ }
   }
 
   // Build the sidebar tree + wire its handlers into an existing sidebar element.
