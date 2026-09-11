@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R2: charter honest about mobile-coverage state — forward-declaration preamble + iframe-floor coverage split",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy"
+  ],
+  "commit": "fd3138ed7f4fc6898eb9ebb06d563a7fb467a8cd",
+  "short_commit": "fd3138e",
+  "snippet_id": "snippet-fd3138ed7f4fc",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "3fe1a5a8843e7fea76188d9728928eea61e03377",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T11:21:29Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-3fe1a5a8843e7.json"
+  ],
+  "notes": [
+    "Codex enforcer R2 review of Plan C Slice 1 R1 (`3fe1a5a`, 2026-09-11)",
+    "returned one MEDIUM finding — a charter-accuracy issue only. All three",
+    "prior R1 findings were verified fixed by production-harness Chromium",
+    "probes at 375×667, 375×500, and 375×400. No code changes needed for",
+    "R2 — charter-only fix.",
+    "My R1 addition to the \"Iframe sizing floor coexistence\" paragraph",
+    "said B2's `test_iframe_sizing_floor_400px` \"stays intact on both",
+    "desktop AND mobile.\" But the pin at `test_html_preview.py:1013` uses"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
