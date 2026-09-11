@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R6: Architect review is post-commit disposition (not pre-commit gate); INDEX cardinality conflict named; snippet #-filter accurately drops any #-prefixed line",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "enforcement-timing",
+    "index-cardinality-conflict"
+  ],
+  "commit": "255d0463c05683fb43df648e178d9bc9f6bb2abd",
+  "short_commit": "255d046",
+  "snippet_id": "snippet-255d0463c0568",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "2fe39b8989b9edb1dbcc7ec7c525d313d8d1875c",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T13:55:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-2fe39b8989b9e.json"
+  ],
+  "notes": [
+    "Outcome first: three MEDIUM charter-accuracy findings addressed.",
+    "Charter-only fix, no code changes.",
+    "Codex R6 review of Plan C Slice 1 R5 (`2fe39b8`, 2026-09-11)",
+    "returned three MEDIUM findings.",
+    "R5's (d) sub-clause called manual Architect review a \"Terminal",
+    "enforcement layer\" applied \"before commit.\" Codex verified Plan",
+    "C's actual sequence: every remediation commit `b46d1ef..842e596`",
+    "was POST-commit review. The constitution's \"Enforcer Findings Are"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
