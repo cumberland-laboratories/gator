@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R3: atomic overlay in restoreSidebarState (second-read-throws HIGH fix); storage-throw pin actually guards collapsed reset; rewrite stale inline-width mechanism comments",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "atomic-state-restore",
+    "pin-contract-tightening",
+    "stale-comment-fix"
+  ],
+  "commit": "c920cab569a0b211cd8b2fe7568d5587daf7bf9a",
+  "short_commit": "c920cab",
+  "snippet_id": "snippet-c920cab569a0b",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 13,
+  "previous_commit_in_session": "5e08b221d6a7b491bddcc3ce5a5ffbebed3028e6",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T22:00:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-5e08b221d6a7b.json",
+    "src/gator_command/scripts/dashboard/views/repo.js",
+    "tests/test_dashboard_ui/test_responsive_shell.py"
+  ],
+  "notes": [
+    "Outcome first: one HIGH real bug (R2 fix had a partial-overlay",
+    "hole on the second-read-throws path); two MEDIUM (pin didn't",
+    "guard what it claimed; source + charter comments contradicted",
+    "the actual CSS-var mechanism). All three addressed.",
+    "Codex R3 review of Plan C Slice 3 R2 (`5e08b22`, 2026-09-11)",
+    "returned 1 HIGH + 2 MEDIUM.",
+    "R2's `restoreSidebarState` established defaults pre-try but",
+    "mutated `_sidebarCollapsed` immediately after the FIRST successful"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

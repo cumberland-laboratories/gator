@@ -1,30 +1,74 @@
 """Plan C Slice 3 Playwright pins — responsive shell + sidebar.
 
 Hits the actual subprocess dashboard spun up by Plan A's
-`dashboard_fleet` fixture. Covers the invariants named in charter
-TRIPWIREs from Plan C Slice 1 R1-R8 + Slice 2:
+`dashboard_fleet` fixture. Every pin here takes the plain
+pytest-playwright `page` fixture (function-scoped, fresh context
+per test) plus `dashboard_fleet` (session-scoped) — no
+`gator_page_readonly` / `gator_page_mutable` shortcuts because
+several pins need to mutate localStorage or set explicit viewport
+sizes before navigating. Tests call `page.goto(fleet["url"] +
+"?repo=<name>")` themselves.
 
-- §7.1 Scroll-ownership contract (`.route-repo` class management,
-  desktop `#app-shell` bounded, no viewport-math on `.repo-browser`).
+Live coverage:
+
+- §7.1 Scroll-ownership contract (`.route-repo` class management
+  on Repo + Docs, desktop `#app-shell` bounded, no viewport-math
+  on `.repo-browser`): pins
+  `test_showview_adds_and_removes_route_repo_class`,
+  `test_docs_view_also_gets_route_repo_class`,
+  `test_desktop_app_shell_bounded_prevents_page_scroll`,
+  `test_repo_browser_no_longer_uses_viewport_calc`.
 - §7.2 Non-Repo routes preserve default `#view-slot { overflow-y:
-  auto }`.
-- §7.3 Mobile viewport 400px iframe floor (R3 F2's named pin
-  `test_iframe_sizing_floor_400px_on_mobile_viewports`).
-- §7.4 Markdown scroll + search-results class attachment (R1 F1).
-- §7.5 Sidebar collapse (button present at every re-render path,
-  32px collapsed width, expand restores width, resize→reload→
-  collapse still collapses, docs mode preserves button, polling
-  refresh preserves button, resize handle hidden while collapsed).
-- §7.6 Sidebar overflow (80-file scroll test).
-- Slice 2 grep invariant: no `sidebar.innerHTML = ...` outside
-  `renderSidebarShell` in `views/repo.js`.
-- Slice 2 persistence: collapse state persists per repo across
-  reload.
+  auto }` (partial — Fleet no-.route-repo class; mobile Repo
+  overflow visible): pins
+  `test_fleet_view_does_not_get_route_repo_class`,
+  `test_mobile_repo_route_uses_visible_overflow`.
+- §7.3 Mobile 400px iframe floor (R3 F2 named pin — the 250px
+  minimum-usable-size contract is a DIFFERENT contract, deferred):
+  `test_iframe_sizing_floor_400px_on_mobile_viewports`.
+- §7.4 Markdown scroll + search-results class attachment (R1 F1):
+  `test_markdown_view_scrolls_vertically_when_long`,
+  `test_search_results_container_has_scroll_owner_class`.
+- §7.5 Sidebar collapse (SUBSET — the "every re-render path"
+  claim from Plan C §7.5 is NOT met by the shipped pins; only
+  initial-mount and docs-filter render paths have dedicated
+  behavioral pins; initial-load-error and polling-refresh
+  re-render paths are DEFERRED and covered only structurally by
+  the source-grep pin). Live pins:
+  `test_sidebar_collapse_button_present_before_files_fetch_completes`
+  (initial-mount, R1 F3 rewrite — hangs the /files fetch to
+  isolate the pre-fetch first-paint render),
+  `test_click_collapse_shrinks_sidebar_to_32px`,
+  `test_resize_then_collapse_actually_collapses_to_32px`,
+  `test_collapse_in_docs_mode_preserves_button` (docs-filter path),
+  `test_resize_handle_hidden_while_collapsed`,
+  `test_sidebar_collapse_state_persists_per_repo`.
+- §7.6 Sidebar overflow (80-file expanded tree scrolls):
+  `test_expanded_sidebar_scrolls_long_file_tree`.
+- Slice 2 canonical-wrapper grep invariant (SOURCE-based; alias
+  renames are the behavioral pins' responsibility):
+  `test_no_sidebar_innerHTML_writes_outside_renderSidebarShell`.
+- Slice 3 R1 regression pins:
+  `test_mobile_collapse_expand_button_remains_clickable` (R1 F1
+  min-height: 32px reachability at 375×667),
+  `test_sidebar_width_does_not_leak_between_repos_on_spa_nav`
+  (R1 F2 SPA-nav width leak via `window.gatorNavToRepo`).
+- Slice 3 R2/R3 storage-fallback pins:
+  `test_sidebar_state_falls_back_to_defaults_when_storage_throws`
+  (R2 HIGH + R3 F2 — seeds alpha collapsed pre-throw so both
+  defaults are meaningfully asserted),
+  `test_sidebar_state_atomic_when_second_read_throws` (R3 HIGH
+  atomic-commit — stubs first getItem to succeed with "1" and
+  second to throw).
 
-Most pins consume Plan A's `gator_page_readonly` (session-scoped
-fleet) unless the pin mutates localStorage (in which case it uses
-`gator_page_mutable` + `context.clear_cookies()` isn't enough —
-localStorage clears via `page.evaluate("() => localStorage.clear()")`).
+**Deferred coverage** (charter TRIPWIREs name the invariant but
+no dedicated live pin exists yet): initial-load-error re-render
+path, polling-refresh re-render path, mobile bounded-shell
+(`#main-shell` scrolls while `documentElement` does not at
+375×667), invalid-persisted-width fallback (parseInt + range
+check exists in source but is not exercised), `test_fleet_view_scrolls_at_900_400`,
+`test_iframe_layout_at_375_667` (250px minimum-usable-size).
+Total shipped pin count: 23.
 """
 
 import re
