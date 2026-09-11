@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R5: test docstring names the fixtureless grep pin separately; charter distinguishes iframe-attribute vs CSP sandbox for embedded vs external HTML",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "docstring-accuracy",
+    "csp-mechanism-clarity"
+  ],
+  "commit": "1f9570a6baa2e825af0c5ce86f0f2d98680a0fd4",
+  "short_commit": "1f9570a",
+  "snippet_id": "snippet-1f9570a6baa2e",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 15,
+  "previous_commit_in_session": "b3e7626cad1f095ce80c36863e7da5a67acbecb4",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T22:22:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-b3e7626cad1f0.json",
+    "tests/test_dashboard_ui/test_responsive_shell.py"
+  ],
+  "notes": [
+    "Outcome first: two MEDIUM documentation-accuracy findings, both",
+    "addressed. No implementation defect.",
+    "Codex R5 review of Plan C Slice 3 R4 (`b3e7626`, 2026-09-11)",
+    "returned 2 MEDIUM. Documentation-only fix, no code changes.",
+    "R4's docstring rewrite said \"every pin here takes the plain",
+    "pytest-playwright `page` fixture plus `dashboard_fleet`.\" But",
+    "`test_no_sidebar_innerHTML_writes_outside_renderSidebarShell` is",
+    "intentionally FIXTURELESS by design — it reads `views/repo.js`"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
