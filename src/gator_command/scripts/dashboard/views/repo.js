@@ -553,22 +553,27 @@
   // CSS variable `--repo-sidebar-width` (falls back to 220px per
   // base rule).
   function restoreSidebarState(repoName) {
+    // Plan C Slice 3 R2 HIGH fix (2026-09-11 Codex): defaults MUST
+    // be established BEFORE any localStorage read. `localStorage.getItem`
+    // can throw (e.g., `SecurityError` when storage is unavailable
+    // — cookies disabled, private-mode restrictions, sandbox
+    // policy). If the very first `getItem` throws, control jumps
+    // straight to the catch and the prior repo's `_sidebarCollapsed`
+    // and `--repo-sidebar-width` both survive — exactly the SPA
+    // width-leak Codex R1 F2 fix was meant to close, just via the
+    // storage-throw path instead of the missing-key path. Set
+    // defaults FIRST, then attempt to overlay valid stored values
+    // inside the guarded block.
+    _sidebarCollapsed = false;
+    document.documentElement.style.removeProperty("--repo-sidebar-width");
     try {
       _sidebarCollapsed =
         localStorage.getItem("gator-sidebar-collapsed:" + repoName) === "1";
-      // Plan C Slice 3 R1 F2 fix (2026-09-11 Codex HIGH): ALWAYS
-      // clear the previous repo's `--repo-sidebar-width` on the
-      // document root BEFORE consulting the new repo's storage.
-      // Without this, an SPA navigation from repo A (with a saved
-      // 400px width) to repo B (no saved width) would leak A's
-      // 400px into B — the CSS var persists on `document.documentElement`
-      // across the internal route change because a same-page nav
-      // doesn't reset it. The full-reload `page.goto()` path used
-      // in `test_sidebar_collapse_state_persists_per_repo` masked
-      // this bug. Explicit removeProperty makes the fallback to
-      // the base 220px unambiguous.
-      document.documentElement.style.removeProperty(
-        "--repo-sidebar-width");
+      // The width branch below is a "clear+conditional-set" pattern:
+      // the removeProperty above already cleared the prior repo's
+      // value; if the new repo has a valid stored width, the
+      // setProperty here overlays it. If not — or if getItem
+      // throws — the CSS base rule's 220px fallback takes over.
       const stored = localStorage.getItem("gator-sidebar-width:" + repoName);
       if (stored) {
         const px = parseInt(stored, 10);
@@ -578,7 +583,7 @@
           );
         }
       }
-    } catch (e) { /* storage unavailable — defaults apply */ }
+    } catch (e) { /* storage unavailable — defaults established above */ }
   }
 
   // Build the sidebar tree + wire its handlers into an existing sidebar element.
