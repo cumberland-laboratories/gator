@@ -948,6 +948,18 @@ a:hover, .link-btn:hover {
   width: 32px;
   min-width: 32px;
   max-width: 32px;
+  /* Plan C Slice 3 R1 F1 fix (2026-09-11 Codex HIGH): on mobile
+     `.repo-browser { display: block }` sizes `.repo-sidebar` to
+     its intrinsic content height, which becomes zero when
+     `.repo-sidebar-inner` is display:none. Combined with
+     `overflow: hidden`, the absolute-positioned collapse button
+     (top:4px, height:24px, total 28px) would be clipped and its
+     click target lost. `min-height: 32px` guarantees the button
+     box is inside the sidebar's clipped region on every viewport,
+     including block-layout mobile. On desktop the flex chain
+     already gives the sidebar its parent's full height, so this
+     rule is a no-op there. */
+  min-height: 32px;
   overflow: hidden;
 }
 .repo-sidebar.collapsed .repo-sidebar-inner {

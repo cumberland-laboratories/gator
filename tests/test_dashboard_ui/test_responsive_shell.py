@@ -376,16 +376,54 @@ def test_search_results_container_has_scroll_owner_class(
 # ── §7.5 Sidebar collapse ─────────────────────────────────────────
 
 
-def test_sidebar_collapse_button_present_on_initial_render(
+def test_sidebar_collapse_button_present_before_files_fetch_completes(
         page, dashboard_fleet):
-    """`renderSidebarShell` runs at initial mount BEFORE
-    `loadFileList` resolves, so the collapse button is visible from
-    the first paint. Pins the initial-mount migration site (Slice 2).
+    """R1 F3 (2026-09-11 Codex MEDIUM): pin the pre-fetch first-
+    paint contract, not the post-success sidebar render. The
+    initial-mount `renderSidebarShell(initialSidebar, ...Loading...)`
+    call at `views/repo.js` runs synchronously at container
+    `innerHTML` setup — BEFORE `loadFileList`'s fetch resolves.
+    Removing that pre-fetch call would leave the previous
+    `test_sidebar_collapse_button_present_on_initial_render` pin
+    green (it waited for `.repo-file-item`, which only appears
+    AFTER fetch success) while violating the first-paint contract.
+
+    This pin intercepts the `/files` request and never fulfills
+    it — the fetch hangs indefinitely, so the SECOND
+    `renderSidebarShell` call (via `renderSidebarInto` on fetch
+    success OR the catch branch on failure) never runs. Any
+    collapse button we observe is guaranteed to be from the
+    initial-mount render.
     """
-    _navigate_to_repo(page, dashboard_fleet, "alpha")
-    btn = page.locator(".repo-sidebar-collapse-btn")
-    assert btn.is_visible(), (
-        "Collapse button should be visible on initial repo render")
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    # Intercept and hang the /files request. Do not fulfill,
+    # continue, or abort — Playwright will keep it pending until
+    # page close.
+    page.route("**/api/repo/alpha/files*", lambda route: None)
+    try:
+        page.goto(origin + "?repo=alpha", wait_until="load")
+        # Button appears from the initial-mount renderSidebarShell.
+        page.wait_for_selector(
+            ".repo-sidebar-collapse-btn", timeout=10000)
+        # Verify we are in the pre-fetch state — the "Loading
+        # files..." message is still visible, which would be
+        # replaced by either the tree render or an error render
+        # once the fetch resolves. Its presence proves the fetch
+        # hasn't completed.
+        loading_visible = page.evaluate("""
+            () => {
+                const el = document.querySelector(
+                    '.repo-sidebar-inner .muted');
+                return el ? el.textContent.includes('Loading files') : false;
+            }
+        """)
+        assert loading_visible, (
+            "Sidebar-inner 'Loading files...' text not present; the "
+            "/files fetch may have already resolved and re-rendered "
+            "the sidebar. The pre-fetch first-paint state was not "
+            "captured.")
+    finally:
+        page.unroute("**/api/repo/alpha/files*")
 
 
 def test_click_collapse_shrinks_sidebar_to_32px(page, dashboard_fleet):
@@ -491,6 +529,101 @@ def test_resize_handle_hidden_while_collapsed(page, dashboard_fleet):
     )
 
 
+def test_mobile_collapse_expand_button_remains_clickable(
+        page, dashboard_fleet):
+    """R1 F1 regression pin (2026-09-11 Codex HIGH): on mobile
+    viewport, collapsing the sidebar MUST NOT strand the expand
+    control. Without `min-height: 32px` on `.repo-sidebar.collapsed`,
+    mobile `.repo-browser { display: block }` sizes the sidebar to
+    its content height (0 when `.repo-sidebar-inner` is display:none),
+    and `overflow: hidden` clips the absolute-positioned collapse
+    button — user cannot un-collapse.
+    """
+    page.set_viewport_size({"width": 375, "height": 667})
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    page.evaluate(
+        "() => localStorage.removeItem('gator-sidebar-collapsed:alpha')")
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Collapse.
+    page.locator(".repo-sidebar-collapse-btn").click()
+    # Sidebar height MUST be at least 32px so the button is not
+    # clipped by overflow:hidden.
+    sidebar_h = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().height")
+    assert sidebar_h >= 32, (
+        f"Mobile collapsed sidebar height {sidebar_h} < 32px — the "
+        f"collapse button box (top:4px + height:24px = 28px) is clipped "
+        f"by overflow:hidden. R1 F1 regression.")
+    # And the button center is hittable — clicking it toggles state.
+    btn = page.locator(".repo-sidebar-collapse-btn")
+    box = btn.bounding_box()
+    assert box is not None, "Collapse button has no bounding box"
+    hit_element = page.evaluate(
+        "(pt) => {"
+        "  const el = document.elementFromPoint(pt.x, pt.y);"
+        "  return el ? el.className : null;"
+        "}",
+        {"x": box["x"] + box["width"] / 2,
+         "y": box["y"] + box["height"] / 2},
+    )
+    assert hit_element is not None and "repo-sidebar-collapse-btn" in (hit_element or ""), (
+        f"elementFromPoint at button center returned {hit_element!r}; "
+        f"expected .repo-sidebar-collapse-btn. Button click target "
+        f"is masked by another element.")
+    # Actual click un-collapses (round-trip).
+    btn.click()
+    page.wait_for_function(
+        "() => !document.querySelector('.repo-sidebar').classList.contains('collapsed')",
+        timeout=3000,
+    )
+
+
+def test_sidebar_width_does_not_leak_between_repos_on_spa_nav(
+        page, dashboard_fleet):
+    """R1 F2 regression pin (2026-09-11 Codex HIGH): SPA navigation
+    from repo A (with a saved width) to repo B (no saved width)
+    MUST NOT leak A's width into B. `restoreSidebarState` clears
+    `--repo-sidebar-width` on the document root before consulting
+    B's storage; without that clear, B renders at A's persisted
+    width. The pre-existing persistence pin used `page.goto()` (full
+    reload) which incidentally cleared the CSS var — this pin uses
+    `window.gatorNavToRepo` (the real SPA entry point) to catch the
+    same-page regression.
+    """
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Set alpha's saved width to 400px, clear beta's.
+    page.evaluate("""
+        () => {
+            localStorage.setItem('gator-sidebar-width:alpha', '400');
+            localStorage.removeItem('gator-sidebar-width:beta');
+            localStorage.removeItem('gator-sidebar-collapsed:alpha');
+            localStorage.removeItem('gator-sidebar-collapsed:beta');
+        }
+    """)
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Alpha renders at 400px (restored from localStorage).
+    alpha_w = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 395 <= alpha_w <= 405, (
+        f"alpha did not restore to 400px; got {alpha_w}")
+    # Same-page navigation to beta via window.gatorNavToRepo (the
+    # production SPA entry point).
+    page.evaluate("() => window.gatorNavToRepo('beta')")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    beta_w = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    # Beta has no saved width → should render at base 220px, NOT
+    # inherit alpha's 400px.
+    assert 215 <= beta_w <= 225, (
+        f"beta rendered at width {beta_w} after SPA nav from alpha; "
+        f"expected ~220px (base). Alpha's --repo-sidebar-width leaked "
+        f"across the same-page navigation. R1 F2 regression.")
+
+
 def test_sidebar_collapse_state_persists_per_repo(page, dashboard_fleet):
     """localStorage keys are repo-namespaced. Collapse `alpha`,
     reload `alpha` → still collapsed. Navigate to `beta` fresh →
@@ -577,10 +710,30 @@ def test_expanded_sidebar_scrolls_long_file_tree(page, dashboard_fleet):
 
 
 def test_no_sidebar_innerHTML_writes_outside_renderSidebarShell():
-    """The Slice 2 canonical-wrapper TRIPWIRE asserts that the ONLY
-    `sidebar.innerHTML = ...` write in `views/repo.js` lives inside
-    `renderSidebarShell`. A future PR that adds a new sidebar-write
-    site without routing through the wrapper fails this pin.
+    """The Slice 2 canonical-wrapper TRIPWIRE asserts that every
+    write to the sidebar's innerHTML in `views/repo.js` routes
+    through `renderSidebarShell`. This pin implements a NAME-BASED
+    source-grep check: it detects direct `innerHTML=` writes where
+    the receiver is named `sidebar` or `sidebarEl` (the two names
+    used by the shipped sites) and asserts the sole surviving hit
+    lives inside `renderSidebarShell`'s function body.
+
+    **Coverage limitation (R1 F4, 2026-09-11 Codex MEDIUM)**: this
+    pin cannot catch a regression that introduces a DIFFERENTLY-
+    NAMED sidebar alias — e.g., `fileList.innerHTML = ...` after
+    `const fileList = container.querySelector('#repo-file-list')`.
+    The pin would still see one hit (inside `renderSidebarShell`)
+    and pass. Alias regressions are covered BEHAVIORALLY by the
+    live re-render pins:
+    - `test_sidebar_collapse_button_present_before_files_fetch_completes`
+      (initial mount path)
+    - `test_collapse_in_docs_mode_preserves_button` (Docs render path)
+    A future PR that introduces a new sidebar-write alias AND
+    bypasses `renderSidebarShell` would remove the collapse button
+    from its render path; the corresponding live pin fails
+    behaviorally even though the grep pin passes. Together the
+    grep pin + the live pins bracket the contract from both source
+    and behavior.
     """
     repo_root = Path(__file__).resolve().parent.parent.parent
     js_path = (repo_root / "src" / "gator_command" / "scripts"
@@ -588,15 +741,19 @@ def test_no_sidebar_innerHTML_writes_outside_renderSidebarShell():
     assert js_path.is_file(), f"views/repo.js not found at {js_path}"
     src = js_path.read_text(encoding="utf-8")
     # Match `sidebar.innerHTML = ...` or `sidebarEl.innerHTML = ...`
-    # to catch the naming variants used by both call sites and the
-    # wrapper itself.
+    # — the two names used by every current call site and the
+    # wrapper. Alias-rename regressions are the runtime pins'
+    # responsibility per the coverage-limitation docstring above.
     hits = re.findall(
         r"\b(?:sidebar|sidebarEl)\.innerHTML\s*=", src)
     # Exactly one hit expected: inside `renderSidebarShell` itself.
     assert len(hits) == 1, (
-        f"Expected exactly 1 sidebar.innerHTML= write (inside "
-        f"renderSidebarShell); found {len(hits)}. Any additional "
-        f"write is a canonical-wrapper contract violation.")
+        f"Expected exactly 1 (sidebar|sidebarEl).innerHTML= write "
+        f"(inside renderSidebarShell); found {len(hits)}. Any "
+        f"additional write via those specific variable names is a "
+        f"canonical-wrapper contract violation. Different-named "
+        f"aliases are the runtime pins' responsibility — see the "
+        f"docstring above.")
     # Verify the surviving hit is in renderSidebarShell (by function
     # proximity).
     fn_start = src.find("function renderSidebarShell(")

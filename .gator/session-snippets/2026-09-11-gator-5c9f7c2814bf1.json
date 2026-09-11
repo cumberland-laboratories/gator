@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3: responsive shell + sidebar Playwright pin suite (19 pins) + seed fixture — Slice 1/2 invariants now automated-guarded",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "test-coverage",
+    "canonical-wrapper-pin",
+    "grep-invariant"
+  ],
+  "commit": "5c9f7c2814bf11b72b4904e4ecd4630f01066bac",
+  "short_commit": "5c9f7c2",
+  "snippet_id": "snippet-5c9f7c2814bf1",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 10,
+  "previous_commit_in_session": "f4f788f063530cb6a8061fb1a38923c249707fff",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T16:17:33Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-f4f788f063530.json",
+    "tests/test_dashboard_ui/conftest.py",
+    "tests/test_dashboard_ui/test_responsive_shell.py",
+    "tests/test_dashboard_ui/test_responsive_shell_seed.py"
+  ],
+  "notes": [
+    "Plan C Slice 3 lands automated regression protection for the",
+    "invariants Slice 1 R1-R8 + Slice 2 accumulated in the \"Responsive",
+    "shell + sidebar\" charter section. 19 Playwright pins across",
+    "Plan C §7's six categories; one seed extension. All pins passing;",
+    "zero regressions in the full `test_dashboard_ui/` suite.",
+    "`tests/test_dashboard_ui/test_responsive_shell_seed.py` — Plan C",
+    "seed extension. Reassigns `_harness.seed_sidebar_fixtures` at",
+    "module scope. Adds three fixtures to every seeded repo:"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

@@ -556,6 +556,19 @@
     try {
       _sidebarCollapsed =
         localStorage.getItem("gator-sidebar-collapsed:" + repoName) === "1";
+      // Plan C Slice 3 R1 F2 fix (2026-09-11 Codex HIGH): ALWAYS
+      // clear the previous repo's `--repo-sidebar-width` on the
+      // document root BEFORE consulting the new repo's storage.
+      // Without this, an SPA navigation from repo A (with a saved
+      // 400px width) to repo B (no saved width) would leak A's
+      // 400px into B — the CSS var persists on `document.documentElement`
+      // across the internal route change because a same-page nav
+      // doesn't reset it. The full-reload `page.goto()` path used
+      // in `test_sidebar_collapse_state_persists_per_repo` masked
+      // this bug. Explicit removeProperty makes the fallback to
+      // the base 220px unambiguous.
+      document.documentElement.style.removeProperty(
+        "--repo-sidebar-width");
       const stored = localStorage.getItem("gator-sidebar-width:" + repoName);
       if (stored) {
         const px = parseInt(stored, 10);
