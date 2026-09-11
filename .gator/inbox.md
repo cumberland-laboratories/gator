@@ -3,40 +3,46 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
-## Where we are (2026-09-09, post-B1)
+## Where we are (2026-09-10, post-B2)
 
-**Dashboard UI Plan A + Plan B1 landed on `main`, unreleased (slated
-v2.13.0).** Codex converged after three review rounds — the final
-whiteboard pass returned "No findings." Test state on Windows / Python
-3.13: `tests/test_dashboard_ui/` **148 pass + 11 skipped**. Ubuntu CI
+**Dashboard UI Plan A + Plan B1 + Plan B2 landed on `main`, unreleased
+(slated v2.13.0).** B2 Codex converged after three review rounds — R1
+took four findings (HIGH child-frame CSP read hole via postMessage
+relay, HIGH production-path pin gap via `_click_file_via_repo_view`,
+MEDIUM charter Wasm-audit claim narrowed, LOW copy-btn `setTimeout`
+null-deref via synchronous button capture), R2 took four (two-lane
+liveness, browser-captured popup CSP, rendered-pixel iframe sizing,
+stale cross-cutting/fleet-intel charter reconciliation), R3 took two
+LOW (extended `test_copy_path_writes_repo_relative_string` to walk
+the full async flow, reconciled the primary Dashboard charter's
+CSP-violation detector and iframe sizing TRIPWIREs to match the R2
+implementations). Test state on Windows / Python 3.13:
+`tests/test_dashboard_ui/` **166 pass + 11 skipped**. Ubuntu CI
 exercises the POSIX-only pins.
 
-Landed commits (in order):
+B2 landed commits (in order):
 
-- `8f2b9c9` Plan A: Dashboard UI harness foundation
-- `dcf3a16` B1 Slice 1: parser + policy helpers + response helpers
-- `880d2a3` B1 Slice 2: `do_GET` in-place migration + handlers
-- `4369f86` B1 Slice 3: platform-symmetry pins + charter reconciliation
-- `9f05a81` B1 Codex R1: reparse-alias + no-store + 404 + E1 fixture split
-- `78c73b8` B1 Codex R2: py3.9 stat kwarg crash + F3 tests reach the branch
-- `6efe9b9` B1 Codex R3: cross-platform in-process F3 branch pins
+- `4c8b900` B2 Slice 1: server-side CSP + Vary emit for /raw text/html + fast-matrix unsafe-eval audit
+- `a22e311` B2 Slice 2: inline sandboxed iframe rendering + iframe CSS + shipped-blueprint + negative-control fixtures
+- `611ca7d` B2 Slice 3: Playwright pins for sandboxed HTML preview + CSP violation detector + shipped-template compat matrix
+- `c51a1d9` B2 Codex R1+R2+R3: postMessage-relay + production-path pins + async copy-btn coverage + charter reconciliation
 
-Next dashboard-UI work (choose one when a session picks it up):
+Plans A + B1 commit list (`8f2b9c9` through `6efe9b9`) preserved in
+git log.
 
-1. **B2 — HTML preview**, not yet reviewed for implementation:
-   `.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`.
-   Depends on B1's security floor (transport headers +
-   `apply_response_headers`); adds the browser-trust model (CSP,
-   iframe sandboxing).
-2. **C — responsive shell/sidebar:**
+Next dashboard-UI work — the choice the Architect handoff calls out:
+
+1. **Cut v2.13.0** bundling Plan A + Plan B1 + Plan B2.
+2. **Plan C — responsive shell/sidebar:**
    `.gator/vault/artifacts/2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`.
    Independent of B2; the harness seam `seed_sidebar_fixtures` is
    reserved for it.
 
 The frozen parent plans remain reference-only:
-`.gator/vault/artifacts/2026-09-06-dashboard-safe-content-transport-plan.md`
+`.gator/vault/artifacts/2026-09-06-dashboard-safe-content-transport-plan.md`,
+`.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`,
 and `.gator/vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md`.
-Do not implement either directly.
+Do not implement any of them directly.
 
 Two sibling plans remain open, not on the dashboard-UI sequence:
 
@@ -44,10 +50,10 @@ Two sibling plans remain open, not on the dashboard-UI sequence:
 - `.gator/vault/artifacts/2026-09-05-legacy-git-hooks-cleanup-implementation-plan.md`
 
 **Release readiness for v2.13.0**: the Dashboard UI arc's changes are
-release-worthy; the next release train can bundle Plan A + Plan B1 into
-v2.13.0 whenever the Architect chooses to cut. Blueprints 2.0 Release B
-(feature-blueprint generation procedure), previously slated for v2.13.0,
-moves to v2.14.0 or later.
+release-worthy; the next release train can bundle Plan A + Plan B1 +
+Plan B2 into v2.13.0 whenever the Architect chooses to cut. Blueprints
+2.0 Release B (feature-blueprint generation procedure), previously
+slated for v2.13.0, moves to v2.14.0 or later.
 
 ## Unscheduled open backlog
 
