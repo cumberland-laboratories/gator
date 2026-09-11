@@ -782,33 +782,11 @@ a:hover, .link-btn:hover {
     padding: 0 16px;
   }
 
-  /* Plan C Slice 1 (v2.13.0): mobile shell scroll ownership. `#app-shell`
-     stays bounded (`height: 100vh; overflow: hidden` from base rule — do NOT
-     relax to `height: auto` here; `#main-shell.overflow: auto` only
-     activates when its parent is bounded). `#main-shell` is the scroll
-     owner for the whole column. Repo/Docs routes go `overflow-y: visible`
-     so the mobile stack flows into `#main-shell`'s scrollbar instead of
-     acquiring its own. `.repo-browser` goes `display: block` for
-     sidebar-over-content stacking. Iframe carries a 60vh floor
-     (60vh × 667px = ~400px on 375×667 target, above the 250px pin
-     threshold). Sidebar becomes a 40vh strip with its own scroll. */
-  #view-slot,
-  #view-slot.route-repo {
-    overflow-y: visible;
-  }
-  .repo-browser {
-    display: block;
-    height: auto;
-    overflow: visible;
-  }
-  .repo-iframe-wrapper,
-  .repo-iframe {
-    min-height: 60vh;
-  }
-  .repo-sidebar {
-    max-height: 40vh;
-    overflow-y: auto;
-  }
+  /* Plan C Slice 1 mobile Repo/Docs rules MOVED to end-of-file media
+     query — the .repo-* base rules live between here and the end of
+     this file, and identical-specificity rules resolve by source order.
+     A mobile rule co-located here loses to the later base declaration.
+     See the trailing "Plan C Slice 1 R1" @media block. */
 }
 
 /* ── session modal overlay ────────────────────────────────────────────── */
@@ -1493,5 +1471,44 @@ mark.search-hit {
 .enforcement-select:focus {
   outline: 2px solid var(--color-link);
   outline-offset: -1px;
+}
+
+/* ── mobile Repo/Docs (Plan C Slice 1 R1) ─────────────────────────────── */
+/* End-of-file placement is LOAD-BEARING: the .repo-* base rules
+   (.repo-browser, .repo-content, .repo-markdown/.repo-search-results,
+   .repo-sidebar, .repo-iframe*) sit between the early @media block at
+   line ~721 and here. Identical-specificity rules resolve by later
+   source order — a mobile override co-located inside the early @media
+   loses to the later base declaration. Trailing placement fixes the
+   Codex R1 F2 finding (mobile Repo/Docs layout not applied).
+
+   #view-slot uses `overflow: visible` (both axes), NOT `overflow-y:
+   visible` — CSS overflow-axis normalization computes any mixed
+   `hidden` / `visible` pairing to `auto` on both axes, which would
+   defeat the mobile stack contract by giving #view-slot its own
+   scrollbar. Explicit both-axis `visible` avoids the normalization
+   entirely.
+
+   No .repo-iframe / .repo-iframe-wrapper override lives here (Codex
+   R1 F3). Plan C §4.3 originally set `min-height: 60vh` on mobile;
+   on viewport heights below 667px, 60vh is less than 400px, which
+   would weaken the B2 → Collision B → B1 400px floor. The base rules'
+   400px floor is correct on every viewport and needs no mobile
+   variant. */
+@media (max-width: 768px) {
+  #view-slot,
+  #view-slot.route-repo {
+    overflow: visible;
+    display: block;
+  }
+  .repo-browser {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .repo-sidebar {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 }
 

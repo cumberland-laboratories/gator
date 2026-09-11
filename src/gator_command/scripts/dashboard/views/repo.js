@@ -819,7 +819,11 @@
         return;
       }
 
-      let html = `<div style="padding:16px"><div style="margin-bottom:12px;color:#666;font-size:13px">${results.length} file${results.length !== 1 ? 's' : ''} matching "${escHtml(query)}"</div>`;
+      // Plan C Slice 1 (v2.13.0): the outer container carries
+      // `.repo-search-results` so the scroll-owner CSS rule attaches (flex:
+      // 1 1 auto; min-height: 0; overflow-y auto). Without the class, long
+      // search results are clipped by `.repo-content { overflow: hidden }`.
+      let html = `<div class="repo-search-results" style="padding:16px"><div style="margin-bottom:12px;color:#666;font-size:13px">${results.length} file${results.length !== 1 ? 's' : ''} matching "${escHtml(query)}"</div>`;
       for (const r of results) {
         const label = r.path.replace(/\.(md|json)$/, "");
         const snippetHtml = escHtml(r.snippet).replace(
