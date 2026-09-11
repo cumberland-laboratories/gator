@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R8: Architect-only override framed as behavioral/constitutional (not technical); revision markers correctly bumped to R7/R8; reviewed-commit list explicit and durable",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "trust-boundary-honesty",
+    "durable-provenance"
+  ],
+  "commit": "0f1904725ccec005e22b0fbae4840cc22df73b6d",
+  "short_commit": "0f19047",
+  "snippet_id": "snippet-0f1904725ccec",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 8,
+  "previous_commit_in_session": "ef7e50ec1ec32e88ac44b0825215876c7205e003",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T14:46:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-ef7e50ec1ec32.json"
+  ],
+  "notes": [
+    "Outcome first: one MEDIUM + one LOW charter-accuracy finding",
+    "addressed. Charter-only fix, no code changes.",
+    "Codex R8 review of Plan C Slice 1 R7 (`ef7e50e`, 2026-09-11)",
+    "returned one MEDIUM and one LOW.",
+    "R7's \"Authorized override path\" text called the override an",
+    "\"Architect-only escape hatch\" and said \"Architect authority",
+    "bypasses the gate.\" Codex verified the actual implementation:",
+    "`gator-approve.py` accepts caller-supplied `--name` and `--reason`"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

@@ -360,6 +360,15 @@
   // must NOT clear this — only lifecycle resources (timers/listeners).
   const _treeState = { repoName: null, expandedDirs: new Set(), selectedFile: null };
 
+  // Plan C Slice 2 (v2.13.0): sidebar collapse state (persisted per repo).
+  // Module-scope because renderSidebarShell — called from every sidebar
+  // re-render site — reads it to decide whether to install the collapsed
+  // class + swap the button icon. The value is loaded from localStorage
+  // in restoreSidebarState() at repo-view mount and written on every
+  // toggleSidebarCollapse() call. Keyed by repo name so different repos
+  // remember their own state.
+  let _sidebarCollapsed = false;
+
   // Debug seam (v2.13.0) — meta-tag gated. Server injects
   // <meta name="gator-debug" content="1"> when GATOR_DASHBOARD_DEBUG=1
   // is set at spawn time; in production the meta is absent and this
@@ -476,6 +485,89 @@
     } catch (e) { /* transient — retry next tick */ }
   }
 
+  // Plan C Slice 2 (v2.13.0): canonical sidebar-shell wrapper.
+  // Every path that would write to `sidebar.innerHTML` MUST route
+  // through this helper so the collapse button + `.collapsed`
+  // class state stay in sync with `_sidebarCollapsed`. Callers pass
+  // the inner content HTML (header + tree, or docs list, or error
+  // message); this function installs the shell around it. See
+  // scripts-dashboard.md "Responsive shell + sidebar" TRIPWIRE.
+  //
+  // Naming note (Architect-ratified 2026-09-10, Collision A → A1):
+  // Plan C's original name `renderSidebarInto` collided with the
+  // pre-existing file-tree renderer of the same name; the wrapper
+  // takes `renderSidebarShell` and the tree renderer keeps its
+  // original name.
+  function renderSidebarShell(sidebarEl, innerHtml) {
+    const collapsed = _sidebarCollapsed;
+    sidebarEl.innerHTML =
+      '<button class="repo-sidebar-collapse-btn" title="' +
+        (collapsed ? "Expand sidebar" : "Collapse sidebar") +
+        '" aria-label="Toggle sidebar">' +
+        (collapsed ? "▸" : "◂") + "</button>" +
+      '<div class="repo-sidebar-inner">' + innerHtml + "</div>";
+    sidebarEl.classList.toggle("collapsed", collapsed);
+    const btn = sidebarEl.querySelector(".repo-sidebar-collapse-btn");
+    if (btn) btn.addEventListener("click", toggleSidebarCollapse);
+  }
+
+  // Plan C Slice 2 (v2.13.0): flip _sidebarCollapsed, persist the
+  // new state, update the DOM in place. Called from the collapse
+  // button's click handler installed by renderSidebarShell. Does
+  // NOT re-render the sidebar contents — the inner tree stays put
+  // and the CSS `.collapsed` rules hide it via
+  // `.repo-sidebar.collapsed .repo-sidebar-inner { display: none }`.
+  function toggleSidebarCollapse() {
+    _sidebarCollapsed = !_sidebarCollapsed;
+    const repoName = _repoView.repoName || _treeState.repoName;
+    if (repoName) {
+      try {
+        localStorage.setItem(
+          "gator-sidebar-collapsed:" + repoName,
+          _sidebarCollapsed ? "1" : "0"
+        );
+      } catch (e) { /* storage unavailable — keep runtime state */ }
+    }
+    const sidebar = document.querySelector(".repo-sidebar");
+    if (sidebar) {
+      sidebar.classList.toggle("collapsed", _sidebarCollapsed);
+      const btn = sidebar.querySelector(".repo-sidebar-collapse-btn");
+      if (btn) {
+        btn.textContent = _sidebarCollapsed ? "▸" : "◂";
+        btn.title = _sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar";
+      }
+      // Inline `style.width` from a prior resize stays put across
+      // collapse/expand cycles: on COLLAPSE the CSS
+      // `.repo-sidebar.collapsed { width: 32px !important; ... }`
+      // beats the inline style; on EXPAND the class is removed and
+      // the inline width naturally reapplies, restoring the user's
+      // resized width. Do NOT clear inline width on either
+      // transition — that would nuke a valid saved width.
+    }
+  }
+
+  // Plan C Slice 2 (v2.13.0): load persisted sidebar state at
+  // repo-view mount. Called BEFORE the first renderSidebarShell so
+  // the shell renders with the right initial state. Restores both
+  // the collapsed boolean AND the resized width — width uses the
+  // CSS variable `--repo-sidebar-width` (falls back to 220px per
+  // base rule).
+  function restoreSidebarState(repoName) {
+    try {
+      _sidebarCollapsed =
+        localStorage.getItem("gator-sidebar-collapsed:" + repoName) === "1";
+      const stored = localStorage.getItem("gator-sidebar-width:" + repoName);
+      if (stored) {
+        const px = parseInt(stored, 10);
+        if (px >= 120 && px <= 500) {
+          document.documentElement.style.setProperty(
+            "--repo-sidebar-width", px + "px"
+          );
+        }
+      }
+    } catch (e) { /* storage unavailable — defaults apply */ }
+  }
+
   // Build the sidebar tree + wire its handlers into an existing sidebar element.
   // Shared by the initial load and every refresh so both render identically.
   function renderSidebarInto(sidebar, content, repoName, filtered) {
@@ -500,7 +592,12 @@
     html += renderSection(".gator/", "section:gator", gatorTree);
     html += renderSection("gator-command/", "section:gc", gcTree);
     html += renderSection("source/", "section:source", sourceTree);
-    sidebar.innerHTML = html;
+    // Plan C Slice 2 (v2.13.0): route through the canonical shell
+    // wrapper so the collapse button + `.collapsed` state stay in
+    // sync. All subsequent `sidebar.querySelectorAll(...)` calls in
+    // this function still work because the tree content lives inside
+    // `.repo-sidebar-inner` and querySelectorAll descends.
+    renderSidebarShell(sidebar, html);
 
     // Section + directory expand/collapse. Each toggle button is emitted
     // immediately before its contents element, so nextElementSibling is the
@@ -640,18 +737,30 @@
     _repoView.lastFp = null;
 
     const verLabel = version ? ` @ ${version.substring(0, 8)}` : "";
+    // Plan C Slice 2 (v2.13.0): restore persisted sidebar state
+    // (collapsed + width) BEFORE the first render so the mount
+    // renders in the correct state.
+    restoreSidebarState(repoName);
     container.innerHTML = `
       <div class="repo-browser">
-        <div class="repo-sidebar" id="repo-file-list">
-          <div class="repo-sidebar-header">${escHtml(repoName)}${version ? '<span class="muted" style="font-size:10px;margin-left:6px;">' + escHtml(verLabel) + '</span>' : ''}</div>
-          <div class="muted" style="padding:8px 12px;font-size:12px">Loading files...</div>
-        </div>
+        <div class="repo-sidebar" id="repo-file-list"></div>
         <div class="repo-sidebar-resize" id="repo-resize-handle"></div>
         <div class="repo-content" id="repo-file-content">
           <div class="muted" style="padding:40px;text-align:center">Select a file to view</div>
         </div>
       </div>
     `;
+    // Plan C Slice 2 (v2.13.0): render the initial sidebar state
+    // through renderSidebarShell so the collapse button appears
+    // immediately, before loadFileList's async fetch resolves.
+    const initialSidebar = container.querySelector("#repo-file-list");
+    if (initialSidebar) {
+      renderSidebarShell(
+        initialSidebar,
+        `<div class="repo-sidebar-header">${escHtml(repoName)}${version ? '<span class="muted" style="font-size:10px;margin-left:6px;">' + escHtml(verLabel) + '</span>' : ''}</div>` +
+        `<div class="muted" style="padding:8px 12px;font-size:12px">Loading files...</div>`
+      );
+    }
 
     loadFileList(repoName, container, version, filter);
 
@@ -677,7 +786,11 @@
       const data = await resp.json();
 
       if (data.error) {
-        sidebar.innerHTML = `<div class="repo-sidebar-header">${escHtml(repoName)}</div><div class="muted" style="padding:8px 12px">${escHtml(data.error)}</div>`;
+        renderSidebarShell(
+          sidebar,
+          `<div class="repo-sidebar-header">${escHtml(repoName)}</div>` +
+          `<div class="muted" style="padding:8px 12px">${escHtml(data.error)}</div>`
+        );
         return;
       }
 
@@ -696,7 +809,7 @@
         } else {
           for (const f of docsFiles) html += fileItem(repoName, f, true);
         }
-        sidebar.innerHTML = html;
+        renderSidebarShell(sidebar, html);
 
         // File click handlers
         sidebar.querySelectorAll(".repo-file-item").forEach(item => {
@@ -794,7 +907,11 @@
       }
 
     } catch (err) {
-      sidebar.innerHTML = `<div class="repo-sidebar-header">${escHtml(repoName)}</div><div class="muted" style="padding:8px 12px">Failed to load files</div>`;
+      renderSidebarShell(
+        sidebar,
+        `<div class="repo-sidebar-header">${escHtml(repoName)}</div>` +
+        `<div class="muted" style="padding:8px 12px">Failed to load files</div>`
+      );
     }
   }
 
@@ -868,18 +985,43 @@
     if (!handle) return;
     let startX, startWidth;
     handle.addEventListener("mousedown", function (e) {
+      // Plan C Slice 2 (v2.13.0): resize is inert while collapsed.
+      // The CSS `.repo-sidebar.collapsed + #repo-resize-handle`
+      // rule also hides the handle, but a mousedown could still
+      // fire on a race before the DOM updates — belt + suspenders.
+      if (_sidebarCollapsed) return;
       startX = e.clientX;
       startWidth = sidebar.offsetWidth;
       e.preventDefault();
       function onMove(e) {
         const newWidth = startWidth + (e.clientX - startX);
         if (newWidth >= 120 && newWidth <= 500) {
-          sidebar.style.width = newWidth + "px";
+          // Plan C Slice 2 (v2.13.0): write to the CSS variable on
+          // document root, not inline `sidebar.style.width`. The
+          // base rule `.repo-sidebar { width: var(--repo-sidebar-width, 220px) }`
+          // consumes it, and `.repo-sidebar.collapsed { width: 32px }`
+          // beats the var on collapse without needing `!important`.
+          // Also lets `restoreSidebarState` restore across mounts
+          // through the same channel.
+          document.documentElement.style.setProperty(
+            "--repo-sidebar-width", newWidth + "px"
+          );
         }
       }
       function onUp() {
         document.removeEventListener("mousemove", onMove);
         document.removeEventListener("mouseup", onUp);
+        // Plan C Slice 2 (v2.13.0): persist the final width so
+        // subsequent repo-view mounts of the same repo restore it.
+        const finalWidth = sidebar.offsetWidth;
+        const repoName = _repoView.repoName || _treeState.repoName;
+        if (repoName && finalWidth >= 120 && finalWidth <= 500) {
+          try {
+            localStorage.setItem(
+              "gator-sidebar-width:" + repoName, String(finalWidth)
+            );
+          } catch (e) { /* storage unavailable — no-op */ }
+        }
       }
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);

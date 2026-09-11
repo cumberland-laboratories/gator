@@ -902,12 +902,63 @@ a:hover, .link-btn:hover {
 }
 
 .repo-sidebar {
-  width: 220px;
+  width: var(--repo-sidebar-width, 220px);
   min-width: 120px;
   max-width: 500px;
   overflow-y: auto;
   background: #fafbfc;
   flex-shrink: 0;
+  position: relative;   /* Plan C Slice 2: anchors .repo-sidebar-collapse-btn */
+}
+
+/* Plan C Slice 2 (v2.13.0): sidebar collapse + shell wrapper.
+   The collapse button sits absolute-positioned at the top-right of
+   the sidebar; the inner slot holds the file tree / docs list /
+   error message rendered by renderSidebarShell. On `.collapsed` the
+   sidebar shrinks to 32px, the inner slot hides, and the sibling
+   resize handle is hidden via adjacent-sibling combinator (below).
+   The width rule uses `--repo-sidebar-width` (initialized by
+   `restoreSidebarState` from localStorage; updated by
+   `initResizeHandle`'s onMove); `.collapsed`'s width rule is
+   higher-specificity than the base and does not need !important. */
+.repo-sidebar-collapse-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  color: #666;
+  z-index: 1;
+}
+.repo-sidebar-collapse-btn:hover {
+  color: #0366d6;
+}
+.repo-sidebar-inner {
+  /* No sizing rules — content flows normally inside the sidebar.
+     The `.repo-sidebar.collapsed .repo-sidebar-inner` selector
+     below hides this slot when the sidebar is collapsed. */
+}
+.repo-sidebar.collapsed {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  overflow: hidden;
+}
+.repo-sidebar.collapsed .repo-sidebar-inner {
+  display: none;
+}
+/* Hide the sibling resize handle while the sidebar is collapsed.
+   Adjacent-sibling combinator (`+`) targets the handle only when
+   its immediately-preceding sibling is a `.collapsed` sidebar. */
+.repo-sidebar.collapsed + .repo-sidebar-resize,
+.repo-sidebar.collapsed + #repo-resize-handle {
+  display: none;
 }
 
 .repo-sidebar-resize {
