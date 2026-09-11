@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R5: charter attributes findings to probes-vs-inspection accurately; pre-commit hard-gate specificity corrected; snippet notes-truncation contract documented + inboxed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "enforcement-attribution",
+    "snippet-audit-contract"
+  ],
+  "commit": "2fe39b8989b9edb1dbcc7ec7c525d313d8d1875c",
+  "short_commit": "2fe39b8",
+  "snippet_id": "snippet-2fe39b8989b9e",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "842e5960ed2c6959e4fbb9f0245f5e36c1010aff",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T13:38:09Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-09-11-gator-842e5960ed2c6.json"
+  ],
+  "notes": [
+    "Outcome first: three MEDIUM charter/audit-record accuracy findings",
+    "addressed. Charter-only + one inbox item. No code changes, no",
+    "retroactive snippet edit.",
+    "Codex R5 review of Plan C Slice 1 R4 (`842e596`, 2026-09-11)",
+    "returned three MEDIUM findings.",
+    "R4 said R1 probes at 375×667/500/400 \"caught F1/F2/F3.\" Codex",
+    "verified the R1 review record: concrete production-harness",
+    "Chromium probe evidence supports F2 only (mobile layout dead-on-"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
