@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 2: sidebar collapse + resize + renderSidebarShell canonical wrapper — five sidebar.innerHTML sites migrated; CSS var single-source-of-truth for width; localStorage persistence per repo",
+  "change_type": "feature",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-contract",
+    "tripwire-new",
+    "canonical-wrapper",
+    "css-var-source-of-truth"
+  ],
+  "commit": "f4f788f063530cb6a8061fb1a38923c249707fff",
+  "short_commit": "f4f788f",
+  "snippet_id": "snippet-f4f788f063530",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 9,
+  "previous_commit_in_session": "0f1904725ccec005e22b0fbae4840cc22df73b6d",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T15:12:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-0f1904725ccec.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/repo.js"
+  ],
+  "notes": [
+    "Plan C Slice 2 lands the sidebar collapse UX + canonical rendering",
+    "wrapper. All CSS + JS + charter, no test changes — Slice 3 owns",
+    "the pin suite.",
+    "**New module state** `let _sidebarCollapsed = false;` right after",
+    "`_treeState`. Loaded from localStorage at mount via",
+    "`restoreSidebarState`; updated by `toggleSidebarCollapse`; read",
+    "by `renderSidebarShell` on every re-render.",
+    "**New `renderSidebarShell(sidebarEl, innerHtml)`** — the"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

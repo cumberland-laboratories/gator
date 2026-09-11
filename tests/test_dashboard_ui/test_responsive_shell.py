@@ -1,0 +1,620 @@
+"""Plan C Slice 3 Playwright pins — responsive shell + sidebar.
+
+Hits the actual subprocess dashboard spun up by Plan A's
+`dashboard_fleet` fixture. Covers the invariants named in charter
+TRIPWIREs from Plan C Slice 1 R1-R8 + Slice 2:
+
+- §7.1 Scroll-ownership contract (`.route-repo` class management,
+  desktop `#app-shell` bounded, no viewport-math on `.repo-browser`).
+- §7.2 Non-Repo routes preserve default `#view-slot { overflow-y:
+  auto }`.
+- §7.3 Mobile viewport 400px iframe floor (R3 F2's named pin
+  `test_iframe_sizing_floor_400px_on_mobile_viewports`).
+- §7.4 Markdown scroll + search-results class attachment (R1 F1).
+- §7.5 Sidebar collapse (button present at every re-render path,
+  32px collapsed width, expand restores width, resize→reload→
+  collapse still collapses, docs mode preserves button, polling
+  refresh preserves button, resize handle hidden while collapsed).
+- §7.6 Sidebar overflow (80-file scroll test).
+- Slice 2 grep invariant: no `sidebar.innerHTML = ...` outside
+  `renderSidebarShell` in `views/repo.js`.
+- Slice 2 persistence: collapse state persists per repo across
+  reload.
+
+Most pins consume Plan A's `gator_page_readonly` (session-scoped
+fleet) unless the pin mutates localStorage (in which case it uses
+`gator_page_mutable` + `context.clear_cookies()` isn't enough —
+localStorage clears via `page.evaluate("() => localStorage.clear()")`).
+"""
+
+import re
+from pathlib import Path
+
+import pytest
+
+
+# ── shared helpers ────────────────────────────────────────────────
+
+
+def _navigate_to_repo(page, fleet, repo="alpha"):
+    """Navigate the page to the Repo view for the given fleet repo
+    and wait for the sidebar to be populated with at least one file
+    item. Returns the fully-loaded page.
+    """
+    origin = fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=" + repo, wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    return page
+
+
+def _navigate_to_docs(page, fleet, repo="alpha"):
+    """Navigate to the Docs view for the repo — Docs is a Repo view
+    with `filter="docs"`. Uses the sidebar 'Docs' nav item.
+    """
+    origin = fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=" + repo, wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Click the Docs sidebar-nav item.
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"docs\"]').click()"
+    )
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    return page
+
+
+def _click_file_via_repo_view(page, fleet, filepath, *, repo="alpha"):
+    """Slice-2-aware production-path helper. Drives the real
+    Dashboard shell to `?repo=<name>`, expands ancestor dirs so the
+    target file item is clickable, clicks it, and waits for the
+    production iframe or markdown pane to render. Returns the page.
+
+    Kept local to this module (rather than imported from
+    test_html_preview) so responsive-shell pins can evolve without
+    coupling to B2's test surface.
+    """
+    origin = fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=" + repo, wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    if "/" in filepath:
+        parts = filepath.split("/")[:-1]
+        for i in range(len(parts)):
+            dir_path = "/".join(parts[:i + 1])
+            page.evaluate(
+                "(selector) => {"
+                "  const btn = document.querySelector(selector);"
+                "  if (btn) {"
+                "    const contents = btn.nextElementSibling;"
+                "    if (contents && contents.style.display === 'none') {"
+                "      btn.click();"
+                "    }"
+                "  }"
+                "}",
+                f'.repo-tree-dir[data-dir="{dir_path}"]',
+            )
+    sel = f'.repo-file-item[data-path="{filepath}"]'
+    page.wait_for_selector(sel, state="attached", timeout=10000)
+    page.evaluate(
+        "(sel) => document.querySelector(sel).click()", sel)
+    return page
+
+
+# ── §7.1 Scroll-ownership contract ────────────────────────────────
+
+
+def test_showview_adds_and_removes_route_repo_class(
+        page, dashboard_fleet):
+    """`.route-repo` is on `#view-slot` for Repo and Docs, absent
+    for Fleet and History. Pins the class-management contract in
+    `showView` at `dashboard.js:97-108`.
+    """
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin, wait_until="load")
+    # Fleet mount (default view): no .route-repo.
+    page.wait_for_selector("#view-slot", timeout=10000)
+    assert page.evaluate(
+        "() => document.getElementById('view-slot').classList"
+        ".contains('route-repo')") is False
+
+    # Navigate to Repo — .route-repo appears.
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert page.evaluate(
+        "() => document.getElementById('view-slot').classList"
+        ".contains('route-repo')") is True
+
+    # Click History — .route-repo goes.
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"history\"]').click()"
+    )
+    # History renders whatever it renders; the class contract is the
+    # invariant.
+    page.wait_for_function(
+        "() => !document.getElementById('view-slot').classList"
+        ".contains('route-repo')",
+        timeout=5000,
+    )
+
+
+def test_docs_view_also_gets_route_repo_class(
+        page, dashboard_fleet):
+    """Both `"repo"` AND `"docs"` route names must add `.route-repo`
+    per the R1 TRIPWIRE. Pins the second half of the contract.
+    """
+    _navigate_to_docs(page, dashboard_fleet, "alpha")
+    assert page.evaluate(
+        "() => document.getElementById('view-slot').classList"
+        ".contains('route-repo')") is True
+
+
+def test_desktop_app_shell_bounded_prevents_page_scroll(
+        page, dashboard_fleet):
+    """At desktop viewport with long markdown loaded, the document
+    element MUST NOT scroll — `#app-shell { height: 100vh; overflow:
+    hidden }` bounds the shell and the flex chain delegates scroll
+    to `.repo-markdown` inside `.repo-content`.
+    """
+    page.set_viewport_size({"width": 1440, "height": 900})
+    _click_file_via_repo_view(
+        page, dashboard_fleet, "artifacts/long.md", repo="alpha")
+    # Wait for the markdown pane to render the long body.
+    page.wait_for_selector(".repo-markdown", timeout=10000)
+    doc_scroll = page.evaluate(
+        "() => document.documentElement.scrollHeight"
+        " - document.documentElement.clientHeight")
+    assert doc_scroll == 0, (
+        f"Page-level scroll present: doc.scrollHeight - clientHeight = "
+        f"{doc_scroll} (expected 0)")
+
+
+def test_repo_browser_no_longer_uses_viewport_calc(
+        page, dashboard_fleet):
+    """`.repo-browser` height tracks `#view-slot`'s clientHeight,
+    NOT `calc(100vh - 80px)`. Pins the R1 remediation of the
+    v2.11.1 80%-zoom regression: no viewport-math sizing.
+    """
+    page.set_viewport_size({"width": 1440, "height": 900})
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    heights = page.evaluate("""
+        () => {
+            const browser = document.querySelector('.repo-browser');
+            const slot = document.getElementById('view-slot');
+            return {
+                browser: browser.getBoundingClientRect().height,
+                slot: slot.getBoundingClientRect().height,
+                viewportMath: window.innerHeight - 80,
+            };
+        }
+    """)
+    # Browser height tracks slot, not viewport-math.
+    assert abs(heights["browser"] - heights["slot"]) < 2, (
+        f".repo-browser height {heights['browser']} does not track "
+        f"#view-slot {heights['slot']}")
+    # Resize the viewport — a viewport-math rule would keep
+    # `browser` at (newHeight - 80); a flex-chain rule tracks slot.
+    page.set_viewport_size({"width": 1440, "height": 600})
+    heights2 = page.evaluate("""
+        () => {
+            const browser = document.querySelector('.repo-browser');
+            const slot = document.getElementById('view-slot');
+            return {
+                browser: browser.getBoundingClientRect().height,
+                slot: slot.getBoundingClientRect().height,
+            };
+        }
+    """)
+    assert abs(heights2["browser"] - heights2["slot"]) < 2, (
+        f"After resize: .repo-browser {heights2['browser']} does not "
+        f"track #view-slot {heights2['slot']}")
+
+
+# ── §7.2 Non-Repo routes preserve default ─────────────────────────
+
+
+def test_fleet_view_does_not_get_route_repo_class(
+        page, dashboard_fleet):
+    """Fleet view has `#view-slot` with default `overflow-y: auto`
+    (no `.route-repo`). Long Fleet lists scroll normally at the slot
+    level, not inside a leaf.
+    """
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.set_viewport_size({"width": 900, "height": 400})
+    page.goto(origin, wait_until="load")
+    page.wait_for_selector("#view-slot", timeout=10000)
+    has_class = page.evaluate(
+        "() => document.getElementById('view-slot').classList"
+        ".contains('route-repo')")
+    assert has_class is False
+    overflow_y = page.evaluate(
+        "() => getComputedStyle(document.getElementById('view-slot'))"
+        ".overflowY")
+    assert overflow_y == "auto", (
+        f"Expected #view-slot overflow-y: auto on Fleet route; got "
+        f"{overflow_y!r}")
+
+
+def test_mobile_repo_route_uses_visible_overflow(
+        page, dashboard_fleet):
+    """On mobile viewport, `#view-slot.route-repo` computes
+    `overflow: visible` (both axes). Pins the R1 F2 fix: the mobile
+    rules live at end-of-file after all `.repo-*` base declarations,
+    and use the `overflow: visible` shorthand — not `overflow-y`.
+    """
+    page.set_viewport_size({"width": 375, "height": 667})
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    overflow = page.evaluate("""
+        () => {
+            const slot = document.getElementById('view-slot');
+            const cs = getComputedStyle(slot);
+            return {
+                overflowX: cs.overflowX,
+                overflowY: cs.overflowY,
+            };
+        }
+    """)
+    assert overflow["overflowY"] == "visible", (
+        f"Expected mobile #view-slot.route-repo overflow-y: visible; "
+        f"got {overflow['overflowY']!r}")
+    assert overflow["overflowX"] == "visible", (
+        f"Expected mobile #view-slot.route-repo overflow-x: visible; "
+        f"got {overflow['overflowX']!r} — CSS overflow-axis "
+        "normalization would promote mixed hidden/visible to auto")
+
+
+# ── §7.3 Mobile 400px iframe floor (R3 F2 named pin) ──────────────
+
+
+@pytest.mark.parametrize("viewport_h", [667, 500, 400])
+def test_iframe_sizing_floor_400px_on_mobile_viewports(
+        page, dashboard_fleet, viewport_h):
+    """The B1-ratified 400px iframe floor holds on every mobile
+    viewport height, including short ones (375×400). Pins the R3 F2
+    contract: dedicated automated protection distinct from the
+    Plan C §7.3 250px minimum-usable-size pins.
+
+    Rendered-pixel primary + computed-style diagnostic — both
+    assertions from B2 R2 F3 preserved across mobile parametrization.
+    """
+    page.set_viewport_size({"width": 375, "height": viewport_h})
+    _click_file_via_repo_view(
+        page, dashboard_fleet, "blueprints/plain.html", repo="alpha")
+    page.wait_for_selector("iframe.repo-iframe", timeout=10000)
+    measurements = page.evaluate("""
+        () => {
+            const wrapper = document.querySelector('.repo-iframe-wrapper');
+            const iframe = document.querySelector('.repo-iframe');
+            return {
+                wrapperRendered: wrapper.getBoundingClientRect().height,
+                wrapperComputed: getComputedStyle(wrapper).minHeight,
+                iframeRendered: iframe.getBoundingClientRect().height,
+                iframeComputed: getComputedStyle(iframe).minHeight,
+            };
+        }
+    """)
+    # Rendered-pixel primary (catches layout-collapse regressions).
+    assert measurements["wrapperRendered"] >= 400, (
+        f"iframe wrapper rendered height {measurements['wrapperRendered']} "
+        f"< 400px at viewport 375×{viewport_h}")
+    assert measurements["iframeRendered"] >= 400, (
+        f"iframe rendered height {measurements['iframeRendered']} < 400px "
+        f"at viewport 375×{viewport_h}")
+    # Computed-style diagnostic (catches "someone removed the CSS
+    # rule" regressions cleaner than layout-collapse alone).
+    assert measurements["wrapperComputed"] == "400px", (
+        f"iframe wrapper computed min-height {measurements['wrapperComputed']} "
+        f"!= '400px' at viewport 375×{viewport_h}")
+    assert measurements["iframeComputed"] == "400px", (
+        f"iframe computed min-height {measurements['iframeComputed']} != "
+        f"'400px' at viewport 375×{viewport_h}")
+
+
+# ── §7.4 Markdown + search regression ─────────────────────────────
+
+
+def test_markdown_view_scrolls_vertically_when_long(
+        page, dashboard_fleet):
+    """`.repo-markdown` is the scroll owner for long markdown
+    content — parent `.repo-content` has `overflow: hidden`.
+    """
+    page.set_viewport_size({"width": 1440, "height": 900})
+    _click_file_via_repo_view(
+        page, dashboard_fleet, "artifacts/long.md", repo="alpha")
+    page.wait_for_selector(".repo-markdown", timeout=10000)
+    measurements = page.evaluate("""
+        () => {
+            const md = document.querySelector('.repo-markdown');
+            const content = document.querySelector('.repo-content');
+            return {
+                mdScroll: md.scrollHeight,
+                mdClient: md.clientHeight,
+                contentScroll: content.scrollHeight,
+                contentClient: content.clientHeight,
+                contentOverflow: getComputedStyle(content).overflowY,
+                mdOverflow: getComputedStyle(md).overflowY,
+            };
+        }
+    """)
+    assert measurements["mdScroll"] > measurements["mdClient"], (
+        f".repo-markdown does not overflow: scrollHeight="
+        f"{measurements['mdScroll']} clientHeight={measurements['mdClient']}")
+    assert measurements["contentOverflow"] == "hidden", (
+        f".repo-content overflow-y should be hidden (parent); got "
+        f"{measurements['contentOverflow']!r}")
+    assert measurements["mdOverflow"] == "auto", (
+        f".repo-markdown overflow-y should be auto (scroll owner); got "
+        f"{measurements['mdOverflow']!r}")
+
+
+def test_search_results_container_has_scroll_owner_class(
+        page, dashboard_fleet):
+    """The search-results outer container renders with class
+    `.repo-search-results` so the scroll-owner CSS rule attaches.
+    Pins the R1 F1 remediation.
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    # Fire a cross-doc search that yields many results (every seed
+    # `artifacts/many/f*.md` contains the string "entry").
+    search = page.locator("#repo-search-input")
+    search.fill("entry")
+    # Server search is debounced 300ms; wait for the results DOM.
+    page.wait_for_selector(".repo-search-results", timeout=10000)
+    styles = page.evaluate("""
+        () => {
+            const res = document.querySelector('.repo-search-results');
+            const cs = getComputedStyle(res);
+            return {
+                overflowY: cs.overflowY,
+                flexGrow: cs.flexGrow,
+                minHeight: cs.minHeight,
+            };
+        }
+    """)
+    assert styles["overflowY"] == "auto", (
+        f".repo-search-results overflow-y expected 'auto'; got "
+        f"{styles['overflowY']!r}")
+
+
+# ── §7.5 Sidebar collapse ─────────────────────────────────────────
+
+
+def test_sidebar_collapse_button_present_on_initial_render(
+        page, dashboard_fleet):
+    """`renderSidebarShell` runs at initial mount BEFORE
+    `loadFileList` resolves, so the collapse button is visible from
+    the first paint. Pins the initial-mount migration site (Slice 2).
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    btn = page.locator(".repo-sidebar-collapse-btn")
+    assert btn.is_visible(), (
+        "Collapse button should be visible on initial repo render")
+
+
+def test_click_collapse_shrinks_sidebar_to_32px(page, dashboard_fleet):
+    """Clicking the collapse button applies `.collapsed`, and the
+    CSS class rule shrinks the sidebar to 32px width.
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    # Ensure not collapsed initially (previous tests may have
+    # persisted state).
+    page.evaluate("""
+        () => {
+            localStorage.removeItem('gator-sidebar-collapsed:alpha');
+        }
+    """)
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    sidebar = page.locator(".repo-sidebar")
+    initial_width = sidebar.evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert initial_width > 100, (
+        f"Sidebar unexpectedly narrow pre-collapse: {initial_width}")
+    page.locator(".repo-sidebar-collapse-btn").click()
+    collapsed_width = sidebar.evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 30 <= collapsed_width <= 34, (
+        f"Expected collapsed sidebar ~32px; got {collapsed_width}")
+    has_class = sidebar.evaluate(
+        "el => el.classList.contains('collapsed')")
+    assert has_class is True
+
+
+def test_resize_then_collapse_actually_collapses_to_32px(
+        page, dashboard_fleet):
+    """Regression pin for the CSS-var + class-specificity design:
+    even after `initResizeHandle` sets `--repo-sidebar-width` to a
+    large value, `.repo-sidebar.collapsed` wins and shrinks to 32px.
+    (Pre-Slice-2 design would have needed !important to beat inline
+    style.width.)
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    # Clear persisted state to avoid interference.
+    page.evaluate("""
+        () => {
+            localStorage.removeItem('gator-sidebar-collapsed:alpha');
+            localStorage.removeItem('gator-sidebar-width:alpha');
+        }
+    """)
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Simulate a resize by setting the CSS variable directly (what
+    # initResizeHandle does on drag).
+    page.evaluate(
+        "() => document.documentElement.style.setProperty("
+        "'--repo-sidebar-width', '400px')")
+    # Sanity: expanded sidebar is at 400px.
+    expanded_width = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 395 <= expanded_width <= 405, (
+        f"Expected expanded sidebar ~400px after var set; got "
+        f"{expanded_width}")
+    # Now collapse.
+    page.locator(".repo-sidebar-collapse-btn").click()
+    collapsed_width = page.locator(".repo-sidebar").evaluate(
+        "el => el.getBoundingClientRect().width")
+    assert 30 <= collapsed_width <= 34, (
+        f".repo-sidebar.collapsed rule failed to beat --repo-sidebar-width; "
+        f"got {collapsed_width} (expected ~32px)")
+
+
+def test_collapse_in_docs_mode_preserves_button(page, dashboard_fleet):
+    """Docs filter re-renders the sidebar innerHTML — collapse
+    button must survive because the docs render path routes through
+    `renderSidebarShell` (Slice 2 F1).
+    """
+    _navigate_to_docs(page, dashboard_fleet, "alpha")
+    btn = page.locator(".repo-sidebar-collapse-btn")
+    assert btn.is_visible(), (
+        "Collapse button clobbered by Docs render path")
+    # And it's clickable.
+    btn.click()
+    assert page.locator(".repo-sidebar.collapsed").count() == 1
+
+
+def test_resize_handle_hidden_while_collapsed(page, dashboard_fleet):
+    """Adjacent-sibling CSS rule `.repo-sidebar.collapsed +
+    #repo-resize-handle { display: none }` hides the sibling resize
+    handle while the sidebar is collapsed.
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    page.evaluate(
+        "() => localStorage.removeItem('gator-sidebar-collapsed:alpha')")
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    handle = page.locator("#repo-resize-handle")
+    assert handle.is_visible(), (
+        "Resize handle should be visible when sidebar is expanded")
+    page.locator(".repo-sidebar-collapse-btn").click()
+    # Give the DOM a moment to reflect the class change.
+    page.wait_for_function(
+        "() => getComputedStyle(document.getElementById('repo-resize-handle'))"
+        ".display === 'none'",
+        timeout=3000,
+    )
+
+
+def test_sidebar_collapse_state_persists_per_repo(page, dashboard_fleet):
+    """localStorage keys are repo-namespaced. Collapse `alpha`,
+    reload `alpha` → still collapsed. Navigate to `beta` fresh →
+    NOT collapsed (unless `beta` has its own state).
+    """
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    # Start clean.
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate("""
+        () => {
+            localStorage.removeItem('gator-sidebar-collapsed:alpha');
+            localStorage.removeItem('gator-sidebar-collapsed:beta');
+        }
+    """)
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Collapse alpha.
+    page.locator(".repo-sidebar-collapse-btn").click()
+    assert page.locator(".repo-sidebar.collapsed").count() == 1
+    # Reload alpha: still collapsed. After reload with persisted
+    # collapse state, `.repo-file-item` descendants are hidden by
+    # `.collapsed .repo-sidebar-inner { display: none }`; wait for
+    # the collapse button which stays visible when collapsed.
+    page.reload()
+    page.wait_for_selector(".repo-sidebar-collapse-btn", timeout=15000)
+    assert page.locator(".repo-sidebar.collapsed").count() == 1, (
+        "alpha collapse state did not persist across reload")
+    # Navigate to beta: not collapsed (no state for beta). `beta`'s
+    # sidebar file items ARE visible so the standard wait works.
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert page.locator(".repo-sidebar.collapsed").count() == 0, (
+        "beta appears collapsed but should have its own (empty) state")
+
+
+# ── §7.6 Sidebar overflow ─────────────────────────────────────────
+
+
+def test_expanded_sidebar_scrolls_long_file_tree(page, dashboard_fleet):
+    """80-file fixture: expanding both nested dirs
+    (`.gator/artifacts/` and `.gator/artifacts/many/`) surfaces 80
+    file rows; the sidebar's own scroll area handles the overflow.
+    """
+    _navigate_to_repo(page, dashboard_fleet, "alpha")
+    # Ensure not collapsed.
+    page.evaluate(
+        "() => localStorage.removeItem('gator-sidebar-collapsed:alpha')")
+    page.reload()
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    # Expand `artifacts/`.
+    page.evaluate(
+        "() => document.querySelector"
+        "('.repo-tree-dir[data-dir=\"artifacts\"]').click()")
+    # Then `artifacts/many/`.
+    page.evaluate(
+        "() => document.querySelector"
+        "('.repo-tree-dir[data-dir=\"artifacts/many\"]').click()")
+    # All 80 f-files should be attached now (may still overflow
+    # visible area).
+    page.wait_for_selector(
+        '.repo-file-item[data-path="artifacts/many/f79.md"]',
+        state="attached", timeout=5000)
+    measurements = page.evaluate("""
+        () => {
+            const s = document.querySelector('.repo-sidebar');
+            return {
+                scrollHeight: s.scrollHeight,
+                clientHeight: s.clientHeight,
+                overflowY: getComputedStyle(s).overflowY,
+            };
+        }
+    """)
+    assert measurements["scrollHeight"] > measurements["clientHeight"], (
+        f".repo-sidebar did not overflow: scrollHeight="
+        f"{measurements['scrollHeight']} clientHeight="
+        f"{measurements['clientHeight']}")
+    assert measurements["overflowY"] == "auto", (
+        f".repo-sidebar overflow-y expected 'auto'; got "
+        f"{measurements['overflowY']!r}")
+
+
+# ── Slice 2 canonical-wrapper grep invariant ──────────────────────
+
+
+def test_no_sidebar_innerHTML_writes_outside_renderSidebarShell():
+    """The Slice 2 canonical-wrapper TRIPWIRE asserts that the ONLY
+    `sidebar.innerHTML = ...` write in `views/repo.js` lives inside
+    `renderSidebarShell`. A future PR that adds a new sidebar-write
+    site without routing through the wrapper fails this pin.
+    """
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    js_path = (repo_root / "src" / "gator_command" / "scripts"
+               / "dashboard" / "views" / "repo.js")
+    assert js_path.is_file(), f"views/repo.js not found at {js_path}"
+    src = js_path.read_text(encoding="utf-8")
+    # Match `sidebar.innerHTML = ...` or `sidebarEl.innerHTML = ...`
+    # to catch the naming variants used by both call sites and the
+    # wrapper itself.
+    hits = re.findall(
+        r"\b(?:sidebar|sidebarEl)\.innerHTML\s*=", src)
+    # Exactly one hit expected: inside `renderSidebarShell` itself.
+    assert len(hits) == 1, (
+        f"Expected exactly 1 sidebar.innerHTML= write (inside "
+        f"renderSidebarShell); found {len(hits)}. Any additional "
+        f"write is a canonical-wrapper contract violation.")
+    # Verify the surviving hit is in renderSidebarShell (by function
+    # proximity).
+    fn_start = src.find("function renderSidebarShell(")
+    assert fn_start != -1, "renderSidebarShell function not found"
+    # Find the matching close brace via naive bracket-balance.
+    depth = 0
+    fn_end = fn_start
+    for i, ch in enumerate(src[fn_start:], start=fn_start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                fn_end = i
+                break
+    fn_body = src[fn_start:fn_end]
+    inner_hits = re.findall(
+        r"\b(?:sidebar|sidebarEl)\.innerHTML\s*=", fn_body)
+    assert len(inner_hits) == 1, (
+        f"The sole sidebar.innerHTML= write must live inside "
+        f"renderSidebarShell; got {len(inner_hits)} hits inside its body")

@@ -20,6 +20,10 @@ from ._harness import build_dashboard_fleet
 # registers `seed_content_fixtures` + `seed_history_commits` on
 # the harness BEFORE any fixture builds the fleet.
 from . import content_transport_seed  # noqa: F401
+# Plan C Slice 3 (v2.13.0) — module-scope import registers
+# `seed_sidebar_fixtures` on the harness BEFORE any fixture
+# builds the fleet.
+from . import test_responsive_shell_seed  # noqa: F401
 
 
 # ── §4.1: in-process dashboard module loader ──────────────────────
