@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R4: test_responsive_shell docstring names only live pins + actual fixtures; charter HTML-artifact section brought current with B2 inline-iframe behavior",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "test-docstring-accuracy",
+    "charter-drift-repair"
+  ],
+  "commit": "b3e7626cad1f095ce80c36863e7da5a67acbecb4",
+  "short_commit": "b3e7626",
+  "snippet_id": "snippet-b3e7626cad1f0",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 14,
+  "previous_commit_in_session": "c920cab569a0b211cd8b2fe7568d5587daf7bf9a",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T22:12:44Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-c920cab569a0b.json",
+    "tests/test_dashboard_ui/test_responsive_shell.py"
+  ],
+  "notes": [
+    "Outcome first: two MEDIUM documentation-accuracy findings — one",
+    "in the new pin file, one pre-existing charter drift. Both",
+    "addressed. No implementation defect flagged in R4; the R3 fix",
+    "verified as landed correctly.",
+    "Codex R4 review of Plan C Slice 3 R3 (`c920cab`, 2026-09-11)",
+    "returned 2 MEDIUM.",
+    "The R3 module docstring:",
+    "Claimed \"sidebar collapse: button present at EVERY re-render"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

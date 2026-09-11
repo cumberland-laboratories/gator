@@ -1,13 +1,20 @@
 """Plan C Slice 3 Playwright pins — responsive shell + sidebar.
 
 Hits the actual subprocess dashboard spun up by Plan A's
-`dashboard_fleet` fixture. Every pin here takes the plain
+`dashboard_fleet` fixture. Every BROWSER-BASED pin takes the plain
 pytest-playwright `page` fixture (function-scoped, fresh context
 per test) plus `dashboard_fleet` (session-scoped) — no
 `gator_page_readonly` / `gator_page_mutable` shortcuts because
 several pins need to mutate localStorage or set explicit viewport
 sizes before navigating. Tests call `page.goto(fleet["url"] +
 "?repo=<name>")` themselves.
+
+The Slice 2 canonical-wrapper grep invariant
+(`test_no_sidebar_innerHTML_writes_outside_renderSidebarShell`) is
+FIXTURELESS by design — it is a static-source-file check that reads
+`views/repo.js` from disk via `pathlib.Path` + bracket-balance
+parse, with no browser navigation and no `page` / `dashboard_fleet`
+consumption. Named separately below.
 
 Live coverage:
 
