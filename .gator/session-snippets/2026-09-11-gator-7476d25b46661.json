@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R3: charter accurate about enforcement mechanisms + names dedicated 400px-floor mobile pin distinct from 250px minimum-usable pins",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "enforcement-honesty",
+    "pin-contract-separation"
+  ],
+  "commit": "7476d25b466613eb657e76ef77a7b6da85a16c34",
+  "short_commit": "7476d25",
+  "snippet_id": "snippet-7476d25b46661",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 3,
+  "previous_commit_in_session": "fd3138ed7f4fc6898eb9ebb06d563a7fb467a8cd",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T13:05:43Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-fd3138ed7f4fc.json"
+  ],
+  "notes": [
+    "Codex enforcer R3 review of Plan C Slice 1 R2 (`fd3138e`, 2026-09-11)",
+    "returned two MEDIUM findings, both charter-accuracy issues. Charter-",
+    "only fix, no code changes.",
+    "My R2 addition to the \"Forward-declaration note\" preamble listed",
+    "three between-now-and-Slice-3 protections and named the first as",
+    "\"the charter TRIPWIREs themselves (charter grep guards).\" Codex",
+    "verified that claim: `precommit_charter.py::read_tripwire_patterns()`",
+    "only extracts backtick paths from explicit `@tripwire` lines (this"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
