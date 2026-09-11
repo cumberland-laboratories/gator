@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Post-B2 housekeeping: roadmap + inbox rolled forward to mark Plan B2 complete; next decision is v2.13.0 cut or Plan C",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [],
+  "commit": "d0fad17546e84865f1f476948c0f931f789668d8",
+  "short_commit": "d0fad17",
+  "snippet_id": "snippet-d0fad17546e84",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "c51a1d979598f96d6660dba0f3ce4f18ec05d32c",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T01:07:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-11-gator-c51a1d979598f.json"
+  ],
+  "notes": [
+    "Roll `.gator/roadmap.md` and `.gator/inbox.md` forward now that the",
+    "Dashboard UI Plan B2 arc has landed on `main` (four commits",
+    "`4c8b900..c51a1d9` on 2026-09-10, unreleased, slated v2.13.0).",
+    "**roadmap.md** intro paragraph: updated date 2026-09-09 → 2026-09-10;",
+    "added Plan B2 to the \"landed on `main`\" list; documented the three",
+    "Slice arc (server-side CSP + Vary + audit, browser-side sandboxed",
+    "iframe + controls + fixtures, 18 Playwright pins); documented the",
+    "three-round Codex remediation loop (R1 postMessage-relay + production-"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

@@ -96,6 +96,18 @@
 
     state.activeView = name;
 
+    // Plan C Slice 1 (v2.13.0): route-scoped scroll ownership. The Repo and
+    // Docs routes both mount `.repo-browser` and own scroll internally via
+    // the flex chain. Fleet, History, Updates, Settings preserve the default
+    // `#view-slot { overflow-y: auto }`. See scripts-dashboard.md
+    // "Responsive shell + sidebar" TRIPWIRE for the invariants this class
+    // toggle enforces.
+    if (name === "repo" || name === "docs") {
+      viewSlot.classList.add("route-repo");
+    } else {
+      viewSlot.classList.remove("route-repo");
+    }
+
     // Update sidebar active state
     document.querySelectorAll(".sidebar-item").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === name);

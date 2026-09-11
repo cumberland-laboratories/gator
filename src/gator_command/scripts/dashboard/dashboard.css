@@ -276,6 +276,18 @@ html, body {
   padding: 24px 28px;
 }
 
+/* Plan C Slice 1 (v2.13.0): route-scoped scroll ownership. The flex +
+   hidden-overflow chain applies ONLY to Repo and Docs routes (both mount
+   `.repo-browser`); Fleet, History, Updates, Settings preserve the
+   `overflow-y: auto` default above. `showView(name)` in `dashboard.js`
+   toggles `.route-repo` on `#view-slot`. Padding is dropped so
+   `.repo-browser` fills the slot; padding remains on non-Repo routes. */
+#view-slot.route-repo {
+  overflow: hidden;
+  display: flex;
+  padding: 0;
+}
+
 #loading {
   padding: 60px;
   color: var(--color-muted);
@@ -769,6 +781,34 @@ a:hover, .link-btn:hover {
   #topbar {
     padding: 0 16px;
   }
+
+  /* Plan C Slice 1 (v2.13.0): mobile shell scroll ownership. `#app-shell`
+     stays bounded (`height: 100vh; overflow: hidden` from base rule — do NOT
+     relax to `height: auto` here; `#main-shell.overflow: auto` only
+     activates when its parent is bounded). `#main-shell` is the scroll
+     owner for the whole column. Repo/Docs routes go `overflow-y: visible`
+     so the mobile stack flows into `#main-shell`'s scrollbar instead of
+     acquiring its own. `.repo-browser` goes `display: block` for
+     sidebar-over-content stacking. Iframe carries a 60vh floor
+     (60vh × 667px = ~400px on 375×667 target, above the 250px pin
+     threshold). Sidebar becomes a 40vh strip with its own scroll. */
+  #view-slot,
+  #view-slot.route-repo {
+    overflow-y: visible;
+  }
+  .repo-browser {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .repo-iframe-wrapper,
+  .repo-iframe {
+    min-height: 60vh;
+  }
+  .repo-sidebar {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 }
 
 /* ── session modal overlay ────────────────────────────────────────────── */
@@ -869,9 +909,17 @@ a:hover, .link-btn:hover {
 
 /* ── Repo file browser ─────────────────────────────────────────────────── */
 
+/* Plan C Slice 1 (v2.13.0): responsive shell layout floor. Viewport-math
+   sizing (`height: calc(100vh - 80px)`) is FORBIDDEN — it was the root cause
+   of the v2.11.1 80%-zoom-required regression because nested scrollbars
+   appeared whenever chrome height changed. The flex chain
+   (`flex: 1 1 auto; min-height: 0` on every level from `.repo-browser`
+   down to the scroll owner) does the same job without pinning to viewport
+   math. See scripts-dashboard.md "Responsive shell + sidebar" TRIPWIREs. */
 .repo-browser {
   display: flex;
-  height: calc(100vh - 80px);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1007,11 +1055,29 @@ a:hover, .link-btn:hover {
 }
 
 .repo-content {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px;
+}
+
+/* Plan C Slice 1 (v2.13.0): explicit scroll-owner rule for the two possible
+   scrollable children of `.repo-content`. Exactly ONE of `.repo-markdown` /
+   `.repo-search-results` / `.repo-iframe` owns vertical scroll per view;
+   parents stay `overflow: hidden`. `.repo-iframe`'s scroll is its own
+   business (owned by the child document). `overflow-x: auto` is preserved
+   from the pre-Plan-C `.repo-content` rule so wide code blocks / tables
+   inside markdown get a horizontal scrollbar inside the pane instead of
+   being clipped by the parent's now-`overflow: hidden`. */
+.repo-markdown,
+.repo-search-results {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: auto;
-  padding: 24px 32px;
 }
 
 .repo-content img { max-width: 100%; height: auto; }
