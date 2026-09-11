@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R1: search-results scroll owner + mobile media-query placement + overflow both-axes + drop 60vh iframe rule",
+  "change_type": "fix",
+  "significance": "architectural",
+  "charter_changed": true,
+  "decision_tags": [
+    "layout-contract",
+    "tripwire-new",
+    "css-source-order",
+    "css-axis-normalization"
+  ],
+  "commit": "3fe1a5a8843e7fea76188d9728928eea61e03377",
+  "short_commit": "3fe1a5a",
+  "snippet_id": "snippet-3fe1a5a8843e7",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T11:07:33Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-b46d1effeb04f.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/repo.js"
+  ],
+  "notes": [
+    "Codex enforcer review of Plan C Slice 1 (`b46d1ef`, 2026-09-11) returned",
+    "three findings — two HIGH structural regressions, one MEDIUM",
+    "inconsistency. All three landed in this single R1 remediation commit.",
+    "Slice 1's new CSS rule `.repo-markdown, .repo-search-results {",
+    "flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: auto }`",
+    "defines `.repo-search-results` as a scroll owner, but the actual",
+    "search-results branch of the Repo view rendered a bare `<div style=",
+    "\"padding:16px\">...</div>` inside `contentEl` — no `.repo-search-results`"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
