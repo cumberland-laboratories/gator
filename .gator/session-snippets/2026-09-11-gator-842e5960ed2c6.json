@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 1 R4: charter honest about which findings came from probes vs inspection; current-state marker refreshed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "enforcement-attribution"
+  ],
+  "commit": "842e5960ed2c6959e4fbb9f0245f5e36c1010aff",
+  "short_commit": "842e596",
+  "snippet_id": "snippet-842e5960ed2c6",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 4,
+  "previous_commit_in_session": "7476d25b466613eb657e76ef77a7b6da85a16c34",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T13:19:21Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-7476d25b46661.json"
+  ],
+  "notes": [
+    "Codex enforcer R4 review of Plan C Slice 1 R3 (`7476d25`,",
+    "2026-09-11) returned one MEDIUM + one LOW, both charter-accuracy.",
+    "Charter-only fix, no code changes.",
+    "R3 rewrote the enforcement-mechanisms clause to describe protections",
+    "\"Between now and Slice 3.\" One of the three modes named live",
+    "production-harness Chromium probes as running \"on every round\" and",
+    "credited them with catching \"R2 F1 and this R3 pair.\" Codex verified",
+    "the actual review history: probes at 375×667/500/400 ran on R1 and"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}

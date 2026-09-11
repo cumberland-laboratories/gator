@@ -60,6 +60,18 @@ slated for v2.13.0, moves to v2.14.0 or later.
 - Widen the TestPyPI and production PyPI poll windows from 120 seconds to 240
   seconds in release workflows B and C. Repeated CDN propagation races have
   established this as a real release reliability issue.
+- Improve `precommit_session.py::_extract_note_lines` snippet emission so the
+  `notes` field captures the substantive governance narrative instead of the
+  first 8 non-empty preamble lines. Concrete regression surfaced in Codex R5
+  F3 (2026-09-11) against `.gator/session-snippets/2026-09-11-gator-7476d25b46661.json`:
+  the 8-line cap truncated mid-explanation and inverted the source finding.
+  Options: (a) raise the `limit=8` default (cheap; helps most commit_drafts);
+  (b) prefer the LAST N lines rather than the first (usually the outcome
+  section); (c) prefer content under a specific heading (`## Outcome` /
+  `## Verdict`) and fall back to first-N when absent; (d) extend the schema
+  with an explicit `verdict` / `outcome` field the commit_draft populates.
+  Whichever option lands, `scripts-cross-cutting.md` "Shared Snippet
+  Infrastructure" note about the truncation shape needs a matching update.
 - Continue hardening session opening if the shipped `gator init` directive does
   not stop models from skipping the constitution: make the entry-point reads
   blunt and explicit, remove the vestigial two-path conditional, and avoid
