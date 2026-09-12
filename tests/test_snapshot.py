@@ -86,6 +86,7 @@ class TestBuildSnapshot:
             'href="dashboard.css"',
             'src="views/fleet.js"',
             'src="views/history.js"',
+            'src="views/syntax.js"',
             'src="views/repo.js"',
             'src="views/updates.js"',
             'src="views/settings.js"',

@@ -315,14 +315,16 @@ def seed_repo(fleet_root, name):
     (repo / ".gator" / "mission.md").write_text(
         f"# {name} mission\n\nSeed body.\n", encoding="utf-8")
 
-    # Extension seams for Plans B and C. Both are module-level
-    # no-op stubs (below); Plan B and Plan C override them by
-    # reassigning `_harness.seed_content_fixtures` /
-    # `seed_sidebar_fixtures` when their fixtures load. Called
-    # BEFORE the seed commit so any files each plan writes land
-    # in the initial commit.
+    # Extension seams for Plans B and C and the syntax-highlight
+    # increment. All module-level no-op stubs (below); each
+    # feature's seed module overrides them by reassigning
+    # `_harness.seed_content_fixtures` / `seed_sidebar_fixtures` /
+    # `seed_syntax_fixtures` when its fixtures load. Called BEFORE
+    # the seed commit so any files each seed writes land in the
+    # initial commit.
     seed_content_fixtures(repo)
     seed_sidebar_fixtures(repo)
+    seed_syntax_fixtures(repo)
 
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", f"seed {name}")
@@ -357,6 +359,15 @@ def seed_history_commits(repo, name):
 def seed_sidebar_fixtures(repo):
     """No-op stub. Plan C (responsive-shell-and-sidebar) reassigns
     this in `_harness` to add sidebar-overflow fixtures.
+    """
+    return None
+
+
+def seed_syntax_fixtures(repo):
+    """No-op stub. The read-only Python/SQL syntax-highlighting
+    increment reassigns this in `_harness` from
+    `test_syntax_highlight_seed.py` to add `source/` fixtures the
+    tokenizer pins exercise.
     """
     return None
 

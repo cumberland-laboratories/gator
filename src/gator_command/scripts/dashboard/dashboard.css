@@ -1364,6 +1364,20 @@ mark.search-hit {
   line-height: 1.5;
 }
 
+/* Read-only Python / SQL syntax highlighting.
+   Emitted by window.gatorHighlight (views/syntax.js) from the
+   Repo view's non-markdown fallback (views/repo.js
+   renderContentFor). Palette is muted to harmonize with the
+   existing light .md-code-block surface — comments greyed and
+   italic, keywords blue, strings amber, numbers/builtins teal,
+   decorators purple. */
+.md-code-block .tok-keyword   { color: #0550ae; font-weight: 600; }
+.md-code-block .tok-string    { color: #8b5a00; }
+.md-code-block .tok-comment   { color: #6b7280; font-style: italic; }
+.md-code-block .tok-number    { color: #0f766e; }
+.md-code-block .tok-builtin   { color: #0f766e; }
+.md-code-block .tok-decorator { color: #6b21a8; }
+
 .md-inline-code {
   background: #f0f2f4;
   padding: 2px 5px;

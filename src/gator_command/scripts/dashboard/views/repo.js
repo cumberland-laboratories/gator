@@ -52,6 +52,31 @@
     return ".gator/" + filePath;
   }
 
+  // Body-rendering triage for the plain (non-HTML-iframe) branch of
+  // loadFile(). Markdown → renderMarkdown; `.py`/`.sql` under the
+  // size cap → `window.gatorHighlight` (see views/syntax.js);
+  // everything else → plain <pre> with escaped bytes.
+  //
+  // TRIPWIRE: the syntax path relies on gatorHighlight to escape
+  // internally (it wraps each token value with escHtml). Do NOT
+  // pre-escape rawContent before passing it in — that would double-
+  // escape the token values and turn `<` into `&amp;lt;`.
+  const HIGHLIGHT_MAX_BYTES = 500 * 1024;
+
+  function renderContentFor(filePath, rawContent) {
+    if (filePath.endsWith(".md")) return renderMarkdown(rawContent);
+    const lang = window.gatorHighlight
+              && window.gatorHighlight.langFor(filePath);
+    if (lang && rawContent.length <= HIGHLIGHT_MAX_BYTES) {
+      return '<pre class="md-code-block tok-code" data-lang="'
+           + lang + '">'
+           + window.gatorHighlight(rawContent, lang)
+           + '</pre>';
+    }
+    return '<pre class="md-code-block">'
+         + escHtml(rawContent) + '</pre>';
+  }
+
   // Bind the three HTML-preview control buttons (Copy path,
   // Refresh, Open externally) that the iframe branch renders.
   // Refresh reseats the iframe `src` with a cache-buster query
@@ -1150,7 +1175,7 @@
             ${lastMod}
           </span>
         </div>
-        <div class="repo-markdown">${filePath.endsWith(".md") ? renderMarkdown(rawContent) : '<pre class="md-code-block">' + escHtml(rawContent) + '</pre>'}</div>
+        <div class="repo-markdown">${renderContentFor(filePath, rawContent)}</div>
       `;
 
       // Copy path button handler

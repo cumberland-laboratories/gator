@@ -37,6 +37,7 @@ def build_snapshot(fast_data):
         history_or_audit_js = audit_path.read_text(encoding="utf-8")
     else:
         history_or_audit_js = ""
+    syntax_js = _read_asset("views/syntax.js")
     repo_js = _read_asset("views/repo.js")
     updates_js = _read_asset("views/updates.js")
     settings_js = _read_asset("views/settings.js")
@@ -62,6 +63,7 @@ def build_snapshot(fast_data):
     scripts_block = (
         f"\n<script>\n{fleet_js}\n</script>\n"
         f"<script>\n{history_or_audit_js}\n</script>\n"
+        f"<script>\n{syntax_js}\n</script>\n"
         f"<script>\n{repo_js}\n</script>\n"
         f"<script>\n{updates_js}\n</script>\n"
         f"<script>\n{settings_js}\n</script>\n"
@@ -71,6 +73,7 @@ def build_snapshot(fast_data):
     html = re.sub(
         r'\s*<script src="views/fleet\.js"></script>\s*'
         r'<script src="views/history\.js"></script>\s*'
+        r'<script src="views/syntax\.js"></script>\s*'
         r'<script src="views/repo\.js"></script>\s*'
         r'<script src="views/updates\.js"></script>\s*'
         r'<script src="views/settings\.js"></script>\s*'

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Post-v2.13.1 rollforward: roadmap + inbox — v2.13.1 shipped, Sketch 1 marked landed, CDN-widen watch-only, two stale-Dashboard follow-ups inboxed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "post-release-rollforward"
+  ],
+  "commit": "4e64f6de7b27cbab21631c1b96d319bebc478976",
+  "short_commit": "4e64f6d",
+  "snippet_id": "snippet-4e64f6de7b27c",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "af60d933518e8c15941d1a34a17fd77d2909ad8c",
+  "started_at": "2026-09-12T17:06:56Z",
+  "ended_at": "2026-09-12T17:06:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-12-gator-af60d933518e8.json"
+  ],
+  "notes": [
+    "Post-release housekeeping for v2.13.1 per `.gator/procedures/release-and-deploy.md` step 8.",
+    "`.gator/roadmap.md` intro — v2.13.1 shipped notice prepended to the v2.13.0 line; test-count updated 189 → 192; both v2.13.0 and v2.13.1 called out as fully-first-try-green with no CDN-race reruns; the \"widen CDN poll windows\" inbox item noted as likely self-resolved.",
+    "`.gator/roadmap.md` Done row — new v2.13.1 \"Fleet activity-column stability patch\" row inserted above the v2.13.0 Dashboard UI row, documenting the reserved-slot pattern, Codex Chromium probe evidence, new geometry + structural pins, new charter TRIPWIRE, +3 net test count, and the second consecutive first-try-green pipeline.",
+    "`.gator/inbox.md::Codex sketches` — Sketch 1 (Fleet column stability) crossed out with \"shipped in v2.13.1\" narrative summary noting the reserved-slot pattern that landed and the pipeline outcome; Sketch 2 (Cumberland HTML) remains next.",
+    "`.gator/inbox.md::Where we are` — reframed post-v2.13.0 → post-v2.13.1; both GitHub Release URLs linked; both fully-green pipelines noted; roadmap-priority pointer preserved.",
+    "`.gator/inbox.md::Unscheduled open backlog` — TestPyPI/production PyPI poll-window item struck through with \"Likely already resolved\" note (two consecutive first-try-green pipelines suggest the existing `Wait for TestPyPI CDN to surface the new version` workflow step handles propagation). Two new items added surfacing today's stale-Dashboard incident:",
+    "**`gator kill dashboard` UX** — bare command LISTS but does NOT kill; the imperative verb misleads. Three concrete option paths.",
+    "**Stale-Dashboard-in-browser detection** — when a fix ships and the operator restarts inconsistently, the browser can silently show pre-fix state. Three concrete option paths (commit-SHA `<meta>` compared frontend-side; auto-reload variant; versioned asset URLs)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

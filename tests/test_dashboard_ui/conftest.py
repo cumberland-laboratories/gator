@@ -24,6 +24,10 @@ from . import content_transport_seed  # noqa: F401
 # `seed_sidebar_fixtures` on the harness BEFORE any fixture
 # builds the fleet.
 from . import test_responsive_shell_seed  # noqa: F401
+# Read-only syntax-highlight increment (2026-09-12) — module-scope
+# import registers `seed_syntax_fixtures` on the harness BEFORE
+# any fixture builds the fleet.
+from . import test_syntax_highlight_seed  # noqa: F401
 
 
 # ── §4.1: in-process dashboard module loader ──────────────────────
