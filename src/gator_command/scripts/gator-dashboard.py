@@ -820,8 +820,19 @@ def _iter_scanner_files(namespace_root_path, namespace_root):
                     if is_dir:
                         cf_name = entry.name.casefold()
                         if is_top and cf_name in reserved_top:
+                            # DEBUG (not WARNING): this defense fires
+                            # on EVERY governed-repo scan because every
+                            # gatorized repo has `.gator/` at its top
+                            # level. WARNING made every Dashboard start
+                            # / refresh spam a line per repo, per
+                            # namespace pass. The mainline code path
+                            # already handles this correctly; the log
+                            # is receipt-of-defense for audit, not an
+                            # actionable warning. Keep at DEBUG so it
+                            # remains reachable via log config when
+                            # verifying the defense fired.
                             logging.getLogger(
-                                "dashboard.discovery").warning(
+                                "dashboard.discovery").debug(
                                 "source_alias_denied path=%s "
                                 "reason=governance_root",
                                 entry.path)
