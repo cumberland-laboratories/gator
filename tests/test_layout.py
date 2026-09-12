@@ -297,6 +297,30 @@ class TestLayoutDetection:
         assert "README.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
         assert "_template.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
 
+    def test_mixed_defaults_includes_cumberland_html_template(self):
+        """Cumberland HTML style master (Codex Sketch 2 Slice 1,
+        2026-09-12): the shipped starter for any HTML document Gator
+        produces lives at
+        `templates/gator-starter/reference-notes/cumberland-html-document-template.html`
+        (source) with `.gator/.includes/reference-notes/…` as the
+        dogfood mirror. Its filename must appear in
+        MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"] so the
+        mixed-directory classifier sees it as a shipped default and
+        does not misroute a fleet repo whose reference-notes/
+        contains only this file + scaffolding.
+
+        Regression pin — additions to MIXED_DIRECTORY_SHIPPED_DEFAULTS
+        are the same class of silent drift as USER_VISIBLE_SCAFFOLDING:
+        an accidental removal would misclassify a reference-notes/
+        containing only the Cumberland template + README + _template.md
+        as "mixed" (has non-scaffolding content at root → incomplete
+        migration), when in fact the Cumberland template IS a shipped
+        default and belongs there.
+        """
+        assert (
+            "cumberland-html-document-template.html"
+            in gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"])
+
 
 class TestScaffoldingRoutingRoundTrip:
     """v2.12.1 fix: real end-to-end pins that USER_VISIBLE_SCAFFOLDING is

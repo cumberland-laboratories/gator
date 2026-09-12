@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<!--
+  cumberland-html-document-template.html
+  ──────────────────────────────────────────────────────────
+  The DEFAULT starting template for any HTML document Gator
+  produces. When the Architect asks for "an HTML document
+  that says X" / "an HTML report on Y" / "a Cumberland-style
+  writeup of Z", start from THIS file.
+
+  Fill every ==TODO== placeholder before publishing. Delete
+  each ==TODO== marker once its section is real. Delete any
+  component sample block below whose kind of content the
+  document does not need (a plain prose doc does not need
+  the .diagram block; a table-heavy doc does not need the
+  numbered-steps list; etc.). Keep what serves the piece.
+
+  ────────────────────────────────────────────────────────────
+  STYLE vs ROLE vs PROTOCOL — three separate concerns:
+
+    STYLE      This template (Cumberland visual grammar —
+               palette, typography, callouts, tables,
+               figures, diagram, steps, pills, badges).
+
+    ROLE       Determines the DESTINATION path:
+                 .gator/artifacts/YYYY-MM-DD-<slug>.html
+                     deep records, design docs, research
+                 .gator/blueprints/<slug>.html
+                     Blueprint artifacts (feature-blueprint,
+                     charter-map, procedure-visual,
+                     reference-explainer — see below)
+                 .gator/procedures/<slug>.html
+                     repeatable workflows / procedure-visual
+                 .gator/reference-notes/<slug>.html
+                     reference-explainers, cognitive aids
+                 .gator/threads/<slug>.html
+                     lightweight topic notes (rare in HTML)
+
+    PROTOCOL   Blueprint artifacts additionally conform to
+               `gator-blueprint-html-v1` (required <meta>
+               tags, structural conventions). If the piece is
+               a Blueprint, use `.gator/blueprints/_template.html`
+               (interactive) or `.gator/blueprints/_template-narrative.html`
+               (narrative) — those specialize this same
+               Cumberland visual grammar with Blueprint-
+               protocol metadata.
+
+  Triage: see `.gator/procedures/authoring-html-artifacts.md`
+  for the medium-first decision (is this a Blueprint, or a
+  general HTML document?).
+
+  ────────────────────────────────────────────────────────────
+  Shared CSS core (below, inside
+  CUMBERLAND-NARRATIVE-STYLE:BEGIN/END): this exact region
+  also appears byte-for-byte inside the narrative Blueprint
+  template `.gator/blueprints/_template-narrative.html`, and
+  a compatibility test pins the two files together. Change
+  either copy without changing the other and the test fails.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>==TODO== short human title, under 80 chars</title>
+
+  <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
+    :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
+
+      /* Neutral scale — 9-step Tailwind-style ramp. */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.85rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
+
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
+
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
+
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* Footer — small centered muted text with top-border. */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: center;
+    }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+  </style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>==TODO== short human title</h1>
+  <div class="subtitle">==TODO== one-to-three-sentence orientation — what this document does for the reader, in the reader's terms (not the author's). Justified prose, so it reads as a document rather than a note.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> ==TODO== artifact | procedure | reference-note | ...</div>
+    <div><span class="label">Audience:</span> ==TODO== who this is for</div>
+    <div><span class="label">Status:</span> <span class="status-badge">==TODO==</span></div>
+    <div><span class="label">Updated:</span> ==TODO== 2026-09-12</div>
+    <div><span class="label">Reading time:</span> ==TODO== ~N minutes</div>
+    <div><span class="label">Author:</span> ==TODO== agent-model | your-handle</div>
+  </div>
+  <!-- Delete .metaline if not needed. Good for cross-refs to
+       related documents, prior versions, or a source ticket. -->
+  <div class="metaline">==TODO== optional footer line — cross-refs, prior versions, related docs.</div>
+</header>
+
+<!-- Delete the whole <nav> if the doc has fewer than four
+     sections. For a short piece, jump straight to the
+     summary callout. -->
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#section-1">==TODO== First section title</a></li>
+    <li><a href="#section-2">==TODO== Second section title</a></li>
+    <li><a href="#section-3">==TODO== Third section title</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <!-- The Summary callout is the load-bearing "if the reader
+       only reads one box" answer. Keep it to one or two
+       paragraphs; do not include lists or tables. -->
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>==TODO== one or two paragraphs answering the question in the title. If the reader stops here, what do they leave knowing?</p>
+  </div>
+</section>
+
+<section id="section-1">
+  <h2>==TODO== First section title</h2>
+  <p>==TODO== opening paragraph. Body prose is justified with automatic hyphenation — write for a document, not a wiki.</p>
+  <p>==TODO== second paragraph if the point needs it. Keep paragraphs to a single idea; the justified layout rewards discipline and punishes run-ons.</p>
+</section>
+
+<section id="section-2">
+  <h2>==TODO== Second section title — with a figure</h2>
+  <p>==TODO== introduce the figure in the paragraph BEFORE it, so the reader knows what to look at.</p>
+
+  <!-- FIGURE — hand-authored SVG. Delete the <div class="figure">
+       block if this section has no diagram; keep-and-modify if
+       there is one. Prefer a real SVG over an image so the doc
+       stays crisp at any zoom and stays self-contained. -->
+  <div class="figure">
+    <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-label="==TODO== short accessible description">
+      <rect x="20" y="30" width="180" height="140" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="110" y="60" font-size="13" fill="#4a72b0" font-weight="700" text-anchor="middle">==TODO== A</text>
+      <text x="110" y="82" font-size="10.5" fill="#374151" text-anchor="middle">==TODO== what A is</text>
+
+      <rect x="410" y="30" width="180" height="140" rx="8" fill="white" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="500" y="60" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">==TODO== B</text>
+      <text x="500" y="82" font-size="10.5" fill="#374151" text-anchor="middle">==TODO== what B is</text>
+
+      <line x1="205" y1="100" x2="405" y2="100" stroke="#4b5563" stroke-width="1.5"/>
+    </svg>
+    <div class="caption">==TODO== Figure 1 — one-sentence caption naming what the figure shows and why it belongs here.</div>
+  </div>
+
+  <p>==TODO== after-figure paragraph: what the reader now understands, or what the figure did NOT show and needs the following text to fill in.</p>
+</section>
+
+<section id="section-3">
+  <h2>==TODO== Third section title — with a diagram, steps, or table</h2>
+  <p>==TODO== pick ONE of the component blocks below (or two if the section is long enough to earn both). Delete the rest.</p>
+
+  <!-- DIAGRAM — CSS-flexbox flowchart. Delete if the section
+       has no linear stage sequence. Node color variants:
+       default teal | .blue | .red | .amber | .green | .purple. -->
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node">
+        ==TODO== Stage A
+        <span class="kind">input</span>
+      </div>
+      <div class="diagram-edge"><span class="diagram-edge-label">==TODO==</span></div>
+      <div class="diagram-node blue">
+        ==TODO== Stage B
+        <span class="kind">transform</span>
+      </div>
+      <div class="diagram-edge blue"></div>
+      <div class="diagram-node green">
+        ==TODO== Stage C
+        <span class="kind">output</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEPS — numbered procedure. Delete if the section is not
+       a sequence. Class variants: default teal | .step-alt (blue)
+       | .step-warn (red) | .step-done (green). -->
+  <ol class="steps">
+    <li>==TODO== first step — short heading, one or two sentences of body.</li>
+    <li class="step-alt">==TODO== branching or alternate step.</li>
+    <li>==TODO== third step.</li>
+    <li class="step-done">==TODO== terminal step marking done state.</li>
+  </ol>
+
+  <!-- TABLE — colored header variants:
+         default gray  general
+         .table-blue   informational / comparative
+         .table-red    failure modes / warnings
+         .table-teal   verified / positive baseline
+       Pill chip variants for cells: .ok .info .warn .alt .data .na. -->
+  <table class="table-blue">
+    <thead>
+      <tr>
+        <th>==TODO== Column A</th>
+        <th>==TODO== Column B</th>
+        <th>==TODO== Column C</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill ok">Recommended</span></td>
+      </tr>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill alt">Alternate</span></td>
+      </tr>
+      <tr>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td>==TODO==</td>
+        <td><span class="pill na">Not applicable</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- CALLOUT VARIANTS — pick the color that matches the role,
+       delete unused. Use .data (purple) SPARINGLY — one or two
+       per document is the intended cadence. -->
+  <div class="callout note">
+    <span class="label">Note</span>
+    <p>==TODO== a neutral aside — related context that doesn't fit inline.</p>
+  </div>
+  <div class="callout info">
+    <span class="label">Caution</span>
+    <p>==TODO== a subtle constraint or gotcha to keep in mind.</p>
+  </div>
+  <div class="callout warn">
+    <span class="label">Warning</span>
+    <p>==TODO== a hard failure mode — mis-step here breaks something visible.</p>
+  </div>
+  <div class="callout ok">
+    <span class="label">Confirmed</span>
+    <p>==TODO== a verified outcome — checked, works, safe to rely on.</p>
+  </div>
+  <div class="callout data">
+    <span class="label">==TODO== insight heading</span>
+    <p>==TODO== the highest-signal moment in the section — reserved for the one or two per document where the surrounding context has built up enough that the reader is ready to be handed the load-bearing conclusion.</p>
+  </div>
+</section>
+
+<footer class="doc-foot">
+  ==TODO== short footer — repo · doc class · date · author. Delete if not wanted.
+</footer>
+
+</body>
+</html>

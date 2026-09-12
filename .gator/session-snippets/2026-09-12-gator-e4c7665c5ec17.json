@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Advance runtime pin to 2.13.2",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-pin",
+    "housekeeping"
+  ],
+  "commit": "e4c7665c5ec17a36192d4dce42b5913dcae5913a",
+  "short_commit": "e4c7665",
+  "snippet_id": "snippet-e4c7665c5ec17",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "f38947cc12a0e2d23ff13fabdd0ac706ba202e73",
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-12T20:25:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-09-12-gator-f38947cc12a0e.json"
+  ],
+  "notes": [
+    "`gator update` run on 2026-09-12 after the v2.13.2 ship advances the",
+    "repo's `.gator/runtime-pin.json` from 2.13.1 → 2.13.2, refreshes the 16",
+    "runtime-file SHA-256 manifest, and updates `.gator/.gator-version` to",
+    "match the installed CLI. No shipped-content updates (\"60 unchanged\")."
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}
