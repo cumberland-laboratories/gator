@@ -2,6 +2,33 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.13.1] — 2026-09-12
+
+Patch release: Dashboard Fleet activity-column stability fix. Cosmetic-only.
+
+### Fixed
+
+- **Fleet table activity-column "jump" on Update / Gatorize click** — clicking the Update or Gatorize button on any Fleet row inserted a 20px `.dot-pulse` into the previously-empty activity `<td>`. Because `.data-table` uses browser-default automatic table-layout, the pulse's 20px intrinsic width recomputed every column and shrank the first five columns by 20px total, producing a visible row "jump" on the idle → busy transition. The Dashboard charter already claimed a fixed-width activity column; the implementation didn't uphold it. Fix reserves the 20px slot from initial render via a permanent `<span class="activity-indicator" aria-live="polite">` inside every `.activity-cell`; both `bindUpdateButtons` and `bindGatorizeButtons` now mutate content INSIDE the indicator rather than the enclosing cell. New CSS rule `.activity-indicator { display: inline-block; width: 20px; min-width: 20px }` in `dashboard.css` beside the existing `.activity-cell` / `.dot-pulse` rules — matches the pulse width exactly so idle geometry equals busy geometry. Codex-authored sketch at `.gator/vault/artifacts/2026-09-12-dashboard-fleet-update-column-stability-sketch.md` verified the issue via Chromium probe at 1440/1200/1000/800px viewports before landing the fix.
+
+### Added
+
+- **Fleet layout regression pins** in `tests/test_dashboard_ui/test_fleet_layout.py`: `test_fleet_update_click_preserves_column_geometry` (parametrized over 1440px + 800px viewports; stubs `window.fetch` to a never-resolving Promise so the busy state persists; clicks the real production `.update-btn:not(.gatorize-btn)`; waits for `.activity-indicator .dot-pulse` to attach; asserts every Fleet header cell's `getBoundingClientRect()` width AND x-coordinate unchanged within 0.5px subpixel tolerance) and `test_every_fleet_activity_cell_contains_indicator_at_initial_render` (structural companion; asserts every populated Fleet row emits exactly one `.activity-indicator` at initial paint).
+
+### Charter
+
+- **New TRIPWIRE** in `scripts-dashboard.md` Fleet-table bang note: **Fleet activity-column stability TRIPWIRE (2026-09-12)** — documents the permanent-indicator + reserved-slot + mutate-inside-indicator contract, names the two Slice-3 pins that lock it, and describes the class of latent regression the fix prevents (empty cell has no min-content contribution, so mutating the cell directly re-triggers auto table-layout).
+
+### Compatibility
+
+- No API change, no server change, no endpoint contract change. Other `.data-table` consumers unaffected — the `.activity-indicator` reservation is scoped to the Fleet activity column only.
+- No breaking changes. Users see the stable Fleet table on next Dashboard restart after `pipx upgrade gator-command`.
+- `tests/test_dashboard_ui/`: **192 passed, 11 skipped** on Windows / Python 3.13 (+3 net vs v2.13.0 baseline of 189).
+
+### Notes
+
+- This patch closes an issue that shipped in v2.13.0 (and every earlier release that shipped the Fleet table): the "fixed-width activity column" claim in the charter was aspirational, not enforced. The regression pins now enforce the invariant automatically.
+- First of two Codex-authored sketches from 2026-09-12; the second (Cumberland HTML style default) is pending as separate cross-cutting work.
+
 ## [2.13.0] — 2026-09-12
 
 The Dashboard UI release: a four-plan arc (Plan A harness + Plan B1 safe content transport + Plan B2 sandboxed HTML preview + Plan C responsive shell/sidebar) that overhauls how the Dashboard serves and renders repository content in the browser. Every plan shipped through Codex enforcer remediation rounds; the final `test_dashboard_ui/` count is **189 pass + 11 skip** (+43 net from the v2.12.3 baseline). No breaking API changes.
