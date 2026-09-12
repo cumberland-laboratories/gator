@@ -3,75 +3,37 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
-## Where we are (2026-09-10, post-B2)
+## Where we are (2026-09-12, post-v2.13.0)
 
-**Dashboard UI Plan A + Plan B1 + Plan B2 landed on `main`, unreleased
-(slated v2.13.0).** B2 Codex converged after three review rounds — R1
-took four findings (HIGH child-frame CSP read hole via postMessage
-relay, HIGH production-path pin gap via `_click_file_via_repo_view`,
-MEDIUM charter Wasm-audit claim narrowed, LOW copy-btn `setTimeout`
-null-deref via synchronous button capture), R2 took four (two-lane
-liveness, browser-captured popup CSP, rendered-pixel iframe sizing,
-stale cross-cutting/fleet-intel charter reconciliation), R3 took two
-LOW (extended `test_copy_path_writes_repo_relative_string` to walk
-the full async flow, reconciled the primary Dashboard charter's
-CSP-violation detector and iframe sizing TRIPWIREs to match the R2
-implementations). Test state on Windows / Python 3.13:
-`tests/test_dashboard_ui/` **166 pass + 11 skipped**. Ubuntu CI
-exercises the POSIX-only pins.
+**v2.13.0 shipped.** GitHub Release live at
+https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.0.
+Nothing on the dashboard-UI sequence is blocking. The pre-v2.13.0
+roadmap priorities remain — see `roadmap.md`:
 
-B2 landed commits (in order):
-
-- `4c8b900` B2 Slice 1: server-side CSP + Vary emit for /raw text/html + fast-matrix unsafe-eval audit
-- `a22e311` B2 Slice 2: inline sandboxed iframe rendering + iframe CSS + shipped-blueprint + negative-control fixtures
-- `611ca7d` B2 Slice 3: Playwright pins for sandboxed HTML preview + CSP violation detector + shipped-template compat matrix
-- `c51a1d9` B2 Codex R1+R2+R3: postMessage-relay + production-path pins + async copy-btn coverage + charter reconciliation
-
-Plans A + B1 commit list (`8f2b9c9` through `6efe9b9`) preserved in
-git log.
-
-Next dashboard-UI work — the choice the Architect handoff calls out:
-
-1. **Cut v2.13.0** bundling Plan A + Plan B1 + Plan B2.
-2. **Plan C — responsive shell/sidebar:**
-   `.gator/vault/artifacts/2026-09-06-dashboard-responsive-shell-and-sidebar-plan.md`.
-   Independent of B2; the harness seam `seed_sidebar_fixtures` is
-   reserved for it.
-
-The frozen parent plans remain reference-only:
-`.gator/vault/artifacts/2026-09-06-dashboard-safe-content-transport-plan.md`,
-`.gator/vault/artifacts/2026-09-07-dashboard-html-preview-b2-plan.md`,
-and `.gator/vault/artifacts/2026-09-05-dashboard-ux-implementation-plan.md`.
-Do not implement any of them directly.
-
-Two sibling plans remain open, not on the dashboard-UI sequence:
-
-- `.gator/vault/artifacts/2026-09-05-field-guides-retirement-implementation-plan.md`
-- `.gator/vault/artifacts/2026-09-05-legacy-git-hooks-cleanup-implementation-plan.md`
-
-**Release readiness for v2.13.0**: the Dashboard UI arc's changes are
-release-worthy; the next release train can bundle Plan A + Plan B1 +
-Plan B2 into v2.13.0 whenever the Architect chooses to cut. Blueprints
-2.0 Release B (feature-blueprint generation procedure), previously
-slated for v2.13.0, moves to v2.14.0 or later.
+1. Gator + Enterprise polished and ready for lots of users.
+2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
+3. Gator Loop polish.
+4. Normalized transcript index (exploratory).
 
 ## Unscheduled open backlog
 
 - Widen the TestPyPI and production PyPI poll windows from 120 seconds to 240
-  seconds in release workflows B and C. Repeated CDN propagation races have
-  established this as a real release reliability issue.
+  seconds in release workflows B and C. Historical CDN propagation races
+  established this as a real reliability item. **Downgrade watch**: the
+  v2.13.0 release train ran fully first-try green on both TestPyPI and
+  production PyPI smokes with no reruns. Might mean the existing
+  "Wait for TestPyPI CDN to surface the new version" workflow step already
+  handles propagation, or it may just be a lucky quiet stretch. Confirm by
+  reading the current workflow YAML before deciding whether to widen.
 - Improve `precommit_session.py::_extract_note_lines` snippet emission so the
   `notes` field captures the substantive governance narrative instead of the
-  first 8 non-empty preamble lines. Concrete regression surfaced in Codex R5
-  F3 (2026-09-11) against `.gator/session-snippets/2026-09-11-gator-7476d25b46661.json`:
-  the 8-line cap truncated mid-explanation and inverted the source finding.
-  Options: (a) raise the `limit=8` default (cheap; helps most commit_drafts);
-  (b) prefer the LAST N lines rather than the first (usually the outcome
-  section); (c) prefer content under a specific heading (`## Outcome` /
-  `## Verdict`) and fall back to first-N when absent; (d) extend the schema
-  with an explicit `verdict` / `outcome` field the commit_draft populates.
-  Whichever option lands, `scripts-cross-cutting.md` "Shared Snippet
-  Infrastructure" note about the truncation shape needs a matching update.
+  first 8 non-empty preamble lines. Options: (a) raise the `limit=8` default;
+  (b) prefer the LAST N lines; (c) prefer content under a specific heading
+  (`## Outcome` / `## Verdict`) and fall back to first-N when absent; (d)
+  extend the schema with an explicit `verdict` / `outcome` field the
+  commit_draft populates. Whichever lands, `scripts-cross-cutting.md`
+  "Shared Snippet Infrastructure" note about the truncation shape needs a
+  matching update.
 - Continue hardening session opening if the shipped `gator init` directive does
   not stop models from skipping the constitution: make the entry-point reads
   blunt and explicit, remove the vestigial two-path conditional, and avoid
@@ -89,7 +51,19 @@ slated for v2.13.0, moves to v2.14.0 or later.
   `__pycache__/*.pyc` files from templates.
 - Fix `stale-charter-refs` parsing of compound headings such as
   `AUTO_YES / set_auto_yes(value) / get_auto_yes()`; current false positives
-  weaken trust in the warning.
+  weaken trust in the warning (fired on every commit across the v2.13.0
+  remediation train).
+- Fix `new-functions-undocumented` warning firing on test-function names in
+  `tests/**`. Every `test_*` in a new test file becomes noise; consider a
+  filename-based filter that skips `tests/**` for that warning. (Same round of
+  observations as the `stale-charter-refs` item above — fired on every
+  Slice 3 commit.)
+- `_required_charters_for_files` vs `INDEX.md` preamble cardinality mismatch:
+  INDEX.md preamble says a matching row requires "at least one" listed
+  charter to be updated; `gator-pre-commit.py::validate_hard_rules` actually
+  requires EVERY listed charter to be staged (`missing = required -
+  staged_names`). Options: align code to the documented "at least one" rule,
+  or update INDEX.md preamble to match the ALL-of-required implementation.
 - Rewrite the vaulted pre-monorepo installation, upgrade, getting-started, and
   docs-index pages for the pipx-first monorepo workflow.
 - After the Architect archives the legacy
@@ -98,16 +72,22 @@ slated for v2.13.0, moves to v2.14.0 or later.
   period.
 - Decide whether the vaulted `scripts-command-post.md` charter should be
   restored for the monorepo or intentionally remain retired.
-- **Post-B1 authoring observations** (nice-to-have, not blocking): (a) the
-  `pre-commit charter-index-gap` rule requires ALL charters in a matching
-  INDEX row to be updated, not "at least one" as the INDEX.md preamble
-  claims — this bit every B1 slice commit and adds friction to changes that
-  legitimately only touch one charter's surface; consider aligning
-  `_required_charters_for_files` to the documented "at least one" rule, or
-  updating INDEX.md's preamble to match the implementation. (b) The
-  `new-functions-undocumented` warning fires on test functions (each
-  `test_*` in a new test file), which is noise — consider a filename-based
-  filter that skips `tests/**` for that warning.
+- Charter line-locator sweep across the OTHER charters. `scripts-dashboard.md`
+  is now clean of the prohibited `filename.ext:N` / `line N` / `line ~N` /
+  `lines N-M` forms (Slice 3 R6-R8 remediation). Similar debt likely exists in
+  neighboring charters (`scripts-cross-cutting.md`, `scripts-repo-lifecycle.md`,
+  etc.) — needs a directed sweep to bring the whole `.gator/charters/` tree
+  into line with the constitution's "stable, grep-verifiable identifiers"
+  rule.
+- Deferred Plan C §7 pins (documented in `scripts-dashboard.md` "Forward-
+  declaration note" preamble + `test_responsive_shell.py` module docstring):
+  `test_fleet_view_scrolls_at_900_400`, `test_fleet_view_scrolls_at_375_667_mobile`,
+  initial-load-error preserves sidebar state, polling-refresh preserves
+  collapse button, `test_iframe_layout_at_375_667` (250px minimum-usable-size
+  distinct from the 400px floor), invalid-persisted-width fallback, mobile
+  bounded-shell scroll-owner (`#main-shell` scrolls while `documentElement`
+  does not). Legitimate follow-on coverage for a future slice if full §7
+  parity is wanted.
 
 ## Machine state (persistent operational reference)
 

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.13.0 — Dashboard UI: Plan A harness + Plan B1 safe content transport + Plan B2 sandboxed HTML preview + Plan C responsive shell/sidebar",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "dashboard-ui"
+  ],
+  "commit": "d1de41730072a150e4823b9bd71b59243c1fe01d",
+  "short_commit": "d1de417",
+  "snippet_id": "snippet-d1de41730072a",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-12T14:59:55Z",
+  "ended_at": "2026-09-12T14:59:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-12-gator-7bf9bbe7caf78.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump commit for v2.13.0 per `.gator/procedures/release-and-deploy.md` step 2. Four-plan Dashboard UI arc + all enforcer-remediation rounds.",
+    "`pyproject.toml` — version 2.12.3 → 2.13.0.",
+    "`VERSION` — 2.12.3 → 2.13.0 (byte-consistent with pyproject per `scripts-core-library.md::get_version` tripwire).",
+    "`CHANGELOG.md` — new `## [2.13.0] — 2026-09-12` section documenting Plan A + B1 + B2 + Plan C, all named Codex remediation rounds (B1 R1-R3, B2 R1+R2+R3 combined, Plan C Slice 1 R1-R8 + Slice 3 R1-R8), test-count movement 148 → 189 pass + 11 skip, no-breaking-changes attestation, deferred coverage inventory, charter line-locator sweep note.",
+    "`.gator/charters/scripts-core-library.md::get_version` — appended `2.13.0 (2026-09-12, current: **2.13.0** in both files)` to the version-drift history line per the tripwire's sync obligation."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
