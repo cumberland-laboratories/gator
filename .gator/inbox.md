@@ -3,6 +3,81 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
+## Codex sketches — Architect-ratified next work (2026-09-12)
+
+Two Codex-authored sketches under `.gator/vault/artifacts/`. Architect
+ratified 2026-09-12: **Fleet column stability first, then Cumberland HTML.**
+
+### 1. Dashboard Fleet **Update** column stability (small cosmetic)
+
+Path: `vault/artifacts/2026-09-12-dashboard-fleet-update-column-stability-sketch.md`
+
+- **Issue** — clicking Fleet **Update** inserts a 20px `.dot-pulse` into the
+  previously-empty activity cell; because `.data-table` uses browser-default
+  auto-layout, every column width recomputes and the row visibly "jumps." The
+  Dashboard charter already claims a fixed-width activity column; the
+  implementation does not currently uphold that.
+- **Fix** — reserve the 20px slot from initial render via a permanent
+  `<span class="activity-indicator">` inside every activity cell; retarget
+  `bindUpdateButtons()` + `bindGatorizeButtons()` to mutate content INSIDE the
+  reserved slot; small CSS reservation rule. Same treatment for Gatorize
+  which shares the column.
+- **Scope** — `views/fleet.js` + `dashboard.css` + new
+  `tests/test_dashboard_ui/test_fleet_layout.py` (geometry pin at 1440px +
+  800px) + charter reconciliation. No server changes, no public API,
+  no responsive-shell overlap.
+- **Codex's recommendation** — land as one small isolated Dashboard polish
+  commit.
+
+### 2. Cumberland HTML style default + always-read routing rule (cross-cutting)
+
+Path: `vault/artifacts/2026-09-12-cumberland-html-style-sketch.md`
+
+- **Thesis** — when the Architect says "I want an HTML document that says…",
+  every governed model should default to a single Cumberland narrative HTML
+  master template without needing to remember a filename, slash command, or
+  protocol. Promote the visual grammar demonstrated by
+  `~/Downloads/2026-09-11-what-gator-is.html` (SHA-256
+  `0926F696…D53D9E4`) into a Gator-shipped master + add one short routing
+  rule to the always-read constitution.
+- **Architect framing (2026-09-12)**: the reference file IS a Gator-built
+  artifact. Its styling IS the canonical target for all HTML documents Gator
+  produces — this is a style-canonicalization task, not an inspiration point.
+  The master template should reproduce the reference's visual grammar
+  faithfully.
+- **Separation of concerns** — style (Cumberland palette/typography/shell)
+  vs role (blueprint/artifact/procedure/policy/reference-note determines
+  path) vs protocol (`gator-blueprint-html-v1` metadata is optional when
+  the role calls for it). Explicit HTML request → Cumberland master →
+  role-appropriate destination.
+- **Canonical source**:
+  `src/gator_command/templates/gator-starter/reference-notes/cumberland-html-document-template.html`
+  with `.gator/.includes/reference-notes/…` as the dogfood mirror.
+  Reference-notes location because it's already shipped + layout-resolved
+  and constitution-relative links work in both v1 and v2 layouts.
+- **Fix** — four slices: (1) establish master from the reference file
+  (add to `MIXED_DIRECTORY_SHIPPED_DEFAULTS` in `gator_layout.py` for
+  fallback classification); (2) constitution rule + broaden
+  `procedures/authoring-html-artifacts.md` from Blueprint-first to
+  medium-first triage; (3) reconcile `_template-narrative.html` as a
+  Blueprint-protocol specialization of the master with a
+  `<!-- CUMBERLAND-NARRATIVE-STYLE:BEGIN/END -->` byte-identical shared
+  region + parity check; (4) propagation + visual-invariant tests
+  (structural + computed-style, not pixel snapshots — OS font rendering
+  variance).
+- **Scope** — cross-cutting: shipped template + constitution + procedure +
+  narrative-Blueprint template + charter updates in `scripts-repo-lifecycle`
+  / `scripts-layout` / `scripts-cross-cutting`. Codex explicitly calls the
+  significance check pre-commit even though HTML/CSS is low-risk, because
+  it changes the default Architect-request response across every governed
+  repo and every supported model.
+- **Codex's recommendation** — land after Blueprints 2.0 work settles enough
+  to avoid editing the narrative-template + authoring-procedure files
+  concurrently. One small cross-cutting feature train.
+
+Sequence: **Sketch 1 (Fleet column stability) is up next**, then Sketch 2
+(Cumberland HTML). Both sketches are pre-implementation.
+
 ## Where we are (2026-09-12, post-v2.13.0)
 
 **v2.13.0 shipped.** GitHub Release live at

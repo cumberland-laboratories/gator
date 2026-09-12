@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Post-v2.13.0 rollforward: roadmap + inbox — v2.13.0 shipped, historical narrative pruned from inbox",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "post-release-rollforward"
+  ],
+  "commit": "fab45e8519349bfa574514d505dc3b1be3cb75fa",
+  "short_commit": "fab45e8",
+  "snippet_id": "snippet-fab45e8519349",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "d1de41730072a150e4823b9bd71b59243c1fe01d",
+  "started_at": "2026-09-12T15:26:36Z",
+  "ended_at": "2026-09-12T15:26:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-12-gator-d1de41730072a.json"
+  ],
+  "notes": [
+    "Post-release housekeeping per `.gator/procedures/release-and-deploy.md` step 8.",
+    "`.gator/roadmap.md` intro — date bumped 2026-09-10 → 2026-09-12; \"unreleased, slated for v2.13.0\" replaced with \"v2.13.0 shipped 2026-09-12\" and the full four-plan arc summary (A + B1 + B2 + Plan C) with commit range `8f2b9c9..d1de417`, final `tests/test_dashboard_ui/` count 189 pass + 11 skip, and the note that both release pipelines ran first-try green (no CDN-race reruns — first since v2.8.0). Body of the \"post-B1 count 166 pass\" paragraph rewritten to cover Plan C's three slices + Slice 3 R1/R2/R3 HIGH-severity fixes + R4-R8 charter tightening.",
+    "`.gator/roadmap.md` Done row — title extended to include \"+ Plan C responsive shell/sidebar\"; status flipped from \"unreleased\" → \"v2.13.0 (shipped 2026-09-12)\"; commit-range badge added.",
+    "`.gator/inbox.md` — historical narrative pruned per Architect direction (\"no need to keep legacy history around\"). Dropped the \"Where we are (2026-09-10, post-B2)\" narrative section with its B2 remediation history + commit list + slated-release framing. Replaced with a short post-v2.13.0 status: GitHub Release link + pointer at the four remaining pre-v2.13.0 roadmap priorities.",
+    "`.gator/inbox.md::Unscheduled open backlog` — carried forward verbatim with three additions surfaced during the v2.13.0 remediation train: (a) `new-functions-undocumented` warning fires on `test_*` in tests/** (fired on every Slice 3 commit); (b) `_required_charters_for_files` vs INDEX.md preamble cardinality mismatch (at-least-one vs ALL-of-required); (c) charter line-locator sweep across the OTHER charters (`scripts-dashboard.md` is now clean; neighbors likely aren't). Also noted the six deferred Plan C §7 pins for follow-on coverage. The TestPyPI/production PyPI CDN poll-window item is retained with a \"downgrade watch\" note — the v2.13.0 pipelines ran fully first-try green; the existing workflow step may already handle propagation.",
+    "`.gator/inbox.md::Machine state` — carried forward verbatim (persistent operational reference for Enterprise dev + smoke tests).",
+    "Charter untouched — post-release rollforward touches roadmap + inbox only; no code changes."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
