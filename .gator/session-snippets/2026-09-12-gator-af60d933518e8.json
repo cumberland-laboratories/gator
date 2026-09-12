@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.13.1 — Fleet activity-column stability patch",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "patch"
+  ],
+  "commit": "af60d933518e8c15941d1a34a17fd77d2909ad8c",
+  "short_commit": "af60d93",
+  "snippet_id": "snippet-af60d933518e8",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "7be554fbde1a8514f903e7c89b2c6886c9d47f7c",
+  "started_at": "2026-09-12T16:44:39Z",
+  "ended_at": "2026-09-12T16:44:39Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-12-gator-7be554fbde1a8.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump commit for v2.13.1 per `.gator/procedures/release-and-deploy.md` step 2. Patch release covering the Codex-authored Fleet activity-column stability fix landed at `7be554f` (2026-09-12), which post-dated the v2.13.0 wheel.",
+    "`pyproject.toml` — version 2.13.0 → 2.13.1.",
+    "`VERSION` — 2.13.0 → 2.13.1 (byte-consistent with pyproject per `scripts-core-library.md::get_version` tripwire).",
+    "`CHANGELOG.md` — new `## [2.13.1] — 2026-09-12` section documenting the Fleet activity-column stability fix (Codex-authored sketch → single-commit implementation `7be554f`) + new pins in `test_fleet_layout.py` + new charter TRIPWIRE. `Compatibility` notes call out the 192-pass baseline (+3 net vs v2.13.0).",
+    "`.gator/charters/scripts-core-library.md::get_version` — appended `2.13.1 (2026-09-12, current: **2.13.1** in both files)` to the version-drift history line."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

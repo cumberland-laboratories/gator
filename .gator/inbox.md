@@ -3,31 +3,36 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
+## Dashboard inspection-workspace decisions (Architect-ratified 2026-09-12)
+
+- **Next Dashboard increment: read-only Python and SQL syntax highlighting.**
+  Keep the existing single-document content pane and file-list navigation.
+  Language-aware visual formatting should apply to raw `.py` and `.sql` files;
+  it does not depend on a tab model.
+- **Document tabs: dropped from current scope.** Hands-on use of the shipped
+  sidebar navigation showed that tabs are not necessary right now. The planned
+  Phase 2 tab strip and tab-descriptor model should not be implemented unless
+  new usage evidence creates a concrete need.
+- **`field-guides/` retirement: deferred to lowest priority.** Preserve current
+  behavior for now and revisit the staged retirement at a later date.
+
 ## Codex sketches — Architect-ratified next work (2026-09-12)
 
-Two Codex-authored sketches under `.gator/vault/artifacts/`. Architect
-ratified 2026-09-12: **Fleet column stability first, then Cumberland HTML.**
+Two Codex-authored sketches under `.gator/vault/artifacts/`. Sketch 1
+(Fleet column stability) **shipped in v2.13.1 on 2026-09-12**. Sketch 2
+(Cumberland HTML) remains next.
 
-### 1. Dashboard Fleet **Update** column stability (small cosmetic)
+### ~~1. Dashboard Fleet Update column stability~~ — **shipped in v2.13.1**
 
 Path: `vault/artifacts/2026-09-12-dashboard-fleet-update-column-stability-sketch.md`
 
-- **Issue** — clicking Fleet **Update** inserts a 20px `.dot-pulse` into the
-  previously-empty activity cell; because `.data-table` uses browser-default
-  auto-layout, every column width recomputes and the row visibly "jumps." The
-  Dashboard charter already claims a fixed-width activity column; the
-  implementation does not currently uphold that.
-- **Fix** — reserve the 20px slot from initial render via a permanent
-  `<span class="activity-indicator">` inside every activity cell; retarget
-  `bindUpdateButtons()` + `bindGatorizeButtons()` to mutate content INSIDE the
-  reserved slot; small CSS reservation rule. Same treatment for Gatorize
-  which shares the column.
-- **Scope** — `views/fleet.js` + `dashboard.css` + new
-  `tests/test_dashboard_ui/test_fleet_layout.py` (geometry pin at 1440px +
-  800px) + charter reconciliation. No server changes, no public API,
-  no responsive-shell overlap.
-- **Codex's recommendation** — land as one small isolated Dashboard polish
-  commit.
+Landed as single-commit implementation `7be554f` (reserved-slot pattern:
+permanent `<span class="activity-indicator">` inside every `.activity-cell`;
+`bindUpdateButtons` / `bindGatorizeButtons` mutate INSIDE the indicator;
+20px CSS reservation matches `.dot-pulse` width; new geometry pin +
+structural pin in `tests/test_dashboard_ui/test_fleet_layout.py`; new
+Fleet-table TRIPWIRE in `scripts-dashboard.md`). Version bump `af60d93`
+and rc1/final tags shipped v2.13.1 via a fully first-try green pipeline.
 
 ### 2. Cumberland HTML style default + always-read routing rule (cross-cutting)
 
@@ -75,15 +80,18 @@ Path: `vault/artifacts/2026-09-12-cumberland-html-style-sketch.md`
   to avoid editing the narrative-template + authoring-procedure files
   concurrently. One small cross-cutting feature train.
 
-Sequence: **Sketch 1 (Fleet column stability) is up next**, then Sketch 2
-(Cumberland HTML). Both sketches are pre-implementation.
+Sequence within these two sketches remains **Fleet column stability, then
+Cumberland HTML**, but both now follow the read-only Python/SQL highlighting
+increment above. Both sketches are pre-implementation.
 
-## Where we are (2026-09-12, post-v2.13.0)
+## Where we are (2026-09-12, post-v2.13.1)
 
-**v2.13.0 shipped.** GitHub Release live at
-https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.0.
-Nothing on the dashboard-UI sequence is blocking. The pre-v2.13.0
-roadmap priorities remain — see `roadmap.md`:
+**v2.13.1 shipped** with the Fleet activity-column stability patch on
+top of v2.13.0's Dashboard UI arc. GitHub Releases live at
+https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.1
+and .../v2.13.0. Both pipelines ran fully first-try green with no
+CDN-race reruns. Nothing on the dashboard-UI sequence is blocking.
+The pre-v2.13.0 roadmap priorities remain — see `roadmap.md`:
 
 1. Gator + Enterprise polished and ready for lots of users.
 2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
@@ -92,14 +100,38 @@ roadmap priorities remain — see `roadmap.md`:
 
 ## Unscheduled open backlog
 
-- Widen the TestPyPI and production PyPI poll windows from 120 seconds to 240
-  seconds in release workflows B and C. Historical CDN propagation races
-  established this as a real reliability item. **Downgrade watch**: the
-  v2.13.0 release train ran fully first-try green on both TestPyPI and
-  production PyPI smokes with no reruns. Might mean the existing
-  "Wait for TestPyPI CDN to surface the new version" workflow step already
-  handles propagation, or it may just be a lucky quiet stretch. Confirm by
-  reading the current workflow YAML before deciding whether to widen.
+- ~~Widen the TestPyPI and production PyPI poll windows from 120 seconds to
+  240 seconds in release workflows B and C.~~ **Likely already resolved
+  (2026-09-12)**: v2.13.0 AND v2.13.1 both ran fully first-try green with
+  no CDN-race reruns — two consecutive. The existing
+  `Wait for TestPyPI CDN to surface the new version` workflow step in
+  `release-candidate.yml` appears to be handling propagation. Keep the
+  item watch-only; if a CDN race hits any future release, re-open with the
+  actual failing workflow log rather than a preemptive widen.
+- **`gator kill dashboard` UX** (2026-09-12): bare command LISTS running
+  processes but does NOT kill them — kill requires `--all` or `--port N`.
+  The imperative verb misleads: multiple times today the operator thought
+  they'd killed a stale Dashboard when they'd only enumerated it, causing
+  a browser tab to keep serving pre-fix `fleet.js` through the whole
+  release cycle. Options: (a) rename bare command to `gator kill dashboard
+  list` (list becomes an action, not a default); (b) require an explicit
+  `list` / `--all` / `--port N` at parse and refuse the bare form with an
+  actionable error; (c) prompt for confirmation on a bare invocation. The
+  current shape prioritizes "prevent accidental kill" but the safety
+  trade-off costs clarity.
+- **Stale-Dashboard-in-browser detection** (2026-09-12): when a fix ships
+  and the operator restarts inconsistently, the browser can silently show
+  pre-fix state — today the Fleet-column shift kept reproducing because
+  the operator's browser tab was pointed at a stale Dashboard on port
+  8420 that the bare `gator kill dashboard` did not terminate. Options:
+  (a) `_send_dashboard_html` embeds a build hash / commit SHA in a
+  `<meta name="gator-dashboard-build" content="...">` tag; frontend
+  compares to a per-connection value and shows a "reload — Dashboard
+  restarted" banner if they diverge; (b) same but auto-reload on
+  divergence with a short-timer debounce; (c) versioned asset URLs
+  (`fleet.js?v=<sha>`) so a Dashboard restart forces browsers to bypass
+  cache on every asset. (a) is the least disruptive; (c) is closest to
+  standard web-app hygiene.
 - Improve `precommit_session.py::_extract_note_lines` snippet emission so the
   `notes` field captures the substantive governance narrative instead of the
   first 8 non-empty preamble lines. Options: (a) raise the `limit=8` default;
