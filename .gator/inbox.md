@@ -5,10 +5,12 @@ in Git history, the changelog, and the roadmap.
 
 ## Dashboard inspection-workspace decisions (Architect-ratified 2026-09-12)
 
-- **Next Dashboard increment: read-only Python and SQL syntax highlighting.**
-  Keep the existing single-document content pane and file-list navigation.
-  Language-aware visual formatting should apply to raw `.py` and `.sql` files;
-  it does not depend on a tab model.
+- ~~**Next Dashboard increment: read-only Python and SQL syntax highlighting.**~~
+  **Shipped in v2.13.2 on 2026-09-12** — `views/syntax.js` hand-rolled
+  Python + SQL tokenizer + `.md-code-block .tok-*` CSS + charter subsection
+  with three TRIPWIREs (escape-order, size-cap, snapshot inliner obligation).
+  7 new Playwright pins (`test_syntax_highlight.py`), dashboard UI suite now
+  199 pass + 11 skip.
 - **Document tabs: dropped from current scope.** Hands-on use of the shipped
   sidebar navigation showed that tabs are not necessary right now. The planned
   Phase 2 tab strip and tab-descriptor model should not be implemented unless
@@ -20,7 +22,9 @@ in Git history, the changelog, and the roadmap.
 
 Two Codex-authored sketches under `.gator/vault/artifacts/`. Sketch 1
 (Fleet column stability) **shipped in v2.13.1 on 2026-09-12**. Sketch 2
-(Cumberland HTML) remains next.
+(Cumberland HTML) remains next — now that the read-only Python/SQL
+highlighting increment shipped in v2.13.2, Cumberland HTML is the next
+scheduled Dashboard-adjacent work.
 
 ### ~~1. Dashboard Fleet Update column stability~~ — **shipped in v2.13.1**
 
@@ -81,17 +85,24 @@ Path: `vault/artifacts/2026-09-12-cumberland-html-style-sketch.md`
   concurrently. One small cross-cutting feature train.
 
 Sequence within these two sketches remains **Fleet column stability, then
-Cumberland HTML**, but both now follow the read-only Python/SQL highlighting
-increment above. Both sketches are pre-implementation.
+Cumberland HTML**. Fleet column stability shipped in v2.13.1 and the
+read-only Python/SQL highlighting increment shipped in v2.13.2; Cumberland
+HTML is pre-implementation and next.
 
-## Where we are (2026-09-12, post-v2.13.1)
+## Where we are (2026-09-12, post-v2.13.2)
 
-**v2.13.1 shipped** with the Fleet activity-column stability patch on
-top of v2.13.0's Dashboard UI arc. GitHub Releases live at
-https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.1
-and .../v2.13.0. Both pipelines ran fully first-try green with no
-CDN-race reruns. Nothing on the dashboard-UI sequence is blocking.
-The pre-v2.13.0 roadmap priorities remain — see `roadmap.md`:
+**v2.13.2 shipped** with read-only Python + SQL syntax highlighting in
+the Dashboard Repo file browser plus a `source_alias_denied` log demote
+(WARNING → DEBUG) that removes ~120 spurious warnings per Dashboard
+session on a 15-repo fleet. GitHub Release:
+https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.2 —
+pipeline **fully first-try green** with no CDN-race reruns, making it
+three consecutive fully-first-try releases (v2.13.0, v2.13.1, v2.13.2).
+Prior releases: v2.13.1 (Fleet activity-column stability) and v2.13.0
+(Dashboard UI arc: Plans A/B1/B2/C). Nothing on the dashboard-UI sequence
+is blocking. Next scheduled work is **Codex Sketch 2 — Cumberland HTML
+style default + always-read routing rule**. The pre-v2.13.0 roadmap
+priorities remain — see `roadmap.md`:
 
 1. Gator + Enterprise polished and ready for lots of users.
 2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
@@ -102,12 +113,31 @@ The pre-v2.13.0 roadmap priorities remain — see `roadmap.md`:
 
 - ~~Widen the TestPyPI and production PyPI poll windows from 120 seconds to
   240 seconds in release workflows B and C.~~ **Likely already resolved
-  (2026-09-12)**: v2.13.0 AND v2.13.1 both ran fully first-try green with
-  no CDN-race reruns — two consecutive. The existing
+  (2026-09-12)**: v2.13.0, v2.13.1, AND v2.13.2 all ran fully first-try
+  green with no CDN-race reruns — three consecutive. The existing
   `Wait for TestPyPI CDN to surface the new version` workflow step in
   `release-candidate.yml` appears to be handling propagation. Keep the
   item watch-only; if a CDN race hits any future release, re-open with the
   actual failing workflow log rather than a preemptive widen.
+- **Pre-commit block message points at stale `gator-approve.py` path**
+  (2026-09-12): when the pre-commit hook blocks and prints the STOP box, the
+  approve instruction reads `python .gator/scripts/gator-approve.py`. Post-
+  runtime-split (v2.9.0), the repo carries no `.gator/scripts/` and no such
+  file exists there — the operator hits `[Errno 2] No such file or
+  directory` on the first attempt. Actual machine-side entry point is
+  `gator hook approve --reason "..." --name "..."` (per the routing table in
+  `gator-hook.py`, which maps `"approve"` → `gator-approve.py` inside the CLI
+  install). The block message text is emitted from
+  `templates/gator-starter/scripts/gator-pre-commit.py` (search for the STOP
+  box print block); update to point at `gator hook approve` (or add a
+  first-class `gator approve` CLI subcommand — the current CLI shows no
+  `approve` verb at the top level, only `hook`, so the natural discovery path
+  is broken too).
+- **`gator-approve.py --help` doesn't work** (2026-09-12): the script reads
+  the reason via `input()` BEFORE parsing sys.argv, so `--help` never
+  reaches argparse — the operator sees the interactive prompt instead of
+  usage. Fix: parse args first (recognize `--help` / `-h` and print usage),
+  then only prompt for the reason when it wasn't supplied via `--reason`.
 - **`gator kill dashboard` UX** (2026-09-12): bare command LISTS running
   processes but does NOT kill them — kill requires `--all` or `--port N`.
   The imperative verb misleads: multiple times today the operator thought
