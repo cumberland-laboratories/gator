@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R8: fix mis-attribution of _reparse_ls_tree_entry caller + broader sweep catches naked line-N locators R7 missed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "stable-identifiers-complete-sweep"
+  ],
+  "commit": "7bf9bbe7caf78ff81e1007e41755ef67d43c69d7",
+  "short_commit": "7bf9bbe",
+  "snippet_id": "snippet-7bf9bbe7caf78",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "350e2ad816e464a7de6c8d1c598991fb03220814",
+  "started_at": "2026-09-12T10:52:27Z",
+  "ended_at": "2026-09-12T10:52:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-12-gator-350e2ad816e46.json"
+  ],
+  "notes": [
+    "Outcome first: two MEDIUM charter findings — one factual",
+    "mis-attribution I introduced in R7, and four naked line-locator",
+    "prose forms my R7 regex didn't catch. Both addressed.",
+    "Codex R8 review of Plan C Slice 3 R7 (`350e2ad`, 2026-09-11)",
+    "returned 2 MEDIUM.",
+    "R7 rewrote line 513 to reference `_reparse_ls_tree_entry`",
+    "\"invoked from `_handle_history`.\" Codex verified the actual",
+    "call graph: `_reparse_ls_tree_entry`'s sole call lives inside"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
