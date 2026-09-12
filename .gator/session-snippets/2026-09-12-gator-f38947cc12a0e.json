@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Post-v2.13.2 rollforward: roadmap + inbox — v2.13.2 shipped, syntax-highlight increment marked landed, CDN-widen watch-only with three data points",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "rollforward",
+    "roadmap",
+    "inbox"
+  ],
+  "commit": "f38947cc12a0e2d23ff13fabdd0ac706ba202e73",
+  "short_commit": "f38947c",
+  "snippet_id": "snippet-f38947cc12a0e",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 4,
+  "previous_commit_in_session": "f253c298003b715b3c41ce6147efc0b981d33c1b",
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-12T20:23:35Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-12-gator-f253c298003b7.json"
+  ],
+  "notes": [
+    "`.gator/roadmap.md`: preamble prepended with v2.13.2 ship note (syntax",
+    "highlighting + log demote; three consecutive fully-first-try greens;",
+    "two Architect overrides on the INDEX cardinality quirk). Mid-preamble",
+    "\"two consecutive\" phrasing updated to \"three consecutive\" for the",
+    "CDN-race-rerun tally. New Done-table row above the v2.13.1 row",
+    "describing the shipped contract, the escape-order/size-cap/snapshot-",
+    "inliner TRIPWIREs, the 7 new Playwright pins, the source_alias_denied",
+    "companion fix, and the two inboxed follow-ups from this release cycle."
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}
