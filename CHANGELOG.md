@@ -2,6 +2,34 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.13.2] — 2026-09-12
+
+Patch release: read-only Python + SQL syntax highlighting in the Dashboard Repo file browser, plus a WARNING → DEBUG log-level demotion for a defense-in-depth line that fired on every governed-repo scan.
+
+### Added
+
+- **Read-only Python and SQL syntax highlighting** in the Dashboard Repo file browser (`views/repo.js` plain-content branch). Click any `.py` or `.sql` file under the sidebar's `source/` section — keywords render blue-bold, strings amber, comments grey-italic, decorators purple, numbers/builtins teal. Everything else (`.txt`, `.json`, `.yaml`, oversize `.py`/`.sql` above a 500 KB cap, etc.) keeps the pre-existing plain `<pre class="md-code-block">` rendering. No external library, no CDN, no build step — a hand-rolled two-language tokenizer in a new `views/syntax.js` module (~300 lines, IIFE, exposes `window.gatorHighlight`). Python tokenizer handles all keywords, builtins, single/double/triple-quoted strings with escape sequences and `r`/`b`/`u`/`f` prefixes, `#` comments, integer/float/hex/oct/bin/complex numbers, and `@decorator` syntax. SQL tokenizer handles `SELECT`/`FROM`/`WHERE` and 90+ other keywords case-insensitively, `--` line comments, `/* … */` block comments, and single-quoted strings with `''` escapes. Rendering is escape-safe by construction: tokens carry raw values and the sole `toHtml()` renderer runs `escHtml` on every value before wrapping in `<span class="tok-*">`. New `.md-code-block .tok-*` classes in `dashboard.css` harmonize with the existing light code-block surface.
+
+- **Syntax-highlight Playwright pin suite** — `tests/test_dashboard_ui/test_syntax_highlight.py` with 7 pins covering `.py` code-block marking, Python keyword/string/comment/decorator/number tokenization, SQL case-insensitive keyword classification, SQL comment + `''`-escape tokenization, and the 500 KB oversize fallback. Adversarial `test_py_string_containing_angle_brackets_is_escaped_once` locks the escape-order invariant in a single pin by asserting a shipped `<` inside a Python f-string renders as literal `<` in `.textContent` (would fail if the highlighter did not escape — XSS surface) AND as `&lt;` in `.innerHTML` (would fail on `&amp;lt;` double-escape). Companion `seed_syntax_fixtures` seed hook + `test_syntax_highlight_seed.py` reassign follow the existing Plan-B / Plan-C harness pattern; ships `source/highlight_sample.py`, `source/highlight_sample.sql`, and a ~1 MB `source/highlight_oversize.py` in every seeded repo. `tests/test_snapshot.py` extended to assert the new `views/syntax.js` tag is inlined so a future regex regression in `snapshot.py` fails there too.
+
+- **Charter subsection** in `scripts-dashboard.md` documents the shipped `renderContentFor` + `gatorHighlight` contract with three TRIPWIREs: escape-order (`gatorHighlight` escapes internally — never pre-escape the input), size-cap (500 KB `HIGHLIGHT_MAX_BYTES` boundary is pinned; changing it requires updating the oversize pin in the same commit), and snapshot-inliner obligation (`snapshot.py`'s script-tag regex requires the exact tag ordering — any future addition/removal of a `views/*.js` shipped file must update both `dashboard.html` and `snapshot.py` regex + `scripts_block` in the same commit or the snapshot silently falls back to external references).
+
+### Fixed
+
+- **`source_alias_denied` log noise** — the B1 (v2.13.0) walker defense that skips `.gator/` and `gator-command/` at the top of a source-namespace scan was emitting a WARNING per hit on the `dashboard.discovery` logger. Because every gatorized repo has `.gator/` at its top level, this fired on EVERY source-namespace scan of EVERY governed repo — a 15-repo fleet produced ~120 WARNING lines per session that obscured genuine warnings (field case 2026-09-12: 8 lines per repo). Demoted to DEBUG so the receipt-of-defense stays reachable via log config when auditing while removing the everyday spam. Companion `reparse_point_rejected` line intentionally left at WARNING — reparse-point encounters (junctions, symlinks) ARE unusual and operator-actionable. Charter note in the "Governance-root aliasing TRIPWIRE" section documents the log-level convention: routine defense receipts → DEBUG; operator-actionable → WARNING.
+
+### Compatibility
+
+- No API change, no server-side content-type change, no endpoint contract change. Frontend-only additive feature + one log-level demote.
+- No CSP change — syntax highlighting rides on the main Dashboard page (which carries no CSP); B2's `/raw` HTML preview surface is untouched.
+- Dashboard UI suite: **199 passed, 11 skipped** on Windows / Python 3.13 (+7 net vs v2.13.1 baseline of 192). Full test suite: 1182 passed, 14 skipped, 2 xfailed. Contract-compatibility suite unchanged.
+
+### Notes
+
+- The read-only syntax highlighting is the first of two 2026-09-12 Architect-ratified Dashboard-inspection increments; the next (document tabs) was explicitly dropped from current scope after hands-on use of the shipped sidebar navigation showed tabs were unnecessary. `field-guides/` retirement was deferred to lowest priority in the same session.
+- Two follow-up items inboxed during this release: the pre-commit block message points at a stale `.gator/scripts/gator-approve.py` path (post-runtime-split, the script lives inside the CLI install; correct machine-side entry is `gator hook approve --reason "..." --name "..."`), and `gator-approve.py --help` doesn't work because the script prompts for a reason via `input()` before parsing sys.argv.
+
+
 ## [2.13.1] — 2026-09-12
 
 Patch release: Dashboard Fleet activity-column stability fix. Cosmetic-only.
