@@ -38,8 +38,17 @@
   <title>==TODO== short human title</title>
 
   <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
     :root {
-      /* Primary palette — teal + red + blue for structure, amber + green for status */
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
       --teal:        #19aeb8;
       --teal-dark:   #148a92;
       --teal-light:  rgba(25, 174, 184, 0.08);
@@ -52,8 +61,10 @@
       --amber-light: rgba(212, 139, 10, 0.08);
       --green:       #2d8a4e;
       --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
 
-      /* Neutral scale */
+      /* Neutral scale — 9-step Tailwind-style ramp. */
       --gray-50:  #f9fafb;
       --gray-100: #f3f4f6;
       --gray-200: #e5e7eb;
@@ -75,21 +86,28 @@
       margin: 0 auto;
     }
 
-    /* Header */
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
     header.doc-head {
       border-bottom: 3px solid var(--teal);
       padding-bottom: 1.5rem;
       margin-bottom: 2rem;
     }
     header.doc-head h1 {
-      font-size: 1.75rem;
+      font-size: 1.85rem;
       color: var(--gray-900);
       font-weight: 700;
       margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
     }
     header.doc-head .subtitle {
       color: var(--gray-600);
-      font-size: 0.95rem;
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
     }
     header.doc-head .metaline {
       margin-top: 0.75rem;
@@ -113,7 +131,11 @@
       margin-right: 0.4rem;
     }
 
-    /* Status badges */
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
     .status-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -129,7 +151,11 @@
     .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
     .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
 
-    /* Sections */
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
     section { margin-bottom: 2.5rem; }
     section > h2 {
       font-size: 1.35rem;
@@ -145,20 +171,34 @@
       font-weight: 600;
       margin: 1.5rem 0 0.5rem;
     }
-    p { margin-bottom: 0.8rem; }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
     ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
     li { margin-bottom: 0.3rem; }
 
     a { color: var(--blue-dark); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* Code */
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
     code {
       font-family: 'Consolas', 'Monaco', monospace;
       background: var(--gray-100);
       padding: 0.1em 0.4em;
       border-radius: 3px;
-      font-size: 0.9em;
+      font-size: 0.88em;
       color: var(--gray-900);
     }
     pre {
@@ -174,9 +214,22 @@
       overflow-x: auto;
       margin: 0.7rem 0 1rem;
     }
-    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
 
-    /* Callouts — teal (default/summary), red (warn), amber (info/caution), green (ok), blue (note) */
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
     .callout {
       background: var(--teal-light);
       border-left: 4px solid var(--teal);
@@ -184,10 +237,11 @@
       border-radius: 4px;
       margin: 1rem 0;
     }
-    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
-    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
-    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
-    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
     .callout .label {
       font-size: 0.75rem;
       font-weight: 700;
@@ -201,12 +255,13 @@
     .callout.info .label { color: var(--amber); }
     .callout.ok   .label { color: var(--green); }
     .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
 
-    /* Tables — colored header variants for scannability
-       Default: neutral gray header
-       .table-blue: blue-tinted header (informational, comparative)
-       .table-red:  red-tinted header (failure modes, warnings)
-       .table-teal: teal-tinted header (verified, positive baseline) */
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -251,7 +306,8 @@
       border-bottom-color: var(--teal);
     }
 
-    /* Pills — for status/verdict cells within tables */
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
     .pill {
       display: inline-block;
       padding: 0.15rem 0.55rem;
@@ -262,13 +318,16 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    .pill.ok    { background: var(--green-light); color: var(--green); }
-    .pill.info  { background: var(--blue-light);  color: var(--blue-dark); }
-    .pill.warn  { background: var(--red-light);   color: var(--red); }
-    .pill.alt   { background: var(--teal-light);  color: var(--teal-dark); }
-    .pill.na    { background: var(--gray-100);    color: var(--gray-600); }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
 
-    /* Table of contents */
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
     .toc {
       background: white;
       border: 1px solid var(--gray-200);
@@ -290,7 +349,40 @@
     .toc a { color: var(--gray-700); }
     .toc a:hover { color: var(--blue-dark); }
 
-    /* Step numbering (procedure-visual doc-class) */
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
     .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
     .steps > li {
       counter-increment: step;
@@ -319,7 +411,10 @@
     .steps > li.step-warn::before { background: var(--red); }
     .steps > li.step-done::before { background: var(--green); }
 
-    /* Diagram slot — horizontal flowchart with colored nodes and connectors */
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
     .diagram {
       background: white;
       border: 1px solid var(--gray-200);
@@ -353,10 +448,11 @@
       text-align: center;
       flex: 0 0 auto;
     }
-    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
-    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
-    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
-    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
     .diagram-node .kind {
       display: block;
       font-size: 0.7rem;
@@ -367,10 +463,9 @@
       margin-top: 0.2rem;
     }
     .diagram-edge {
-      /* flex-grow: 1 lets edges consume slack in the container so nodes
-         distribute evenly across the available width, instead of clustering
-         at the left with all whitespace piled on the right. min-width keeps
-         the arrow legible when the diagram overflows into horizontal scroll. */
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
       flex: 1 1 auto;
       min-width: 2rem;
       height: 2px;
@@ -390,8 +485,8 @@
     }
     .diagram-edge.blue { background: var(--blue); }
     .diagram-edge.blue::after { border-left-color: var(--blue); }
-    .diagram-edge.red { background: var(--red); }
-    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
     .diagram-edge-label {
       position: absolute;
       top: -1.1rem;
@@ -402,15 +497,16 @@
       white-space: nowrap;
     }
 
-    /* Footer */
+    /* Footer — small centered muted text with top-border. */
     footer.doc-foot {
       margin-top: 3rem;
       padding-top: 1.5rem;
       border-top: 1px solid var(--gray-200);
       font-size: 0.82rem;
-      color: var(--gray-400);
+      color: var(--gray-600);
       text-align: center;
     }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
   </style>
 </head>
 <body>

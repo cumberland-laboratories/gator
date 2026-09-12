@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Slice 2: constitution HTML Documents rule + broaden authoring procedure to medium-first triage",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "cumberland-html",
+    "constitution",
+    "procedure",
+    "blueprints",
+    "sketch-2-slice-2"
+  ],
+  "commit": "adf673d73e13ed83b02d50abf8448fe75eb73180",
+  "short_commit": "adf673d",
+  "snippet_id": "snippet-adf673d73e13e",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 7,
+  "previous_commit_in_session": "fd35d9295992bd58202d39cc7eb6dc89299db97a",
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-12T22:56:43Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/constitution.md",
+    ".gator/.includes/procedures/authoring-html-artifacts.md",
+    ".gator/session-snippets/2026-09-12-gator-fd35d9295992b.json",
+    "src/gator_command/templates/gator-starter/constitution.md",
+    "src/gator_command/templates/gator-starter/procedures/authoring-html-artifacts.md"
+  ],
+  "notes": [
+    "`constitution.md`: new `## HTML Documents` section (placed between",
+    "`## Knowledge Lives in the Repo` and `## Field Guides`) establishes the",
+    "always-read routing rule — Architect asks for HTML → Cumberland master at",
+    "`reference-notes/cumberland-html-document-template.html`. Blueprint",
+    "exception carved out for the four `gator-blueprint-html-v1` doc classes",
+    "(`charter-map`, `feature-blueprint`, `procedure-visual`,",
+    "`reference-explainer`), which continue to use `blueprints/_template.html`",
+    "or `blueprints/_template-narrative.html`. Style / role / protocol are"
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}
