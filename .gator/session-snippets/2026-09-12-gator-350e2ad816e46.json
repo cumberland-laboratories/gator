@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R7: full sweep of prohibited line-locator form in scripts-dashboard.md — line 391 + line 513 all replaced with stable function/section identifiers",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "stable-identifiers",
+    "constitutional-sweep"
+  ],
+  "commit": "350e2ad816e464a7de6c8d1c598991fb03220814",
+  "short_commit": "350e2ad",
+  "snippet_id": "snippet-350e2ad816e46",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-12T10:40:40Z",
+  "ended_at": "2026-09-12T10:40:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-7333c9d497bd2.json"
+  ],
+  "notes": [
+    "Outcome first: charter now has ZERO instances of the prohibited",
+    "`filename.ext:N` / `filename.ext:N-M` line-locator form. Codex",
+    "R7's directive was to sweep, not to defer — R6's \"scope-",
+    "limited\" defense was wrong.",
+    "Codex R7 review of Plan C Slice 3 R6 (`7333c9d`, 2026-09-11)",
+    "returned 1 MEDIUM, explicit that scope limits do not create an",
+    "exception to the constitution's unconditional Charter Rules.",
+    "R6 removed the R5-added `:1138-1139` locator but explicitly"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
