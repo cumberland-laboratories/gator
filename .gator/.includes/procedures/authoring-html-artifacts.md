@@ -3,10 +3,16 @@
 ## When to use
 
 Reach for this procedure when you're about to create — or being asked to
-create — an artifact where visual structure, interactive exploration, or
-richer skimability would help the reader more than a plain markdown file.
+create — an HTML artifact. Two entry points:
 
-Concrete triggers:
+**The Architect explicitly asks for HTML.** "I want an HTML that says…",
+"make me an HTML report on…", "write this up as HTML." Every governed
+model defaults to the same Cumberland master template — see the
+constitution's "HTML Documents" section for the routing rule.
+
+**The content is a Blueprint.** Feature flow map, charter map, procedure
+visual, or reference explainer conforming to the `gator-blueprint-html-v1`
+protocol. Concrete Blueprint triggers:
 
 - Architect asks for a **blueprint** of a feature, subsystem, or flow.
 - You're about to author a **charter map** for a repo (repo-wide node graph
@@ -19,56 +25,116 @@ Concrete triggers:
   callouts.
 
 Default is still markdown. HTML is the premium medium — reach for it when
-visual structure materially improves comprehension.
+visual structure materially improves comprehension OR when the Architect
+explicitly asks.
 
-**Since v2.12.0**: new blueprint content is authored in HTML. Existing markdown
-blueprints in `.gator/blueprints/` stay put; no bulk conversion. New blueprints
-never go into `.md`.
+**Since v2.12.0**: new Blueprint content is authored in HTML. Existing
+markdown Blueprints in `.gator/blueprints/` stay put; no bulk conversion.
+New Blueprints never go into `.md`.
+
+**Since Codex Sketch 2 (2026-09-12)**: non-Blueprint HTML documents share
+the same Cumberland visual grammar via the master template at
+`../reference-notes/cumberland-html-document-template.html`. The master's
+`<style>` block encloses its full CSS between
+`CUMBERLAND-NARRATIVE-STYLE:BEGIN/END` delimiters; the narrative Blueprint
+template will link that region byte-for-byte in Slice 3 so the visual
+grammar is guaranteed identical across both surfaces.
 
 ## Steps
 
-### 1. Pick the template (two-lane triage)
+### 1. Pick the template (medium-first triage)
 
-Ask: **does the content have a natural node-and-edge structure that benefits
-from interactive click-to-isolate exploration?**
+Two questions in order:
+
+**A. Is this a Blueprint?**
+
+A Blueprint is a durable artifact whose content maps naturally to one of
+four doc classes AND is worth conforming to the `gator-blueprint-html-v1`
+protocol (required `<meta>` tags, schema-check-ready, lives under
+`.gator/blueprints/`):
+
+- `charter-map` — repo-wide graph of chartered regions (one per repo)
+- `feature-blueprint` — per-feature flow map (many per repo)
+- `procedure-visual` — visualized workflow
+- `reference-explainer` — architecture overview, capability landscape
+
+**If NO** — the piece is a general HTML document (a report, an explainer,
+a design writeup, a status page). → Use the Cumberland master at
+[`../reference-notes/cumberland-html-document-template.html`](../reference-notes/cumberland-html-document-template.html).
+Skip Step 3 (no Blueprint metadata required). Proceed to Step 2 for storage,
+Step 4 for content.
+
+**If YES** — continue to sub-question B.
+
+**B. (Blueprint only) Does the content have a natural node-and-edge
+structure that benefits from interactive click-to-isolate exploration?**
 
 - **Yes** — a graph of chartered regions, a feature flow across modules, a
   system-interaction map. → Use
-  [`_template.html`](../blueprints/_template.html) (interactive blueprint,
+  [`_template.html`](../blueprints/_template.html) (interactive Blueprint,
   map + sidebar + narrative shape). Doc classes: `charter-map`,
   `feature-blueprint`.
 
-- **No** — prose-heavy, step-sequenced, or otherwise not naturally graph-shaped.
-  A release workflow, a concept explainer, an architecture overview that reads
-  as narrative. → Use
+- **No** — prose-heavy, step-sequenced, or otherwise not naturally
+  graph-shaped. A release workflow, a concept explainer, an architecture
+  overview that reads as narrative. → Use
   [`_template-narrative.html`](../blueprints/_template-narrative.html)
-  (non-blueprint narrative, header + sequential sections, no interactive map).
+  (narrative Blueprint, header + sequential sections, no interactive map).
   Doc classes: `procedure-visual`, `reference-explainer`.
 
-Do NOT force non-graph content into the interactive template. The interactive
-click-to-isolate affordance only earns its keep when there's a real
-neighborhood to isolate.
+Do NOT force non-graph content into the interactive template. The
+interactive click-to-isolate affordance only earns its keep when there's a
+real neighborhood to isolate.
+
+**Style vs role vs protocol** — the three are independent concerns.
+**Style** = Cumberland visual grammar, shared by all three templates.
+**Role** = destination path (Blueprint → `blueprints/`, general HTML →
+role-appropriate path per Step 2). **Protocol** = `gator-blueprint-html-v1`
+metadata, required for Blueprints only.
 
 ### 2. Copy the template to the target location
 
 Storage follows the artifact's role, not its rendering format:
 
-- **`.gator/blueprints/`** (tracked): durable repo-wide artifacts.
+- **`.gator/blueprints/`** (tracked): durable repo-wide Blueprint artifacts.
   - `charter-map.html` — exact filename, one per repo.
-  - `<slug>.html` — other durable blueprints or reference explainers.
+  - `<slug>.html` — other durable Blueprints.
 
-- **`.gator/vault/artifacts/`** (gitignored): exploratory or question-specific
-  HTML. Default landing zone for `feature-blueprint` doc-class artifacts
-  generated on demand.
-  - `YYYY-MM-DD-<slug>.html` — matches the existing vault date-prefix convention.
+- **`.gator/artifacts/`** (tracked): deep records, design docs, research
+  writeups. Default for non-Blueprint HTML documents that deserve
+  durability.
+  - `YYYY-MM-DD-<slug>.html` — matches the existing artifact date-prefix
+    convention.
 
-- Other roles (e.g. procedure-visual near its markdown procedure) — author's
-  discretion; keep the file where a reader will naturally look for it.
+- **`.gator/procedures/`** (tracked): repeatable workflows. Non-Blueprint
+  HTML procedures live alongside their markdown peers.
+  - `<slug>.html` — non-date-prefixed; procedures name themselves after
+    the workflow.
 
-### 3. Fill the `<meta>` block
+- **`.gator/reference-notes/`** (tracked): reference-explainers and
+  cognitive aids. Non-Blueprint HTML reference material lives here.
+  - `<slug>.html`.
 
-Every conformant artifact carries these `<meta>` tags near the top of `<head>`
-(the templates provide them with `==TODO==` placeholders):
+- **`.gator/threads/`** (tracked): lightweight topic notes (rare in HTML).
+  - `<slug>.html`.
+
+- **`.gator/vault/artifacts/`** (gitignored): exploratory or
+  question-specific HTML that hasn't earned a durable path yet. Default
+  landing zone for on-demand `feature-blueprint` Blueprints AND for
+  drafts/sketches of any kind.
+  - `YYYY-MM-DD-<slug>.html` — matches the existing vault date-prefix
+    convention.
+
+### 3. Fill the `<meta>` block (Blueprints only)
+
+**Skip this step if you're using the Cumberland master.** The master
+template intentionally omits the `gator-schema` block — non-Blueprint
+HTML documents do not conform to `gator-blueprint-html-v1`. Fill only
+the visible `.meta-grid` cells in the header (doc class, audience,
+status, updated date, reading time, author).
+
+**Every Blueprint** carries these `<meta>` tags near the top of `<head>`
+(both Blueprint templates provide them with `==TODO==` placeholders):
 
 ```html
 <meta name="gator-schema" content="gator-blueprint-html-v1">
@@ -99,7 +165,20 @@ repos.
 
 ### 4. Fill the content
 
-**Interactive template** (`_template.html`):
+**Cumberland master** (`cumberland-html-document-template.html`):
+
+- Fill the header (title, subtitle, meta-grid cells, optional metaline).
+- Fill the TOC (delete if fewer than four sections).
+- Fill the Summary callout — one or two paragraphs that answer the doc's
+  question. If the reader stops there, what do they leave knowing?
+- Fill the body sections. The template ships one visible example of every
+  component (`.figure`, `.diagram`, `.steps`, colored tables, `.pill`
+  chips, all six callout variants). Keep the components that serve the
+  piece; delete the rest.
+- Use `<div class="callout data">` (purple) SPARINGLY — one or two per
+  document is the intended cadence for the highest-signal insight moments.
+
+**Interactive Blueprint template** (`_template.html`):
 
 - Populate `NODES` array in the inline `<script>` with the domain data —
   node id, title, kind (subtitle), color (`var(--bp-<letter>)` or hex),
@@ -109,7 +188,7 @@ repos.
 - Fill the narrative sections: what this shows, why these regions matter,
   reading order, boundaries + tripwires, open questions.
 
-**Narrative template** (`_template-narrative.html`):
+**Narrative Blueprint template** (`_template-narrative.html`):
 
 - Fill the sequential sections: question, executive summary, flow (steps for
   procedure-visual, sequential exposition for reference-explainer), why-it-matters,
@@ -129,18 +208,26 @@ click → opens in new tab).
 
 Before you consider the artifact done:
 
+- **All `==TODO==` markers removed.** Applies to every template.
+- **Self-contained.** No `<script src="...">` or `<link rel="stylesheet" href="...">`
+  pulling from a CDN. All CSS + JS inlined. Applies to every template.
+- **Renders in a plain browser.** Open the file directly (`file://...`) —
+  it should render correctly with no console errors. Applies to every
+  template.
+
+Additionally, for **Blueprints only**:
+
 - **Metadata complete.** No `==TODO==` markers remain in the `<meta>` block.
 - **Question specific.** `gator-question` is a real, specific question, not
   a generic label.
-- **Self-contained.** No `<script src="...">` or `<link rel="stylesheet" href="...">`
-  pulling from a CDN. All CSS + JS inlined.
-- **Renders in a plain browser.** Open the file directly (`file://...`) —
-  it should render correctly with no console errors.
 - **Compat-ready** if it lives under `.gator/blueprints/`. The Gator source
   repo's compat suite runs `test_blueprint_html_schema.py` against every
   `.gator/blueprints/*.html` (scaffolding templates excluded). Your fleet
   repo won't carry that test, but the checkpoints above cover the same
   contract — meta block complete, question specific, self-contained.
+
+Cumberland-master documents don't need the `<meta>`/`gator-question`/compat
+checkpoints — those apply only to files under `.gator/blueprints/`.
 
 ## Notes
 
@@ -166,11 +253,14 @@ Before you consider the artifact done:
 
 ## Connections
 
-- [`../blueprints/_template.html`](../blueprints/_template.html) — interactive template
-- [`../blueprints/_template-narrative.html`](../blueprints/_template-narrative.html) — narrative template
-- [`../blueprints/README.md`](../blueprints/README.md) — blueprint directory README with the triage summary
+- [`../reference-notes/cumberland-html-document-template.html`](../reference-notes/cumberland-html-document-template.html) — Cumberland master (default for non-Blueprint HTML)
+- [`../blueprints/_template.html`](../blueprints/_template.html) — interactive Blueprint template
+- [`../blueprints/_template-narrative.html`](../blueprints/_template-narrative.html) — narrative Blueprint template
+- [`../blueprints/README.md`](../blueprints/README.md) — Blueprint directory README with the triage summary
 - [`./artifact-freshness.md`](./artifact-freshness.md) — the source of the status label vocabulary
-- **Protocol** `gator-blueprint-html-v1` — the shape you're conforming to; the
-  full requirements are enumerated in the "Fill the `<meta>` block" section
-  above. Canonical contract lives in the Gator source tree
+- **Constitution `## HTML Documents`** — the always-read routing rule that
+  points here from every session.
+- **Protocol** `gator-blueprint-html-v1` — the shape Blueprints conform to;
+  the full requirements are enumerated in the "Fill the `<meta>` block"
+  section above. Canonical contract lives in the Gator source tree
   (`contracts/schemas/gator-blueprint-html-v1.md`) and is not shipped here.

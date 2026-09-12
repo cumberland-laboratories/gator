@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Slice 1: land the master document template + register in layout defaults",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "template",
+    "blueprints",
+    "layout",
+    "sketch-2-slice-1"
+  ],
+  "commit": "fd35d9295992bd58202d39cc7eb6dc89299db97a",
+  "short_commit": "fd35d92",
+  "snippet_id": "snippet-fd35d9295992b",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "e4c7665c5ec17a36192d4dce42b5913dcae5913a",
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-12T22:49:44Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/reference-notes/cumberland-html-document-template.html",
+    ".gator/charters/scripts-layout.md",
+    ".gator/session-snippets/2026-09-12-gator-e4c7665c5ec17.json",
+    "src/gator_command/scripts/gator_layout.py",
+    "src/gator_command/templates/gator-starter/reference-notes/cumberland-html-document-template.html",
+    "tests/test_layout.py"
+  ],
+  "notes": [
+    "New `templates/gator-starter/reference-notes/cumberland-html-document-template.html`",
+    "(shipped source) + `.gator/.includes/reference-notes/cumberland-html-document-template.html`",
+    "(byte-identical dogfood mirror). The default starting template for any HTML",
+    "document Gator produces — the file every governed model reaches for when the",
+    "Architect says \"an HTML document that says X.\" Contains the full Cumberland",
+    "visual grammar: 13-token palette (teal/red/blue/amber/green/purple + 9-step",
+    "gray) with dark anchors + 8%-alpha washes, justified body with auto",
+    "hyphenation and selective left-align overrides for narrow contexts,"
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}

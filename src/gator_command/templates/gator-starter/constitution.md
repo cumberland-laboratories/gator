@@ -152,6 +152,14 @@ The `.gator/` folder is the shared knowledge layer — it works across users, ac
 
 See [`procedures/knowledge-capture.md`](procedures/knowledge-capture.md) for the full decision guide.
 
+## HTML Documents
+
+When the Architect asks for an HTML document ("I want an HTML that says…", "make me an HTML report on…", "write this up as HTML"), start from the Cumberland master template at [`reference-notes/cumberland-html-document-template.html`](reference-notes/cumberland-html-document-template.html). Fill the `==TODO==` placeholders and save at the path that matches the piece's role — `artifacts/YYYY-MM-DD-<slug>.html` for deep records, `procedures/<slug>.html` for procedures, `reference-notes/<slug>.html` for reference-explainers, `threads/<slug>.html` for lightweight notes.
+
+Exception: if the piece is a **Blueprint** (`charter-map`, `feature-blueprint`, `procedure-visual`, or `reference-explainer` conforming to the `gator-blueprint-html-v1` protocol), use [`blueprints/_template.html`](blueprints/_template.html) (interactive) or [`blueprints/_template-narrative.html`](blueprints/_template-narrative.html) (narrative) — those specialize the same Cumberland visual grammar with Blueprint-protocol metadata. See [`procedures/authoring-html-artifacts.md`](procedures/authoring-html-artifacts.md) for the medium-first triage that picks between master and Blueprint templates.
+
+Style (Cumberland visual grammar), role (destination path), and protocol (`gator-blueprint-html-v1` metadata) are three separate concerns. Every HTML document Gator produces uses the Cumberland style; role determines the path; protocol applies only to Blueprints.
+
 ## Field Guides
 
 Field guides are optional language-specific pattern references in `.gator/field-guides/`. Consult when writing new code in a language that has a guide — same cadence as reference-notes (situational, not always-loaded). If no guide exists for a language, that's normal. Generation procedure: → [`procedures/field-guide-generation.md`](procedures/field-guide-generation.md)
