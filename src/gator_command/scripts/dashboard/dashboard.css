@@ -1508,6 +1508,20 @@ mark.search-hit {
   text-align: center;
 }
 
+/* Fleet activity-column stability (2026-09-12): the 20px reservation on
+   the permanent `.activity-indicator` span inside every `.activity-cell`
+   keeps the Fleet table's automatic-layout column widths stable across
+   the idle → busy transition. Without this, an empty cell has no
+   intrinsic 20px min-content contribution; inserting the 20px
+   `.dot-pulse` on Update/Gatorize click would recompute all column
+   widths and shift every preceding column by 20px total. See
+   scripts-dashboard.md "Fleet activity-column stability" TRIPWIRE. */
+.activity-indicator {
+  display: inline-block;
+  width: 20px;
+  min-width: 20px;
+}
+
 /* Save confirmation checkmark */
 .save-check {
   color: var(--color-healthy, #28a745);

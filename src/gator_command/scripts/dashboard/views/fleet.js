@@ -93,7 +93,7 @@
           <td>${enfDropdown}</td>
           <td class="mono" style="font-size:12px">${cliVersion || '<span class="muted">-</span>'}</td>
           <td class="status-cell">${actionBtn}</td>
-          <td class="activity-cell" data-repo="${escHtml(repo.name)}"></td>
+          <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
         </tr>
       `;
     }
@@ -215,10 +215,19 @@
     container.querySelectorAll(".update-btn:not(.gatorize-btn)").forEach(btn => {
       btn.addEventListener("click", async function () {
         const repoName = this.dataset.repo;
+        // Fleet activity-column stability (2026-09-12): mutate content
+        // INSIDE the permanent `.activity-indicator` span (rendered at
+        // initial paint by `renderStandaloneRepos`), NOT the enclosing
+        // `.activity-cell`. The indicator reserves 20px via
+        // `dashboard.css::.activity-indicator`; mutating the cell
+        // instead re-triggers automatic table-layout width recomputation
+        // and shifts every preceding column by 20px (visible "jump").
+        // See scripts-dashboard.md "Fleet activity-column stability" TRIPWIRE.
         const activityCell = container.querySelector(`.activity-cell[data-repo="${repoName}"]`);
+        const indicator = activityCell && activityCell.querySelector(".activity-indicator");
 
         this.disabled = true;
-        if (activityCell) activityCell.innerHTML = '<span class="dot-pulse"></span>';
+        if (indicator) indicator.innerHTML = '<span class="dot-pulse"></span>';
 
         try {
           const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/update`, {
@@ -227,7 +236,7 @@
           });
           const data = await resp.json();
 
-          if (activityCell) activityCell.innerHTML = "";
+          if (indicator) indicator.innerHTML = "";
           if (data.status === "ok") {
             if (window.gatorRefreshFleet) window.gatorRefreshFleet();
           } else {
@@ -237,12 +246,12 @@
             // the marker, but surface the CLI's actual output where the
             // operator cannot miss it.
             const reason = (data.output || data.error || "no output from CLI").trim();
-            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
+            if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
             this.disabled = false;
             alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
           }
         } catch (err) {
-          if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)">!</span>';
+          if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)">!</span>';
           this.disabled = false;
           alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
         }
@@ -259,10 +268,17 @@
     container.querySelectorAll(".gatorize-btn").forEach(btn => {
       btn.addEventListener("click", async function () {
         const repoName = this.dataset.repo;
+        // Fleet activity-column stability (2026-09-12): same reserved-
+        // slot pattern as bindUpdateButtons — mutate inside the
+        // `.activity-indicator` span rather than the `.activity-cell`
+        // so the column stays geometrically stable during the
+        // gatorize request. See scripts-dashboard.md "Fleet
+        // activity-column stability" TRIPWIRE.
         const activityCell = container.querySelector(`.activity-cell[data-repo="${repoName}"]`);
+        const indicator = activityCell && activityCell.querySelector(".activity-indicator");
 
         this.disabled = true;
-        if (activityCell) activityCell.innerHTML = '<span class="dot-pulse"></span>';
+        if (indicator) indicator.innerHTML = '<span class="dot-pulse"></span>';
 
         try {
           const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/gatorize`, {
@@ -271,7 +287,7 @@
           });
           const data = await resp.json();
 
-          if (activityCell) activityCell.innerHTML = "";
+          if (indicator) indicator.innerHTML = "";
           if (data.status === "ok") {
             if (window.gatorRefreshFleet) window.gatorRefreshFleet();
           } else {
@@ -281,12 +297,12 @@
             // the marker, but surface the CLI's actual output where the
             // operator cannot miss it.
             const reason = (data.output || data.error || "no output from CLI").trim();
-            if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
+            if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
             this.disabled = false;
             alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
           }
         } catch (err) {
-          if (activityCell) activityCell.innerHTML = '<span style="color:var(--color-critical)">!</span>';
+          if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)">!</span>';
           this.disabled = false;
           alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
         }

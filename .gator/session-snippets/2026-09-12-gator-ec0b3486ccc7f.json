@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Inbox: record Architect ratification of Codex sketch sequence — Fleet column stability first, then Cumberland HTML style",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "ratification"
+  ],
+  "commit": "ec0b3486ccc7f2fa24718b69c5adce452c04991c",
+  "short_commit": "ec0b348",
+  "snippet_id": "snippet-ec0b3486ccc7f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 3,
+  "previous_commit_in_session": "fab45e8519349bfa574514d505dc3b1be3cb75fa",
+  "started_at": "2026-09-12T16:12:02Z",
+  "ended_at": "2026-09-12T16:12:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-09-12-gator-fab45e8519349.json"
+  ],
+  "notes": [
+    "Architect discussed both Codex-authored sketches from 2026-09-12 and ratified:",
+    "**Priority order**: Sketch 1 (Fleet Update column stability) first; Sketch 2 (Cumberland HTML style) second.",
+    "**Sketch 2 framing**: the reference file `~/Downloads/2026-09-11-what-gator-is.html` IS a Gator-built artifact, and its styling IS the canonical target for all HTML documents Gator produces. Not an inspiration point where the master might diverge — a style-canonicalization task where the master reproduces the reference's visual grammar faithfully.",
+    "`.gator/inbox.md` updated: heading changed from \"queued for discussion\" to \"Architect-ratified next work\"; Sketch 2 gains an \"Architect framing (2026-09-12)\" paragraph capturing the canonicalization framing; closing note switches from \"awaiting Architect direction on priority + framing\" to \"Sketch 1 is up next.\""
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
