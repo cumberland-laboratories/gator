@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-4-7",
+  "intent": "Plan C Slice 3 R6: drop brittle line-locator from R5 CSP reference; retain named constants + function names as stable identifiers",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-accuracy",
+    "stable-identifiers"
+  ],
+  "commit": "7333c9d497bd2bff37297af87c61f13474d1353b",
+  "short_commit": "7333c9d",
+  "snippet_id": "snippet-7333c9d497bd2",
+  "session_group_key": "anthropic:abd33a09-7d59-4de0-acc1-794f162a914e",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 16,
+  "previous_commit_in_session": "1f9570a6baa2e825af0c5ce86f0f2d98680a0fd4",
+  "started_at": "2026-09-11T00:41:23Z",
+  "ended_at": "2026-09-11T22:28:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-11-gator-1f9570a6baa2e.json"
+  ],
+  "notes": [
+    "Outcome first: one MEDIUM documentation finding — R5's charter",
+    "addition introduced a brittle source-line locator that the",
+    "constitution's Charter Rules explicitly forbid. Single-line fix.",
+    "Codex R6 review of Plan C Slice 3 R5 (`1f9570a`, 2026-09-11)",
+    "returned 1 MEDIUM.",
+    "R5's \"Two sandbox layers\" sub-section referenced",
+    "`_B2_CSP_EMBEDDED` and `_B2_CSP_EXTERNAL` constants at",
+    "`gator-dashboard.py:1138-1139`. Line locators drift on unrelated"
+  ],
+  "transcript_session_id": "abd33a09-7d59-4de0-acc1-794f162a914e",
+  "transcript_ref": null
+}
