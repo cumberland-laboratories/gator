@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Slice 3: narrative Blueprint template inherits master CSS core byte-for-byte + parity check",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "blueprints",
+    "parity-check",
+    "sketch-2-slice-3"
+  ],
+  "commit": "c288062586e14d8c1236c9abc02233eb003986d3",
+  "short_commit": "c288062",
+  "snippet_id": "snippet-c288062586e14",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 8,
+  "previous_commit_in_session": "adf673d73e13ed83b02d50abf8448fe75eb73180",
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-12T23:07:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/blueprints/_template-narrative.html",
+    ".gator/charters/contracts.md",
+    ".gator/session-snippets/2026-09-12-gator-adf673d73e13e.json",
+    "contracts/compatibility/test_cumberland_narrative_style_parity.py",
+    "src/gator_command/templates/gator-starter/blueprints/_template-narrative.html"
+  ],
+  "notes": [
+    "Narrative Blueprint template `_template-narrative.html` (both mirror",
+    "copies — `.gator/blueprints/` user-visible-scaffolding root + shipped",
+    "source at `templates/gator-starter/blueprints/`) now inherits the",
+    "Cumberland master's CSS core byte-for-byte. The `<style>` block content",
+    "was substituted from the master; the region between",
+    "`CUMBERLAND-NARRATIVE-STYLE:BEGIN` and `CUMBERLAND-NARRATIVE-STYLE:END`",
+    "delimiters is exactly the same bytes as in the master. Everything",
+    "outside the `<style>` block (Blueprint metadata, TOC, ==TODO=="
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}
