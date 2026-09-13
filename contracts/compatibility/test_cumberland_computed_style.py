@@ -47,6 +47,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MASTER = (REPO_ROOT / "src" / "gator_command" / "templates"
           / "gator-starter" / "reference-notes"
           / "cumberland-html-document-template.html")
+NARRATIVE = (REPO_ROOT / ".gator" / "blueprints"
+             / "_template-narrative.html")
 
 
 def _file_url(path: Path) -> str:
@@ -60,19 +62,46 @@ def master_url() -> str:
     return _file_url(MASTER)
 
 
-# ── F2: narrow-viewport overflow safety net ──────────────────────
+# Two canonical Cumberland templates the mobile checks parametrize
+# over. Codex enforcer 2026-09-13 F4: existential "any table wrapped"
+# on master alone would miss a narrative-body regression that ships
+# an unwrapped table (narrative body is outside the parity-checked
+# shared CSS region). Both bodies get equal treatment.
+_NARROW_VIEWPORT_TARGETS = [
+    ("master", MASTER),
+    ("narrative", NARRATIVE),
+]
 
-def test_no_horizontal_overflow_at_375px(page, master_url):
+
+def _url_for(name_and_path):
+    _, path = name_and_path
+    if not path.is_file():
+        pytest.skip(f"{path} not present")
+    return _file_url(path)
+
+
+# ── F2 + F4: narrow-viewport overflow safety net ─────────────────
+
+@pytest.mark.parametrize("name, path", _NARROW_VIEWPORT_TARGETS,
+                         ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
+def test_no_horizontal_overflow_at_375px(page, name, path):
     """At the 375×667 mobile viewport (iPhone SE class),
     `documentElement.scrollWidth` must not exceed `window.innerWidth`.
-    Codex enforcer 2026-09-13 F2 measured the pre-fix state:
-    scrollWidth 491 vs innerWidth 375 (the sample table was 471px
-    inside a 335px content box; table's `overflow: hidden` gave rounded
-    corners but no local scroll container, so the whole page scrolled).
-    Fix landed the `.table-wrap` component + wrapped the sample tables.
+    Codex enforcer 2026-09-13 F2 measured the pre-fix state on the
+    master: scrollWidth 491 vs innerWidth 375 (the sample table was
+    471px inside a 335px content box; table's `overflow: hidden` gave
+    rounded corners but no local scroll container, so the whole page
+    scrolled). Fix landed the `.table-wrap` component + wrapped the
+    sample tables.
+
+    F4 extension (2026-09-13): parametrize over master AND narrative.
+    Narrative body is outside the parity-checked shared region so a
+    regression could add or unwrap a narrative table alone.
     """
+    if not path.is_file():
+        pytest.skip(f"{path} not present")
     page.set_viewport_size({"width": 375, "height": 667})
-    page.goto(master_url, wait_until="load")
+    page.goto(_file_url(path), wait_until="load")
     metrics = page.evaluate("""
         () => ({
             scrollWidth: document.documentElement.scrollWidth,
@@ -80,32 +109,103 @@ def test_no_horizontal_overflow_at_375px(page, master_url):
         })
     """)
     assert metrics["scrollWidth"] <= metrics["innerWidth"], (
-        f"Horizontal overflow at 375px: "
+        f"Horizontal overflow at 375px in {name} template ({path.name}): "
         f"scrollWidth={metrics['scrollWidth']} > "
-        f"innerWidth={metrics['innerWidth']}. Slice-4 F2 fix "
-        f"regressed — check the .table-wrap component and the body "
-        f"sample tables.")
+        f"innerWidth={metrics['innerWidth']}. Check the .table-wrap "
+        f"component and every <table> in the body.")
 
 
-def test_sample_table_is_wrapped_in_table_wrap(page, master_url):
-    """At any viewport, the sample table in the master body must have
-    a `.table-wrap` ancestor. Companion to the invariant pin — this
-    catches an HTML-level regression (someone unwraps the sample)
-    that would still pass the CSS-source assertion in
-    `test_cumberland_visual_invariants.py::test_master_body_uses_table_wrap`
-    if that pin were removed."""
+@pytest.mark.parametrize("name, path", _NARROW_VIEWPORT_TARGETS,
+                         ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
+def test_every_table_has_table_wrap_ancestor(page, name, path):
+    """UNIVERSAL variant of the wrap-check (Codex enforcer 2026-09-13
+    F4). Every `<table>` in the rendered body must have a `.table-wrap`
+    ancestor. Existential "any table wrapped" — the prior shape —
+    passes when someone adds an UNWRAPPED table alongside a wrapped
+    one, silently reintroducing the F2 overflow class.
+    """
+    if not path.is_file():
+        pytest.skip(f"{path} not present")
     page.set_viewport_size({"width": 1440, "height": 900})
-    page.goto(master_url, wait_until="load")
-    has_wrapped_table = page.evaluate("""
+    page.goto(_file_url(path), wait_until="load")
+    unwrapped = page.evaluate("""
         () => {
             const tables = document.querySelectorAll('table');
-            return Array.from(tables).some(
-                t => t.closest('.table-wrap') !== null);
+            return Array.from(tables)
+                .filter(t => t.closest('.table-wrap') === null)
+                .map(t => {
+                    // best-effort identifier for the failure message
+                    const heading = t.previousElementSibling
+                        && /^h[1-6]$/i.test(t.previousElementSibling.tagName)
+                        ? t.previousElementSibling.textContent.trim().slice(0, 40)
+                        : null;
+                    return {
+                        totalTables: tables.length,
+                        heading: heading,
+                        firstCellText: (t.querySelector('td, th')?.textContent
+                            || '').trim().slice(0, 40),
+                    };
+                });
         }
     """)
-    assert has_wrapped_table, (
-        "Master body has no <table> inside .table-wrap — the sample "
-        "table lost its wrap")
+    assert unwrapped == [], (
+        f"{name} template ({path.name}) has {len(unwrapped)} unwrapped "
+        f"<table>(s). Every table must live inside a .table-wrap "
+        f"ancestor so wide tables scroll locally instead of forcing "
+        f"page-level horizontal overflow. Unwrapped tables: {unwrapped!r}")
+
+
+@pytest.mark.parametrize("name, path", _NARROW_VIEWPORT_TARGETS,
+                         ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
+def test_oversize_tables_have_scrolling_wrapper(page, name, path):
+    """When a table's natural width exceeds its wrapper's clientWidth
+    (the narrow-viewport case), the `.table-wrap` MUST provide
+    horizontal scrolling — `wrap.scrollWidth > wrap.clientWidth`
+    with `overflow-x: auto` computed. Any table that meets the
+    oversized condition without the scroll affordance is a functional
+    regression even if page-level scrollWidth stays contained (a
+    truncated-then-clipped table is worse than a scrollable one).
+
+    Codex enforcer 2026-09-13 F4 recommended this positive-behavior
+    pin alongside the universal-wrap negative pin: prove the wrap
+    actually WORKS on the oversized case, not just that it exists.
+    """
+    if not path.is_file():
+        pytest.skip(f"{path} not present")
+    page.set_viewport_size({"width": 375, "height": 667})
+    page.goto(_file_url(path), wait_until="load")
+    oversized_diagnostics = page.evaluate("""
+        () => {
+            const wraps = document.querySelectorAll('.table-wrap');
+            const diagnostics = [];
+            for (const wrap of wraps) {
+                const table = wrap.querySelector('table');
+                if (!table) continue;
+                const isOversized = table.scrollWidth > wrap.clientWidth;
+                if (!isOversized) continue;
+                const style = window.getComputedStyle(wrap);
+                diagnostics.push({
+                    tableScrollWidth: table.scrollWidth,
+                    wrapClientWidth: wrap.clientWidth,
+                    wrapScrollWidth: wrap.scrollWidth,
+                    overflowX: style.overflowX,
+                    scrolls: wrap.scrollWidth > wrap.clientWidth,
+                });
+            }
+            return diagnostics;
+        }
+    """)
+    for d in oversized_diagnostics:
+        assert d["overflowX"] == "auto", (
+            f"{name} template ({path.name}): oversize .table-wrap "
+            f"has overflow-x={d['overflowX']!r}, expected 'auto'. "
+            f"Diagnostic: {d!r}")
+        assert d["scrolls"], (
+            f"{name} template ({path.name}): oversize .table-wrap "
+            f"is not actually scrollable "
+            f"(wrap.scrollWidth={d['wrapScrollWidth']} <= "
+            f"wrap.clientWidth={d['wrapClientWidth']}). "
+            f"Diagnostic: {d!r}")
 
 
 # ── F4: computed-style anchors at wide viewport ──────────────────

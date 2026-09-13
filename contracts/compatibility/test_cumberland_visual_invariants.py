@@ -403,65 +403,220 @@ def test_master_body_uses_table_wrap(master_text: str):
         "authors will inherit the pre-F2 overflow pattern")
 
 
-# ── Self-containment (F4) ─────────────────────────────────────────
+# ── Self-containment (F4 + broadened by 2026-09-13 F3) ────────────
+#
+# The Cumberland contract is broader than "no external stylesheet and
+# no external script" — it forbids EVERY resource-fetching reference
+# to an outside host or a sibling file. Regression guards must cover:
+#
+#   HTML resource-loading elements:
+#     <link rel="stylesheet" href="…">
+#     <link rel="icon"/…>        (any <link> that isn't a nav hint)
+#     <script src="…">
+#     <img src="…">              (unless src is `data:` or `#`)
+#     <iframe src="…">
+#     <video src="…">, <audio src="…">, <source src="…">, <track src="…">
+#     <object data="…">, <embed src="…">
+#
+#   CSS references (in <style> blocks OR inline style="…"):
+#     @import "…" / @import url(…)
+#     url(…) property values referencing anything not `data:`
+#
+# Allowed forms:
+#   * `<a href="…">` navigation (does not fetch at load).
+#   * `data:` URIs (self-contained inline).
+#   * `#anchor` fragments (in-document nav).
+#   * Empty `""` / `#` placeholders.
+#
+# The two guards below share a helper that scans text for every
+# violation and returns a list — a single failure message names
+# every remaining hit, so an author sees the whole surface at once.
 
-def test_master_has_no_external_stylesheet(master_text: str):
-    """The master must be self-contained per the gator-blueprint-html-v1
-    contract (and per the general Gator HTML artifact rule): no
-    `<link rel="stylesheet" href="…">` pulling from a CDN or from a
-    sibling file. All CSS inlined in `<style>`. Codex enforcer
-    follow-up 2026-09-13 F4."""
-    external = re.search(
-        r'<link\s+[^>]*rel=["\']stylesheet["\']',
-        master_text, re.IGNORECASE)
-    assert not external, (
-        f"Master must be self-contained — external stylesheet link "
-        f"found: {external.group(0)!r}")
+_RESOURCE_URL_ATTR_ELEMENTS = (
+    # (tag, attr) pairs whose value is a URL that IS fetched at load.
+    ("script", "src"),
+    ("img", "src"),
+    ("iframe", "src"),
+    ("video", "src"),
+    ("audio", "src"),
+    ("source", "src"),
+    ("track", "src"),
+    ("embed", "src"),
+    ("object", "data"),
+    ("input", "src"),  # <input type="image" src="…">
+)
 
 
-def test_master_has_no_external_script(master_text: str):
-    """The master must not pull scripts from outside. `<script src="…">`
-    with any href — CDN or sibling file — is a self-containment
-    violation. Inline `<script>...</script>` is fine (none in the
-    master today, but not prohibited)."""
-    external = re.search(
-        r'<script\s+[^>]*src=["\']',
-        master_text, re.IGNORECASE)
-    assert not external, (
-        f"Master must be self-contained — external script src found: "
-        f"{external.group(0)!r}")
+def _url_is_self_contained(url: str) -> bool:
+    """True if the URL is safe to keep inside a self-contained
+    artifact: data URI, in-document fragment, or empty placeholder.
+    Everything else (http, https, //, ftp, file, sibling path, bare
+    filename) is external and must be rejected."""
+    url = url.strip()
+    if not url:
+        return True
+    if url.startswith("#"):
+        return True
+    if url.lower().startswith("data:"):
+        return True
+    return False
 
 
-def test_narrative_has_no_external_stylesheet():
-    """Same self-containment rule applies to the narrative Blueprint
-    template. Both files share the CSS core inline; neither can pull
-    external stylesheets."""
+def _find_external_html_resources(text: str):
+    """Yield (tag, attr, url, position) for every HTML resource-loading
+    attribute that references an external target. Case-insensitive tag
+    match; attribute value in single or double quotes."""
+    violations = []
+    for tag, attr in _RESOURCE_URL_ATTR_ELEMENTS:
+        pat = re.compile(
+            rf'<{tag}\b[^>]*?\b{attr}\s*=\s*["\']([^"\']*)["\']',
+            re.IGNORECASE)
+        for match in pat.finditer(text):
+            url = match.group(1)
+            if not _url_is_self_contained(url):
+                violations.append((tag, attr, url, match.start()))
+
+    # <link> is a special case — allow ONLY nav-hint rel values that
+    # do not fetch resources (e.g. author, help). Reject any <link>
+    # with href pointing anywhere external, regardless of rel — the
+    # safe posture is "no external <link> at all in self-contained
+    # artifacts."
+    link_pat = re.compile(
+        r'<link\b[^>]*?\bhref\s*=\s*["\']([^"\']*)["\'][^>]*>',
+        re.IGNORECASE)
+    for match in link_pat.finditer(text):
+        url = match.group(1)
+        if not _url_is_self_contained(url):
+            violations.append(("link", "href", url, match.start()))
+
+    return violations
+
+
+def _find_external_css_resources(text: str):
+    """Yield (kind, url, position) for every CSS `@import` and every
+    `url(…)` reference to an external target. Scans <style> blocks;
+    ignores inline `style="…"` attributes (they're rare in these
+    templates and would need a different quoting escape). Both
+    quoted and unquoted url() forms are matched."""
+    violations = []
+    style_pat = re.compile(r'<style\b[^>]*>(.*?)</style>',
+                           re.IGNORECASE | re.DOTALL)
+    for style_match in style_pat.finditer(text):
+        css_body = style_match.group(1)
+        style_start = style_match.start(1)
+
+        # @import "…" / @import '…' / @import url(…)
+        import_pat = re.compile(
+            r'@import\s+(?:url\s*\(\s*)?["\']?([^"\')\s;]*)["\']?',
+            re.IGNORECASE)
+        for m in import_pat.finditer(css_body):
+            url = m.group(1)
+            if not _url_is_self_contained(url):
+                violations.append(
+                    ("@import", url, style_start + m.start()))
+
+        # url(…) — any property. Skip data:, http-less, and fragment.
+        url_pat = re.compile(
+            r'\burl\s*\(\s*["\']?([^"\')\s]+)["\']?\s*\)',
+            re.IGNORECASE)
+        for m in url_pat.finditer(css_body):
+            url = m.group(1)
+            if not _url_is_self_contained(url):
+                violations.append(
+                    ("url()", url, style_start + m.start()))
+
+    return violations
+
+
+@pytest.fixture(scope="module")
+def narrative_text() -> str:
     narrative = (REPO_ROOT / ".gator" / "blueprints"
                  / "_template-narrative.html")
     if not narrative.is_file():
         pytest.skip("narrative Blueprint scaffolding-root not present")
-    text = narrative.read_text(encoding="utf-8")
-    external = re.search(
-        r'<link\s+[^>]*rel=["\']stylesheet["\']',
-        text, re.IGNORECASE)
-    assert not external, (
-        f"Narrative Blueprint must be self-contained — external "
-        f"stylesheet link found: {external.group(0)!r}")
+    return narrative.read_text(encoding="utf-8")
 
 
-def test_narrative_has_no_external_script():
-    """Companion self-containment pin for the narrative Blueprint."""
-    narrative = (REPO_ROOT / ".gator" / "blueprints"
-                 / "_template-narrative.html")
-    if not narrative.is_file():
-        pytest.skip("narrative Blueprint scaffolding-root not present")
-    text = narrative.read_text(encoding="utf-8")
-    external = re.search(
-        r'<script\s+[^>]*src=["\']',
-        text, re.IGNORECASE)
-    assert not external, (
-        f"Narrative Blueprint must be self-contained — external script "
-        f"src found: {external.group(0)!r}")
+def test_master_is_fully_self_contained(master_text: str):
+    """The master must contain no external resource references —
+    stylesheets, scripts, images, iframes, media sources, embeds,
+    objects, CSS @import, or CSS url() targeting anything outside
+    the file. `<a href>` navigation is explicitly allowed (it does
+    not fetch at load); `data:` URIs and `#fragment` anchors are
+    self-contained.
+
+    Codex enforcer 2026-09-13 F3 broadened this from the original
+    two-attribute check to the full resource surface. The earlier
+    narrow guard would pass a template that added `<img
+    src="https://…">` or CSS `url(https://cdn.example/font.woff2)`.
+    """
+    html_violations = _find_external_html_resources(master_text)
+    css_violations = _find_external_css_resources(master_text)
+    assert not html_violations and not css_violations, (
+        f"Master is not fully self-contained.\n"
+        f"  HTML resource violations: {html_violations!r}\n"
+        f"  CSS resource violations:  {css_violations!r}")
+
+
+def test_narrative_is_fully_self_contained(narrative_text: str):
+    """Same self-containment surface applied to the narrative
+    Blueprint. Both anchor templates ship with all CSS inline and no
+    external resource references."""
+    html_violations = _find_external_html_resources(narrative_text)
+    css_violations = _find_external_css_resources(narrative_text)
+    assert not html_violations and not css_violations, (
+        f"Narrative Blueprint is not fully self-contained.\n"
+        f"  HTML resource violations: {html_violations!r}\n"
+        f"  CSS resource violations:  {css_violations!r}")
+
+
+def test_self_containment_helper_catches_known_forms():
+    """Meta-pin: exercise the helper against synthesized violations
+    so a bug in the pattern regex is visible immediately (rather
+    than manifesting as a false-negative on a real template).
+    Ensures the helper actually detects each violation class the
+    contract lists.
+    """
+    fixture = """<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="https://cdn.example.com/x.css">
+<script src="//example.org/foo.js"></script>
+<style>
+@import "https://external.example/lib.css";
+body { background: url("https://cdn.example/bg.png"); }
+</style>
+</head>
+<body>
+<img src="https://example.com/logo.png">
+<iframe src="/other.html"></iframe>
+<video src="./local.mp4"></video>
+<a href="https://example.com/">nav OK</a>
+<a href="#anchor">nav OK</a>
+<img src="data:image/png;base64,abc">
+</body>
+</html>"""
+    html_v = _find_external_html_resources(fixture)
+    css_v = _find_external_css_resources(fixture)
+    detected = {(kind, url) for kind, _, url, _ in html_v}
+    detected |= {(kind, url) for kind, url, _ in css_v}
+    # Expected: link+href, script+src, img+src, iframe+src, video+src,
+    # @import, url()
+    assert ("link", "https://cdn.example.com/x.css") in detected
+    assert ("script", "//example.org/foo.js") in detected
+    assert ("img", "https://example.com/logo.png") in detected
+    assert ("iframe", "/other.html") in detected
+    assert ("video", "./local.mp4") in detected
+    assert ("@import", "https://external.example/lib.css") in detected
+    assert ("url()", "https://cdn.example/bg.png") in detected
+    # Allowed forms must NOT be detected:
+    for tag, attr, url, _ in html_v:
+        assert not url.startswith("data:"), (
+            f"data: URI incorrectly flagged: {tag} {attr}={url!r}")
+    # <a href> is not in _RESOURCE_URL_ATTR_ELEMENTS so it's never
+    # scanned; if it were, the two `<a>` entries above would appear.
+    assert not any("a" == kind for kind, _, _, _ in html_v), (
+        "<a href> should be allowed but the helper flagged it")
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):

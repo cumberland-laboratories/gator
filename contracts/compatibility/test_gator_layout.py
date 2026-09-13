@@ -148,6 +148,30 @@ def test_gatorize_install_produces_required_layout(tmp_path: Path, gatorize_mod)
         "default enforcement_level must be 'strict'"
     )
 
+    # Cumberland master (Codex Sketch 2 Slice 1 + 2026-09-13 F2 enforcer
+    # follow-up): a fresh gatorize install must place the master
+    # template at `.gator/.includes/reference-notes/…` — the v2 shipped
+    # reference-notes location. The plan-only check in
+    # test_cumberland_propagation.py covers the `plan_updates` routing;
+    # this pin proves the plan actually executes and lands the file
+    # after action_install_gator() completes.
+    cumberland = (gator_dir / ".includes" / "reference-notes"
+                  / "cumberland-html-document-template.html")
+    assert cumberland.is_file(), (
+        f"fresh gatorize install did not place Cumberland master at "
+        f"{cumberland} — check `plan_updates` routing and template "
+        f"packaging (MIXED_DIRECTORY_SHIPPED_DEFAULTS + "
+        f"templates/**/* glob).")
+    # And the master must NOT land at the flat root — that would be
+    # the mixed-layout state the layout resolver rejects.
+    flat_root_copy = (gator_dir / "reference-notes"
+                      / "cumberland-html-document-template.html")
+    assert not flat_root_copy.exists(), (
+        f"fresh install placed Cumberland master at flat root "
+        f"({flat_root_copy}) — v2 shipped defaults belong under "
+        f".includes/; flat-root presence is the incomplete-migration "
+        f"shape the resolver reports as `mixed`.")
+
 
 # ── machine-identity file format ────────────────────────────────────
 

@@ -353,27 +353,64 @@ class TestLayoutDetection:
 
     def test_mixed_defaults_includes_cumberland_html_template(self):
         """Cumberland HTML style master (Codex Sketch 2 Slice 1,
-        2026-09-12): the shipped starter for any HTML document Gator
-        produces lives at
-        `templates/gator-starter/reference-notes/cumberland-html-document-template.html`
-        (source) with `.gator/.includes/reference-notes/…` as the
-        dogfood mirror. Its filename must appear in
-        MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"] so the
-        mixed-directory classifier sees it as a shipped default and
-        does not misroute a fleet repo whose reference-notes/
-        contains only this file + scaffolding.
+        2026-09-12; docstring corrected 2026-09-13 F1):
+        `cumberland-html-document-template.html` must appear in
+        `MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"]` so
+        `_has_legacy_shipped_content()` treats it as a shipped default
+        — meaning a fleet repo whose `reference-notes/` carries this
+        file at the FLAT ROOT (`.gator/reference-notes/…`) classifies
+        as `mixed` (incomplete migration to `.includes/`), NOT as
+        clean v2.
 
-        Regression pin — additions to MIXED_DIRECTORY_SHIPPED_DEFAULTS
-        are the same class of silent drift as USER_VISIBLE_SCAFFOLDING:
-        an accidental removal would misclassify a reference-notes/
-        containing only the Cumberland template + README + _template.md
-        as "mixed" (has non-scaffolding content at root → incomplete
-        migration), when in fact the Cumberland template IS a shipped
-        default and belongs there.
+        This is distinct from `USER_VISIBLE_SCAFFOLDING`, which
+        exempts scaffolding names (README.md, _template.md, etc.) from
+        the mixed classification. The Cumberland master is a shipped
+        DEFAULT that belongs under `.includes/reference-notes/` on v2;
+        flat-root presence is a migration bug.
+
+        Regression: an accidental removal from the frozenset would let
+        a broken tree pass as clean v2 while the actual file sits in
+        the wrong location. Behavioral companion is
+        `test_v2_tree_with_cumberland_master_at_flat_root_is_mixed`
+        below — this membership pin locks the constant; that pin locks
+        the observable classification.
         """
         assert (
             "cumberland-html-document-template.html"
             in gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"])
+
+    def test_v2_tree_with_cumberland_master_at_flat_root_is_mixed(
+            self, tmp_path):
+        """Behavioral counterpart to the membership pin above (Codex
+        enforcer 2026-09-13 F1). A v2 layout that carries the
+        Cumberland master at flat `.gator/reference-notes/` — instead
+        of the correct `.gator/.includes/reference-notes/` — is an
+        incomplete migration and must classify as `mixed`.
+
+        Constructs the minimum v2 shape (`.includes/scripts/` +
+        `.includes/constitution.md` + layout-version.json declaring v2)
+        + the flat-root Cumberland file, then calls
+        `resolve_gator_layout()` and asserts `mixed`. Prior to F1's
+        prose correction the charter claimed the exact opposite, and
+        without a behavioral pin a future maintainer could remove the
+        membership entry (thinking they were fixing a bug) and every
+        existing test would stay green.
+        """
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        includes = gator / ".includes"
+        includes.mkdir()
+        (includes / "scripts").mkdir()
+        (includes / "constitution.md").write_text(
+            "# Constitution\n", encoding="utf-8")
+        # Flat-root Cumberland — the "incomplete migration" shape.
+        (gator / "reference-notes").mkdir()
+        (gator / "reference-notes"
+         / "cumberland-html-document-template.html").write_text(
+            "<!DOCTYPE html>\n", encoding="utf-8")
+        (gator / "layout-version.json").write_text(
+            '{"layout": "v2"}\n', encoding="utf-8")
+        assert gator_layout.resolve_gator_layout(tmp_path) == "mixed"
 
 
 class TestScaffoldingRoutingRoundTrip:
