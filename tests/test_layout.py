@@ -297,6 +297,60 @@ class TestLayoutDetection:
         assert "README.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
         assert "_template.md" in gator_layout.USER_VISIBLE_SCAFFOLDING
 
+    def test_package_and_template_gator_layout_constants_agree(self):
+        """Enforcer finding 2026-09-13 F1: `gator_layout.py` ships in TWO
+        copies — the package/runtime at
+        `src/gator_command/scripts/gator_layout.py` AND the template mirror
+        at `src/gator_command/templates/gator-starter/scripts/gator_layout.py`.
+        A repo-resident install can invoke either copy, so drift between them
+        can flip a valid v2 tree to `mixed` (or vice versa) without any file
+        touching the update path. This pin loads both copies and asserts
+        their `MIXED_DIRECTORY_SHIPPED_DEFAULTS` and `USER_VISIBLE_SCAFFOLDING`
+        sets agree.
+
+        Comments and docstrings can legitimately differ between the copies
+        (the package copy is often more verbose); only the PARSED CONSTANTS
+        must match. That is the actual behavioral invariant the mixed-
+        directory classifier and scaffolding-only exemption rely on.
+
+        Regression: Slice 1 of the Cumberland HTML arc (fd35d92, 2026-09-12)
+        added `cumberland-html-document-template.html` to the package copy
+        but not the template mirror; enforcer review flagged it a day later.
+        This pin would have caught it at Slice-1 commit time.
+        """
+        import importlib.util
+        template_path = (
+            Path(__file__).parent.parent
+            / "src" / "gator_command" / "templates" / "gator-starter"
+            / "scripts" / "gator_layout.py")
+        assert template_path.is_file(), (
+            f"template mirror missing at {template_path}")
+        spec = importlib.util.spec_from_file_location(
+            "gator_layout_template_mirror", str(template_path))
+        template_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(template_module)
+
+        # MIXED_DIRECTORY_SHIPPED_DEFAULTS: same keys, same value sets.
+        assert (set(template_module.MIXED_DIRECTORY_SHIPPED_DEFAULTS.keys())
+                == set(gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS.keys())), (
+            "package and template gator_layout disagree on which mixed "
+            "directories exist")
+        for dir_name in gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS:
+            pkg_set = gator_layout.MIXED_DIRECTORY_SHIPPED_DEFAULTS[dir_name]
+            tpl_set = template_module.MIXED_DIRECTORY_SHIPPED_DEFAULTS[dir_name]
+            assert pkg_set == tpl_set, (
+                f"MIXED_DIRECTORY_SHIPPED_DEFAULTS[{dir_name!r}] disagrees "
+                f"between package and template.\n"
+                f"  package only:  {sorted(pkg_set - tpl_set)}\n"
+                f"  template only: {sorted(tpl_set - pkg_set)}")
+
+        # USER_VISIBLE_SCAFFOLDING: single set, byte-equal.
+        assert (template_module.USER_VISIBLE_SCAFFOLDING
+                == gator_layout.USER_VISIBLE_SCAFFOLDING), (
+            f"USER_VISIBLE_SCAFFOLDING disagrees.\n"
+            f"  package only:  {sorted(gator_layout.USER_VISIBLE_SCAFFOLDING - template_module.USER_VISIBLE_SCAFFOLDING)}\n"
+            f"  template only: {sorted(template_module.USER_VISIBLE_SCAFFOLDING - gator_layout.USER_VISIBLE_SCAFFOLDING)}")
+
     def test_mixed_defaults_includes_cumberland_html_template(self):
         """Cumberland HTML style master (Codex Sketch 2 Slice 1,
         2026-09-12): the shipped starter for any HTML document Gator

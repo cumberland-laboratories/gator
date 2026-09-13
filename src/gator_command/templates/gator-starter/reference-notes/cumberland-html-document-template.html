@@ -332,6 +332,20 @@
       border-bottom-color: var(--teal);
     }
 
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
     /* Pills — inline status/verdict chips for table cells.
        Six variants matching the callout palette. */
     .pill {
@@ -651,37 +665,41 @@
          .table-blue   informational / comparative
          .table-red    failure modes / warnings
          .table-teal   verified / positive baseline
-       Pill chip variants for cells: .ok .info .warn .alt .data .na. -->
-  <table class="table-blue">
-    <thead>
-      <tr>
-        <th>==TODO== Column A</th>
-        <th>==TODO== Column B</th>
-        <th>==TODO== Column C</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill ok">Recommended</span></td>
-      </tr>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill alt">Alternate</span></td>
-      </tr>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill na">Not applicable</span></td>
-      </tr>
-    </tbody>
-  </table>
+       Pill chip variants for cells: .ok .info .warn .alt .data .na.
+       Wrap every table in .table-wrap so narrow viewports scroll the
+       table locally instead of the whole page. -->
+  <div class="table-wrap">
+    <table class="table-blue">
+      <thead>
+        <tr>
+          <th>==TODO== Column A</th>
+          <th>==TODO== Column B</th>
+          <th>==TODO== Column C</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill ok">Recommended</span></td>
+        </tr>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill alt">Alternate</span></td>
+        </tr>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill na">Not applicable</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
   <!-- CALLOUT VARIANTS — pick the color that matches the role,
        delete unused. Use .data (purple) SPARINGLY — one or two

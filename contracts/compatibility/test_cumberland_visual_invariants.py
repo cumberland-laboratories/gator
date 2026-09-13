@@ -7,11 +7,12 @@ or the justified-body rule. This test walks the master's CSS + body and
 asserts the load-bearing visual invariants are still present.
 
 Method: string / regex assertions against the raw template text. No
-browser, no Playwright, no computed-style snapshotting — those would
-introduce OS font-rendering variance (Windows vs macOS vs Linux
-subpixel-metric differences that vary between browser versions) and
-Codex Sketch 2 explicitly ruled pixel-based invariants out for that
-reason.
+PIXEL SNAPSHOTS — those introduce OS font-rendering variance (Windows
+vs macOS vs Linux subpixel-metric differences that vary between browser
+versions) and Codex Sketch 2 explicitly ruled them out. Computed-style
+checks (values from `getComputedStyle()` in a real browser) live in
+`test_cumberland_computed_style.py` — they are NOT pixel snapshots and
+are a separate acceptance surface.
 
 Invariants covered:
   - PALETTE: all 6 hue tokens + their `-dark` (for teal/blue) + `-light`
@@ -365,6 +366,102 @@ def test_body_has_visible_example_of_each_callout_variant(master_text: str):
             selector = 'class="callout"'
         assert selector in master_text, (
             f"Master body missing visible example of {selector!r}")
+
+
+def test_table_wrap_component_defined(shared_region: str):
+    """`.table-wrap` is the narrow-viewport safety net: wraps a wide
+    table in its own overflow-x scroll container so a mobile viewport
+    doesn't force the whole page to scroll horizontally. Codex
+    enforcer follow-up 2026-09-13 F2 landed this after measuring a
+    concrete overflow at 375×667 (documentElement.scrollWidth==491
+    vs innerWidth==375; sample table was ~471px inside ~335px
+    content box).
+    """
+    match = re.search(
+        r'\.table-wrap\s*\{[^}]*overflow-x:\s*auto',
+        shared_region, re.DOTALL)
+    assert match, (
+        ".table-wrap component missing overflow-x: auto — narrow-viewport "
+        "overflow safety net is not in place")
+    # Sanity: the wrap must also reset the child table's margin so
+    # spacing above/below comes from the wrap, not the table.
+    reset = re.search(
+        r'\.table-wrap\s+table\s*\{[^}]*margin:\s*0',
+        shared_region, re.DOTALL)
+    assert reset, (
+        ".table-wrap table { margin: 0 } reset missing — child table's "
+        "own margin would compound with the wrap's")
+
+
+def test_master_body_uses_table_wrap(master_text: str):
+    """The master's body sample table must be wrapped so authors see
+    the wrap-by-default pattern in the shipped scaffolding. Missing
+    wrap here means every fleet-repo author who copy-modifies the
+    sample gets an unwrapped table and re-exposes the F2 overflow."""
+    assert 'class="table-wrap"' in master_text, (
+        "Master body sample table is not wrapped in .table-wrap — "
+        "authors will inherit the pre-F2 overflow pattern")
+
+
+# ── Self-containment (F4) ─────────────────────────────────────────
+
+def test_master_has_no_external_stylesheet(master_text: str):
+    """The master must be self-contained per the gator-blueprint-html-v1
+    contract (and per the general Gator HTML artifact rule): no
+    `<link rel="stylesheet" href="…">` pulling from a CDN or from a
+    sibling file. All CSS inlined in `<style>`. Codex enforcer
+    follow-up 2026-09-13 F4."""
+    external = re.search(
+        r'<link\s+[^>]*rel=["\']stylesheet["\']',
+        master_text, re.IGNORECASE)
+    assert not external, (
+        f"Master must be self-contained — external stylesheet link "
+        f"found: {external.group(0)!r}")
+
+
+def test_master_has_no_external_script(master_text: str):
+    """The master must not pull scripts from outside. `<script src="…">`
+    with any href — CDN or sibling file — is a self-containment
+    violation. Inline `<script>...</script>` is fine (none in the
+    master today, but not prohibited)."""
+    external = re.search(
+        r'<script\s+[^>]*src=["\']',
+        master_text, re.IGNORECASE)
+    assert not external, (
+        f"Master must be self-contained — external script src found: "
+        f"{external.group(0)!r}")
+
+
+def test_narrative_has_no_external_stylesheet():
+    """Same self-containment rule applies to the narrative Blueprint
+    template. Both files share the CSS core inline; neither can pull
+    external stylesheets."""
+    narrative = (REPO_ROOT / ".gator" / "blueprints"
+                 / "_template-narrative.html")
+    if not narrative.is_file():
+        pytest.skip("narrative Blueprint scaffolding-root not present")
+    text = narrative.read_text(encoding="utf-8")
+    external = re.search(
+        r'<link\s+[^>]*rel=["\']stylesheet["\']',
+        text, re.IGNORECASE)
+    assert not external, (
+        f"Narrative Blueprint must be self-contained — external "
+        f"stylesheet link found: {external.group(0)!r}")
+
+
+def test_narrative_has_no_external_script():
+    """Companion self-containment pin for the narrative Blueprint."""
+    narrative = (REPO_ROOT / ".gator" / "blueprints"
+                 / "_template-narrative.html")
+    if not narrative.is_file():
+        pytest.skip("narrative Blueprint scaffolding-root not present")
+    text = narrative.read_text(encoding="utf-8")
+    external = re.search(
+        r'<script\s+[^>]*src=["\']',
+        text, re.IGNORECASE)
+    assert not external, (
+        f"Narrative Blueprint must be self-contained — external script "
+        f"src found: {external.group(0)!r}")
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):

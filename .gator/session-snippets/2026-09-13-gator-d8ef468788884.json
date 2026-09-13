@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Slice 4: visual-invariant tests + charter propagation (Sketch 2 complete)",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "visual-invariants",
+    "charter-propagation",
+    "sketch-2-slice-4",
+    "sketch-2-complete"
+  ],
+  "commit": "d8ef4687888842130e9f4c8b28b7ebbc3c342838",
+  "short_commit": "d8ef468",
+  "snippet_id": "snippet-d8ef468788884",
+  "session_group_key": "anthropic:8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-12T18:05:36Z",
+  "ended_at": "2026-09-13T11:45:41Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-09-12-gator-c288062586e14.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "New `contracts/compatibility/test_cumberland_visual_invariants.py` — 52",
+    "pins asserting the load-bearing visual invariants against the master",
+    "template's shared CSS region + body. Textual/regex only; deliberately no",
+    "Playwright, no computed-style snapshotting, no pixel-based checks —",
+    "Codex Sketch 2 explicitly ruled those out for OS font-rendering",
+    "variance. Coverage:",
+    "**Palette**: 13 hex-exact values (teal / teal-dark / red / blue /",
+    "blue-dark / amber / green / purple + 9-step gray scale) via"
+  ],
+  "transcript_session_id": "8179f604-0c05-4fc2-b9b5-54cad1cfd6aa",
+  "transcript_ref": null
+}

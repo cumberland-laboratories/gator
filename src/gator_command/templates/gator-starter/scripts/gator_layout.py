@@ -73,7 +73,9 @@ MIXED_DIRECTORY_SHIPPED_DEFAULTS = {
     # sync with templates/gator-starter/reference-notes/ (scaffolding
     # README.md/_template.md excluded; USER_VISIBLE_SCAFFOLDING covers those).
     "reference-notes": frozenset({
-        "concierge-responses.md", "dangerous-patterns.md",
+        "concierge-responses.md",
+        "cumberland-html-document-template.html",
+        "dangerous-patterns.md",
         "dashboard-operations.md", "enforcer-configuration.md",
         "enforcer-prompt.md", "example-project.md",
         "expected-governance-residue.md",

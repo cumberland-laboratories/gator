@@ -306,6 +306,20 @@
       border-bottom-color: var(--teal);
     }
 
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
     /* Pills — inline status/verdict chips for table cells.
        Six variants matching the callout palette. */
     .pill {
@@ -608,61 +622,67 @@
   <p>==TODO== the load-bearing "so what?" answer. If the reader skips this, they can act on the flow above but won't know when to reach for it or when to reach past it.</p>
 
   <!-- Sample table with colored header variants — pick the class that matches
-       the table's role, or leave off the variant class for neutral gray. -->
+       the table's role, or leave off the variant class for neutral gray.
+       Wrap every table in .table-wrap so narrow viewports scroll the table
+       locally instead of the whole page. -->
   <h3>Comparison / options</h3>
-  <table class="table-blue">
-    <thead>
-      <tr>
-        <th>Option</th>
-        <th>When to use</th>
-        <th>Trade-off</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill ok">Recommended</span></td>
-      </tr>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill alt">Alternate</span></td>
-      </tr>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill na">Not applicable</span></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table-blue">
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>When to use</th>
+          <th>Trade-off</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill ok">Recommended</span></td>
+        </tr>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill alt">Alternate</span></td>
+        </tr>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill na">Not applicable</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
   <h3>Failure modes</h3>
-  <table class="table-red">
-    <thead>
-      <tr>
-        <th>What breaks</th>
-        <th>Symptom</th>
-        <th>Fallback</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill warn">==TODO==</span></td>
-      </tr>
-      <tr>
-        <td>==TODO==</td>
-        <td>==TODO==</td>
-        <td><span class="pill info">==TODO==</span></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table-red">
+      <thead>
+        <tr>
+          <th>What breaks</th>
+          <th>Symptom</th>
+          <th>Fallback</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill warn">==TODO==</span></td>
+        </tr>
+        <tr>
+          <td>==TODO==</td>
+          <td>==TODO==</td>
+          <td><span class="pill info">==TODO==</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <section id="refs">
