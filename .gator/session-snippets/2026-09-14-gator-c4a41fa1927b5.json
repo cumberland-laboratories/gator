@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Compact roadmap per retention standards; archive shipped-release history",
+  "change_type": "docs",
+  "significance": "notable",
+  "charter_changed": false,
+  "decision_tags": [
+    "governance-retention",
+    "roadmap-compaction",
+    "shipped-history-archive"
+  ],
+  "commit": "c4a41fa1927b53fc00203015f01d859871c1e5ce",
+  "short_commit": "c4a41fa",
+  "snippet_id": "snippet-c4a41fa1927b5",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 8,
+  "previous_commit_in_session": "da0f112a26cca1efd63e8b0714b9f39a406dd43e",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T17:54:28Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md",
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-14-gator-da0f112a26cca.json"
+  ],
+  "notes": [
+    "Executes the retention-standards direction the Architect set",
+    "2026-09-12 (inbox top item). Compacts `roadmap.md` from a",
+    "document that had accumulated 124,491 bytes (with a single-line",
+    "~120K-char leading paragraph carrying release-by-release",
+    "narrative) into a current-facing 15,801 bytes — an 87% reduction",
+    "without losing live decisions.",
+    "**Retired the leading release-history paragraph.** The",
+    "single-line paragraph spanning v2.13.2 → v2.8.0 releases,"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

@@ -2,6 +2,41 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.13.3] — 2026-09-14
+
+Patch release: Cumberland HTML style Sketch 2 arc closure. Adds a pinned Content-Security-Policy `<meta>` to both shipped Cumberland templates and replaces eleven rounds of parser-based self-containment scanner accretion with a bounded positive-policy validator. Defensive hardening of the shipped template surface; no user-facing feature, no API change.
+
+### Changed
+
+- **Cumberland templates now carry a pinned CSP `<meta>`.** Both the master (`src/gator_command/templates/gator-starter/reference-notes/cumberland-html-document-template.html` + `.gator/.includes/` mirror) and the narrative Blueprint specialization (`src/gator_command/templates/gator-starter/blueprints/_template-narrative.html` + `.gator/blueprints/` mirror) now include `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">` early in `<head>` (before `<title>` and `<style>`). Documents authored from these templates inherit the CSP — a browser-enforced denial of external resource loading. The shipped CSS core (delimited by `CUMBERLAND-NARRATIVE-STYLE:BEGIN/END` inside `<style>`) is unchanged, so the byte-for-byte parity check between master and narrative CSS still holds.
+
+- **Self-containment compat tests refactored to a bounded positive-policy validator** — `contracts/compatibility/test_cumberland_visual_invariants.py` module dropped **2304 → 937 lines (−1367 net)**. The eleven rounds of parser-based blacklist scanners (`_HTMLResourceScanner`, `_ExecutableScriptScanner`, WHATWG meta-refresh parser, srcset parser, CSS hex-escape decoder, active-data-document guard, and their 12 meta-pins) were replaced with `_validate_cumberland_document` — an HTMLParser walk enforcing `_ALLOWED_TAGS` (26 tags: document skeleton, semantic sections, text, lists, tables, `<a>`, the SVG subset the shipped templates actually use) + per-tag `_ATTR_ALLOWLIST`. `<a href>` fragment-only; `<meta http-equiv>` = `content-security-policy` only; every `on*=` event handler flagged; parse errors fail closed. Findings surface as `(kind, detail, lineno)` tuples with per-line localization. Rejecting the enclosing tag makes every prior parser-detail variant (iframe srcdoc, data:text/html, entity-encoded `javascript:`, meta-refresh grammar shapes, CSS hex escapes, srcset comma handling) automatically moot — the closure trades continued enumeration for a bounded, defensible guarantee.
+
+### Added
+
+- **Structural CSP validator `_find_csp_status`** — replaces the earlier raw-substring `text.find(...)` check that was fooled by a commented-out `<!-- <meta http-equiv=... > -->`. Walks the document with HTMLParser, records every ACTIVE `<meta http-equiv="Content-Security-Policy">` with its content + position, and returns one of eight verdicts: `ok` / `missing` / `duplicate` / `csp-outside-head` / `csp-after-title` / `csp-after-style` / `csp-content-mismatch` / `parse-error`. Meta-pin `test_csp_status_rejects_commented_out_meta` covers all four negative classes explicitly.
+
+- **CSP-blocks-forbidden-CSS-shapes browser test** — new parametrized Playwright pin in `contracts/compatibility/test_cumberland_computed_style.py` covering five CSS shapes (`@import`, `@IMPORT`, `url()`, `image-set("...")`, `\75rl(...)`). Each fixture combines the pinned CSP with the forbidden CSS shape, installs a `securitypolicyviolation` listener via `add_init_script` before navigation, and asserts (a) Chromium fired SPV citing the expected directive (`style-src-elem` for `@import`, `img-src` for image references) + blocked URI under `cdn.example`, AND (b) zero external requests completed via the routed fetch path. Executes the Layer 2 (CSP) boundary against CSS content that Layer 1 (positive policy, HTML-only) intentionally does not scan.
+
+- **27-entry HTML-capability rejection matrix** — parametrized fixture per forbidden class (script / iframe / iframe-srcdoc / iframe-src-data-html / frame / object / embed / base / form / input / button / meta-refresh labeled + unlabeled / on-* handlers / external-a-href / javascript-a-href / data-a-href / protocol-relative-a-href / img / svg-script / svg-use-xlink / link / style-attr / video / audio). Every class must produce at least one policy finding.
+
+- **Shared CSP constant** — `PINNED_CSP_CONTENT` + `pinned_csp_meta_string()` moved to `contracts/compatibility/_helpers.py`; both visual-invariants and computed-style modules import from `._helpers`. Prevents drift between the policy the templates carry and the policy the boundary tests exercise.
+
+- **Shipped-history archive** — `.gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md` extracts the roadmap's accumulated release narrative into a focused artifact. Roadmap compacted from 124,491 → 15,801 bytes (87% reduction) and given a documented retention standard: current-facing only, ~250-line soft cap, roll-forward-by-prepending.
+
+### Compatibility
+
+- No API change, no endpoint contract change, no CLI-verb change. The base wheel behaves identically; only shipped template content + the compat test module changed.
+- Templates: added the CSP `<meta>` above `<title>`/`<style>`; shared CSS core between master and narrative is untouched (byte-for-byte parity check unaffected).
+- Compat suite: **194 passed, 3 skipped** (191 → 194 across the closure and follow-ups; 5 new CSP-CSS-egress pins, 1 new CSP-status meta-pin, 3 obsolete CSS-source pins retired from Layer 1's rejection matrix). Base + contracts test run: **1104 passed, 3 skipped, 2 xfailed** (excluding Playwright dashboard-ui matrix).
+- CI note: `source-ci` on `origin/main` tip (`3d58322`, Cumberland R8) reported one failure on the Windows Playwright dashboard-ui job (`test_resize_handle_hidden_while_collapsed` — a Plan-C timing flake unrelated to the Cumberland arc); prior + subsequent commits went green.
+
+### Notes
+
+- The bounded guarantee (verbatim from the closure block-comment): "The two checked-in Cumberland templates contain only approved passive HTML, carry the pinned CSP that denies external resource loading, and produce no non-template network requests during Chromium's initial load." The guarantee does not extend to arbitrary user-edited HTML, to every encoded/malformed browser input, or to intervals beyond the initial-load observation window — those confinements require runtime enforcement, not repository tests.
+- Codex round-15 review after the round-14 wiring pass: **"No findings. Recommend closure."** Stop rule in force — further hypothetical browser shapes are out of scope unless they bypass an allowed HTML capability, weaken/evade the active pinned CSP, or reproduce against a shipped template.
+- Cumberland arc totals: 18 commits (`fd35d92`..`d986898`) across three days, September 12-14.
+
 ## [2.13.2] — 2026-09-12
 
 Patch release: read-only Python + SQL syntax highlighting in the Dashboard Repo file browser, plus a WARNING → DEBUG log-level demotion for a defense-in-depth line that fired on every governed-repo scan.
