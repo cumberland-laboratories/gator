@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-5 follow-up: SVG <script href>, escape-aware CSS url(), charter count fix",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "svg-script",
+    "css-escapes",
+    "sketch-2-post-arc"
+  ],
+  "commit": "df737347e5d9041b6eb4ed8d9b7aa417aff99983",
+  "short_commit": "df73734",
+  "snippet_id": "snippet-df737347e5d90",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "c077818e91af082236145697fc086351766174de",
+  "started_at": "2026-09-14T00:36:43Z",
+  "ended_at": "2026-09-14T00:36:43Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-c077818e91af0.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-5 enforcer review of `c077818` (browser-backed via Chromium",
+    "intercept) surfaced two MEDIUM blind spots + one LOW documentation",
+    "count mismatch. All three fixed.",
+    "SVG `<script>` uses `href` / `xlink:href`, not `src`. My HTML",
+    "`<script src>` allowlist entry covered HTML scripts but not the",
+    "SVG-namespaced form. Codex verified via Chromium's request",
+    "interception: `<svg><script href=\"https://cdn.example/x.js\">`",
+    "triggers a real network fetch; my scanner returned empty."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

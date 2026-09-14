@@ -432,6 +432,7 @@ def test_master_body_uses_table_wrap(master_text: str):
 # violation and returns a list — a single failure message names
 # every remaining hit, so an author sees the whole surface at once.
 
+import html as _html_stdlib
 import html.parser as _html_parser
 
 
@@ -506,15 +507,18 @@ def _scan_css_for_externals(css_text: str):
     """
     results = []
     # Unquoted URL character class — escape-aware per CSS spec.
-    # `\<any-char>` counts as one URL character, so `a\ b.png` is a
-    # single URL that renders to `a%20b.png` (Codex's Chromium
-    # intercept confirmed the fetch — F2 round-5 finding). The
-    # regex accepts either a backslash-escape pair OR a normal
-    # non-special char. Trailing `\` (bare, no follower) is
-    # intentionally not matched — real CSS treats that as invalid
-    # syntax; keeping the pattern strict avoids catastrophic
-    # backtracking on malformed input.
-    _UNQ = r"(?:\\.|[^\"')\s])+"
+    # Three URL-character shapes:
+    #   1. `\<1-6 hex digits>[optional whitespace terminator]` —
+    #      standard CSS hex escape (F1 round-6, Chromium-verified:
+    #      `\68 ttps://…` decodes to `https://…`). The space in
+    #      `\68 ` is the terminator, NOT the URL boundary.
+    #   2. `\<any single char>` — the simple char escape (F2
+    #      round-5, e.g. `a\ b.png`).
+    #   3. Any non-special char.
+    # Trailing `\` (bare, no follower) is intentionally not matched
+    # — real CSS treats that as invalid; keeping the pattern strict
+    # avoids catastrophic backtracking on malformed input.
+    _UNQ = r"(?:\\[0-9a-fA-F]{1,6}\s?|\\.|[^\"')\s])+"
 
     # @import "…" / @import '…' / @import url(…)
     # Three URL shapes: double-quoted, single-quoted, unquoted.
@@ -550,14 +554,32 @@ def _scan_css_for_externals(css_text: str):
     return results
 
 
+_CSS_HEX_ESCAPE_RE = re.compile(r'\\([0-9a-fA-F]{1,6})(\s?)')
+
+
 def _unescape_css(url: str) -> str:
-    """Undo CSS backslash-escapes in a URL. `a\\ b.png` → `a b.png`.
-    Applied AFTER the regex captures so `_url_is_self_contained`
-    sees the same URL the browser would resolve. Handles the simple
-    `\\<char>` form (which is what real templates use); the full
-    CSS spec allows `\\<hex-digits>` runs, but no real fetch-target
-    URL uses those, so keep the mapping minimal."""
-    return re.sub(r'\\(.)', r'\1', url)
+    """Undo CSS backslash-escapes in a URL so `_url_is_self_contained`
+    sees the same URL the browser would resolve.
+
+    Two escape forms per CSS spec:
+      * `\\<1-6 hex digits>[optional single whitespace terminator]`
+        — decodes to the Unicode character with that code point.
+        E.g. `\\68 ttps://…` becomes `https://…` (F1 round-6,
+        Chromium-verified).
+      * `\\<any non-hex-digit char>` — decodes to that char.
+        E.g. `a\\ b.png` becomes `a b.png` (F2 round-5).
+
+    Hex escapes are processed FIRST so the trailing whitespace
+    terminator (part of the escape) isn't consumed by a naive
+    `\\.` pass. Any remaining `\\<char>` is unwrapped by the second
+    pass. Runs of hex escapes decode correctly because each
+    escape consumes exactly its own digits + optional terminator.
+    """
+    def _decode_hex(m: re.Match) -> str:
+        codepoint = int(m.group(1), 16)
+        return chr(codepoint)
+    unhexed = _CSS_HEX_ESCAPE_RE.sub(_decode_hex, url)
+    return re.sub(r'\\(.)', r'\1', unhexed)
 
 
 def _parse_srcset(value: str):
@@ -619,16 +641,29 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
     regex-based scanner missed unquoted attrs — F2 re-review
     finding).
 
-    Emits three violation shapes into `self.violations`:
-      * `(tag, attr, url, lineno)` — HTML resource attribute
-      * `(f"{tag}@style", kind, url, lineno)` — inline CSS via
-        `style="…"` (kind = `@import` or `url()`)
+    Emits two violation shapes:
+      * `self.html_violations` = `(tag, attr, url, lineno)` — HTML
+        resource attribute violations.
+      * `self.inline_style_violations` = `(f"{tag}@style", kind, url,
+        lineno)` — inline CSS via `style="…"` (kind = `@import` or
+        `url()`).
+
+    Also recurses into `<iframe srcdoc>` (F2 round-6): the attribute
+    value is a full HTML document embedded as HTML-encoded text. A
+    resource inside srcdoc is fetched by the browser — Codex verified
+    with Chromium intercept. Scanner decodes entities via
+    `html.unescape` and re-feeds the content into a fresh scanner
+    instance at `depth+1`, capped at `_MAX_SRCDOC_DEPTH` to prevent
+    runaway. Nested `<style>` blocks inside srcdoc are also scanned.
     """
 
-    def __init__(self):
+    _MAX_SRCDOC_DEPTH = 2
+
+    def __init__(self, depth: int = 0):
         super().__init__(convert_charrefs=False)
         self.html_violations = []
         self.inline_style_violations = []
+        self.depth = depth
 
     def handle_starttag(self, tag, attrs):
         self._scan(tag, attrs)
@@ -640,6 +675,19 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
     def _scan(self, tag, attrs):
         tag_l = tag.lower()
         lineno = self.getpos()[0]
+
+        # F2 round-6: recursive scan of <iframe srcdoc>. Decodes
+        # HTML entities in the srcdoc value and feeds the result
+        # back through the scanner, prefixing surfaced violations
+        # with `iframe@srcdoc>` so the failure diagnostic names the
+        # scope. Also scans embedded <style> blocks (which the
+        # scanner alone doesn't handle — they're regex-extracted at
+        # the outer function level normally).
+        if tag_l == "iframe" and self.depth < self._MAX_SRCDOC_DEPTH:
+            for name, value in attrs:
+                if name and name.lower() == "srcdoc" and value:
+                    self._recurse_srcdoc(value, lineno)
+
         for name, value in attrs:
             if name is None or value is None:
                 continue
@@ -673,6 +721,37 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
                 for kind, url in _scan_css_for_externals(value):
                     self.inline_style_violations.append(
                         (f"{tag_l}@style", kind, url, lineno))
+
+    def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
+        """Decode entities in an `<iframe srcdoc>` value and feed the
+        decoded HTML back through a fresh scanner at `depth+1`. Merge
+        surfaced violations with `iframe@srcdoc>` prefix. Also scan
+        any `<style>` blocks inside the srcdoc content.
+        """
+        inner_html = _html_stdlib.unescape(srcdoc_value)
+        inner = _HTMLResourceScanner(depth=self.depth + 1)
+        try:
+            inner.feed(inner_html)
+            inner.close()
+        except Exception:  # noqa: BLE001 — partial HTML OK
+            pass
+        for (t, a, u, _ln) in inner.html_violations:
+            self.html_violations.append(
+                (f"iframe@srcdoc>{t}", a, u, parent_lineno))
+        for (t, k, u, _ln) in inner.inline_style_violations:
+            # Inline style-inside-srcdoc becomes an
+            # `iframe@srcdoc>…@style` scope on the outer collector.
+            self.inline_style_violations.append(
+                (f"iframe@srcdoc>{t}", k, u, parent_lineno))
+        # <style> blocks inside srcdoc are extracted regex-style and
+        # scanned through the shared CSS helper.
+        style_pat = re.compile(
+            r'<style\b[^>]*>(.*?)</style>',
+            re.IGNORECASE | re.DOTALL)
+        for m in style_pat.finditer(inner_html):
+            for kind, url in _scan_css_for_externals(m.group(1)):
+                self.inline_style_violations.append(
+                    ("iframe@srcdoc><style>", kind, url, parent_lineno))
 
 
 def _find_external_html_resources(text: str):
@@ -1021,6 +1100,124 @@ def test_self_containment_helper_catches_svg_script_and_escaped_css_url():
     assert "https://cdn.example/c d.png" in detected_css_urls, (
         f"escaped-space url() in <style> block not flagged. "
         f"css_v={css_v!r}")
+
+
+def test_self_containment_helper_catches_css_hex_escape_and_srcdoc():
+    """F1 + F2 round-6 additions (2026-09-14). Codex intercepted real
+    Chromium fetches for two more forms:
+
+      * CSS hex escapes — `url(\\68 ttps://cdn.example/x.png)` decodes
+        to `url(https://cdn.example/x.png)` and is fetched. The
+        whitespace after `\\68` is the CSS escape terminator, NOT the
+        URL boundary. `_UNQ` now includes `\\<1-6 hex>\\s?` as a URL
+        character class; `_unescape_css` decodes hex escapes to
+        `chr(int(hex, 16))` before the self-containment check.
+      * `<iframe srcdoc>` — the attribute value is an entire
+        HTML document embedded as entity-encoded text. Any
+        `<img src>`, `<script src>`, `<style>` block, or inline
+        `style="…"` inside srcdoc gets fetched by the browser.
+        Scanner now decodes srcdoc entities via `html.unescape` and
+        recurses at depth+1 (capped at `_MAX_SRCDOC_DEPTH=2` to
+        prevent runaway).
+    """
+    fixture = """<!DOCTYPE html>
+<html>
+<body>
+<!-- CSS hex escape: `\\68` = 'h', trailing space is escape terminator -->
+<style>
+.hex-in-style { background-image: url(\\68 ttps://cdn.example/hex-in-style.png); }
+</style>
+<div style="background-image: url(\\68 ttps://cdn.example/hex-inline.png)"></div>
+
+<!-- iframe srcdoc: embedded HTML, external resources inside must be flagged -->
+<iframe srcdoc="&lt;img src='https://cdn.example/srcdoc-img.png'&gt;"></iframe>
+<iframe srcdoc="&lt;script src='https://cdn.example/srcdoc-script.js'&gt;&lt;/script&gt;"></iframe>
+<iframe srcdoc="&lt;style&gt;@import 'https://cdn.example/srcdoc-import.css';&lt;/style&gt;"></iframe>
+<iframe srcdoc="&lt;div style='background:url(https://cdn.example/srcdoc-inline-bg.png)'&gt;&lt;/div&gt;"></iframe>
+
+<!-- iframe srcdoc containing only a data-URI image — must NOT flag -->
+<iframe srcdoc="&lt;img src='data:image/png;base64,AAA'&gt;"></iframe>
+</body>
+</html>"""
+    html_v = _find_external_html_resources(fixture)
+    css_v = _find_external_css_resources(fixture)
+    detected_css_urls = {url for _, url, _ in css_v}
+    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
+
+    # ── Hex escape in CSS url() flagged in both contexts ──
+    assert "https://cdn.example/hex-in-style.png" in detected_css_urls, (
+        f"hex-escape url() in <style> block not decoded. css_v={css_v!r}")
+    assert "https://cdn.example/hex-inline.png" in detected_css_urls, (
+        f"hex-escape url() in inline style not decoded. css_v={css_v!r}")
+
+    # ── iframe srcdoc: HTML resources inside are flagged ──
+    srcdoc_html_hits = [(tag, attr, url) for (tag, attr, url) in detected_html
+                        if "iframe@srcdoc>" in tag]
+    assert any(
+        "img" in tag and url == "https://cdn.example/srcdoc-img.png"
+        for tag, _attr, url in srcdoc_html_hits), (
+        f"<img> inside srcdoc not flagged. srcdoc_html_hits={srcdoc_html_hits!r}")
+    assert any(
+        "script" in tag and url == "https://cdn.example/srcdoc-script.js"
+        for tag, _attr, url in srcdoc_html_hits), (
+        f"<script src> inside srcdoc not flagged. "
+        f"srcdoc_html_hits={srcdoc_html_hits!r}")
+
+    # ── srcdoc <style> block @import flagged ──
+    srcdoc_css_hits = [(kind, url) for kind, url, _ in css_v
+                       if "srcdoc" in kind]
+    assert any(
+        "srcdoc><style>" in kind and "@import" in kind
+        and url == "https://cdn.example/srcdoc-import.css"
+        for kind, url in srcdoc_css_hits), (
+        f"<style> @import inside srcdoc not flagged. "
+        f"srcdoc_css_hits={srcdoc_css_hits!r}")
+
+    # ── srcdoc inline style="…" url() flagged ──
+    assert any(
+        url == "https://cdn.example/srcdoc-inline-bg.png"
+        for _kind, url in srcdoc_css_hits), (
+        f"inline style url() inside srcdoc not flagged. "
+        f"srcdoc_css_hits={srcdoc_css_hits!r}")
+
+    # ── Data-URI-only srcdoc content produces NO violations ──
+    data_only_flags = [
+        v for v in html_v
+        if "iframe@srcdoc>" in v[0] and v[2].startswith("AAA")
+    ]
+    assert not data_only_flags, (
+        f"data-URI content inside srcdoc incorrectly flagged: "
+        f"{data_only_flags!r}")
+
+
+def test_css_hex_escape_decoder_handles_full_range():
+    """Meta-pin on `_unescape_css` itself. CSS spec allows 1-6 hex
+    digits per escape, with an optional whitespace terminator.
+    Exercises: single digit, six digits, terminator whitespace
+    consumed, plain char escape passthrough.
+    """
+    # `\68` = 'h' (2 hex digits, no terminator; followed by 't'
+    # which is NOT a hex digit, so escape ends after 68).
+    assert _unescape_css(r"\68ttp://x") == "http://x"
+    # `\68 ` = 'h' with terminator space consumed.
+    assert _unescape_css(r"\68 ttp://x") == "http://x"
+    # Non-hex boundary: `\002F` = '/' (4 hex digits, followed by
+    # 'z' which is not a hex digit, so escape ends).
+    assert _unescape_css(r"a\002Fz") == "a/z"
+    # Terminator-space form: `\002F b` = '/' + 'b'.
+    assert _unescape_css(r"a\002F b") == "a/b"
+    # CSS greediness up to 6 hex: `\002Fb` is FIVE hex digits
+    # (b is a hex digit), decoded as U+002FB. Not `/b`. This is
+    # correct per spec — to get `/b` you must terminate the
+    # escape, e.g. `\002F b` (with space) or `\00002Fb` (six
+    # digits + literal 'b').
+    assert _unescape_css(r"a\002Fb") == "a˻"
+    # Six-digit maximum: `\01F600` = smiling face emoji U+1F600.
+    assert _unescape_css(r"\01F600") == "\U0001F600"
+    # Plain char escape (F2 round-5 path): `\ ` = ' '.
+    assert _unescape_css(r"a\ b") == "a b"
+    # Mixed: `\68i\ j` = 'h' + 'i' + ' ' + 'j'.
+    assert _unescape_css(r"\68i\ j") == "hi j"
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):
