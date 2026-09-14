@@ -432,7 +432,6 @@ def test_master_body_uses_table_wrap(master_text: str):
 # violation and returns a list — a single failure message names
 # every remaining hit, so an author sees the whole surface at once.
 
-import html as _html_stdlib
 import html.parser as _html_parser
 
 
@@ -657,7 +656,15 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
     runaway. Nested `<style>` blocks inside srcdoc are also scanned.
     """
 
-    _MAX_SRCDOC_DEPTH = 2
+    # F2 round-7 raised the cap from 2 to 5 — real Cumberland docs
+    # never nest srcdoc even one level, so 5 is generous for
+    # anything a legitimate author would write. Above 5 the scanner
+    # fails CLOSED (adds an explicit "unscanned nested srcdoc"
+    # violation) rather than silently accepting the unscanned
+    # surface. Chromium fetches through nesting regardless of depth,
+    # so the earlier silent-skip contradicted the full self-
+    # containment guarantee.
+    _MAX_SRCDOC_DEPTH = 5
 
     def __init__(self, depth: int = 0):
         super().__init__(convert_charrefs=False)
@@ -676,14 +683,12 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
         tag_l = tag.lower()
         lineno = self.getpos()[0]
 
-        # F2 round-6: recursive scan of <iframe srcdoc>. Decodes
-        # HTML entities in the srcdoc value and feeds the result
-        # back through the scanner, prefixing surfaced violations
-        # with `iframe@srcdoc>` so the failure diagnostic names the
-        # scope. Also scans embedded <style> blocks (which the
-        # scanner alone doesn't handle — they're regex-extracted at
-        # the outer function level normally).
-        if tag_l == "iframe" and self.depth < self._MAX_SRCDOC_DEPTH:
+        # F2 round-6: recursive scan of <iframe srcdoc>. Always call
+        # `_recurse_srcdoc` — the depth check + fail-closed logic
+        # lives INSIDE that method (F2 round-7 change: pre-check
+        # was silently skipping past the cap; now beyond-cap emits
+        # an explicit "unscanned" violation instead).
+        if tag_l == "iframe":
             for name, value in attrs:
                 if name and name.lower() == "srcdoc" and value:
                     self._recurse_srcdoc(value, lineno)
@@ -723,12 +728,36 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
                         (f"{tag_l}@style", kind, url, lineno))
 
     def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
-        """Decode entities in an `<iframe srcdoc>` value and feed the
-        decoded HTML back through a fresh scanner at `depth+1`. Merge
-        surfaced violations with `iframe@srcdoc>` prefix. Also scan
-        any `<style>` blocks inside the srcdoc content.
+        """Feed an `<iframe srcdoc>` value into a fresh scanner at
+        `depth+1`. Merge surfaced violations with `iframe@srcdoc>`
+        prefix. Also scan any `<style>` blocks inside the srcdoc.
+
+        F1 round-7 (2026-09-14): DO NOT `html.unescape` the value
+        before recursion. `html.parser.HTMLParser` already resolves
+        character references in attribute values (regardless of
+        `convert_charrefs=False`, which only affects the DATA
+        callback). A second unescape is a double-decode that turns
+        legitimate literal `&lt;img&gt;` inside srcdoc (which
+        browsers render as text) into a synthetic `<img>` tag and
+        false-positives the scan.
+
+        F2 round-7 (2026-09-14): fail CLOSED at the depth cap. When
+        `self.depth >= _MAX_SRCDOC_DEPTH`, record an "unscanned
+        nested srcdoc" violation rather than silently skipping —
+        Chromium fetches through nesting regardless of depth, so a
+        silent skip contradicts the self-containment guarantee.
         """
-        inner_html = _html_stdlib.unescape(srcdoc_value)
+        if self.depth >= self._MAX_SRCDOC_DEPTH:
+            self.html_violations.append(
+                (f"iframe@srcdoc>UNSCANNED-AT-DEPTH-{self.depth + 1}",
+                 "srcdoc",
+                 f"<nested srcdoc exceeds max depth "
+                 f"{self._MAX_SRCDOC_DEPTH} — flatten or split the "
+                 f"document; scanner refuses to accept unscanned "
+                 f"content silently>",
+                 parent_lineno))
+            return
+        inner_html = srcdoc_value
         inner = _HTMLResourceScanner(depth=self.depth + 1)
         try:
             inner.feed(inner_html)
@@ -1188,6 +1217,104 @@ def test_self_containment_helper_catches_css_hex_escape_and_srcdoc():
     assert not data_only_flags, (
         f"data-URI content inside srcdoc incorrectly flagged: "
         f"{data_only_flags!r}")
+
+
+def test_srcdoc_double_encoded_literal_does_not_false_positive():
+    """F1 round-7 negative-control. HTMLParser already decodes
+    character references in attribute values (Python `html.parser`
+    behavior, `convert_charrefs` flag notwithstanding — that flag
+    only governs DATA callback decoding, not attribute values).
+
+    A DOUBLE-encoded srcdoc — `&amp;lt;img&amp;gt;` inside a
+    srcdoc attribute — is a document that a browser would render
+    as LITERAL characters `<img>` (text, not markup). Chromium
+    intercept confirms: no fetch. Our scanner must match: no
+    violation. Pre-F1-round-7 the scanner double-decoded via
+    `html.unescape` and synthetically produced a real `<img>` tag
+    to scan, false-positiving on legitimate documents that
+    intentionally demonstrate escaped HTML inside srcdoc.
+    """
+    fixture = (
+        '<!DOCTYPE html><html><body>'
+        # Double-encoded: HTMLParser decodes ONCE to `&lt;img src=\'X\'&gt;`
+        # which browsers render as literal text. Our scanner must
+        # NOT decode a second time.
+        '<iframe srcdoc="&amp;lt;img src=\'https://cdn.example/literal.png\'&amp;gt;"></iframe>'
+        '</body></html>'
+    )
+    html_v = _find_external_html_resources(fixture)
+    literal_hits = [v for v in html_v
+                    if "literal.png" in v[2]]
+    assert not literal_hits, (
+        f"Double-encoded literal in srcdoc false-positived: "
+        f"{literal_hits!r}. HTMLParser already decoded once; the "
+        f"scanner must not decode again.")
+
+
+def test_srcdoc_beyond_depth_cap_fails_closed():
+    """F2 round-7 fail-closed invariant. Beyond `_MAX_SRCDOC_DEPTH`
+    the scanner must emit an explicit UNSCANNED violation rather
+    than silently skip. Chromium fetches resources at any nesting
+    depth, so silent skipping contradicts the self-containment
+    guarantee.
+
+    Constructs a chain of `_MAX_SRCDOC_DEPTH + 1` nested srcdocs
+    with a real external at the innermost level. The scanner
+    should surface EITHER the external (if within depth) OR the
+    UNSCANNED violation (if the innermost sits beyond the cap).
+    Either outcome proves the scanner did not silently accept.
+    """
+    max_depth = _HTMLResourceScanner._MAX_SRCDOC_DEPTH
+    # Build a chain of `max_depth + 1` nested srcdocs so the
+    # deepest one sits beyond the cap.
+    innermost = ('<script src="https://cdn.example/deep-buried.js">'
+                 '</script>')
+    # Encode one layer of `<iframe srcdoc="...">` `max_depth + 1`
+    # times. Each layer's payload becomes the srcdoc value of the
+    # next enclosing iframe (HTML-encoded).
+    import html as _h
+    payload = innermost
+    for _ in range(max_depth + 1):
+        payload = f'<iframe srcdoc="{_h.escape(payload, quote=True)}"></iframe>'
+    fixture = f"<!DOCTYPE html><html><body>{payload}</body></html>"
+    html_v = _find_external_html_resources(fixture)
+    unscanned_hits = [v for v in html_v if "UNSCANNED" in v[0]]
+    external_hits = [v for v in html_v
+                     if "deep-buried.js" in v[2]]
+    # Either the external must surface (scanner covered the full
+    # nesting) OR the UNSCANNED sentinel fired (scanner refused to
+    # accept without inspection). Silent skip is the failure mode.
+    assert unscanned_hits or external_hits, (
+        f"Beyond-cap nested srcdoc silently accepted — neither the "
+        f"external nor an UNSCANNED violation was reported. "
+        f"html_v={html_v!r}")
+
+
+def test_srcdoc_within_depth_cap_flags_external():
+    """F2 round-7 companion: WITHIN the depth cap, nested srcdocs
+    are still recursed. Three-level nesting (which Codex probed
+    specifically) must flag the innermost external resource
+    provided the cap allows that depth."""
+    max_depth = _HTMLResourceScanner._MAX_SRCDOC_DEPTH
+    if max_depth < 3:
+        import pytest as _p
+        _p.skip(
+            f"_MAX_SRCDOC_DEPTH={max_depth} < 3 — three-level test "
+            f"expects the scanner to recurse at least three levels")
+    # Three-level nesting: outer → mid → inner → external <script>.
+    inner_body = ('<svg><script href="https://cdn.example/deep-script.js">'
+                  '</script></svg>')
+    import html as _h
+    level_2 = _h.escape(inner_body, quote=True)
+    level_1 = _h.escape(f'<iframe srcdoc="{level_2}"></iframe>',
+                        quote=True)
+    top = f'<iframe srcdoc="{level_1}"></iframe>'
+    fixture = f"<!DOCTYPE html><html><body>{top}</body></html>"
+    html_v = _find_external_html_resources(fixture)
+    deep_hits = [v for v in html_v if "deep-script.js" in v[2]]
+    assert deep_hits, (
+        f"Three-level nested srcdoc external not flagged. "
+        f"html_v={html_v!r}")
 
 
 def test_css_hex_escape_decoder_handles_full_range():

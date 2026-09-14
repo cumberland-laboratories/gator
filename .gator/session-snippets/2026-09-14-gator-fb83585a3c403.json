@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-6 follow-up: CSS hex escapes + iframe srcdoc recursion",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "css-hex-escapes",
+    "iframe-srcdoc",
+    "sketch-2-post-arc"
+  ],
+  "commit": "fb83585a3c403529ae766bd9a7d33c7964bc4e22",
+  "short_commit": "fb83585",
+  "snippet_id": "snippet-fb83585a3c403",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "df737347e5d9041b6eb4ed8d9b7aa417aff99983",
+  "started_at": "2026-09-14T00:54:15Z",
+  "ended_at": "2026-09-14T00:54:15Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-df737347e5d90.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-6 (browser-backed via Chromium request interception) — two",
+    "more MEDIUM blind spots, both fixed.",
+    "Prior state: my `_UNQ` regex accepted `\\\\.` (simple char escape)",
+    "but not the full CSS hex-escape form. `url(\\68 ttps://…)` decodes",
+    "in Chromium to `url(https://…)` because `\\68` is the hex escape",
+    "for 'h' and the trailing space is the escape terminator. My",
+    "scanner treated the space as URL boundary and returned empty.",
+    "**Fix**:"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
