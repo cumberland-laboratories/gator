@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-3 follow-up: move wheel pins to test_packaging, real HTML parse for self-containment",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "ci-topology",
+    "wheel-inspection",
+    "self-containment",
+    "html-parser",
+    "sketch-2-post-arc"
+  ],
+  "commit": "86d8a0a7461bbb8c239d9d19d0af84ed7dc85d3f",
+  "short_commit": "86d8a0a",
+  "snippet_id": "snippet-86d8a0a7461bb",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 3,
+  "previous_commit_in_session": "259cee0adeee14eace4664df846fe8818c686a73",
+  "started_at": "2026-09-14T00:02:09Z",
+  "ended_at": "2026-09-14T00:02:09Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-13-gator-259cee0adeee1.json",
+    "contracts/compatibility/test_cumberland_propagation.py",
+    "contracts/compatibility/test_cumberland_visual_invariants.py",
+    "tests/test_packaging.py"
+  ],
+  "notes": [
+    "Round-3 enforcer review of `259cee0` surfaced two more findings.",
+    "Prior state: `contracts/compatibility/test_cumberland_propagation.py`",
+    "carried a session-scoped `built_wheel_members` fixture that ran",
+    "`python -m build --wheel` with default build isolation. Two",
+    "concrete failures:",
+    "1. On offline machines, the isolated build environment tries to",
+    "download `setuptools>=64` + `wheel` and errors out — the",
+    "compatibility run had 2 setup errors on the wheel fixture in"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -448,6 +448,17 @@ _SINGLE_URL_RESOURCE_ATTRS = {
     ("embed", "src"),
     ("object", "data"),
     ("input", "src"),             # <input type="image" src="…">
+    # SVG resource consumers — Cumberland docs use inline SVG; a
+    # regression that referenced an external icon or sprite would
+    # slip past a pure-HTML allowlist. Cover both the modern `href`
+    # spelling AND the legacy `xlink:href` on each SVG element that
+    # actually fetches. F2 round-4 addition (2026-09-13).
+    ("image", "href"),
+    ("image", "xlink:href"),
+    ("use", "href"),
+    ("use", "xlink:href"),
+    ("feimage", "href"),
+    ("feimage", "xlink:href"),
 }
 
 # Comma-separated URL-list attributes (srcset syntax).
@@ -478,43 +489,95 @@ def _url_is_self_contained(url: str) -> bool:
 def _scan_css_for_externals(css_text: str):
     """Return list of `(kind, url)` for CSS `@import` + `url(...)`
     references that point outside the file. Shared by the `<style>`
-    block scan AND the inline `style="…"` attribute scan (F2
-    re-review — inline-style scanning was previously missing).
+    block scan AND the inline `style="…"` attribute scan.
+
+    The `url(...)` regex distinguishes three quoting shapes so a
+    QUOTED URL containing whitespace (e.g. `url('a b.png')`) resolves
+    correctly — the naive ``[^"')\\s]+`` pattern was breaking on the
+    space and missing external references (F2 round-4 finding).
     """
     results = []
     # @import "…" / @import '…' / @import url(…)
+    # Three URL shapes: double-quoted, single-quoted, unquoted.
     import_pat = re.compile(
-        r'@import\s+(?:url\s*\(\s*)?["\']?([^"\')\s;]*)["\']?',
+        r'@import\s+'
+        r'(?:'
+        r'url\s*\(\s*(?:"([^"]*)"|\'([^\']*)\'|([^"\')\s]+))\s*\)'
+        r'|"([^"]*)"'
+        r'|\'([^\']*)\''
+        r'|([^"\')\s;]+)'
+        r')',
         re.IGNORECASE)
     for m in import_pat.finditer(css_text):
-        url = m.group(1)
-        if not _url_is_self_contained(url):
+        url = next((g for g in m.groups() if g is not None), None)
+        if url is not None and not _url_is_self_contained(url):
             results.append(("@import", url))
-    # url(…) — any property. Handles quoted and unquoted forms.
+    # url(…) — any property. Three quoting shapes: double-quoted
+    # (allow whitespace + parens up to matching quote), single-quoted
+    # (same), unquoted (whitespace-terminated).
     url_pat = re.compile(
-        r'\burl\s*\(\s*["\']?([^"\')\s]+)["\']?\s*\)',
+        r'\burl\s*\(\s*'
+        r'(?:'
+        r'"([^"]*)"'
+        r'|\'([^\']*)\''
+        r'|([^"\')\s]+)'
+        r')'
+        r'\s*\)',
         re.IGNORECASE)
     for m in url_pat.finditer(css_text):
-        url = m.group(1)
-        if not _url_is_self_contained(url):
+        url = next((g for g in m.groups() if g is not None), None)
+        if url is not None and not _url_is_self_contained(url):
             results.append(("url()", url))
     return results
 
 
 def _parse_srcset(value: str):
-    """Parse an HTML `srcset` (or `imagesrcset`) attribute value into
-    a list of URLs. Format is comma-separated `URL [descriptor]` where
-    the descriptor may be `2x`, `100w`, etc. Only the URL portion is
-    treated as a resource reference."""
+    """Parse an HTML `srcset` (or `imagesrcset`) attribute into a list
+    of URLs. Follows the WHATWG spec: URL runs to the next whitespace
+    (or trailing comma) and commas INSIDE the URL are literal — so a
+    `data:image/png;base64,abc 1x, data:image/png;base64,def 2x`
+    srcset yields two data URIs, not four comma-split fragments.
+
+    Naive comma-split (the previous shape, 2026-09-13 F1 round-4
+    finding) reported `abc` and `def` as external URLs and let the
+    meta-pin's data-URI allowance silently contradict itself.
+    """
     urls = []
-    for candidate in value.split(","):
-        candidate = candidate.strip()
-        if not candidate:
-            continue
-        # URL is the leading whitespace-delimited token.
-        parts = candidate.split()
-        if parts:
-            urls.append(parts[0])
+    i = 0
+    n = len(value)
+    while i < n:
+        # Skip leading whitespace and stray candidate separators.
+        while i < n and value[i].isspace():
+            i += 1
+        while i < n and value[i] == ",":
+            i += 1
+        while i < n and value[i].isspace():
+            i += 1
+        if i >= n:
+            break
+
+        # URL runs from here to next whitespace. Commas inside are
+        # part of the URL (data: URIs rely on this).
+        url_start = i
+        while i < n and not value[i].isspace():
+            i += 1
+        url = value[url_start:i]
+
+        # A trailing comma is a candidate separator, not part of the
+        # URL. Strip repeated trailing commas too.
+        trailing_comma_terminated = url.endswith(",")
+        while url.endswith(","):
+            url = url[:-1]
+        if url:
+            urls.append(url)
+
+        # If terminated by whitespace (not by trailing comma), skip
+        # the descriptor — advance until next comma or EOL. If
+        # terminated by trailing comma, we're already at the next
+        # candidate boundary; loop back.
+        if not trailing_comma_terminated:
+            while i < n and value[i] != ",":
+                i += 1
     return urls
 
 
@@ -775,6 +838,100 @@ body { background: url("https://cdn.example/bg.png"); }
     # <a href> is scoped-out (navigation, not resource loading).
     assert not any(tag == "a" for tag, _, _, _ in html_v), (
         f"<a href> should be allowed but the helper flagged it: {html_v!r}")
+
+
+def test_self_containment_helper_catches_svg_and_quoted_css_forms():
+    """F2 round-4 additions (2026-09-13). The previous meta-pin
+    covered common HTML resource attributes and inline style, but
+    left blind spots that Codex verified with direct probes:
+
+      * SVG `<image href>` / `<use href>` (fetch inline-SVG assets)
+      * SVG legacy `<image xlink:href>` (SVG 1.1)
+      * CSS `url('path with spaces.png')` where whitespace inside
+        quoted URL was breaking the naive `[^\\s]+` regex.
+      * `srcset` containing ONLY data URIs — the split-on-comma
+        parser was reporting base64 tail fragments as external URLs.
+
+    This pin exercises all four so a scanner regression on any
+    of them surfaces immediately.
+    """
+    fixture = """<!DOCTYPE html>
+<html>
+<body>
+<!-- SVG image + use — modern href AND legacy xlink:href -->
+<svg>
+  <image href="https://cdn.example/icon.png"/>
+  <use href="https://cdn.example/sprite.svg#glyph"/>
+  <image xlink:href="https://cdn.example/legacy.png"/>
+</svg>
+<!-- Fragment-only <use> is self-contained — MUST NOT flag -->
+<svg><use href="#local-glyph"/></svg>
+
+<!-- CSS url() with whitespace INSIDE a quoted URL — double-quoted
+     url() lives inside a single-quoted style="…" attribute so
+     HTML parsing doesn't see the inner `"` as attribute terminator. -->
+<div style="background: url('https://cdn.example/a b.png')"></div>
+<div style='background: url("https://cdn.example/c d.png")'></div>
+
+<!-- srcset containing ONLY data URIs — must produce NO violations -->
+<img srcset="data:image/png;base64,AAABBB 1x, data:image/png;base64,CCCDDD 2x">
+
+<!-- Mixed srcset: external URL first, then data URI — external flagged, data allowed -->
+<img srcset="https://cdn.example/external.png 1x, data:image/png;base64,XXXX 2x">
+</body>
+</html>"""
+    html_v = _find_external_html_resources(fixture)
+    css_v = _find_external_css_resources(fixture)
+    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
+    detected_css_urls = {url for kind, url, _ in css_v}
+
+    # ── SVG resource consumers flagged when external ──
+    assert ("image", "href", "https://cdn.example/icon.png") in detected_html, (
+        f"SVG <image href> external not flagged. html_v={html_v!r}")
+    assert ("use", "href", "https://cdn.example/sprite.svg#glyph") in detected_html, (
+        f"SVG <use href> external not flagged. html_v={html_v!r}")
+    assert ("image", "xlink:href", "https://cdn.example/legacy.png") in detected_html, (
+        f"SVG <image xlink:href> external not flagged. html_v={html_v!r}")
+
+    # ── Fragment-only <use href="#…"> allowed (self-contained) ──
+    for tag, attr, url, _ in html_v:
+        assert not (tag == "use" and url == "#local-glyph"), (
+            f"fragment-only <use href> incorrectly flagged: {tag} {attr}={url!r}")
+
+    # ── CSS url() with quoted whitespace-containing URLs flagged ──
+    assert "https://cdn.example/a b.png" in detected_css_urls, (
+        f"quoted-single url() with whitespace not flagged. css_v={css_v!r}")
+    assert "https://cdn.example/c d.png" in detected_css_urls, (
+        f"quoted-double url() with whitespace not flagged. css_v={css_v!r}")
+
+    # ── srcset with ONLY data URIs produces NO violations ──
+    srcset_violations = [(tag, attr, url, ln) for tag, attr, url, ln in html_v
+                         if attr == "srcset" and "data:" not in url]
+    # Compute what the data-only srcset produced: its content URIs are
+    # `data:image/png;base64,AAABBB` and `data:image/png;base64,CCCDDD`.
+    # After the parser fix, both should be data:-prefixed and allowed.
+    data_only_flags = [
+        v for v in html_v
+        if v[1] == "srcset" and v[2] in ("AAABBB", "CCCDDD",
+                                          "data:image/png;base64",
+                                          "image/png;base64,AAABBB",
+                                          "image/png;base64,CCCDDD")
+    ]
+    assert not data_only_flags, (
+        f"data-only srcset produced false-positive violations "
+        f"(regression on 2026-09-13 F1 round-4 fix): {data_only_flags!r}")
+
+    # ── Mixed srcset: external URL flagged, data URI allowed ──
+    assert ("img", "srcset",
+            "https://cdn.example/external.png") in detected_html, (
+        f"mixed srcset external URL not flagged. html_v={html_v!r}")
+    # The data URI in the mixed srcset must NOT appear as a violation.
+    mixed_data_flags = [
+        v for v in html_v
+        if v[1] == "srcset" and v[2].startswith("XXXX")
+    ]
+    assert not mixed_data_flags, (
+        f"mixed srcset data URI incorrectly flagged: {mixed_data_flags!r}")
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):
