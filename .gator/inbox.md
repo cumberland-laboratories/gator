@@ -3,6 +3,18 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
+## Tighten roadmap and inbox retention standards (Architect direction 2026-09-12)
+
+- **Keep both session-opening documents short, concise, and human-readable.**
+  `roadmap.md` should contain current strategy, priorities, and planned work;
+  `inbox.md` should contain only open work and current operational context.
+  Neither file should accumulate shipped-release narratives or become a
+  historical change log. Move durable historical detail to focused artifacts
+  when it merits preservation; otherwise rely on the changelog and Git history.
+  Define practical size/retention standards, compact both existing files
+  without losing live decisions, and consider a lightweight mechanical check
+  that prevents the same accumulation from recurring.
+
 ## Dashboard inspection-workspace decisions (Architect-ratified 2026-09-12)
 
 - ~~**Next Dashboard increment: read-only Python and SQL syntax highlighting.**~~
@@ -18,96 +30,48 @@ in Git history, the changelog, and the roadmap.
 - **`field-guides/` retirement: deferred to lowest priority.** Preserve current
   behavior for now and revisit the staged retirement at a later date.
 
-## Codex sketches — Architect-ratified next work (2026-09-12)
+## Recently landed — Codex sketches (both closed)
 
-Two Codex-authored sketches under `.gator/vault/artifacts/`. Sketch 1
-(Fleet column stability) **shipped in v2.13.1 on 2026-09-12**. Sketch 2
-(Cumberland HTML) remains next — now that the read-only Python/SQL
-highlighting increment shipped in v2.13.2, Cumberland HTML is the next
-scheduled Dashboard-adjacent work.
+Two Codex-authored sketches lived here as ratified next work. Both
+landed; leaving succinct pointers so the closure is visible.
 
-### ~~1. Dashboard Fleet Update column stability~~ — **shipped in v2.13.1**
+- **Sketch 1 — Dashboard Fleet Update column stability** —
+  **shipped in v2.13.1 on 2026-09-12** (single-commit `7be554f`
+  reserved-slot pattern + Fleet-table TRIPWIRE). Path:
+  `vault/artifacts/2026-09-12-dashboard-fleet-update-column-stability-sketch.md`.
+- **Sketch 2 — Cumberland HTML style default + always-read routing
+  rule** — **closed 2026-09-14** across 18 commits `fd35d92`..`d986898`.
+  Slices 1-4 delivered the shipped Cumberland master + narrative
+  Blueprint specialization + parity contract + visual-invariant
+  test surface; eleven enforcer rounds accreted a parser-based
+  blacklist; round-12 pivoted to a bounded positive-policy
+  validator + pinned Content-Security-Policy `<meta>` (module
+  dropped 2304 → 937 lines); rounds 13-14 tightened structural
+  CSP validation, narrowed Layer 1 to HTML-only, and hardened
+  the CSS-egress boundary test with a shared CSP constant and
+  `securitypolicyviolation` liveness assertion. Codex round-15
+  review: "No findings. Recommend closure." Stop rule in force.
+  Not tied to a released version — ships whenever the next
+  release cuts. Path:
+  `vault/artifacts/2026-09-12-cumberland-html-style-sketch.md`.
 
-Path: `vault/artifacts/2026-09-12-dashboard-fleet-update-column-stability-sketch.md`
+## Where we are (2026-09-14, Cumberland arc closed)
 
-Landed as single-commit implementation `7be554f` (reserved-slot pattern:
-permanent `<span class="activity-indicator">` inside every `.activity-cell`;
-`bindUpdateButtons` / `bindGatorizeButtons` mutate INSIDE the indicator;
-20px CSS reservation matches `.dot-pulse` width; new geometry pin +
-structural pin in `tests/test_dashboard_ui/test_fleet_layout.py`; new
-Fleet-table TRIPWIRE in `scripts-dashboard.md`). Version bump `af60d93`
-and rc1/final tags shipped v2.13.1 via a fully first-try green pipeline.
-
-### 2. Cumberland HTML style default + always-read routing rule (cross-cutting)
-
-Path: `vault/artifacts/2026-09-12-cumberland-html-style-sketch.md`
-
-- **Thesis** — when the Architect says "I want an HTML document that says…",
-  every governed model should default to a single Cumberland narrative HTML
-  master template without needing to remember a filename, slash command, or
-  protocol. Promote the visual grammar demonstrated by
-  `~/Downloads/2026-09-11-what-gator-is.html` (SHA-256
-  `0926F696…D53D9E4`) into a Gator-shipped master + add one short routing
-  rule to the always-read constitution.
-- **Architect framing (2026-09-12)**: the reference file IS a Gator-built
-  artifact. Its styling IS the canonical target for all HTML documents Gator
-  produces — this is a style-canonicalization task, not an inspiration point.
-  The master template should reproduce the reference's visual grammar
-  faithfully.
-- **Separation of concerns** — style (Cumberland palette/typography/shell)
-  vs role (blueprint/artifact/procedure/policy/reference-note determines
-  path) vs protocol (`gator-blueprint-html-v1` metadata is optional when
-  the role calls for it). Explicit HTML request → Cumberland master →
-  role-appropriate destination.
-- **Canonical source**:
-  `src/gator_command/templates/gator-starter/reference-notes/cumberland-html-document-template.html`
-  with `.gator/.includes/reference-notes/…` as the dogfood mirror.
-  Reference-notes location because it's already shipped + layout-resolved
-  and constitution-relative links work in both v1 and v2 layouts.
-- **Fix** — four slices: (1) establish master from the reference file
-  (add to `MIXED_DIRECTORY_SHIPPED_DEFAULTS` in `gator_layout.py` for
-  fallback classification); (2) constitution rule + broaden
-  `procedures/authoring-html-artifacts.md` from Blueprint-first to
-  medium-first triage; (3) reconcile `_template-narrative.html` as a
-  Blueprint-protocol specialization of the master with a
-  `<!-- CUMBERLAND-NARRATIVE-STYLE:BEGIN/END -->` byte-identical shared
-  region + parity check; (4) propagation + visual-invariant tests
-  (structural + computed-style, not pixel snapshots — OS font rendering
-  variance).
-- **Scope** — cross-cutting: shipped template + constitution + procedure +
-  narrative-Blueprint template + charter updates in `scripts-repo-lifecycle`
-  / `scripts-layout` / `scripts-cross-cutting`. Codex explicitly calls the
-  significance check pre-commit even though HTML/CSS is low-risk, because
-  it changes the default Architect-request response across every governed
-  repo and every supported model.
-- **Codex's recommendation** — land after Blueprints 2.0 work settles enough
-  to avoid editing the narrative-template + authoring-procedure files
-  concurrently. One small cross-cutting feature train.
-
-Sequence within these two sketches remains **Fleet column stability, then
-Cumberland HTML**. Fleet column stability shipped in v2.13.1 and the
-read-only Python/SQL highlighting increment shipped in v2.13.2; Cumberland
-HTML is pre-implementation and next.
-
-## Where we are (2026-09-12, post-v2.13.2)
-
-**v2.13.2 shipped** with read-only Python + SQL syntax highlighting in
-the Dashboard Repo file browser plus a `source_alias_denied` log demote
-(WARNING → DEBUG) that removes ~120 spurious warnings per Dashboard
-session on a 15-repo fleet. GitHub Release:
-https://github.com/cumberland-laboratories/gator/releases/tag/v2.13.2 —
-pipeline **fully first-try green** with no CDN-race reruns, making it
-three consecutive fully-first-try releases (v2.13.0, v2.13.1, v2.13.2).
-Prior releases: v2.13.1 (Fleet activity-column stability) and v2.13.0
-(Dashboard UI arc: Plans A/B1/B2/C). Nothing on the dashboard-UI sequence
-is blocking. Next scheduled work is **Codex Sketch 2 — Cumberland HTML
-style default + always-read routing rule**. The pre-v2.13.0 roadmap
-priorities remain — see `roadmap.md`:
+Cumberland HTML Sketch 2 arc is closed; no bounded-guarantee
+findings remain. Nothing on the dashboard-UI sequence is
+blocking. The pre-v2.13.0 roadmap priorities are next — see
+`roadmap.md`:
 
 1. Gator + Enterprise polished and ready for lots of users.
 2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
 3. Gator Loop polish.
 4. Normalized transcript index (exploratory).
+
+Latest released version is **v2.13.2** (2026-09-12) — pipeline
+was fully first-try green, third consecutive. A tagged release
+covering the Cumberland arc is optional; the changes are
+internal quality improvements to shipped templates + test
+contracts and can ride the next natural release cut.
 
 ## Unscheduled open backlog
 

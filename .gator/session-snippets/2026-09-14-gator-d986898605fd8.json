@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — round-14 closure follow-up: refined guarantee wording + shared CSP constant + SPV liveness assertion",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "guarantee-refinement",
+    "shared-constants",
+    "csp-spv-liveness",
+    "sketch-2-post-arc"
+  ],
+  "commit": "d986898605fd8e8e83a79a72287cf6d4ea38c35a",
+  "short_commit": "d986898",
+  "snippet_id": "snippet-d986898605fd8",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 6,
+  "previous_commit_in_session": "21b7f81c389017a8f40b9df8140ed2988a05725f",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T15:14:46Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-21b7f81c38901.json",
+    "contracts/compatibility/_helpers.py",
+    "contracts/compatibility/test_cumberland_computed_style.py",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-14 follow-up on round-13's closure. Codex confirmed both",
+    "round-13 fixes landed correctly (structural CSP validation +",
+    "Layer-1 narrowing) and named two remaining wiring gaps — both",
+    "inside allowed constructs, both closure-safe. Neither expands",
+    "the CSS-shape list; each closes a mismatch between what the",
+    "guarantee says and what the layers actually enforce.",
+    "Round-12 draft: \"contain only approved passive markup, use no",
+    "external resource references, and produce no non-template"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}
