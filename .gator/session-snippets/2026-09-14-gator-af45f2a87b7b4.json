@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-11 follow-up: active-data-document guard for both scanners",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "active-data-document",
+    "data-uri-mime",
+    "sketch-2-post-arc"
+  ],
+  "commit": "af45f2a87b7b487ef575db67fd4ad09f5e23cda9",
+  "short_commit": "af45f2a",
+  "snippet_id": "snippet-af45f2a87b7b4",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 3,
+  "previous_commit_in_session": "7ee907af578e5e37406b5d01a3d97a71d281f055",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T14:17:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-7ee907af578e5.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-11 (Chromium-intercept-backed) — 1 MEDIUM, addressed. Codex",
+    "confirmed round-10 landed correctly and named one remaining bypass.",
+    "Codex-verified Chromium execution of",
+    "<iframe src=\"data:text/html,%3Cscript%3E",
+    "setTimeout(()=>fetch('https://cdn.example/data-late'),1200)",
+    "%3C/script%3E\"></iframe>",
+    "Resource scanner: `_url_is_self_contained` accepts every `data:`",
+    "URI unconditionally → returns `[]`."
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

@@ -1,36 +1,35 @@
-"""Computed-style + rendered-layout checks for the Cumberland master.
+"""Computed-style + rendered-layout checks for the Cumberland
+templates, plus the browser-side initial-load smoke test for the
+bounded self-containment guarantee.
 
-Codex enforcer follow-up 2026-09-13 F2 + F4: the Slice-4
-`test_cumberland_visual_invariants.py` module asserts CSS source
-text — regex against the raw template bytes — which does NOT catch:
+## Two concerns
+
+**Computed style + rendered layout** — the source-text module
+(`test_cumberland_visual_invariants.py`) cannot catch:
 
     - Layout regressions the browser's rendering engine surfaces
-      (e.g., the 375×667 horizontal overflow Codex measured: sample
-      table 471px inside 335px content box → whole page scrolls).
-    - Cascade / specificity mistakes that leave a rule in the source
-      but overridden at compute time.
+      (e.g. the 375×667 horizontal overflow Codex measured
+      2026-09-13: sample table 471px inside 335px content box).
+    - Cascade / specificity mistakes that leave a rule in the
+      source but overridden at compute time.
     - Font-metric-derived values that depend on `rem` resolution
       (h1 at 1.85rem is only ~29.6px if the root font-size is the
       browser default).
 
-These are computed-style / rendered-layout assertions, NOT pixel
-snapshots. Pixel snapshots (full-page image diffs) are the surface
-Codex Sketch 2 explicitly ruled out for OS font-rendering variance;
-computed-style is a numeric/string invariant that stays stable across
-platforms because the browser normalizes the values before returning
-them to `getComputedStyle()`.
+Computed-style / rendered-layout assertions, NOT pixel snapshots.
+Pixel snapshots are ruled out per the round-1 design decision:
+OS font-rendering variance makes them flaky.
 
-Coverage:
-    - 375×667 (narrow viewport): the wrapped-table safety net holds —
-      `documentElement.scrollWidth <= innerWidth`.
-    - 1440×900 (wide viewport): computed anchor values match the
-      reference-file typographic decisions — h1 fontSize ≈ 29.6px,
-      body maxWidth 1120px, body padding "32px 20px", header
-      border-bottom color rgb(25, 174, 184) [= #19aeb8 teal].
+**Initial-load network smoke test** — one pin observes what
+Chromium actually requests during the templates' initial load.
+Layer 3 of the round-12 bounded self-containment defense
+(positive-policy source-text validator + pinned CSP meta + this
+observation). Scoped to the observed interval; not a definitive
+guarantee on its own.
 
-The test navigates via `file://` — no HTTP server needed. Playwright's
-`page` fixture is provided by pytest-playwright (already a dev
-dependency).
+The test navigates via `file://` — no HTTP server needed.
+Playwright's `page` fixture is provided by pytest-playwright
+(already a dev dependency).
 """
 from __future__ import annotations
 
@@ -288,40 +287,38 @@ def test_computed_header_border_bottom_is_teal(page, master_url):
 @pytest.mark.parametrize("name, path", _NARROW_VIEWPORT_TARGETS,
                          ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
 def test_template_makes_no_external_requests_at_load(page, name, path):
-    """Browser-level backstop for the self-containment guarantee
-    (Codex enforcer 2026-09-14 round-8, tightened round-9). The
-    textual scanner in `test_cumberland_visual_invariants.py`
-    covers a broad HTML + CSS surface, but Codex has repeatedly
-    found narrow browser-driven forms the scanner initially
-    missed (unquoted attrs, srcset data URIs with commas, SVG
-    hrefs, CSS hex escapes, iframe srcdoc, `<base href>`,
-    meta-refresh with and without the `url=` label — eight rounds
-    of findings). This pin is the *browser* opinion: does
-    Chromium actually make any request to anything other than the
-    exact template file?
+    """Chromium initial-load network smoke test for the SHIPPED
+    Cumberland templates. Scoped claim (Codex round-12 closure):
 
-    Round-9 tightening (2026-09-14): only the EXACT top-level
-    template URL is allowed to continue. Every other request —
-    even another `file://` URL like a sibling Cumberland template
-    loaded from an iframe — is recorded as external and aborted.
-    The earlier `url.startswith("file:")` filter would let a
-    silently-added iframe fetching a sibling `file:` document
-    look self-contained; Codex's F2 finding walked exactly this
-    case.
+        "The two checked-in Cumberland templates produce no
+         non-template network requests during Chromium's initial
+         load."
 
-    Deferred fetches (a `fetch(…)` scheduled via inline script
-    beyond the wait window) are ruled out by the sibling
-    `test_no_executable_scripts_in_cumberland_templates`
-    invariant in the visual-invariants module — Cumberland
-    templates contain no executable script, no inline event
-    handlers, and no `javascript:` URLs, so nothing can schedule
-    a network request that fires after the wait window closes.
-    The two pins compose: no-executable-scripts blocks the class
-    of deferred-fetch attacks, this pin observes the actual
-    resulting network at load. Together they are definitive; the
-    round-8 docstring's unqualified "definitive" claim (without
-    the no-script invariant in place) overstated what this pin
-    proves alone.
+    This is defense-in-depth, NOT a "definitive" self-containment
+    proof. The bounded guarantee is enforced by three independent
+    layers, of which this pin is one:
+
+      Layer 1 — Positive-policy source-text validator
+                (`test_master_passes_positive_policy` +
+                `test_narrative_passes_positive_policy` in
+                `test_cumberland_visual_invariants.py`).
+      Layer 2 — Pinned Content-Security-Policy `<meta>` in each
+                shipped template
+                (`test_master_carries_pinned_csp` +
+                `test_narrative_carries_pinned_csp`).
+      Layer 3 — This pin: observe the actual network during
+                Chromium's initial load.
+
+    The route filter allows only the EXACT top-level template
+    URL. Every other request — including a sibling `file://` URL
+    like a Cumberland neighbour loaded from an iframe — is
+    recorded as external and aborted. A short wait window flushes
+    parser-deferred requests; delayed JS-scheduled fetches are not
+    considered here because the positive policy already forbids
+    every JavaScript surface (Layer 1). Hypothetical browser
+    escape shapes beyond the observed interval are out of scope —
+    confining them requires runtime confinement, not repository
+    tests.
     """
     if not path.is_file():
         pytest.skip(f"{path} not present")
@@ -348,9 +345,10 @@ def test_template_makes_no_external_requests_at_load(page, name, path):
 
     assert external_urls == [], (
         f"{name} template ({path.name}) made requests to non-template "
-        f"URLs at load — self-containment guarantee broken. Only the "
-        f"top-level template file may be fetched; sibling file:// URLs "
-        f"are treated as external too. Observed non-template URLs:\n"
+        f"URLs during Chromium's initial load — the bounded "
+        f"guarantee is broken. Only the top-level template file may "
+        f"be fetched; sibling file:// URLs are treated as external "
+        f"too. Observed non-template URLs:\n"
         + "\n".join(f"  {u}" for u in external_urls))
 
 

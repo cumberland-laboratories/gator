@@ -1,36 +1,28 @@
-"""Visual-invariant checks for the Cumberland HTML style (Codex Sketch 2 Slice 4).
+"""Visual invariants + bounded self-containment for the Cumberland
+HTML templates.
 
-The Slice-3 parity check pins the master's CSS core byte-for-byte to the
-narrative-Blueprint specialization, but a byte-diff alone would happily
-accept a well-formed edit that silently removed (say) the purple palette
-or the justified-body rule. This test walks the master's CSS + body and
-asserts the load-bearing visual invariants are still present.
+## Two concerns, one module
 
-Method: string / regex assertions against the raw template text. No
-PIXEL SNAPSHOTS — those introduce OS font-rendering variance (Windows
-vs macOS vs Linux subpixel-metric differences that vary between browser
-versions) and Codex Sketch 2 explicitly ruled them out. Computed-style
-checks (values from `getComputedStyle()` in a real browser) live in
-`test_cumberland_computed_style.py` — they are NOT pixel snapshots and
-are a separate acceptance surface.
+**Visual invariants** — palette hex values, callout/pill/status
+variants, typography (justified body, `.figure`, `.steps`,
+`.diagram-node.purple`, `.toc`, `.table-wrap`, etc.). These
+regression-guard the reference-file typography decisions against a
+well-formed edit that silently rewired a token. Method: regex
+assertions against the source text of the shared CSS region;
+computed-style checks live in the companion module.
 
-Invariants covered:
-  - PALETTE: all 6 hue tokens + their `-dark` (for teal/blue) + `-light`
-    variants + full gray scale (9 steps).
-  - CALLOUTS: all 6 variants (default/note/info/warn/ok/data) styled with
-    both background + border-left-color rules AND a label-color rule.
-  - PILLS: all 6 variants (ok/info/warn/alt/data/na).
-  - STATUS BADGES: 4 status variants (default green, exploratory, generated,
-    historical).
-  - TYPOGRAPHY: h1 at 1.85rem, letter-spacing -0.01em on h1, body prose
-    with `text-align: justify` + `hyphens: auto`, selective left-align
-    overrides for figure captions / footer / TOC entries.
-  - COMPONENTS: `.figure`, `.diagram-node.purple` (Slice-1 addition),
-    `.steps` counter-based numbering, `.toc` block, `pre code` reset.
-  - BODY EXAMPLES: master's body has at least one visible example of every
-    component so authors can copy-modify.
+**Bounded self-containment** — a small POSITIVE policy that
+validates the shipped templates use only approved passive markup,
+plus a pinned Content-Security-Policy `<meta>` in both templates.
+This replaces eleven rounds of parser-based blacklist scanners
+(2026-09-13 through 2026-09-14) — Codex's round-12 whiteboard
+recommended closure via a bounded guarantee rather than continued
+whack-a-mole on browser-input shapes. See the block comment
+starting `── Bounded self-containment guarantee ──` below for the
+exact scoped claim and the three-layer defense composition.
 
-Skips gracefully when the master is absent (fleet repo before first update).
+Skips gracefully when the master is absent (fleet repo pre-first-
+update).
 """
 from __future__ import annotations
 
@@ -403,676 +395,353 @@ def test_master_body_uses_table_wrap(master_text: str):
         "authors will inherit the pre-F2 overflow pattern")
 
 
-# ── Self-containment (F4 + broadened by 2026-09-13 F3) ────────────
+# ── Bounded self-containment guarantee (Codex closure, round-12) ──
 #
-# The Cumberland contract is broader than "no external stylesheet and
-# no external script" — it forbids EVERY resource-fetching reference
-# to an outside host or a sibling file. Regression guards must cover:
+# Eleven parser-focused enforcer rounds converged on a partial
+# reimplementation of browser HTML/CSS/URL semantics. Codex round-12
+# recommended CLOSURE via three moves:
 #
-#   HTML resource-loading elements:
-#     <link rel="stylesheet" href="…">
-#     <link rel="icon"/…>        (any <link> that isn't a nav hint)
-#     <script src="…">
-#     <img src="…">              (unless src is `data:` or `#`)
-#     <iframe src="…">
-#     <video src="…">, <audio src="…">, <source src="…">, <track src="…">
-#     <object data="…">, <embed src="…">
+#   1. Narrow the guarantee to a bounded claim about the SHIPPED
+#      Cumberland templates, not arbitrary user-edited HTML.
+#   2. Replace the expanding blacklist scanner with a small POSITIVE
+#      policy — only the tags and attributes the templates actually
+#      use are allowed; everything else is rejected.
+#   3. Add a Content-Security-Policy `<meta>` tag as browser-enforced
+#      defense in depth.
 #
-#   CSS references (in <style> blocks OR inline style="…"):
-#     @import "…" / @import url(…)
-#     url(…) property values referencing anything not `data:`
+# THE GUARANTEE (verbatim from the round-12 whiteboard):
 #
-# Allowed forms:
-#   * `<a href="…">` navigation (does not fetch at load).
-#   * `data:` URIs (self-contained inline).
-#   * `#anchor` fragments (in-document nav).
-#   * Empty `""` / `#` placeholders.
+#     The two checked-in Cumberland templates contain only approved
+#     passive markup, use no external resource references, and
+#     produce no non-template network requests during Chromium's
+#     initial load.
 #
-# The two guards below share a helper that scans text for every
-# violation and returns a list — a single failure message names
-# every remaining hit, so an author sees the whole surface at once.
+# WHAT THIS GUARANTEE DOES NOT CLAIM:
+#   * Arbitrary user-edited HTML remains self-contained. The
+#     validator here checks the SHIPPED templates; author-added
+#     content is out of scope.
+#   * Every possible encoded or malformed browser input is safe.
+#     Confining that class requires runtime confinement, not
+#     repository tests. The pinned CSP is defense in depth against
+#     accidental future edits.
+#   * A short browser observation is "definitive". The Chromium
+#     smoke test observes the initial-load interval only.
+#
+# HOW THE THREE-LAYER DEFENSE COMPOSES:
+#
+#   Layer 1 · Positive policy (this module) — source-text HTMLParser
+#     walk against a small allowlist of passive tags and attributes.
+#     Fails closed on parse error.
+#   Layer 2 · Pinned CSP `<meta>` in the templates — browser-
+#     enforced denial of `script-src`, `img-src`, `font-src`,
+#     `frame-src`, `object-src`, `base-uri`, `form-action`. Catches
+#     future edits that slip past Layer 1.
+#   Layer 3 · Chromium initial-load network smoke test
+#     (`test_cumberland_computed_style.py`) — observes real browser
+#     behavior at load. Scoped to the observed interval; not
+#     definitive on its own.
+#
+# The three layers are INDEPENDENT and CUMULATIVE. No single layer
+# is "the" guarantee.
+#
+# ── Round-12 replacement of round-1..11 machinery ────────────────
+# The prior blacklist scanners (`_HTMLResourceScanner`,
+# `_ExecutableScriptScanner`, WHATWG meta-refresh parser, srcset
+# parser, CSS hex-escape decoder, active-data-document guard, etc.)
+# are DELETED. Their meta-pins are DELETED. Any browser-input shape
+# they were parsing (srcdoc recursion, entity-encoded schemes,
+# meta-refresh grammar, data:text/html) is now moot: the enclosing
+# tag is forbidden by the positive policy, so the parser detail
+# below it does not matter. This is the "material net reduction in
+# self-containment test complexity" the round-12 whiteboard asked
+# for.
 
 import html.parser as _html_parser
 
 
-# Single-URL resource attributes: {(tag, attr) → applicable to which tag}.
-_SINGLE_URL_RESOURCE_ATTRS = {
-    ("script", "src"),
-    ("img", "src"),
-    ("iframe", "src"),
-    ("video", "src"),
-    ("video", "poster"),          # F2 re-review addition
-    ("audio", "src"),
-    ("source", "src"),
-    ("track", "src"),
-    ("embed", "src"),
-    ("object", "data"),
-    ("input", "src"),             # <input type="image" src="…">
-    # SVG resource consumers — Cumberland docs use inline SVG; a
-    # regression that referenced an external icon or sprite would
-    # slip past a pure-HTML allowlist. Cover both the modern `href`
-    # spelling AND the legacy `xlink:href` on each SVG element that
-    # actually fetches. F2 round-4 addition (2026-09-13).
-    ("image", "href"),
-    ("image", "xlink:href"),
-    ("use", "href"),
-    ("use", "xlink:href"),
-    ("feimage", "href"),
-    ("feimage", "xlink:href"),
-    # SVG <script> uses href / xlink:href (not `src`) — F1 round-5
-    # addition (2026-09-14). Codex's Chromium intercept verified
-    # `<svg><script href="https://cdn.example/x.js">` triggers a
-    # real network fetch; the HTML <script src> allowlist entry
-    # above did NOT catch this form because the attribute name is
-    # different.
-    ("script", "href"),
-    ("script", "xlink:href"),
-    # <base href> — F1 round-8 addition (2026-09-14). Codex verified
-    # `<base href="https://cdn.example/assets/">` combined with
-    # `<img src="#logo">` triggers a fetch of the base URL: `#logo`
-    # is treated as a fragment on the current document, but with an
-    # external <base> the "current document" resolves to the base
-    # URL and Chromium fetches THAT. Any non-self-contained <base>
-    # breaks the self-containment invariant even without a same-doc
-    # sibling reference, so flag every non-{data:,#,empty} value.
-    ("base", "href"),
+# ── The positive policy ──────────────────────────────────────────
+
+# Tags that appear in the master and/or narrative templates as
+# shipped. Any tag NOT in this set is a violation — even
+# structurally-harmless ones (`<mark>`, `<em>`, `<figure>`, …) —
+# because the policy is scoped to the actual template surface, not
+# a general HTML subset. Adding a tag requires (a) demonstrating a
+# template need and (b) extending this allowlist plus the attribute
+# allowlist in the same commit.
+_ALLOWED_TAGS = frozenset({
+    # Document skeleton
+    "html", "head", "body", "title", "meta", "style",
+    # Semantic sections
+    "header", "footer", "nav", "section",
+    # Text
+    "h1", "h2", "h3", "p", "span", "div", "code", "pre",
+    # Lists
+    "ol", "ul", "li",
+    # Tables
+    "table", "thead", "tbody", "tr", "th", "td",
+    # Fragment navigation
+    "a",
+    # Inline SVG (the subset actually used in the shipped
+    # templates: `<svg>`, `<line>`, `<rect>`, `<text>`). SVG
+    # `<script>`, `<image>`, `<use>`, `<feImage>`, `<foreignObject>`,
+    # and animation elements are intentionally excluded — none of
+    # them appear in the templates and every one carries an
+    # external-resource or execution surface.
+    "svg", "line", "rect", "text",
+})
+
+# Attributes allowed on every tag. `class` and `id` are the two
+# Cumberland uses everywhere for styling and TOC anchors.
+_GLOBAL_ATTRS = frozenset({"class", "id"})
+
+# Per-tag attribute allowlist. Merged with `_GLOBAL_ATTRS`. Any
+# attribute not in the union is a violation.
+_ATTR_ALLOWLIST = {
+    "html":    frozenset({"lang"}),
+    "head":    frozenset(),
+    "body":    frozenset(),
+    "title":   frozenset(),
+    # `<meta>` allows `charset`, `name`, `content`, `http-equiv`.
+    # Values are validated below: `http-equiv` must be
+    # `Content-Security-Policy`; `name` must be an approved key.
+    "meta":    frozenset({"charset", "name", "content", "http-equiv"}),
+    "style":   frozenset(),
+    "header":  frozenset(),
+    "footer":  frozenset(),
+    "nav":     frozenset(),
+    "section": frozenset(),
+    "h1":      frozenset(),
+    "h2":      frozenset(),
+    "h3":      frozenset(),
+    "p":       frozenset(),
+    "span":    frozenset(),
+    "div":     frozenset(),
+    "code":    frozenset(),
+    "pre":     frozenset(),
+    "ol":      frozenset(),
+    "ul":      frozenset(),
+    "li":      frozenset(),
+    "table":   frozenset(),
+    "thead":   frozenset(),
+    "tbody":   frozenset(),
+    "tr":      frozenset(),
+    "th":      frozenset(),
+    "td":      frozenset(),
+    # `<a href>` values are further constrained to fragment-only
+    # by `_href_is_allowed` — no external URLs, no `javascript:`,
+    # no `data:`.
+    "a":       frozenset({"href"}),
+    # SVG: standard geometry/presentation attributes actually used
+    # by the shipped templates plus a small margin for legitimate
+    # neighbours. Attribute names lowercased because HTMLParser
+    # lowercases them before delivery — `viewBox` in source arrives
+    # as `viewbox` here. Notably ABSENT: `href`, `xlink:href`,
+    # `filter`, `style`. Those carry external resources or scripts
+    # in browsers that support them.
+    "svg":  frozenset({
+        "viewbox", "width", "height", "xmlns", "fill",
+        "stroke", "stroke-width", "preserveaspectratio",
+        "role", "aria-label", "aria-hidden",
+        "font-family", "font-size",
+    }),
+    "line": frozenset({
+        "x1", "y1", "x2", "y2", "stroke", "stroke-width",
+        "stroke-linecap", "stroke-dasharray", "fill", "opacity",
+    }),
+    "rect": frozenset({
+        "x", "y", "width", "height", "rx", "ry", "fill",
+        "stroke", "stroke-width", "opacity",
+    }),
+    "text": frozenset({
+        "x", "y", "dx", "dy", "text-anchor", "font-family",
+        "font-size", "font-weight", "fill", "opacity",
+    }),
 }
 
-# Comma-separated URL-list attributes (srcset syntax).
-_SRCSET_ATTRS = {
-    ("img", "srcset"),
-    ("source", "srcset"),
-    ("link", "imagesrcset"),
-}
 
-# <link href> is special-cased because <a href> must be scoped-out.
+# `<meta http-equiv>` — only Content-Security-Policy is allowed.
+# `refresh` is forbidden (triggers a navigation, breaks
+# self-containment).
+_ALLOWED_META_HTTP_EQUIV = frozenset({"content-security-policy"})
 
 
-def _url_is_self_contained(url: str) -> bool:
-    """True if the URL is safe to keep inside a self-contained
-    artifact: data URI, in-document fragment, or empty placeholder.
-    Everything else (http, https, //, ftp, file, sibling path, bare
-    filename) is external and must be rejected.
+# `<meta name>` — an explicit set of known-safe keys plus the
+# Blueprint-protocol `gator-*` prefix. Anything else is a
+# violation; the templates use only viewport (master + narrative)
+# and gator-* (narrative Blueprint only).
+_ALLOWED_META_NAMES = frozenset({
+    "viewport", "generator", "description", "author",
+    "keywords", "referrer", "color-scheme", "theme-color",
+})
 
-    NB: `data:` URIs are accepted here unconditionally. In
-    BROWSING/PLUGIN contexts (`iframe@src`, `object@data`, etc.),
-    an active `data:` document (`data:text/html,…`,
-    `data:image/svg+xml,…`) can carry a full executable payload —
-    that class is handled at the call site by
-    `_is_active_data_document` (round-11), NOT here.
-    """
-    url = url.strip()
-    if not url:
+
+def _href_is_allowed(value):
+    """`<a href>` values that are safe in a self-contained
+    document: empty, `#`, or `#fragment`. Everything else is a
+    violation — including `javascript:`, `data:`, external
+    schemes, and anything with whitespace."""
+    if value is None:
         return True
-    if url.startswith("#"):
+    v = value.strip()
+    if v == "" or v == "#":
         return True
-    if url.lower().startswith("data:"):
+    if not v.startswith("#"):
+        return False
+    if " " in v or "\t" in v or "\n" in v or "\r" in v:
+        return False
+    return True
+
+
+def _meta_name_is_allowed(value):
+    if value is None:
+        return False
+    v = value.lower().strip()
+    if v in _ALLOWED_META_NAMES:
+        return True
+    if v.startswith("gator-"):
         return True
     return False
 
 
-# Attribute contexts where the browser creates a browsing/plugin
-# context around the resource — an HTML/SVG `data:` URI here is
-# parsed as an active document that can run scripts. Round-11
-# addition (Codex Chromium-verified: `<iframe
-# src="data:text/html,%3Cscript%3E…%3C/script%3E">` executes with
-# a 1200 ms timer, past the browser backstop's grace window).
-_ACTIVE_DOC_ATTRS = {
-    ("iframe", "src"),
-    ("frame", "src"),
-    ("embed", "src"),
-    ("object", "data"),
-}
+class _PositivePolicyScanner(_html_parser.HTMLParser):
+    """HTMLParser walk implementing the positive policy. Every
+    start tag and start/end tag is checked against `_ALLOWED_TAGS`;
+    every attribute is checked against the per-tag allowlist plus
+    `_GLOBAL_ATTRS`. Style-block DATA is checked for `@import` and
+    `url(` — both are forbidden. Findings are appended to a list
+    the caller provides.
 
-# `data:` MIME types Chromium treats as script-capable active
-# documents. `text/html`, `application/xhtml+xml`, and
-# `image/svg+xml` all parse + execute inline scripts in a browsing
-# context. Generic XML variants can carry XSLT / SVG payloads that
-# execute; treated as active. Non-document MIMEs (`text/plain`,
-# `image/png`, `application/octet-stream`, etc.) are inert in
-# browsing contexts — the browser shows the raw bytes without
-# script execution.
-_ACTIVE_DATA_MIMES = {
-    "text/html",
-    "application/xhtml+xml",
-    "image/svg+xml",
-    "application/xml",
-    "text/xml",
-}
-
-
-def _data_uri_active_mime(url: str):
-    """If `url` is a `data:` URI whose MIME parses to a
-    script-capable active-document type, return the lowercased
-    MIME string (params stripped). Otherwise return None.
-
-    Rules per RFC 2397 + browser behavior:
-      * `data:` alone (no MIME, no comma) → None (malformed).
-      * `data:,body` (empty MIME + comma) defaults to
-        `text/plain` — inert, returns None.
-      * `data:text/html,…` → `text/html`.
-      * `data:text/html;charset=utf-8,…` → `text/html` (params
-        stripped).
-      * `data:image/svg+xml;base64,…` → `image/svg+xml`.
-      * Any MIME NOT in `_ACTIVE_DATA_MIMES` returns None.
-    """
-    if not url:
-        return None
-    u = url.strip()
-    if not u.lower().startswith("data:"):
-        return None
-    body = u[5:]
-    comma = body.find(",")
-    if comma == -1:
-        return None
-    header = body[:comma].strip().lower()
-    if not header:
-        return None
-    mime = header.split(";", 1)[0].strip()
-    if mime in _ACTIVE_DATA_MIMES:
-        return mime
-    return None
-
-
-def _is_active_data_document(tag_l: str, attr_l: str, value: str) -> bool:
-    """True if `(tag, attr, value)` is a `data:` URI in a
-    browsing/plugin attribute context AND the MIME is a
-    script-capable active-document type. This shape bypasses the
-    round-10 self-containment guard AND the executable-scan (which
-    only recurses `srcdoc`) — Codex round-11 finding. Treat as a
-    violation in both scanners: an inline active document is not
-    self-contained (even though the URL is inline), and it can
-    schedule delayed fetches that outlive the browser backstop's
-    grace window.
-    """
-    if (tag_l, attr_l) not in _ACTIVE_DOC_ATTRS:
-        return False
-    return _data_uri_active_mime(value) is not None
-
-
-def _scan_css_for_externals(css_text: str):
-    """Return list of `(kind, url)` for CSS `@import` + `url(...)`
-    references that point outside the file. Shared by the `<style>`
-    block scan AND the inline `style="…"` attribute scan.
-
-    The `url(...)` regex distinguishes three quoting shapes so a
-    QUOTED URL containing whitespace (e.g. `url('a b.png')`) resolves
-    correctly — the naive ``[^"')\\s]+`` pattern was breaking on the
-    space and missing external references (F2 round-4 finding).
-    """
-    results = []
-    # Unquoted URL character class — escape-aware per CSS spec.
-    # Three URL-character shapes:
-    #   1. `\<1-6 hex digits>[optional whitespace terminator]` —
-    #      standard CSS hex escape (F1 round-6, Chromium-verified:
-    #      `\68 ttps://…` decodes to `https://…`). The space in
-    #      `\68 ` is the terminator, NOT the URL boundary.
-    #   2. `\<any single char>` — the simple char escape (F2
-    #      round-5, e.g. `a\ b.png`).
-    #   3. Any non-special char.
-    # Trailing `\` (bare, no follower) is intentionally not matched
-    # — real CSS treats that as invalid; keeping the pattern strict
-    # avoids catastrophic backtracking on malformed input.
-    _UNQ = r"(?:\\[0-9a-fA-F]{1,6}\s?|\\.|[^\"')\s])+"
-
-    # @import "…" / @import '…' / @import url(…)
-    # Three URL shapes: double-quoted, single-quoted, unquoted.
-    import_pat = re.compile(
-        r'@import\s+'
-        r'(?:'
-        r'url\s*\(\s*(?:"([^"]*)"|\'([^\']*)\'|(' + _UNQ + r'))\s*\)'
-        r'|"([^"]*)"'
-        r'|\'([^\']*)\''
-        r'|([^"\')\s;]+)'
-        r')',
-        re.IGNORECASE)
-    for m in import_pat.finditer(css_text):
-        url = next((g for g in m.groups() if g is not None), None)
-        if url is not None and not _url_is_self_contained(_unescape_css(url)):
-            results.append(("@import", _unescape_css(url)))
-    # url(…) — any property. Three quoting shapes: double-quoted
-    # (allow whitespace + parens up to matching quote), single-quoted
-    # (same), unquoted (escape-aware — `\ ` is a literal space).
-    url_pat = re.compile(
-        r'\burl\s*\(\s*'
-        r'(?:'
-        r'"([^"]*)"'
-        r'|\'([^\']*)\''
-        r'|(' + _UNQ + r')'
-        r')'
-        r'\s*\)',
-        re.IGNORECASE)
-    for m in url_pat.finditer(css_text):
-        url = next((g for g in m.groups() if g is not None), None)
-        if url is not None and not _url_is_self_contained(_unescape_css(url)):
-            results.append(("url()", _unescape_css(url)))
-    return results
-
-
-_CSS_HEX_ESCAPE_RE = re.compile(r'\\([0-9a-fA-F]{1,6})(\s?)')
-
-
-def _unescape_css(url: str) -> str:
-    """Undo CSS backslash-escapes in a URL so `_url_is_self_contained`
-    sees the same URL the browser would resolve.
-
-    Two escape forms per CSS spec:
-      * `\\<1-6 hex digits>[optional single whitespace terminator]`
-        — decodes to the Unicode character with that code point.
-        E.g. `\\68 ttps://…` becomes `https://…` (F1 round-6,
-        Chromium-verified).
-      * `\\<any non-hex-digit char>` — decodes to that char.
-        E.g. `a\\ b.png` becomes `a b.png` (F2 round-5).
-
-    Hex escapes are processed FIRST so the trailing whitespace
-    terminator (part of the escape) isn't consumed by a naive
-    `\\.` pass. Any remaining `\\<char>` is unwrapped by the second
-    pass. Runs of hex escapes decode correctly because each
-    escape consumes exactly its own digits + optional terminator.
-    """
-    def _decode_hex(m: re.Match) -> str:
-        codepoint = int(m.group(1), 16)
-        return chr(codepoint)
-    unhexed = _CSS_HEX_ESCAPE_RE.sub(_decode_hex, url)
-    return re.sub(r'\\(.)', r'\1', unhexed)
-
-
-def _parse_srcset(value: str):
-    """Parse an HTML `srcset` (or `imagesrcset`) attribute into a list
-    of URLs. Follows the WHATWG spec: URL runs to the next whitespace
-    (or trailing comma) and commas INSIDE the URL are literal — so a
-    `data:image/png;base64,abc 1x, data:image/png;base64,def 2x`
-    srcset yields two data URIs, not four comma-split fragments.
-
-    Naive comma-split (the previous shape, 2026-09-13 F1 round-4
-    finding) reported `abc` and `def` as external URLs and let the
-    meta-pin's data-URI allowance silently contradict itself.
-    """
-    urls = []
-    i = 0
-    n = len(value)
-    while i < n:
-        # Skip leading whitespace and stray candidate separators.
-        while i < n and value[i].isspace():
-            i += 1
-        while i < n and value[i] == ",":
-            i += 1
-        while i < n and value[i].isspace():
-            i += 1
-        if i >= n:
-            break
-
-        # URL runs from here to next whitespace. Commas inside are
-        # part of the URL (data: URIs rely on this).
-        url_start = i
-        while i < n and not value[i].isspace():
-            i += 1
-        url = value[url_start:i]
-
-        # A trailing comma is a candidate separator, not part of the
-        # URL. Strip repeated trailing commas too.
-        trailing_comma_terminated = url.endswith(",")
-        while url.endswith(","):
-            url = url[:-1]
-        if url:
-            urls.append(url)
-
-        # If terminated by whitespace (not by trailing comma), skip
-        # the descriptor — advance until next comma or EOL. If
-        # terminated by trailing comma, we're already at the next
-        # candidate boundary; loop back.
-        if not trailing_comma_terminated:
-            while i < n and value[i] != ",":
-                i += 1
-    return urls
-
-
-_META_REFRESH_WS = " \t\n\r\f"
-
-
-def _parse_meta_refresh_url(content: str):
-    """Extract the target URL from a `<meta http-equiv="refresh"
-    content="…">` value per WHATWG "shared declarative refresh steps".
-
-    Grammar accepted (case-insensitive, whitespace-tolerant):
-
-        content = time [(';' | ',') [WS] [ 'url' [WS] ['='] [WS] ] URL]
-
-    All of these produce the same URL — `https://cdn.example/x.html`:
-
-        "0; url=https://cdn.example/x.html"
-        "0;url=https://cdn.example/x.html"
-        "0; URL = https://cdn.example/x.html"
-        "0; url https://cdn.example/x.html"   (no '=', WS-separated)
-        "0; https://cdn.example/x.html"       (unlabeled — F1 round-9)
-        "0, https://cdn.example/x.html"       (comma separator)
-        "0.5; https://cdn.example/x.html"     (decimal time)
-
-    Returns `None` when the content refreshes in place (no URL after
-    the separator, e.g. `"0"` or `"5"`), when the content has no
-    time value, or when the URL portion is empty. Callers pass the
-    result through `_url_is_self_contained` to decide whether to
-    flag the reference.
-
-    F1 round-9 (2026-09-14): the earlier round-8 implementation used
-    a regex that hard-required the `url=` label. Chromium accepts the
-    unlabeled form and the labeled-without-`=` form, so a template
-    author (or a hostile edit) could route to an external URL via a
-    shape the textual scanner reported clean.
-    """
-    if not content:
-        return None
-    s = content
-    L = len(s)
-    i = 0
-    while i < L and s[i] in _META_REFRESH_WS:
-        i += 1
-    time_start = i
-    while i < L and s[i].isdigit():
-        i += 1
-    if i < L and s[i] == "." and i > time_start:
-        i += 1
-        while i < L and s[i].isdigit():
-            i += 1
-    if i == time_start:
-        return None
-    # Round-10 F3: require a valid boundary immediately after the
-    # time token. Whitespace, a separator (`;` or `,`), or
-    # end-of-string are the only shapes Chromium honors. When the
-    # time token is glued to non-refresh content — `0https://…` or
-    # `0foo` — Chromium refuses the directive, so the parser must
-    # too. Otherwise the textual guard would report an external
-    # navigation on markup that the browser will not follow.
-    if i < L and s[i] not in _META_REFRESH_WS and s[i] not in ";,":
-        return None
-    while i < L and s[i] in _META_REFRESH_WS:
-        i += 1
-    if i >= L:
-        return None
-    if s[i] in ";,":
-        i += 1
-    while i < L and s[i] in _META_REFRESH_WS:
-        i += 1
-    if i >= L:
-        return None
-    # Optional 'url' keyword. Only consume it as a keyword if the
-    # rest of the value is actually followed by '=' or whitespace —
-    # otherwise treat 'url' as the start of the URL itself.
-    if s[i:i + 3].lower() == "url":
-        j = i + 3
-        j_ws_start = j
-        while j < L and s[j] in _META_REFRESH_WS:
-            j += 1
-        if j < L and s[j] == "=":
-            j += 1
-            while j < L and s[j] in _META_REFRESH_WS:
-                j += 1
-            i = j
-        elif j > j_ws_start:
-            i = j
-    if i >= L:
-        return None
-    if s[i] in "\"'":
-        quote = s[i]
-        i += 1
-        end = s.find(quote, i)
-        if end == -1:
-            end = L
-        url = s[i:end]
-    else:
-        url = s[i:].rstrip()
-    return url or None
-
-
-class _HTMLResourceScanner(_html_parser.HTMLParser):
-    """Walk every start tag, examine every attribute, collect
-    external resource references.
-
-    Uses stdlib `html.parser.HTMLParser`, which handles single-quoted,
-    double-quoted, AND unquoted attribute values correctly (previous
-    regex-based scanner missed unquoted attrs — F2 re-review
-    finding). HTMLParser also decodes character references in
-    attribute values by default (regardless of `convert_charrefs=False`,
-    which only affects the DATA callback — see F1 round-7 docstring
-    note on `_recurse_srcdoc`).
-
-    Emits two violation shapes:
-      * `self.html_violations` = `(tag, attr, url, lineno)` — HTML
-        resource attribute violations.
-      * `self.inline_style_violations` = `(f"{tag}@style", kind, url,
-        lineno)` — inline CSS via `style="…"` (kind = `@import` or
-        `url()`).
-
-    Recurses into `<iframe srcdoc>` (F2 round-6, F1/F2 round-7): the
-    attribute value is a full HTML document embedded as source text.
-    HTMLParser has already single-decoded it by the time we see the
-    attribute, so the value is fed verbatim to a fresh scanner
-    instance at `depth+1`. Cap `_MAX_SRCDOC_DEPTH` bounds recursion;
-    beyond the cap the scanner fails CLOSED with an
-    `iframe@srcdoc>UNSCANNED-AT-DEPTH-N` violation rather than
-    silently skipping (Chromium fetches at any depth, so a silent
-    skip would contradict the self-containment guarantee).
-
-    Handles two indirect-fetch forms (F1 round-8):
-      * `<base href>` — resolves other same-doc references against
-        an external base URL; flagged with the standard
-        _url_is_self_contained predicate.
-      * `<meta http-equiv="refresh" content="0; url=X">` — Chromium
-        navigates to X at load; content string is parsed for the
-        url= target.
+    Deliberately NOT tracked: nesting rules, DOCTYPE, entity
+    references. Those are Chromium's job; this scanner only
+    enforces the small policy the Cumberland templates need.
     """
 
-    # F2 round-7 raised the cap from 2 to 5 — real Cumberland docs
-    # never nest srcdoc even one level, so 5 is generous for
-    # anything a legitimate author would write. Above 5 the scanner
-    # fails CLOSED (adds an explicit "unscanned nested srcdoc"
-    # violation) rather than silently accepting the unscanned
-    # surface. Chromium fetches through nesting regardless of depth,
-    # so the earlier silent-skip contradicted the full self-
-    # containment guarantee.
-    _MAX_SRCDOC_DEPTH = 5
-
-    def __init__(self, depth: int = 0):
+    def __init__(self, findings):
         super().__init__(convert_charrefs=False)
-        self.html_violations = []
-        self.inline_style_violations = []
-        self.depth = depth
+        self.findings = findings
+        self._in_style = False
 
     def handle_starttag(self, tag, attrs):
-        self._scan(tag, attrs)
+        if tag.lower() == "style":
+            self._in_style = True
+        self._check_tag(tag, attrs)
 
     def handle_startendtag(self, tag, attrs):
-        # Self-closing (<img/>, etc.) — treat identically.
-        self._scan(tag, attrs)
+        self._check_tag(tag, attrs)
 
-    def _scan(self, tag, attrs):
+    def handle_endtag(self, tag):
+        if tag.lower() == "style":
+            self._in_style = False
+
+    def handle_data(self, data):
+        if not self._in_style:
+            return
+        if "@import" in data:
+            self.findings.append((
+                "css-@import", "in <style> block", self.getpos()[0]))
+        if re.search(r"\burl\s*\(", data, re.IGNORECASE):
+            self.findings.append((
+                "css-url()", "in <style> block", self.getpos()[0]))
+
+    def _check_tag(self, tag, attrs):
         tag_l = tag.lower()
         lineno = self.getpos()[0]
-
-        # F2 round-6: recursive scan of <iframe srcdoc>. Always call
-        # `_recurse_srcdoc` — the depth check + fail-closed logic
-        # lives INSIDE that method (F2 round-7 change: pre-check
-        # was silently skipping past the cap; now beyond-cap emits
-        # an explicit "unscanned" violation instead).
-        if tag_l == "iframe":
-            for name, value in attrs:
-                if name and name.lower() == "srcdoc" and value:
-                    self._recurse_srcdoc(value, lineno)
-
-        # F1 round-8/round-9: <meta http-equiv="refresh"
-        # content="…"> triggers a browser navigation to the target at
-        # load. Parse the content string per WHATWG semantics — the
-        # `url=` label is OPTIONAL (round-9 fix); Chromium honors
-        # `0; https://example/` and `0, https://example/` too.
-        if tag_l == "meta":
-            attr_map = {(n.lower() if n else ""): v
-                        for n, v in attrs if v is not None}
-            if attr_map.get("http-equiv", "").lower() == "refresh":
-                content = attr_map.get("content", "") or ""
-                url = _parse_meta_refresh_url(content)
-                if url is not None and not _url_is_self_contained(url):
-                    self.html_violations.append(
-                        ("meta", "http-equiv=refresh", url, lineno))
-
-        for name, value in attrs:
-            if name is None or value is None:
-                continue
-            attr_l = name.lower()
-
-            # Single-URL resource attributes.
-            if (tag_l, attr_l) in _SINGLE_URL_RESOURCE_ATTRS:
-                # Round-11 F1: active `data:` documents in
-                # browsing/plugin contexts execute scripts and can
-                # schedule delayed fetches past the browser
-                # backstop's grace window. Fail closed on the MIME
-                # test even though the URL is technically inline.
-                if _is_active_data_document(tag_l, attr_l, value):
-                    self.html_violations.append(
-                        (tag_l, attr_l, value, lineno))
-                elif not _url_is_self_contained(value):
-                    self.html_violations.append(
-                        (tag_l, attr_l, value, lineno))
-                continue
-
-            # srcset-style comma-separated URL lists.
-            if (tag_l, attr_l) in _SRCSET_ATTRS:
-                for url in _parse_srcset(value):
-                    if not _url_is_self_contained(url):
-                        self.html_violations.append(
-                            (tag_l, attr_l, url, lineno))
-                continue
-
-            # <link href> — no external targets allowed.
-            # <a href> is navigation, not resource-loading; scope out.
-            if tag_l == "link" and attr_l == "href":
-                if not _url_is_self_contained(value):
-                    self.html_violations.append(
-                        (tag_l, attr_l, value, lineno))
-                continue
-
-            # Inline style="…" — treat as CSS. Any tag can carry it.
-            if attr_l == "style":
-                for kind, url in _scan_css_for_externals(value):
-                    self.inline_style_violations.append(
-                        (f"{tag_l}@style", kind, url, lineno))
-
-    def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
-        """Feed an `<iframe srcdoc>` value into a fresh scanner at
-        `depth+1`. Merge surfaced violations with `iframe@srcdoc>`
-        prefix. Also scan any `<style>` blocks inside the srcdoc.
-
-        F1 round-7 (2026-09-14): DO NOT `html.unescape` the value
-        before recursion. `html.parser.HTMLParser` already resolves
-        character references in attribute values (regardless of
-        `convert_charrefs=False`, which only affects the DATA
-        callback). A second unescape is a double-decode that turns
-        legitimate literal `&lt;img&gt;` inside srcdoc (which
-        browsers render as text) into a synthetic `<img>` tag and
-        false-positives the scan.
-
-        F2 round-7 (2026-09-14): fail CLOSED at the depth cap. When
-        `self.depth >= _MAX_SRCDOC_DEPTH`, record an "unscanned
-        nested srcdoc" violation rather than silently skipping —
-        Chromium fetches through nesting regardless of depth, so a
-        silent skip contradicts the self-containment guarantee.
-        """
-        if self.depth >= self._MAX_SRCDOC_DEPTH:
-            self.html_violations.append(
-                (f"iframe@srcdoc>UNSCANNED-AT-DEPTH-{self.depth + 1}",
-                 "srcdoc",
-                 f"<nested srcdoc exceeds max depth "
-                 f"{self._MAX_SRCDOC_DEPTH} — flatten or split the "
-                 f"document; scanner refuses to accept unscanned "
-                 f"content silently>",
-                 parent_lineno))
+        if tag_l not in _ALLOWED_TAGS:
+            self.findings.append((
+                "forbidden-tag", f"<{tag_l}>", lineno))
             return
-        inner_html = srcdoc_value
-        inner = _HTMLResourceScanner(depth=self.depth + 1)
-        try:
-            inner.feed(inner_html)
-            inner.close()
-        except Exception:  # noqa: BLE001 — partial HTML OK
-            pass
-        for (t, a, u, _ln) in inner.html_violations:
-            self.html_violations.append(
-                (f"iframe@srcdoc>{t}", a, u, parent_lineno))
-        for (t, k, u, _ln) in inner.inline_style_violations:
-            # Inline style-inside-srcdoc becomes an
-            # `iframe@srcdoc>…@style` scope on the outer collector.
-            self.inline_style_violations.append(
-                (f"iframe@srcdoc>{t}", k, u, parent_lineno))
-        # <style> blocks inside srcdoc are extracted regex-style and
-        # scanned through the shared CSS helper.
-        style_pat = re.compile(
-            r'<style\b[^>]*>(.*?)</style>',
-            re.IGNORECASE | re.DOTALL)
-        for m in style_pat.finditer(inner_html):
-            for kind, url in _scan_css_for_externals(m.group(1)):
-                self.inline_style_violations.append(
-                    ("iframe@srcdoc><style>", kind, url, parent_lineno))
+        allowed_attrs = _ATTR_ALLOWLIST.get(tag_l, frozenset()) | \
+            _GLOBAL_ATTRS
+        for name, value in attrs:
+            if name is None:
+                continue
+            name_l = name.lower()
+            # Event handlers — a single global rule (all `on*=` are
+            # forbidden). Reported as its own class so the failure
+            # message is legible.
+            if name_l.startswith("on") and len(name_l) > 2:
+                self.findings.append((
+                    "event-handler-attr",
+                    f"{tag_l}@{name_l}", lineno))
+                continue
+            if name_l not in allowed_attrs:
+                self.findings.append((
+                    "forbidden-attr",
+                    f"{tag_l}@{name_l}", lineno))
+                continue
+            # Value-level validation for the attributes the policy
+            # admits.
+            if tag_l == "a" and name_l == "href":
+                if not _href_is_allowed(value):
+                    self.findings.append((
+                        "external-a-href",
+                        f"a@href={value!r}", lineno))
+            elif tag_l == "meta" and name_l == "http-equiv":
+                v = (value or "").lower().strip()
+                if v not in _ALLOWED_META_HTTP_EQUIV:
+                    self.findings.append((
+                        "forbidden-meta-http-equiv",
+                        f"meta@http-equiv={value!r}", lineno))
+            elif tag_l == "meta" and name_l == "name":
+                if not _meta_name_is_allowed(value):
+                    self.findings.append((
+                        "forbidden-meta-name",
+                        f"meta@name={value!r}", lineno))
 
 
-def _find_external_html_resources(text: str):
-    """Return `[(tag, attr, url, position), …]` for every HTML
-    resource-loading attribute that references an external target.
-    Handles quoted AND unquoted attribute values (F2 re-review).
-    Covers `<script>`, `<img>` (src + srcset), `<iframe>`, `<video>`
-    (src + poster), `<audio>`, `<source>` (src + srcset), `<track>`,
-    `<embed>`, `<object data>`, `<input type=image src>`, and
-    `<link href>` on non-`<a>` elements. `<a href>` navigation is
-    explicitly excluded. Position is line number from the HTML
-    parser (was character offset in the pre-F2-re-review shape).
+def _validate_cumberland_document(text):
+    """Return a list of `(kind, detail, lineno)` findings from
+    walking `text` under the positive policy. Empty list ⇒ the
+    document is valid.
+
+    Fails CLOSED on parse errors — any HTMLParser exception
+    produces a `parse-error` finding rather than being swallowed.
+    A template that can't be parsed cannot be trusted to be safe.
     """
-    scanner = _HTMLResourceScanner()
+    findings = []
+    scanner = _PositivePolicyScanner(findings)
     try:
         scanner.feed(text)
         scanner.close()
-    except Exception:  # noqa: BLE001 — malformed HTML is OK, keep partial hits
-        pass
-    return list(scanner.html_violations)
+    except Exception as exc:  # noqa: BLE001
+        findings.append(("parse-error", repr(exc), -1))
+    return findings
 
 
-def _find_external_css_resources(text: str):
-    """Return `[(kind, url, position), …]` for every CSS `@import`
-    and every `url(…)` reference to an external target. Scans BOTH
-    `<style>…</style>` blocks (via regex) AND inline `style="…"`
-    attribute values (via `html.parser` — F2 re-review addition).
+# ── The pinned CSP ────────────────────────────────────────────────
 
-    Position for `<style>`-block hits is the character offset within
-    `text`; for inline-style hits it is the line number of the
-    element carrying the attribute — the two shapes are heterogeneous
-    but every consumer includes the value in a diagnostic string, so
-    stringifying either is fine.
-    """
-    violations = []
+# The exact policy string the two templates carry. Deviation from
+# this string (spacing, directive order, added/removed directives)
+# fails the pin — CSP is defense in depth; a hand-edited variant
+# is not trusted.
+_PINNED_CSP_META = (
+    '<meta http-equiv="Content-Security-Policy" '
+    'content="default-src \'none\'; style-src \'unsafe-inline\'; '
+    'script-src \'none\'; img-src \'none\'; font-src \'none\'; '
+    'frame-src \'none\'; object-src \'none\'; base-uri \'none\'; '
+    'form-action \'none\'">'
+)
 
-    # 1. <style>…</style> blocks
-    style_pat = re.compile(r'<style\b[^>]*>(.*?)</style>',
-                           re.IGNORECASE | re.DOTALL)
-    for style_match in style_pat.finditer(text):
-        css_body = style_match.group(1)
-        style_start = style_match.start(1)
-        for kind, url in _scan_css_for_externals(css_body):
-            # Best-effort locator — the exact within-block offset is
-            # not tracked here; the diagnostic string carries enough
-            # context to find the reference by grep.
-            violations.append((kind, url, style_start))
 
-    # 2. Inline style="…" attributes
-    scanner = _HTMLResourceScanner()
-    try:
-        scanner.feed(text)
-        scanner.close()
-    except Exception:  # noqa: BLE001
-        pass
-    for tag_scope, kind, url, lineno in scanner.inline_style_violations:
-        violations.append((f"{tag_scope}:{kind}", url, lineno))
-
-    return violations
+def _csp_is_present_and_early(text):
+    """The pinned CSP meta must appear verbatim, and it must sit
+    ABOVE the first `<title>` and the first `<style>` in the
+    document — so any resource declared in `<head>` prior to
+    those anchors is already governed."""
+    csp_pos = text.find(_PINNED_CSP_META)
+    if csp_pos == -1:
+        return "missing"
+    title_pos = text.find("<title")
+    style_pos = text.find("<style")
+    if title_pos != -1 and csp_pos > title_pos:
+        return "csp-after-title"
+    if style_pos != -1 and csp_pos > style_pos:
+        return "csp-after-style"
+    return "ok"
 
 
 @pytest.fixture(scope="module")
-def narrative_text() -> str:
+def narrative_text():
     narrative = (REPO_ROOT / ".gator" / "blueprints"
                  / "_template-narrative.html")
     if not narrative.is_file():
@@ -1080,1212 +749,173 @@ def narrative_text() -> str:
     return narrative.read_text(encoding="utf-8")
 
 
-def test_master_is_fully_self_contained(master_text: str):
-    """The master must contain no external resource references —
-    stylesheets, scripts, images, iframes, media sources, embeds,
-    objects, CSS @import, or CSS url() targeting anything outside
-    the file. `<a href>` navigation is explicitly allowed (it does
-    not fetch at load); `data:` URIs and `#fragment` anchors are
-    self-contained.
+# ── Positive policy on shipped templates ─────────────────────────
 
-    Codex enforcer 2026-09-13 F3 broadened this from the original
-    two-attribute check to the full resource surface. The earlier
-    narrow guard would pass a template that added `<img
-    src="https://…">` or CSS `url(https://cdn.example/font.woff2)`.
+def test_master_passes_positive_policy(master_text):
+    findings = _validate_cumberland_document(master_text)
+    assert findings == [], (
+        "Cumberland master violates the positive policy — the "
+        "shipped template must use only approved passive markup.\n"
+        + "\n".join(f"  line {ln}: {kind} — {detail}"
+                    for kind, detail, ln in findings))
+
+
+def test_narrative_passes_positive_policy(narrative_text):
+    findings = _validate_cumberland_document(narrative_text)
+    assert findings == [], (
+        "Cumberland narrative Blueprint violates the positive "
+        "policy.\n"
+        + "\n".join(f"  line {ln}: {kind} — {detail}"
+                    for kind, detail, ln in findings))
+
+
+# ── CSP presence + placement pins ────────────────────────────────
+
+def test_master_carries_pinned_csp(master_text):
+    verdict = _csp_is_present_and_early(master_text)
+    assert verdict == "ok", (
+        f"Master CSP check failed: {verdict}. Required string:\n"
+        f"  {_PINNED_CSP_META}")
+
+
+def test_narrative_carries_pinned_csp(narrative_text):
+    verdict = _csp_is_present_and_early(narrative_text)
+    assert verdict == "ok", (
+        f"Narrative CSP check failed: {verdict}. Required string:\n"
+        f"  {_PINNED_CSP_META}")
+
+
+# ── Positive control + forbidden-class rejection matrix ──────────
+
+_MINIMAL_ALLOWED_DOCUMENT = (
+    '<!DOCTYPE html>\n'
+    '<html lang="en">\n'
+    '<head>\n'
+    '<meta charset="utf-8">\n'
+    + _PINNED_CSP_META + '\n'
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    '<title>ok</title>\n'
+    '<style>\n'
+    'body { color: black; }\n'
+    '</style>\n'
+    '</head>\n'
+    '<body>\n'
+    '<header><h1>Hi</h1></header>\n'
+    '<section><p>Text <a href="#top">jump</a>.</p></section>\n'
+    '</body>\n'
+    '</html>\n'
+)
+
+
+def test_positive_policy_accepts_minimal_allowed_document():
+    """Positive control. A minimal document using ONLY the
+    tags/attributes the policy admits must produce zero findings —
+    otherwise the validator is over-strict (and the shipped
+    templates would falsely fail)."""
+    findings = _validate_cumberland_document(_MINIMAL_ALLOWED_DOCUMENT)
+    assert findings == [], (
+        f"Positive control failed — a minimal allowed document was "
+        f"flagged:\n"
+        + "\n".join(f"  line {ln}: {kind} — {detail}"
+                    for kind, detail, ln in findings))
+
+
+# One entry per forbidden capability class. The validator must
+# produce at least one finding for every fixture. The specific
+# `kind` a finding uses is intentionally NOT asserted — the class
+# survives the round-1..11 whack-a-mole precisely because the
+# validator's job is REJECTION, not classification. If a future
+# change routes `<iframe>` through a different finding label, the
+# test still passes as long as the tag is rejected.
+_FORBIDDEN_FIXTURES = [
+    ("script-tag",
+     "<script>fetch('https://cdn.example/x')</script>"),
+    ("iframe-tag",
+     "<iframe src=\"data:text/html,<b>hi</b>\"></iframe>"),
+    ("iframe-with-srcdoc",
+     '<iframe srcdoc="&lt;script&gt;fetch(1)&lt;/script&gt;"></iframe>'),
+    ("iframe-src-data-html",
+     "<iframe src=\"data:text/html,%3Cscript%3Efetch(1)%3C/script%3E\"></iframe>"),
+    ("frame-tag",
+     "<frame src=\"about:blank\">"),
+    ("object-tag",
+     "<object data=\"x.svg\"></object>"),
+    ("embed-tag",
+     "<embed src=\"x.pdf\">"),
+    ("base-tag",
+     "<base href=\"https://cdn.example/\">"),
+    ("form-tag",
+     "<form action=\"javascript:1\"></form>"),
+    ("input-tag",
+     "<input type=\"text\">"),
+    ("button-tag",
+     "<button>go</button>"),
+    ("meta-refresh",
+     '<meta http-equiv="refresh" content="0;url=https://cdn.example/">'),
+    ("meta-refresh-unlabeled",
+     '<meta http-equiv="refresh" content="0; https://cdn.example/">'),
+    ("event-handler-onclick",
+     '<a href="#" onclick="fetch(1)">x</a>'),
+    ("event-handler-onload",
+     "<div onload=\"fetch(2)\">x</div>"),
+    ("event-handler-onerror",
+     "<span onerror=\"fetch(3)\">x</span>"),
+    ("external-a-href",
+     '<a href="https://cdn.example/x">go</a>'),
+    ("javascript-a-href",
+     '<a href="javascript:1">x</a>'),
+    ("data-a-href",
+     '<a href="data:text/plain,x">x</a>'),
+    ("protocol-relative-a-href",
+     '<a href="//cdn.example/x">x</a>'),
+    ("css-@import",
+     "<style>@import \"https://cdn.example/x.css\";</style>"),
+    ("css-url",
+     "<style>body { background: url('https://cdn.example/bg.png'); }</style>"),
+    ("css-url-data",
+     "<style>body { background: url(data:image/svg+xml,%3Csvg/%3E); }</style>"),
+    ("img-tag",
+     "<img src=\"x.png\">"),
+    ("svg-with-script",
+     "<svg><script>fetch(1)</script></svg>"),
+    ("svg-use-xlink",
+     "<svg><use xlink:href=\"#foo\"></use></svg>"),
+    ("link-tag",
+     "<link rel=\"stylesheet\" href=\"https://cdn.example/x.css\">"),
+    ("style-attr",
+     '<div style="background: url(https://cdn.example/x.png)">x</div>'),
+    ("video-tag",
+     "<video src=\"x.mp4\"></video>"),
+    ("audio-tag",
+     "<audio src=\"x.mp3\"></audio>"),
+]
+
+
+@pytest.mark.parametrize(
+    "class_name, fixture", _FORBIDDEN_FIXTURES,
+    ids=[c for c, _ in _FORBIDDEN_FIXTURES],
+)
+def test_positive_policy_rejects_forbidden_class(class_name, fixture):
+    """Every forbidden capability class produces at least one
+    policy finding. The point of round-12 closure: a class-level
+    rejection subsumes the previous rounds of parser-detail
+    findings (`iframe[srcdoc]`, `data:text/html`, entity-encoded
+    `javascript:`, meta-refresh grammar shapes, etc.). Rejecting
+    `<iframe>` outright makes every `<iframe src=...>` variant
+    moot, because the enclosing tag is already refused.
     """
-    html_violations = _find_external_html_resources(master_text)
-    css_violations = _find_external_css_resources(master_text)
-    assert not html_violations and not css_violations, (
-        f"Master is not fully self-contained.\n"
-        f"  HTML resource violations: {html_violations!r}\n"
-        f"  CSS resource violations:  {css_violations!r}")
-
-
-def test_narrative_is_fully_self_contained(narrative_text: str):
-    """Same self-containment surface applied to the narrative
-    Blueprint. Both anchor templates ship with all CSS inline and no
-    external resource references."""
-    html_violations = _find_external_html_resources(narrative_text)
-    css_violations = _find_external_css_resources(narrative_text)
-    assert not html_violations and not css_violations, (
-        f"Narrative Blueprint is not fully self-contained.\n"
-        f"  HTML resource violations: {html_violations!r}\n"
-        f"  CSS resource violations:  {css_violations!r}")
-
-
-# ── No-executable-scripts invariant (Codex enforcer round-9) ─────
-#
-# The browser backstop in `test_cumberland_computed_style.py`
-# observes real Chromium requests during a short grace window. That
-# window closes fast — a `fetch(…)` or `<img src=…>` inserted from
-# an inline `<script>` on a `setTimeout(…, 500)` would leak past the
-# window and leave the backstop reporting clean. Round-8 called this
-# "definitive" without a matching invariant on the templates; round-9
-# codifies the invariant that makes the claim actually hold:
-# Cumberland templates contain no executable JavaScript surface at
-# all. With this invariant in force, no code inside the templates
-# can schedule a deferred network request, so a browser observation
-# of "zero non-template requests at load" IS definitive for the
-# self-containment guarantee.
-#
-# Surface covered:
-#   * `<script>` blocks — inline or `src=` — any variety.
-#   * Inline event handlers `on*=` on any element.
-#   * `javascript:` URLs (in `href`, `src`, form actions, etc.).
-
-# Attributes that carry a URL a browser will navigate to or execute.
-# `javascript:` in any of these fires code in Chromium. HTMLParser
-# gives us the DECODED attribute value (character references already
-# resolved), so `<a href="java&#x73;cript:...">` reaches us as
-# `javascript:...` and matches without any extra decode. Round-10 F1
-# closes the round-9 blind spot where the raw-regex helper searched
-# the source text and missed entity-encoded scheme letters.
-_JS_URL_ATTRS = {
-    ("a", "href"),
-    ("area", "href"),
-    ("base", "href"),
-    ("link", "href"),
-    ("form", "action"),
-    ("button", "formaction"),
-    ("input", "formaction"),
-    ("iframe", "src"),
-    ("frame", "src"),
-    ("embed", "src"),
-    ("object", "data"),
-    ("img", "src"),
-    ("script", "src"),
-    # `srcdoc` itself doesn't have a scheme, but a `javascript:` URL
-    # embedded in nested attributes shows up via the srcdoc recursion
-    # below; no separate case needed here.
-}
-
-# Characters Chromium strips from a URL before scheme detection.
-# Per the URL Living Standard "URL scheme start state", ASCII TAB,
-# LF, CR (and, in practice, form-feed + NUL) inside the scheme are
-# removed. `java&#x09;script:` is fetched as `javascript:` — a
-# raw-substring check for `javascript:` misses this shape.
-_URL_STRIP_CTRL_RE = re.compile(r"[\t\n\r\f\x00]")
-
-
-def _url_scheme_is_javascript(value: str) -> bool:
-    """True if `value`, after browser-style whitespace/control-char
-    stripping, has the `javascript:` scheme. HTMLParser has already
-    resolved character references in attribute values by the time
-    this runs — no additional entity decode needed."""
-    if not value:
-        return False
-    stripped = _URL_STRIP_CTRL_RE.sub("", value).lstrip().lower()
-    return stripped.startswith("javascript:")
-
-
-class _ExecutableScriptScanner(_html_parser.HTMLParser):
-    """HTMLParser-based walk that surfaces every executable-script
-    seat a template exposes. Mirrors the shape of
-    `_HTMLResourceScanner` so the two behave alike: parses real tags
-    (so `<script>` inside an HTML comment is ignored — round-10 F2),
-    reads decoded attribute values (so entity-obfuscated
-    `javascript:` schemes are still caught — round-10 F1), and
-    RECURSES through `<iframe srcdoc>` at `depth+1` so a delayed
-    fetch scheduled inside a srcdoc-embedded script is not invisible
-    to the invariant.
-
-    Depth cap `_MAX_SRCDOC_DEPTH` matches the resource scanner (5) —
-    beyond the cap the scanner FAILS CLOSED with an
-    `iframe@srcdoc>UNSCANNED-AT-DEPTH-N` finding rather than
-    silently accepting the unscanned surface.
-    """
-
-    _MAX_SRCDOC_DEPTH = 5
-
-    def __init__(self, depth: int = 0):
-        super().__init__(convert_charrefs=False)
-        self.findings = []
-        self.depth = depth
-
-    def handle_starttag(self, tag, attrs):
-        self._scan(tag, attrs)
-
-    def handle_startendtag(self, tag, attrs):
-        self._scan(tag, attrs)
-
-    def _scan(self, tag, attrs):
-        tag_l = tag.lower()
-        lineno = self.getpos()[0]
-
-        # `<script>` — executable by tag identity. HTMLParser only
-        # visits real tags; a `<script>` sitting inside `<!-- -->`
-        # is delivered to `handle_comment`, not here (F2 round-10
-        # false-positive fix).
-        if tag_l == "script":
-            self.findings.append(("<script>", f"<{tag_l}>", lineno))
-
-        # Recurse into <iframe srcdoc> BEFORE processing attributes,
-        # matching the resource scanner's order. HTMLParser has
-        # single-decoded the srcdoc value; feed it verbatim to a
-        # fresh scanner at depth+1.
-        if tag_l == "iframe":
-            for name, value in attrs:
-                if name and name.lower() == "srcdoc" and value:
-                    self._recurse_srcdoc(value, lineno)
-
-        for name, value in attrs:
-            if name is None:
-                continue
-            name_l = name.lower()
-
-            # on* event handlers — HTMLParser gives us the attribute
-            # name intact; any `on<x>=` variant flags. Case-insensitive
-            # per HTML attribute name rules.
-            if name_l.startswith("on") and len(name_l) > 2:
-                self.findings.append(
-                    ("event-handler",
-                     f"{tag_l}@{name_l}=...", lineno))
-                continue
-
-            # `javascript:` URLs — check the DECODED value, in the
-            # attribute contexts a browser actually resolves as a
-            # URL. HTMLParser has already resolved character
-            # references; control-char stripping handled by
-            # `_url_scheme_is_javascript`.
-            if value is None:
-                continue
-            if (tag_l, name_l) in _JS_URL_ATTRS and \
-                    _url_scheme_is_javascript(value):
-                sample = value[:40]
-                self.findings.append(
-                    ("javascript:",
-                     f"{tag_l}@{name_l}={sample!r}", lineno))
-                continue
-
-            # Round-11 F1: active `data:` documents in
-            # browsing/plugin contexts (`iframe@src`, `object@data`,
-            # etc.) parse as a full HTML/SVG document that can
-            # execute inline scripts. Codex-verified: a
-            # `data:text/html,%3Cscript%3EsetTimeout(...,1200)…`
-            # iframe schedules a fetch past the 200 ms grace window
-            # the browser backstop uses. Fail closed on the MIME
-            # test — Cumberland templates have no legitimate reason
-            # to inline an active document, so this is a defensive
-            # boundary against a class of bypass, not a
-            # false-positive risk on real content.
-            if _is_active_data_document(tag_l, name_l, value):
-                mime = _data_uri_active_mime(value) or "?"
-                self.findings.append(
-                    ("active-data-document",
-                     f"{tag_l}@{name_l} data:{mime}", lineno))
-
-    def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
-        if self.depth + 1 > self._MAX_SRCDOC_DEPTH:
-            self.findings.append(
-                ("iframe@srcdoc>UNSCANNED-AT-DEPTH-N",
-                 f"beyond depth cap ({self._MAX_SRCDOC_DEPTH})",
-                 parent_lineno))
-            return
-        nested = _ExecutableScriptScanner(depth=self.depth + 1)
-        try:
-            nested.feed(srcdoc_value)
-            nested.close()
-        except Exception:  # noqa: BLE001
-            pass
-        for kind, sample, _line in nested.findings:
-            self.findings.append(
-                (f"iframe@srcdoc>{kind}", sample, parent_lineno))
-
-
-def _find_executable_script_surface(html_text: str):
-    """Return `[(kind, sample), …]` for every executable-script
-    surface reachable in `html_text`. Empty list ⇒ the document has
-    no way to schedule a fetch, run inline JS on load, or navigate
-    to a `javascript:` URL — so a browser observation of "no
-    external requests" is jointly definitive with this pin.
-
-    Rebuilt round-10 (2026-09-14) from raw-regex to an HTMLParser
-    walk. The regex form (a) false-positived on `<script>` inside
-    HTML comments (F2 round-10), (b) missed
-    entity-encoded scheme letters like `java&#x73;cript:` (F1
-    round-10), (c) missed ASCII-control-char scheme interleavings
-    like `java\\x09script:`, and (d) never descended into
-    `<iframe srcdoc>` where a nested inline script with a delayed
-    timer would slip past both this pin AND the browser backstop's
-    grace window.
-
-    Also treats an UNSCANNED-AT-DEPTH finding from srcdoc
-    recursion as a real finding — matching the resource scanner's
-    fail-closed discipline; a template author who nests srcdoc
-    beyond the cap needs to flatten the document, not silently
-    trust the invariant.
-    """
-    scanner = _ExecutableScriptScanner()
-    try:
-        scanner.feed(html_text)
-        scanner.close()
-    except Exception:  # noqa: BLE001
-        pass
-    return [(kind, sample) for kind, sample, _lineno in scanner.findings]
-
-
-def test_no_executable_scripts_in_master(master_text: str):
-    """The master must contain no executable-script surface —
-    no `<script>` blocks (inline or external), no inline `on*`
-    event handlers, no `javascript:` URLs. This invariant is the
-    partner of the browser backstop in `test_cumberland_computed_style
-    ::test_template_makes_no_external_requests_at_load`: with no
-    executable surface in the template, no code can schedule a
-    deferred fetch that would slip past the backstop's short wait
-    window. The two pins together are definitive for the
-    self-containment guarantee.
-    """
-    findings = _find_executable_script_surface(master_text)
-    assert not findings, (
-        f"Master contains executable-script surface — self-containment "
-        f"claim depends on there being none:\n"
-        + "\n".join(f"  {kind}: {sample!r}" for kind, sample in findings))
-
-
-def test_no_executable_scripts_in_narrative(narrative_text: str):
-    """Same no-executable-script invariant on the narrative
-    Blueprint. Both anchor templates share it because the browser
-    backstop parametrizes over both."""
-    findings = _find_executable_script_surface(narrative_text)
-    assert not findings, (
-        f"Narrative Blueprint contains executable-script surface — "
-        f"self-containment claim depends on there being none:\n"
-        + "\n".join(f"  {kind}: {sample!r}" for kind, sample in findings))
-
-
-def test_no_executable_scripts_helper_catches_known_forms():
-    """Meta-pin for `_find_executable_script_surface`. Codex asked
-    round-9 for either the invariant or a narrowed 'definitive'
-    claim; the invariant is worth as much as its detector, so this
-    exercises every surface the invariant is meant to catch.
-    """
-    fixture = """<!DOCTYPE html>
-<html>
-<head>
-<script>fetch('https://cdn.example/deferred.json');</script>
-<script src="https://cdn.example/late.js"></script>
-</head>
-<body>
-<button onclick="load('https://cdn.example/click.json')">Go</button>
-<img src="x.png" onerror="fetch('https://cdn.example/onerror.json')">
-<a href="javascript:fetch('https://cdn.example/js-url.json')">click</a>
-<form action="javascript:submit()"></form>
-</body>
-</html>"""
-    findings = _find_executable_script_surface(fixture)
-    kinds = {kind for kind, _sample in findings}
-    assert "<script>" in kinds, findings
-    assert "event-handler" in kinds, findings
-    assert "javascript:" in kinds, findings
-    # Sanity: multiple <script> tags are all counted (two here).
-    script_count = sum(1 for k, _ in findings if k == "<script>")
-    assert script_count == 2, (
-        f"expected 2 <script> hits, got {script_count}: {findings!r}")
-    # Sanity: multiple event handlers counted (onclick + onerror).
-    handler_count = sum(1 for k, _ in findings if k == "event-handler")
-    assert handler_count == 2, (
-        f"expected 2 event-handler hits, got {handler_count}: "
-        f"{findings!r}")
-    # Sanity: multiple javascript: URLs counted (href + form action).
-    js_count = sum(1 for k, _ in findings if k == "javascript:")
-    assert js_count == 2, (
-        f"expected 2 javascript: hits, got {js_count}: {findings!r}")
-
-    # ── Clean fixture must produce no findings ──
-    clean = """<!DOCTYPE html>
-<html>
-<head><style>body { font-family: system-ui; }</style></head>
-<body><p>No scripts here.</p><a href="#top">go</a></body>
-</html>"""
-    assert _find_executable_script_surface(clean) == [], (
-        "clean fixture false-positived on _find_executable_script_surface")
-
-
-def test_no_executable_scripts_helper_catches_round_10_forms():
-    """Round-10 meta-pin (2026-09-14). Codex's F1 + F2 findings
-    on the round-9 raw-regex helper: entity-obfuscated schemes and
-    srcdoc-nested delayed scripts slipped past the detector while
-    `<script>` inside HTML comments false-positived. All four
-    behaviors flip after the HTMLParser rewrite.
-    """
-    # ── (a) Entity-obfuscated `javascript:` schemes must flag ──
-    entity_fixture = (
-        '<!DOCTYPE html><html><body>'
-        # Entity for 's' inside "javascript" — Chromium decodes and
-        # executes; raw-regex missed this.
-        '<a href="java&#x73;cript:fetch(1)">e</a>'
-        # Decimal entity form for 's'.
-        '<a href="java&#115;cript:fetch(2)">d</a>'
-        # ASCII TAB inside the scheme — Chromium strips control
-        # chars during URL scheme detection.
-        '<a href="java&#x09;script:fetch(3)">t</a>'
-        # LEADING whitespace is stripped by browsers before scheme
-        # detection.
-        '<a href="   javascript:fetch(4)">w</a>'
-        # Named entity for lowercase 'j' does not exist as short
-        # form; use decimal to prove decimal path.
-        '<form action="&#106;avascript:go()"></form>'
-        '</body></html>'
+    doc = (
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        + _PINNED_CSP_META +
+        '<title>x</title></head><body>' + fixture + '</body></html>'
     )
-    findings = _find_executable_script_surface(entity_fixture)
-    js_hits = [(k, s) for k, s in findings if k == "javascript:"]
-    # Five `javascript:` schemes across two different attribute
-    # contexts (a@href × 4 + form@action × 1). Every one must flag.
-    assert len(js_hits) == 5, (
-        f"expected 5 javascript: hits (entity/control-char/whitespace "
-        f"forms), got {len(js_hits)}: {findings!r}")
+    findings = _validate_cumberland_document(doc)
+    assert findings, (
+        f"Forbidden class {class_name!r} produced no findings — "
+        f"the positive policy failed to reject it. Fixture: "
+        f"{fixture!r}")
 
-    # ── (b) srcdoc-embedded executable content must flag through
-    #        the depth-cap-bounded recursion ──
-    srcdoc_fixture = (
-        '<!DOCTYPE html><html><body>'
-        # Entity-encoded srcdoc containing an inline script — the
-        # exact shape from Codex\'s F1 finding. The script would
-        # schedule a fetch on a 1200 ms timer, past the backstop\'s
-        # 200 ms window; the invariant must catch it BEFORE the
-        # browser gets a chance.
-        '<iframe srcdoc="&lt;script&gt;'
-        'setTimeout(()=&gt;fetch(&apos;https://cdn.example/late&apos;), 1200)'
-        '&lt;/script&gt;"></iframe>'
-        # And a srcdoc-nested javascript: URL.
-        '<iframe srcdoc="&lt;a href=&apos;javascript:doit()&apos;&gt;x&lt;/a&gt;"></iframe>'
-        '</body></html>'
-    )
-    findings = _find_executable_script_surface(srcdoc_fixture)
-    nested_kinds = {k for k, _s in findings if k.startswith("iframe@srcdoc>")}
-    assert "iframe@srcdoc><script>" in nested_kinds, (
-        f"srcdoc-nested <script> not surfaced through recursion. "
-        f"findings={findings!r}")
-    assert "iframe@srcdoc>javascript:" in nested_kinds, (
-        f"srcdoc-nested javascript: URL not surfaced. "
-        f"findings={findings!r}")
-
-    # ── (c) `<script>` inside HTML comment must NOT flag ──
-    comment_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<!-- <script>fetch("https://cdn.example/inert")</script> -->'
-        '<p>Document explaining script tags.</p>'
-        '</body></html>'
-    )
-    assert _find_executable_script_surface(comment_fixture) == [], (
-        "commented-out <script> false-positived — the round-9 "
-        "raw-regex bug. HTMLParser dispatches comment content to "
-        "handle_comment, not handle_starttag.")
-
-    # ── (d) Non-URL contexts with the string 'javascript:' must
-    #        NOT flag. A paragraph mentioning "javascript:" in prose
-    #        or a `data-*` attribute holding the string is not
-    #        executable.
-    prose_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<p>The string "javascript:" is used for legacy URLs.</p>'
-        '<div data-example="javascript:example()">safe</div>'
-        '</body></html>'
-    )
-    assert _find_executable_script_surface(prose_fixture) == [], (
-        "prose/data-* mention of 'javascript:' false-positived — "
-        "only URL-carrying attributes on real tags should flag.")
-
-    # ── (e) Fail-closed on beyond-cap nested srcdoc ──
-    import html as _h
-    max_depth = _ExecutableScriptScanner._MAX_SRCDOC_DEPTH
-    inner = '<script>fetch("https://cdn.example/beyond-cap")</script>'
-    payload = inner
-    for _ in range(max_depth + 1):
-        payload = f'<iframe srcdoc="{_h.escape(payload, quote=True)}"></iframe>'
-
-    fixture_deep = f'<!DOCTYPE html><html><body>{payload}</body></html>'
-    findings = _find_executable_script_surface(fixture_deep)
-    beyond_cap = [k for k, _s in findings
-                  if "UNSCANNED" in k or k.endswith("<script>")]
-    assert beyond_cap, (
-        f"beyond-cap srcdoc silently accepted — neither the deep "
-        f"<script> nor an UNSCANNED sentinel was reported. "
-        f"findings={findings!r}")
-
-
-def test_active_data_document_bypass_is_caught():
-    """Round-11 meta-pin (2026-09-14). Codex Chromium-verified an
-    active `data:` document bypass:
-
-        <iframe src="data:text/html,%3Cscript%3E
-            setTimeout(()=>fetch('https://cdn.example/data-late'),1200)
-        %3C/script%3E"></iframe>
-
-    The resource scanner returned `[]` (because
-    `_url_is_self_contained` accepts every `data:` URI). The
-    executable scanner returned `[]` (because it only recurses
-    `srcdoc`, not `data:` bodies). And the browser backstop's
-    200 ms grace window closes before the 1200 ms timer fires.
-    Round-11 closes the class at the active-document attribute
-    boundary — `iframe@src`, `frame@src`, `embed@src`,
-    `object@data` in combination with a script-capable MIME
-    (`text/html`, `image/svg+xml`, `application/xhtml+xml`,
-    `application/xml`, `text/xml`) is treated as a violation in
-    BOTH scanners.
-    """
-    # Codex\'s exact reproduction — active HTML data document in
-    # an iframe.
-    codex_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<iframe src="data:text/html,%3Cscript%3E'
-        'setTimeout(()=%3Efetch(%27https://cdn.example/data-late%27),1200)'
-        '%3C/script%3E"></iframe>'
-        '</body></html>'
-    )
-    html_v = _find_external_html_resources(codex_fixture)
-    exec_v = _find_executable_script_surface(codex_fixture)
-    # Resource scanner surfaces the active data document as an
-    # HTML resource violation.
-    assert any(tag == "iframe" and attr == "src"
-               and url.lower().startswith("data:text/html")
-               for tag, attr, url, _ in html_v), (
-        f"active data:text/html iframe not flagged by resource "
-        f"scanner. html_v={html_v!r}")
-    # Executable scanner surfaces it with the `active-data-document`
-    # kind. This is the deferred-fetch class Codex specifically
-    # measured; the no-executable-scripts invariant now blocks it
-    # before the browser has a chance to schedule the timer.
-    assert any(kind == "active-data-document" for kind, _ in exec_v), (
-        f"active data:text/html iframe not flagged by executable "
-        f"scanner. exec_v={exec_v!r}")
-
-    # All four active-document attribute contexts × three
-    # script-capable MIMEs must flag in the executable scanner.
-    active_ctx_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<iframe src="data:text/html,%3Ch1%3Ehi%3C/h1%3E"></iframe>'
-        '<frame src="data:application/xhtml+xml,%3Cp/%3E"></frame>'
-        '<embed src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">'
-        '<object data="data:text/xml,%3Cx/%3E"></object>'
-        '<object data="data:application/xml,%3Cx/%3E"></object>'
-        '</body></html>'
-    )
-    exec_v = _find_executable_script_surface(active_ctx_fixture)
-    active_hits = [kind for kind, _ in exec_v
-                   if kind == "active-data-document"]
-    assert len(active_hits) == 5, (
-        f"expected 5 active-data-document hits across "
-        f"iframe/frame/embed/object with text/html + xhtml + "
-        f"svg+xml + text/xml + application/xml; got "
-        f"{len(active_hits)}: {exec_v!r}")
-
-    # ── Negative controls: `data:` in INERT contexts must NOT flag ──
-    #
-    # Cumberland templates legitimately use `data:` URIs for inline
-    # images and CSS backgrounds. Those contexts are not
-    # browsing/plugin — the browser decodes bytes and paints,
-    # never executes. The round-11 guard must not disturb them.
-    inert_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<img src="data:image/png;base64,AAAA">'
-        '<a href="data:text/plain,hello">click</a>'
-        '<img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">'  # <img>, not <embed>
-        '</body></html>'
-    )
-    html_v = _find_external_html_resources(inert_fixture)
-    exec_v = _find_executable_script_surface(inert_fixture)
-    assert html_v == [], (
-        f"inert data: URI in `<img>`/`<a>` context false-positived "
-        f"in resource scanner: {html_v!r}")
-    assert exec_v == [], (
-        f"inert data: URI in `<img>`/`<a>` context false-positived "
-        f"in executable scanner: {exec_v!r}")
-
-    # ── Negative controls: non-script MIMEs in active contexts ──
-    #
-    # `data:text/plain,…` and `data:image/png;base64,…` inside an
-    # `<iframe>` render as text or raster — no script execution.
-    # Guard must not flag these.
-    non_script_fixture = (
-        '<!DOCTYPE html><html><body>'
-        '<iframe src="data:text/plain,hello"></iframe>'
-        '<iframe src="data:image/png;base64,AAAA"></iframe>'
-        '<iframe src="data:,body-only"></iframe>'   # empty MIME → text/plain
-        '</body></html>'
-    )
-    html_v = _find_external_html_resources(non_script_fixture)
-    exec_v = _find_executable_script_surface(non_script_fixture)
-    active_iframe = [
-        (tag, attr, url) for tag, attr, url, _ in html_v
-        if tag == "iframe" and attr == "src"
-    ]
-    assert not active_iframe, (
-        f"non-script data: MIME in iframe false-positived: "
-        f"{active_iframe!r}")
-    active_exec = [k for k, _ in exec_v if k == "active-data-document"]
-    assert not active_exec, (
-        f"non-script data: MIME in iframe false-positived in "
-        f"executable scanner: {active_exec!r}")
-
-    # ── MIME parser unit-check ──
-    assert _data_uri_active_mime("data:text/html,x") == "text/html"
-    assert _data_uri_active_mime(
-        "data:text/html;charset=utf-8,x") == "text/html"
-    assert _data_uri_active_mime(
-        "data:image/svg+xml;base64,AAAA") == "image/svg+xml"
-    assert _data_uri_active_mime("data:text/plain,x") is None
-    assert _data_uri_active_mime("data:image/png;base64,AAAA") is None
-    assert _data_uri_active_mime("data:,x") is None      # empty MIME
-    assert _data_uri_active_mime("data:text/html") is None  # no comma
-    assert _data_uri_active_mime("https://x/y.html") is None
-    assert _data_uri_active_mime("") is None
-
-
-def test_self_containment_helper_catches_known_forms():
-    """Meta-pin: exercise the helper against synthesized violations
-    so a bug in the parse or the URL predicate is visible immediately
-    (rather than manifesting as a false-negative on a real template).
-    Ensures the helper actually detects each violation class the
-    contract lists — including the four F2 re-review blind spots
-    (unquoted src, inline style url, srcset, poster) that the earlier
-    regex-only scanner silently missed.
-    """
-    fixture = """<!DOCTYPE html>
-<html>
-<head>
-<link rel="stylesheet" href="https://cdn.example.com/x.css">
-<script src="//example.org/foo.js"></script>
-<style>
-@import "https://external.example/lib.css";
-body { background: url("https://cdn.example/bg.png"); }
-</style>
-</head>
-<body>
-<!-- Quoted attribute forms — pre-F2-re-review coverage -->
-<img src="https://example.com/logo.png">
-<iframe src="/other.html"></iframe>
-<video src="./local.mp4"></video>
-
-<!-- F2 re-review additions: forms the old scanner missed -->
-<!-- unquoted src (HTML permits this) -->
-<img src=https://cdn.example/x.png>
-<!-- srcset comma-list -->
-<img srcset="https://cdn.example/x-1x.png 1x, https://cdn.example/x-2x.png 2x">
-<!-- <video poster> — resource loaded before play -->
-<video poster="https://cdn.example/poster.jpg"></video>
-<!-- inline style="…" carrying url(…) -->
-<div style="background: url(https://cdn.example/bg.png)"></div>
-<!-- inline style="…" carrying @import -->
-<span style='@import "https://cdn.example/x.css";'></span>
-<!-- <object data> -->
-<object data="https://example.com/thing.swf"></object>
-<!-- <embed src> -->
-<embed src="https://example.com/x.svg">
-
-<!-- Allowed forms — must NOT be flagged -->
-<a href="https://example.com/">nav OK</a>
-<a href="#anchor">nav OK</a>
-<img src="data:image/png;base64,abc">
-<img srcset="data:image/png;base64,abc 1x, data:image/png;base64,def 2x">
-<div style="background: url(data:image/png;base64,abc)"></div>
-</body>
-</html>"""
-    html_v = _find_external_html_resources(fixture)
-    css_v = _find_external_css_resources(fixture)
-    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
-    detected_css = {(kind, url) for kind, url, _ in css_v}
-
-    # ── Pre-F2-re-review baseline ──
-    assert ("link", "href", "https://cdn.example.com/x.css") in detected_html
-    assert ("script", "src", "//example.org/foo.js") in detected_html
-    assert ("img", "src", "https://example.com/logo.png") in detected_html
-    assert ("iframe", "src", "/other.html") in detected_html
-    assert ("video", "src", "./local.mp4") in detected_html
-    assert ("@import", "https://external.example/lib.css") in detected_css
-    assert ("url()", "https://cdn.example/bg.png") in detected_css
-
-    # ── F2 re-review blind spots — MUST be caught now ──
-    assert ("img", "src", "https://cdn.example/x.png") in detected_html, (
-        f"unquoted src not detected. html_v={html_v!r}")
-    assert ("img", "srcset", "https://cdn.example/x-1x.png") in detected_html, (
-        f"srcset first candidate not detected. html_v={html_v!r}")
-    assert ("img", "srcset", "https://cdn.example/x-2x.png") in detected_html, (
-        f"srcset second candidate not detected. html_v={html_v!r}")
-    assert ("video", "poster", "https://cdn.example/poster.jpg") in detected_html, (
-        f"video poster not detected. html_v={html_v!r}")
-    # Inline style="…" — url() and @import both scanned.
-    inline_urls = {url for kind, url, _ in css_v if "@style" in kind}
-    assert "https://cdn.example/bg.png" in inline_urls, (
-        f"inline style url() not detected. css_v={css_v!r}")
-    assert "https://cdn.example/x.css" in inline_urls, (
-        f"inline style @import not detected. css_v={css_v!r}")
-    # <object data> + <embed src>.
-    assert ("object", "data", "https://example.com/thing.swf") in detected_html
-    assert ("embed", "src", "https://example.com/x.svg") in detected_html
-
-    # ── Allowed forms MUST NOT be flagged ──
-    for tag, attr, url, _ in html_v:
-        assert not url.strip().startswith("data:"), (
-            f"data: URI incorrectly flagged: {tag} {attr}={url!r}")
-        assert not url.strip().startswith("#"), (
-            f"fragment anchor incorrectly flagged: {tag} {attr}={url!r}")
-    # <a href> is scoped-out (navigation, not resource loading).
-    assert not any(tag == "a" for tag, _, _, _ in html_v), (
-        f"<a href> should be allowed but the helper flagged it: {html_v!r}")
-
-
-def test_self_containment_helper_catches_svg_and_quoted_css_forms():
-    """F2 round-4 additions (2026-09-13). The previous meta-pin
-    covered common HTML resource attributes and inline style, but
-    left blind spots that Codex verified with direct probes:
-
-      * SVG `<image href>` / `<use href>` (fetch inline-SVG assets)
-      * SVG legacy `<image xlink:href>` (SVG 1.1)
-      * CSS `url('path with spaces.png')` where whitespace inside
-        quoted URL was breaking the naive `[^\\s]+` regex.
-      * `srcset` containing ONLY data URIs — the split-on-comma
-        parser was reporting base64 tail fragments as external URLs.
-
-    This pin exercises all four so a scanner regression on any
-    of them surfaces immediately.
-    """
-    fixture = """<!DOCTYPE html>
-<html>
-<body>
-<!-- SVG image + use — modern href AND legacy xlink:href -->
-<svg>
-  <image href="https://cdn.example/icon.png"/>
-  <use href="https://cdn.example/sprite.svg#glyph"/>
-  <image xlink:href="https://cdn.example/legacy.png"/>
-</svg>
-<!-- Fragment-only <use> is self-contained — MUST NOT flag -->
-<svg><use href="#local-glyph"/></svg>
-
-<!-- CSS url() with whitespace INSIDE a quoted URL — double-quoted
-     url() lives inside a single-quoted style="…" attribute so
-     HTML parsing doesn't see the inner `"` as attribute terminator. -->
-<div style="background: url('https://cdn.example/a b.png')"></div>
-<div style='background: url("https://cdn.example/c d.png")'></div>
-
-<!-- srcset containing ONLY data URIs — must produce NO violations -->
-<img srcset="data:image/png;base64,AAABBB 1x, data:image/png;base64,CCCDDD 2x">
-
-<!-- Mixed srcset: external URL first, then data URI — external flagged, data allowed -->
-<img srcset="https://cdn.example/external.png 1x, data:image/png;base64,XXXX 2x">
-</body>
-</html>"""
-    html_v = _find_external_html_resources(fixture)
-    css_v = _find_external_css_resources(fixture)
-    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
-    detected_css_urls = {url for kind, url, _ in css_v}
-
-    # ── SVG resource consumers flagged when external ──
-    assert ("image", "href", "https://cdn.example/icon.png") in detected_html, (
-        f"SVG <image href> external not flagged. html_v={html_v!r}")
-    assert ("use", "href", "https://cdn.example/sprite.svg#glyph") in detected_html, (
-        f"SVG <use href> external not flagged. html_v={html_v!r}")
-    assert ("image", "xlink:href", "https://cdn.example/legacy.png") in detected_html, (
-        f"SVG <image xlink:href> external not flagged. html_v={html_v!r}")
-
-    # ── Fragment-only <use href="#…"> allowed (self-contained) ──
-    for tag, attr, url, _ in html_v:
-        assert not (tag == "use" and url == "#local-glyph"), (
-            f"fragment-only <use href> incorrectly flagged: {tag} {attr}={url!r}")
-
-    # ── CSS url() with quoted whitespace-containing URLs flagged ──
-    assert "https://cdn.example/a b.png" in detected_css_urls, (
-        f"quoted-single url() with whitespace not flagged. css_v={css_v!r}")
-    assert "https://cdn.example/c d.png" in detected_css_urls, (
-        f"quoted-double url() with whitespace not flagged. css_v={css_v!r}")
-
-    # ── srcset with ONLY data URIs produces NO violations ──
-    srcset_violations = [(tag, attr, url, ln) for tag, attr, url, ln in html_v
-                         if attr == "srcset" and "data:" not in url]
-    # Compute what the data-only srcset produced: its content URIs are
-    # `data:image/png;base64,AAABBB` and `data:image/png;base64,CCCDDD`.
-    # After the parser fix, both should be data:-prefixed and allowed.
-    data_only_flags = [
-        v for v in html_v
-        if v[1] == "srcset" and v[2] in ("AAABBB", "CCCDDD",
-                                          "data:image/png;base64",
-                                          "image/png;base64,AAABBB",
-                                          "image/png;base64,CCCDDD")
-    ]
-    assert not data_only_flags, (
-        f"data-only srcset produced false-positive violations "
-        f"(regression on 2026-09-13 F1 round-4 fix): {data_only_flags!r}")
-
-    # ── Mixed srcset: external URL flagged, data URI allowed ──
-    assert ("img", "srcset",
-            "https://cdn.example/external.png") in detected_html, (
-        f"mixed srcset external URL not flagged. html_v={html_v!r}")
-    # The data URI in the mixed srcset must NOT appear as a violation.
-    mixed_data_flags = [
-        v for v in html_v
-        if v[1] == "srcset" and v[2].startswith("XXXX")
-    ]
-    assert not mixed_data_flags, (
-        f"mixed srcset data URI incorrectly flagged: {mixed_data_flags!r}")
-
-
-def test_self_containment_helper_catches_svg_script_and_escaped_css_url():
-    """F1 + F2 round-5 additions (2026-09-14). Codex intercepted real
-    Chromium fetches for two forms my scanner returned empty on:
-
-      * SVG `<script href="…">` — SVG scripts use `href`
-        (not `src`); the HTML <script src> allowlist entry did NOT
-        cover the SVG namespace form.
-      * CSS `url(a\\ b.png)` — an escaped-space in an unquoted URL
-        is a valid CSS URL character; the browser resolves it as
-        `a%20b.png`, my scanner stopped at the space.
-
-    Both are now covered. This pin locks the coverage.
-    """
-    fixture = r"""<!DOCTYPE html>
-<html>
-<body>
-<!-- SVG <script href> — modern spelling -->
-<svg><script href="https://cdn.example/svg-script.js"></script></svg>
-<!-- SVG <script xlink:href> — legacy spelling -->
-<svg><script xlink:href="https://cdn.example/legacy-svg-script.js"></script></svg>
-<!-- SVG <script href="#local"> — fragment, allowed -->
-<svg><script href="#local-anchor"></script></svg>
-
-<!-- Escaped space in unquoted url() — real browsers fetch this. -->
-<div style="background: url(https://cdn.example/a\ b.png)"></div>
-<!-- Same idea in a <style> block -->
-<style>
-.escaped-bg { background-image: url(https://cdn.example/c\ d.png); }
-</style>
-</body>
-</html>"""
-    html_v = _find_external_html_resources(fixture)
-    css_v = _find_external_css_resources(fixture)
-    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
-    detected_css_urls = {url for _, url, _ in css_v}
-
-    # SVG <script> flagged (both spellings).
-    assert ("script", "href",
-            "https://cdn.example/svg-script.js") in detected_html, (
-        f"SVG <script href> external not flagged. html_v={html_v!r}")
-    assert ("script", "xlink:href",
-            "https://cdn.example/legacy-svg-script.js") in detected_html, (
-        f"SVG <script xlink:href> external not flagged. html_v={html_v!r}")
-    # Fragment-only <script href="#local"> is allowed (self-contained).
-    for tag, attr, url, _ in html_v:
-        assert not (tag == "script" and url == "#local-anchor"), (
-            f"fragment-only <script href> incorrectly flagged: "
-            f"{tag} {attr}={url!r}")
-
-    # Escaped-space CSS url() flagged in BOTH inline style and
-    # <style> block. After _unescape_css, the URL reads `a b.png` /
-    # `c d.png` — that's what the browser would resolve to.
-    assert "https://cdn.example/a b.png" in detected_css_urls, (
-        f"escaped-space url() in inline style not flagged. "
-        f"css_v={css_v!r}")
-    assert "https://cdn.example/c d.png" in detected_css_urls, (
-        f"escaped-space url() in <style> block not flagged. "
-        f"css_v={css_v!r}")
-
-
-def test_self_containment_helper_catches_css_hex_escape_and_srcdoc():
-    """F1 + F2 round-6 additions (2026-09-14). Codex intercepted real
-    Chromium fetches for two more forms:
-
-      * CSS hex escapes — `url(\\68 ttps://cdn.example/x.png)` decodes
-        to `url(https://cdn.example/x.png)` and is fetched. The
-        whitespace after `\\68` is the CSS escape terminator, NOT the
-        URL boundary. `_UNQ` now includes `\\<1-6 hex>\\s?` as a URL
-        character class; `_unescape_css` decodes hex escapes to
-        `chr(int(hex, 16))` before the self-containment check.
-      * `<iframe srcdoc>` — the attribute value is an entire
-        HTML document embedded as entity-encoded text. Any
-        `<img src>`, `<script src>`, `<style>` block, or inline
-        `style="…"` inside srcdoc gets fetched by the browser.
-        Scanner now decodes srcdoc entities via `html.unescape` and
-        recurses at depth+1 (capped at `_MAX_SRCDOC_DEPTH=2` to
-        prevent runaway).
-    """
-    fixture = """<!DOCTYPE html>
-<html>
-<body>
-<!-- CSS hex escape: `\\68` = 'h', trailing space is escape terminator -->
-<style>
-.hex-in-style { background-image: url(\\68 ttps://cdn.example/hex-in-style.png); }
-</style>
-<div style="background-image: url(\\68 ttps://cdn.example/hex-inline.png)"></div>
-
-<!-- iframe srcdoc: embedded HTML, external resources inside must be flagged -->
-<iframe srcdoc="&lt;img src='https://cdn.example/srcdoc-img.png'&gt;"></iframe>
-<iframe srcdoc="&lt;script src='https://cdn.example/srcdoc-script.js'&gt;&lt;/script&gt;"></iframe>
-<iframe srcdoc="&lt;style&gt;@import 'https://cdn.example/srcdoc-import.css';&lt;/style&gt;"></iframe>
-<iframe srcdoc="&lt;div style='background:url(https://cdn.example/srcdoc-inline-bg.png)'&gt;&lt;/div&gt;"></iframe>
-
-<!-- iframe srcdoc containing only a data-URI image — must NOT flag -->
-<iframe srcdoc="&lt;img src='data:image/png;base64,AAA'&gt;"></iframe>
-</body>
-</html>"""
-    html_v = _find_external_html_resources(fixture)
-    css_v = _find_external_css_resources(fixture)
-    detected_css_urls = {url for _, url, _ in css_v}
-    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
-
-    # ── Hex escape in CSS url() flagged in both contexts ──
-    assert "https://cdn.example/hex-in-style.png" in detected_css_urls, (
-        f"hex-escape url() in <style> block not decoded. css_v={css_v!r}")
-    assert "https://cdn.example/hex-inline.png" in detected_css_urls, (
-        f"hex-escape url() in inline style not decoded. css_v={css_v!r}")
-
-    # ── iframe srcdoc: HTML resources inside are flagged ──
-    srcdoc_html_hits = [(tag, attr, url) for (tag, attr, url) in detected_html
-                        if "iframe@srcdoc>" in tag]
-    assert any(
-        "img" in tag and url == "https://cdn.example/srcdoc-img.png"
-        for tag, _attr, url in srcdoc_html_hits), (
-        f"<img> inside srcdoc not flagged. srcdoc_html_hits={srcdoc_html_hits!r}")
-    assert any(
-        "script" in tag and url == "https://cdn.example/srcdoc-script.js"
-        for tag, _attr, url in srcdoc_html_hits), (
-        f"<script src> inside srcdoc not flagged. "
-        f"srcdoc_html_hits={srcdoc_html_hits!r}")
-
-    # ── srcdoc <style> block @import flagged ──
-    srcdoc_css_hits = [(kind, url) for kind, url, _ in css_v
-                       if "srcdoc" in kind]
-    assert any(
-        "srcdoc><style>" in kind and "@import" in kind
-        and url == "https://cdn.example/srcdoc-import.css"
-        for kind, url in srcdoc_css_hits), (
-        f"<style> @import inside srcdoc not flagged. "
-        f"srcdoc_css_hits={srcdoc_css_hits!r}")
-
-    # ── srcdoc inline style="…" url() flagged ──
-    assert any(
-        url == "https://cdn.example/srcdoc-inline-bg.png"
-        for _kind, url in srcdoc_css_hits), (
-        f"inline style url() inside srcdoc not flagged. "
-        f"srcdoc_css_hits={srcdoc_css_hits!r}")
-
-    # ── Data-URI-only srcdoc content produces NO violations ──
-    data_only_flags = [
-        v for v in html_v
-        if "iframe@srcdoc>" in v[0] and v[2].startswith("AAA")
-    ]
-    assert not data_only_flags, (
-        f"data-URI content inside srcdoc incorrectly flagged: "
-        f"{data_only_flags!r}")
-
-
-def test_srcdoc_double_encoded_literal_does_not_false_positive():
-    """F1 round-7 negative-control. HTMLParser already decodes
-    character references in attribute values (Python `html.parser`
-    behavior, `convert_charrefs` flag notwithstanding — that flag
-    only governs DATA callback decoding, not attribute values).
-
-    A DOUBLE-encoded srcdoc — `&amp;lt;img&amp;gt;` inside a
-    srcdoc attribute — is a document that a browser would render
-    as LITERAL characters `<img>` (text, not markup). Chromium
-    intercept confirms: no fetch. Our scanner must match: no
-    violation. Pre-F1-round-7 the scanner double-decoded via
-    `html.unescape` and synthetically produced a real `<img>` tag
-    to scan, false-positiving on legitimate documents that
-    intentionally demonstrate escaped HTML inside srcdoc.
-    """
-    fixture = (
-        '<!DOCTYPE html><html><body>'
-        # Double-encoded: HTMLParser decodes ONCE to `&lt;img src=\'X\'&gt;`
-        # which browsers render as literal text. Our scanner must
-        # NOT decode a second time.
-        '<iframe srcdoc="&amp;lt;img src=\'https://cdn.example/literal.png\'&amp;gt;"></iframe>'
-        '</body></html>'
-    )
-    html_v = _find_external_html_resources(fixture)
-    literal_hits = [v for v in html_v
-                    if "literal.png" in v[2]]
-    assert not literal_hits, (
-        f"Double-encoded literal in srcdoc false-positived: "
-        f"{literal_hits!r}. HTMLParser already decoded once; the "
-        f"scanner must not decode again.")
-
-
-def test_srcdoc_beyond_depth_cap_fails_closed():
-    """F2 round-7 fail-closed invariant. Beyond `_MAX_SRCDOC_DEPTH`
-    the scanner must emit an explicit UNSCANNED violation rather
-    than silently skip. Chromium fetches resources at any nesting
-    depth, so silent skipping contradicts the self-containment
-    guarantee.
-
-    Constructs a chain of `_MAX_SRCDOC_DEPTH + 1` nested srcdocs
-    with a real external at the innermost level. The scanner
-    should surface EITHER the external (if within depth) OR the
-    UNSCANNED violation (if the innermost sits beyond the cap).
-    Either outcome proves the scanner did not silently accept.
-    """
-    max_depth = _HTMLResourceScanner._MAX_SRCDOC_DEPTH
-    # Build a chain of `max_depth + 1` nested srcdocs so the
-    # deepest one sits beyond the cap.
-    innermost = ('<script src="https://cdn.example/deep-buried.js">'
-                 '</script>')
-    # Encode one layer of `<iframe srcdoc="...">` `max_depth + 1`
-    # times. Each layer's payload becomes the srcdoc value of the
-    # next enclosing iframe (HTML-encoded).
-    import html as _h
-    payload = innermost
-    for _ in range(max_depth + 1):
-        payload = f'<iframe srcdoc="{_h.escape(payload, quote=True)}"></iframe>'
-    fixture = f"<!DOCTYPE html><html><body>{payload}</body></html>"
-    html_v = _find_external_html_resources(fixture)
-    unscanned_hits = [v for v in html_v if "UNSCANNED" in v[0]]
-    external_hits = [v for v in html_v
-                     if "deep-buried.js" in v[2]]
-    # Either the external must surface (scanner covered the full
-    # nesting) OR the UNSCANNED sentinel fired (scanner refused to
-    # accept without inspection). Silent skip is the failure mode.
-    assert unscanned_hits or external_hits, (
-        f"Beyond-cap nested srcdoc silently accepted — neither the "
-        f"external nor an UNSCANNED violation was reported. "
-        f"html_v={html_v!r}")
-
-
-def test_srcdoc_within_depth_cap_flags_external():
-    """F2 round-7 companion: WITHIN the depth cap, nested srcdocs
-    are still recursed. Three-level nesting (which Codex probed
-    specifically) must flag the innermost external resource
-    provided the cap allows that depth."""
-    max_depth = _HTMLResourceScanner._MAX_SRCDOC_DEPTH
-    if max_depth < 3:
-        import pytest as _p
-        _p.skip(
-            f"_MAX_SRCDOC_DEPTH={max_depth} < 3 — three-level test "
-            f"expects the scanner to recurse at least three levels")
-    # Three-level nesting: outer → mid → inner → external <script>.
-    inner_body = ('<svg><script href="https://cdn.example/deep-script.js">'
-                  '</script></svg>')
-    import html as _h
-    level_2 = _h.escape(inner_body, quote=True)
-    level_1 = _h.escape(f'<iframe srcdoc="{level_2}"></iframe>',
-                        quote=True)
-    top = f'<iframe srcdoc="{level_1}"></iframe>'
-    fixture = f"<!DOCTYPE html><html><body>{top}</body></html>"
-    html_v = _find_external_html_resources(fixture)
-    deep_hits = [v for v in html_v if "deep-script.js" in v[2]]
-    assert deep_hits, (
-        f"Three-level nested srcdoc external not flagged. "
-        f"html_v={html_v!r}")
-
-
-def test_self_containment_helper_catches_indirect_fetches():
-    """F1 round-8 additions (2026-09-14), extended in round-9. Codex
-    intercepted real Chromium fetches for browser-driven forms that
-    don't fit the "one attribute → one URL fetched at load" shape:
-
-      * `<base href="…">` — retargets URL resolution for other
-        same-document refs. `<img src="#logo">` looks self-
-        contained (fragment), but with an external `<base>` the
-        fragment resolves against the base URL and Chromium
-        fetches THAT.
-      * `<meta http-equiv="refresh" content="0; url=…">` —
-        triggers a navigation. Not a resource load per se, but
-        every self-contained-document guarantee is broken if
-        opening the file causes the browser to leave the file.
-      * Round-9: the meta-refresh `url=` label is OPTIONAL per
-        WHATWG. `<meta http-equiv="refresh" content="0; X">` and
-        `<meta http-equiv="refresh" content="0, X">` are both
-        accepted by Chromium and navigate to `X`. The round-8
-        regex hard-required the label and reported these clean.
-    """
-    fixture = """<!DOCTYPE html>
-<html>
-<head>
-<!-- External <base> — resolves other refs against the external URL. -->
-<base href="https://cdn.example/assets/">
-<!-- meta-refresh navigation forms, all pointing at cdn.example.
-     Round-8 covered the labeled form. Round-9 adds three more
-     shapes Chromium honors identically. -->
-<meta http-equiv="refresh" content="0; url=https://cdn.example/refresh.html">
-<meta http-equiv="refresh" content="0; https://cdn.example/no-key.html">
-<meta http-equiv="refresh" content="0, https://cdn.example/comma.html">
-<meta http-equiv="refresh" content="0; url https://cdn.example/bare-kw.html">
-<meta http-equiv="refresh" content="0.5; url=https://cdn.example/decimal.html">
-</head>
-<body>
-<!-- These fragments look local but resolve against <base>. Codex
-     verified Chromium fetches `https://cdn.example/assets/` when
-     this markup is served. -->
-<img src="#logo">
-<script src="#code"></script>
-
-<!-- Allowed forms — must NOT flag. -->
-<base href="">
-<base href="#top">
-<meta http-equiv="refresh" content="0; url=#local">
-<meta http-equiv="refresh" content="0; #local-nokw">
-<meta http-equiv="refresh" content="5">
-<meta http-equiv="refresh" content="0">
-<!-- Round-10 F3: time glued to non-refresh content. Chromium
-     refuses the directive (no navigation); the parser must too. -->
-<meta http-equiv="refresh" content="0https://cdn.example/glued.html">
-<meta http-equiv="refresh" content="0foo">
-<meta http-equiv="content-type" content="text/html">
-</body>
-</html>"""
-    html_v = _find_external_html_resources(fixture)
-    detected = {(tag, attr, url) for tag, attr, url, _ in html_v}
-
-    # ── External <base href> flagged ──
-    assert ("base", "href",
-            "https://cdn.example/assets/") in detected, (
-        f"external <base href> not flagged. html_v={html_v!r}")
-
-    # ── Every meta-refresh navigation to an external URL must be
-    #    flagged, across all four WHATWG-accepted shapes.
-    for shape, expected_url in [
-        ("labeled url=X",   "https://cdn.example/refresh.html"),
-        ("unlabeled",       "https://cdn.example/no-key.html"),
-        ("comma-separator", "https://cdn.example/comma.html"),
-        ("url-bare-kw",     "https://cdn.example/bare-kw.html"),
-        ("decimal-time",    "https://cdn.example/decimal.html"),
-    ]:
-        assert ("meta", "http-equiv=refresh",
-                expected_url) in detected, (
-            f"meta-refresh {shape} not flagged. "
-            f"expected url={expected_url!r}. html_v={html_v!r}")
-
-    # ── Allowed forms MUST NOT be flagged ──
-    for tag, attr, url, _ in html_v:
-        assert not (tag == "base" and url in ("", "#top")), (
-            f"self-contained <base href> incorrectly flagged: "
-            f"{tag} {attr}={url!r}")
-        assert not (tag == "meta" and url in (
-                "#local", "#local-nokw")), (
-            f"meta-refresh fragment target incorrectly flagged: "
-            f"{tag} {attr}={url!r}")
-        # A URL-less refresh directive ("0" / "5") must produce no
-        # meta-refresh violation at all — the parser returns None.
-        assert not (tag == "meta" and attr == "http-equiv=refresh"
-                    and url in ("", "0", "5")), (
-            f"URL-less meta-refresh incorrectly flagged: "
-            f"{tag} {attr}={url!r}")
-        # Round-10 F3: glued-time refresh directives — Chromium
-        # refuses these, so they must NOT reach the violation list.
-        assert not (
-            tag == "meta" and attr == "http-equiv=refresh"
-            and "glued.html" in url), (
-            f"glued-time meta-refresh (Chromium-refused) "
-            f"incorrectly flagged: {tag} {attr}={url!r}")
-        assert not (
-            tag == "meta" and attr == "http-equiv=refresh"
-            and url == "foo"), (
-            f"glued-time meta-refresh 'foo' (Chromium-refused) "
-            f"incorrectly flagged: {tag} {attr}={url!r}")
-    # <meta http-equiv="content-type"> must never appear (no url= in
-    # content, and http-equiv != refresh).
-    assert not any(
-        tag == "meta" and "content-type" in url.lower()
-        for tag, _attr, url in detected), (
-        f"non-refresh <meta http-equiv> incorrectly scanned: "
-        f"{html_v!r}")
-
-
-def test_meta_refresh_url_parser_handles_whatwg_forms():
-    """F1 round-9 unit-test meta-pin (2026-09-14). Covers the parser
-    directly (not through the HTML scanner) so a regression in the
-    parser is diagnosed at the parser, not diluted by the surrounding
-    HTMLParser plumbing.
-
-    The parser must accept every shape a browser accepts, and reject
-    every shape that doesn't produce a navigation.
-    """
-    # Every one of these must return the same target URL.
-    labeled_forms = [
-        "0; url=https://cdn.example/x.html",
-        "0;url=https://cdn.example/x.html",
-        "0 ; url = https://cdn.example/x.html",
-        "0; URL = https://cdn.example/x.html",
-        "0; url  https://cdn.example/x.html",   # keyword + ws, no '='
-        "0.5; url=https://cdn.example/x.html",
-        "3.14 , url=https://cdn.example/x.html",
-        '0; url="https://cdn.example/x.html"',
-        "0; url='https://cdn.example/x.html'",
-    ]
-    for content in labeled_forms:
-        got = _parse_meta_refresh_url(content)
-        assert got == "https://cdn.example/x.html", (
-            f"labeled meta-refresh content {content!r} parsed to "
-            f"{got!r}, expected the target URL")
-
-    # Unlabeled + comma-separator forms — round-9's actual finding.
-    unlabeled_forms = [
-        "0; https://cdn.example/x.html",
-        "0,https://cdn.example/x.html",
-        "0 , https://cdn.example/x.html",
-        "0.5; https://cdn.example/x.html",
-    ]
-    for content in unlabeled_forms:
-        got = _parse_meta_refresh_url(content)
-        assert got == "https://cdn.example/x.html", (
-            f"unlabeled meta-refresh content {content!r} parsed to "
-            f"{got!r}, expected the target URL")
-
-    # No-URL forms — parser must return None so the scanner does
-    # not synthesize a meta-refresh violation for an in-place
-    # refresh that never leaves the document.
-    for content in ["0", "5", "  30  ", "0.5", ""]:
-        got = _parse_meta_refresh_url(content)
-        assert got is None, (
-            f"URL-less refresh content {content!r} parsed to "
-            f"{got!r}, expected None (in-place refresh)")
-
-    # Fragment target — parser extracts it; _url_is_self_contained
-    # separately clears the fragment. Test both steps.
-    got = _parse_meta_refresh_url("0; #local")
-    assert got == "#local", got
-    got = _parse_meta_refresh_url("0; url=#local")
-    assert got == "#local", got
-
-    # Malformed but tolerated: missing time value returns None.
-    for content in ["url=https://cdn.example/x", "; https://cdn.example/x",
-                    "abc; https://cdn.example/x"]:
-        got = _parse_meta_refresh_url(content)
-        assert got is None, (
-            f"time-less content {content!r} parsed to {got!r}, "
-            f"expected None (invalid refresh directive)")
-
-    # Round-10 F3: time glued to non-refresh content — Chromium
-    # refuses the directive, so the parser must return None too.
-    # These are the exact shapes Codex\'s Chromium probes measured
-    # as no-op ("no request made") while the round-9 parser was
-    # reporting them as external navigation targets.
-    for content in ["0https://cdn.example/no-sep.html",
-                    "0foo",
-                    "3.14https://cdn.example/glued",
-                    "5nope"]:
-        got = _parse_meta_refresh_url(content)
-        assert got is None, (
-            f"glued-time content {content!r} parsed to {got!r}, "
-            f"expected None (no valid boundary after time — Chromium "
-            f"refuses these)")
-
-
-def test_css_hex_escape_decoder_handles_full_range():
-    """Meta-pin on `_unescape_css` itself. CSS spec allows 1-6 hex
-    digits per escape, with an optional whitespace terminator.
-    Exercises: single digit, six digits, terminator whitespace
-    consumed, plain char escape passthrough.
-    """
-    # `\68` = 'h' (2 hex digits, no terminator; followed by 't'
-    # which is NOT a hex digit, so escape ends after 68).
-    assert _unescape_css(r"\68ttp://x") == "http://x"
-    # `\68 ` = 'h' with terminator space consumed.
-    assert _unescape_css(r"\68 ttp://x") == "http://x"
-    # Non-hex boundary: `\002F` = '/' (4 hex digits, followed by
-    # 'z' which is not a hex digit, so escape ends).
-    assert _unescape_css(r"a\002Fz") == "a/z"
-    # Terminator-space form: `\002F b` = '/' + 'b'.
-    assert _unescape_css(r"a\002F b") == "a/b"
-    # CSS greediness up to 6 hex: `\002Fb` is FIVE hex digits
-    # (b is a hex digit), decoded as U+002FB. Not `/b`. This is
-    # correct per spec — to get `/b` you must terminate the
-    # escape, e.g. `\002F b` (with space) or `\00002Fb` (six
-    # digits + literal 'b').
-    assert _unescape_css(r"a\002Fb") == "a˻"
-    # Six-digit maximum: `\01F600` = smiling face emoji U+1F600.
-    assert _unescape_css(r"\01F600") == "\U0001F600"
-    # Plain char escape (F2 round-5 path): `\ ` = ' '.
-    assert _unescape_css(r"a\ b") == "a b"
-    # Mixed: `\68i\ j` = 'h' + 'i' + ' ' + 'j'.
-    assert _unescape_css(r"\68i\ j") == "hi j"
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):
