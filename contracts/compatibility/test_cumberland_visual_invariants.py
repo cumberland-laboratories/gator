@@ -607,41 +607,81 @@ class _PositivePolicyScanner(_html_parser.HTMLParser):
     """HTMLParser walk implementing the positive policy. Every
     start tag and start/end tag is checked against `_ALLOWED_TAGS`;
     every attribute is checked against the per-tag allowlist plus
-    `_GLOBAL_ATTRS`. Style-block DATA is checked for `@import` and
-    `url(` — both are forbidden. Findings are appended to a list
-    the caller provides.
+    `_GLOBAL_ATTRS`.
+
+    **Layer 1 boundary (round-13 F2 closure)**: HTML capabilities
+    only. CSS content inside `<style>` blocks is NOT scanned here —
+    Chromium recognizes CSS reference shapes that a source-text
+    scanner would need a full CSS tokenizer to catch (uppercase
+    `@IMPORT`, `image-set("…")`, CSS-escaped `\75rl(...)`, etc.).
+    Delegating CSS to Layer 2 (the pinned CSP declaration blocks
+    every external CSS reference under `style-src 'unsafe-inline'`
+    + `img-src 'none'` + `font-src 'none'`) and Layer 3 (the
+    browser initial-load smoke test) is the cleaner closure than
+    maintaining a CSS parser here. A dedicated browser-side test
+    in `test_cumberland_computed_style.py` exercises the CSP
+    boundary against those exact shapes so the boundary is
+    executable and documented.
+
+    Alongside policy findings, the scanner also RECORDS every
+    active `<meta http-equiv="Content-Security-Policy">` it sees
+    with its position relative to `<head>` / `<title>` / `<style>`.
+    Round-13 F1: replaces the earlier raw-substring CSP checker,
+    which was fooled by a commented-out `<!-- <meta ... > -->` —
+    HTMLParser routes comment content to `handle_comment`, not
+    `handle_starttag`, so only ACTIVE tags reach the recorder.
 
     Deliberately NOT tracked: nesting rules, DOCTYPE, entity
-    references. Those are Chromium's job; this scanner only
-    enforces the small policy the Cumberland templates need.
+    references. Those are Chromium's job.
     """
 
     def __init__(self, findings):
         super().__init__(convert_charrefs=False)
         self.findings = findings
-        self._in_style = False
+        # CSP tracking (round-13 F1).
+        self.csp_metas = []  # list of dicts, one per active CSP <meta>
+        self._in_head = False
+        self._seen_title = False
+        self._seen_style = False
 
     def handle_starttag(self, tag, attrs):
-        if tag.lower() == "style":
-            self._in_style = True
+        self._track_position(tag)
+        self._maybe_record_csp(tag, attrs)
         self._check_tag(tag, attrs)
 
     def handle_startendtag(self, tag, attrs):
+        self._track_position(tag)
+        self._maybe_record_csp(tag, attrs)
         self._check_tag(tag, attrs)
 
     def handle_endtag(self, tag):
-        if tag.lower() == "style":
-            self._in_style = False
+        if tag.lower() == "head":
+            self._in_head = False
 
-    def handle_data(self, data):
-        if not self._in_style:
+    def _track_position(self, tag):
+        t = tag.lower()
+        if t == "head":
+            self._in_head = True
+        elif t == "title":
+            self._seen_title = True
+        elif t == "style":
+            self._seen_style = True
+
+    def _maybe_record_csp(self, tag, attrs):
+        if tag.lower() != "meta":
             return
-        if "@import" in data:
-            self.findings.append((
-                "css-@import", "in <style> block", self.getpos()[0]))
-        if re.search(r"\burl\s*\(", data, re.IGNORECASE):
-            self.findings.append((
-                "css-url()", "in <style> block", self.getpos()[0]))
+        attr_map = {(n.lower() if n else ""): v
+                    for n, v in attrs if v is not None}
+        if attr_map.get("http-equiv", "").lower().strip() != \
+                "content-security-policy":
+            return
+        self.csp_metas.append({
+            "content": attr_map.get("content", ""),
+            "in_head": self._in_head,
+            "seen_title": self._seen_title,
+            "seen_style": self._seen_style,
+            "lineno": self.getpos()[0],
+        })
 
     def _check_tag(self, tag, attrs):
         tag_l = tag.lower()
@@ -710,34 +750,80 @@ def _validate_cumberland_document(text):
 
 # ── The pinned CSP ────────────────────────────────────────────────
 
-# The exact policy string the two templates carry. Deviation from
-# this string (spacing, directive order, added/removed directives)
-# fails the pin — CSP is defense in depth; a hand-edited variant
-# is not trusted.
-_PINNED_CSP_META = (
-    '<meta http-equiv="Content-Security-Policy" '
-    'content="default-src \'none\'; style-src \'unsafe-inline\'; '
-    'script-src \'none\'; img-src \'none\'; font-src \'none\'; '
-    'frame-src \'none\'; object-src \'none\'; base-uri \'none\'; '
-    'form-action \'none\'">'
+# The exact policy CONTENT the two templates carry inside their
+# `<meta http-equiv="Content-Security-Policy" content="...">` tag.
+# Deviation from this string (spacing, directive order, added or
+# removed directives) fails the pin — CSP is defense in depth; a
+# hand-edited variant is not trusted.
+_PINNED_CSP_CONTENT = (
+    "default-src 'none'; style-src 'unsafe-inline'; "
+    "script-src 'none'; img-src 'none'; font-src 'none'; "
+    "frame-src 'none'; object-src 'none'; base-uri 'none'; "
+    "form-action 'none'"
 )
 
 
-def _csp_is_present_and_early(text):
-    """The pinned CSP meta must appear verbatim, and it must sit
-    ABOVE the first `<title>` and the first `<style>` in the
-    document — so any resource declared in `<head>` prior to
-    those anchors is already governed."""
-    csp_pos = text.find(_PINNED_CSP_META)
-    if csp_pos == -1:
-        return "missing"
-    title_pos = text.find("<title")
-    style_pos = text.find("<style")
-    if title_pos != -1 and csp_pos > title_pos:
-        return "csp-after-title"
-    if style_pos != -1 and csp_pos > style_pos:
-        return "csp-after-style"
-    return "ok"
+def _find_csp_status(text):
+    """Round-13 F1 structural CSP validator. Walks `text` with the
+    positive-policy HTMLParser and returns `(verdict, detail)`:
+
+      "ok"                        — exactly one active CSP meta in
+                                    <head> before <title> and
+                                    <style>, content matches pin.
+      "missing"                   — no active CSP meta.
+      "duplicate"                 — more than one active CSP meta.
+      "csp-outside-head"          — CSP meta is not inside <head>.
+      "csp-after-title"           — CSP meta appears after <title>.
+      "csp-after-style"           — CSP meta appears after <style>.
+      "csp-content-mismatch"      — content differs from
+                                    `_PINNED_CSP_CONTENT`.
+      "parse-error"               — HTMLParser raised.
+
+    Uses HTMLParser (via the same walk as
+    `_validate_cumberland_document`) so a commented-out
+    `<!-- <meta http-equiv="Content-Security-Policy" …> -->`
+    correctly counts as MISSING — HTMLParser dispatches comment
+    content to `handle_comment`, so an inert commented-out CSP
+    never reaches `handle_starttag`.
+    """
+    findings = []
+    scanner = _PositivePolicyScanner(findings)
+    try:
+        scanner.feed(text)
+        scanner.close()
+    except Exception as exc:  # noqa: BLE001
+        return ("parse-error", repr(exc))
+    if not scanner.csp_metas:
+        return ("missing", "no active CSP <meta> tag")
+    if len(scanner.csp_metas) > 1:
+        lines = ", ".join(str(m["lineno"]) for m in scanner.csp_metas)
+        return ("duplicate", f"{len(scanner.csp_metas)} CSP metas "
+                             f"(lines {lines})")
+    meta = scanner.csp_metas[0]
+    if not meta["in_head"]:
+        return ("csp-outside-head",
+                f"CSP meta outside <head> (line {meta['lineno']})")
+    if meta["seen_title"]:
+        return ("csp-after-title",
+                f"CSP meta after <title> (line {meta['lineno']})")
+    if meta["seen_style"]:
+        return ("csp-after-style",
+                f"CSP meta after <style> (line {meta['lineno']})")
+    if meta["content"].strip() != _PINNED_CSP_CONTENT:
+        return ("csp-content-mismatch",
+                f"CSP content differs from pinned "
+                f"(line {meta['lineno']})")
+    return ("ok", f"line {meta['lineno']}")
+
+
+def _pinned_csp_meta_string():
+    """Compose the full `<meta http-equiv=...>` string authors
+    paste into templates. Kept in ONE place so the pinned content
+    and the meta-string never drift."""
+    return (
+        '<meta http-equiv="Content-Security-Policy" '
+        f'content="{_PINNED_CSP_CONTENT}">'
+    )
 
 
 @pytest.fixture(scope="module")
@@ -772,17 +858,84 @@ def test_narrative_passes_positive_policy(narrative_text):
 # ── CSP presence + placement pins ────────────────────────────────
 
 def test_master_carries_pinned_csp(master_text):
-    verdict = _csp_is_present_and_early(master_text)
+    verdict, detail = _find_csp_status(master_text)
     assert verdict == "ok", (
-        f"Master CSP check failed: {verdict}. Required string:\n"
-        f"  {_PINNED_CSP_META}")
+        f"Master CSP check failed: {verdict} — {detail}. Required "
+        f"CSP content:\n  {_PINNED_CSP_CONTENT}")
 
 
 def test_narrative_carries_pinned_csp(narrative_text):
-    verdict = _csp_is_present_and_early(narrative_text)
+    verdict, detail = _find_csp_status(narrative_text)
     assert verdict == "ok", (
-        f"Narrative CSP check failed: {verdict}. Required string:\n"
-        f"  {_PINNED_CSP_META}")
+        f"Narrative CSP check failed: {verdict} — {detail}. "
+        f"Required CSP content:\n  {_PINNED_CSP_CONTENT}")
+
+
+def test_csp_status_rejects_commented_out_meta():
+    """Round-13 F1 negative control. A commented-out CSP `<meta>`
+    is browser-inert — Chromium ignores everything inside
+    `<!-- ... -->`. The structural validator must report the
+    document as MISSING CSP, not "ok".
+
+    Codex's Chromium probe walked exactly this shape: substituting
+    the real CSP with `<!-- <meta http-equiv=... > -->` left Layer 2
+    unenforced while the earlier raw-substring `text.find(...)`
+    reported "ok". HTMLParser dispatches comment content to
+    `handle_comment`, so the round-13 walker only sees ACTIVE
+    tags. The fixture below is the exact liveness form Codex
+    recommended for the meta-pin.
+    """
+    commented_out = (
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        '<!-- ' + _pinned_csp_meta_string() + ' -->'
+        '<title>x</title></head><body>hi</body></html>'
+    )
+    verdict, detail = _find_csp_status(commented_out)
+    assert verdict == "missing", (
+        f"Commented-out CSP incorrectly reported as {verdict!r} — "
+        f"HTMLParser routes comment content away from starttag "
+        f"handlers, so the inert form must count as missing. "
+        f"detail={detail!r}")
+
+    # Duplicate CSP metas — reject.
+    two_metas = (
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        + _pinned_csp_meta_string()
+        + _pinned_csp_meta_string() +
+        '<title>x</title></head><body>hi</body></html>'
+    )
+    verdict, detail = _find_csp_status(two_metas)
+    assert verdict == "duplicate", (
+        f"Duplicate CSP metas reported as {verdict!r}, expected "
+        f"'duplicate'. detail={detail!r}")
+
+    # CSP after <title> — reject.
+    late_csp = (
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        '<title>x</title>'
+        + _pinned_csp_meta_string() +
+        '</head><body>hi</body></html>'
+    )
+    verdict, detail = _find_csp_status(late_csp)
+    assert verdict == "csp-after-title", (
+        f"CSP after <title> reported as {verdict!r}, expected "
+        f"'csp-after-title'. detail={detail!r}")
+
+    # CSP with wrong content — reject.
+    weak_csp = (
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        '<meta http-equiv="Content-Security-Policy" '
+        'content="default-src *">'
+        '<title>x</title></head><body>hi</body></html>'
+    )
+    verdict, detail = _find_csp_status(weak_csp)
+    assert verdict == "csp-content-mismatch", (
+        f"Weakened CSP content reported as {verdict!r}, expected "
+        f"'csp-content-mismatch'. detail={detail!r}")
 
 
 # ── Positive control + forbidden-class rejection matrix ──────────
@@ -792,7 +945,7 @@ _MINIMAL_ALLOWED_DOCUMENT = (
     '<html lang="en">\n'
     '<head>\n'
     '<meta charset="utf-8">\n'
-    + _PINNED_CSP_META + '\n'
+    + _pinned_csp_meta_string() + '\n'
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     '<title>ok</title>\n'
     '<style>\n'
@@ -820,13 +973,20 @@ def test_positive_policy_accepts_minimal_allowed_document():
                     for kind, detail, ln in findings))
 
 
-# One entry per forbidden capability class. The validator must
-# produce at least one finding for every fixture. The specific
-# `kind` a finding uses is intentionally NOT asserted — the class
-# survives the round-1..11 whack-a-mole precisely because the
-# validator's job is REJECTION, not classification. If a future
-# change routes `<iframe>` through a different finding label, the
-# test still passes as long as the tag is rejected.
+# One entry per forbidden HTML capability class. Layer 1 policy
+# scope (round-13 F2 closure): HTML tags and attributes only. CSS
+# CONTENT inside `<style>` blocks is NOT this layer's concern —
+# see `test_cumberland_computed_style.py::test_csp_blocks_forbidden_css_shapes`
+# for Layer 2 (CSP) + Layer 3 (browser observation) coverage of
+# the CSS shapes a source-text scanner cannot reliably match
+# (uppercase `@IMPORT`, `image-set("…")`, CSS-escaped
+# `\75rl(...)`, etc.).
+#
+# The validator must produce at least one finding for every
+# fixture. The specific `kind` a finding uses is intentionally NOT
+# asserted — the class survives the round-1..11 whack-a-mole
+# precisely because the validator's job is REJECTION, not
+# classification.
 _FORBIDDEN_FIXTURES = [
     ("script-tag",
      "<script>fetch('https://cdn.example/x')</script>"),
@@ -868,12 +1028,6 @@ _FORBIDDEN_FIXTURES = [
      '<a href="data:text/plain,x">x</a>'),
     ("protocol-relative-a-href",
      '<a href="//cdn.example/x">x</a>'),
-    ("css-@import",
-     "<style>@import \"https://cdn.example/x.css\";</style>"),
-    ("css-url",
-     "<style>body { background: url('https://cdn.example/bg.png'); }</style>"),
-    ("css-url-data",
-     "<style>body { background: url(data:image/svg+xml,%3Csvg/%3E); }</style>"),
     ("img-tag",
      "<img src=\"x.png\">"),
     ("svg-with-script",
@@ -907,7 +1061,7 @@ def test_positive_policy_rejects_forbidden_class(class_name, fixture):
     doc = (
         '<!DOCTYPE html><html lang="en"><head>'
         '<meta charset="utf-8">'
-        + _PINNED_CSP_META +
+        + _pinned_csp_meta_string() +
         '<title>x</title></head><body>' + fixture + '</body></html>'
     )
     findings = _validate_cumberland_document(doc)

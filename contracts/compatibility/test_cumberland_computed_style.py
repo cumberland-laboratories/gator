@@ -352,6 +352,96 @@ def test_template_makes_no_external_requests_at_load(page, name, path):
         + "\n".join(f"  {u}" for u in external_urls))
 
 
+# ── Layer 2 (CSP) boundary for CSS-content egress ────────────────
+#
+# Codex round-13 F2 closure: the round-12 positive-policy validator
+# does not scan CSS content inside `<style>` blocks — Chromium
+# recognizes external CSS references (uppercase `@IMPORT`,
+# `image-set("...")`, CSS-escaped `\75rl(...)`) that a source-text
+# scanner would need a full CSS tokenizer to match. Rather than
+# maintain a CSS parser, the round-12 closure moves CSS-egress
+# enforcement to Layer 2 (the pinned CSP declaration) and Layer 3
+# (this browser observation). The fixtures below execute that
+# boundary against the exact shapes Codex reproduced in Chromium.
+
+_FORBIDDEN_CSS_SHAPES = [
+    ("lowercase-import",
+     '@import "https://cdn.example/lower.css";'),
+    ("uppercase-IMPORT",
+     '@IMPORT "https://cdn.example/upper.css";'),
+    ("lowercase-url",
+     "body { background-image: url('https://cdn.example/bg-lower.png'); }"),
+    ("image-set-string",
+     'body { background-image: image-set("https://cdn.example/bg-imgset.png" 1x); }'),
+    ("escaped-url",
+     'body { background-image: \\75rl(https://cdn.example/escaped.png); }'),
+]
+
+
+_PINNED_CSP_FOR_FIXTURES = (
+    "default-src 'none'; style-src 'unsafe-inline'; "
+    "script-src 'none'; img-src 'none'; font-src 'none'; "
+    "frame-src 'none'; object-src 'none'; base-uri 'none'; "
+    "form-action 'none'"
+)
+
+
+@pytest.mark.parametrize("name, css", _FORBIDDEN_CSS_SHAPES,
+                         ids=[n for n, _ in _FORBIDDEN_CSS_SHAPES])
+def test_csp_blocks_forbidden_css_shapes(page, tmp_path, name, css):
+    """Load a synthesized fixture carrying the pinned CSP plus
+    one forbidden CSS shape; assert Chromium completes zero
+    external requests. Because CSP blocks at scheme resolution
+    (before `page.route` sees the request), an empty
+    `external_completed` list is the positive signal that Layer
+    2 enforced the boundary against the shape Codex reproduced.
+
+    Layer 1 (`_validate_cumberland_document`) intentionally does
+    NOT flag these — CSS content is out of its scope after the
+    round-13 closure. Layer 2 (this pin) documents that the
+    pinned CSP catches them at the browser's evaluation of the
+    `<style>` block; the shipped templates use no CSS
+    references at all, so the pin defends against future edits
+    that add CSS with an external reference.
+    """
+    fixture = tmp_path / f"csp-{name}.html"
+    fixture.write_text(
+        '<!DOCTYPE html><html lang="en"><head>'
+        '<meta charset="utf-8">'
+        f'<meta http-equiv="Content-Security-Policy" '
+        f'content="{_PINNED_CSP_FOR_FIXTURES}">'
+        '<title>x</title>'
+        f'<style>\n{css}\n</style>'
+        '</head><body>x</body></html>',
+        encoding="utf-8")
+    fixture_url = _file_url(fixture)
+    external_completed = []
+
+    def handle_route(route):
+        url = route.request.url
+        if url == fixture_url:
+            route.continue_()
+        else:
+            external_completed.append(url)
+            route.abort()
+
+    page.route("**/*", handle_route)
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.goto(fixture_url, wait_until="networkidle")
+    # Longer window than the primary backstop pin — CSS parsing
+    # and CSP evaluation happen after HTML parse, and image-set /
+    # background-image resolution can lag.
+    page.wait_for_timeout(500)
+
+    assert external_completed == [], (
+        f"Forbidden CSS shape {name!r} caused an external request "
+        f"to complete under the pinned CSP — the Layer 2 boundary "
+        f"is not holding.\n"
+        f"  CSS: {css!r}\n"
+        f"  External URLs observed:\n"
+        + "\n".join(f"    {u}" for u in external_completed))
+
+
 def test_computed_paragraph_text_align_is_justify(page, master_url):
     """Body prose renders justified — the reference-file typographic
     decision. Verify at RENDER time, not just in CSS source (a cascade
