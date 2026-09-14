@@ -32,3 +32,34 @@ def parse_frontmatter(md_text: str) -> tuple[dict, str]:
     if body_start is None:
         return fm, ""
     return fm, "\n".join(lines[body_start:])
+
+
+# ── Pinned Cumberland Content-Security-Policy ────────────────────
+#
+# Shared between `test_cumberland_visual_invariants.py` (validates
+# the shipped templates carry it) and `test_cumberland_computed_style.py`
+# (builds fixtures that exercise the Layer 2 boundary against
+# forbidden CSS shapes). Kept HERE — a single source of truth — so
+# the two modules can never drift; a hand-edited fixture in one
+# module would exercise a policy no template carries, giving a
+# green boundary test against a phantom guarantee (Codex round-13
+# LOW).
+#
+# Round-14 F2 addition (2026-09-14).
+
+PINNED_CSP_CONTENT = (
+    "default-src 'none'; style-src 'unsafe-inline'; "
+    "script-src 'none'; img-src 'none'; font-src 'none'; "
+    "frame-src 'none'; object-src 'none'; base-uri 'none'; "
+    "form-action 'none'"
+)
+
+
+def pinned_csp_meta_string() -> str:
+    """Compose the full `<meta http-equiv=...>` string authors paste
+    into templates. Kept in ONE place so the pinned content and the
+    meta-string never drift."""
+    return (
+        '<meta http-equiv="Content-Security-Policy" '
+        f'content="{PINNED_CSP_CONTENT}">'
+    )

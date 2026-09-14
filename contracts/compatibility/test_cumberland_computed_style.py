@@ -378,38 +378,55 @@ _FORBIDDEN_CSS_SHAPES = [
 ]
 
 
-_PINNED_CSP_FOR_FIXTURES = (
-    "default-src 'none'; style-src 'unsafe-inline'; "
-    "script-src 'none'; img-src 'none'; font-src 'none'; "
-    "frame-src 'none'; object-src 'none'; base-uri 'none'; "
-    "form-action 'none'"
-)
+# Shared with `test_cumberland_visual_invariants.py` via `_helpers`
+# (round-14 F2): a second hand-copy of the CSP content would let
+# this fixture exercise a policy the templates no longer carry.
+from ._helpers import PINNED_CSP_CONTENT as _PINNED_CSP_CONTENT
+
+
+# Expected CSP violation directive per fixture. Chromium normalizes
+# `securitypolicyviolation.effectiveDirective` for the resource
+# class that was blocked: `@import` violates `style-src`; image /
+# background-image violates `img-src`.
+_EXPECTED_VIOLATION_DIRECTIVE = {
+    "lowercase-import": "style-src-elem",
+    "uppercase-IMPORT": "style-src-elem",
+    "lowercase-url":    "img-src",
+    "image-set-string": "img-src",
+    "escaped-url":      "img-src",
+}
 
 
 @pytest.mark.parametrize("name, css", _FORBIDDEN_CSS_SHAPES,
                          ids=[n for n, _ in _FORBIDDEN_CSS_SHAPES])
 def test_csp_blocks_forbidden_css_shapes(page, tmp_path, name, css):
     """Load a synthesized fixture carrying the pinned CSP plus
-    one forbidden CSS shape; assert Chromium completes zero
-    external requests. Because CSP blocks at scheme resolution
-    (before `page.route` sees the request), an empty
-    `external_completed` list is the positive signal that Layer
-    2 enforced the boundary against the shape Codex reproduced.
+    one forbidden CSS shape and assert Chromium (a) fires a
+    `securitypolicyviolation` event citing the expected
+    directive and blocked URI, and (b) completes zero external
+    requests via the routed fetch path.
+
+    Round-14 F2 tightens the round-13 form: the earlier version
+    checked only (b), which cannot distinguish "CSP blocked a
+    live request" from "the CSS fixture was inert and never
+    initiated one." Registering a `securitypolicyviolation`
+    listener via `add_init_script` (installed before navigation)
+    preserves the liveness signal — if the fixture were to become
+    inert in a future Chromium (e.g. `image-set` string form
+    dropped), the assertion fails immediately, telling us to
+    refresh the fixture rather than silently passing.
 
     Layer 1 (`_validate_cumberland_document`) intentionally does
-    NOT flag these — CSS content is out of its scope after the
-    round-13 closure. Layer 2 (this pin) documents that the
-    pinned CSP catches them at the browser's evaluation of the
-    `<style>` block; the shipped templates use no CSS
-    references at all, so the pin defends against future edits
-    that add CSS with an external reference.
+    NOT flag these — CSS content is out of Layer 1 scope after
+    round-13 F2. This pin executes the Layer 2 boundary against
+    the exact shapes Codex reproduced against real Chromium.
     """
     fixture = tmp_path / f"csp-{name}.html"
     fixture.write_text(
         '<!DOCTYPE html><html lang="en"><head>'
         '<meta charset="utf-8">'
         f'<meta http-equiv="Content-Security-Policy" '
-        f'content="{_PINNED_CSP_FOR_FIXTURES}">'
+        f'content="{_PINNED_CSP_CONTENT}">'
         '<title>x</title>'
         f'<style>\n{css}\n</style>'
         '</head><body>x</body></html>',
@@ -426,13 +443,51 @@ def test_csp_blocks_forbidden_css_shapes(page, tmp_path, name, css):
             route.abort()
 
     page.route("**/*", handle_route)
+    # SPV listener MUST be installed before navigation so it
+    # captures the violations that fire during the fixture's
+    # initial parse. `add_init_script` re-runs on every navigation.
+    page.add_init_script("""
+        window.__csp_violations = [];
+        document.addEventListener('securitypolicyviolation', e => {
+            window.__csp_violations.push({
+                effective: e.effectiveDirective,
+                violated:  e.violatedDirective,
+                blocked:   e.blockedURI,
+                source:    e.sourceFile || '',
+            });
+        });
+    """)
     page.set_viewport_size({"width": 1440, "height": 900})
     page.goto(fixture_url, wait_until="networkidle")
-    # Longer window than the primary backstop pin — CSS parsing
-    # and CSP evaluation happen after HTML parse, and image-set /
-    # background-image resolution can lag.
+    # Longer window than the primary backstop pin — CSS parsing,
+    # CSP evaluation, and image-set / background-image resolution
+    # happen after HTML parse.
     page.wait_for_timeout(500)
+    violations = page.evaluate("() => window.__csp_violations || []")
 
+    # (a) SPV fired citing the expected directive + a blocked URI
+    #     under cdn.example.
+    expected_dir = _EXPECTED_VIOLATION_DIRECTIVE[name]
+    matches = [
+        v for v in violations
+        if (v.get("effective") == expected_dir
+            or v.get("violated", "").startswith(expected_dir))
+        and "cdn.example" in v.get("blocked", "")
+    ]
+    assert matches, (
+        f"Forbidden CSS shape {name!r} did not produce the "
+        f"expected securitypolicyviolation event. Layer 2 might "
+        f"be inert, or the fixture no longer trips Chromium's "
+        f"CSP evaluation. Expected effective/violated directive "
+        f"starting with {expected_dir!r} and blocked URI "
+        f"containing 'cdn.example'.\n"
+        f"  CSS: {css!r}\n"
+        f"  Violations captured: {violations!r}")
+
+    # (b) No external request completed via the routed fetch
+    #     path (defense in depth in case Chromium ever changes
+    #     how CSP-blocked resources interact with request
+    #     interception).
     assert external_completed == [], (
         f"Forbidden CSS shape {name!r} caused an external request "
         f"to complete under the pinned CSP — the Layer 2 boundary "

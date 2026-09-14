@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — round-13 closure follow-up: structural CSP validation + narrow Layer 1 to HTML-only + CSP-blocks-CSS browser boundary",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "csp-structural",
+    "layer-scoping",
+    "css-egress-boundary",
+    "sketch-2-post-arc"
+  ],
+  "commit": "21b7f81c389017a8f40b9df8140ed2988a05725f",
+  "short_commit": "21b7f81",
+  "snippet_id": "snippet-21b7f81c38901",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 5,
+  "previous_commit_in_session": "ea6b61045c5aba6031d5a0b8d92782bf08f8efa6",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T15:02:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-ea6b61045c5ab.json",
+    "contracts/compatibility/test_cumberland_computed_style.py",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-13 follow-up on the round-12 closure. Codex confirmed the",
+    "architectural pivot is sound and named two MEDIUM findings — both",
+    "inside allowed constructs (satisfying the stop rule), neither",
+    "requesting resumption of malformed-HTML enumeration.",
+    "Round-12's `_csp_is_present_and_early` used `text.find(...)` on",
+    "the pinned meta string. Codex's Chromium probe: substitute the",
+    "real CSP with `<!-- <meta http-equiv=... > -->`. The browser",
+    "has no CSP; `_validate_cumberland_document` returns `[]` (comments"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

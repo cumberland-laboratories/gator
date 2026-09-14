@@ -409,12 +409,24 @@ def test_master_body_uses_table_wrap(master_text: str):
 #   3. Add a Content-Security-Policy `<meta>` tag as browser-enforced
 #      defense in depth.
 #
-# THE GUARANTEE (verbatim from the round-12 whiteboard):
+# THE GUARANTEE (round-13 F1 refined):
 #
 #     The two checked-in Cumberland templates contain only approved
-#     passive markup, use no external resource references, and
-#     produce no non-template network requests during Chromium's
-#     initial load.
+#     passive HTML, carry the pinned CSP that denies external
+#     resource loading, and produce no non-template network
+#     requests during Chromium's initial load.
+#
+# The round-12 whiteboard's draft used "use no external resource
+# references"; Codex round-13 flagged that as inconsistent with
+# the enforcement split: Layer 1 (this module) is HTML-only after
+# round-13 F2 and does NOT scan CSS content, so a template with a
+# `background-image: image-set("https://…")` inside `<style>`
+# would pass Layer 1 while carrying an external reference. The
+# CSP denies that reference at the browser (Layer 2) and the
+# initial-load smoke test observes no request (Layer 3), so all
+# three layers stay green — but the source-text sentence would
+# be false. The refined sentence above matches what the layers
+# actually enforce.
 #
 # WHAT THIS GUARANTEE DOES NOT CLAIM:
 #   * Arbitrary user-edited HTML remains self-contained. The
@@ -755,12 +767,13 @@ def _validate_cumberland_document(text):
 # Deviation from this string (spacing, directive order, added or
 # removed directives) fails the pin — CSP is defense in depth; a
 # hand-edited variant is not trusted.
-_PINNED_CSP_CONTENT = (
-    "default-src 'none'; style-src 'unsafe-inline'; "
-    "script-src 'none'; img-src 'none'; font-src 'none'; "
-    "frame-src 'none'; object-src 'none'; base-uri 'none'; "
-    "form-action 'none'"
-)
+#
+# Shared with `test_cumberland_computed_style.py` via `_helpers` so
+# the browser-side CSS-egress fixtures exercise the SAME policy the
+# templates carry (round-14 F2). Two hand-copies would let the
+# fixture drift into a phantom policy while the templates and this
+# module updated to a new one.
+from ._helpers import PINNED_CSP_CONTENT as _PINNED_CSP_CONTENT
 
 
 def _find_csp_status(text):
