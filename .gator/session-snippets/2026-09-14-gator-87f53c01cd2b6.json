@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-9 follow-up: WHATWG meta-refresh parser + tightened backstop + no-executable-scripts invariant",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "meta-refresh-whatwg",
+    "backstop-tightening",
+    "no-executable-scripts",
+    "sketch-2-post-arc"
+  ],
+  "commit": "87f53c01cd2b69165f423714e8f40d6695fdda82",
+  "short_commit": "87f53c0",
+  "snippet_id": "snippet-87f53c01cd2b6",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T10:23:08Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-3d58322dce8ee.json",
+    "contracts/compatibility/test_cumberland_computed_style.py",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-9 (Chromium-intercept-backed) — 2 MEDIUM + 1 LOW, all",
+    "addressed. Findings sat in `whiteboard.md` naming three gaps",
+    "inside the round-8 work itself; this commit closes them.",
+    "Round-8's inline regex was",
+    "`r'url\\s*=\\s*[\\'\"]?([^\\'\"\\s;]+)[\\'\"]?'` — hard-required the",
+    "`url=` label. Chromium honors the unlabeled form",
+    "`<meta http-equiv=\"refresh\" content=\"0; https://cdn.example/x\">`",
+    "and the comma-separator form"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

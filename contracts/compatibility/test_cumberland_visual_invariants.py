@@ -689,6 +689,15 @@ def _parse_meta_refresh_url(content: str):
             i += 1
     if i == time_start:
         return None
+    # Round-10 F3: require a valid boundary immediately after the
+    # time token. Whitespace, a separator (`;` or `,`), or
+    # end-of-string are the only shapes Chromium honors. When the
+    # time token is glued to non-refresh content — `0https://…` or
+    # `0foo` — Chromium refuses the directive, so the parser must
+    # too. Otherwise the textual guard would report an external
+    # navigation on markup that the browser will not follow.
+    if i < L and s[i] not in _META_REFRESH_WS and s[i] not in ";,":
+        return None
     while i < L and s[i] in _META_REFRESH_WS:
         i += 1
     if i >= L:
@@ -1029,38 +1038,177 @@ def test_narrative_is_fully_self_contained(narrative_text: str):
 #   * Inline event handlers `on*=` on any element.
 #   * `javascript:` URLs (in `href`, `src`, form actions, etc.).
 
-_ON_HANDLER_RE = re.compile(
-    r"""(?ix)                # case-insensitive, verbose
-    \bon[a-z]+               # onload, onclick, onerror, etc.
-    \s*=                     # attribute-assignment
+# Attributes that carry a URL a browser will navigate to or execute.
+# `javascript:` in any of these fires code in Chromium. HTMLParser
+# gives us the DECODED attribute value (character references already
+# resolved), so `<a href="java&#x73;cript:...">` reaches us as
+# `javascript:...` and matches without any extra decode. Round-10 F1
+# closes the round-9 blind spot where the raw-regex helper searched
+# the source text and missed entity-encoded scheme letters.
+_JS_URL_ATTRS = {
+    ("a", "href"),
+    ("area", "href"),
+    ("base", "href"),
+    ("link", "href"),
+    ("form", "action"),
+    ("button", "formaction"),
+    ("input", "formaction"),
+    ("iframe", "src"),
+    ("frame", "src"),
+    ("embed", "src"),
+    ("object", "data"),
+    ("img", "src"),
+    ("script", "src"),
+    # `srcdoc` itself doesn't have a scheme, but a `javascript:` URL
+    # embedded in nested attributes shows up via the srcdoc recursion
+    # below; no separate case needed here.
+}
+
+# Characters Chromium strips from a URL before scheme detection.
+# Per the URL Living Standard "URL scheme start state", ASCII TAB,
+# LF, CR (and, in practice, form-feed + NUL) inside the scheme are
+# removed. `java&#x09;script:` is fetched as `javascript:` — a
+# raw-substring check for `javascript:` misses this shape.
+_URL_STRIP_CTRL_RE = re.compile(r"[\t\n\r\f\x00]")
+
+
+def _url_scheme_is_javascript(value: str) -> bool:
+    """True if `value`, after browser-style whitespace/control-char
+    stripping, has the `javascript:` scheme. HTMLParser has already
+    resolved character references in attribute values by the time
+    this runs — no additional entity decode needed."""
+    if not value:
+        return False
+    stripped = _URL_STRIP_CTRL_RE.sub("", value).lstrip().lower()
+    return stripped.startswith("javascript:")
+
+
+class _ExecutableScriptScanner(_html_parser.HTMLParser):
+    """HTMLParser-based walk that surfaces every executable-script
+    seat a template exposes. Mirrors the shape of
+    `_HTMLResourceScanner` so the two behave alike: parses real tags
+    (so `<script>` inside an HTML comment is ignored — round-10 F2),
+    reads decoded attribute values (so entity-obfuscated
+    `javascript:` schemes are still caught — round-10 F1), and
+    RECURSES through `<iframe srcdoc>` at `depth+1` so a delayed
+    fetch scheduled inside a srcdoc-embedded script is not invisible
+    to the invariant.
+
+    Depth cap `_MAX_SRCDOC_DEPTH` matches the resource scanner (5) —
+    beyond the cap the scanner FAILS CLOSED with an
+    `iframe@srcdoc>UNSCANNED-AT-DEPTH-N` finding rather than
+    silently accepting the unscanned surface.
     """
-)
-_JAVASCRIPT_URL_RE = re.compile(r"""(?i)\bjavascript\s*:""")
-_SCRIPT_OPEN_RE = re.compile(r"""(?i)<\s*script\b""")
+
+    _MAX_SRCDOC_DEPTH = 5
+
+    def __init__(self, depth: int = 0):
+        super().__init__(convert_charrefs=False)
+        self.findings = []
+        self.depth = depth
+
+    def handle_starttag(self, tag, attrs):
+        self._scan(tag, attrs)
+
+    def handle_startendtag(self, tag, attrs):
+        self._scan(tag, attrs)
+
+    def _scan(self, tag, attrs):
+        tag_l = tag.lower()
+        lineno = self.getpos()[0]
+
+        # `<script>` — executable by tag identity. HTMLParser only
+        # visits real tags; a `<script>` sitting inside `<!-- -->`
+        # is delivered to `handle_comment`, not here (F2 round-10
+        # false-positive fix).
+        if tag_l == "script":
+            self.findings.append(("<script>", f"<{tag_l}>", lineno))
+
+        # Recurse into <iframe srcdoc> BEFORE processing attributes,
+        # matching the resource scanner's order. HTMLParser has
+        # single-decoded the srcdoc value; feed it verbatim to a
+        # fresh scanner at depth+1.
+        if tag_l == "iframe":
+            for name, value in attrs:
+                if name and name.lower() == "srcdoc" and value:
+                    self._recurse_srcdoc(value, lineno)
+
+        for name, value in attrs:
+            if name is None:
+                continue
+            name_l = name.lower()
+
+            # on* event handlers — HTMLParser gives us the attribute
+            # name intact; any `on<x>=` variant flags. Case-insensitive
+            # per HTML attribute name rules.
+            if name_l.startswith("on") and len(name_l) > 2:
+                self.findings.append(
+                    ("event-handler",
+                     f"{tag_l}@{name_l}=...", lineno))
+                continue
+
+            # `javascript:` URLs — check the DECODED value, in the
+            # attribute contexts a browser actually resolves as a
+            # URL. HTMLParser has already resolved character
+            # references; control-char stripping handled by
+            # `_url_scheme_is_javascript`.
+            if value is None:
+                continue
+            if (tag_l, name_l) in _JS_URL_ATTRS and \
+                    _url_scheme_is_javascript(value):
+                sample = value[:40]
+                self.findings.append(
+                    ("javascript:",
+                     f"{tag_l}@{name_l}={sample!r}", lineno))
+
+    def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
+        if self.depth + 1 > self._MAX_SRCDOC_DEPTH:
+            self.findings.append(
+                ("iframe@srcdoc>UNSCANNED-AT-DEPTH-N",
+                 f"beyond depth cap ({self._MAX_SRCDOC_DEPTH})",
+                 parent_lineno))
+            return
+        nested = _ExecutableScriptScanner(depth=self.depth + 1)
+        try:
+            nested.feed(srcdoc_value)
+            nested.close()
+        except Exception:  # noqa: BLE001
+            pass
+        for kind, sample, _line in nested.findings:
+            self.findings.append(
+                (f"iframe@srcdoc>{kind}", sample, parent_lineno))
 
 
 def _find_executable_script_surface(html_text: str):
-    """Return a list of `(kind, sample)` tuples describing every
-    executable-script surface found in `html_text`. Empty list ⇒
-    the document has no way to schedule a deferred network fetch
-    from within its own content.
+    """Return `[(kind, sample), …]` for every executable-script
+    surface reachable in `html_text`. Empty list ⇒ the document has
+    no way to schedule a fetch, run inline JS on load, or navigate
+    to a `javascript:` URL — so a browser observation of "no
+    external requests" is jointly definitive with this pin.
 
-    Uses simple pattern matching — an HTMLParser walk was
-    considered, but the surface is small and grep-like patterns
-    are already load-bearing in the neighbouring self-containment
-    scanner. False-positives on the templates are impossible in
-    practice: the templates are hand-authored HTML with no need
-    for any of these surfaces.
+    Rebuilt round-10 (2026-09-14) from raw-regex to an HTMLParser
+    walk. The regex form (a) false-positived on `<script>` inside
+    HTML comments (F2 round-10), (b) missed
+    entity-encoded scheme letters like `java&#x73;cript:` (F1
+    round-10), (c) missed ASCII-control-char scheme interleavings
+    like `java\\x09script:`, and (d) never descended into
+    `<iframe srcdoc>` where a nested inline script with a delayed
+    timer would slip past both this pin AND the browser backstop's
+    grace window.
+
+    Also treats an UNSCANNED-AT-DEPTH finding from srcdoc
+    recursion as a real finding — matching the resource scanner's
+    fail-closed discipline; a template author who nests srcdoc
+    beyond the cap needs to flatten the document, not silently
+    trust the invariant.
     """
-    findings = []
-    for m in _SCRIPT_OPEN_RE.finditer(html_text):
-        findings.append(("<script>", html_text[m.start():m.start() + 40]))
-    for m in _ON_HANDLER_RE.finditer(html_text):
-        findings.append(("event-handler",
-                         html_text[m.start():m.start() + 40]))
-    for m in _JAVASCRIPT_URL_RE.finditer(html_text):
-        findings.append(("javascript:", html_text[m.start():m.start() + 40]))
-    return findings
+    scanner = _ExecutableScriptScanner()
+    try:
+        scanner.feed(html_text)
+        scanner.close()
+    except Exception:  # noqa: BLE001
+        pass
+    return [(kind, sample) for kind, sample, _lineno in scanner.findings]
 
 
 def test_no_executable_scripts_in_master(master_text: str):
@@ -1138,6 +1286,108 @@ def test_no_executable_scripts_helper_catches_known_forms():
 </html>"""
     assert _find_executable_script_surface(clean) == [], (
         "clean fixture false-positived on _find_executable_script_surface")
+
+
+def test_no_executable_scripts_helper_catches_round_10_forms():
+    """Round-10 meta-pin (2026-09-14). Codex's F1 + F2 findings
+    on the round-9 raw-regex helper: entity-obfuscated schemes and
+    srcdoc-nested delayed scripts slipped past the detector while
+    `<script>` inside HTML comments false-positived. All four
+    behaviors flip after the HTMLParser rewrite.
+    """
+    # ── (a) Entity-obfuscated `javascript:` schemes must flag ──
+    entity_fixture = (
+        '<!DOCTYPE html><html><body>'
+        # Entity for 's' inside "javascript" — Chromium decodes and
+        # executes; raw-regex missed this.
+        '<a href="java&#x73;cript:fetch(1)">e</a>'
+        # Decimal entity form for 's'.
+        '<a href="java&#115;cript:fetch(2)">d</a>'
+        # ASCII TAB inside the scheme — Chromium strips control
+        # chars during URL scheme detection.
+        '<a href="java&#x09;script:fetch(3)">t</a>'
+        # LEADING whitespace is stripped by browsers before scheme
+        # detection.
+        '<a href="   javascript:fetch(4)">w</a>'
+        # Named entity for lowercase 'j' does not exist as short
+        # form; use decimal to prove decimal path.
+        '<form action="&#106;avascript:go()"></form>'
+        '</body></html>'
+    )
+    findings = _find_executable_script_surface(entity_fixture)
+    js_hits = [(k, s) for k, s in findings if k == "javascript:"]
+    # Five `javascript:` schemes across two different attribute
+    # contexts (a@href × 4 + form@action × 1). Every one must flag.
+    assert len(js_hits) == 5, (
+        f"expected 5 javascript: hits (entity/control-char/whitespace "
+        f"forms), got {len(js_hits)}: {findings!r}")
+
+    # ── (b) srcdoc-embedded executable content must flag through
+    #        the depth-cap-bounded recursion ──
+    srcdoc_fixture = (
+        '<!DOCTYPE html><html><body>'
+        # Entity-encoded srcdoc containing an inline script — the
+        # exact shape from Codex\'s F1 finding. The script would
+        # schedule a fetch on a 1200 ms timer, past the backstop\'s
+        # 200 ms window; the invariant must catch it BEFORE the
+        # browser gets a chance.
+        '<iframe srcdoc="&lt;script&gt;'
+        'setTimeout(()=&gt;fetch(&apos;https://cdn.example/late&apos;), 1200)'
+        '&lt;/script&gt;"></iframe>'
+        # And a srcdoc-nested javascript: URL.
+        '<iframe srcdoc="&lt;a href=&apos;javascript:doit()&apos;&gt;x&lt;/a&gt;"></iframe>'
+        '</body></html>'
+    )
+    findings = _find_executable_script_surface(srcdoc_fixture)
+    nested_kinds = {k for k, _s in findings if k.startswith("iframe@srcdoc>")}
+    assert "iframe@srcdoc><script>" in nested_kinds, (
+        f"srcdoc-nested <script> not surfaced through recursion. "
+        f"findings={findings!r}")
+    assert "iframe@srcdoc>javascript:" in nested_kinds, (
+        f"srcdoc-nested javascript: URL not surfaced. "
+        f"findings={findings!r}")
+
+    # ── (c) `<script>` inside HTML comment must NOT flag ──
+    comment_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<!-- <script>fetch("https://cdn.example/inert")</script> -->'
+        '<p>Document explaining script tags.</p>'
+        '</body></html>'
+    )
+    assert _find_executable_script_surface(comment_fixture) == [], (
+        "commented-out <script> false-positived — the round-9 "
+        "raw-regex bug. HTMLParser dispatches comment content to "
+        "handle_comment, not handle_starttag.")
+
+    # ── (d) Non-URL contexts with the string 'javascript:' must
+    #        NOT flag. A paragraph mentioning "javascript:" in prose
+    #        or a `data-*` attribute holding the string is not
+    #        executable.
+    prose_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<p>The string "javascript:" is used for legacy URLs.</p>'
+        '<div data-example="javascript:example()">safe</div>'
+        '</body></html>'
+    )
+    assert _find_executable_script_surface(prose_fixture) == [], (
+        "prose/data-* mention of 'javascript:' false-positived — "
+        "only URL-carrying attributes on real tags should flag.")
+
+    # ── (e) Fail-closed on beyond-cap nested srcdoc ──
+    import html as _h
+    max_depth = _ExecutableScriptScanner._MAX_SRCDOC_DEPTH
+    inner = '<script>fetch("https://cdn.example/beyond-cap")</script>'
+    payload = inner
+    for _ in range(max_depth + 1):
+        payload = f'<iframe srcdoc="{_h.escape(payload, quote=True)}"></iframe>'
+    fixture_deep = f'<!DOCTYPE html><html><body>{payload}</body></html>'
+    findings = _find_executable_script_surface(fixture_deep)
+    beyond_cap = [k for k, _s in findings
+                  if "UNSCANNED" in k or k.endswith("<script>")]
+    assert beyond_cap, (
+        f"beyond-cap srcdoc silently accepted — neither the deep "
+        f"<script> nor an UNSCANNED sentinel was reported. "
+        f"findings={findings!r}")
 
 
 def test_self_containment_helper_catches_known_forms():
@@ -1621,6 +1871,10 @@ def test_self_containment_helper_catches_indirect_fetches():
 <meta http-equiv="refresh" content="0; #local-nokw">
 <meta http-equiv="refresh" content="5">
 <meta http-equiv="refresh" content="0">
+<!-- Round-10 F3: time glued to non-refresh content. Chromium
+     refuses the directive (no navigation); the parser must too. -->
+<meta http-equiv="refresh" content="0https://cdn.example/glued.html">
+<meta http-equiv="refresh" content="0foo">
 <meta http-equiv="content-type" content="text/html">
 </body>
 </html>"""
@@ -1661,6 +1915,18 @@ def test_self_containment_helper_catches_indirect_fetches():
                     and url in ("", "0", "5")), (
             f"URL-less meta-refresh incorrectly flagged: "
             f"{tag} {attr}={url!r}")
+        # Round-10 F3: glued-time refresh directives — Chromium
+        # refuses these, so they must NOT reach the violation list.
+        assert not (
+            tag == "meta" and attr == "http-equiv=refresh"
+            and "glued.html" in url), (
+            f"glued-time meta-refresh (Chromium-refused) "
+            f"incorrectly flagged: {tag} {attr}={url!r}")
+        assert not (
+            tag == "meta" and attr == "http-equiv=refresh"
+            and url == "foo"), (
+            f"glued-time meta-refresh 'foo' (Chromium-refused) "
+            f"incorrectly flagged: {tag} {attr}={url!r}")
     # <meta http-equiv="content-type"> must never appear (no url= in
     # content, and http-equiv != refresh).
     assert not any(
@@ -1733,6 +1999,21 @@ def test_meta_refresh_url_parser_handles_whatwg_forms():
         assert got is None, (
             f"time-less content {content!r} parsed to {got!r}, "
             f"expected None (invalid refresh directive)")
+
+    # Round-10 F3: time glued to non-refresh content — Chromium
+    # refuses the directive, so the parser must return None too.
+    # These are the exact shapes Codex\'s Chromium probes measured
+    # as no-op ("no request made") while the round-9 parser was
+    # reporting them as external navigation targets.
+    for content in ["0https://cdn.example/no-sep.html",
+                    "0foo",
+                    "3.14https://cdn.example/glued",
+                    "5nope"]:
+        got = _parse_meta_refresh_url(content)
+        assert got is None, (
+            f"glued-time content {content!r} parsed to {got!r}, "
+            f"expected None (no valid boundary after time — Chromium "
+            f"refuses these)")
 
 
 def test_css_hex_escape_decoder_handles_full_range():
