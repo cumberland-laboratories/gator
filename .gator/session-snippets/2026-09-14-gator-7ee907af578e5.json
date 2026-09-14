@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-10 follow-up: HTMLParser-based executable-surface scanner + srcdoc recursion + meta-refresh time boundary",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "htmlparser-executable-scan",
+    "srcdoc-recursion",
+    "url-scheme-normalization",
+    "meta-refresh-boundary",
+    "sketch-2-post-arc"
+  ],
+  "commit": "7ee907af578e5e37406b5d01a3d97a71d281f055",
+  "short_commit": "7ee907a",
+  "snippet_id": "snippet-7ee907af578e5",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 2,
+  "previous_commit_in_session": "87f53c01cd2b69165f423714e8f40d6695fdda82",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T10:39:30Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-87f53c01cd2b6.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-10 (Chromium-intercept-backed) — 1 MEDIUM + 2 LOW, all",
+    "addressed. Codex confirmed round-9 fixes landed correctly; these",
+    "are new gaps inside the round-9 additions themselves. All three",
+    "converge on parse-first-then-check.",
+    "Round-9's `_find_executable_script_surface` was a raw-regex",
+    "scan. Three ways past it, all Chromium-verified:",
+    "`<a href=\"java&#x73;cript:fetch(...)\">` — HTML entity for",
+    "`s`. Chromium decodes and executes; regex looks for literal"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

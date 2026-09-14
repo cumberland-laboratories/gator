@@ -492,7 +492,15 @@ def _url_is_self_contained(url: str) -> bool:
     """True if the URL is safe to keep inside a self-contained
     artifact: data URI, in-document fragment, or empty placeholder.
     Everything else (http, https, //, ftp, file, sibling path, bare
-    filename) is external and must be rejected."""
+    filename) is external and must be rejected.
+
+    NB: `data:` URIs are accepted here unconditionally. In
+    BROWSING/PLUGIN contexts (`iframe@src`, `object@data`, etc.),
+    an active `data:` document (`data:text/html,…`,
+    `data:image/svg+xml,…`) can carry a full executable payload —
+    that class is handled at the call site by
+    `_is_active_data_document` (round-11), NOT here.
+    """
     url = url.strip()
     if not url:
         return True
@@ -501,6 +509,85 @@ def _url_is_self_contained(url: str) -> bool:
     if url.lower().startswith("data:"):
         return True
     return False
+
+
+# Attribute contexts where the browser creates a browsing/plugin
+# context around the resource — an HTML/SVG `data:` URI here is
+# parsed as an active document that can run scripts. Round-11
+# addition (Codex Chromium-verified: `<iframe
+# src="data:text/html,%3Cscript%3E…%3C/script%3E">` executes with
+# a 1200 ms timer, past the browser backstop's grace window).
+_ACTIVE_DOC_ATTRS = {
+    ("iframe", "src"),
+    ("frame", "src"),
+    ("embed", "src"),
+    ("object", "data"),
+}
+
+# `data:` MIME types Chromium treats as script-capable active
+# documents. `text/html`, `application/xhtml+xml`, and
+# `image/svg+xml` all parse + execute inline scripts in a browsing
+# context. Generic XML variants can carry XSLT / SVG payloads that
+# execute; treated as active. Non-document MIMEs (`text/plain`,
+# `image/png`, `application/octet-stream`, etc.) are inert in
+# browsing contexts — the browser shows the raw bytes without
+# script execution.
+_ACTIVE_DATA_MIMES = {
+    "text/html",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "application/xml",
+    "text/xml",
+}
+
+
+def _data_uri_active_mime(url: str):
+    """If `url` is a `data:` URI whose MIME parses to a
+    script-capable active-document type, return the lowercased
+    MIME string (params stripped). Otherwise return None.
+
+    Rules per RFC 2397 + browser behavior:
+      * `data:` alone (no MIME, no comma) → None (malformed).
+      * `data:,body` (empty MIME + comma) defaults to
+        `text/plain` — inert, returns None.
+      * `data:text/html,…` → `text/html`.
+      * `data:text/html;charset=utf-8,…` → `text/html` (params
+        stripped).
+      * `data:image/svg+xml;base64,…` → `image/svg+xml`.
+      * Any MIME NOT in `_ACTIVE_DATA_MIMES` returns None.
+    """
+    if not url:
+        return None
+    u = url.strip()
+    if not u.lower().startswith("data:"):
+        return None
+    body = u[5:]
+    comma = body.find(",")
+    if comma == -1:
+        return None
+    header = body[:comma].strip().lower()
+    if not header:
+        return None
+    mime = header.split(";", 1)[0].strip()
+    if mime in _ACTIVE_DATA_MIMES:
+        return mime
+    return None
+
+
+def _is_active_data_document(tag_l: str, attr_l: str, value: str) -> bool:
+    """True if `(tag, attr, value)` is a `data:` URI in a
+    browsing/plugin attribute context AND the MIME is a
+    script-capable active-document type. This shape bypasses the
+    round-10 self-containment guard AND the executable-scan (which
+    only recurses `srcdoc`) — Codex round-11 finding. Treat as a
+    violation in both scanners: an inline active document is not
+    self-contained (even though the URL is inline), and it can
+    schedule delayed fetches that outlive the browser backstop's
+    grace window.
+    """
+    if (tag_l, attr_l) not in _ACTIVE_DOC_ATTRS:
+        return False
+    return _data_uri_active_mime(value) is not None
 
 
 def _scan_css_for_externals(css_text: str):
@@ -834,7 +921,15 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
 
             # Single-URL resource attributes.
             if (tag_l, attr_l) in _SINGLE_URL_RESOURCE_ATTRS:
-                if not _url_is_self_contained(value):
+                # Round-11 F1: active `data:` documents in
+                # browsing/plugin contexts execute scripts and can
+                # schedule delayed fetches past the browser
+                # backstop's grace window. Fail closed on the MIME
+                # test even though the URL is technically inline.
+                if _is_active_data_document(tag_l, attr_l, value):
+                    self.html_violations.append(
+                        (tag_l, attr_l, value, lineno))
+                elif not _url_is_self_contained(value):
                     self.html_violations.append(
                         (tag_l, attr_l, value, lineno))
                 continue
@@ -1160,6 +1255,24 @@ class _ExecutableScriptScanner(_html_parser.HTMLParser):
                 self.findings.append(
                     ("javascript:",
                      f"{tag_l}@{name_l}={sample!r}", lineno))
+                continue
+
+            # Round-11 F1: active `data:` documents in
+            # browsing/plugin contexts (`iframe@src`, `object@data`,
+            # etc.) parse as a full HTML/SVG document that can
+            # execute inline scripts. Codex-verified: a
+            # `data:text/html,%3Cscript%3EsetTimeout(...,1200)…`
+            # iframe schedules a fetch past the 200 ms grace window
+            # the browser backstop uses. Fail closed on the MIME
+            # test — Cumberland templates have no legitimate reason
+            # to inline an active document, so this is a defensive
+            # boundary against a class of bypass, not a
+            # false-positive risk on real content.
+            if _is_active_data_document(tag_l, name_l, value):
+                mime = _data_uri_active_mime(value) or "?"
+                self.findings.append(
+                    ("active-data-document",
+                     f"{tag_l}@{name_l} data:{mime}", lineno))
 
     def _recurse_srcdoc(self, srcdoc_value: str, parent_lineno: int):
         if self.depth + 1 > self._MAX_SRCDOC_DEPTH:
@@ -1380,6 +1493,7 @@ def test_no_executable_scripts_helper_catches_round_10_forms():
     payload = inner
     for _ in range(max_depth + 1):
         payload = f'<iframe srcdoc="{_h.escape(payload, quote=True)}"></iframe>'
+
     fixture_deep = f'<!DOCTYPE html><html><body>{payload}</body></html>'
     findings = _find_executable_script_surface(fixture_deep)
     beyond_cap = [k for k, _s in findings
@@ -1388,6 +1502,134 @@ def test_no_executable_scripts_helper_catches_round_10_forms():
         f"beyond-cap srcdoc silently accepted — neither the deep "
         f"<script> nor an UNSCANNED sentinel was reported. "
         f"findings={findings!r}")
+
+
+def test_active_data_document_bypass_is_caught():
+    """Round-11 meta-pin (2026-09-14). Codex Chromium-verified an
+    active `data:` document bypass:
+
+        <iframe src="data:text/html,%3Cscript%3E
+            setTimeout(()=>fetch('https://cdn.example/data-late'),1200)
+        %3C/script%3E"></iframe>
+
+    The resource scanner returned `[]` (because
+    `_url_is_self_contained` accepts every `data:` URI). The
+    executable scanner returned `[]` (because it only recurses
+    `srcdoc`, not `data:` bodies). And the browser backstop's
+    200 ms grace window closes before the 1200 ms timer fires.
+    Round-11 closes the class at the active-document attribute
+    boundary — `iframe@src`, `frame@src`, `embed@src`,
+    `object@data` in combination with a script-capable MIME
+    (`text/html`, `image/svg+xml`, `application/xhtml+xml`,
+    `application/xml`, `text/xml`) is treated as a violation in
+    BOTH scanners.
+    """
+    # Codex\'s exact reproduction — active HTML data document in
+    # an iframe.
+    codex_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<iframe src="data:text/html,%3Cscript%3E'
+        'setTimeout(()=%3Efetch(%27https://cdn.example/data-late%27),1200)'
+        '%3C/script%3E"></iframe>'
+        '</body></html>'
+    )
+    html_v = _find_external_html_resources(codex_fixture)
+    exec_v = _find_executable_script_surface(codex_fixture)
+    # Resource scanner surfaces the active data document as an
+    # HTML resource violation.
+    assert any(tag == "iframe" and attr == "src"
+               and url.lower().startswith("data:text/html")
+               for tag, attr, url, _ in html_v), (
+        f"active data:text/html iframe not flagged by resource "
+        f"scanner. html_v={html_v!r}")
+    # Executable scanner surfaces it with the `active-data-document`
+    # kind. This is the deferred-fetch class Codex specifically
+    # measured; the no-executable-scripts invariant now blocks it
+    # before the browser has a chance to schedule the timer.
+    assert any(kind == "active-data-document" for kind, _ in exec_v), (
+        f"active data:text/html iframe not flagged by executable "
+        f"scanner. exec_v={exec_v!r}")
+
+    # All four active-document attribute contexts × three
+    # script-capable MIMEs must flag in the executable scanner.
+    active_ctx_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<iframe src="data:text/html,%3Ch1%3Ehi%3C/h1%3E"></iframe>'
+        '<frame src="data:application/xhtml+xml,%3Cp/%3E"></frame>'
+        '<embed src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">'
+        '<object data="data:text/xml,%3Cx/%3E"></object>'
+        '<object data="data:application/xml,%3Cx/%3E"></object>'
+        '</body></html>'
+    )
+    exec_v = _find_executable_script_surface(active_ctx_fixture)
+    active_hits = [kind for kind, _ in exec_v
+                   if kind == "active-data-document"]
+    assert len(active_hits) == 5, (
+        f"expected 5 active-data-document hits across "
+        f"iframe/frame/embed/object with text/html + xhtml + "
+        f"svg+xml + text/xml + application/xml; got "
+        f"{len(active_hits)}: {exec_v!r}")
+
+    # ── Negative controls: `data:` in INERT contexts must NOT flag ──
+    #
+    # Cumberland templates legitimately use `data:` URIs for inline
+    # images and CSS backgrounds. Those contexts are not
+    # browsing/plugin — the browser decodes bytes and paints,
+    # never executes. The round-11 guard must not disturb them.
+    inert_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<img src="data:image/png;base64,AAAA">'
+        '<a href="data:text/plain,hello">click</a>'
+        '<img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">'  # <img>, not <embed>
+        '</body></html>'
+    )
+    html_v = _find_external_html_resources(inert_fixture)
+    exec_v = _find_executable_script_surface(inert_fixture)
+    assert html_v == [], (
+        f"inert data: URI in `<img>`/`<a>` context false-positived "
+        f"in resource scanner: {html_v!r}")
+    assert exec_v == [], (
+        f"inert data: URI in `<img>`/`<a>` context false-positived "
+        f"in executable scanner: {exec_v!r}")
+
+    # ── Negative controls: non-script MIMEs in active contexts ──
+    #
+    # `data:text/plain,…` and `data:image/png;base64,…` inside an
+    # `<iframe>` render as text or raster — no script execution.
+    # Guard must not flag these.
+    non_script_fixture = (
+        '<!DOCTYPE html><html><body>'
+        '<iframe src="data:text/plain,hello"></iframe>'
+        '<iframe src="data:image/png;base64,AAAA"></iframe>'
+        '<iframe src="data:,body-only"></iframe>'   # empty MIME → text/plain
+        '</body></html>'
+    )
+    html_v = _find_external_html_resources(non_script_fixture)
+    exec_v = _find_executable_script_surface(non_script_fixture)
+    active_iframe = [
+        (tag, attr, url) for tag, attr, url, _ in html_v
+        if tag == "iframe" and attr == "src"
+    ]
+    assert not active_iframe, (
+        f"non-script data: MIME in iframe false-positived: "
+        f"{active_iframe!r}")
+    active_exec = [k for k, _ in exec_v if k == "active-data-document"]
+    assert not active_exec, (
+        f"non-script data: MIME in iframe false-positived in "
+        f"executable scanner: {active_exec!r}")
+
+    # ── MIME parser unit-check ──
+    assert _data_uri_active_mime("data:text/html,x") == "text/html"
+    assert _data_uri_active_mime(
+        "data:text/html;charset=utf-8,x") == "text/html"
+    assert _data_uri_active_mime(
+        "data:image/svg+xml;base64,AAAA") == "image/svg+xml"
+    assert _data_uri_active_mime("data:text/plain,x") is None
+    assert _data_uri_active_mime("data:image/png;base64,AAAA") is None
+    assert _data_uri_active_mime("data:,x") is None      # empty MIME
+    assert _data_uri_active_mime("data:text/html") is None  # no comma
+    assert _data_uri_active_mime("https://x/y.html") is None
+    assert _data_uri_active_mime("") is None
 
 
 def test_self_containment_helper_catches_known_forms():
