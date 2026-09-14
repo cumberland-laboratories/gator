@@ -640,6 +640,94 @@ def _parse_srcset(value: str):
     return urls
 
 
+_META_REFRESH_WS = " \t\n\r\f"
+
+
+def _parse_meta_refresh_url(content: str):
+    """Extract the target URL from a `<meta http-equiv="refresh"
+    content="…">` value per WHATWG "shared declarative refresh steps".
+
+    Grammar accepted (case-insensitive, whitespace-tolerant):
+
+        content = time [(';' | ',') [WS] [ 'url' [WS] ['='] [WS] ] URL]
+
+    All of these produce the same URL — `https://cdn.example/x.html`:
+
+        "0; url=https://cdn.example/x.html"
+        "0;url=https://cdn.example/x.html"
+        "0; URL = https://cdn.example/x.html"
+        "0; url https://cdn.example/x.html"   (no '=', WS-separated)
+        "0; https://cdn.example/x.html"       (unlabeled — F1 round-9)
+        "0, https://cdn.example/x.html"       (comma separator)
+        "0.5; https://cdn.example/x.html"     (decimal time)
+
+    Returns `None` when the content refreshes in place (no URL after
+    the separator, e.g. `"0"` or `"5"`), when the content has no
+    time value, or when the URL portion is empty. Callers pass the
+    result through `_url_is_self_contained` to decide whether to
+    flag the reference.
+
+    F1 round-9 (2026-09-14): the earlier round-8 implementation used
+    a regex that hard-required the `url=` label. Chromium accepts the
+    unlabeled form and the labeled-without-`=` form, so a template
+    author (or a hostile edit) could route to an external URL via a
+    shape the textual scanner reported clean.
+    """
+    if not content:
+        return None
+    s = content
+    L = len(s)
+    i = 0
+    while i < L and s[i] in _META_REFRESH_WS:
+        i += 1
+    time_start = i
+    while i < L and s[i].isdigit():
+        i += 1
+    if i < L and s[i] == "." and i > time_start:
+        i += 1
+        while i < L and s[i].isdigit():
+            i += 1
+    if i == time_start:
+        return None
+    while i < L and s[i] in _META_REFRESH_WS:
+        i += 1
+    if i >= L:
+        return None
+    if s[i] in ";,":
+        i += 1
+    while i < L and s[i] in _META_REFRESH_WS:
+        i += 1
+    if i >= L:
+        return None
+    # Optional 'url' keyword. Only consume it as a keyword if the
+    # rest of the value is actually followed by '=' or whitespace —
+    # otherwise treat 'url' as the start of the URL itself.
+    if s[i:i + 3].lower() == "url":
+        j = i + 3
+        j_ws_start = j
+        while j < L and s[j] in _META_REFRESH_WS:
+            j += 1
+        if j < L and s[j] == "=":
+            j += 1
+            while j < L and s[j] in _META_REFRESH_WS:
+                j += 1
+            i = j
+        elif j > j_ws_start:
+            i = j
+    if i >= L:
+        return None
+    if s[i] in "\"'":
+        quote = s[i]
+        i += 1
+        end = s.find(quote, i)
+        if end == -1:
+            end = L
+        url = s[i:end]
+    else:
+        url = s[i:].rstrip()
+    return url or None
+
+
 class _HTMLResourceScanner(_html_parser.HTMLParser):
     """Walk every start tag, examine every attribute, collect
     external resource references.
@@ -715,22 +803,20 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
                 if name and name.lower() == "srcdoc" and value:
                     self._recurse_srcdoc(value, lineno)
 
-        # F1 round-8: <meta http-equiv="refresh" content="0; url=X">
-        # triggers a browser navigation to X at load. Parse the
-        # content attribute for the url= target and check.
+        # F1 round-8/round-9: <meta http-equiv="refresh"
+        # content="…"> triggers a browser navigation to the target at
+        # load. Parse the content string per WHATWG semantics — the
+        # `url=` label is OPTIONAL (round-9 fix); Chromium honors
+        # `0; https://example/` and `0, https://example/` too.
         if tag_l == "meta":
             attr_map = {(n.lower() if n else ""): v
                         for n, v in attrs if v is not None}
             if attr_map.get("http-equiv", "").lower() == "refresh":
                 content = attr_map.get("content", "") or ""
-                m = re.search(
-                    r'url\s*=\s*[\'"]?([^\'"\s;]+)[\'"]?',
-                    content, re.IGNORECASE)
-                if m:
-                    url = m.group(1)
-                    if not _url_is_self_contained(url):
-                        self.html_violations.append(
-                            ("meta", "http-equiv=refresh", url, lineno))
+                url = _parse_meta_refresh_url(content)
+                if url is not None and not _url_is_self_contained(url):
+                    self.html_violations.append(
+                        ("meta", "http-equiv=refresh", url, lineno))
 
         for name, value in attrs:
             if name is None or value is None:
@@ -921,6 +1007,137 @@ def test_narrative_is_fully_self_contained(narrative_text: str):
         f"Narrative Blueprint is not fully self-contained.\n"
         f"  HTML resource violations: {html_violations!r}\n"
         f"  CSS resource violations:  {css_violations!r}")
+
+
+# ── No-executable-scripts invariant (Codex enforcer round-9) ─────
+#
+# The browser backstop in `test_cumberland_computed_style.py`
+# observes real Chromium requests during a short grace window. That
+# window closes fast — a `fetch(…)` or `<img src=…>` inserted from
+# an inline `<script>` on a `setTimeout(…, 500)` would leak past the
+# window and leave the backstop reporting clean. Round-8 called this
+# "definitive" without a matching invariant on the templates; round-9
+# codifies the invariant that makes the claim actually hold:
+# Cumberland templates contain no executable JavaScript surface at
+# all. With this invariant in force, no code inside the templates
+# can schedule a deferred network request, so a browser observation
+# of "zero non-template requests at load" IS definitive for the
+# self-containment guarantee.
+#
+# Surface covered:
+#   * `<script>` blocks — inline or `src=` — any variety.
+#   * Inline event handlers `on*=` on any element.
+#   * `javascript:` URLs (in `href`, `src`, form actions, etc.).
+
+_ON_HANDLER_RE = re.compile(
+    r"""(?ix)                # case-insensitive, verbose
+    \bon[a-z]+               # onload, onclick, onerror, etc.
+    \s*=                     # attribute-assignment
+    """
+)
+_JAVASCRIPT_URL_RE = re.compile(r"""(?i)\bjavascript\s*:""")
+_SCRIPT_OPEN_RE = re.compile(r"""(?i)<\s*script\b""")
+
+
+def _find_executable_script_surface(html_text: str):
+    """Return a list of `(kind, sample)` tuples describing every
+    executable-script surface found in `html_text`. Empty list ⇒
+    the document has no way to schedule a deferred network fetch
+    from within its own content.
+
+    Uses simple pattern matching — an HTMLParser walk was
+    considered, but the surface is small and grep-like patterns
+    are already load-bearing in the neighbouring self-containment
+    scanner. False-positives on the templates are impossible in
+    practice: the templates are hand-authored HTML with no need
+    for any of these surfaces.
+    """
+    findings = []
+    for m in _SCRIPT_OPEN_RE.finditer(html_text):
+        findings.append(("<script>", html_text[m.start():m.start() + 40]))
+    for m in _ON_HANDLER_RE.finditer(html_text):
+        findings.append(("event-handler",
+                         html_text[m.start():m.start() + 40]))
+    for m in _JAVASCRIPT_URL_RE.finditer(html_text):
+        findings.append(("javascript:", html_text[m.start():m.start() + 40]))
+    return findings
+
+
+def test_no_executable_scripts_in_master(master_text: str):
+    """The master must contain no executable-script surface —
+    no `<script>` blocks (inline or external), no inline `on*`
+    event handlers, no `javascript:` URLs. This invariant is the
+    partner of the browser backstop in `test_cumberland_computed_style
+    ::test_template_makes_no_external_requests_at_load`: with no
+    executable surface in the template, no code can schedule a
+    deferred fetch that would slip past the backstop's short wait
+    window. The two pins together are definitive for the
+    self-containment guarantee.
+    """
+    findings = _find_executable_script_surface(master_text)
+    assert not findings, (
+        f"Master contains executable-script surface — self-containment "
+        f"claim depends on there being none:\n"
+        + "\n".join(f"  {kind}: {sample!r}" for kind, sample in findings))
+
+
+def test_no_executable_scripts_in_narrative(narrative_text: str):
+    """Same no-executable-script invariant on the narrative
+    Blueprint. Both anchor templates share it because the browser
+    backstop parametrizes over both."""
+    findings = _find_executable_script_surface(narrative_text)
+    assert not findings, (
+        f"Narrative Blueprint contains executable-script surface — "
+        f"self-containment claim depends on there being none:\n"
+        + "\n".join(f"  {kind}: {sample!r}" for kind, sample in findings))
+
+
+def test_no_executable_scripts_helper_catches_known_forms():
+    """Meta-pin for `_find_executable_script_surface`. Codex asked
+    round-9 for either the invariant or a narrowed 'definitive'
+    claim; the invariant is worth as much as its detector, so this
+    exercises every surface the invariant is meant to catch.
+    """
+    fixture = """<!DOCTYPE html>
+<html>
+<head>
+<script>fetch('https://cdn.example/deferred.json');</script>
+<script src="https://cdn.example/late.js"></script>
+</head>
+<body>
+<button onclick="load('https://cdn.example/click.json')">Go</button>
+<img src="x.png" onerror="fetch('https://cdn.example/onerror.json')">
+<a href="javascript:fetch('https://cdn.example/js-url.json')">click</a>
+<form action="javascript:submit()"></form>
+</body>
+</html>"""
+    findings = _find_executable_script_surface(fixture)
+    kinds = {kind for kind, _sample in findings}
+    assert "<script>" in kinds, findings
+    assert "event-handler" in kinds, findings
+    assert "javascript:" in kinds, findings
+    # Sanity: multiple <script> tags are all counted (two here).
+    script_count = sum(1 for k, _ in findings if k == "<script>")
+    assert script_count == 2, (
+        f"expected 2 <script> hits, got {script_count}: {findings!r}")
+    # Sanity: multiple event handlers counted (onclick + onerror).
+    handler_count = sum(1 for k, _ in findings if k == "event-handler")
+    assert handler_count == 2, (
+        f"expected 2 event-handler hits, got {handler_count}: "
+        f"{findings!r}")
+    # Sanity: multiple javascript: URLs counted (href + form action).
+    js_count = sum(1 for k, _ in findings if k == "javascript:")
+    assert js_count == 2, (
+        f"expected 2 javascript: hits, got {js_count}: {findings!r}")
+
+    # ── Clean fixture must produce no findings ──
+    clean = """<!DOCTYPE html>
+<html>
+<head><style>body { font-family: system-ui; }</style></head>
+<body><p>No scripts here.</p><a href="#top">go</a></body>
+</html>"""
+    assert _find_executable_script_surface(clean) == [], (
+        "clean fixture false-positived on _find_executable_script_surface")
 
 
 def test_self_containment_helper_catches_known_forms():
@@ -1357,9 +1574,9 @@ def test_srcdoc_within_depth_cap_flags_external():
 
 
 def test_self_containment_helper_catches_indirect_fetches():
-    """F1 round-8 additions (2026-09-14). Codex intercepted real
-    Chromium fetches for two browser-driven forms that don't fit
-    the "one attribute → one URL fetched at load" shape:
+    """F1 round-8 additions (2026-09-14), extended in round-9. Codex
+    intercepted real Chromium fetches for browser-driven forms that
+    don't fit the "one attribute → one URL fetched at load" shape:
 
       * `<base href="…">` — retargets URL resolution for other
         same-document refs. `<img src="#logo">` looks self-
@@ -1370,14 +1587,25 @@ def test_self_containment_helper_catches_indirect_fetches():
         triggers a navigation. Not a resource load per se, but
         every self-contained-document guarantee is broken if
         opening the file causes the browser to leave the file.
+      * Round-9: the meta-refresh `url=` label is OPTIONAL per
+        WHATWG. `<meta http-equiv="refresh" content="0; X">` and
+        `<meta http-equiv="refresh" content="0, X">` are both
+        accepted by Chromium and navigate to `X`. The round-8
+        regex hard-required the label and reported these clean.
     """
     fixture = """<!DOCTYPE html>
 <html>
 <head>
 <!-- External <base> — resolves other refs against the external URL. -->
 <base href="https://cdn.example/assets/">
-<!-- meta-refresh navigation to an external URL. -->
+<!-- meta-refresh navigation forms, all pointing at cdn.example.
+     Round-8 covered the labeled form. Round-9 adds three more
+     shapes Chromium honors identically. -->
 <meta http-equiv="refresh" content="0; url=https://cdn.example/refresh.html">
+<meta http-equiv="refresh" content="0; https://cdn.example/no-key.html">
+<meta http-equiv="refresh" content="0, https://cdn.example/comma.html">
+<meta http-equiv="refresh" content="0; url https://cdn.example/bare-kw.html">
+<meta http-equiv="refresh" content="0.5; url=https://cdn.example/decimal.html">
 </head>
 <body>
 <!-- These fragments look local but resolve against <base>. Codex
@@ -1390,6 +1618,9 @@ def test_self_containment_helper_catches_indirect_fetches():
 <base href="">
 <base href="#top">
 <meta http-equiv="refresh" content="0; url=#local">
+<meta http-equiv="refresh" content="0; #local-nokw">
+<meta http-equiv="refresh" content="5">
+<meta http-equiv="refresh" content="0">
 <meta http-equiv="content-type" content="text/html">
 </body>
 </html>"""
@@ -1401,19 +1632,34 @@ def test_self_containment_helper_catches_indirect_fetches():
             "https://cdn.example/assets/") in detected, (
         f"external <base href> not flagged. html_v={html_v!r}")
 
-    # ── meta-refresh with external url flagged ──
-    assert ("meta", "http-equiv=refresh",
-            "https://cdn.example/refresh.html") in detected, (
-        f"meta-refresh external navigation not flagged. "
-        f"html_v={html_v!r}")
+    # ── Every meta-refresh navigation to an external URL must be
+    #    flagged, across all four WHATWG-accepted shapes.
+    for shape, expected_url in [
+        ("labeled url=X",   "https://cdn.example/refresh.html"),
+        ("unlabeled",       "https://cdn.example/no-key.html"),
+        ("comma-separator", "https://cdn.example/comma.html"),
+        ("url-bare-kw",     "https://cdn.example/bare-kw.html"),
+        ("decimal-time",    "https://cdn.example/decimal.html"),
+    ]:
+        assert ("meta", "http-equiv=refresh",
+                expected_url) in detected, (
+            f"meta-refresh {shape} not flagged. "
+            f"expected url={expected_url!r}. html_v={html_v!r}")
 
     # ── Allowed forms MUST NOT be flagged ──
     for tag, attr, url, _ in html_v:
         assert not (tag == "base" and url in ("", "#top")), (
             f"self-contained <base href> incorrectly flagged: "
             f"{tag} {attr}={url!r}")
-        assert not (tag == "meta" and url in ("#local",)), (
+        assert not (tag == "meta" and url in (
+                "#local", "#local-nokw")), (
             f"meta-refresh fragment target incorrectly flagged: "
+            f"{tag} {attr}={url!r}")
+        # A URL-less refresh directive ("0" / "5") must produce no
+        # meta-refresh violation at all — the parser returns None.
+        assert not (tag == "meta" and attr == "http-equiv=refresh"
+                    and url in ("", "0", "5")), (
+            f"URL-less meta-refresh incorrectly flagged: "
             f"{tag} {attr}={url!r}")
     # <meta http-equiv="content-type"> must never appear (no url= in
     # content, and http-equiv != refresh).
@@ -1422,6 +1668,71 @@ def test_self_containment_helper_catches_indirect_fetches():
         for tag, _attr, url in detected), (
         f"non-refresh <meta http-equiv> incorrectly scanned: "
         f"{html_v!r}")
+
+
+def test_meta_refresh_url_parser_handles_whatwg_forms():
+    """F1 round-9 unit-test meta-pin (2026-09-14). Covers the parser
+    directly (not through the HTML scanner) so a regression in the
+    parser is diagnosed at the parser, not diluted by the surrounding
+    HTMLParser plumbing.
+
+    The parser must accept every shape a browser accepts, and reject
+    every shape that doesn't produce a navigation.
+    """
+    # Every one of these must return the same target URL.
+    labeled_forms = [
+        "0; url=https://cdn.example/x.html",
+        "0;url=https://cdn.example/x.html",
+        "0 ; url = https://cdn.example/x.html",
+        "0; URL = https://cdn.example/x.html",
+        "0; url  https://cdn.example/x.html",   # keyword + ws, no '='
+        "0.5; url=https://cdn.example/x.html",
+        "3.14 , url=https://cdn.example/x.html",
+        '0; url="https://cdn.example/x.html"',
+        "0; url='https://cdn.example/x.html'",
+    ]
+    for content in labeled_forms:
+        got = _parse_meta_refresh_url(content)
+        assert got == "https://cdn.example/x.html", (
+            f"labeled meta-refresh content {content!r} parsed to "
+            f"{got!r}, expected the target URL")
+
+    # Unlabeled + comma-separator forms — round-9's actual finding.
+    unlabeled_forms = [
+        "0; https://cdn.example/x.html",
+        "0,https://cdn.example/x.html",
+        "0 , https://cdn.example/x.html",
+        "0.5; https://cdn.example/x.html",
+    ]
+    for content in unlabeled_forms:
+        got = _parse_meta_refresh_url(content)
+        assert got == "https://cdn.example/x.html", (
+            f"unlabeled meta-refresh content {content!r} parsed to "
+            f"{got!r}, expected the target URL")
+
+    # No-URL forms — parser must return None so the scanner does
+    # not synthesize a meta-refresh violation for an in-place
+    # refresh that never leaves the document.
+    for content in ["0", "5", "  30  ", "0.5", ""]:
+        got = _parse_meta_refresh_url(content)
+        assert got is None, (
+            f"URL-less refresh content {content!r} parsed to "
+            f"{got!r}, expected None (in-place refresh)")
+
+    # Fragment target — parser extracts it; _url_is_self_contained
+    # separately clears the fragment. Test both steps.
+    got = _parse_meta_refresh_url("0; #local")
+    assert got == "#local", got
+    got = _parse_meta_refresh_url("0; url=#local")
+    assert got == "#local", got
+
+    # Malformed but tolerated: missing time value returns None.
+    for content in ["url=https://cdn.example/x", "; https://cdn.example/x",
+                    "abc; https://cdn.example/x"]:
+        got = _parse_meta_refresh_url(content)
+        assert got is None, (
+            f"time-less content {content!r} parsed to {got!r}, "
+            f"expected None (invalid refresh directive)")
 
 
 def test_css_hex_escape_decoder_handles_full_range():

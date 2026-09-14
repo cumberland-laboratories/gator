@@ -289,30 +289,48 @@ def test_computed_header_border_bottom_is_teal(page, master_url):
                          ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
 def test_template_makes_no_external_requests_at_load(page, name, path):
     """Browser-level backstop for the self-containment guarantee
-    (Codex enforcer 2026-09-14 round-8). The textual scanner in
-    `test_cumberland_visual_invariants.py` covers a broad HTML +
-    CSS surface, but Codex has repeatedly found narrow browser-
-    driven forms the scanner initially missed (unquoted attrs,
-    srcset data URIs with commas, SVG hrefs, CSS hex escapes,
-    iframe srcdoc, `<base href>`, meta-refresh — seven rounds of
-    findings). The scanner is fast and named, but the DEFINITIVE
-    check is: does the browser actually make any external request?
+    (Codex enforcer 2026-09-14 round-8, tightened round-9). The
+    textual scanner in `test_cumberland_visual_invariants.py`
+    covers a broad HTML + CSS surface, but Codex has repeatedly
+    found narrow browser-driven forms the scanner initially
+    missed (unquoted attrs, srcset data URIs with commas, SVG
+    hrefs, CSS hex escapes, iframe srcdoc, `<base href>`,
+    meta-refresh with and without the `url=` label — eight rounds
+    of findings). This pin is the *browser* opinion: does
+    Chromium actually make any request to anything other than the
+    exact template file?
 
-    This pin routes every request in Chromium; anything that
-    isn't a `file://` URL is recorded as an external fetch and
-    aborted. After load, zero external requests must have been
-    observed. If a future edit introduces any form the textual
-    scanner doesn't yet cover, this pin catches it at the exact
-    layer that matters — the layer that would make the shipped
-    document actually leak.
+    Round-9 tightening (2026-09-14): only the EXACT top-level
+    template URL is allowed to continue. Every other request —
+    even another `file://` URL like a sibling Cumberland template
+    loaded from an iframe — is recorded as external and aborted.
+    The earlier `url.startswith("file:")` filter would let a
+    silently-added iframe fetching a sibling `file:` document
+    look self-contained; Codex's F2 finding walked exactly this
+    case.
+
+    Deferred fetches (a `fetch(…)` scheduled via inline script
+    beyond the wait window) are ruled out by the sibling
+    `test_no_executable_scripts_in_cumberland_templates`
+    invariant in the visual-invariants module — Cumberland
+    templates contain no executable script, no inline event
+    handlers, and no `javascript:` URLs, so nothing can schedule
+    a network request that fires after the wait window closes.
+    The two pins compose: no-executable-scripts blocks the class
+    of deferred-fetch attacks, this pin observes the actual
+    resulting network at load. Together they are definitive; the
+    round-8 docstring's unqualified "definitive" claim (without
+    the no-script invariant in place) overstated what this pin
+    proves alone.
     """
     if not path.is_file():
         pytest.skip(f"{path} not present")
+    template_url = _file_url(path)
     external_urls = []
 
     def handle_route(route):
         url = route.request.url
-        if url.startswith("file:"):
+        if url == template_url:
             route.continue_()
         else:
             external_urls.append(url)
@@ -320,14 +338,19 @@ def test_template_makes_no_external_requests_at_load(page, name, path):
 
     page.route("**/*", handle_route)
     page.set_viewport_size({"width": 1440, "height": 900})
-    page.goto(_file_url(path), wait_until="networkidle")
-    # Grace period for any late/deferred fetches (fonts, lazy
-    # images, meta-refresh timers) to fire.
+    page.goto(template_url, wait_until="networkidle")
+    # Short grace window for the browser to flush any queued
+    # requests from parsing (fonts, decorative images that were
+    # deferred to layout, etc.). The no-executable-scripts
+    # invariant rules out JS-scheduled late fetches, so this
+    # window does not need to be long.
     page.wait_for_timeout(200)
 
     assert external_urls == [], (
-        f"{name} template ({path.name}) made external requests at "
-        f"load — self-containment guarantee broken. External URLs:\n"
+        f"{name} template ({path.name}) made requests to non-template "
+        f"URLs at load — self-containment guarantee broken. Only the "
+        f"top-level template file may be fetched; sibling file:// URLs "
+        f"are treated as external too. Observed non-template URLs:\n"
         + "\n".join(f"  {u}" for u in external_urls))
 
 

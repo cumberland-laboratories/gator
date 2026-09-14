@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-8 follow-up: <base href> + meta-refresh coverage + browser-level backstop pin",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "base-href",
+    "meta-refresh",
+    "browser-backstop",
+    "sketch-2-post-arc"
+  ],
+  "commit": "3d58322dce8ee53508c4f2c31de69ea3ac0df234",
+  "short_commit": "3d58322",
+  "snippet_id": "snippet-3d58322dce8ee",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 8,
+  "previous_commit_in_session": "054fc1ec77695b5a00628e0ed510e05c43c38872",
+  "started_at": "2026-09-14T01:20:35Z",
+  "ended_at": "2026-09-14T01:20:35Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-054fc1ec77695.json",
+    "contracts/compatibility/test_cumberland_computed_style.py",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-8 (Chromium-intercept-backed) — 1 MEDIUM + 1 LOW plus a",
+    "strategic addition: the browser-level backstop Codex has been",
+    "implicitly justifying across the whole review chain.",
+    "Two forms fetched by Chromium but missed by the textual scanner:",
+    "**`<base href>`**: an external `<base>` retargets URL resolution",
+    "for other same-doc refs. Codex verified `<base href=\"https://cdn.example/assets/\">`",
+    "+ `<img src=\"#logo\">` triggers a fetch of `https://cdn.example/assets/`.",
+    "**`<meta http-equiv=\"refresh\" content=\"0; url=…\">`**: browser"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
