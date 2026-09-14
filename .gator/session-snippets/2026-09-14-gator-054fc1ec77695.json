@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-7 follow-up: srcdoc double-decode fix + depth cap fails closed",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "srcdoc-decode",
+    "fail-closed",
+    "sketch-2-post-arc"
+  ],
+  "commit": "054fc1ec77695b5a00628e0ed510e05c43c38872",
+  "short_commit": "054fc1e",
+  "snippet_id": "snippet-054fc1ec77695",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 7,
+  "previous_commit_in_session": "fb83585a3c403529ae766bd9a7d33c7964bc4e22",
+  "started_at": "2026-09-14T01:08:01Z",
+  "ended_at": "2026-09-14T01:08:01Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-fb83585a3c403.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-7 (Chromium-intercept-backed) — two MEDIUM findings, both",
+    "fixed.",
+    "Prior state: `_recurse_srcdoc` called `html.unescape` on the",
+    "srcdoc value before feeding it to the child scanner. But",
+    "`html.parser.HTMLParser` ALREADY resolves character references in",
+    "attribute values (regardless of `convert_charrefs=False`, which",
+    "only governs the DATA callback — a Python quirk verified by",
+    "direct probe). So my extra unescape was a double-decode."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

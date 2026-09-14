@@ -285,6 +285,52 @@ def test_computed_header_border_bottom_is_teal(page, master_url):
         f"expected 'rgb(25, 174, 184)' (teal #19aeb8)")
 
 
+@pytest.mark.parametrize("name, path", _NARROW_VIEWPORT_TARGETS,
+                         ids=[t[0] for t in _NARROW_VIEWPORT_TARGETS])
+def test_template_makes_no_external_requests_at_load(page, name, path):
+    """Browser-level backstop for the self-containment guarantee
+    (Codex enforcer 2026-09-14 round-8). The textual scanner in
+    `test_cumberland_visual_invariants.py` covers a broad HTML +
+    CSS surface, but Codex has repeatedly found narrow browser-
+    driven forms the scanner initially missed (unquoted attrs,
+    srcset data URIs with commas, SVG hrefs, CSS hex escapes,
+    iframe srcdoc, `<base href>`, meta-refresh — seven rounds of
+    findings). The scanner is fast and named, but the DEFINITIVE
+    check is: does the browser actually make any external request?
+
+    This pin routes every request in Chromium; anything that
+    isn't a `file://` URL is recorded as an external fetch and
+    aborted. After load, zero external requests must have been
+    observed. If a future edit introduces any form the textual
+    scanner doesn't yet cover, this pin catches it at the exact
+    layer that matters — the layer that would make the shipped
+    document actually leak.
+    """
+    if not path.is_file():
+        pytest.skip(f"{path} not present")
+    external_urls = []
+
+    def handle_route(route):
+        url = route.request.url
+        if url.startswith("file:"):
+            route.continue_()
+        else:
+            external_urls.append(url)
+            route.abort()
+
+    page.route("**/*", handle_route)
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.goto(_file_url(path), wait_until="networkidle")
+    # Grace period for any late/deferred fetches (fonts, lazy
+    # images, meta-refresh timers) to fire.
+    page.wait_for_timeout(200)
+
+    assert external_urls == [], (
+        f"{name} template ({path.name}) made external requests at "
+        f"load — self-containment guarantee broken. External URLs:\n"
+        + "\n".join(f"  {u}" for u in external_urls))
+
+
 def test_computed_paragraph_text_align_is_justify(page, master_url):
     """Body prose renders justified — the reference-file typographic
     decision. Verify at RENDER time, not just in CSS source (a cascade

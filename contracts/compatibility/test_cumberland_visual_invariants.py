@@ -467,6 +467,15 @@ _SINGLE_URL_RESOURCE_ATTRS = {
     # different.
     ("script", "href"),
     ("script", "xlink:href"),
+    # <base href> — F1 round-8 addition (2026-09-14). Codex verified
+    # `<base href="https://cdn.example/assets/">` combined with
+    # `<img src="#logo">` triggers a fetch of the base URL: `#logo`
+    # is treated as a fragment on the current document, but with an
+    # external <base> the "current document" resolves to the base
+    # URL and Chromium fetches THAT. Any non-self-contained <base>
+    # breaks the self-containment invariant even without a same-doc
+    # sibling reference, so flag every non-{data:,#,empty} value.
+    ("base", "href"),
 }
 
 # Comma-separated URL-list attributes (srcset syntax).
@@ -638,7 +647,10 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
     Uses stdlib `html.parser.HTMLParser`, which handles single-quoted,
     double-quoted, AND unquoted attribute values correctly (previous
     regex-based scanner missed unquoted attrs — F2 re-review
-    finding).
+    finding). HTMLParser also decodes character references in
+    attribute values by default (regardless of `convert_charrefs=False`,
+    which only affects the DATA callback — see F1 round-7 docstring
+    note on `_recurse_srcdoc`).
 
     Emits two violation shapes:
       * `self.html_violations` = `(tag, attr, url, lineno)` — HTML
@@ -647,13 +659,23 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
         lineno)` — inline CSS via `style="…"` (kind = `@import` or
         `url()`).
 
-    Also recurses into `<iframe srcdoc>` (F2 round-6): the attribute
-    value is a full HTML document embedded as HTML-encoded text. A
-    resource inside srcdoc is fetched by the browser — Codex verified
-    with Chromium intercept. Scanner decodes entities via
-    `html.unescape` and re-feeds the content into a fresh scanner
-    instance at `depth+1`, capped at `_MAX_SRCDOC_DEPTH` to prevent
-    runaway. Nested `<style>` blocks inside srcdoc are also scanned.
+    Recurses into `<iframe srcdoc>` (F2 round-6, F1/F2 round-7): the
+    attribute value is a full HTML document embedded as source text.
+    HTMLParser has already single-decoded it by the time we see the
+    attribute, so the value is fed verbatim to a fresh scanner
+    instance at `depth+1`. Cap `_MAX_SRCDOC_DEPTH` bounds recursion;
+    beyond the cap the scanner fails CLOSED with an
+    `iframe@srcdoc>UNSCANNED-AT-DEPTH-N` violation rather than
+    silently skipping (Chromium fetches at any depth, so a silent
+    skip would contradict the self-containment guarantee).
+
+    Handles two indirect-fetch forms (F1 round-8):
+      * `<base href>` — resolves other same-doc references against
+        an external base URL; flagged with the standard
+        _url_is_self_contained predicate.
+      * `<meta http-equiv="refresh" content="0; url=X">` — Chromium
+        navigates to X at load; content string is parsed for the
+        url= target.
     """
 
     # F2 round-7 raised the cap from 2 to 5 — real Cumberland docs
@@ -692,6 +714,23 @@ class _HTMLResourceScanner(_html_parser.HTMLParser):
             for name, value in attrs:
                 if name and name.lower() == "srcdoc" and value:
                     self._recurse_srcdoc(value, lineno)
+
+        # F1 round-8: <meta http-equiv="refresh" content="0; url=X">
+        # triggers a browser navigation to X at load. Parse the
+        # content attribute for the url= target and check.
+        if tag_l == "meta":
+            attr_map = {(n.lower() if n else ""): v
+                        for n, v in attrs if v is not None}
+            if attr_map.get("http-equiv", "").lower() == "refresh":
+                content = attr_map.get("content", "") or ""
+                m = re.search(
+                    r'url\s*=\s*[\'"]?([^\'"\s;]+)[\'"]?',
+                    content, re.IGNORECASE)
+                if m:
+                    url = m.group(1)
+                    if not _url_is_self_contained(url):
+                        self.html_violations.append(
+                            ("meta", "http-equiv=refresh", url, lineno))
 
         for name, value in attrs:
             if name is None or value is None:
@@ -1315,6 +1354,74 @@ def test_srcdoc_within_depth_cap_flags_external():
     assert deep_hits, (
         f"Three-level nested srcdoc external not flagged. "
         f"html_v={html_v!r}")
+
+
+def test_self_containment_helper_catches_indirect_fetches():
+    """F1 round-8 additions (2026-09-14). Codex intercepted real
+    Chromium fetches for two browser-driven forms that don't fit
+    the "one attribute → one URL fetched at load" shape:
+
+      * `<base href="…">` — retargets URL resolution for other
+        same-document refs. `<img src="#logo">` looks self-
+        contained (fragment), but with an external `<base>` the
+        fragment resolves against the base URL and Chromium
+        fetches THAT.
+      * `<meta http-equiv="refresh" content="0; url=…">` —
+        triggers a navigation. Not a resource load per se, but
+        every self-contained-document guarantee is broken if
+        opening the file causes the browser to leave the file.
+    """
+    fixture = """<!DOCTYPE html>
+<html>
+<head>
+<!-- External <base> — resolves other refs against the external URL. -->
+<base href="https://cdn.example/assets/">
+<!-- meta-refresh navigation to an external URL. -->
+<meta http-equiv="refresh" content="0; url=https://cdn.example/refresh.html">
+</head>
+<body>
+<!-- These fragments look local but resolve against <base>. Codex
+     verified Chromium fetches `https://cdn.example/assets/` when
+     this markup is served. -->
+<img src="#logo">
+<script src="#code"></script>
+
+<!-- Allowed forms — must NOT flag. -->
+<base href="">
+<base href="#top">
+<meta http-equiv="refresh" content="0; url=#local">
+<meta http-equiv="content-type" content="text/html">
+</body>
+</html>"""
+    html_v = _find_external_html_resources(fixture)
+    detected = {(tag, attr, url) for tag, attr, url, _ in html_v}
+
+    # ── External <base href> flagged ──
+    assert ("base", "href",
+            "https://cdn.example/assets/") in detected, (
+        f"external <base href> not flagged. html_v={html_v!r}")
+
+    # ── meta-refresh with external url flagged ──
+    assert ("meta", "http-equiv=refresh",
+            "https://cdn.example/refresh.html") in detected, (
+        f"meta-refresh external navigation not flagged. "
+        f"html_v={html_v!r}")
+
+    # ── Allowed forms MUST NOT be flagged ──
+    for tag, attr, url, _ in html_v:
+        assert not (tag == "base" and url in ("", "#top")), (
+            f"self-contained <base href> incorrectly flagged: "
+            f"{tag} {attr}={url!r}")
+        assert not (tag == "meta" and url in ("#local",)), (
+            f"meta-refresh fragment target incorrectly flagged: "
+            f"{tag} {attr}={url!r}")
+    # <meta http-equiv="content-type"> must never appear (no url= in
+    # content, and http-equiv != refresh).
+    assert not any(
+        tag == "meta" and "content-type" in url.lower()
+        for tag, _attr, url in detected), (
+        f"non-refresh <meta http-equiv> incorrectly scanned: "
+        f"{html_v!r}")
 
 
 def test_css_hex_escape_decoder_handles_full_range():
