@@ -3,17 +3,38 @@
 Keep only open work and current operational context here. Finished work belongs
 in Git history, the changelog, and the roadmap.
 
-## Tighten roadmap and inbox retention standards (Architect direction 2026-09-12)
+## Retention standards for roadmap and inbox (Architect direction 2026-09-12)
 
-- **Keep both session-opening documents short, concise, and human-readable.**
-  `roadmap.md` should contain current strategy, priorities, and planned work;
-  `inbox.md` should contain only open work and current operational context.
-  Neither file should accumulate shipped-release narratives or become a
-  historical change log. Move durable historical detail to focused artifacts
-  when it merits preservation; otherwise rely on the changelog and Git history.
-  Define practical size/retention standards, compact both existing files
-  without losing live decisions, and consider a lightweight mechanical check
-  that prevents the same accumulation from recurring.
+**Standards ratified** (2026-09-14, both files now compliant):
+
+- **Both files are current-facing only.** `roadmap.md` = current
+  strategy, priorities, planned work. `inbox.md` = open work +
+  current operational context.
+- **No shipped-release narratives; no historical change log.** Git
+  history and commit messages are authoritative for what has shipped.
+  Durable historical detail moves to focused artifacts under
+  `.gator/artifacts/` when it merits preservation; otherwise it's
+  dropped and Git carries it.
+- **Soft cap: keep each file under ~250 lines.** If either grows
+  past that, compact or archive before adding.
+- **Roll-forward pattern**: after a release or arc closes, prepend
+  a short note to the relevant file, don't extend an existing dense
+  paragraph.
+
+**First pass** (2026-09-14): roadmap compacted from 124,491 → 15,801
+bytes (87% reduction — single-line 120K-char leading paragraph
+retired). Shipped-release detail archived at
+`.gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md`.
+Inbox: earlier same-day roll-forward retired the Codex-sketches
+section (both closed).
+
+**Follow-up still open**: consider a lightweight mechanical check
+that fires when either file exceeds the ~250-line soft cap. Options:
+(a) pre-commit hook rule (`gator-pre-commit.py`) that emits a
+`retention-cap-warning` finding; (b) `gator init` check that surfaces
+size drift alongside the constitution drift indicator; (c) a
+scheduled `gator pulse` observation. Pick one, keep it advisory not
+blocking.
 
 ## Dashboard inspection-workspace decisions (Architect-ratified 2026-09-12)
 
