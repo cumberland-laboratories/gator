@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Cumberland HTML style — Codex enforcer round-4 follow-up: WHATWG srcset parser + SVG href attrs + quote-aware CSS url()",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "cumberland-html",
+    "enforcer-followup",
+    "srcset-parser",
+    "svg-resources",
+    "css-quoted-urls",
+    "sketch-2-post-arc"
+  ],
+  "commit": "c077818e91af082236145697fc086351766174de",
+  "short_commit": "c077818",
+  "snippet_id": "snippet-c077818e91af0",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 4,
+  "previous_commit_in_session": "86d8a0a7461bbb8c239d9d19d0af84ed7dc85d3f",
+  "started_at": "2026-09-14T00:19:56Z",
+  "ended_at": "2026-09-14T00:19:56Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/contracts.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-09-14-gator-86d8a0a7461bb.json",
+    "contracts/compatibility/test_cumberland_visual_invariants.py"
+  ],
+  "notes": [
+    "Round-4 enforcer review of `86d8a0a` surfaced two more MEDIUM",
+    "findings — both real, both narrow.",
+    "Prior state: `_parse_srcset` split the attribute value on every",
+    "comma. Data URIs contain commas (`data:image/png;base64,ABC…`) so",
+    "the split fragmented them. Codex direct-probed",
+    "`<img srcset=\"data:...,abc 1x, data:...,def 2x\">` and got back",
+    "`abc` and `def` as reported \"external URLs\" — the meta-pin's",
+    "data-URI allowance was silently false because the URLs starting"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

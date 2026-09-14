@@ -459,6 +459,14 @@ _SINGLE_URL_RESOURCE_ATTRS = {
     ("use", "xlink:href"),
     ("feimage", "href"),
     ("feimage", "xlink:href"),
+    # SVG <script> uses href / xlink:href (not `src`) — F1 round-5
+    # addition (2026-09-14). Codex's Chromium intercept verified
+    # `<svg><script href="https://cdn.example/x.js">` triggers a
+    # real network fetch; the HTML <script src> allowlist entry
+    # above did NOT catch this form because the attribute name is
+    # different.
+    ("script", "href"),
+    ("script", "xlink:href"),
 }
 
 # Comma-separated URL-list attributes (srcset syntax).
@@ -497,12 +505,23 @@ def _scan_css_for_externals(css_text: str):
     space and missing external references (F2 round-4 finding).
     """
     results = []
+    # Unquoted URL character class — escape-aware per CSS spec.
+    # `\<any-char>` counts as one URL character, so `a\ b.png` is a
+    # single URL that renders to `a%20b.png` (Codex's Chromium
+    # intercept confirmed the fetch — F2 round-5 finding). The
+    # regex accepts either a backslash-escape pair OR a normal
+    # non-special char. Trailing `\` (bare, no follower) is
+    # intentionally not matched — real CSS treats that as invalid
+    # syntax; keeping the pattern strict avoids catastrophic
+    # backtracking on malformed input.
+    _UNQ = r"(?:\\.|[^\"')\s])+"
+
     # @import "…" / @import '…' / @import url(…)
     # Three URL shapes: double-quoted, single-quoted, unquoted.
     import_pat = re.compile(
         r'@import\s+'
         r'(?:'
-        r'url\s*\(\s*(?:"([^"]*)"|\'([^\']*)\'|([^"\')\s]+))\s*\)'
+        r'url\s*\(\s*(?:"([^"]*)"|\'([^\']*)\'|(' + _UNQ + r'))\s*\)'
         r'|"([^"]*)"'
         r'|\'([^\']*)\''
         r'|([^"\')\s;]+)'
@@ -510,25 +529,35 @@ def _scan_css_for_externals(css_text: str):
         re.IGNORECASE)
     for m in import_pat.finditer(css_text):
         url = next((g for g in m.groups() if g is not None), None)
-        if url is not None and not _url_is_self_contained(url):
-            results.append(("@import", url))
+        if url is not None and not _url_is_self_contained(_unescape_css(url)):
+            results.append(("@import", _unescape_css(url)))
     # url(…) — any property. Three quoting shapes: double-quoted
     # (allow whitespace + parens up to matching quote), single-quoted
-    # (same), unquoted (whitespace-terminated).
+    # (same), unquoted (escape-aware — `\ ` is a literal space).
     url_pat = re.compile(
         r'\burl\s*\(\s*'
         r'(?:'
         r'"([^"]*)"'
         r'|\'([^\']*)\''
-        r'|([^"\')\s]+)'
+        r'|(' + _UNQ + r')'
         r')'
         r'\s*\)',
         re.IGNORECASE)
     for m in url_pat.finditer(css_text):
         url = next((g for g in m.groups() if g is not None), None)
-        if url is not None and not _url_is_self_contained(url):
-            results.append(("url()", url))
+        if url is not None and not _url_is_self_contained(_unescape_css(url)):
+            results.append(("url()", _unescape_css(url)))
     return results
+
+
+def _unescape_css(url: str) -> str:
+    """Undo CSS backslash-escapes in a URL. `a\\ b.png` → `a b.png`.
+    Applied AFTER the regex captures so `_url_is_self_contained`
+    sees the same URL the browser would resolve. Handles the simple
+    `\\<char>` form (which is what real templates use); the full
+    CSS spec allows `\\<hex-digits>` runs, but no real fetch-target
+    URL uses those, so keep the mapping minimal."""
+    return re.sub(r'\\(.)', r'\1', url)
 
 
 def _parse_srcset(value: str):
@@ -932,6 +961,66 @@ def test_self_containment_helper_catches_svg_and_quoted_css_forms():
     ]
     assert not mixed_data_flags, (
         f"mixed srcset data URI incorrectly flagged: {mixed_data_flags!r}")
+
+
+def test_self_containment_helper_catches_svg_script_and_escaped_css_url():
+    """F1 + F2 round-5 additions (2026-09-14). Codex intercepted real
+    Chromium fetches for two forms my scanner returned empty on:
+
+      * SVG `<script href="…">` — SVG scripts use `href`
+        (not `src`); the HTML <script src> allowlist entry did NOT
+        cover the SVG namespace form.
+      * CSS `url(a\\ b.png)` — an escaped-space in an unquoted URL
+        is a valid CSS URL character; the browser resolves it as
+        `a%20b.png`, my scanner stopped at the space.
+
+    Both are now covered. This pin locks the coverage.
+    """
+    fixture = r"""<!DOCTYPE html>
+<html>
+<body>
+<!-- SVG <script href> — modern spelling -->
+<svg><script href="https://cdn.example/svg-script.js"></script></svg>
+<!-- SVG <script xlink:href> — legacy spelling -->
+<svg><script xlink:href="https://cdn.example/legacy-svg-script.js"></script></svg>
+<!-- SVG <script href="#local"> — fragment, allowed -->
+<svg><script href="#local-anchor"></script></svg>
+
+<!-- Escaped space in unquoted url() — real browsers fetch this. -->
+<div style="background: url(https://cdn.example/a\ b.png)"></div>
+<!-- Same idea in a <style> block -->
+<style>
+.escaped-bg { background-image: url(https://cdn.example/c\ d.png); }
+</style>
+</body>
+</html>"""
+    html_v = _find_external_html_resources(fixture)
+    css_v = _find_external_css_resources(fixture)
+    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
+    detected_css_urls = {url for _, url, _ in css_v}
+
+    # SVG <script> flagged (both spellings).
+    assert ("script", "href",
+            "https://cdn.example/svg-script.js") in detected_html, (
+        f"SVG <script href> external not flagged. html_v={html_v!r}")
+    assert ("script", "xlink:href",
+            "https://cdn.example/legacy-svg-script.js") in detected_html, (
+        f"SVG <script xlink:href> external not flagged. html_v={html_v!r}")
+    # Fragment-only <script href="#local"> is allowed (self-contained).
+    for tag, attr, url, _ in html_v:
+        assert not (tag == "script" and url == "#local-anchor"), (
+            f"fragment-only <script href> incorrectly flagged: "
+            f"{tag} {attr}={url!r}")
+
+    # Escaped-space CSS url() flagged in BOTH inline style and
+    # <style> block. After _unescape_css, the URL reads `a b.png` /
+    # `c d.png` — that's what the browser would resolve to.
+    assert "https://cdn.example/a b.png" in detected_css_urls, (
+        f"escaped-space url() in inline style not flagged. "
+        f"css_v={css_v!r}")
+    assert "https://cdn.example/c d.png" in detected_css_urls, (
+        f"escaped-space url() in <style> block not flagged. "
+        f"css_v={css_v!r}")
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):
