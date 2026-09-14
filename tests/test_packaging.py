@@ -151,6 +151,58 @@ class TestWheelBuildAndContents:
             assert "constitution.md" in names
             assert "gator-pre-commit.py" in names
 
+    def test_wheel_contains_cumberland_master(self, built_wheel):
+        """Cumberland HTML style master (Codex Sketch 2 Slice 1, 2026-09-12;
+        moved into test_packaging.py 2026-09-13 F1 re-review): the wheel
+        MUST contain the master at the exact package-data path setuptools
+        should ship it at. Slice-1 established the master; F2's earlier
+        glob-literal check would have stayed green even if setuptools
+        exclusions dropped the file. Owned here in test_packaging.py
+        because this is the job with `build` installed AND actually run
+        against the packaging suite in CI; the compatibility suite's
+        matrix runs without `build` and would silently skip.
+        """
+        expected = ("gator_command/templates/gator-starter/reference-notes/"
+                    "cumberland-html-document-template.html")
+        with zipfile.ZipFile(built_wheel) as z:
+            members = z.namelist()
+        if expected in members:
+            return
+        near_miss = [m for m in members if "cumberland" in m.lower()]
+        template_members = [m for m in members if "templates/gator-starter" in m]
+        pytest.fail(
+            f"Cumberland master missing from built wheel.\n"
+            f"  Expected member: {expected}\n"
+            f"  Near-miss (any 'cumberland' in name): {near_miss!r}\n"
+            f"  Total template-tree members: {len(template_members)}\n"
+            f"  First 10 template members: {template_members[:10]!r}")
+
+    def test_wheel_ships_full_cumberland_delivery_surface(self, built_wheel):
+        """Companion to `test_wheel_contains_cumberland_master`: the wheel
+        MUST also carry the narrative Blueprint template (Slice-3 CSS-core
+        specialization) AND the two files Slice 2 edited (constitution +
+        authoring-html-artifacts.md). Any of these missing means fleet
+        repos would not receive the reconciled Cumberland arc, breaking
+        the routing rule the constitution HTML Documents section
+        establishes.
+        """
+        expected = {
+            "gator_command/templates/gator-starter/reference-notes/"
+            "cumberland-html-document-template.html",
+            "gator_command/templates/gator-starter/blueprints/"
+            "_template-narrative.html",
+            "gator_command/templates/gator-starter/constitution.md",
+            "gator_command/templates/gator-starter/procedures/"
+            "authoring-html-artifacts.md",
+        }
+        with zipfile.ZipFile(built_wheel) as z:
+            members = set(z.namelist())
+        missing = expected - members
+        assert not missing, (
+            f"Wheel is missing Cumberland-arc shipped files:\n"
+            f"  Missing: {sorted(missing)!r}\n"
+            f"  Wheel has {len(members)} members total.")
+
     def test_wheel_has_gator_enterprise_script(self, built_wheel):
         """Phase 3a → 4e: the thin `gator enterprise` dispatcher ships in the wheel."""
         with zipfile.ZipFile(built_wheel) as z:

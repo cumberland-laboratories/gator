@@ -432,19 +432,32 @@ def test_master_body_uses_table_wrap(master_text: str):
 # violation and returns a list — a single failure message names
 # every remaining hit, so an author sees the whole surface at once.
 
-_RESOURCE_URL_ATTR_ELEMENTS = (
-    # (tag, attr) pairs whose value is a URL that IS fetched at load.
+import html.parser as _html_parser
+
+
+# Single-URL resource attributes: {(tag, attr) → applicable to which tag}.
+_SINGLE_URL_RESOURCE_ATTRS = {
     ("script", "src"),
     ("img", "src"),
     ("iframe", "src"),
     ("video", "src"),
+    ("video", "poster"),          # F2 re-review addition
     ("audio", "src"),
     ("source", "src"),
     ("track", "src"),
     ("embed", "src"),
     ("object", "data"),
-    ("input", "src"),  # <input type="image" src="…">
-)
+    ("input", "src"),             # <input type="image" src="…">
+}
+
+# Comma-separated URL-list attributes (srcset syntax).
+_SRCSET_ATTRS = {
+    ("img", "srcset"),
+    ("source", "srcset"),
+    ("link", "imagesrcset"),
+}
+
+# <link href> is special-cased because <a href> must be scoped-out.
 
 
 def _url_is_self_contained(url: str) -> bool:
@@ -462,68 +475,169 @@ def _url_is_self_contained(url: str) -> bool:
     return False
 
 
-def _find_external_html_resources(text: str):
-    """Yield (tag, attr, url, position) for every HTML resource-loading
-    attribute that references an external target. Case-insensitive tag
-    match; attribute value in single or double quotes."""
-    violations = []
-    for tag, attr in _RESOURCE_URL_ATTR_ELEMENTS:
-        pat = re.compile(
-            rf'<{tag}\b[^>]*?\b{attr}\s*=\s*["\']([^"\']*)["\']',
-            re.IGNORECASE)
-        for match in pat.finditer(text):
-            url = match.group(1)
-            if not _url_is_self_contained(url):
-                violations.append((tag, attr, url, match.start()))
-
-    # <link> is a special case — allow ONLY nav-hint rel values that
-    # do not fetch resources (e.g. author, help). Reject any <link>
-    # with href pointing anywhere external, regardless of rel — the
-    # safe posture is "no external <link> at all in self-contained
-    # artifacts."
-    link_pat = re.compile(
-        r'<link\b[^>]*?\bhref\s*=\s*["\']([^"\']*)["\'][^>]*>',
+def _scan_css_for_externals(css_text: str):
+    """Return list of `(kind, url)` for CSS `@import` + `url(...)`
+    references that point outside the file. Shared by the `<style>`
+    block scan AND the inline `style="…"` attribute scan (F2
+    re-review — inline-style scanning was previously missing).
+    """
+    results = []
+    # @import "…" / @import '…' / @import url(…)
+    import_pat = re.compile(
+        r'@import\s+(?:url\s*\(\s*)?["\']?([^"\')\s;]*)["\']?',
         re.IGNORECASE)
-    for match in link_pat.finditer(text):
-        url = match.group(1)
+    for m in import_pat.finditer(css_text):
+        url = m.group(1)
         if not _url_is_self_contained(url):
-            violations.append(("link", "href", url, match.start()))
+            results.append(("@import", url))
+    # url(…) — any property. Handles quoted and unquoted forms.
+    url_pat = re.compile(
+        r'\burl\s*\(\s*["\']?([^"\')\s]+)["\']?\s*\)',
+        re.IGNORECASE)
+    for m in url_pat.finditer(css_text):
+        url = m.group(1)
+        if not _url_is_self_contained(url):
+            results.append(("url()", url))
+    return results
 
-    return violations
+
+def _parse_srcset(value: str):
+    """Parse an HTML `srcset` (or `imagesrcset`) attribute value into
+    a list of URLs. Format is comma-separated `URL [descriptor]` where
+    the descriptor may be `2x`, `100w`, etc. Only the URL portion is
+    treated as a resource reference."""
+    urls = []
+    for candidate in value.split(","):
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        # URL is the leading whitespace-delimited token.
+        parts = candidate.split()
+        if parts:
+            urls.append(parts[0])
+    return urls
+
+
+class _HTMLResourceScanner(_html_parser.HTMLParser):
+    """Walk every start tag, examine every attribute, collect
+    external resource references.
+
+    Uses stdlib `html.parser.HTMLParser`, which handles single-quoted,
+    double-quoted, AND unquoted attribute values correctly (previous
+    regex-based scanner missed unquoted attrs — F2 re-review
+    finding).
+
+    Emits three violation shapes into `self.violations`:
+      * `(tag, attr, url, lineno)` — HTML resource attribute
+      * `(f"{tag}@style", kind, url, lineno)` — inline CSS via
+        `style="…"` (kind = `@import` or `url()`)
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.html_violations = []
+        self.inline_style_violations = []
+
+    def handle_starttag(self, tag, attrs):
+        self._scan(tag, attrs)
+
+    def handle_startendtag(self, tag, attrs):
+        # Self-closing (<img/>, etc.) — treat identically.
+        self._scan(tag, attrs)
+
+    def _scan(self, tag, attrs):
+        tag_l = tag.lower()
+        lineno = self.getpos()[0]
+        for name, value in attrs:
+            if name is None or value is None:
+                continue
+            attr_l = name.lower()
+
+            # Single-URL resource attributes.
+            if (tag_l, attr_l) in _SINGLE_URL_RESOURCE_ATTRS:
+                if not _url_is_self_contained(value):
+                    self.html_violations.append(
+                        (tag_l, attr_l, value, lineno))
+                continue
+
+            # srcset-style comma-separated URL lists.
+            if (tag_l, attr_l) in _SRCSET_ATTRS:
+                for url in _parse_srcset(value):
+                    if not _url_is_self_contained(url):
+                        self.html_violations.append(
+                            (tag_l, attr_l, url, lineno))
+                continue
+
+            # <link href> — no external targets allowed.
+            # <a href> is navigation, not resource-loading; scope out.
+            if tag_l == "link" and attr_l == "href":
+                if not _url_is_self_contained(value):
+                    self.html_violations.append(
+                        (tag_l, attr_l, value, lineno))
+                continue
+
+            # Inline style="…" — treat as CSS. Any tag can carry it.
+            if attr_l == "style":
+                for kind, url in _scan_css_for_externals(value):
+                    self.inline_style_violations.append(
+                        (f"{tag_l}@style", kind, url, lineno))
+
+
+def _find_external_html_resources(text: str):
+    """Return `[(tag, attr, url, position), …]` for every HTML
+    resource-loading attribute that references an external target.
+    Handles quoted AND unquoted attribute values (F2 re-review).
+    Covers `<script>`, `<img>` (src + srcset), `<iframe>`, `<video>`
+    (src + poster), `<audio>`, `<source>` (src + srcset), `<track>`,
+    `<embed>`, `<object data>`, `<input type=image src>`, and
+    `<link href>` on non-`<a>` elements. `<a href>` navigation is
+    explicitly excluded. Position is line number from the HTML
+    parser (was character offset in the pre-F2-re-review shape).
+    """
+    scanner = _HTMLResourceScanner()
+    try:
+        scanner.feed(text)
+        scanner.close()
+    except Exception:  # noqa: BLE001 — malformed HTML is OK, keep partial hits
+        pass
+    return list(scanner.html_violations)
 
 
 def _find_external_css_resources(text: str):
-    """Yield (kind, url, position) for every CSS `@import` and every
-    `url(…)` reference to an external target. Scans <style> blocks;
-    ignores inline `style="…"` attributes (they're rare in these
-    templates and would need a different quoting escape). Both
-    quoted and unquoted url() forms are matched."""
+    """Return `[(kind, url, position), …]` for every CSS `@import`
+    and every `url(…)` reference to an external target. Scans BOTH
+    `<style>…</style>` blocks (via regex) AND inline `style="…"`
+    attribute values (via `html.parser` — F2 re-review addition).
+
+    Position for `<style>`-block hits is the character offset within
+    `text`; for inline-style hits it is the line number of the
+    element carrying the attribute — the two shapes are heterogeneous
+    but every consumer includes the value in a diagnostic string, so
+    stringifying either is fine.
+    """
     violations = []
+
+    # 1. <style>…</style> blocks
     style_pat = re.compile(r'<style\b[^>]*>(.*?)</style>',
                            re.IGNORECASE | re.DOTALL)
     for style_match in style_pat.finditer(text):
         css_body = style_match.group(1)
         style_start = style_match.start(1)
+        for kind, url in _scan_css_for_externals(css_body):
+            # Best-effort locator — the exact within-block offset is
+            # not tracked here; the diagnostic string carries enough
+            # context to find the reference by grep.
+            violations.append((kind, url, style_start))
 
-        # @import "…" / @import '…' / @import url(…)
-        import_pat = re.compile(
-            r'@import\s+(?:url\s*\(\s*)?["\']?([^"\')\s;]*)["\']?',
-            re.IGNORECASE)
-        for m in import_pat.finditer(css_body):
-            url = m.group(1)
-            if not _url_is_self_contained(url):
-                violations.append(
-                    ("@import", url, style_start + m.start()))
-
-        # url(…) — any property. Skip data:, http-less, and fragment.
-        url_pat = re.compile(
-            r'\burl\s*\(\s*["\']?([^"\')\s]+)["\']?\s*\)',
-            re.IGNORECASE)
-        for m in url_pat.finditer(css_body):
-            url = m.group(1)
-            if not _url_is_self_contained(url):
-                violations.append(
-                    ("url()", url, style_start + m.start()))
+    # 2. Inline style="…" attributes
+    scanner = _HTMLResourceScanner()
+    try:
+        scanner.feed(text)
+        scanner.close()
+    except Exception:  # noqa: BLE001
+        pass
+    for tag_scope, kind, url, lineno in scanner.inline_style_violations:
+        violations.append((f"{tag_scope}:{kind}", url, lineno))
 
     return violations
 
@@ -572,10 +686,12 @@ def test_narrative_is_fully_self_contained(narrative_text: str):
 
 def test_self_containment_helper_catches_known_forms():
     """Meta-pin: exercise the helper against synthesized violations
-    so a bug in the pattern regex is visible immediately (rather
-    than manifesting as a false-negative on a real template).
+    so a bug in the parse or the URL predicate is visible immediately
+    (rather than manifesting as a false-negative on a real template).
     Ensures the helper actually detects each violation class the
-    contract lists.
+    contract lists — including the four F2 re-review blind spots
+    (unquoted src, inline style url, srcset, poster) that the earlier
+    regex-only scanner silently missed.
     """
     fixture = """<!DOCTYPE html>
 <html>
@@ -588,35 +704,77 @@ body { background: url("https://cdn.example/bg.png"); }
 </style>
 </head>
 <body>
+<!-- Quoted attribute forms — pre-F2-re-review coverage -->
 <img src="https://example.com/logo.png">
 <iframe src="/other.html"></iframe>
 <video src="./local.mp4"></video>
+
+<!-- F2 re-review additions: forms the old scanner missed -->
+<!-- unquoted src (HTML permits this) -->
+<img src=https://cdn.example/x.png>
+<!-- srcset comma-list -->
+<img srcset="https://cdn.example/x-1x.png 1x, https://cdn.example/x-2x.png 2x">
+<!-- <video poster> — resource loaded before play -->
+<video poster="https://cdn.example/poster.jpg"></video>
+<!-- inline style="…" carrying url(…) -->
+<div style="background: url(https://cdn.example/bg.png)"></div>
+<!-- inline style="…" carrying @import -->
+<span style='@import "https://cdn.example/x.css";'></span>
+<!-- <object data> -->
+<object data="https://example.com/thing.swf"></object>
+<!-- <embed src> -->
+<embed src="https://example.com/x.svg">
+
+<!-- Allowed forms — must NOT be flagged -->
 <a href="https://example.com/">nav OK</a>
 <a href="#anchor">nav OK</a>
 <img src="data:image/png;base64,abc">
+<img srcset="data:image/png;base64,abc 1x, data:image/png;base64,def 2x">
+<div style="background: url(data:image/png;base64,abc)"></div>
 </body>
 </html>"""
     html_v = _find_external_html_resources(fixture)
     css_v = _find_external_css_resources(fixture)
-    detected = {(kind, url) for kind, _, url, _ in html_v}
-    detected |= {(kind, url) for kind, url, _ in css_v}
-    # Expected: link+href, script+src, img+src, iframe+src, video+src,
-    # @import, url()
-    assert ("link", "https://cdn.example.com/x.css") in detected
-    assert ("script", "//example.org/foo.js") in detected
-    assert ("img", "https://example.com/logo.png") in detected
-    assert ("iframe", "/other.html") in detected
-    assert ("video", "./local.mp4") in detected
-    assert ("@import", "https://external.example/lib.css") in detected
-    assert ("url()", "https://cdn.example/bg.png") in detected
-    # Allowed forms must NOT be detected:
+    detected_html = {(tag, attr, url) for tag, attr, url, _ in html_v}
+    detected_css = {(kind, url) for kind, url, _ in css_v}
+
+    # ── Pre-F2-re-review baseline ──
+    assert ("link", "href", "https://cdn.example.com/x.css") in detected_html
+    assert ("script", "src", "//example.org/foo.js") in detected_html
+    assert ("img", "src", "https://example.com/logo.png") in detected_html
+    assert ("iframe", "src", "/other.html") in detected_html
+    assert ("video", "src", "./local.mp4") in detected_html
+    assert ("@import", "https://external.example/lib.css") in detected_css
+    assert ("url()", "https://cdn.example/bg.png") in detected_css
+
+    # ── F2 re-review blind spots — MUST be caught now ──
+    assert ("img", "src", "https://cdn.example/x.png") in detected_html, (
+        f"unquoted src not detected. html_v={html_v!r}")
+    assert ("img", "srcset", "https://cdn.example/x-1x.png") in detected_html, (
+        f"srcset first candidate not detected. html_v={html_v!r}")
+    assert ("img", "srcset", "https://cdn.example/x-2x.png") in detected_html, (
+        f"srcset second candidate not detected. html_v={html_v!r}")
+    assert ("video", "poster", "https://cdn.example/poster.jpg") in detected_html, (
+        f"video poster not detected. html_v={html_v!r}")
+    # Inline style="…" — url() and @import both scanned.
+    inline_urls = {url for kind, url, _ in css_v if "@style" in kind}
+    assert "https://cdn.example/bg.png" in inline_urls, (
+        f"inline style url() not detected. css_v={css_v!r}")
+    assert "https://cdn.example/x.css" in inline_urls, (
+        f"inline style @import not detected. css_v={css_v!r}")
+    # <object data> + <embed src>.
+    assert ("object", "data", "https://example.com/thing.swf") in detected_html
+    assert ("embed", "src", "https://example.com/x.svg") in detected_html
+
+    # ── Allowed forms MUST NOT be flagged ──
     for tag, attr, url, _ in html_v:
-        assert not url.startswith("data:"), (
+        assert not url.strip().startswith("data:"), (
             f"data: URI incorrectly flagged: {tag} {attr}={url!r}")
-    # <a href> is not in _RESOURCE_URL_ATTR_ELEMENTS so it's never
-    # scanned; if it were, the two `<a>` entries above would appear.
-    assert not any("a" == kind for kind, _, _, _ in html_v), (
-        "<a href> should be allowed but the helper flagged it")
+        assert not url.strip().startswith("#"), (
+            f"fragment anchor incorrectly flagged: {tag} {attr}={url!r}")
+    # <a href> is scoped-out (navigation, not resource loading).
+    assert not any(tag == "a" for tag, _, _, _ in html_v), (
+        f"<a href> should be allowed but the helper flagged it: {html_v!r}")
 
 
 def test_body_has_figure_diagram_steps_and_table_examples(master_text: str):

@@ -1,34 +1,32 @@
-"""Cumberland master propagation checks (Codex Sketch 2 Slice 4, F4).
+"""Cumberland master propagation checks (Codex Sketch 2 Slice 4, F4;
+CI-topology-corrected 2026-09-13 F1 round-3 re-review).
 
-Codex Sketch 2 Slice 4 requires the master to reach fleet repos through
-the shipped delivery path. Codex enforcer 2026-09-13 F2 tightened this
-from a source-existence + glob-literal check to a real wheel-content
-inspection + real gatorize execution:
+The master must reach fleet repos through the shipped delivery path.
+This module owns the pieces of that seam that fit the fast
+compatibility matrix (no `build` package required, no wheel build):
 
     1. The master file exists at the canonical shipped location under
        `src/gator_command/templates/gator-starter/reference-notes/`.
-    2. A REAL wheel built from the current source tree contains the
-       master at the expected package-data path — proves setuptools
-       actually packages it, not just that the glob literal appears
-       in pyproject.toml. This closes the class of failure where
-       exclusions or packaging quirks would silently drop the file.
-    3. `gator-update`'s `plan_updates` function, when run against an
+    2. `gator-update`'s `plan_updates` function, when run against an
        empty v2 repo with the current template source, produces a
        plan entry that adds the master to `.gator/.includes/reference-notes/`.
-    4. A REAL `action_install_gator()` on a tmp_path places the master
-       at that destination (pinned separately in test_gator_layout.py
-       to avoid duplicating the fixture setup).
 
-The wheel-build test is session-scoped so `python -m build` runs once
-per test session; the resulting artifact is cached and re-inspected
-by all wheel-content assertions.
+The other two seams live in the CI job that actually runs them:
+
+    * Actual wheel content — pinned in
+      `tests/test_packaging.py::TestWheelBuildAndContents` alongside
+      the other wheel-content assertions. That is the ONLY job in CI
+      that installs `build` and runs its test file, so wheel-content
+      pins in the compatibility suite would silently skip on the
+      fast matrix and never run on the packaging matrix.
+    * A REAL `action_install_gator()` on tmp_path places the master
+      at `.gator/.includes/reference-notes/…` — pinned in
+      `contracts/compatibility/test_gator_layout.py::test_gatorize_install_produces_required_layout`
+      which reuses the existing install fixture.
 """
 from __future__ import annotations
 
-import shutil
-import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -42,109 +40,18 @@ MASTER_SRC = (REPO_ROOT / "src" / "gator_command" / "templates"
 MASTER_FILENAME = "cumberland-html-document-template.html"
 
 
-# ── 1. Wheel content (via canonical source path) ─────────────────
+# ── 1. Source existence at canonical shipped path ────────────────
 
 def test_cumberland_master_exists_at_shipped_path():
     """The master must exist at the exact path the wheel packages.
     This is the load-bearing existence check — everything else
-    (packaging glob, gatorize walk, update plan) references this
-    path."""
+    (wheel-content pin in test_packaging.py, gatorize walk, update
+    plan) references this path."""
     assert MASTER_SRC.is_file(), (
         f"Cumberland master missing at canonical shipped path: {MASTER_SRC}\n"
         f"This is where gatorize + gator-update walk to find template "
         f"files. Missing here means every fleet repo would not receive "
         f"the master on install or update.")
-
-
-@pytest.fixture(scope="session")
-def built_wheel_members(tmp_path_factory):
-    """Build a wheel from the current source tree once per test
-    session and return the list of member paths inside it. Session-
-    scoped because `python -m build --wheel` takes several seconds;
-    all wheel-content assertions read the same cached listing.
-
-    Skips gracefully when `build` is not importable (dev-only
-    dependency) — the source-existence + gatorize + plan pins still
-    give partial coverage on installs without `build`.
-    """
-    try:
-        import build  # noqa: F401
-    except ImportError:
-        pytest.skip("`build` package not installed — skipping "
-                    "wheel-content inspection")
-
-    outdir = tmp_path_factory.mktemp("wheel_build")
-    result = subprocess.run(
-        [sys.executable, "-m", "build", "--wheel",
-         "--outdir", str(outdir), str(REPO_ROOT)],
-        capture_output=True, text=True,
-        # Long enough for a fresh build; captured on failure.
-        timeout=180,
-    )
-    assert result.returncode == 0, (
-        f"wheel build failed (rc={result.returncode})\n"
-        f"stdout tail:\n{result.stdout[-2000:]}\n"
-        f"stderr tail:\n{result.stderr[-2000:]}")
-
-    wheels = list(outdir.glob("gator_command-*.whl"))
-    assert wheels, (
-        f"no gator_command wheel produced in {outdir}. "
-        f"Files present: {[p.name for p in outdir.iterdir()]!r}")
-    with zipfile.ZipFile(wheels[0]) as zf:
-        return zf.namelist()
-
-
-def test_wheel_contains_cumberland_master(built_wheel_members):
-    """A real wheel built from the current source tree must contain
-    the Cumberland master at the exact package-data path setuptools
-    should ship it at. Codex enforcer 2026-09-13 F2 called out that
-    the prior glob-literal check would stay green even if setuptools
-    exclusions dropped the file at build time — this pin closes the
-    gap by actually building a wheel and inspecting its zip contents.
-    """
-    expected = ("gator_command/templates/gator-starter/reference-notes/"
-                "cumberland-html-document-template.html")
-    matching = [m for m in built_wheel_members if m == expected]
-    if matching:
-        return
-    # Failure diagnostic — show any near-miss + the template surface
-    # so a rename or path change is easy to spot.
-    template_members = [m for m in built_wheel_members
-                        if "templates/gator-starter" in m]
-    near_miss = [m for m in built_wheel_members
-                 if "cumberland" in m.lower()]
-    pytest.fail(
-        f"Cumberland master missing from built wheel.\n"
-        f"  Expected member: {expected}\n"
-        f"  Near-miss (any 'cumberland' in name): {near_miss!r}\n"
-        f"  Total template-tree members shipped: {len(template_members)}\n"
-        f"  First 10 template members: {template_members[:10]!r}")
-
-
-def test_wheel_ships_full_cumberland_delivery_surface(built_wheel_members):
-    """Companion to the master pin: the built wheel must also carry
-    the narrative Blueprint template (which inherits the master's
-    CSS core byte-for-byte) AND the two files Slice 2 edited
-    (constitution + authoring-html-artifacts.md procedure). Any of
-    these missing from the wheel means fleet repos would not receive
-    the reconciled surface, breaking the routing rule the
-    constitution HTML Documents section establishes.
-    """
-    expected = {
-        "gator_command/templates/gator-starter/reference-notes/"
-        "cumberland-html-document-template.html",
-        "gator_command/templates/gator-starter/blueprints/"
-        "_template-narrative.html",
-        "gator_command/templates/gator-starter/constitution.md",
-        "gator_command/templates/gator-starter/procedures/"
-        "authoring-html-artifacts.md",
-    }
-    members = set(built_wheel_members)
-    missing = expected - members
-    assert not missing, (
-        f"Wheel is missing Cumberland-arc shipped files:\n"
-        f"  Missing: {sorted(missing)!r}\n"
-        f"  Wheel has {len(members)} members total.")
 
 
 # ── 2. Update plan routing ───────────────────────────────────────
