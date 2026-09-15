@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Runtime-pin self-heal to v2.13.3",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-pin",
+    "post-release-residue"
+  ],
+  "commit": "eec88d0bd62419470aaec4acd30aa5a88af55e38",
+  "short_commit": "eec88d0",
+  "snippet_id": "snippet-eec88d0bd6241",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "d7b887153aed3f4101371c771a98ae6bc81d3e78",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-15T00:36:29Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-09-15-gator-d7b887153aed3.json"
+  ],
+  "notes": [
+    "Post-v2.13.3 machine self-heal: after the release landed, the",
+    "installed CLI at v2.13.3 refreshed `.gator/.gator-version` and",
+    "`.gator/runtime-pin.json` to reflect the new runtime version and",
+    "recomputed the manifest hash for `gator_layout.py` (which changed",
+    "in Cumberland Slice 1 to add the master template to",
+    "`MIXED_DIRECTORY_SHIPPED_DEFAULTS`).",
+    "Expected governance residue per the runtime-split contract; committing",
+    "the state so origin/main and origin/dev carry the accurate record."
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

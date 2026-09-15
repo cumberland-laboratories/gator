@@ -72,6 +72,7 @@ quick session-open scanning; open the issue for full detail.
 - [#24](https://github.com/cumberland-laboratories/gator/issues/24) Retention-standards mechanical check for roadmap/inbox (hooks)
 - [#25](https://github.com/cumberland-laboratories/gator/issues/25) Post-runtime-split authority for `product-source.json` (packaging)
 - [#26](https://github.com/cumberland-laboratories/gator/issues/26) Deferred Plan C §7 pins — dashboard-UI test coverage (dashboard)
+- [#31](https://github.com/cumberland-laboratories/gator/issues/31) Clickable "Representative functions" in `charter-map.html` — click-through to source (dashboard) — Blueprints 2.0 Level-3 step
 
 **Documentation:**
 
