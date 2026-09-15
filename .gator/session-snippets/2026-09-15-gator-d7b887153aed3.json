@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Inbox: retire backlog items to GitHub Issues #13-#30; compact to pointer index",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox-compaction",
+    "github-issues-sync",
+    "backlog-retention"
+  ],
+  "commit": "d7b887153aed3f4101371c771a98ae6bc81d3e78",
+  "short_commit": "d7b8871",
+  "snippet_id": "snippet-d7b887153aed3",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-15T00:36:06Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-09-14-gator-40ad971569962.json"
+  ],
+  "notes": [
+    "Moves 18 backlog items from `.gator/inbox.md` into the GitHub",
+    "Issues tracker (#13-#30) and rewires the inbox as a compact index",
+    "that points at the tracker. Architect direction: \"GitHub Issues",
+    "are the source of truth for bugs, feature requests, and",
+    "improvements.\"",
+    "**Bugs (7)**:",
+    "#13 Pre-commit STOP box points at stale `gator-approve.py` (hooks)",
+    "#14 `gator-approve.py --help` broken (hooks)"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}
