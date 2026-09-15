@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Bump to 2.13.3 — Cumberland HTML style Sketch 2 arc closure: bounded self-containment for shipped templates",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "cumberland-html",
+    "sketch-2-closed",
+    "csp-defense-in-depth",
+    "positive-policy-validator"
+  ],
+  "commit": "40ad971569962b092366888128612551c47d4551",
+  "short_commit": "40ad971",
+  "snippet_id": "snippet-40ad971569962",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "main",
+  "commit_index": 9,
+  "previous_commit_in_session": "c4a41fa1927b53fc00203015f01d859871c1e5ce",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-14T18:10:18Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-14-gator-c4a41fa1927b5.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "v2.13.3 patch release. Ships the Cumberland HTML style Sketch 2",
+    "arc closure to `pipx install gator-command` users. Defensive",
+    "hardening of the shipped template surface — no user-facing",
+    "feature, no API change.",
+    "`pyproject.toml` version → 2.13.3",
+    "`VERSION` file → 2.13.3 (byte-consistent per `scripts-core-library.md` tripwire)",
+    "`scripts-core-library.md` charter running note updated to name",
+    "2.13.3 as the current version in both files"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}
