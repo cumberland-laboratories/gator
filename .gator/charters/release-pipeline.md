@@ -103,6 +103,27 @@ Two lanes:
   verification; the fix is to make future verification claims
   precise about what was actually checked.
 
+- **! All `actions/*` pins sit at their minimum Node-24-native
+  majors** (bumped 2026-09-16, tracks
+  [issue #4](https://github.com/cumberland-laboratories/gator/issues/4)).
+  Ratified target majors:
+  - `actions/checkout` at `@v5`
+  - `actions/setup-python` at `@v6`
+  - `actions/upload-artifact` at `@v6`
+  - `actions/download-artifact` at `@v7`
+  These are the SMALLEST majors whose `action.yml` declares
+  `runs.using: node24`. GitHub removes Node 20 availability on
+  2026-09-23; between 2026-06-16 and that date, Node-20-declaring
+  actions have been forced onto Node 24 under a temporary
+  compatibility shim while emitting deprecation annotations. The
+  bump retires dependence on that forced-runtime behavior and
+  aligns Gator with the supported Node-24-native runtime contract.
+  Do NOT bump to latest majors (currently checkout v7, setup-python
+  v7, upload-artifact v7, download-artifact v8) as part of this
+  invariant — those carry additional behavioral changes unrelated
+  to Node 20 removal. `pypa/gh-action-pypi-publish@release/v1`
+  remains unchanged (docker-container action, Node-independent).
+
 ## Workflow B — Release Candidate (shipped 3b-3, wired but disabled)
 
 Triggers on every `v*.*.*-rc*` tag push. Four sequential-with-fanout

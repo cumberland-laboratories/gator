@@ -56,7 +56,7 @@ jobs:
         python-version: ['3.9', '3.13']
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Don't leave the GITHUB_TOKEN in the checkout's git config —
           # read-only CI never pushes, so credentials should not
@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -95,7 +95,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Preserve the least-privilege rule the `fast` and `packaging`
           # jobs use — read-only CI never pushes, so credentials should
@@ -103,7 +103,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -121,12 +121,12 @@ jobs:
     name: packaging (ubuntu · py3.13, wheel build + venv install)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip

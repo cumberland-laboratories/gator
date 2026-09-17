@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Inbox: add pointer to #31 (clickable Representative functions in charter-map.html)",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox-pointer",
+    "github-issue-31",
+    "blueprints-2-0"
+  ],
+  "commit": "f2880e1a454a2b4d7ec742a036748e881732c6d1",
+  "short_commit": "f2880e1",
+  "snippet_id": "snippet-f2880e1a454a2",
+  "session_group_key": "anthropic:c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "eec88d0bd62419470aaec4acd30aa5a88af55e38",
+  "started_at": "2026-09-14T09:52:35Z",
+  "ended_at": "2026-09-15T00:47:18Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-09-15-gator-eec88d0bd6241.json"
+  ],
+  "notes": [
+    "Adds a one-line pointer to newly-filed GitHub Issue #31 —",
+    "\"Make 'Representative functions' clickable in charter-map.html —",
+    "link to source for inspection\". Architect-requested feature-track",
+    "step toward Blueprints 2.0 Level 3 (click-through to source for",
+    "architecturally-significant functions).",
+    "Issue body captures the current shape (plain `<li><code>fname</code></li>`",
+    "in `renderDetail`), target behavior (click a function → open source",
+    "file), and three axes of open design questions (link target, how"
+  ],
+  "transcript_session_id": "c7e1ee37-9db5-4090-b03d-779ca7d3b713",
+  "transcript_ref": null
+}

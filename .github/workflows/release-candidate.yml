@@ -93,12 +93,12 @@ jobs:
       # output is for observability, not the sole source of truth.
       wheel_version: ${{ steps.extract.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -135,7 +135,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Upload candidate artifact (Workflow C consumes this by name)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           # NAME IS A CONTRACT with Workflow C's fetch-candidate.
           # Do not rename in isolation.
@@ -165,7 +165,7 @@ jobs:
       id-token: write
     steps:
       - name: Download candidate wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: candidate-wheel-${{ github.ref_name }}
           path: dist/
@@ -197,7 +197,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
