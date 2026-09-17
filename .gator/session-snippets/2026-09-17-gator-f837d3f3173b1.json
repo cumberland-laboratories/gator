@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Fix #32: session hooks resolve Git worktree top level before dispatch",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "issue-32",
+    "session-hooks",
+    "dispatcher",
+    "ai-tool-cwd"
+  ],
+  "commit": "f837d3f3173b1b228a10238b00c5e710b0c56e0b",
+  "short_commit": "f837d3f",
+  "snippet_id": "snippet-f837d3f3173b1",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "8ed83222b0cdd90b2cc511a6efc49f3e3aec3d19",
+  "started_at": "2026-09-17T00:53:21Z",
+  "ended_at": "2026-09-17T00:53:21Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-09-17-gator-8ed83222b0cdd.json",
+    "src/gator_command/scripts/gator-hook.py",
+    "tests/test_gator_hook.py"
+  ],
+  "notes": [
+    "Closes [issue #32](https://github.com/cumberland-laboratories/gator/issues/32).",
+    "`gator hook session-open` and `gator hook session-start` passed",
+    "`Path.cwd()` directly to `resolve_governed_runtime`. When an AI",
+    "tool started with cwd inside a governed repository subdirectory",
+    "(e.g. `repo/src/`), the dispatcher evaluated that subdirectory as",
+    "though it were the repo root, misclassified the governed",
+    "repository as ungoverned, and skipped both nonblocking session",
+    "hooks' existing behavior. Reproduced behavior, not hypothetical."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

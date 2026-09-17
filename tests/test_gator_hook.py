@@ -272,13 +272,32 @@ class TestResolveRepoRoot:
         got = hook._resolve_repo_root(subdir, "session-open")
         assert got.resolve() == wt.resolve()
 
-    def test_session_open_outside_git_returns_cwd(self, tmp_path):
+    def test_session_open_outside_git_returns_cwd(
+            self, tmp_path, monkeypatch):
         """Case 4: invocation outside any Git tree preserves today's
         ungoverned, non-blocking behavior — resolver returns cwd
         unchanged, and downstream `resolve_governed_runtime` will
-        report ungoverned."""
+        report ungoverned.
+
+        Hermetic: pytest's tmp_path may sit inside a parent Git tree
+        (e.g. `--basetemp=.tmp/...` places it inside this checkout).
+        A real `git rev-parse` from such a subdirectory correctly
+        finds the enclosing repo. Mock `subprocess.run` to return
+        the outside-Git shape (rc != 0) so the test asserts the
+        outside-Git BRANCH of the resolver, not a coincidence of
+        temp-dir placement."""
         outside = tmp_path / "no-git"
         outside.mkdir()
+
+        def _mock_run(*args, **kwargs):
+            class _R:
+                returncode = 128
+                stdout = ""
+                stderr = ("fatal: not a git repository "
+                          "(or any of the parent directories): .git\n")
+            return _R()
+
+        monkeypatch.setattr(hook.subprocess, "run", _mock_run)
         got = hook._resolve_repo_root(outside, "session-open")
         assert got.resolve() == outside.resolve()
 
@@ -362,3 +381,86 @@ class TestResolveRepoRootAdditionalGuards:
             got = hook._resolve_repo_root(subdir, hook_name)
             assert got == subdir, (
                 f"{hook_name} should NOT walk to git top-level")
+
+
+class TestMainSeamWiring:
+    """Codex round-1 finding: the helper-level TestResolveRepoRoot
+    tests would all still pass if a future edit reverted `main()`
+    back to `repo_root = Path.cwd()` (bare) — the bug from issue
+    #32 would silently reopen. These pins invoke `main()` from a
+    governed subdirectory and assert the resolved-root value
+    actually reaches `resolve_governed_runtime` (and, transitively,
+    `plan_dispatch`).
+
+    Method: mock `resolve_governed_runtime` to capture its
+    argument and return an `ungoverned` decision. `plan_dispatch`
+    then returns `action=skip, exit_code=0` on the ungoverned
+    branch, so `main()` short-circuits before any subprocess spawn
+    — the test never runs a real hook script."""
+
+    def _ungoverned_capture(self, monkeypatch):
+        captured = []
+
+        def _mock_resolve(rr):
+            captured.append(rr)
+            return {"mode": "ungoverned", "pin_version": None,
+                    "cli_version": "2.13.4",
+                    "reason": "test-mock"}
+        monkeypatch.setattr(hook, "resolve_governed_runtime", _mock_resolve)
+        return captured
+
+    @pytest.mark.parametrize("hook_name",
+                             ["session-open", "session-start"])
+    def test_main_session_hook_from_subdir_passes_git_toplevel(
+            self, tmp_path, monkeypatch, hook_name):
+        """Regression against a future revert of `main()`'s single
+        line from `_resolve_repo_root(Path.cwd(), hook_name)` back
+        to `Path.cwd()`. This pin would fail against pre-fix
+        `main()` because the bare `Path.cwd()` would resolve to
+        the subdirectory, not the git top level."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        monkeypatch.chdir(subdir)
+        captured = self._ungoverned_capture(monkeypatch)
+
+        rc = hook.main([hook_name])
+
+        assert rc == 0, (
+            "ungoverned decision + non-blocking hook should exit 0")
+        assert len(captured) == 1, (
+            f"resolve_governed_runtime called {len(captured)} times, "
+            f"expected 1")
+        assert captured[0].resolve() == tmp_path.resolve(), (
+            f"main() with cwd={subdir} and hook={hook_name!r} passed "
+            f"{captured[0]!r} to resolve_governed_runtime instead of "
+            f"the git top-level {tmp_path}. A future revert of "
+            f"main()'s repo_root line to bare Path.cwd() would "
+            f"re-open issue #32 while every TestResolveRepoRoot pin "
+            f"still passed — that's the class of regression this "
+            f"seam pin catches.")
+
+    def test_main_pre_commit_from_subdir_passes_cwd_unchanged(
+            self, tmp_path, monkeypatch):
+        """Sibling seam pin: commit hooks must NOT walk to git top
+        level even when invoked with a subdirectory cwd. Would fail
+        if a future edit added `pre-commit` to
+        `_HOOKS_NEEDING_GIT_TOPLEVEL`. Also demonstrates that the
+        resolver's opt-in behavior actually reaches `main()`, not
+        just the helper."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        monkeypatch.chdir(subdir)
+        captured = self._ungoverned_capture(monkeypatch)
+
+        rc = hook.main(["pre-commit"])
+
+        assert rc == 0, "ungoverned pre-commit exits 0 (warning-mode)"
+        assert len(captured) == 1
+        assert captured[0].resolve() == subdir.resolve(), (
+            f"main() with cwd={subdir} and hook='pre-commit' passed "
+            f"{captured[0]!r} instead of the subdirectory. Commit "
+            f"hooks must NOT walk to git top-level.")

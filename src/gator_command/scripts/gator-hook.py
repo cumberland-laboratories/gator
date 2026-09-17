@@ -109,9 +109,14 @@ def _resolve_repo_root(cwd, hook_name):
       * Commit hooks (pre-commit / commit-msg / post-commit) → cwd
         unchanged regardless.
 
-    Fails open on any environment error (git missing from PATH,
-    subprocess timeout, unexpected stderr) — returns cwd so the
+    Fails open on any environment error — returns cwd so the
     dispatcher's existing ungoverned fallback handles the case.
+    The specific fail-open conditions are: git subprocess raises
+    (FileNotFoundError, SubprocessError, timeout, OSError), the
+    subprocess returns a non-zero exit code, or stdout comes back
+    empty. Stderr is NOT inspected — git can emit non-fatal
+    diagnostics alongside a valid top-level on stdout, and
+    treating any stderr as a failure would false-positive on those.
     Session hooks are non-blocking; a resolver failure must never
     strand a session open.
     """
