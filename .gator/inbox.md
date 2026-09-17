@@ -25,16 +25,18 @@ Codex-sketches section retired; historical detail archived at
 `.gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md`).
 Mechanical soft-cap check is #24.
 
-## Where we are (2026-09-14, post-v2.13.3)
+## Where we are (2026-09-16, post-v2.13.4)
 
-Cumberland HTML Sketch 2 arc closed and shipped in v2.13.3
-(2026-09-14) — Codex round-15 "no findings, recommend closure";
+v2.13.4 shipped 2026-09-16 — Node-24-native `actions/*` bump
+across all three GitHub Actions workflows. Closes issue #4 ahead
+of the 2026-09-23 Node 20 availability removal. Sixth consecutive
+fully first-try green pipeline (v2.13.0 → v2.13.4).
+
+v2.13.3 (2026-09-14) shipped the Cumberland HTML Sketch 2 arc
+closure — Codex round-15 "no findings, recommend closure";
 bounded self-containment stop rule in force.
 
-Latest released version is **v2.13.3** (2026-09-14). Five
-consecutive fully first-try green pipelines (v2.13.0 →
-v2.13.3). The pre-v2.13.0 roadmap priorities are next — see
-`roadmap.md`:
+The pre-v2.13.0 roadmap priorities are next — see `roadmap.md`:
 
 1. Gator + Enterprise polished and ready for lots of users.
 2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
@@ -60,7 +62,6 @@ quick session-open scanning; open the issue for full detail.
 
 **Enhancements / Features:**
 
-- [#4](https://github.com/cumberland-laboratories/gator/issues/4) Bump `actions/*` past Node.js 20 before GitHub force-fails (packaging, maintenance — deadline-driven)
 - [#5](https://github.com/cumberland-laboratories/gator/issues/5) Gator Loop polish (umbrella) (loop)
 - [#6](https://github.com/cumberland-laboratories/gator/issues/6) Loop Dashboard events timeline (dashboard, loop)
 - [#7](https://github.com/cumberland-laboratories/gator/issues/7) Loop Dashboard session card on Repo overview (dashboard, loop)

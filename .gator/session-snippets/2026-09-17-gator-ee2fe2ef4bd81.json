@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Bump to 2.13.4 — Node-24-native `actions/*` majors across all three workflows",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "github-actions",
+    "node-24",
+    "issue-4"
+  ],
+  "commit": "ee2fe2ef4bd81f0b3ac75596b38940582e78a385",
+  "short_commit": "ee2fe2e",
+  "snippet_id": "snippet-ee2fe2ef4bd81",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "d71baa9ac75f7855457716b8eaf79fd04366f39c",
+  "started_at": "2026-09-17T00:14:58Z",
+  "ended_at": "2026-09-17T00:14:58Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-17-gator-d71baa9ac75f7.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "v2.13.4 patch release. Ships the `actions/*` Node-24-native",
+    "bump from the preceding `d71baa9` workflow commit, per the r3",
+    "implementation plan in",
+    "`.gator/vault/artifacts/2026-09-16-bump-actions-past-node-20-implementation-plan.md`.",
+    "`pyproject.toml` version → 2.13.4",
+    "`VERSION` file → 2.13.4 (byte-consistent per",
+    "`scripts-core-library.md` tripwire)",
+    "`scripts-core-library.md` charter running note updated to name"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
