@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Bump `actions/*` to Node-24-native majors across all three workflows",
+  "change_type": "maintenance",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "github-actions",
+    "node-24",
+    "issue-4",
+    "release-pipeline",
+    "maintenance"
+  ],
+  "commit": "d71baa9ac75f7855457716b8eaf79fd04366f39c",
+  "short_commit": "d71baa9",
+  "snippet_id": "snippet-d71baa9ac75f7",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-17T00:04:34Z",
+  "ended_at": "2026-09-17T00:04:34Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/session-snippets/2026-09-15-gator-f2880e1a454a2.json",
+    ".github/workflows/promote-to-pypi.yml",
+    ".github/workflows/release-candidate.yml",
+    ".github/workflows/source-ci.yml"
+  ],
+  "notes": [
+    "Executes the workflow-bump commit from the r3 plan",
+    "(`.gator/vault/artifacts/2026-09-16-bump-actions-past-node-20-implementation-plan.md`),",
+    "tracking [issue #4](https://github.com/cumberland-laboratories/gator/issues/4).",
+    "All 15 `actions/*` pins across the three workflow files move to",
+    "their minimum Node-24-native majors in one commit.",
+    "`actions/checkout` `@v4` → **`@v5`** (5 lines)",
+    "`actions/setup-python` `@v5` → **`@v6`** (6 lines)",
+    "`actions/upload-artifact` `@v4` → **`@v6`** (2 lines)"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -2,6 +2,27 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.13.4] — 2026-09-16
+
+Maintenance release. Bumps every `actions/*` pin across all three GitHub Actions workflows to its minimum Node-24-native major, aligning Gator's release pipeline with GitHub's Node 24 runtime contract before Node 20 availability ends on 2026-09-23. Workflow-only change; no user-facing API, CLI, or dashboard behavior change.
+
+### Changed
+
+- **`.github/workflows/*.yml`** — all 15 `actions/*` pin-lines bumped to their minimum majors whose `action.yml` declares `runs.using: node24`:
+  - `actions/checkout@v4` → **`@v5`** (5 sites: `source-ci.yml` ×3, `release-candidate.yml` ×1, `promote-to-pypi.yml` ×1)
+  - `actions/setup-python@v5` → **`@v6`** (6 sites: `source-ci.yml` ×3, `release-candidate.yml` ×2, `promote-to-pypi.yml` ×1)
+  - `actions/upload-artifact@v4` → **`@v6`** (2 sites: `release-candidate.yml` ×1, `promote-to-pypi.yml` ×1)
+  - `actions/download-artifact@v4` → **`@v7`** (2 sites: `release-candidate.yml` ×1, `promote-to-pypi.yml` ×1)
+  Each target is the SMALLEST major that crosses the Node-24 boundary — v5 upload-artifact and v5/v6 download-artifact still declare `node20`, per direct `action.yml` inspection. Latest majors (checkout v7, setup-python v7, upload-artifact v7, download-artifact v8) are intentionally NOT adopted here; they carry additional behavioral changes unrelated to Node 20 removal, and belong in a separate audit.
+- **`.gator/charters/release-pipeline.md`** — new bang note in the Invariants section documenting the pinned Node-24-native majors, the 2026-09-23 motivation, and the deliberate not-latest choice.
+
+### Notes
+
+- Since 2026-06-16, JavaScript actions have been forced onto Node 24 on GitHub-hosted runners; every Gator workflow run since has succeeded under that forced-compat shim while emitting deprecation annotations for the Node-20-declaring pins. GitHub removes Node 20 availability on **2026-09-23** and the temporary `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` opt-out disappears with it. This release retires Gator's dependence on the forced-runtime compatibility behavior. See <https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/>.
+- `pypa/gh-action-pypi-publish@release/v1` is unchanged (docker-container action; Node-independent).
+- First source-ci run on the bumped `actions/setup-python@v6` may be marginally slower on the four `cache: pip`-enabled call sites (`source-ci.yml` ×3, `release-candidate.yml::build-candidate`) as the cache key regenerates. Subsequent runs cache normally.
+- Tracks [issue #4](https://github.com/cumberland-laboratories/gator/issues/4). Full plan: `.gator/vault/artifacts/2026-09-16-bump-actions-past-node-20-implementation-plan.md` (vault, machine-local; three Codex whiteboard review rounds folded into r3).
+
 ## [2.13.3] — 2026-09-14
 
 Patch release: Cumberland HTML style Sketch 2 arc closure. Adds a pinned Content-Security-Policy `<meta>` to both shipped Cumberland templates and replaces eleven rounds of parser-based self-containment scanner accretion with a bounded positive-policy validator. Defensive hardening of the shipped template surface; no user-facing feature, no API change.
