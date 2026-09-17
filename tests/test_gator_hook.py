@@ -183,3 +183,182 @@ class TestMain:
         assert d.name == "scripts"
         assert d.parent.name == "gator-starter"
         assert (d / "gator-pre-commit.py").is_file()
+
+
+# ── Issue #32: session-hook root resolution ─────────────────────
+#
+# `gator hook session-open` and `gator hook session-start` may be
+# invoked by an AI tool whose cwd is a governed repository
+# subdirectory (e.g. `repo/src/`). Before the fix, `main()` passed
+# `Path.cwd()` directly to `resolve_governed_runtime`; the
+# subdirectory was misclassified as ungoverned and the session
+# hook skipped its existing behavior.
+#
+# The fix: for session-open and session-start only, resolve the
+# enclosing Git worktree's top level via `git rev-parse
+# --show-toplevel`. Commit hooks are unchanged — git itself invokes
+# them with cwd at the top level.
+#
+# These tests use real `git init` calls in `tmp_path`. Git is
+# available on every CI runner that also runs `actions/checkout`.
+
+import subprocess as _subprocess
+
+
+def _git_init(path):
+    """Init a git repo at `path` with minimal identity for
+    downstream `commit` / `worktree` calls."""
+    _subprocess.run(["git", "init", "-q", "-b", "main", str(path)],
+                    check=True)
+    _subprocess.run(["git", "-C", str(path), "config",
+                     "user.email", "t@t"], check=True)
+    _subprocess.run(["git", "-C", str(path), "config",
+                     "user.name", "t"], check=True)
+
+
+class TestResolveRepoRoot:
+    """Six acceptance-coverage cases from issue #32, one test per case."""
+
+    def test_session_open_from_repo_root_unchanged(self, tmp_path):
+        """Case 1: invocation at the governed repo root must behave
+        exactly as before — cwd IS the top level, resolver returns
+        the same path."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        got = hook._resolve_repo_root(tmp_path, "session-open")
+        assert got.resolve() == tmp_path.resolve()
+
+    def test_session_open_from_governed_subdirectory_resolves_to_toplevel(
+            self, tmp_path):
+        """Case 2: cwd inside a governed subdirectory resolves to the
+        governed repository's top level — the bug this issue fixes."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        got = hook._resolve_repo_root(subdir, "session-open")
+        assert got.resolve() == tmp_path.resolve()
+
+    def test_session_start_from_governed_subdirectory_resolves_to_toplevel(
+            self, tmp_path):
+        """Same rule for session-start (the vendor SessionStart entry
+        point). Pinned separately because the issue names both hooks."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src" / "deep"
+        subdir.mkdir(parents=True)
+        got = hook._resolve_repo_root(subdir, "session-start")
+        assert got.resolve() == tmp_path.resolve()
+
+    def test_session_open_linked_worktree_resolves_to_worktree_toplevel(
+            self, tmp_path):
+        """Case 3: a linked worktree's subdirectory resolves to that
+        worktree's own top level, NOT the main repo. `git rev-parse
+        --show-toplevel` returns the worktree top when run from
+        inside a linked worktree."""
+        main_repo = tmp_path / "main-repo"
+        main_repo.mkdir()
+        _git_init(main_repo)
+        (main_repo / "seed.txt").write_text("x\n", encoding="utf-8")
+        _subprocess.run(["git", "-C", str(main_repo), "add", "."],
+                        check=True)
+        _subprocess.run(["git", "-C", str(main_repo), "commit", "-q",
+                         "-m", "seed"], check=True)
+        wt = tmp_path / "linked-worktree"
+        _subprocess.run(["git", "-C", str(main_repo), "worktree",
+                         "add", "-q", str(wt), "HEAD"], check=True)
+        subdir = wt / "sub"
+        subdir.mkdir()
+        got = hook._resolve_repo_root(subdir, "session-open")
+        assert got.resolve() == wt.resolve()
+
+    def test_session_open_outside_git_returns_cwd(self, tmp_path):
+        """Case 4: invocation outside any Git tree preserves today's
+        ungoverned, non-blocking behavior — resolver returns cwd
+        unchanged, and downstream `resolve_governed_runtime` will
+        report ungoverned."""
+        outside = tmp_path / "no-git"
+        outside.mkdir()
+        got = hook._resolve_repo_root(outside, "session-open")
+        assert got.resolve() == outside.resolve()
+
+    def test_session_open_nested_ungoverned_git_stays_at_nested_toplevel(
+            self, tmp_path):
+        """Case 5: a nested ungoverned Git repository inside a
+        governed parent resolves to the nested top level (its own
+        `.git` boundary) — do NOT walk past that boundary into the
+        governed parent."""
+        parent = tmp_path / "governed-parent"
+        parent.mkdir()
+        _git_init(parent)
+        (parent / ".gator").mkdir()
+        nested = parent / "vendored" / "otherproject"
+        nested.mkdir(parents=True)
+        _git_init(nested)
+        # Nested has NO `.gator/` — the current code would classify
+        # it as ungoverned once run from its top level, which is
+        # correct. The bug case would be walking up to the governed
+        # parent and running governed behavior from an unrelated
+        # nested repo.
+        subdir = nested / "src"
+        subdir.mkdir()
+        got = hook._resolve_repo_root(subdir, "session-open")
+        assert got.resolve() == nested.resolve()
+
+    @pytest.mark.parametrize("hook_name",
+                             ["pre-commit", "commit-msg", "post-commit"])
+    def test_commit_hooks_unchanged_by_root_resolution(
+            self, tmp_path, hook_name):
+        """Case 6: commit-hook dispatch behavior remains unchanged.
+        Git itself invokes commit hooks with cwd already at the top
+        level, so the resolver must NOT walk to the top level for
+        them — even if invoked with a subdirectory cwd (test-only
+        edge). Preserving cwd verbatim keeps commit-hook semantics
+        identical to pre-fix behavior."""
+        _git_init(tmp_path)
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        got = hook._resolve_repo_root(subdir, hook_name)
+        assert got == subdir
+
+
+class TestResolveRepoRootAdditionalGuards:
+    """Non-acceptance-coverage cases the resolver must handle
+    gracefully to preserve today's fail-open behavior."""
+
+    def test_git_missing_from_path_returns_cwd(self, tmp_path, monkeypatch):
+        """If `git` is not on PATH (unusual but possible on stripped
+        CI images or exotic dev machines), the resolver must not
+        raise — return cwd, let the downstream ungoverned path
+        handle it."""
+        # Force `git` invocation to raise FileNotFoundError via a
+        # PATH pointed at an empty dir.
+        empty = tmp_path / "empty-path"
+        empty.mkdir()
+        monkeypatch.setenv("PATH", str(empty))
+        # On Windows, PATHEXT / cmd.exe resolution may still find
+        # git.exe via other means; skip cleanly if the test can't
+        # actually poison the git resolution.
+        try:
+            _subprocess.run(["git", "--version"],
+                            capture_output=True, timeout=2)
+            pytest.skip("could not poison git PATH lookup on this platform")
+        except (FileNotFoundError, OSError):
+            pass
+        got = hook._resolve_repo_root(tmp_path, "session-open")
+        assert got == tmp_path
+
+    def test_enforcer_review_and_approve_return_cwd_unchanged(
+            self, tmp_path):
+        """The dispatcher also handles `enforcer-review` and
+        `approve` (non-git hooks); they run with cwd owned by the
+        caller and MUST NOT get the Git-top-level lookup. Only
+        session-open and session-start opt in."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        for hook_name in ("enforcer-review", "approve"):
+            got = hook._resolve_repo_root(subdir, hook_name)
+            assert got == subdir, (
+                f"{hook_name} should NOT walk to git top-level")

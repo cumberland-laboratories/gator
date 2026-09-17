@@ -71,6 +71,67 @@ HOOK_MAP = {
 BLOCKING_HOOKS = {"pre-commit"}
 
 
+# Hooks for which cwd may legitimately be a governed repo
+# subdirectory (an AI tool started with `cwd=repo/src/`, a vendor
+# SessionStart entry point that inherits the shell's cwd, etc.).
+# For these, resolve the enclosing Git worktree's top-level
+# directory before running the dispatcher.
+#
+# Commit hooks (pre-commit / commit-msg / post-commit) are NOT in
+# this set: git itself invokes them with cwd already at the top
+# level, and re-resolving would introduce a behavior change the
+# runtime-split intentionally avoids. `enforcer-review` and
+# `approve` are also excluded — they are user-driven verbs whose
+# cwd expectations are owned by the caller.
+#
+# Issue #32 (2026-09-16).
+_HOOKS_NEEDING_GIT_TOPLEVEL = frozenset({"session-open", "session-start"})
+
+
+def _resolve_repo_root(cwd, hook_name):
+    """Return the effective repository root for `hook_name`.
+
+    For hooks in `_HOOKS_NEEDING_GIT_TOPLEVEL`, resolve the
+    enclosing Git worktree's top level via
+    `git rev-parse --show-toplevel`. For every other hook, return
+    `cwd` unchanged.
+
+    Boundary rules (issue #32 acceptance coverage):
+      * Session hook at the repo root → cwd unchanged.
+      * Session hook in a governed subdirectory → walks to top level.
+      * Session hook in a linked worktree → worktree's own top level
+        (git rev-parse honors worktree boundaries).
+      * Session hook outside any Git tree → cwd unchanged; downstream
+        `resolve_governed_runtime` reports ungoverned.
+      * Session hook in a nested Git repository → nested top level,
+        NOT any outer parent (git rev-parse stops at the first
+        `.git` walking upward).
+      * Commit hooks (pre-commit / commit-msg / post-commit) → cwd
+        unchanged regardless.
+
+    Fails open on any environment error (git missing from PATH,
+    subprocess timeout, unexpected stderr) — returns cwd so the
+    dispatcher's existing ungoverned fallback handles the case.
+    Session hooks are non-blocking; a resolver failure must never
+    strand a session open.
+    """
+    if hook_name not in _HOOKS_NEEDING_GIT_TOPLEVEL:
+        return cwd
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return cwd
+    if result.returncode != 0:
+        return cwd
+    top = result.stdout.strip()
+    if not top:
+        return cwd
+    return Path(top)
+
+
 def _wheel_runtime_dir():
     """The installed wheel's runtime — the template scripts dir."""
     return SCRIPTS_DIR.parent / "templates" / "gator-starter" / "scripts"
@@ -161,7 +222,11 @@ def main(argv=None):
 
     hook_name = argv[0]
     passthrough = argv[1:]
-    repo_root = Path.cwd()
+    # Issue #32: session-open / session-start may be invoked by an
+    # AI tool whose cwd is a governed repo subdirectory. Walk to the
+    # Git worktree top level for those hooks; commit hooks keep the
+    # pre-fix behavior since git invokes them at the top level.
+    repo_root = _resolve_repo_root(Path.cwd(), hook_name)
 
     decision = resolve_governed_runtime(repo_root)
     plan = plan_dispatch(hook_name, repo_root, decision)

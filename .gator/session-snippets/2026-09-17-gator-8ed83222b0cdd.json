@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Roll forward roadmap + inbox — v2.13.4 shipped; issue #4 closed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "governance-roll-forward",
+    "v2-13-4",
+    "issue-4-closed"
+  ],
+  "commit": "8ed83222b0cdd90b2cc511a6efc49f3e3aec3d19",
+  "short_commit": "8ed8322",
+  "snippet_id": "snippet-8ed83222b0cdd",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "ee2fe2ef4bd81f0b3ac75596b38940582e78a385",
+  "started_at": "2026-09-17T00:38:42Z",
+  "ended_at": "2026-09-17T00:38:42Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-09-17-gator-ee2fe2ef4bd81.json"
+  ],
+  "notes": [
+    "Post-v2.13.4 roll-forward.",
+    "Header updated 2026-09-14 → 2026-09-16.",
+    "\"Latest released version\" bumped v2.13.2 → v2.13.4.",
+    "Consecutive-green-pipeline count updated to six (v2.13.0 →",
+    "v2.13.4).",
+    "Added a two-sentence note naming v2.13.3 (Cumberland arc",
+    "closure) and v2.13.4 (Node-24 bump; closes #4).",
+    "\"Where we are\" block rewritten for the post-v2.13.4 state:"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
