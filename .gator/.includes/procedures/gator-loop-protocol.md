@@ -46,7 +46,7 @@ Read the output. It tells you:
 
 **Exit codes matter:**
 - `0` — it IS your turn. Proceed with your submission.
-- `1` — it is NOT your turn. Wait — but you can still escalate (see Rule 6).
+- `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token>` to block until the loop becomes actionable.
 - `2` — the loop is blocked or ended. Stop.
 
 **Finding files:** The status output always prints a `Dir:` line with the full loop directory path. The relevant files are at fixed names within that directory: `sketch.md`, `plan.current.md`, `findings.current.md`. When it's your turn, the status output also shows the specific artifact paths and next-step command.
@@ -114,7 +114,7 @@ After you submit, your turn is over. The other model's turn begins.
 
 ### Rule 1: Only submit on your turn (but you can always escalate)
 
-Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — but you CAN escalate if you see a problem that requires Architect attention (see Rule 6). If exit code is `2`, the loop is over or blocked — stop. Do not poll in a tight loop — wait a reasonable interval and check again.
+Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token>` to block until the loop becomes actionable. If exit code is `2`, the loop is over or blocked — stop.
 
 ### Rule 2: Submit through the CLI only
 
@@ -267,7 +267,7 @@ gator loop status --token <token>
 ## Summary For Quick Reference
 
 1. `gator loop status --token <token>` — am I up?
-2. Exit 0: proceed. Exit 1: wait (but you can still escalate). Exit 2: stop.
+2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token>`. Exit 2: stop.
 3. Read the relevant files (sketch, plan, or findings) from the loop directory
 4. Write your artifact to a file
 5. Submit: `gator loop submit-draft` or `gator loop submit-review`

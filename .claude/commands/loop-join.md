@@ -25,7 +25,8 @@ gator loop status --token $ARGUMENTS
    - Then proceed with your work as the protocol directs
 
 6. If it is NOT your turn (exit code 1):
-   - Report your status and wait for instructions
-   - Remember: you can still escalate if you see a problem
+   - If you have a genuine Architect-owned blocker, escalate first: `gator loop escalate --token $ARGUMENTS --reason "..."`
+   - Otherwise, run `gator loop wait --token $ARGUMENTS` to block until the loop becomes actionable
+   - When `wait` returns, re-read the status output and proceed with your work
 
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.

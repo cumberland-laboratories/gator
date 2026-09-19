@@ -1058,3 +1058,78 @@ class TestGitignore:
         gi = (loop_env["loop_dir"].parent / ".gitignore").read_text(encoding="utf-8")
         assert ".tokens.json" in gi
         assert "session.lock" in gi
+
+
+# ===========================================================================
+# Content-pin tests: participant-facing instructions reference `wait`
+# ===========================================================================
+
+TEMPLATES_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "templates" / "gator-starter"
+INCLUDES_DIR = Path(__file__).parent.parent / ".gator" / ".includes"
+
+
+class TestWaitHandoffAlignment:
+    """All participant-facing surfaces must teach `gator loop wait`."""
+
+    def test_loop_join_template_references_wait(self):
+        """Slash-command template tells not-up participants to use wait."""
+        text = (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8")
+        assert "gator loop wait" in text
+        assert "Report your status and wait" not in text
+
+    def test_protocol_references_wait_in_rule_1(self):
+        """Protocol Rule 1 tells participants to run wait on exit code 1."""
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            assert "gator loop wait" in text
+            assert "Do not poll in a tight loop" not in text
+
+    def test_protocol_quick_reference_mentions_wait(self):
+        """Quick Reference section mentions wait command for exit code 1."""
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            assert "`gator loop wait --token <token>`" in text
+
+    def test_entry_point_rendering_references_wait(self):
+        """render_entry_content() output includes wait instruction."""
+        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
+        if gatorize_dir not in sys.path:
+            sys.path.insert(0, gatorize_dir)
+        from entry_points import render_entry_content
+        content = render_entry_content(has_command_post=False)
+        assert "gator loop wait" in content
+
+    def test_protocol_copies_are_identical(self):
+        """Shipped template and .includes/ protocol are byte-identical."""
+        includes = (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8")
+        template = (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8")
+        assert includes == template
+
+    def test_escalate_before_wait_ordering(self):
+        """All surfaces teach escalate-first, then wait — not the reverse."""
+        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
+        if gatorize_dir not in sys.path:
+            sys.path.insert(0, gatorize_dir)
+        from entry_points import render_entry_content
+
+        surfaces = {
+            "render_entry_content": render_entry_content(has_command_post=False),
+            "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
+            "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
+            "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
+        }
+        for name, text in surfaces.items():
+            assert "escalate" in text.lower(), f"{name} missing escalate guidance"
+            escalate_pos = text.lower().index("escalate first")
+            wait_pos = text.lower().index("gator loop wait")
+            assert escalate_pos < wait_pos, (
+                f"{name}: escalate must appear before wait in the exit-1 guidance"
+            )
+
+    def test_live_entry_points_reference_wait(self):
+        """CLAUDE.md, AGENTS.md, GEMINI.md managed blocks include wait."""
+        repo_root = Path(__file__).parent.parent
+        for name in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]:
+            text = (repo_root / name).read_text(encoding="utf-8")
+            assert "gator loop wait" in text, f"{name} missing wait instruction"
+            assert "escalate first" in text, f"{name} missing escalate-first ordering"

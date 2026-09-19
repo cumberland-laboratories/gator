@@ -1,478 +1,104 @@
-# Charter: Scripts Cross-Cutting Patterns
+# Charter: Cross-Cutting Runtime Contracts
 
-This charter documents patterns that span multiple script clusters. Read this before any of the module-specific charters. These are the invariants that break silently if violated.
+**Covers**: `src/gator_command/cli.py`, `src/gator_command/__init__.py`, `src/gator_command/scripts/gator_core.py`, `src/gator_command/scripts/gator_runtime.py`, `src/gator_command/scripts/gator_remote.py`, `pyproject.toml`
+
+Read this charter before the domain charter selected through [`INDEX.md`](INDEX.md). It contains only contracts that cross multiple domains.
 
 ## Owns
 
-Patterns that cross module boundaries:
-- The `resolve_charter_surface()` canonical resolver for charter directory, cross-cutting filename, and INDEX
-- The `gator_core` import convention used by all scripts
-- The `git()` return contract
-- The local → remote fallback pattern (and parallel local/remote scan schemas)
-- The `SKIP_FILES` set used consistently across fleet, lint, and intel scripts
-- The `ensure_utf8_stdout()` call pattern
-- The `import_sibling()` dynamic load pattern and graceful degradation convention
-- The plan/execute separation in gator-update
-- The `parse_committed_summary()` canonical parser shared across 4+ consumers
-- The `source_kind` provenance vocabulary ("command-post", "local-repo", "remote-cache")
-- The `X-Gator-Dashboard` header anti-CSRF trust boundary
-- The `find_command_post()` + `parse_registry()` registry resolution pattern
-- The `"schema"` field convention in all CLI JSON output
-- The policy sync graceful import pattern (fleet-report, drift importing policy-status optionally)
-- The managed Git hook path migration pattern (Windows `.git/gator-hooks` + `core.hooksPath`, legacy `.git/hooks` fallback)
+- Canonical charter-surface and repository-layout resolution.
+- Shared script import and subprocess conventions.
+- Runtime selection and managed Git-hook dispatch boundaries.
+- Compatibility rules shared by CLI JSON, commit trailers, and shipped template mirrors.
+- The boundary between the base Gator wheel and optional Enterprise code.
 
 ## Does Not Own
 
-Any single module's implementation — see the module-specific charters for those.
-
----
+- Dashboard HTTP, content, or browser behavior; see [`scripts-dashboard.md`](scripts-dashboard.md) and [`scripts-dashboard-ui.md`](scripts-dashboard-ui.md).
+- Session aggregation and provenance; see [`scripts-session-archaeology.md`](scripts-session-archaeology.md).
+- Update planning, layout migration, or policy synchronization; see [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
+- Enterprise command or server behavior; see the Enterprise charters.
+- Cumberland document styling; see [`contracts.md`](contracts.md).
 
 ## TRIPWIRE: Charter Surface Resolution
 
-`gator_core.resolve_charter_surface(repo_root)` is the single source of truth for which charter directory, cross-cutting charter filename, and INDEX file govern a repo. It returns a dict with `mode`, `charter_dir`, `cross_cutting`, and `index_file`.
+`gator_core.resolve_charter_surface(repo_root)` is the sole resolver for the governing charter directory, cross-cutting charter, and index. It must support both current `.gator/charters/` and legacy included layouts without requiring callers to reproduce layout tests.
 
-Three consumers must use this resolver (or its output) consistently:
-1. `precommit_charter.py` — `_resolve_charter_surface()` tries `gator_core` first, falls back to inline heuristic. Used by `gator-pre-commit.py` via import.
-2. `enforcer-review.py` — `_resolve_charter_surface()` same pattern
-3. The template copy (`src/gator_command/templates/gator-starter/scripts/precommit_charter.py`) — must stay identical to the `.gator/scripts/` version (see Product Boundary below)
+! Pre-commit validation, charter tools, and session boot must consume this resolver. A local `Path.exists()` heuristic creates split governance.
 
-Two modes exist, no others:
-- **source-command-post**: `.gator/charters/`, cross-cutting is `scripts-cross-cutting.md`
-- **governed-repo**: `.gator/charters/`, cross-cutting is `cross-cutting.md`
+## TRIPWIRE: Import Boundaries
 
-Do NOT add mode detection via string heuristics in individual tools. Use the resolver. Do NOT hardcode charter filenames — the cross-cutting charter is found by pattern (`"cross-cutting" in filename`).
+Scripts loaded by filename use `gator_core.import_sibling(name)` rather than package-relative imports because fleet copies may execute outside an installed package. Callers must handle both exceptions and a `None` result for a missing sibling.
 
-**Product Boundary: Individual template vs Enterprise live copy.** The template is the **Gator Individual** version — it contains validation, trailers, and basic cleanup (draft reset, whiteboard reset, status.json). The live `.gator/scripts/gator-pre-commit.py` is the **Enterprise** version — it adds snippet emission, session ledger, and vendor session reading on top of the shared Individual base.
+Optional enrichment imports degrade only the affected section. Keep independent imports in independent guards so one absent feature does not disable unrelated output.
 
-**Module structure (since split):** The pre-commit hook is now four files in both locations:
-- `gator-pre-commit.py` — orchestrator: git helpers, state readers, classification, override, validation rules, trailers, status, output, phase dispatch
-- `precommit_lint.py` — security lint engine: LINT_RULES, diff parsing, context-aware severity, run_layer1_lint
-- `precommit_charter.py` — charter discovery and validation: surface resolution, iteration, counting, tripwires, INDEX parsing, function ref checks
-- `precommit_session.py` — session audit trail: ledger parsing, commit entry building, block rendering, reassembly, commit summary writing
+`ensure_utf8_stdout()` is called from executable entry points before Unicode output. Do not scatter platform-specific encoding mutations through domain code.
 
-All four files MUST remain identical between `.gator/scripts/` and `templates/gator-starter/scripts/`. The Enterprise copy adds enterprise-only functions to `gator-pre-commit.py`: `_find_active_session()`, `_read_vendor_session()`, `render_snippet()`, `render_snippet_json()`, `record_commit_and_emit_snippet()`, plus the `record_commit_and_emit_snippet()` call in `phase_cleanup()`. The three submodules have no enterprise-only additions.
+## TRIPWIRE: Git Wrapper Contract
 
-After editing shared logic, update BOTH locations (all four files). After editing enterprise-only logic, update only the live `.gator/scripts/gator-pre-commit.py`.
+Shared `git(*args, cwd=None)` helpers return stripped stdout on success and a falsey result on expected Git failure. Callers that require error classification must use a dedicated subprocess seam and inspect the return code; do not silently change the shared return type.
 
-Both copies share the commit-message-from-draft behavior: when `commit_draft.md` has a populated `message` field or non-stub body lines, `phase_trailers` replaces the entire commit message with content assembled from the draft. Both `validate_hard_rules` and `phase_trailers` strip only the exact stub heading `# Session Change Log` — all other `#`-prefixed lines are preserved as real content. These changes must remain synchronized across both copies.
+Local and remote readers that feed the same consumer must return the same schema. Remote absence may produce a structured unavailable state, never a locally shaped payload containing another repository's data.
 
-## TRIPWIRE: gator_core Import Convention
+## TRIPWIRE: Runtime and Hook Dispatch
 
-Every script that needs shared utilities adds its own scripts directory to `sys.path` and imports from `gator_core`:
+`resolve_governed_runtime(repo_root, cli_version=None)` selects the runtime for repo hooks. A corrupt or missing runtime pin fails open to the repo-shipped scripts so governance damage does not brick Git operations.
 
-```python
-SCRIPTS_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(SCRIPTS_DIR))
-from gator_core import get_version, find_command_post, ...
-```
+Managed Git hooks live under the configured `core.hooksPath`; legacy `.git/hooks` is a compatibility probe, not a second authority. Hook installers and health checks must agree on the canonical directory.
 
-Some scripts omit the `sys.path` insert because they rely on the caller having set it (e.g., when loaded via `import_sibling()`). Standalone scripts must always insert their own scripts directory. Library modules (gator_core.py, gator_remote.py, gator_session_reader.py) do not insert sys.path — they are loaded by their callers.
+`gator hook session-open` and `session-start` resolve the Git top level before governance lookup. Commit hooks retain their existing working-directory contract. See [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
 
-## TRIPWIRE: git() Return Contract
+## TRIPWIRE: Shipped-Copy Synchronization
 
-`gator_core.git()` returns `(stdout: str, success: bool)`. It never raises. Subprocess call uses `encoding="utf-8", errors="replace"` — bare `text=True` on Windows decodes with cp1252 and crashes with `UnicodeDecodeError` on any non-cp1252 bytes in git output (see `scripts-core-library.md` for the v2.4.4 fix details). The dashboard's `_git_run()` follows the same pattern but returns `(stderr, False)` on failure so git error messages are visible to the user. Dashboard `pull_updates()` also runs `git merge --abort` on failed pull to avoid leaving the repo in a conflicted state. The tuple is the full contract:
+Some runtime files intentionally exist in more than one delivery surface:
 
-```python
-out, ok = git("log", "-1", "--format=%h", cwd=repo_path)
-if not ok:
-    return {"error": "git log failed"}
-if not out:
-    return None  # git succeeded but returned nothing
-```
+- package source under `src/gator_command/scripts/`;
+- starter templates under `src/gator_command/templates/gator-starter/`;
+- this repository's dogfood copy under `.gator/.includes/`;
+- selected Enterprise bundled scripts under `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/`.
 
-Callers that check only `ok` and not `out` will silently treat "git returned empty string" as a successful non-result. Both must be checked. Fleet-report, drift, and fleet-intel all follow this pattern — preserve it in any new git consumers.
+When a file is governed by a byte-identity compatibility test, change all named copies in the same commit. Do not infer synchronization from similar filenames; consult the relevant contract test or domain charter. `TestWaitHandoffAlignment` in `tests/test_loop.py` pins protocol-copy identity and content alignment across the loop-join template, entry-point renderer, and live entry-point files.
 
-## TRIPWIRE: Local → Remote Fallback Pattern
+## TRIPWIRE: Machine-Local State Readers
 
-Both `gator-fleet-report.scan_repo()` and `gator-drift.check_repo_drift()` implement the same three-tier fallback:
+Machine-local JSON readers return discriminated states such as `absent`, `malformed`, and `present`. Callers must not collapse malformed user configuration into absence: an invalid explicit preference fails closed, while an invalid runtime pin follows the hook fail-open contract above.
 
-1. Local path accessible → full local scan
-2. Local path inaccessible AND remote URL available → thin-fetch via `gator_remote`
-3. Neither accessible → report as unreachable
+Paths persisted by Windows, MSYS, or POSIX callers are normalized through `normalize_path()` before filesystem checks. Registry writers must use the canonical helper rather than writing JSON directly.
 
-This pattern must be preserved together. Changing the fallback logic in one script without the other creates an inconsistency between fleet-report and drift findings for the same repo.
+## TRIPWIRE: CLI and Git Compatibility
 
-## TRIPWIRE: SKIP_FILES Consistency
+Machine-readable CLI output has a top-level `schema` identifier. Additive fields may remain within a version; removing, renaming, or changing meaning requires a schema bump and consumer migration.
 
-The set `{"_template.md", "README.md", "INDEX.md"}` (plus sometimes `.gitkeep`) is used to exclude scaffolding files from counts and analysis in:
-- `gator-fleet-report.read_gator_state()` — charter count
-- `gator-drift.check_repo_drift()` — charter count
-- `gator_remote.read_gator_state_remote()` — charter count
-- `gator-fleet-intel.read_charter_names()` — charter name list
-- `gator-charter-lint.find_charter_dirs()` / `collect_files()` — lint targets
+Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.
 
-All must use the same skip set. A discrepancy between fleet-report's charter count and fleet-intel's charter list creates misleading governance telemetry.
+The `change-type`, `significance`, vendor, and source-kind vocabularies are shared contracts. Update producers, schemas, compatibility tests, and consumers together.
 
-## Dashboard POST Endpoints Require X-Gator-Dashboard Header
+## TRIPWIRE: Product Boundary
 
-All dashboard POST endpoints (config, topology, update, gatorize, fetch, pull, restart) require the `X-Gator-Dashboard: 1` header for CSRF protection. The `GET /api/repos/discover` endpoint (Add Repository modal's auto-discovery) uses `resolve_discovery_roots()` from `dashboard/data.py` — respects the `GATOR_DASHBOARD_DISCOVERY_ROOTS` env var override, falls back to a fixed home-relative set (`~/code`, `~/code2`, `~/projects`, `~/repos`, `~/src`, `~/dev`) when unset. See `scripts-dashboard.md` for the full override contract. The update endpoint calls `gator-update.py --path <repo>` — operates on the current branch in place, honors the `.pre-gator-update` backup pattern for entry-point files. The gatorize endpoint (Stage 3 fold-in of the retire-gator-install plan, 2026-07-30) calls `gatorize --yes <repo>` — the install path for ungoverned repos, wired to the Fleet-row "Gatorize" button in fleet.js (`bindGatorizeButtons()` handler, `gatorize-btn` class). Historical behavior of the /update endpoint invoking `gatorize.py` was retired in v2.4.0 (see plan `2026-07-30-retire-gator-install-branch-implementation-plan.md`) because it silently switched branches on Dashboard-triggered updates. Standalone data payload includes `gator_cli_version` for frontend version comparison. Fleet activity indicator uses CSS `dot-pulse` animation (fixed-width, no layout shift). Config POST updates cached `fast_data` in-place for immediate page-refresh consistency. Updates view uses PyPI JSON API for version check and `pipx upgrade` for installation. All version resolution consolidated into `gator_core.get_version()`. Upgrade flow uses detached subprocess (`CREATE_NO_WINDOW`) to release file locks before `pipx upgrade`, relaunches via `gator` CLI entry point. Frontend JS includes this on every POST call. The restart endpoint (`POST /api/restart`) uses `os.execv()` to replace the server process — the response is sent before the process dies, and the frontend polls until the new server responds. `handle_one_request()` suppresses `ConnectionAbortedError` during restart to avoid log noise. `_git_run()` uses `encoding="utf-8"` (not `text=True`) — same fix as gator-deploy.py for Windows cp1252 compatibility. Session snippets are now JSON v2 (`.json` extension, `gator-session-snippet-v2` schema) — immutable once committed. `gatorize.py` ensures standard gitignore rules (vault, .vscode, __pycache__), tracks `origin/dev` when creating the dev branch, and writes `cli-version` to `.gator-version` (resolved from `gator_core.get_version()`) so the dashboard Fleet view can display what CLI version gatorized each repo.
+The base `gator-command` wheel may expose the `gator enterprise` dispatcher but must not import Enterprise server dependencies or ship the Enterprise implementation package. Enterprise code stays under `enterprise/` and is installed separately.
 
-## TRIPWIRE: change-type + significance Enum Sync (pre-commit ↔ snippet schema)
+Shared behavior needed by both products belongs behind an explicit library contract; do not copy Enterprise modules back into the base scripts tree.
 
-`gator-pre-commit.py::validate_hard_rules` rejects any `change-type` value in `.gator/commit_draft.md` that is not in the `VALID_CHANGE_TYPES` frozenset (`feature | fix | refactor | docs | test | release | maintenance | review | governance | ""`). That set MUST stay byte-consistent with `properties.change_type.enum` in `contracts/schemas/gator-session-snippet-v2.json` — both are read by the same schema validator (`contracts/compatibility/test_snippet_schema.py::test_live_repo_snippets_conform`). Drift means a bad value passes pre-commit but fails CI on the emitted session snippet — the exact regression this validation exists to prevent. Regression pin: `tests/test_precommit_validation.py::TestSchemaEnumSyncObligation::test_enum_matches_schema` reads both surfaces and asserts equality. If either changes, change both in the same commit. Added 2026-08-02 after the monorepo cutover committed several snippets with `change-type: bugfix` — plausible-sounding, not in the enum, blocked CI. The template + `.gator/.includes/scripts/gator-pre-commit.py` must also stay byte-consistent per the module-structure invariant above.
+## Package and License Surface
 
-**Added 2026-08-10 (v2.6.0)**: identical sync obligation for `significance`. `VALID_SIGNIFICANCE` frozenset (`low | minor | routine | notable | high | critical | architectural | ""`) mirrors `properties.significance.enum` in the same schema. `architectural` was added to the enum in v2.6.0 to formalize a value that had been in de facto use for cross-module invariant changes; the gate itself prevents future drift. Regression pin: `tests/test_precommit_validation.py::TestSchemaEnumSyncObligation::test_significance_enum_matches_schema` plus 11 test methods in `TestSignificanceValidation`. Trigger: the Phase 4 (3.0 stabilization) smoke-test run surfaced 5 pre-existing snippets with `significance: medium` (typo for `notable`) and 8 with `architectural`; contracts test caught them at release-time regression check.
+`src/gator_command/cli.py` is the installed command router. Adding or removing a public subcommand requires coordinated parser, packaging, help, and installed-wheel coverage.
 
-**Enterprise-cli bundled `gator-pre-commit.py` — pre-existing divergence**: `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/gator-pre-commit.py` (~1515 lines vs the shipped copy's ~1507) does NOT have EITHER the change-type or the significance gate. Per MVP plan §D2 the byte-identity contract was explicitly relaxed for `gator-pre-commit.py`. Syncing the bundled copy is post-3.0 cleanup (§4 P3.2 in the stabilization plan) — new enterprise-provisioned repos ship with an older gate-less pre-commit until then.
+The repository is Apache-2.0. Preserve `LICENSE`, `NOTICE`, and contributor provenance requirements when adding third-party assets or code.
 
-## Shared Snippet Infrastructure (Phase 4a — 2026-08-01)
+## Before Changing Cross-Cutting Seams
 
-! **Snippet `notes` field is a truncated first-N extract, NOT a summary (2026-09-11)**: `_extract_note_lines(body, limit=8)` in `precommit_session.py` walks `commit_draft.md`'s body and captures the FIRST 8 non-empty lines that do NOT begin with `#`, then unwraps `- ` bullet prefixes on the survivors. The `#` filter uses `line.startswith("#")` after stripping — it drops EVERY line whose first non-whitespace character is `#`, including substantive content like `#123 fix` or `#4` references. This differs from the commit-message-from-draft assembly in `gator-pre-commit.py::phase_trailers` / `validate_hard_rules` (documented earlier in this charter under the trio-copy shared-scripts contract), which preserves every `#`-prefixed body line except the exact `# Session Change Log` stub. The two `#`-handling rules live in different code paths for different purposes: commit-message assembly wants substantive `#` lines through; snippet extraction (via `_extract_note_lines`) wants a compact preamble-fragment and drops all `#` lines aggressively. Because commit_draft bodies typically open with a preamble paragraph ("Codex enforcer RN review of Plan X…") that runs longer than 8 lines, the extracted `notes` in the emitted snippet is often the FIRST HALF of the preamble and does NOT capture the finding's outcome or verdict — mid-sentence truncation is common. **Consequence**: `notes` in a session snippet is EVIDENCE of authorship + audit trail, NOT a substantive governance summary. The commit body itself (via `git log`) and the affected charter's diff are the authoritative narratives; the snippet's `notes` field is a lineage marker, not a conclusion. Codex R5 F3 (2026-09-11) surfaced this against `.gator/session-snippets/2026-09-11-gator-7476d25b46661.json`, whose 8-line notes extract stops mid-explanation and reads as if Codex accepted a claim the source commit had refuted. The snippet itself is immutable per this section's contract; the corrective mechanism is (a) this charter note so readers understand the shape, and (b) the inboxed emitter improvement (raise limit / add a verdict field / extract-by-section) tracked in `.gator/inbox.md`. Any reader building on a snippet's `notes` for governance interpretation MUST cross-check against the commit body.
-
-
-
-`precommit_session.py` (in both `.gator/scripts/` and the shipped template at `src/gator_command/templates/gator-starter/scripts/`) exposes the canonical snippet-emission surface: `record_commit_and_emit_snippet(gator_dir, status, git_fn=None)` is the orchestrator; `render_snippet_json(entry, session_meta, vendor_session=None)` renders the JSON; `_read_active_vendor_session(gator_dir)` and `_read_vendor_session(gator_dir)` enrich snippets with vendor session identity when `.gator/active-vendor-session.json` is present; `_atomic_write(target_path, content, parent_dir)` handles the temp-file-and-rename write. `build_commit_entry` gains a `git_fn=None` parameter — the single surgical injection point for mock testability. Per the ratified Decision B of the monorepo plan, this is **shared Desktop infrastructure**, not Enterprise-gated — every governed repo emits snippets to `.gator/session-snippets/*.json` on commit, regardless of Enterprise configuration. Gator-Enterprise integration (session block emission, ledger writes gated behind `.gator/enterprise.json`) belongs to Phase 4b and is a separate concern from this shared layer. `gator-pre-commit.py::phase_cleanup` calls `record_commit_and_emit_snippet` inside a guarded `try/except` — snippet-emission failure MUST NEVER block a successful commit, and MUST NEVER corrupt the session ledger (tested by `test_snippet_failure_preserves_ledger`). Contract-side validation lives in `contracts/schemas/gator-session-snippet-v2.json` (the required-fields + enum contract for every emitted snippet). `render_snippet_json`'s `started_at` field uses a three-tier fallback — `vendor_session["started_at"] → session_meta["started-at"] → now` — so non-vendor sessions preserve the schema's "when the session group began" semantics via the ledger-frontmatter's session-start rather than resetting per-commit (Codex Phase 4a review fix). Live snippets in `.gator/session-snippets/*.json` are exercised by `contracts/compatibility/test_snippet_schema.py::test_live_repo_snippets_conform` with a filename-date grandfather cutoff of 2026-07-01. The port from `enterprise-mvp` explicitly did NOT bring over that branch's `phase_validate` simplification (which removed v1.9.3's hook-warning-mode print block) — "main wins" per the plan's Phase 4 conflict rule. Phase 4b-substrate (2026-08-01) adds the canonical Enterprise-marker reader `gator_core.is_enterprise_active(gator_dir)` — fail-closed against missing/malformed/`enabled != true` markers; every Phase 4 Enterprise gating call site MUST use this helper rather than re-implement the check (`scripts-core-library.md` + `contracts.md` codify the invariant; `TestIsEnterpriseActive` pins semantics). Per amended Decision B, the base-Gator snippet-emission call in `phase_cleanup` does NOT consult the marker — base behavior is unconditional, the marker gates only the additive Enterprise layer landing in 4c/4d.
-
-## `Gator-Machine-Id` trailer (Phase 6 — 2026-08-08 transcripts-first MVP)
-
-`gator-pre-commit.py::assemble_trailers` emits `Gator-Machine-Id: <id>` sourced from `~/.gator/machine-id`'s `id:` line (via `precommit_session.py::_read_machine_id`). Silent no-op when the file is absent — standalone base-gator use on a machine that never activated Enterprise (or that predates the file) still commits successfully; the trailer just doesn't get added. Enterprise-side consumer: `enterprise/app/routes/ingest.py::ingest_commits` reads the trailer bag to populate `commits.machine_id`, which the linkage algorithm's `strong_machine_repo_time` basis (Phase 3) matches against `transcript_sessions.machine_id`. Snippet schema already carries `machine_id` per Phase 0 inventory — no schema change needed. Trio-copy contract note: the Phase 6 edit was applied to all three copies of `gator-pre-commit.py` (`.gator/.includes/scripts/`, `src/gator_command/templates/gator-starter/scripts/`, `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/`) at the same anchor. Byte-identity across the trio was NOT extended to `gator-pre-commit.py` — those three copies pre-drifted for reasons unrelated to Phase 6 (line counts 1480/1465/1500 as of 2026-08-08), and full byte-identity would fail on pre-existing differences. Reconciling that trio drift is a follow-up cleanup, not Phase 6 scope. Regression pins: `tests/test_precommit_validation.py::TestMachineIdTrailer` (3 tests — emitted-when-present, omitted-when-file-missing, omitted-when-id-line-missing; uses `Path.home` monkeypatch for hermeticity).
-
-## TRIPWIRE: Multi-Session Vendor Attribution (v2 schema)
-
-**Filename stays `.gator/active-vendor-session.json` (singular) but CONTENT is a container of sessions, not a single entry.** Since 2026-08-07 (Issue B of the 2026-08-06 Enterprise Local Bring-Up), `precommit_session.py` reads and `gator-session-start.py` writes a v2 schema — `{"schema": "gator-active-vendor-sessions-v2", "sessions": [...]}` — that lets multiple vendor CLIs (Codex + Opus + Gemini, etc.) coexist in the same repo without overwriting each other's identity. The filename stays singular for backwards compat with `gator_layout.py`'s file registry and gitignore templates.
-
-**Attribution priority in `_pick_session_for_commit`** (highest first):
-1. `GATOR_TRANSCRIPT_SESSION_ID` env var — orchestrators, cross-repo commits, test harnesses can set this to override inference. If the env id isn't in the file's session list, a minimal synthesized entry with `source: "env-override"` is returned so callers can still emit the id.
-2. PID tree walk match — if the git hook's ancestor process PIDs (bounded depth 10) include a session's `owner_pid`, hard match. Only walked when 2+ entries; short-circuits below.
-3. Single entry — after freshness cleanup, if only one session in the file, use it (no PID walk needed — common case).
-4. Transcript mtime fallback — pick the session whose `transcript_path` was most recently modified.
-5. None — snippet's `transcript_session_id` stays null; Finding #4 diagnostic log at `~/.gator/diagnostics/block-gen.log` captures the fall-through.
-
-**Cross-platform PID walking** via subprocess: PowerShell `Get-CimInstance Win32_Process` on Windows (~150ms/hop, slow but correct), `ps -o ppid=` on Unix. `_walk_parent_pids(start_pid=None, max_depth=10)` bounds the walk. `owner_pid_started_at` timestamp (captured at SessionStart) protects against PID recycling — a later process reusing the same PID number won't match if its start time differs.
-
-**Backwards compat**: readers accept BOTH `gator-active-vendor-session-v1` (legacy single-entry, wrapped as list-of-one) and the new `-sessions-v2` (multi-entry container). Writers always emit v2 — v1 files auto-migrate to v2 on the next SessionStart write. No migration script needed; the file self-heals in place.
-
-**Cleanup semantics**: on both read and write, drop entries where `started_at > 24h ago` (`_AVS_MAX_AGE_SECONDS = 86400`). Entries without a parseable `started_at` are preserved (defensive — better to keep a maybe-stale entry than silently drop a valid one). CWD filter (entry's `cwd` field must match this repo) applies on read only — file itself is shared across all sessions on the machine that happen to have the same repo mounted.
-
-**Sync obligation — TWO-WAY as of runtime-split Phase 4 (2026-08-19; historically three-way per Codex Finding #1 from 2026-08-07, then shrunk when repos stopped carrying runtime)**: `precommit_session.py` and `gator-session-start.py` exist in TWO locations that MUST stay byte-identical:
-
-1. `src/gator_command/templates/gator-starter/scripts/` — the WHEEL RUNTIME (executed machine-side via the gator-hook dispatcher; also the gatorize/update pin-manifest source).
-2. `enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/` — copied INTO new repos by `gator-enterprise repo init`'s `_install_bundled_scripts` step (`repo_init.py:135-145`).
-
-The historical first location (`.gator/.includes/scripts/`, repo-resident shipped copies) was RETIRED by Phase 4 — `tests/test_multi_session.py::test_repo_resident_copy_retired` pins that it stays gone in this repo, and `test_wheel_and_bundled_copies_byte_identical` pins the remaining pair. The pair dissolves entirely when Enterprise bundled_scripts retire (runtime-split D4 / Post-2.6 item 4). Until then, every edit to either file MUST land in both.
-
-**PID recycling protection**: `_walk_parent_pids()` returns `[(pid, started_at_or_none), ...]` tuples. `_pick_session_for_commit()` matches BOTH the ancestor PID number AND the session's `owner_pid_started_at` (via `_pid_start_times_match` — fuzzy string compare with graceful degradation when either side is None). Windows especially recycles PIDs aggressively; a session that recorded `owner_pid=1234` at SessionStart shouldn't match a different process that happens to have PID 1234 now. Codex Finding #2 caught the earlier code where the writer captured `owner_pid_started_at` but the reader ignored it.
-
-**Cross-repo vendor identity (GATOR_TRANSCRIPT_VENDOR companion env var)**: `GATOR_TRANSCRIPT_SESSION_ID` names the session; `GATOR_TRANSCRIPT_VENDOR` names its vendor. When only the ID is set, the synthesized entry has `vendor: None` (not `"unknown"`) — `render_snippet_json` then preserves the agent-inferred vendor rather than clobbering with `unknown`. `session_group_key` fallback: explicit `vendor_session["vendor"]` → agent-inferred `vendor_inferred` → `"unknown"` (last resort). Codex Finding #3 caught the earlier code where synthesized `vendor: "unknown"` was authoritative in `render_snippet_json`, producing `vendor_inferred: unknown` and `session_group_key: unknown:<id>` exactly in the cross-repo case the env override was designed to enable.
-
-**Regression pins**: `tests/test_multi_session.py` (now 34 tests) — reader v1+v2, cwd filter, freshness filter, corrupt/missing/unknown-schema resilience; picker env var / PID / single / mtime / none, PID+started_at recycling detection (Finding #2), env-var vendor override (Finding #3); PID walker returns tuples (bounded + cross-platform + started-at match helper); writer fresh + preserve + upsert + v1→v2 migration + stale-drop; render_snippet_json vendor fallback (Finding #3); byte-identity across all three copies (Finding #1 regression pin — `TestByteIdentityAcrossThreeCopies`).
-
-**Known issue (v2.6.0)**: `test_v1_file_returns_single_entry_list` and `test_v1_file_migrates_to_v2_on_write` are `@pytest.mark.xfail(strict=False)` as of 2026-08-10 — v1 backwards-compat is NOT implemented in the current v2 reader/writer, so v1 legacy entries silently drop rather than being preserved on migration. Post-2.6 work will either implement the v1 read-shim (preserving legacy entries) or delete the tests entirely if v1 is truly out of support under the transcripts-first + Enterprise-owned-session-capture end-state. See CHANGELOG `[2.6.0] Known issues`.
-
-**Blast radius**: base gator code, ships in every gatorized repo AND every Enterprise-provisioned repo. Attribution accuracy changes for every governed commit. Old repos with v1 files continue working on read; get upgraded to v2 on the next SessionStart write.
-
-## License Posture and Contribution Policy
-
-The project ships under **Apache License 2.0** (`LICENSE` at repo root, canonical text). `NOTICE` at repo root carries the copyright + license grant and is bundled into the wheel automatically at `dist-info/licenses/NOTICE` via setuptools' `License-File` convention (both LICENSE and NOTICE appear as `License-File:` lines in wheel METADATA). `pyproject.toml` declares `license = {text = "Apache-2.0"}` and `License :: OSI Approved :: Apache Software License` in classifiers — both surfaces kept in sync per PEP 639 while retaining the classifier for older tooling. Phase 3c (2026-08-01) flipped the source repo from MIT to Apache 2.0 per the ratified plan; the flip covers packaging-visible surfaces (LICENSE, NOTICE, pyproject, README, PYPI_README, docs/how-gator-works.md) and contributor-facing surfaces (CONTRIBUTING.md with DCO sign-off requirement, SPDX source-header recommendation for new files). Historical artifacts under `.gator/artifacts/` and vestigial `.gator/charters/` are preserved as historical record — the Track F sweep from the mechanical checklist deliberately leaves those in place. Contributor obligations: **DCO sign-off required** on every commit (`git commit -s`) — no separate CLA. New source files SHOULD carry an SPDX identifier line where practical (`# SPDX-License-Identifier: Apache-2.0`); a full Apache header on every file is not required (Track D deferred, checklist recommendation). Any existing MIT installs from prior PyPI releases keep MIT terms — the flip is not retroactive. The current public MIT repo remains on MIT until the public monorepo bootstrap (Phase 3b-3 / GitHub Option B cutover); Phase 3c prepares the source posture so the new public tree starts life already Apache.
-
-## Package CLI Entry Point
-
-`src/gator_command/cli.py` is the thin CLI dispatcher installed by `pip install gator-command`. Scripts and templates are now canonical at `src/gator_command/scripts/` and `src/gator_command/templates/` — no junctions, no copies. The CLI resolves scripts in priority order: package-bundled (`cli_dir/scripts/`), source-checkout (`src/gator_command/scripts/`), public-clone (`gator-engine/scripts/`). `pyproject.toml` declares package-data globs for scripts and templates. `gator_runtime.py` provides the resolver layer for runtime mode detection. v1.1.0 adds `gator gatorize` and `gator update` to the CLI dispatch. v2.0.0 adds `gator loop` — a multi-file package (`scripts/loop/`) dispatched via the same subprocess model through `gator-loop.py`. Loop modules use `sys.path`-based imports (not relative imports) because `scripts/` is package data, not an importable sub-package. All loop `.py` files are listed individually in `pyproject.toml` package-data. v2.2.3 adds `gator state` — a two-subcommand orchestrator (`status`, `repair`) for the managed-state layer covering entry-point files and constitution drift; dispatched through `gator-state.py` and covered by `scripts-managed-state.md`. v2.4.3 adds `gator kill` — a nested-subverb orchestrator (currently `dashboard [--all | --port N | --dry-run]`) for killing stale Gator processes; dispatched through `gator-kill.py` and covered by `scripts-dashboard.md`. Phase 3a (post-v2.4.5) adds `gator enterprise` — a subcommand-group stub with ten subcommands split client-side (setup/status/sync/audit/disconnect, base install) and server-side (server/db/policy/org/fleet, requires the new `[enterprise-server]` optional-dependencies extra with fastapi/sqlalchemy/alembic/uvicorn/psycopg); dispatched through `gator-enterprise.py` and covered by `scripts-enterprise.md`. Strict `parse_args` at the top level: unknown flags on a stub subcommand fail visibly (argparse exit 2), same as every other `gator <verb>`. Every stub body — mutating and read-only — exits 69 (EX_UNAVAILABLE) with a `[gator-enterprise-stub]` sentinel on the first stdout line, so shell chains like `gator enterprise setup && do_next_thing` short-circuit instead of proceeding on a fake success. An earlier Phase 3a draft returned 0 and used `parse_known_args` for passthrough leniency; both were reversed after Codex flagged them as traps for automation and typos respectively. The nested `gator kill <target>` shape is deliberate — leaves room for `gator kill loop`, `gator kill enforcer`, etc. without CLI restructure. Selector-semantics rules (`--all` and `--port` mutually exclusive at the argparse layer; `--dry-run` requires a selector; `--port` must be inside the dashboard port range) are enforced BEFORE any process discovery runs — see `scripts-dashboard.md` for the full contract and the `TestSelectorSemanticsAtCliBoundary` regression suite. Standalone dashboard mode uses `~/.gator/dashboard-repos.json` instead of command-post registry. Versioning: patch bumps for incremental releases, minor bumps at Architect-decided milestones. `pyproject.toml` readme points to `PYPI_README.md` (user-facing, no command-post references) not `README.md` (developer-facing). `_restart_server()` adds `--no-open` to avoid duplicate browser tabs on restart. v1.1.3. `tests/test_packaging.py` verifies CLI dispatch, script resolution, wheel contents (scripts, dashboard, templates), and end-to-end installed-artifact behavior (builds wheel, creates temp venv, installs, verifies `gator.exe` entry point exists, runs `gator -V`, `gator --help`, and `gator version` subcommand dispatch via the real console-script entry point). `test_version_flag` compares the CLI output against `gator_command.__version__` (imported live) rather than a hardcoded string — the assertion survives every version bump. Prior form hardcoded `"1."` and broke silently on the v2.0.0 bump; the fix restores the packaging suite's signal.
-
-## TRIPWIRE: ensure_utf8_stdout() Call Pattern
-
-Every CLI entry-point script calls `ensure_utf8_stdout()` at the top of `main()` before any `print()`. This is required on Windows where the default encoding is not UTF-8 and causes UnicodeEncodeError for the ASCII art and emoji characters in the boot display.
-
-Library modules (gator_core.py, gator_remote.py, gator_session_reader.py) must not call this — they are imported by scripts that have already set up stdout.
-
-## Pattern: import_sibling() for Runtime Module Loading
-
-`gator-audit.py` loads peer scripts at runtime using `gator_core.import_sibling()` rather than static imports:
-
-```python
-fleet_mod = _import_script("gator-fleet-report")
-if fleet_mod:
-    reports = fleet_mod.scan_fleet(repos)
-```
-
-This pattern:
-1. Prevents a broken fleet-report from killing the entire audit
-2. Avoids circular import issues between scripts in the same directory
-3. Handles hyphenated filenames that Python's import machinery can't handle natively
-
-Each subsystem import is guarded with try/except ImportError. Do not convert these to static imports — the graceful degradation is intentional.
-
-## Pattern: Plan/Execute Separation (gator-update)
-
-`gator-update.plan_updates()` is read-only: it compares files, builds a diff list, and returns a plan without touching the filesystem. `gator-update.execute_updates()` performs the writes.
-
-This separation enables accurate dry-run (`--dry-run` shows exact changes without side effects) and JSON output (`--json` emits the plan without executing). Any new update logic must maintain this boundary — if it creates directories, it belongs in `execute_updates()`.
-
-## TRIPWIRE: Managed Hook Path Migration
-
-Gator now has one authoritative managed hook strategy:
-
-- Windows: install active hooks in `.git/gator-hooks`, set `core.hooksPath=.git/gator-hooks`, shebang is a spaceless absolute `py.exe` path resolved by the canonical resolver `gator_core.resolve_python_launcher_for_hooks()` (v2.10.0 Phase 2 cutover from the v2.9.3 inline probe). Resolution order: `~/.gator/preferences.json` python.windows_py_launcher → `shutil.which("py")` → `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe` → `C:\Windows\py.exe`. Historic `C:\Windows\py.exe` hardcode broke on per-user and Microsoft Store installs, field-fixed 2026-08-28.
-- Unix-like: install active hooks in the default `.git/hooks`
-
-**Shebang invariant**: the resolved shebang path must be spaceless. POSIX shebang syntax cannot quote paths with spaces, so a launcher under `C:\Users\<spaced name>\AppData\Local\...` would silently break hooks. The resolver's `_validate_launcher_candidate()` space-checks every candidate; a malformed OR invalid user preference refuses loudly (`source="user", status="degraded"` — NEVER silent fallback); if no spaceless launcher exists anywhere the resolver returns `degraded, source="none"`, and `_hook_shebang()` raises `HookShebangUnresolvable` which `install_git_hooks` / `plan_hook_updates` catch and surface as a loud install-time refusal (never a silent skip). Every launcher-consuming machine-side seam must go through the resolver — do not re-inline probing (see `scripts-repo-lifecycle.md::build_git_hook_wrappers` TRIPWIRE).
-
-Three clusters must stay aligned:
-1. `gator-update.py` — defines the managed path helpers and performs install/repair
-2. `gatorize.py` / boot self-heal — delegate to the same installer rather than writing hooks independently
-3. Fleet readers (`gator-fleet-report.py`, `gator-drift.py`, `gator-repo-status.py`) — probe the managed path set and tolerate legacy `.git/hooks`
-
-If one of these changes without the others, the likely failures are:
-- `git commit` still launching through Git-for-Windows `env.exe`
-- fleet/drift false negatives or false positives on Windows repos
-- dry-run/update output pointing at the wrong destination
-
-## Pattern: Snippet Fingerprint (session-aggregator)
-
-`snippet_fingerprint()` in `gator-session-aggregator.py` hashes the full raw bytes of each snippet file (SHA-256 per file, sorted alphabetically, combined SHA-256, prefixed `sha256:`). This is the cache invalidation key for session summaries at `~/.gator/sessions/<path-hash>/`. Any byte change in any snippet invalidates the cached summary. The fingerprint is order-independent — same set of files always produces the same result regardless of discovery order.
-
-! `session_cache_key()` uses `sha256(resolved_repo_path)[:12]` as the directory name. This is distinct from the snippet fingerprint — the cache key identifies the repo, the fingerprint validates the content.
-! `_atomic_write()` uses fd_closed flag to track file descriptor state — do not call os.get_inheritable() or os.close() on an already-closed fd in the error path.
-! Cache filenames use `sha256(effective_session_key)[:16].json`. The `effective_session_key()` helper returns `"group:<repo>:<session_group_key>"` when vendor session identity is present, `"legacy:<repo>:<session_id>"` otherwise. This is the single canonical grouping key used for aggregation, cache filenames, and fingerprint lookups. Aggregation, cache, and fingerprint code must all use this helper — never ad hoc `(repo, session_id)` tuples.
-
-## TRIPWIRE: parse_committed_summary() Canonical Parser
-
-`gator_session_reader.parse_committed_summary(text, filename)` is the sole parser for committed session summary markdown. Post-Phase-3 (2026-08-13) it has exactly one owner and two consumers.
-
-**Owner:**
-- `gator_session_reader.py` — defines it, uses it in `read_committed_summaries()`.
-
-**Consumers via `import_sibling()`:**
-- `gator-audit.py` — fleet-wide decision extraction + session_summaries (via `_committed_decisions_from_snippets()`).
-- `gator-repo-status.py` — per-repo recent sessions display (via `get_session_summaries()`).
-
-The parser handles two schema types: `gator-session-summary-v1` (legacy archaeology format, still readable) and `gator-commit-summary-v1` (from pre-commit hook). Returns dict with: date, repo, vendor, agent, goal, decisions, source_file, start. Returns None for unparseable files.
-
-Any change to frontmatter field names, section headers (`## Goal`, `## Decisions`), or the return dict shape breaks the consumers. Adding new return fields is safe; removing or renaming existing ones is not.
-
-*(Prior state: `gator-sessions.py` was the definer, with `gator-session-sink.py` as a fourth consumer via `import_sibling`. Phase 2A extracted the parser into `gator_session_reader.py`; Phase 3 Commit E retired `gator-sessions.py` and `gator-session-sink.py`, collapsing back to one owner.)*
-
-## TRIPWIRE: source_kind Provenance Vocabulary
-
-Session summaries carry a `source_kind` field with exactly three valid values:
-
-- `"command-post"` — read from the command post's `.gator/sessions/`
-- `"local-repo"` — read from a local fleet repo's `.gator/sessions/`
-- `"remote-cache"` — read from a remote bare cache via `gator_remote`
-
-Used by:
-- `gator-audit.py` — tags each summary at collection time
-- `gator-repo-status.py` — always tags as `"local-repo"`
-- `gator-dashboard.py` — `_find_session_content()` dispatches file resolution by `source_kind`
-- Dashboard JS (audit.js, repo.js) — passes `source_kind` to the drill-down modal
-
-A misspelling or new value that the dashboard doesn't handle breaks the evidence drill-down with a 400 error.
-
-## TRIPWIRE: X-Gator-Dashboard Header (Anti-CSRF Trust Boundary)
-
-All POST endpoints in `gator-dashboard.py` require the custom header `X-Gator-Dashboard: 1`. The server validates this in `_check_post_auth()` before processing any POST.
-
-This is the security boundary. Browsers cannot send custom headers on simple form POSTs, `<img>` embeds, or navigations. A cross-origin `fetch()` with custom headers triggers a CORS preflight OPTIONS request, which this server does not answer — blocking the request.
-
-Rules:
-- Every new POST endpoint must call `_check_post_auth()` first
-- Every new JS `fetch()` to a POST endpoint must include `headers: { "X-Gator-Dashboard": "1" }`
-- Do NOT weaken this to Origin-only checking — Origin can be absent on some browser form POSTs
-
-**v2.13.0 addition** — the debug GET endpoint `/api/__gator_debug/registry_state` (introduced by Plan A of the Dashboard UX track) uses a separate gating axis: it checks `os.environ.get("GATOR_DASHBOARD_DEBUG") == "1"` per request and returns 404 when the env var is unset. The endpoint does NOT exist in production. GET routes do not go through `_check_post_auth()`; the env-var gate is the only trust boundary and is complete because it is set only by the test harness's Popen env, never by any production launch path. See [Dashboard charter](scripts-dashboard.md) `### do_GET(self)` and `### _send_dashboard_html(self)` for the full contract, and `### Dashboard UI test harness (Playwright, v2.13.0)` for the harness pins that guard both the presence-when-set and absence-when-unset cases.
-- Do NOT add CORS headers to the server — no cross-origin access is intentional
-
-## Pattern: Two-Channel Update Architecture
-
-`gator-update.py` separates product updates from org-policy sync:
-
-- **Channel 1** (all repos): template overlay from gator clone via `product-source.json`. Uses `resolve_template_source()` from `gator_core.py`.
-- **Channel 2** (policy-synced repos only): org-policy sync via thin link. Skipped gracefully for standalone repos.
-
-**TRIPWIRE: product-source.json self-heal.** `gator-update.py:main()` self-heals a stale `product-source.json` (where `gator_root` points at a nonexistent path — common failure mode when the fleet-repo captured an absolute pipx venv path and pipx later rebuilt the venv or was reinstalled editable). On resolution failure the caller falls back to `Path(__file__).resolve().parent.parent` — the running install's own root, which by definition contains valid templates for the pipx and source-checkout cases. On successful fallback: prints a "Self-healing" warning, rewrites `product-source.json` so future runs don't need to self-heal, continues the update. If the fallback root has no `templates/gator-starter/` either (fleet-repo direct invocation of the template mirror at `.gator/scripts/gator-update.py`), the original "run --source" error surfaces unchanged. Self-heal is package-and-template-mirror sync-obligation-bound: any change to the fallback logic must land in BOTH `src/gator_command/scripts/gator-update.py` AND `src/gator_command/templates/gator-starter/scripts/gator-update.py`. Shipped in v2.4.1 (2026-07-30) — Stage 1 of v2.4.0 exposed the latent bug fleet-wide by swapping the Dashboard Update endpoint to `gator-update`.
-
-`product-source.json` is gitignored machine-local state. `--source` CLI arg rebinds it. Topology (`get_repo_topology()`) determines whether channel 2 runs. Three-state model: policy-synced (active thin link), standalone (all policy artifacts absent), inconsistent (partial artifacts remain — needs repair). Registry paths must be normalized via `normalize_path()` before use with `Path.is_dir()` — MSYS-style `/c/` paths fail on Windows otherwise. Dashboard Fleet Update passes `--no-policy` so the action model is: Fleet = template updates, Audit = policy sync (future). Fleet "Check Status" uses dry-run JSON to detect available updates AND `gator-charter-verify --json` for charter health before offering the action. Repo view is a markdown file browser over `.gator/` — `gator-pulse.py` generates the default document (`pulse.md`). File paths in URLs use per-segment encoding (preserve slashes) with server-side `unquote()`. File paths starting with `gator-command/` resolve against the repo root (not `.gator/`). Command post is injected into fleet data via `_inject_command_post()` (survives refresh). Dir values for gator-command/ files stripped of trailing slashes. File view includes git last-modified date. Command post identified by `is_command_post` flag (path-matched). Source file paths use `source/` prefix mapped to repo root. Binary files served via `/api/repo/<name>/raw/<path>` for inline image rendering. Template sync tripwire validated: gator-update.py and gator_core.py drifted (--no-policy, topology, product-source functions missing from templates).
-
-## Pattern: Single Command-Post Detection Predicate
-
-`find_command_post()` in `gator_core.py` is the canonical predicate for detecting whether a command post exists. All consumers must use this single definition. Do not invent alternative detection heuristics.
-
-Consumers: `gator-dashboard.py` (standalone vs command-post startup), `gatorize.py` (has-command-post flag for conditional thin link and entry-point text), `gator-fleet-report.py`, `gator-drift.py`, `gator-audit.py`, `gator-repo-status.py`. Historical: the retired bash chain (`gatorize.sh` et al) called this via `python3 -c "from gator_core import find_command_post; ..."` — that shell-bridge pattern went away with the bash chain in v2.4.0.
-
-## TRIPWIRE: find_command_post() + parse_registry() Registry Resolution
-
-All fleet-level scripts bootstrap via a two-step registry lookup from `gator_core`:
-
-1. `find_command_post(start_path)` — walks up directories looking for `.gator/mission.md`
-2. `parse_registry(command_post)` — reads `gator-command/registry.md`, returns list of repo entries with `name`, `path`, `remote`, `status`
-
-Used by: `gator-fleet-report.py`, `gator-drift.py`, `gator-audit.py`, `gator-repo-status.py`, `gator-dashboard.py`, `gator-policy-status.py`.
-
-The registry format (markdown table in `registry.md` with pipe-delimited columns) is the contract. Changes to column order, header names, or the path resolution heuristic in `find_command_post()` break every fleet-level script simultaneously.
-
-## Pattern: Machine-Local Dashboard Registry — Single Write Helper
-
-`ensure_dashboard_registry_entry(repo_path, source)` in `gator_core.py` is the canonical write path for the machine-local dashboard registry (`~/.gator/dashboard-repos.json`). All callers — `gator-init.py` (auto-register on session start), `gatorize.py` (via `add_dashboard_repo()`), `gator-dashboard.py` (`--add-repo`) — must go through this helper. It is idempotent by resolved path and returns a structured `{status, detail}` result.
-
-! Do not add repos to the registry by writing the JSON directly. The helper handles path resolution, deduplication, and error isolation.
-
-## Pattern: Repo-Scoped Dashboard Endpoints — Per-Repo Data or Structured Empty-State
-
-Dashboard endpoints under `/api/repo/<name>/...` are per-repo scoped by construction. When the requested data isn't available for the resolved repo, the correct response is a structured **empty-state** (`{status: "unavailable", reason: "<why>", message: "..."}`), NEVER a fallback that serves another repo's data under this repo's name. The historical precedent (v2.11.0 Blueprints Release A, retired v2.12.0) demonstrated the failure mode: an early draft served Gator's own charter map to any fleet repo with a "showing Gator's own architecture" disclaimer, which whiteboard review flagged as teaching users wrong data at the exact seam whose value proposition is repo-scoped inspection. The fix — return a structured empty-state instead — is the pattern here.
-
-Applies to any future per-repo Dashboard endpoint that lacks universal data availability. When in doubt, prefer the empty-state.
-
-**Sub-invariant**: a `status: "unavailable"` payload MUST carry a distinct `reason` for each condition it represents, and the frontend MUST branch on `reason`, not collapse every unavailable-state into the same "not available yet" empty card. The retired Blueprints view's first pass used the same shape for both the intentional gate (`release-b-pending`) and real degradation (`shipped-data-unreadable`), which would have presented corrupt-shipped-data failures as a "Release B ships it" teaser — a message that both hides the actual bug and promises a fix that doesn't apply. Empty-state and error-state are different UX classes; keep them distinguishable at the wire.
-
-## Pattern: Machine-Local Preferences — Discriminated Reader
-
-`read_preferences()` in `gator_core.py` is the canonical read path for the unified machine-local preferences file (`~/.gator/preferences.json`, schema `gator-preferences-v1`). Consumers today: the shebang resolver (Phase 2, v2.10.0) via `resolve_python_launcher_for_hooks()`. Reserved future consumer: the hook-mode resolver (follow-on plan) via the `hooks:` section.
-
-! The reader returns a **discriminated result** (`{"state": "absent" | "malformed" | "present", ...}`), never `Optional[dict]`. Callers must distinguish "absent" from "malformed" to honor the invariant that a user-declared preference override refuses loudly rather than silently falling back to auto-detection. Collapsing the two states (r1 mistake, caught by 2026-08-29 whiteboard finding 1) would make the invariant unenforceable for the malformed-file case.
-
-! **`state == "present"` means shape-valid, not just tag-matched.** `read_preferences()` runs `_validate_preferences_shape()` after the schema-tag check to type-check every documented section and field. Without this, a tagged payload with a wrong-shape section (e.g. `{"schema": "gator-preferences-v1", "python": []}`) would slip through as `present` and crash downstream `.get()` chains with `AttributeError`, violating the resolver's "never raises" contract. Whiteboard 2026-08-29 implementation-review finding 1 caught this — the r1 shape check only covered top-level-is-object. Whiteboard follow-up finding extended the shape validator to also enforce the schema's `minLength: 1` on string paths that must name real filesystem locations (empty `python.windows_py_launcher` → malformed), because the resolver's pre-fix `if not launcher:` collapse lumped `""` with `None` and silently fell through to auto-detect — the same silent-fallback class the feature exists to prevent.
-
-## Cross-Platform Test Patterns for Path Validators
-
-Two classes of failure that CI has caught on Linux runners after a Windows-first commit:
-
-1. **Hardcoded `C:/...` in path-validator tests** — Linux's `os.path.isabs("C:/...")` returns False (drive letter is not a POSIX absolute prefix), so a validator returns `relative-path` before reaching the check the test is trying to exercise (spaces, exists, basename). Use `tmp_path` for platform-native absolute prefixes, then compose subpaths for the specific behavior being tested.
-2. **Patching `os.name` alone doesn't stop downstream `os.path.isabs`/`isfile`/`expandvars`** — those helpers respect the real platform regardless of a patched `os.name`. Tests that exercise a wrapper around a resolver should patch the resolver seam (`gator_core.resolve_python_launcher_for_hooks`) directly rather than trying to fool downstream path helpers.
-
-Both patterns land in `test_gator_core.py::TestValidateLauncherCandidate` (tmp_path) and `test_hooks.py::TestBuildGitHookWrappers::test_windows_platform_shebang` (resolver-seam patching).
-
-! **Asymmetry with `resolve_governed_runtime()`**: a corrupt runtime pin fails OPEN to repo scripts (broken file must never brick commits); a malformed preferences file fails CLOSED (broken user override must never silently defeat itself). Both behaviors are correct for their contract — do not homogenize.
-
-## TRIPWIRE: Trailer Backward Compatibility (Gator-Architect / Gator-PI)
-
-The commit trailer `Gator-Architect:` (formerly `Gator-PI:`) carries the human role attribution. All code that reads trailers from git history must accept both names:
-
-```python
-architect = trailer_dict.get("Gator-Architect", trailer_dict.get("Gator-PI", ""))
-```
-
-Old commits have `Gator-PI:` and that history does not change. New commits use `Gator-Architect:`. The frontmatter field in `commit_draft.md` is `architect:` (formerly `pi:`); the hook also accepts `pi:` for backward compatibility.
-
-Consumers: `gator-pre-commit.py` (trailer assembly), `gator-repo-status.py` (trailer reading), dashboard `repo.js` (column display).
-
-## TRIPWIRE: Schema Versioning in CLI JSON Output
-
-All CLI scripts that produce JSON include a top-level `"schema"` field declaring the format version:
-
-- `gator-audit.py` → `"schema": "gator-audit-v1"`
-- `gator-repo-status.py` → `"schema": "gator-repo-status-v1"`
-
-*(Historical: `gator-session-common.py` → `"gator-session-summary-v1"` retired with the vendor extractors in the 2026-08-16 sweep; `parse_committed_summary()` still READS that schema from previously committed summaries.)*
-
-Every new CLI script with JSON output must include `"schema": "<name>-v<N>"` at the top level. This enables:
-- Downstream consumers to detect incompatible versions
-- Dashboard to guard against missing fields introduced in newer versions
-- Database schema migrations
-
-## Pattern: Graceful import_sibling() Degradation
-
-Multiple scripts optionally import peer modules for enriched output, with graceful fallback when the module is unavailable:
-
-```python
-try:
-    _ps = import_sibling("gator-policy-status")
-    _compute_sync_state = _ps.compute_sync_state
-    _HAS_POLICY = True
-except Exception:
-    _HAS_POLICY = False
-```
-
-Used by:
-- `gator-audit.py` — imports fleet-report, drift, gator_session_reader (3 optional modules). Machine identity comes from `gator_session_reader.get_machine_identity()` (folded from session-common in Phase 3F, 2026-08-13; session-common itself retired in the 2026-08-16 sweep).
-- `gator-fleet-report.py` — imports policy-status optionally
-- `gator-drift.py` — imports policy-status optionally
-- `gator-repo-status.py` — imports `gator_session_reader` optionally (Phase 2A, 2026-08-12 — was `gator-sessions` until then; the reader module is the surviving snippet-reader per parent plan)
-- `gator-update.py` — imports policy-status optionally
-- `gator-init.py` — imports gator-state optionally for the Stage 5 constitution-drift suffix on the boot line; failure yields no suffix, never breaks session opening
-
-The rule: a broken or missing optional module degrades that section's output (empty or `{"error": "..."}`) but never kills the entire script. Each import is independently guarded. Do not consolidate these into a single try/except block.
-
-! `import_sibling()` returns `None` when the file doesn't exist — it does NOT raise. A `try/except` around the import call will not catch this case. Callers must guard against `None` before calling methods on the returned module. Base-wheel package-data currently omits several session-pipeline scripts (`gator-session-aggregator`, `gator_session_reader`, `gator-audit`, `gator-fleet-report`, `gator-drift`, `gator-fleet-intel`, `gator-audit-renderers`) — a pre-existing gap unrelated to the session cleanup (`gator-session-common` was also on this list until its 2026-08-16 retirement removed the question). Under `pipx install gator-command` these scripts return `None` at runtime and their features degrade to empty output; an editable/source-checkout install has them. Adding them to package-data is a separate follow-on task.
-
-## Pattern: Parallel Local/Remote Scan Schemas
-
-Functions that read governance state from local repos have a parallel remote counterpart that must return the same schema:
-
-| Local function | Remote counterpart | Schema must match |
-|---|---|---|
-| `fleet-report.read_gator_state()` | `gator_remote.read_gator_state_remote()` | charter count, hooks, status fields |
-| `fleet-report.scan_repo()` | `gator_remote.scan_repo_remote()` | full repo scan with `scan_mode` field |
-
-Adding a field to the local function without the remote counterpart creates inconsistent data in fleet-report and audit — some repos show the field, others don't, with no indication of why.
-
-## Pattern: Individual/Enterprise Product Boundary
-
-The source tree contains both Individual and Enterprise code in one repo. The product boundary is enforced at build/deploy time, not at runtime:
-
-1. **PyPI wheel**: `pyproject.toml` uses explicit `package-data` file lists. Enterprise scripts are not listed, so they do not enter the wheel. `include-package-data = false` prevents auto-inclusion.
-2. **Public git repo**: `gator-deploy.py` uses `ENTERPRISE_ONLY_SCRIPTS`, `ENTERPRISE_ONLY_TESTS`, `ENTERPRISE_ONLY_TEMPLATES`, and `ENTERPRISE_ONLY_TEMPLATE_DIRS` exclude sets.
-3. **PyPI release**: `scripts/release-individual.sh` is the canonical release path. Deletes sdist before upload — only wheel ships.
-
-Enterprise scripts remain importable from `scripts/` for development, testing, and command-post dogfooding. They are never shipped to end users via the public package or repo.
-
-**Package-data completeness (roadmap item 12, fixed 2026-08-18).** `pyproject.toml` `[tool.setuptools.package-data]` is an explicit list (`include-package-data = false`) — a top-level script absent from it silently vanishes from pipx installs, `import_sibling()` returns None, and features degrade to empty (dashboard audit view, machine identity, fleet reports). Seven session-pipeline/fleet scripts were missing pre-fix (`gator-audit`, `gator-audit-renderers`, `gator-drift`, `gator-fleet-intel`, `gator-fleet-report`, `gator-session-aggregator`, `gator_session_reader`); three stale entries pruned (`gator-deploy.py`, `gator-init-command-post.py` — both retired; `scripts/legacy/**/*` — dir never existed; setuptools ignores missing patterns silently, which is exactly why the list rotted). ! TRIPWIRE — load-bearing for the runtime split (Variant A): the wheel IS the runtime, so a script missing from package-data is no longer rescued by a repo-resident copy. Self-maintaining guard: `tests/test_packaging.py::test_wheel_ships_every_top_level_script` compares disk → built wheel (not disk → pyproject text), so any future script added without a package-data entry fails CI. Named pins for the seven in `test_wheel_has_session_pipeline_scripts`.
-
-**Package/template sync obligations.** Several files ship in two locations that must stay behaviorally consistent:
-
-- Pre-commit hook trio (`gator-pre-commit.py`, `precommit_lint.py`, `precommit_charter.py`, `precommit_session.py`) — see "Product Boundary: Individual template vs Enterprise live copy" above. Runtime-split Phase 2 (2026-08-18): template `gator-pre-commit.py::main()` gained the flag-gated (`GATOR_RUNTIME_RESOLVER=1`) fail-closed version-negotiation check — validate phase ONLY (refusing mid-commit at trailers/cleanup would strand a half-finished commit); guarded import + broad except so the gate adds no new failure modes; flag-off default = pre-Phase-2 behavior exactly. The Enterprise bundled copy does NOT carry the gate (byte-identity already relaxed per MVP plan §D2; reconcile at item 3 or bundled-scripts retirement).
-- `gatorize.py` — **template copy retired in v2.4.0** (retire-gator-install plan Stage 4, 2026-07-30). Only the package copy at `src/gator_command/scripts/gatorize.py` remains; there is no template mirror to sync. Invariant #14 of the local-agent-overrides plan (2026-07-28) is retired with the file. See the "TRIPWIRE: gatorize.py Package/Template Copy Sync — RETIRED" note in `scripts-installer.md` for the fleet-repo `import_sibling("gatorize")` degradation contract.
-- `gator_core.py` — D6 staleness nudge (2026-08-22): `policy_staleness_nudge` block-mirrored to both copies (see `scripts-core-library.md` for semantics; NO-network tripwire). **r3 same-day wiring fix**: both `gator-init.py` copies called the nudge with an undefined `gator_dir` (NameError swallowed by the surrounding blanket except → banner surface dead code); corrected to `paths.gator_root` in wheel + template, wiring pinned end-to-end (`test_banner_shows_policy_nudge_wiring`). **Session-opening directive tail (2026-08-23)**: `session_opening_directive()` + the banner tail block-mirrored to both `gator-init.py` copies (constitution-skip finding — see `scripts-repo-lifecycle.md`); the two copies' helper must stay identical. Same commit uncapped the depth-limited repo-root walks in `gator-approve.py` and `gator-session-open.py` (whiteboard r2 class: arbitrary hop caps silently fail on deep working dirs) and fixed session-open's pinned-repo bootstrap (own-dir sys.path fallback — post-Phase-4 the repo-dirs-only probe made the wheel copy a silent no-op). Phase 1 (2026-08-18): `write_runtime_pin` + `_read_machine_id_value` added to BOTH the package copy and the template copy. The two copies are NOT byte-identical overall (the template variant is deliberately leaner) but these two functions must stay behaviorally consistent — the template copy exists so a repo-resident `gator-update.py` standalone run emits the same pin shape the CLI does. Contract: `contracts/schemas/gator-runtime-pin-v1.json` is the single arbiter of the emitted shape; drift between copies surfaces as a contract-test failure on the live pin, not silently. Phase 2 (same day) added `resolve_governed_runtime` + `_version_tuple` to both copies via block-mirroring, and the BOM-hardening follow-up (`utf-8-sig` pin read) landed in all three locations (wheel, template, this repo's `.includes`) in one commit — the mirror rule for these functions is: edit wheel first, block-mirror to template, let `gator update` carry `.includes`. The 2026-08-19 unreadable-pin degradation fix (whiteboard Findings 1+2 — unparseable-version branch now matches the malformed-JSON branch's repo-scripts-present check) followed the same three-copy rule.
-- **`*.pre-gator-update` backups are gitignored residue (2026-08-19)**: the machine-local safety copies `gator update` writes beside entry-point files when refreshing managed blocks (v2.3.0 design) are NOT content — three were accidentally committed by a `git add -A` in the Phase 4c commit, then untracked and the class gitignored (same rationale as v2.1.0's gitignoring of `whiteboard.md`/`commit_draft.md`/`status.json`). Never commit them; never hand-restore from them without Architect direction.
-- **`enforcer-review.py` path resolution rewired (runtime-split Phase 4d, 2026-08-19)**: `_resolve_repo_root()` is CWD-based (`find_gator_root()`) with the legacy script-position derivation as fallback — post-Phase-4 the script executes from the installed wheel where script-position arithmetic is meaningless. `_resolve_config_path()` canonicalizes the USER-OWNED config at `.gator/enforcer-config.json` (root) with legacy probes (`.includes/scripts/`, `scripts/`, script-dir) — a user file in a shipped dir was always a classification wrinkle. Whiteboard writes now resolve `_REPO_ROOT/.gator/whiteboard.md` — fixing a LATENT v2 bug (old `dirname(SCRIPT_DIR)` resolved to `.includes/whiteboard.md`; masked because the Architect-run external enforcer writes the whiteboard directly). Charter-verify probe gained the installed-wheel-sibling candidate. Pins: `tests/test_hooks.py::TestEnforcerReviewResolution` (5 — incl. `test_guidance_strings_name_canonical_config_path`, added after whiteboard 2026-08-20 caught the script's OWN docstring + operator guidance still naming the retired scripts-dir config path; the pin greps source text so guidance can't drift from the canonical home again). Live-verified: `gator hook enforcer-review --layer 1` clean through the dispatcher.
-- **Static bash hook files RETIRED** (runtime-split Phase 4, 2026-08-19 — Phase-0 finding F2): `templates/gator-starter/scripts/hooks/{pre-commit,commit-msg,post-commit}` deleted. They carried v1 paths, were documented as dead weight (real wrappers are generated by `build_git_hook_wrappers`), and post-Phase-4 would have polluted the wheel-runtime manifest. Row 16's covered-file set shrinks accordingly.
-- **Vendor-hook merge logic — FOUR-copy sync obligation** (`gatorize/vendor_hooks.py` canonical; wheel `gator-update.py` inline copy; template `gator-update.py` inline copy; enterprise `gator_enterprise_cli/vendor_hooks.py::_merge_hooks`). Runtime-split Phase 3b (2026-08-19): all four gained the identical `_is_gator_hook_command()` predicate; same-day whiteboard hardening upgraded it to THREE-shape matching (`.gator/` substring incl. shell-chain fallback clauses, bare `gator hook ` prefix, quoted absolute-launcher form) in all four copies. Changing the predicate or the merge semantics in one copy without the other three reintroduces the duplicate-group-on-migration bug the predicate exists to prevent.
-- `gator-update.py` — runtime-split Phase 3a (2026-08-19): both copies' `build_git_hook_wrappers` + new `_installed_dispatcher_path` + the `plan_hook_updates` pinned-repo guard block-mirrored (template copy resolves the dispatcher via `import gator_command` — fails to None on CLI-less machines, generating pre-Phase-3 stubs). `cli.py` gained the `hook` verb → `gator-hook.py`; pyproject package-data gained `scripts/gator-hook.py` (disk→wheel guard test would have caught the omission). Phase 1 (2026-08-18): both copies gained the identical best-effort `write_runtime_pin` call in `main()` (after the `.gator-version` stamp, before `print_result`); try/except by contract — pin failure never fails an update. Stage 4b added entry-point managed-block refresh (`plan_entry_point_updates`, `execute_entry_point_updates`, `entry_point_actions` in JSON, `"schema": "gator-update-v1"`). The template copy inlines `find_managed_block`, `classify_managed_block`, `detect_legacy_gator_content`, `render_managed_region`, `BlockState`, `ManagedBlockLocation`, and the sentinel/fingerprint constants so it runs standalone without the `gatorize/` sub-package. `render_entry_content` and `upgrade_legacy_entry_point` are guarded imports — when unavailable (fleet-repo template copy invoked directly), `_ENTRY_POINT_REFRESH_AVAILABLE = False` and `plan_entry_point_updates()` returns an empty list. Enforced by `tests/test_template_sync.py`: behavioral parity for the update pipeline, JSON-schema parity (`"schema": "gator-update-v1"` + `entry_point_actions`), and AST-equivalence for the three inlined helper functions (`ast.dump` of their bodies must match the canonical `gatorize/managed_block.py`).
-
-## TRIPWIRE: Logical-Path Parse Contract (B1, v2.13.0)
-
-The `(namespace_root, disk_rel, git_rel)` triple returned by `parse_logical_path` in `gator-dashboard.py` is the canonical shape for every future dashboard endpoint that receives a user-supplied file path. Consumers MUST NOT construct these values by string slicing at the call site — the parser is the ONLY code that turns a decoded URL logical string into a triple.
-
-Three namespace roots are recognized, EXACT-CASE:
-- `""` — source repository (URL prefix `source/`; git prefix empty)
-- `".gator"` — governance (URL prefix implicit; git prefix `.gator/`)
-- `"gator-command"` — governance (URL prefix `gator-command/`; git prefix `gator-command/`)
-
-Explicit `.gator/` in a URL and any case-aliased spelling of the three roots (`Source/`, `.GATOR/`, `Gator-Command/`) is REJECTED at parse — POSIX roots are case-sensitive and a lenient parser would hide contract-shape errors. ADS colons (`private.pem:leak.md`), Win32 trailing dots/spaces (`sessions/_active./`), Windows-reserved device names on any segment (via `_is_reserved_windows_component` — E5 layered check with `_WIN_RESERVED_STEMS_EXPLICIT` PRIMARY and `PureWindowsPath.is_reserved()` SECONDARY), backslashes on any platform, control chars, tilde prefix, and drive-relative shapes (`C:secret.txt`) are all rejected in parse — BEFORE any disk resolution.
-
-The wire-schema serializer `_serialize_listing_entry` in `dashboard/content_policy.py` is the SYMMETRIC inverse: it turns a `(namespace_root, disk_rel)` pair BACK into the URL client would submit (via the `path` field). Live and historical `/files` responses MUST both flow through this serializer so discovery and serving agree on the canonical URL by construction.
-
-Pinned by `test_content_transport_slice1.py` parser + serializer tests, and by `test_content_transport_slice2.py` HTTP integration round-trip pins (live + historical listings, discovery-serving symmetry, governance-root aliasing 404, one-canonical-path contract).
-
-**v2.13.0 B1 Slice 2** — Slice 2 wires the parse contract into `do_GET`: `_parse_request` runs EXACTLY ONCE per request from the top of the method; the four B1-owned endpoints dispatch through `_handle_files`/`_handle_file`/`_handle_raw`/`_handle_history` on `req.endpoint`. Handler methods take `req` as an argument and MUST NOT read `handler.path` or invoke `_parse_request` again — a source grep on those four methods is the mechanical guard. The wire-schema serializer's live + historical branches share the same predicate (`_reparse_ls_tree_entry` for git tree entries; `_canonical_logical_for` + `parse_logical_path` for live scanner entries) so `/files` and `/file`/`/raw` cannot desynchronize.
-
-**v2.13.0 B1 post-Codex remediation (2026-09-09)** — Five Codex findings against the Slice 1+2 landing were addressed in-session: (F1 HIGH) `_contained_repo_path` now walks unresolved path components rejecting reparse points before resolve, closing an in-repo alias where a symlink like `source/public → .gator/sessions/_active` would authorize on the LOGICAL path but resolve to protected content; (F2 MEDIUM) `/history?version=…` rejections now propagate `Cache-Control: no-store`; (F3 MEDIUM) live-read handlers now return 404 on `FileNotFoundError`/`PermissionError` instead of 500 (no existence/permission oracle); (F4 MEDIUM) fixture split so `beta` preserves `gator-command/` while `alpha` deletes it, unblocking the E1 positive live-listing round-trip; (F5 MEDIUM) charter reconciliation retired pre-B1 claims about octet-stream fallback and missing `/raw?version=` handler.
-
-**v2.13.0 B1 second-round remediation (2026-09-09, same-session)** — Codex re-review of the first-round remediation found two additional issues. (F1 HIGH re-review) `_is_reparse_point` called `entry_or_path.stat(follow_symlinks=False)` on `pathlib.Path` inputs — but that kwarg is 3.10+, and `pyproject.toml` declares `>=3.9`; a 3.9 host would crash every live handler with `TypeError`. Fix: gate the DirEntry-native call behind `isinstance(entry_or_path, os.DirEntry)`, route Path/str inputs through `os.stat(os.fspath(x), follow_symlinks=False)` (3.3+ API). (F2 MEDIUM re-review) the concurrent-removal F3 pins deleted the file BEFORE the request, so `_contained_repo_path.resolve(strict=True)` returned None and the handler emitted 404 via the `target is None` check — never reaching the remediated `except (FileNotFoundError, PermissionError)` branch. Fix: rename to `test_*_missing_target_returns_404_via_containment` (accurate scope), add POSIX-only `chmod 0` pins that DO reach the exception branch, plus a source-grep pin asserting both exception classes are named in the specific clause BEFORE the general `OSError`.
-
-**v2.13.0 B1 third-round remediation (2026-09-09, same-session)** — Codex third review (LOW) noted the POSIX `chmod 0` pins can be bypassed by a privileged reader and `FileNotFoundError` was still not deterministically reachable via filesystem state. Fix: added 6 cross-platform in-process branch pins that inject a faulty target through the `_contained_repo_path` seam (Mock with `is_file() → True`, `read_bytes()` raising) so the `except (FileNotFoundError, PermissionError)` clause fires deterministically on any platform, any Python version, for both `_handle_file` and `_handle_raw`. Complementary `_stays_500` pins prove the general-`OSError` branch was preserved.
-
-**v2.13.0 B2 Slice 1 (2026-09-10)** — Sandboxed HTML preview server-side surface. `gator-dashboard.py` gains `apply_html_csp_headers(handler, *, external)` — a dedicated seam that emits `Content-Security-Policy` + `Vary: Sec-Fetch-Dest` for `text/html` responses on `/raw/`. B1's `apply_response_headers` stays byte-exact preserved; B2 is additive-only. `_handle_raw` gains one conditional block after the mime lookup: when the resolved MIME starts with `text/html`, `Sec-Fetch-Dest` selects the embedded vs external CSP variant (`iframe` → embedded; missing/other → external with `sandbox allow-scripts;` prepended per r14 §M1 safer default). The CSP directives forbid `'unsafe-eval'` per r14 §M1; the fast-matrix audit `tests/test_shipped_template_audit.py` walks both shipped-template roots (`.gator/blueprints/*.html`, `src/gator_command/templates/gator-starter/blueprints/*.html`) with a three-pattern regex set (`\bFunction\s*\(`, `\beval\s*\(`, `\bset(?:Timeout|Interval|Immediate)\s*\(\s*['\"]`) so any future template introducing dynamic-code execution fails CI before the browser catches it. `document.write` is intentionally NOT audited (belongs to `'unsafe-inline'` policy family, not `'unsafe-eval'` gate); indirect-eval bypasses are documented as out-of-scope. Slice 2 (frontend + fixtures) and Slice 3 (Playwright pins) land the browser-side surface; Slice 1 lands the server-side CSP emit and its audit alone.
-
-**v2.13.0 B2 Slice 3 (2026-09-10, post-R3 remediation)** — Playwright pins that lock the browser-side surface. `tests/test_dashboard_ui/test_html_preview.py` lands 18 pins after three rounds of Codex remediation (initial 13 pins landed 2026-09-10, then R1 added 5 r14 §M1 production-path pins + retargeted 4 existing pins at the shipped click path, then R2 tightened the detector's liveness contract, popup CSP capture, and iframe sizing assertion, then R3 extended the Copy-path pin from a clipboard-only assertion to the full async flow and reconciled the primary Dashboard charter's CSP-violation detector + iframe sizing TRIPWIREs to match the R2 implementations). Coverage: `apply_response_headers` byte-diff guard (H1 seam invariant), non-Sec-Fetch-Dest → external CSP fallback (L2), Vary header on both variants (M1), embedded vs external CSP contents (M2/M3 — no `'unsafe-eval'`), non-HTML responses carry no CSP, URL canonical-prefix guard (r14 §M1 static check), iframe sandbox exact-string (r7 §H2), detector-liveness with TWO-LANE assertion against the negative-control fixture (child-side listener + parent-side postMessage-relay aggregate — R2 F1 remediation pins BOTH lanes since the compat matrix reads only the parent aggregate), shipped-template compat matrix (parameterized over 9 files across both audit roots, 200 status precondition, parent-side aggregate read via postMessage relay), parent-DOM isolation (r8 §M3), inline-script executes inside sandbox, form-submission blocked, Open-externally label + noopener popup + BROWSER-CAPTURED response CSP (R2 F2 — synthetic urllib check replaced with `page.context.on("response")` capture of the actual navigation Response), Refresh reissues HTTP + preserves `?version=`, Copy path writes repo-relative string with full async coverage (R3 F1 — snapshot original icon → click → 200ms assert clipboard write + transient ✓ visible (Promise microtask path) → 1600ms assert original icon restored (setTimeout path) → `page.on("pageerror")` catches the `TypeError: Cannot set properties of null` a regression would emit; the pre-R3 pin only asserted the clipboard write and would have stayed green under the buggy `e.currentTarget` code because the Promise microtask often succeeds and only the delayed timer throws), iframe rendered pixels ≥400px + computed-style min-height (R2 F3 — rendered `getBoundingClientRect().height` is the primary check, computed style is diagnostic).
-
-Two helpers: `_load_raw_in_iframe` for CSP corpus probing (compat matrix + liveness — direct iframe with hardcoded sandbox for iteration cheapness); `_click_file_via_repo_view` (r14 §M1 addition, R1 land) drives the real Dashboard shell (`?repo=<name>` → sidebar click → production iframe emitted by `views/repo.js::loadFile()`) so the pins for sandbox/isolation/execution/UX assertions cover the shipped trust boundary end-to-end. `_load_raw_in_iframe` navigates parent to the dashboard origin FIRST (`frame-ancestors 'self'` blocks framing from opaque-origin parents; the previous `set_content`-only approach silently produced `chrome-error://chromewebdata/` iframes that passed empty-violations assertions falsely). postMessage-relay architecture in the context init script (R1 F1): each document's CSP handler pushes to its LOCAL `window.__csp_violations` AND `postMessage`s violations up to `window.parent`; the parent's `message` listener aggregates. **Two-lane liveness (R2 F1)**: `test_csp_violation_detector_flags_negative_control` MUST assert BOTH the child's local array via `frame.evaluate` (contract: prove the listener runs INSIDE the sandboxed child) AND the parent's aggregate array via `page.evaluate` (contract: prove the postMessage relay carried violations across). The compat matrix reads ONLY the parent aggregate, so single-lane assertion is a contract violation — a regression that breaks either the child-side `window.parent.postMessage` sender or the parent-side `message` listener would leave the compat matrix silently reporting every template as clean while a child-only liveness pin stays green. Compat itself reads the parent's aggregate via `page.evaluate` (fast, safe, avoids `frame.evaluate`'s no-default-timeout hang on shipped templates that don't reach a stable execution context). Fixture `csp_violation_listener` is FUNCTION-scoped (r8 §M2 — pytest-playwright's `context` is function-scoped). Playwright API details ratified: `element_handle().content_frame()` for a real `Frame`, `Locator.evaluate` for FrameLocator-scoped access, `expect(...).not_to_have_attribute(name, value)` for negation. Slice 3 concludes B2.
-
-**v2.13.0 B2 Slice 2 (2026-09-10)** — Sandboxed HTML preview browser-side surface + fixtures. `dashboard/views/repo.js`'s `loadFile()` HTML branch is replaced: instead of `window.open(rawUrl, "_blank", "noopener")` (v2.4.5 fallback), the file renders INLINE via `<iframe sandbox="allow-scripts">` with three control buttons (Copy path, Refresh, Open in new tab). Sandbox attribute is EXACTLY `allow-scripts` (r7 §H2 — no top-nav, no popups, no forms). Three module-scope helpers factored: `buildRawUrl(repoName, filePath, version)`, `copyPathFor(filePath)`, `bindHtmlPreviewControls(contentEl, repoName, filePath, version)`. CSS in `dashboard.css` adds `.repo-iframe-wrapper` + `.repo-iframe` base sizing (min-height 400px, flex 1 1 auto) — Plan C amends the responsive flex chain, B2 alone ships a usable floor. Fixtures in `tests/test_dashboard_ui/content_transport_seed.py` gain `_copy_shipped_blueprints(repo)` (copies every `*.html` under `.gator/blueprints/` and `src/gator_command/templates/gator-starter/blueprints/` into the test repo pre-seed via `shutil.copy2`; skips silently on installed-wheel layout) and `_csp_negative_control.html` (deliberately violates three CSP directives — external stylesheet, external image, cross-origin fetch — targeting `example.invalid` to prevent accidental real-network traffic; used by Slice 3's detector-liveness pin). Slice 3 lands the Playwright pins that pin the frontend contract end-to-end.
-
-## TRIPWIRE: Cumberland HTML Style Contract (Codex Sketch 2, 2026-09-12/13)
-
-Every HTML document Gator produces shares one visual grammar — the Cumberland style — via two anchor files that are pinned identical by two compat tests plus a template-sync pair:
-
-- **Master** `src/gator_command/templates/gator-starter/reference-notes/cumberland-html-document-template.html` — the default starting template when the Architect asks for an HTML document (routing rule in constitution `## HTML Documents`). Mirror at `.gator/.includes/reference-notes/…` (dogfood).
-- **Narrative Blueprint specialization** `.gator/blueprints/_template-narrative.html` — inherits the master's CSS core byte-for-byte inside `CUMBERLAND-NARRATIVE-STYLE:BEGIN/END` delimiters, adds Blueprint-protocol metadata + `==TODO==` scaffolding on top. Mirror at `templates/gator-starter/blueprints/_template-narrative.html`.
-
-Three concerns are DELIBERATELY separated across these files: **style** (Cumberland visual grammar — palette, typography, callouts, tables, figures, diagram, steps, pills, badges — lives in the shared region), **role** (destination path, per `authoring-html-artifacts.md` step 2), **protocol** (`gator-blueprint-html-v1` metadata, Blueprint-only). Blurring these — e.g., adding Blueprint metadata to the general master, or moving palette tokens out of the shared region — breaks the reconciliation contract.
-
-Pins (all in `contracts/compatibility/`):
-- `test_cumberland_narrative_style_parity.py` — after the 2026-09-13 enforcer F3 extension, 10 pins covering (a) marker existence on all four Cumberland copies (2 master + 2 narrative), (b) mirror-pair byte-equality (master source↔mirror; narrative source↔mirror), (c) shared-region byte-equality between master and narrative on both the source pair AND the mirror pair, and (d) source↔dogfood byte-equality for the Slice-2 constitution + authoring-procedure edits. Compact-diff failure message points at the first divergent line. This module owns Cumberland + Slice-2 mirror parity directly; the earlier claim that `tests/test_template_sync.py` supplied transitive coverage was false.
-- `test_cumberland_visual_invariants.py` — visual invariants + bounded self-containment. **Round-12 closure (2026-09-14)**: replaced eleven rounds of blacklist scanners with a small positive-policy validator plus a pinned CSP `<meta>` in both templates. **Round-13 follow-up (2026-09-14)**: F1 promoted CSP validation into the structural HTMLParser walk so a commented-out `<meta>` no longer bypasses (`_find_csp_status` returns `missing` for the inert form); F2 narrowed Layer 1's scope from "HTML + CSS content" to "HTML capabilities only" and delegated CSS-egress enforcement to Layer 2 (CSP) + Layer 3 (browser observation) — the earlier `handle_data` scan of `@import`/`url(` was removed because Chromium recognizes CSS shapes (uppercase `@IMPORT`, `image-set(...)`, CSS-escaped `\75rl(...)`) that a source-text scanner cannot reliably catch without a full CSS parser. Visual coverage unchanged. Self-containment now runs `_validate_cumberland_document` — HTMLParser walk against `_ALLOWED_TAGS` (26 tags) and per-tag `_ATTR_ALLOWLIST`. `<a href>` fragment-only; `<meta http-equiv>` = `content-security-policy` only; every `on*=` event handler flagged; parse errors fail closed. CSP validation runs through `_find_csp_status` (structural walk, verdicts: `ok` / `missing` / `duplicate` / `csp-outside-head` / `csp-after-title` / `csp-after-style` / `csp-content-mismatch` / `parse-error`). Two shipped-template pins (`test_master_passes_positive_policy` + `test_narrative_passes_positive_policy`), positive-control minimal-document pin, 27-parametrized HTML rejection matrix (round-12's 30 minus round-13's 3 dropped CSS entries), and `test_csp_status_rejects_commented_out_meta` (F1 meta-pin: commented-out / duplicate / late / weakened CSP forms all rejected). Round-1..11 machinery DELETED per Codex's "material net reduction" stop criterion.
-- `test_cumberland_computed_style.py` — visual layout + Layer 3 network smoke test + Layer 2 CSS-egress boundary. 17 Playwright pins. Narrow (375×667) parametrized over master + narrative Blueprint: page-level no-overflow; EVERY `<table>` has `.table-wrap` ancestor (universal); any oversized wrap has `overflow-x: auto` AND actually scrolls. Wide (1440×900) on master: h1 fontSize, body padding + max-width, header border color, section paragraph text-align. **Initial-load network smoke test** (round-8 → scoped round-12): parametrized over both templates; asserts zero non-template requests during Chromium's initial load. **CSP-blocks-forbidden-CSS-shapes** (round-13 F2, hardened round-14): parametrized over 5 CSS shapes (`@import`, `@IMPORT`, `url(...)`, `image-set("...")`, `\75rl(...)`). Round-14 F2: fixtures now import the pinned CSP from `_helpers.PINNED_CSP_CONTENT` (shared with the visual-invariants module — no duplicated constant, no drift risk); a `securitypolicyviolation` listener installed pre-navigation captures the block event for each shape; each pin asserts (a) SPV fired with the expected directive (`style-src-elem` for `@import`, `img-src` for `url`/`image-set`/`escaped`) + blocked URI under `cdn.example`, AND (b) zero external requests completed. Preserves liveness — a fixture going inert now fails immediately instead of silently passing.
-- `test_cumberland_propagation.py` — 2 pins fitting the fast compatibility matrix: master exists at canonical shipped-source path; `gator-update.plan_updates` routes the master to `.gator/.includes/reference-notes/…` on v2. **Wheel-content pins live in `tests/test_packaging.py::TestWheelBuildAndContents`** (`test_wheel_contains_cumberland_master` + `test_wheel_ships_full_cumberland_delivery_surface`) alongside the other wheel-content assertions — the ONLY CI job that installs `build` and actually runs its test file (F1 round-3 fix — wheel-building fixtures in the compatibility suite would have silently skipped on the fast matrix and never collected on the packaging matrix). **Fresh-gatorize-installs-master lives in `test_gator_layout.py::test_gatorize_install_produces_required_layout`** (reuses the existing install fixture, verifies both correct destination AND absence at flat root).
-
-Changing the shared region: edit inside the delimiters in EITHER file, then re-sync the other (parity check fails otherwise). Adding a new palette hue, callout variant, or component: touch the shared region ONCE — both consumers inherit automatically at next release. Removing a variant: same, plus retire any `visual_invariants` assertion the removal invalidates in the same commit.
+- Identify every producer and consumer of the contract.
+- Check for package, template, dogfood, and Enterprise bundled copies.
+- Preserve fail-open versus fail-closed behavior deliberately.
+- Run the relevant compatibility tests plus the affected domain suite.
+- Keep implementation history in Git or an artifact, not in this always-read charter.
 
 ## Connections
 
--> [scripts-core-library](scripts-core-library.md) — gator_core, gator_remote, normalize_path
--> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — local/remote fallback, import_sibling consumers, registry resolution
--> [scripts-session-archaeology](scripts-session-archaeology.md) — row_key duplication, parse_committed_summary canonical parser
--> [scripts-repo-lifecycle](scripts-repo-lifecycle.md) — plan/execute separation, SKIP_FILES, policy sync import
--> [scripts-dashboard](scripts-dashboard.md) — X-Gator-Dashboard header, source_kind vocabulary, session drill-down, file refresh button, mtime sort
-! `gator-audit.py --sessions` and `gator-dashboard.py /api/audit/sessions` both import `gator-session-aggregator` via `import_sibling()` — follows the same graceful degradation pattern as other cross-script imports. `--fleet` and `--refresh` flags are rejected without `--sessions` via `parser.error()` to prevent silent no-ops. Dashboard endpoint logic extracted to `_resolve_audit_sessions()` for testability — handler is a thin delegate. Repos identified by path-hash only (no repo_name param) — consistent with plan's stable identity model. `_inject_repo_keys()` ensures both command-post and standalone fleet data include `repo_key` — the `session_cache_key()` call is the single source of truth for this identity. Cross-doc search uses server-side `_search_repo_files()` endpoint with AND/OR boolean operators — never fetches files individually from JS.
-! `gator-audit.py` imports renderers from `gator-audit-renderers.py` via lazy `import_sibling()` — loaded on first call to `render_text()` or `render_html()`, not at module import time. This means `--sessions` and `--json` paths work even if the renderers file is missing. Raises explicit `ImportError` with diagnostic if the file is not found.
-! `gator-dashboard.py` file-listing scan (v2.4.5) accepts `.html`/`.htm` in `.gator/` alongside `.md`/`.json`/`.jsonl`. The raw endpoint's MIME map serves them as `text/html; charset=utf-8`. Extension whitelist stays exhaustive — no wildcard, no "any text file" fallback. Same discipline applies whenever a new file kind needs Dashboard visibility: add it to both the scan and the MIME map together, or the file lists but downloads instead of rendering.
+-> [Core Library](scripts-core-library.md) - shared helpers and runtime APIs
+-> [Repo Lifecycle](scripts-repo-lifecycle.md) - hook installation and dispatch
+-> [Session Archaeology](scripts-session-archaeology.md) - snippets, summaries, and provenance
+-> [Dashboard Server](scripts-dashboard.md) - registry and HTTP trust boundaries
+-> [Enterprise Dispatcher](scripts-enterprise.md) - base-wheel separation
+-> [Contracts](contracts.md) - schemas and byte-identity checks
+-> [Release Pipeline](release-pipeline.md) - installed-wheel and workflow validation

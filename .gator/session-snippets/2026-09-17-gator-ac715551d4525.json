@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "opus-4-7",
+  "intent": "Fix #32 follow-up: seam-wiring pin + hermetic outside-Git test + docstring fix",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "issue-32",
+    "test-hardening",
+    "codex-followup"
+  ],
+  "commit": "ac715551d4525351a89651fb258c005240ac4ffa",
+  "short_commit": "ac71555",
+  "snippet_id": "snippet-ac715551d4525",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "f837d3f3173b1b228a10238b00c5e710b0c56e0b",
+  "started_at": "2026-09-17T01:33:22Z",
+  "ended_at": "2026-09-17T01:33:22Z",
+  "vendor_inferred": "unknown",
+  "model_inferred": "opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-repo-lifecycle.md",
+    ".gator/session-snippets/2026-09-17-gator-f837d3f3173b1.json",
+    "src/gator_command/scripts/gator-hook.py",
+    "tests/test_gator_hook.py"
+  ],
+  "notes": [
+    "Addresses the three Codex whiteboard findings on the `f837d3f`",
+    "issue-#32 fix. All three are test/documentation corrections — no",
+    "production-code redesign.",
+    "The `TestResolveRepoRoot` helper-level tests would ALL still pass",
+    "if a future edit reverted `main()`'s single line back to",
+    "`repo_root = Path.cwd()` (dropping the `_resolve_repo_root(...)`",
+    "call). Issue #32 would silently reopen while the acceptance suite",
+    "stayed green."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
