@@ -767,6 +767,140 @@ class TestStructuredDecisionRequests:
         assert "not found" in stderr.getvalue()
 
 
+class TestDurableArchitectResponses:
+    """Module 3: unblock --file creates durable response artifacts."""
+
+    def test_unblock_with_file_creates_durable_response(self, loop_env):
+        """Escalate with file, unblock with file -> response artifact in loop dir."""
+        e = loop_env
+
+        req = e["tmp"] / "my-request.md"
+        req.write_text("# Request\n\nWhich API version?\n", encoding="utf-8")
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need API version", file_path=str(req)
+        )
+
+        resp = e["tmp"] / "my-response.md"
+        resp.write_text("# Response\n\nUse API v2.\n", encoding="utf-8")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Use API v2", file_path=str(resp)
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        d = s["decisions"][0]
+        assert d["response"]["message"] == "Use API v2"
+        assert d["response"]["artifact_path"] == "decision-response.decision-1.md"
+        assert d["response"]["ts"]
+
+        copied = e["loop_dir"] / "decision-response.decision-1.md"
+        assert copied.exists()
+        assert "Use API v2" in copied.read_text(encoding="utf-8")
+
+    def test_unblock_message_only_no_artifact(self, loop_env):
+        """Escalate, unblock with --message only -> artifact_path is null."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Need guidance")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Proceed with plan A"
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        d = s["decisions"][0]
+        assert d["response"]["message"] == "Proceed with plan A"
+        assert d["response"]["artifact_path"] is None
+
+    def test_decisions_survive_to_terminal(self, loop_env):
+        """Full loop: escalate -> unblock -> submit -> approve -> decisions intact."""
+        e = loop_env
+
+        # Escalate and unblock
+        loop_submit.handle_escalate(e["draftor_token"], "Need guidance")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Go ahead"
+        )
+
+        # Complete the loop: draft -> review (approve)
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(
+            e["reviewer_token"], str(e["findings_file"]), approve=True
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "plan_approved"
+        assert len(s["decisions"]) == 1
+        assert s["decisions"][0]["response"] is not None
+        assert s["decisions"][0]["response"]["message"] == "Go ahead"
+
+    def test_unblock_after_pause_no_decision_entry(self, loop_env):
+        """Pause -> unblock. decisions[] is untouched (empty)."""
+        e = loop_env
+
+        from submit import handle_pause
+        handle_pause(e["architect_token"], message="Taking a break")
+        loop_submit.handle_unblock(e["architect_token"])
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s.get("decisions", []) == []
+
+    def test_unblock_with_file_after_pause_rejected(self, loop_env):
+        """Pause -> unblock with --file raises ValueError, stage stays paused."""
+        e = loop_env
+
+        from submit import handle_pause
+        handle_pause(e["architect_token"], message="Taking a break")
+
+        resp = e["tmp"] / "unsolicited-response.md"
+        resp.write_text("# Response\n\nSome answer.\n", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="pending decision"):
+            loop_submit.handle_unblock(
+                e["architect_token"], message="Here's my answer",
+                file_path=str(resp)
+            )
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "paused_by_architect"
+        assert not (e["loop_dir"] / "decision-response.decision-1.md").exists()
+
+    def test_unblock_event_includes_decision_id(self, loop_env):
+        """Unblock event includes decision_id when resolving a pending decision."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Need decision")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Decided"
+        )
+
+        events_file = e["loop_dir"] / "events.jsonl"
+        import json
+        events = [json.loads(line) for line in
+                  events_file.read_text(encoding="utf-8").strip().split("\n")]
+        unblock_events = [ev for ev in events if ev["event"] == "loop_unblocked"]
+        assert len(unblock_events) == 1
+        assert unblock_events[0]["decision_id"] == "decision-1"
+
+    def test_unblock_file_must_exist(self, loop_env):
+        """Unblock with nonexistent --file raises FileNotFoundError."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Need decision")
+        with pytest.raises(FileNotFoundError, match="not found"):
+            loop_submit.handle_unblock(
+                e["architect_token"], message="Here",
+                file_path=str(e["tmp"] / "ghost.md")
+            )
+
+    def test_unblock_file_must_be_nonempty(self, loop_env):
+        """Unblock with empty --file raises ValueError."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Need decision")
+        empty = e["tmp"] / "empty.md"
+        empty.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="empty"):
+            loop_submit.handle_unblock(
+                e["architect_token"], message="Here",
+                file_path=str(empty)
+            )
+
+
 class TestSessionWrittenBeforeEvent:
     def test_write_ordering(self, loop_env):
         """Event appears in events.jsonl only after session.json is updated."""

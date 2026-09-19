@@ -268,14 +268,25 @@ def handle_escalate(token, reason, file_path=None):
     return loop_id, role, loop_dir
 
 
-def handle_unblock(token, next_role=None, stage=None, message=None):
+def handle_unblock(token, next_role=None, stage=None, message=None,
+                   file_path=None):
     """Architect command: unblock a paused loop.
 
     Requires architect token. Both next_role and stage are optional;
     defaults come from the resume state saved at escalation/pause time.
     Optional message is stored in session and shown in the resuming
-    model's status output.
+    model's status output. Optional file_path attaches a durable
+    decision-response artifact.
     """
+    if file_path is not None:
+        source = Path(file_path)
+        if not source.exists():
+            raise FileNotFoundError(
+                f"Decision-response file not found: {file_path}")
+        if source.stat().st_size == 0:
+            raise ValueError(
+                f"Decision-response file is empty: {file_path}")
+
     loop_id, role, loop_dir = resolve_token(token)
     if role != "architect":
         raise PermissionError("Unblock requires the architect token")
@@ -285,18 +296,32 @@ def handle_unblock(token, next_role=None, stage=None, message=None):
         if not allowed:
             raise PermissionError(reason)
 
+        # Check pending decisions before advancing state
+        from datetime import datetime, timezone
+        decisions = session.get("decisions", [])
+        pending = [d for d in decisions if d.get("response") is None]
+
+        if file_path is not None and not pending:
+            raise ValueError(
+                "--file requires a pending decision request to attach to; "
+                "no outstanding decisions exist")
+
         timeout = session["status"]["turn_timeout_seconds"]
         advance_unblocked(session, stage=stage, next_role=next_role,
                           turn_timeout=timeout, message=message)
 
         # Resolve the most recent pending decision, if any
-        from datetime import datetime, timezone
-        decisions = session.get("decisions", [])
-        pending = [d for d in decisions if d.get("response") is None]
+        resolved_id = None
+        artifact_name = None
         if pending:
-            pending[-1]["response"] = {
+            decision = pending[-1]
+            resolved_id = decision["id"]
+            if file_path is not None:
+                artifact_name = f"decision-response.{resolved_id}.md"
+                _copy_artifact(file_path, loop_dir, artifact_name)
+            decision["response"] = {
                 "message": message,
-                "artifact_path": None,
+                "artifact_path": artifact_name,
                 "ts": datetime.now(tz=timezone.utc).isoformat(),
             }
 
@@ -314,6 +339,8 @@ def handle_unblock(token, next_role=None, stage=None, message=None):
             "round": session["status"]["round"],
             "detail": detail,
         }
+        if resolved_id:
+            event["decision_id"] = resolved_id
         return session, event
 
     with_session_lock(loop_dir, _unblock)

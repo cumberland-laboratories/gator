@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "ag896398@gmail.com",
+  "agent": "claude-opus-4-6",
+  "intent": "Structured decision requests via escalate --file (issue #8, module 2)",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop-protocol",
+    "decision-lifecycle"
+  ],
+  "commit": "295c92585f4a7cba012bec2d83742ecf6b60233f",
+  "short_commit": "295c925",
+  "snippet_id": "snippet-295c92585f4a7",
+  "session_group_key": "anthropic:289bb879-f92b-4cce-93a7-4349e01e3ba0",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-19T22:01:10Z",
+  "ended_at": "2026-09-19T22:11:45Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-09-19-gator-caa6505f71ce0.json",
+    "src/gator_command/scripts/loop/cli.py",
+    "src/gator_command/scripts/loop/session.py",
+    "src/gator_command/scripts/loop/submit.py",
+    "tests/test_loop.py"
+  ],
+  "notes": [
+    "escalate --file copies a decision-request artifact into the loop dir",
+    "with a collision-proof name: decision-request.decision-{N}.round-{R}.md",
+    "session.decisions[] ledger tracks request/response lifecycle",
+    "handle_unblock() resolves the most recent pending decision on unblock",
+    "Architect status (text + JSON) surfaces pending decisions while blocked",
+    "CLI escalate catches FileNotFoundError + ValueError without traceback",
+    "12 tests added (TestStructuredDecisionRequests); 105 total pass",
+    "Charter updated: command count, handler signatures, decision lifecycle"
+  ],
+  "transcript_session_id": "289bb879-f92b-4cce-93a7-4349e01e3ba0",
+  "transcript_ref": null
+}

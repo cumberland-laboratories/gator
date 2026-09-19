@@ -164,12 +164,12 @@ Filesystem: source file (R, optional), `.gator/loops/<loop-id>/decision-request.
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_escalated()`, `_copy_artifact()` (when file_path provided)
 ! Either model role may escalate from any active stage, including when it is not its turn — `validate_action()` intentionally skips the turn check for escalate.
 
-### handle_unblock(token, next_role, stage, message)
+### handle_unblock(token, next_role, stage, message, file_path=None)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path` (None for text-only), and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests.
-Filesystem: none (session mutation only)
+Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path`, and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests. Optional `file_path` attaches a durable response artifact copied to `decision-response.{decision-id}.md` in the loop directory. File validation (must exist, must be non-empty) runs before lock acquisition; `FileNotFoundError`/`ValueError` on failure. `--file` is rejected with `ValueError` inside the lock (before state advancement) when no pending decision exists — prevents silent discard of a response artifact after an Architect pause.
+Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when file_path provided), session mutation
 <- `cli._cmd_unblock()`
--> `resolve_token()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`
+-> `resolve_token()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
 
 ### handle_pause(token, message)
 File: `src/gator_command/scripts/loop/submit.py`

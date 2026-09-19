@@ -293,7 +293,7 @@ def _cmd_unblock(args):
     try:
         loop_id, loop_dir = handle_unblock(
             args.token, next_role=args.next_role, stage=args.stage,
-            message=args.message
+            message=args.message, file_path=getattr(args, "file", None)
         )
         from session import load_session
         session = load_session(loop_dir)
@@ -584,6 +584,7 @@ def main(argv=None):
     p_unblock.add_argument("--next-role", choices=["draftor", "reviewer"], help="Override resume role")
     p_unblock.add_argument("--stage", choices=["plan_drafting", "plan_review", "plan_revision"], help="Override resume stage")
     p_unblock.add_argument("--message", help="Message to the resuming model (shown in their status)")
+    p_unblock.add_argument("--file", help="Path to a decision-response artifact")
 
     # wait
     p_wait = sub.add_parser("wait", help="Block until it is your turn")
