@@ -179,6 +179,7 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300):
             "findings": None,
         },
         "turns": [],
+        "decisions": [],
     }
 
 

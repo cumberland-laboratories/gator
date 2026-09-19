@@ -517,6 +517,256 @@ class TestEscalateUnblockResume:
         assert s["status"]["stage"] == "plan_approved"
 
 
+class TestStructuredDecisionRequests:
+    """Module 2: escalate --file creates structured decision entries."""
+
+    def test_escalate_with_file_copies_artifact(self, loop_env):
+        """escalate --file copies decision-request artifact into loop dir."""
+        e = loop_env
+        request_file = e["tmp"] / "decision-request.md"
+        request_file.write_text("# Decision Request\n\nWhich API version?\n", encoding="utf-8")
+
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need API version guidance",
+            file_path=str(request_file)
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "blocked_on_architect"
+
+        # Artifact copied to loop dir with decision-seq in name
+        copied = e["loop_dir"] / "decision-request.decision-1.round-0.md"
+        assert copied.exists()
+        assert "Which API version?" in copied.read_text(encoding="utf-8")
+
+        # Decisions entry created
+        assert len(s["decisions"]) == 1
+        d = s["decisions"][0]
+        assert d["id"] == "decision-1"
+        assert d["request"]["reason"] == "Need API version guidance"
+        assert d["request"]["artifact_path"] == "decision-request.decision-1.round-0.md"
+        assert d["request"]["role"] == "draftor"
+        assert d["request"]["round"] == 0
+        assert d["response"] is None
+
+    def test_escalate_without_file_backwards_compat(self, loop_env):
+        """escalate without --file still works and creates a decisions entry."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Scope unclear")
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "blocked_on_architect"
+        assert len(s["decisions"]) == 1
+        d = s["decisions"][0]
+        assert d["request"]["reason"] == "Scope unclear"
+        assert d["request"]["artifact_path"] is None
+        assert d["response"] is None
+
+    def test_escalate_file_must_exist(self, loop_env):
+        """escalate --file with nonexistent path raises FileNotFoundError."""
+        e = loop_env
+        with pytest.raises(FileNotFoundError, match="not found"):
+            loop_submit.handle_escalate(
+                e["draftor_token"], "reason",
+                file_path=str(e["tmp"] / "nonexistent.md")
+            )
+
+    def test_escalate_file_must_be_nonempty(self, loop_env):
+        """escalate --file with empty file raises ValueError."""
+        e = loop_env
+        empty = e["tmp"] / "empty.md"
+        empty.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="empty"):
+            loop_submit.handle_escalate(
+                e["draftor_token"], "reason",
+                file_path=str(empty)
+            )
+
+    def test_decisions_array_in_fresh_session(self, loop_env):
+        """Fresh session has an empty decisions array."""
+        s = loop_session.load_session(loop_env["loop_dir"])
+        assert s["decisions"] == []
+
+    def test_escalate_event_includes_decision_request(self, loop_env):
+        """Event dict includes decision_request when file is provided."""
+        e = loop_env
+        request_file = e["tmp"] / "request.md"
+        request_file.write_text("# Request\n\nDetails.\n", encoding="utf-8")
+
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need guidance",
+            file_path=str(request_file)
+        )
+
+        events_text = (e["loop_dir"] / "events.jsonl").read_text(encoding="utf-8")
+        events = [json.loads(line) for line in events_text.strip().splitlines()]
+        escalation_events = [ev for ev in events if ev["event"] == "escalated"]
+        assert len(escalation_events) == 1
+        assert escalation_events[0]["decision_request"] == "decision-request.decision-1.round-0.md"
+
+    def test_repeated_escalations_same_round_unique_files(self, loop_env):
+        """Two escalations in the same round produce distinct files."""
+        e = loop_env
+        req_a = e["tmp"] / "request-a.md"
+        req_a.write_text("# Request A\n\nFirst question.\n", encoding="utf-8")
+        req_b = e["tmp"] / "request-b.md"
+        req_b.write_text("# Request B\n\nSecond question.\n", encoding="utf-8")
+
+        # First escalation
+        loop_submit.handle_escalate(
+            e["draftor_token"], "First question",
+            file_path=str(req_a)
+        )
+        # Unblock back to same stage/round
+        loop_submit.handle_unblock(e["architect_token"], message="Answered first")
+
+        # Second escalation in the same round
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Second question",
+            file_path=str(req_b)
+        )
+
+        # Both files exist with distinct contents
+        file_1 = e["loop_dir"] / "decision-request.decision-1.round-0.md"
+        file_2 = e["loop_dir"] / "decision-request.decision-2.round-0.md"
+        assert file_1.exists()
+        assert file_2.exists()
+        assert "First question" in file_1.read_text(encoding="utf-8")
+        assert "Second question" in file_2.read_text(encoding="utf-8")
+
+        # Both decisions entries present with correct artifact paths
+        s = loop_session.load_session(e["loop_dir"])
+        assert len(s["decisions"]) == 2
+        assert s["decisions"][0]["request"]["artifact_path"] == "decision-request.decision-1.round-0.md"
+        assert s["decisions"][1]["request"]["artifact_path"] == "decision-request.decision-2.round-0.md"
+
+    def test_architect_status_shows_pending_decision(self, loop_env):
+        """Architect text status displays pending decision info when blocked."""
+        import argparse, io, contextlib
+
+        e = loop_env
+        req = e["tmp"] / "request.md"
+        req.write_text("# Decision needed\n\nDetails.\n", encoding="utf-8")
+
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need API version guidance",
+            file_path=str(req)
+        )
+
+        args = argparse.Namespace(token=e["architect_token"], json=False)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            try:
+                from cli import _cmd_status
+                _cmd_status(args)
+            except SystemExit:
+                pass
+        text = output.getvalue()
+        assert "decision-1" in text
+        assert "Need API version guidance" in text
+        assert "decision-request.decision-1.round-0.md" in text
+
+    def test_architect_json_status_includes_decisions(self, loop_env):
+        """Architect JSON status includes decisions and pending_decisions."""
+        import argparse, io, contextlib
+
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Scope unclear")
+
+        args = argparse.Namespace(token=e["architect_token"], json=True)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            try:
+                from cli import _cmd_status
+                _cmd_status(args)
+            except SystemExit:
+                pass
+        data = json.loads(output.getvalue())
+        assert "decisions" in data
+        assert "pending_decisions" in data
+        assert len(data["pending_decisions"]) == 1
+        assert data["pending_decisions"][0]["id"] == "decision-1"
+
+    def test_escalate_with_file_not_your_turn(self, loop_env):
+        """Escalate with --file works when it is NOT the caller's turn."""
+        e = loop_env
+        # Submit draft so it's reviewer's turn
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        req = e["tmp"] / "off-turn-request.md"
+        req.write_text("# Off-turn request\n\nBlocked on external info.\n", encoding="utf-8")
+
+        # Draftor escalates even though it's reviewer's turn
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Blocked on external info",
+            file_path=str(req)
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "blocked_on_architect"
+        assert len(s["decisions"]) == 1
+        assert s["decisions"][0]["request"]["role"] == "draftor"
+        copied = e["loop_dir"] / s["decisions"][0]["request"]["artifact_path"]
+        assert copied.exists()
+
+    def test_unblock_resolves_pending_decision(self, loop_env):
+        """Escalate d1 -> unblock -> escalate d2 -> only d2 pending, d1 has response."""
+        e = loop_env
+
+        # Decision 1: escalate with reason
+        loop_submit.handle_escalate(e["draftor_token"], "Need API version guidance")
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert len(s["decisions"]) == 1
+        assert s["decisions"][0]["response"] is None
+
+        # Architect unblocks with a message
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Use API v2"
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        d1 = s["decisions"][0]
+        assert d1["response"] is not None
+        assert d1["response"]["message"] == "Use API v2"
+        assert d1["response"]["ts"]
+
+        # Decision 2: escalate again
+        loop_submit.handle_escalate(e["draftor_token"], "Need deployment target")
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert len(s["decisions"]) == 2
+        # d1 still resolved
+        assert s["decisions"][0]["response"] is not None
+        assert s["decisions"][0]["response"]["message"] == "Use API v2"
+        # d2 pending
+        assert s["decisions"][1]["response"] is None
+
+        # Pending list has only d2
+        pending = [d for d in s["decisions"] if d["response"] is None]
+        assert len(pending) == 1
+        assert pending[0]["id"] == "decision-2"
+
+    def test_cli_escalate_bad_file_prints_error(self, loop_env):
+        """CLI escalate with nonexistent --file prints error, not traceback."""
+        import argparse, io, contextlib
+
+        args = argparse.Namespace(
+            token=loop_env["draftor_token"],
+            reason="test",
+            file=str(loop_env["tmp"] / "nonexistent.md")
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            try:
+                from cli import _cmd_escalate
+                _cmd_escalate(args)
+            except SystemExit as exc:
+                assert exc.code == 1
+        assert "Error:" in stderr.getvalue()
+        assert "not found" in stderr.getvalue()
+
+
 class TestSessionWrittenBeforeEvent:
     def test_write_ordering(self, loop_env):
         """Event appears in events.jsonl only after session.json is updated."""

@@ -132,6 +132,9 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
     max_rnd = status.get("max_rounds", 0)
     roles = session.get("roles", {})
 
+    decisions = session.get("decisions", [])
+    pending = [d for d in decisions if d.get("response") is None]
+
     if args.json:
         out = {
             "schema": "gator-loop-status-v1",
@@ -147,6 +150,8 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "draftor_joined": roles.get("draftor", {}).get("joined", False),
             "reviewer_joined": roles.get("reviewer", {}).get("joined", False),
             "turns": session.get("turns", []),
+            "decisions": decisions,
+            "pending_decisions": pending,
         }
         print(json.dumps(out, indent=2))
     else:
@@ -174,6 +179,13 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             print(f"    gator loop interject --token {args.token} --message \"...\"")
             print(f"    gator loop end --token {args.token} --reason \"...\"")
         elif is_paused(session):
+            if pending:
+                p = pending[-1]
+                req = p.get("request", {})
+                print(f"  Pending decision: {p['id']}")
+                print(f"    Reason: {req.get('reason', '?')}")
+                if req.get("artifact_path"):
+                    print(f"    Request: {loop_dir / req['artifact_path']}")
             print()
             print("  Commands:")
             print(f"    gator loop unblock --token {args.token} --message \"...\"")
@@ -263,10 +275,12 @@ def _cmd_submit_review(args):
 def _cmd_escalate(args):
     from submit import handle_escalate
     try:
-        loop_id, role, loop_dir = handle_escalate(args.token, args.reason)
+        loop_id, role, loop_dir = handle_escalate(
+            args.token, args.reason, file_path=getattr(args, "file", None)
+        )
         print(f"  Escalated. Loop blocked -- waiting for Architect.")
         print(f"  Loop: {loop_id}")
-    except ValueError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"  Error: {e}", file=sys.stderr)
         sys.exit(1)
     except PermissionError as e:
@@ -547,6 +561,7 @@ def main(argv=None):
     p_esc = sub.add_parser("escalate", help="Escalate to Architect")
     p_esc.add_argument("--token", required=True, help="Role token")
     p_esc.add_argument("--reason", required=True, help="Escalation reason")
+    p_esc.add_argument("--file", help="Path to decision-request document (optional)")
 
     # pause (Architect)
     p_pause = sub.add_parser("pause", help="Pause a running loop (Architect)")

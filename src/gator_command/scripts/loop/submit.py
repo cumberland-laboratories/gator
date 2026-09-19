@@ -193,20 +193,38 @@ def handle_submit_review(token, file_path, approve=False):
     return loop_id, role, loop_dir
 
 
-def handle_escalate(token, reason):
+def handle_escalate(token, reason, file_path=None):
     """Escalate to blocked_on_architect from any active state.
 
-    Either role can escalate when it's their turn.
+    Either model role may escalate from any active stage, including when
+    it is not its turn. Optional file_path attaches a structured
+    decision-request artifact.
     """
     if not reason or not reason.strip():
         raise ValueError("Escalation reason is required")
 
+    artifact_name = None
+    if file_path is not None:
+        source = Path(file_path)
+        if not source.exists():
+            raise FileNotFoundError(f"Decision-request file not found: {file_path}")
+        if source.stat().st_size == 0:
+            raise ValueError(f"Decision-request file is empty: {file_path}")
+
     loop_id, role, loop_dir = resolve_token(token)
 
     def _escalate(session):
+        nonlocal artifact_name
         allowed, msg = validate_action(session, role, "escalate")
         if not allowed:
             raise PermissionError(msg)
+
+        round_num = session["status"]["round"]
+
+        decision_seq = len(session.get("decisions", [])) + 1
+        if file_path is not None:
+            artifact_name = f"decision-request.decision-{decision_seq}.round-{round_num}.md"
+            _copy_artifact(file_path, loop_dir, artifact_name)
 
         # Track turn
         append_turn(
@@ -217,12 +235,32 @@ def handle_escalate(token, reason):
         # Advance state
         advance_escalated(session, reason)
 
+        # Record structured decision request
+        from datetime import datetime, timezone
+        decision_id = f"decision-{decision_seq}"
+        decision_entry = {
+            "id": decision_id,
+            "request": {
+                "reason": reason,
+                "artifact_path": artifact_name,
+                "round": round_num,
+                "role": role,
+                "ts": datetime.now(tz=timezone.utc).isoformat(),
+            },
+            "response": None,
+        }
+        if "decisions" not in session:
+            session["decisions"] = []
+        session["decisions"].append(decision_entry)
+
         event = {
             "event": "escalated",
             "role": role,
             "round": session["status"]["round"],
             "detail": reason,
         }
+        if artifact_name:
+            event["decision_request"] = artifact_name
         return session, event
 
     with_session_lock(loop_dir, _escalate)
@@ -250,6 +288,17 @@ def handle_unblock(token, next_role=None, stage=None, message=None):
         timeout = session["status"]["turn_timeout_seconds"]
         advance_unblocked(session, stage=stage, next_role=next_role,
                           turn_timeout=timeout, message=message)
+
+        # Resolve the most recent pending decision, if any
+        from datetime import datetime, timezone
+        decisions = session.get("decisions", [])
+        pending = [d for d in decisions if d.get("response") is None]
+        if pending:
+            pending[-1]["response"] = {
+                "message": message,
+                "artifact_path": None,
+                "ts": datetime.now(tz=timezone.utc).isoformat(),
+            }
 
         # Record architect turn
         append_turn(session, "architect", "unblock",

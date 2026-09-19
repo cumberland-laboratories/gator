@@ -9,9 +9,9 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `session.py` owns session CRUD, token generation/resolution (with secret nonce), platform-aware file locking, atomic writes, turn tracking, and loop ID generation
 - `state_machine.py` owns state categorization (active/paused/terminal), action validation, and all state transitions
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
-- `submit.py` owns the four submit handlers: submit-draft, submit-review, escalate, unblock
+- `submit.py` owns the seven submit handlers: submit-draft, submit-review, escalate, unblock, pause, interject, end
 - `host.py` owns loop initialization (`gator loop start`) and the watch loop with timeout enforcement
-- `cli.py` owns argparse subcommand routing for all 8 loop commands
+- `cli.py` owns argparse subcommand routing for all 12 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, wait, tail, list)
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
 ## Does Not Own
@@ -40,7 +40,7 @@ Filesystem: `.gator/loops/<loop-id>/.tokens.json` (R)
 
 ### create_session(feature, loop_id, max_rounds, turn_timeout)
 File: `src/gator_command/scripts/loop/session.py`
-Builds the initial session dict. Does not write to disk.
+Builds the initial session dict including empty `decisions: []` ledger. Does not write to disk.
 Filesystem: none
 <- `host.start_loop()`
 
@@ -156,16 +156,17 @@ Filesystem: source file (R), `.gator/loops/<loop-id>/findings.current.md` (W)
 <- `cli._cmd_submit_review()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_review_submitted()`
 
-### handle_escalate(token, reason)
+### handle_escalate(token, reason, file_path=None)
 File: `src/gator_command/scripts/loop/submit.py`
-Transitions to `blocked_on_architect`. Requires non-empty reason.
-Filesystem: none (session mutation only)
+Transitions to `blocked_on_architect`. Requires non-empty reason. Optional `file_path` attaches a structured decision-request artifact: validates file exists and is non-empty, copies to `decision-request.decision-{N}.round-{R}.md` (decision-sequenced to prevent overwrites on repeated same-round escalations), and appends a `decisions[]` entry to session with `id`, `request` (reason, artifact_path, round, role, ts), and `response: null`.
+Filesystem: source file (R, optional), `.gator/loops/<loop-id>/decision-request.decision-*.round-*.md` (W, optional), session mutation
 <- `cli._cmd_escalate()`
--> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_escalated()`
+-> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_escalated()`, `_copy_artifact()` (when file_path provided)
+! Either model role may escalate from any active stage, including when it is not its turn — `validate_action()` intentionally skips the turn check for escalate.
 
 ### handle_unblock(token, next_role, stage, message)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits.
+Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path` (None for text-only), and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests.
 Filesystem: none (session mutation only)
 <- `cli._cmd_unblock()`
 -> `resolve_token()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`
@@ -226,11 +227,11 @@ Filesystem: none (delegates to handlers)
 
 ### _cmd_status(args)
 File: `src/gator_command/scripts/loop/cli.py`
-Read-only status display. Role-aware: model view (exit codes 0/1/2) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands).
+Read-only status display. Role-aware: model view (exit codes 0/1/2) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands + pending decisions).
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `load_session()`
-! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns` and join states. Architect never gets exit code 1 (always authorized to act on active loops).
+! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
 
 ---
 
@@ -262,7 +263,7 @@ Each active stage belongs to exactly one role: `plan_drafting` -> draftor, `plan
 
 Three roles: `draftor`, `reviewer`, `architect`. Each has a token with a secret nonce. `validate_action()` enforces a strict matrix: model actions (submit-draft, submit-review, escalate) reject `architect`, architect actions (pause, interject, end, unblock) reject model roles. This is a structural barrier — models don't have the architect nonce and cannot execute architect commands.
 
-! The architect token is stored in the same `.tokens.json` as model tokens. The protection is that models are not given the token and have no protocol-sanctioned way to obtain it. This is defense-in-depth, not a cryptographic guarantee. See the [Architect Authority Plan](../artifacts/2026-07-26-architect-loop-authority-plan.md) for the full trust model analysis.
+! The architect token is stored in the same `.tokens.json` as model tokens. The protection is that models are not given the token and have no protocol-sanctioned way to obtain it. This is defense-in-depth, not a cryptographic guarantee.
 
 ## Pattern: sys.path Import Model
 
@@ -272,9 +273,14 @@ Loop modules use `sys.path.insert(0, LOOP_DIR)` and absolute imports (`from sess
 
 Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`.
 
+## Before Changing This Module
+
+- Preserve lock ordering, role authorization, and stage/turn invariants.
+- Exercise timeout, pause, escalation, interjection, unblock, and terminal transitions.
+- Keep CLI output and the loop protocol aligned.
+
 ## Connections
 
 -> [Cross-Cutting](scripts-cross-cutting.md) -- Package CLI Entry Point (cli.py COMMANDS dict), sys.path import convention
 -> [Core Library](scripts-core-library.md) -- `find_gator_root()`, `ensure_utf8_stdout()`, `get_version()`
 -> [Installer and Boot](scripts-installer.md) -- `render_entry_content()` cross-vendor orientation, `/loop-join` command template
--> [Implementation Plan](../artifacts/2026-07-25-gator-loop-implementation-plan.md) -- full design rationale, resolved design choices
