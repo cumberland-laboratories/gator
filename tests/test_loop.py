@@ -1080,6 +1080,120 @@ class TestArtifactFormatAlignment:
             )
 
 
+class TestEscalateVerdictWarning:
+    """Module 5: soft warning when findings contain ESCALATE but use submit-review."""
+
+    def test_submit_review_warns_on_escalate_verdict(self, loop_env):
+        """Findings with ESCALATE via submit-review succeeds but emits warning."""
+        import io, contextlib
+        e = loop_env
+
+        # Submit draft first so reviewer can submit
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        # Write findings with ESCALATE verdict
+        escalate_findings = e["tmp"] / "escalate-findings.md"
+        escalate_findings.write_text(
+            "# Review\n\n## Verdict\n\nESCALATE\n\nScope is unclear.\n",
+            encoding="utf-8",
+        )
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            loop_submit.handle_submit_review(
+                e["reviewer_token"], str(escalate_findings)
+            )
+
+        warning = stderr.getvalue()
+        assert "Warning" in warning
+        assert "ESCALATE" in warning
+        assert "submit-review" in warning
+
+        # Submission still succeeded — entered revision, not blocked
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] in ("plan_revision", "max_rounds_exceeded")
+
+    def test_submit_review_no_warning_without_escalate(self, loop_env):
+        """Normal findings via submit-review emits no warning."""
+        import io, contextlib
+        e = loop_env
+
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            loop_submit.handle_submit_review(
+                e["reviewer_token"], str(e["findings_file"])
+            )
+
+        assert stderr.getvalue() == ""
+
+    def test_approve_no_warning_even_with_escalate_text(self, loop_env):
+        """Approval with ESCALATE text in file emits no warning."""
+        import io, contextlib
+        e = loop_env
+
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        findings_with_escalate = e["tmp"] / "approval-with-escalate.md"
+        findings_with_escalate.write_text(
+            "# Review\n\n## Verdict\n\nAPPROVE\n\n"
+            "Previously considered ESCALATE but resolved.\n",
+            encoding="utf-8",
+        )
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            loop_submit.handle_submit_review(
+                e["reviewer_token"], str(findings_with_escalate), approve=True
+            )
+
+        assert stderr.getvalue() == ""
+
+    def test_revise_mentioning_escalate_no_warning(self, loop_env):
+        """REVISE findings that casually mention 'escalate' emit no warning."""
+        import io, contextlib
+        e = loop_env
+
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        findings = e["tmp"] / "revise-mention-escalate.md"
+        findings.write_text(
+            "# Review\n\n## Verdict\n\nREVISE\n\n"
+            "Do not escalate this — handle it in the plan.\n",
+            encoding="utf-8",
+        )
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            loop_submit.handle_submit_review(
+                e["reviewer_token"], str(findings)
+            )
+
+        assert stderr.getvalue() == ""
+
+    def test_non_utf8_findings_submit_succeeds(self, loop_env):
+        """Non-UTF-8 findings file submits successfully without exception."""
+        import io, contextlib
+        e = loop_env
+
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        binary_findings = e["tmp"] / "binary-findings.md"
+        content = b"# Review\n\n## Verdict\n\nREVISE\n\nBad byte: \xff\xfe here.\n"
+        binary_findings.write_bytes(content)
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            loop_submit.handle_submit_review(
+                e["reviewer_token"], str(binary_findings)
+            )
+
+        # Submission succeeded
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] in ("plan_revision", "max_rounds_exceeded")
+
+
 class TestSessionWrittenBeforeEvent:
     def test_write_ordering(self, loop_env):
         """Event appears in events.jsonl only after session.json is updated."""

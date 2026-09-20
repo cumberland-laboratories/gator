@@ -151,7 +151,7 @@ Filesystem: source file (R), `.gator/loops/<loop-id>/plan.current.md` (W)
 
 ### handle_submit_review(token, file_path, approve)
 File: `src/gator_command/scripts/loop/submit.py`
-Same pattern as draft. Copies to `findings.current.md`. Branches on `--approve`: terminal or revision.
+Same pattern as draft. Copies to `findings.current.md`. Branches on `--approve`: terminal or revision. Before the lock: if `approve` is False, reads the first 500 bytes (decoded with `errors="replace"` for safety) and checks for an actual `## Verdict` heading followed by `ESCALATE` (regex, case-insensitive). If matched, emits a stderr warning after the successful submission. This is a soft guard — does not block the submission and cannot raise on non-UTF-8 input.
 Filesystem: source file (R), `.gator/loops/<loop-id>/findings.current.md` (W)
 <- `cli._cmd_submit_review()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_review_submitted()`

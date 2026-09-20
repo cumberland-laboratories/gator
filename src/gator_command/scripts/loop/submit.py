@@ -127,6 +127,17 @@ def handle_submit_review(token, file_path, approve=False):
     if source.stat().st_size == 0:
         raise ValueError(f"Review file is empty: {file_path}")
 
+    # Pre-read for ESCALATE verdict detection (safe, before lock)
+    import re
+    _has_escalate_verdict = False
+    if not approve:
+        try:
+            head = source.read_bytes()[:500].decode("utf-8", errors="replace")
+            _has_escalate_verdict = bool(
+                re.search(r"##\s*Verdict[^\n]*\n\s*ESCALATE", head, re.IGNORECASE))
+        except OSError:
+            pass
+
     loop_id, role, loop_dir = resolve_token(token)
 
     def _submit(session):
@@ -189,6 +200,15 @@ def handle_submit_review(token, file_path, approve=False):
         return session, event
 
     with_session_lock(loop_dir, _submit)
+
+    if _has_escalate_verdict:
+        print(
+            "Warning: findings contain an ESCALATE verdict but were "
+            "submitted via submit-review, not escalate. The loop entered "
+            "revision, not blocked state. If you intended to escalate, "
+            "run `gator loop escalate` instead.",
+            file=sys.stderr,
+        )
 
     return loop_id, role, loop_dir
 
