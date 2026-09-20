@@ -2,6 +2,29 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.14.0] — 2026-09-20
+
+Feature release. Adds structured decision lifecycle to `gator loop` — file-backed escalation and unblock, a persistent decision ledger, artifact format alignment, and ESCALATE verdict discipline. Also adds the "Delegating to Sub-Agents" constitution section governing when primary agents may farm out work.
+
+### Added
+
+- **`gator loop escalate --file <path>`** — attach a decision-request artifact when escalating to the Architect. The file is copied into the loop directory as `decision-request.decision-{N}.round-{R}.md`. A `session.decisions[]` ledger tracks the request/response lifecycle. Architect status surfaces pending decisions while blocked. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 2)
+- **`gator loop unblock --file <path>`** — attach a decision-response artifact when unblocking a participant. Response recorded in the decision ledger. Guard rejects `--file` when no pending decision exists. `loop_unblocked` event includes `decision_id`. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 3)
+- **Decision Request / Decision Response templates** in `loop-artifact-formats.md` — standardized artifact formats for the structured decision lifecycle. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 4)
+- **Uncertainty classification** in plan template — "Risks and Open Questions" renamed to "Assumptions, Risks, and Required Architect Decisions" with non-blocking vs blocking classification. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 4)
+- **ESCALATE verdict soft warning** — `handle_submit_review()` warns when a participant submits an ESCALATE verdict via `submit-review` instead of the proper `escalate` command. Detection uses `## Verdict` heading regex. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 5)
+- **128 loop tests** — 35 new tests across modules 1–5 (TestWaitHandoffAlignment, TestStructuredDecisionRequests, TestDurableArchitectResponses, TestArtifactFormatAlignment, TestEscalateVerdictWarning).
+
+### Changed
+
+- **Wait-handoff alignment** — all participant-facing surfaces now teach `gator loop wait --token` instead of "report your status and wait for instructions," removing the Architect-as-manual-relay anti-pattern. Escalate-before-wait ordering in protocol, entry-point renderer, `/loop-join` slash command, and live entry points (CLAUDE.md, AGENTS.md, GEMINI.md). ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 1)
+- **`architect_response_artifact`** surfaces in model status (text + JSON), stored as relative name, resolved to absolute at render, cleared on submit. `state_machine.py` clears alongside `architect_message`. ([#8](https://github.com/cumberland-laboratories/gator/issues/8), module 4)
+- **Constitution** — new "Delegating to Sub-Agents" section: primary agent does not delegate by default; must explain and ask the Architect before farming out work. Shipped template synced for byte-identity.
+
+### Compatibility
+
+- No breaking API change. New `--file` flags on `escalate` and `unblock` are additive; existing CLI invocations without `--file` behave identically.
+
 ## [2.13.4] — 2026-09-16
 
 Maintenance release. Bumps every `actions/*` pin across all three GitHub Actions workflows to its minimum Node-24-native major, aligning Gator's release pipeline with GitHub's Node 24 runtime contract before Node 20 availability ends on 2026-09-23. Workflow-only change; no user-facing API, CLI, or dashboard behavior change.
