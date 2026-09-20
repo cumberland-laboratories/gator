@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "ag896398@gmail.com",
+  "agent": "claude-opus-4-6",
+  "intent": "Bump to 2.14.0 — structured decision lifecycle for gator loop (#8)",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "version-bump"
+  ],
+  "commit": "dae0116b9f4d3cad2bd7097fba813d96b881baed",
+  "short_commit": "dae0116",
+  "snippet_id": "snippet-dae0116b9f4d3",
+  "session_group_key": "anthropic:a582722b-4ac8-4697-be98-323b06267782",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "aa5cf9489362eb13a65a7de4484eb185cda4cbf0",
+  "started_at": "2026-09-20T19:30:59Z",
+  "ended_at": "2026-09-20T20:19:28Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-20-gator-aa5cf9489362e.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Bump pyproject.toml and VERSION to 2.14.0",
+    "CHANGELOG.md: add [2.14.0] section — structured decision lifecycle, wait-handoff alignment, artifact format changes, ESCALATE verdict discipline, constitution delegation section",
+    "Charter updated: scripts-core-library.md get_version() tripwire — version sync note extended to 2.14.0"
+  ],
+  "transcript_session_id": "a582722b-4ac8-4697-be98-323b06267782",
+  "transcript_ref": null
+}

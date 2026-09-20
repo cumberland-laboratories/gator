@@ -1951,6 +1951,45 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self._send_json({"registered": True, "path": abs_path, "name": Path(repo_path).name})
 
+    def _handle_repo_remove(self):
+        """Remove a repo from the dashboard registry by its registered path."""
+        global _REGISTRY_REPOS
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b""
+        try:
+            req = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            self._send_json({"error": "invalid JSON"}, 400)
+            return
+
+        repo_path = req.get("path", "").strip()
+        if not repo_path or not os.path.isabs(repo_path):
+            self._send_json({"error": "Absolute path required"}, 400)
+            return
+
+        resolved = str(Path(repo_path).resolve())
+
+        # 1. Write registry — remove_dashboard_repo matches by resolved path
+        from gator_core import remove_dashboard_repo
+        if not remove_dashboard_repo(resolved):
+            self._send_json({"error": "not found"}, 404)
+            return
+
+        # 2. Update in-memory registry
+        _REGISTRY_REPOS[:] = [
+            r for r in _REGISTRY_REPOS
+            if str(Path(r.get("path", "")).resolve()) != resolved
+        ]
+
+        # 3. Update fast_data so the next GET /api/data is coherent
+        cached_repos = self.__class__.fast_data.get("repos", [])
+        self.__class__.fast_data["repos"] = [
+            r for r in cached_repos
+            if str(Path(r.get("path", "")).resolve()) != resolved
+        ]
+
+        self._send_json({"status": "ok", "removed": resolved})
+
     def _find_session_content(self, repo, source_kind, filename):
         """Resolve and read a session summary file from a local repo.
 
@@ -2000,6 +2039,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # POST /api/repos/register — add a repo to the dashboard registry
         if path == "/api/repos/register":
             self._handle_repo_register()
+            return
+
+        # POST /api/repos/remove — remove a repo from the dashboard registry
+        if path == "/api/repos/remove":
+            self._handle_repo_remove()
             return
 
         # POST /api/repo/<name>/config — write to repo's .gator/config.json

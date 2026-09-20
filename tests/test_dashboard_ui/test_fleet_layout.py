@@ -1,4 +1,4 @@
-"""Fleet-table column-stability pins (2026-09-12).
+"""Fleet-table column-stability pins (2026-09-12, updated 2026-09-20).
 
 Fleet-column-stability sketch remediation: the previously-empty
 `.activity-cell` used to grow by 20px on the idle → busy transition
@@ -9,14 +9,13 @@ shrank — visibly "jumping." The fix is a permanent
 `<span class="activity-indicator">` rendered in every activity cell
 at initial paint (`renderStandaloneRepos`), with a 20px CSS
 reservation (`.activity-indicator { display: inline-block; width:
-20px; min-width: 20px }`), and both `bindUpdateButtons` and
-`bindGatorizeButtons` retargeted to mutate content INSIDE that
-reserved slot.
+20px; min-width: 20px }`), and `performLifecycleAction` (via the
+overflow menu) retargeted to mutate content INSIDE that reserved slot.
 
-These pins click the REAL production Update button (bound handler
-in the shipped `views/fleet.js`) rather than injecting the pulse
-directly, so a future handler regression that goes back to mutating
-`.activity-cell` fails.
+These pins exercise the Update action through the overflow menu
+(the shipped `views/fleet.js` interaction path) rather than injecting
+the pulse directly, so a future handler regression that goes back to
+mutating `.activity-cell` fails.
 
 `fetch` is stubbed to a never-resolving Promise so the busy state
 persists — the request is never actually issued against a repo.
@@ -26,10 +25,10 @@ import pytest
 
 
 def _wait_for_fleet_render(page):
-    """Wait for the Fleet table's Update button to attach — proves
-    `renderStandaloneRepos` has run and `bindUpdateButtons` has
+    """Wait for the Fleet table's overflow menu to attach — proves
+    `renderStandaloneRepos` has run and `bindOverflowMenus` has
     wired the click handler."""
-    page.wait_for_selector(".update-btn:not(.gatorize-btn)", timeout=15000)
+    page.wait_for_selector(".overflow-menu-btn", timeout=15000)
 
 
 def _measure_header_geometry(page):
@@ -83,22 +82,20 @@ def test_fleet_update_click_preserves_column_geometry(
     assert len(before) == 6, (
         f"Expected 6 Fleet columns; got {len(before)}: {before}")
 
-    # Click the first enabled production Update button. It's bound
-    # via `bindUpdateButtons` in the shipped `views/fleet.js` —
-    # exercising the real trust boundary, not a hand-built click.
-    btn = page.locator(".update-btn:not(.gatorize-btn):not([disabled])").first
-    assert btn.count() > 0 or True, "no update button — will select regardless"
-    # Some fleet fixtures may have all-disabled Update buttons. If so,
-    # temporarily remove the `disabled` attribute so we can exercise the
-    # click path — the shipped handler doesn't care about the disabled
-    # state at click time (only sets it after entry).
+    # Trigger Update through the overflow menu — the shipped interaction
+    # path in `views/fleet.js`. Open the first overflow menu, then click
+    # the Update item. Some fleet fixtures may have all-disabled Update
+    # items; temporarily enable the first one so we can exercise the
+    # click path.
+    page.locator(".overflow-menu-btn").first.click()
+    page.wait_for_selector(".overflow-menu.open", timeout=3000)
     page.evaluate("""
         () => {
-            const b = document.querySelector('.update-btn:not(.gatorize-btn)');
+            const b = document.querySelector('.overflow-menu.open .menu-lifecycle');
             if (b) b.removeAttribute('disabled');
         }
     """)
-    page.locator(".update-btn:not(.gatorize-btn)").first.click()
+    page.locator(".overflow-menu.open .menu-lifecycle").first.click()
 
     # Wait for the busy indicator to appear inside the reserved slot.
     page.wait_for_selector(

@@ -98,7 +98,7 @@ The repository is Apache-2.0. Preserve `LICENSE`, `NOTICE`, and contributor prov
 -> [Core Library](scripts-core-library.md) - shared helpers and runtime APIs
 -> [Repo Lifecycle](scripts-repo-lifecycle.md) - hook installation and dispatch
 -> [Session Archaeology](scripts-session-archaeology.md) - snippets, summaries, and provenance
--> [Dashboard Server](scripts-dashboard.md) - registry and HTTP trust boundaries
+-> [Dashboard Server](scripts-dashboard.md) - registry, HTTP trust boundaries, and removal endpoint
 -> [Enterprise Dispatcher](scripts-enterprise.md) - base-wheel separation
 -> [Contracts](contracts.md) - schemas and byte-identity checks
 -> [Release Pipeline](release-pipeline.md) - installed-wheel and workflow validation

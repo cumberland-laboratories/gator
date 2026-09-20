@@ -70,18 +70,26 @@
           </select>`
         : '<span class="muted">-</span>';
 
-      // Ungoverned repos show "Gatorize", governed repos show "Update"
-      let actionBtn;
-      if (!repo.accessible) {
-        actionBtn = `<button class="update-btn" disabled>Update</button>`;
-      } else if (!isGatorized) {
-        // Gatorize button gets its own class so it does NOT trigger the
-        // Update handler (which POSTs to /update — an endpoint that now
-        // pre-checks for .gator/ and 400s on ungoverned repos).
-        actionBtn = `<button class="update-btn gatorize-btn" data-repo="${escHtml(repo.name)}" style="background:#2563eb;color:#fff;border-color:#2563eb">Gatorize</button>`;
-      } else {
-        actionBtn = `<button class="update-btn" data-repo="${escHtml(repo.name)}" ${needsUpdate ? "" : "disabled"}>Update</button>`;
-      }
+      // Overflow menu replaces the direct action button.
+      // Carries both data-repo-name (for Update/Gatorize) and
+      // data-repo-path (for Remove) — each action uses its own identity.
+      const lifecycleAction = isGatorized ? "update" : "gatorize";
+      const lifecycleLabel = isGatorized ? "Update" : "Gatorize";
+      const lifecycleDisabled = !repo.accessible || (isGatorized && !needsUpdate);
+
+      const menuHtml = `<div class="overflow-menu-wrapper">
+        <button class="overflow-menu-btn" aria-label="Actions for ${escHtml(repo.name)}">&#8942;</button>
+        <div class="overflow-menu">
+          <button class="menu-item menu-lifecycle"
+            data-repo-name="${escHtml(repo.name)}"
+            data-action="${lifecycleAction}"
+            ${lifecycleDisabled ? "disabled" : ""}>${lifecycleLabel}</button>
+          <button class="menu-item menu-remove"
+            data-repo-name="${escHtml(repo.name)}"
+            data-repo-path="${escHtml(repo.path || "")}"
+            data-action="remove">Remove</button>
+        </div>
+      </div>`;
 
       html += `
         <tr>
@@ -92,7 +100,7 @@
           <td>${branch}</td>
           <td>${enfDropdown}</td>
           <td class="mono" style="font-size:12px">${cliVersion || '<span class="muted">-</span>'}</td>
-          <td class="status-cell">${actionBtn}</td>
+          <td class="status-cell">${menuHtml}</td>
           <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
         </tr>
       `;
@@ -108,8 +116,7 @@
 
     html += `</tbody></table></div>`;
     container.innerHTML = html;
-    bindUpdateButtons(container, currentVersion);
-    bindGatorizeButtons(container);
+    bindOverflowMenus(container);
     bindEnforcementDropdowns(container);
 
     // Add Repository button
@@ -208,105 +215,140 @@
     .catch(() => alert("Registration failed"));
   }
 
-  // ── Update flow ────────────────────────────────────────────────────────
+  // ── Overflow menu ───────────────────────────────────────────────────────
 
-  function bindUpdateButtons(container, currentVersion) {
-    // Exclude .gatorize-btn — those POST to /gatorize, not /update.
-    container.querySelectorAll(".update-btn:not(.gatorize-btn)").forEach(btn => {
-      btn.addEventListener("click", async function () {
-        const repoName = this.dataset.repo;
-        // Fleet activity-column stability (2026-09-12): mutate content
-        // INSIDE the permanent `.activity-indicator` span (rendered at
-        // initial paint by `renderStandaloneRepos`), NOT the enclosing
-        // `.activity-cell`. The indicator reserves 20px via
-        // `dashboard.css::.activity-indicator`; mutating the cell
-        // instead re-triggers automatic table-layout width recomputation
-        // and shifts every preceding column by 20px (visible "jump").
-        // See scripts-dashboard.md "Fleet activity-column stability" TRIPWIRE.
-        const activityCell = container.querySelector(`.activity-cell[data-repo="${repoName}"]`);
-        const indicator = activityCell && activityCell.querySelector(".activity-indicator");
+  function bindOverflowMenus(container) {
+    // Toggle menu on trigger click; close others first
+    container.querySelectorAll(".overflow-menu-btn").forEach(btn => {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const menu = this.nextElementSibling;
+        const wasOpen = menu.classList.contains("open");
+        closeAllMenus(container);
+        if (!wasOpen) menu.classList.add("open");
+      });
+    });
 
-        this.disabled = true;
-        if (indicator) indicator.innerHTML = '<span class="dot-pulse"></span>';
+    // Close on outside click (once per render)
+    document.addEventListener("click", () => closeAllMenus(container));
 
-        try {
-          const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/update`, {
-            method: "POST",
-            headers: { "X-Gator-Dashboard": "1" },
-          });
-          const data = await resp.json();
+    // Close on Escape
+    container.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeAllMenus(container);
+    });
 
-          if (indicator) indicator.innerHTML = "";
-          if (data.status === "ok") {
-            if (window.gatorRefreshFleet) window.gatorRefreshFleet();
-          } else {
-            // Issue #1: a hover-only tooltip on the "!" marker silently
-            // swallowed the refusal reason (field case: a mixed-layout
-            // refusal read as "the Update button does nothing"). Keep
-            // the marker, but surface the CLI's actual output where the
-            // operator cannot miss it.
-            const reason = (data.output || data.error || "no output from CLI").trim();
-            if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
-            this.disabled = false;
-            alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
-          }
-        } catch (err) {
-          if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)">!</span>';
-          this.disabled = false;
-          alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
+    // Dispatch menu item clicks
+    container.querySelectorAll(".menu-item").forEach(btn => {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const action = this.dataset.action;
+        const repoName = this.dataset.repoName;
+        const repoPath = this.dataset.repoPath;
+        closeAllMenus(container);
+
+        if (action === "remove") {
+          openRemoveConfirmDialog(repoName, repoPath, container);
+        } else if (action === "update" || action === "gatorize") {
+          performLifecycleAction(repoName, action, container);
         }
       });
     });
   }
 
-  // ── Gatorize flow (Stage 3 of retire-gator-install plan) ───────────────
-  // Ungoverned repos get a "Gatorize" button that POSTs to a separate
-  // /gatorize endpoint. That endpoint runs `gatorize --yes` — non-interactive
-  // by definition because the Dashboard cannot answer prompts.
+  function closeAllMenus(container) {
+    container.querySelectorAll(".overflow-menu.open").forEach(m => m.classList.remove("open"));
+  }
 
-  function bindGatorizeButtons(container) {
-    container.querySelectorAll(".gatorize-btn").forEach(btn => {
-      btn.addEventListener("click", async function () {
-        const repoName = this.dataset.repo;
-        // Fleet activity-column stability (2026-09-12): same reserved-
-        // slot pattern as bindUpdateButtons — mutate inside the
-        // `.activity-indicator` span rather than the `.activity-cell`
-        // so the column stays geometrically stable during the
-        // gatorize request. See scripts-dashboard.md "Fleet
-        // activity-column stability" TRIPWIRE.
-        const activityCell = container.querySelector(`.activity-cell[data-repo="${repoName}"]`);
-        const indicator = activityCell && activityCell.querySelector(".activity-indicator");
+  // ── Lifecycle actions (Update / Gatorize) ─────────────────────────────
 
-        this.disabled = true;
-        if (indicator) indicator.innerHTML = '<span class="dot-pulse"></span>';
+  async function performLifecycleAction(repoName, action, container) {
+    const activityCell = container.querySelector(`.activity-cell[data-repo="${repoName}"]`);
+    const indicator = activityCell && activityCell.querySelector(".activity-indicator");
 
-        try {
-          const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/gatorize`, {
-            method: "POST",
-            headers: { "X-Gator-Dashboard": "1" },
-          });
-          const data = await resp.json();
+    if (indicator) indicator.innerHTML = '<span class="dot-pulse"></span>';
 
-          if (indicator) indicator.innerHTML = "";
-          if (data.status === "ok") {
-            if (window.gatorRefreshFleet) window.gatorRefreshFleet();
-          } else {
-            // Issue #1: a hover-only tooltip on the "!" marker silently
-            // swallowed the refusal reason (field case: a mixed-layout
-            // refusal read as "the Update button does nothing"). Keep
-            // the marker, but surface the CLI's actual output where the
-            // operator cannot miss it.
-            const reason = (data.output || data.error || "no output from CLI").trim();
-            if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
-            this.disabled = false;
-            alert(((this.textContent || "Operation").trim() || "Operation") + " failed for " + repoName + ":\n\n" + reason);
-          }
-        } catch (err) {
-          if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)">!</span>';
-          this.disabled = false;
-          alert(((this.textContent || "Operation").trim() || "Operation") + " request failed for " + repoName + ": " + err);
-        }
+    try {
+      const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/${action}`, {
+        method: "POST",
+        headers: { "X-Gator-Dashboard": "1" },
       });
+      const data = await resp.json();
+
+      if (indicator) indicator.innerHTML = "";
+      if (data.status === "ok") {
+        if (window.gatorRefreshFleet) window.gatorRefreshFleet();
+      } else {
+        const reason = (data.output || data.error || "no output from CLI").trim();
+        if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)" title="' + escHtml(reason) + '">!</span>';
+        const label = action === "gatorize" ? "Gatorize" : "Update";
+        alert(label + " failed for " + repoName + ":\n\n" + reason);
+      }
+    } catch (err) {
+      if (indicator) indicator.innerHTML = '<span style="color:var(--color-critical)">!</span>';
+      const label = action === "gatorize" ? "Gatorize" : "Update";
+      alert(label + " request failed for " + repoName + ": " + err);
+    }
+  }
+
+  // ── Remove confirmation dialog ────────────────────────────────────────
+
+  function openRemoveConfirmDialog(repoName, repoPath, container) {
+    const modal = document.createElement("div");
+    modal.className = "gator-modal-overlay";
+    modal.innerHTML = `
+      <div class="gator-modal">
+        <h3>Remove Repository</h3>
+        <div class="gator-modal-body">
+          <p>Are you sure you want to remove <strong>${escHtml(repoName)}</strong> from the dashboard?</p>
+          <p class="muted" style="font-size:13px">This only removes the registry entry &mdash; no files will be deleted.</p>
+          <p class="remove-error" style="color:var(--color-critical);display:none;margin-top:12px"></p>
+        </div>
+        <div class="gator-modal-footer" style="display:flex;justify-content:flex-end;gap:8px">
+          <button class="gator-btn modal-cancel-btn">Cancel</button>
+          <button class="gator-btn remove-confirm-btn" style="color:var(--color-critical);border-color:var(--color-critical)">Remove</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(modal);
+
+    const cancelBtn = modal.querySelector(".modal-cancel-btn");
+    const confirmBtn = modal.querySelector(".remove-confirm-btn");
+    const errorEl = modal.querySelector(".remove-error");
+
+    function close() { modal.remove(); }
+
+    cancelBtn.addEventListener("click", close);
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+    confirmBtn.addEventListener("click", async function () {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Removing…";
+      errorEl.style.display = "none";
+
+      try {
+        const resp = await fetch("/api/repos/remove", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Gator-Dashboard": "1" },
+          body: JSON.stringify({ path: repoPath }),
+        });
+        const data = await resp.json();
+
+        if (resp.ok && data.status === "ok") {
+          close();
+          if (window.gatorRefreshFleet) window.gatorRefreshFleet();
+        } else {
+          errorEl.textContent = data.error || "Removal failed";
+          errorEl.style.display = "block";
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = "Remove";
+        }
+      } catch (err) {
+        errorEl.textContent = "Request failed: " + err;
+        errorEl.style.display = "block";
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Remove";
+      }
     });
   }
 
