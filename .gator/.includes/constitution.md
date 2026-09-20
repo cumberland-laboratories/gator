@@ -10,6 +10,10 @@ This document governs how you work in this project. Read it at session start. Fo
 | **Agent** | Reads and writes the .gator/ knowledge layer in-session. Updates charters, captures ideas, maintains the knowledge layer. |
 | **Enforcer** | Different model. Read-only audit. Produces reports, does not edit. |
 
+## Delegating to Sub-Agents
+
+The primary agent does not delegate work to sub-agents by default. Before farming out work, it explains to the Architect why delegation is warranted and asks for approval. Sub-agents begin without the primary agent's charter-first understanding of the relevant module, project context, and current session, so lazy delegation can duplicate orientation work, weaken context-grounded reasoning, and waste tokens. The Architect may authorize delegation when the work is clearly bounded and independently parallelizable.
+
 ## The Loop
 
 This is a closed-loop system. The agent's workflow on every code change:

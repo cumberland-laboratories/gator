@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "ag896398@gmail.com",
+  "agent": "claude-opus-4-6",
+  "intent": "ESCALATE verdict soft warning (issue #8, module 5)",
+  "change_type": "feature",
+  "significance": "low",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop-protocol",
+    "escalate-discipline"
+  ],
+  "commit": "8f669bf1e1e74386a8d0285a8e03de33705034bf",
+  "short_commit": "8f669bf",
+  "snippet_id": "snippet-8f669bf1e1e74",
+  "session_group_key": "anthropic:289bb879-f92b-4cce-93a7-4349e01e3ba0",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "1bb094c127d2297d81b42da08308a83100807ca4",
+  "started_at": "2026-09-19T22:01:10Z",
+  "ended_at": "2026-09-20T00:33:49Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-09-20-gator-1bb094c127d22.json",
+    "src/gator_command/scripts/loop/submit.py",
+    "tests/test_loop.py"
+  ],
+  "notes": [
+    "handle_submit_review() warns on ESCALATE verdict submitted via",
+    "submit-review instead of escalate command",
+    "Detection uses ## Verdict heading regex, not bare substring",
+    "Pre-lock read with errors=\"replace\" — safe on non-UTF-8 input",
+    "5 tests added (TestEscalateVerdictWarning); 128 total pass",
+    "Charter updated: handle_submit_review description",
+    "Final module of issue #8."
+  ],
+  "transcript_session_id": "289bb879-f92b-4cce-93a7-4349e01e3ba0",
+  "transcript_ref": null
+}
