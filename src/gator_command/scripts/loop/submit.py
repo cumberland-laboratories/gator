@@ -325,6 +325,10 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
                 "ts": datetime.now(tz=timezone.utc).isoformat(),
             }
 
+        # Surface response artifact in model-facing status (cleared on next submit)
+        # Store relative name only — cli resolves against loop_dir at render time
+        session["status"]["architect_response_artifact"] = artifact_name
+
         # Record architect turn
         append_turn(session, "architect", "unblock",
                     message or "Loop unblocked")

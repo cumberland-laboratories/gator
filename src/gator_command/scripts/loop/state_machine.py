@@ -174,6 +174,7 @@ def advance_draft_submitted(session, turn_timeout):
     status["next_role"] = "reviewer"
     status["plan_status"] = "in_review"
     status["architect_message"] = None  # clear after model acts on it
+    status["architect_response_artifact"] = None
     status["turn_deadline"] = _deadline_from_now(turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
@@ -196,6 +197,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["plan_status"] = "approved"
         status["unresolved_findings"] = 0
         status["architect_message"] = None
+        status["architect_response_artifact"] = None
         status["turn_deadline"] = None
         status["blocked"] = False
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -210,6 +212,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["next_role"] = None
         status["plan_status"] = "max_rounds"
         status["architect_message"] = None
+        status["architect_response_artifact"] = None
         status["turn_deadline"] = None
         status["blocked"] = True
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -220,6 +223,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
     status["next_role"] = "draftor"
     status["plan_status"] = "revision"
     status["architect_message"] = None
+    status["architect_response_artifact"] = None
     status["turn_deadline"] = _deadline_from_now(turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session

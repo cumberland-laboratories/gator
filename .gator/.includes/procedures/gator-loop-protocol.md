@@ -228,16 +228,31 @@ Valid reasons to escalate:
 
 When you escalate, the loop pauses. No timeout runs. The Architect reads your reason, makes a decision, and unblocks.
 
+### Classifying uncertainty
+
+Not every uncertainty requires escalation. Classify before deciding:
+
+**(a) Non-blocking — state an assumption and proceed.** If you face ambiguity that you can resolve with a reasonable default, state it explicitly in the plan as a reversible assumption (e.g., "Assuming v2 API — will revert if Architect directs otherwise"). The Architect can interject to correct the assumption without pausing the loop.
+
+**(b) Blocking — requires an Architect decision, escalate with `--file`.** If the uncertainty is Architect-owned (scope change, external authorization, fundamental direction choice), write a structured decision-request document and escalate:
+
+```
+gator loop escalate --token <token> --file request.md --reason "Need Architect decision on API version"
+```
+
+The `--file` attaches a durable artifact to the decision ledger. The Architect's response (via `unblock --message` or `unblock --file`) is recorded on the same ledger entry and survives to terminal state.
+
 ### What happens after you escalate
 
 1. The loop enters `blocked_on_architect`. Your status will show exit code `2`.
 2. Wait. Do not poll aggressively. The Architect may take minutes or hours.
-3. When the Architect unblocks, they may include a **message** — a direct response to your escalation reason.
+3. When the Architect unblocks, they may include a **message** and optionally a **response artifact** — a structured document with the decision, rationale, and next action.
 4. On your next `gator loop status` check, you will see:
    - Your turn is `YES` again
    - An `Architect message:` line with the Architect's response (if they sent one)
-5. **Read the Architect message before doing anything else.** It is the answer to your question or the authorization you requested. Act on it.
-6. The Architect message is cleared after you submit. It is a one-time instruction, not a persistent note.
+   - An `Architect response artifact:` line with the path to a durable response document (if the Architect attached one via `unblock --file`)
+5. **Read the Architect message and response artifact before doing anything else.** The message is a summary; the artifact (when present) contains the full decision, rationale, and next action. Act on both.
+6. The Architect message and response artifact path are cleared after you submit. They are one-turn instructions, not persistent notes. The response artifact file remains in the loop directory for audit.
 
 The Architect may also change your stage or role as part of the unblock (e.g., sending you back to `plan_drafting` instead of resuming where you left off). The status output will reflect this.
 

@@ -227,7 +227,7 @@ Filesystem: none (delegates to handlers)
 
 ### _cmd_status(args)
 File: `src/gator_command/scripts/loop/cli.py`
-Read-only status display. Role-aware: model view (exit codes 0/1/2) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands + pending decisions).
+Read-only status display. Role-aware: model view (exit codes 0/1/2, shows `architect_message` and `architect_response_artifact` when set) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands + pending decisions). Both text and JSON output include `architect_response_artifact` (absolute loop path or null).
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `load_session()`
@@ -271,7 +271,9 @@ Loop modules use `sys.path.insert(0, LOOP_DIR)` and absolute imports (`from sess
 
 ## Cross-Vendor Orientation
 
-Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`.
+Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`. Artifact format templates are at `reference-notes/loop-artifact-formats.md`. Both files exist as byte-identical pairs between `.gator/.includes/` and `src/.../templates/gator-starter/`; change both copies in the same commit.
+
+The protocol's escalation section classifies uncertainty into non-blocking (state an assumption, proceed) and blocking (Architect-owned, escalate with `--file`). The artifact format's plan template uses "Assumptions, Risks, and Required Architect Decisions" (not "Risks and Open Questions") to reinforce this classification. The findings template documents that an ESCALATE verdict must be accompanied by `gator loop escalate` — `submit-review` alone enters revision, not blocked state.
 
 ## Before Changing This Module
 

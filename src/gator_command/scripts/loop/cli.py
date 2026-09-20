@@ -89,6 +89,10 @@ def _cmd_status(args):
             "blocked": status.get("blocked", False),
             "next_role": next_role,
             "architect_message": status.get("architect_message"),
+            "architect_response_artifact": (
+                str(loop_dir / status["architect_response_artifact"])
+                if status.get("architect_response_artifact") else None
+            ),
         }
         print(json.dumps(out, indent=2))
     else:
@@ -107,6 +111,9 @@ def _cmd_status(args):
             architect_msg = status.get("architect_message")
             if architect_msg:
                 print(f"  Architect message: {architect_msg}")
+            response_artifact = status.get("architect_response_artifact")
+            if response_artifact:
+                print(f"  Architect response artifact: {loop_dir / response_artifact}")
             _print_action_prompt(session, role, loop_dir, args.token)
         else:
             print(f"  Waiting for: {next_role}")
@@ -384,6 +391,10 @@ def _cmd_wait(args):
             "blocked": status.get("blocked", False),
             "next_role": next_role,
             "architect_message": status.get("architect_message"),
+            "architect_response_artifact": (
+                str(loop_dir / status["architect_response_artifact"])
+                if status.get("architect_response_artifact") else None
+            ),
             "wake_reason": wake_reason,
         }
         print(json.dumps(out, indent=2))
@@ -403,6 +414,9 @@ def _cmd_wait(args):
             architect_msg = status.get("architect_message")
             if architect_msg:
                 print(f"  Architect message: {architect_msg}")
+            response_artifact = status.get("architect_response_artifact")
+            if response_artifact:
+                print(f"  Architect response artifact: {loop_dir / response_artifact}")
             _print_action_prompt(session, role, loop_dir, args.token)
 
         print(f"  Round: {rnd}/{max_rnd}")

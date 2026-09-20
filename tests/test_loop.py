@@ -901,6 +901,185 @@ class TestDurableArchitectResponses:
             )
 
 
+    def test_status_shows_response_artifact_after_unblock_file(self, loop_env):
+        """Model status (text + JSON) shows architect_response_artifact after unblock --file."""
+        import argparse, io, json, contextlib
+        e = loop_env
+
+        req = e["tmp"] / "req.md"
+        req.write_text("# Request\n\nWhich API?\n", encoding="utf-8")
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need decision", file_path=str(req)
+        )
+
+        resp = e["tmp"] / "resp.md"
+        resp.write_text("# Response\n\nUse v2.\n", encoding="utf-8")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Use v2", file_path=str(resp)
+        )
+
+        # Session stores relative name only (portable)
+        s = loop_session.load_session(e["loop_dir"])
+        raw = s["status"].get("architect_response_artifact")
+        assert raw == "decision-response.decision-1.md"
+
+        # JSON status renders absolute path (actionable)
+        args = argparse.Namespace(
+            token=e["draftor_token"], json=True
+        )
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            try:
+                from cli import _cmd_status
+                _cmd_status(args)
+            except SystemExit:
+                pass
+        out = json.loads(stdout.getvalue())
+        assert out["architect_response_artifact"] is not None
+        assert out["architect_response_artifact"].endswith(
+            "decision-response.decision-1.md")
+        # Absolute path includes the loop dir
+        assert str(e["loop_dir"]) in out["architect_response_artifact"]
+
+    def test_response_artifact_clears_after_submit(self, loop_env):
+        """architect_response_artifact clears after the model submits."""
+        e = loop_env
+
+        req = e["tmp"] / "req.md"
+        req.write_text("# Request\n\nWhich API?\n", encoding="utf-8")
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need decision", file_path=str(req)
+        )
+
+        resp = e["tmp"] / "resp.md"
+        resp.write_text("# Response\n\nUse v2.\n", encoding="utf-8")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Use v2", file_path=str(resp)
+        )
+
+        # Model submits — artifact should clear
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"].get("architect_response_artifact") is None
+
+    def test_text_only_unblock_no_response_artifact(self, loop_env):
+        """Text-only unblock leaves architect_response_artifact as null."""
+        e = loop_env
+        loop_submit.handle_escalate(e["draftor_token"], "Need guidance")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Just proceed"
+        )
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"].get("architect_response_artifact") is None
+
+
+    def test_terminal_session_has_no_absolute_artifact_path(self, loop_env):
+        """If loop ends before model submits, session has relative name, not absolute."""
+        e = loop_env
+
+        req = e["tmp"] / "req.md"
+        req.write_text("# Request\n\nWhich API?\n", encoding="utf-8")
+        loop_submit.handle_escalate(
+            e["draftor_token"], "Need decision", file_path=str(req)
+        )
+
+        resp = e["tmp"] / "resp.md"
+        resp.write_text("# Response\n\nUse v2.\n", encoding="utf-8")
+        loop_submit.handle_unblock(
+            e["architect_token"], message="Use v2", file_path=str(resp)
+        )
+
+        # Architect ends the loop before the model submits
+        from submit import handle_end
+        handle_end(e["architect_token"], reason="Ending for test")
+
+        s = loop_session.load_session(e["loop_dir"])
+        raw = s["status"].get("architect_response_artifact")
+        # If still present, must be relative (no path separator prefix)
+        if raw is not None:
+            import os
+            assert not os.path.isabs(raw), (
+                f"absolute path persisted in terminal session: {raw}")
+
+
+class TestArtifactFormatAlignment:
+    """Module 4: artifact format + uncertainty classification."""
+
+    def test_artifact_format_contains_assumptions_field(self):
+        """Plan template uses 'Assumptions, Risks, and Required Architect Decisions'."""
+        from pathlib import Path
+        fmt = Path(__file__).resolve().parent.parent / (
+            ".gator/.includes/reference-notes/loop-artifact-formats.md"
+        )
+        content = fmt.read_text(encoding="utf-8")
+        assert "Assumptions, Risks, and Required Architect Decisions" in content
+        assert "Risks and Open Questions" not in content
+
+    def test_protocol_classifies_uncertainty(self):
+        """Protocol escalation section classifies non-blocking vs blocking."""
+        from pathlib import Path
+        proto = Path(__file__).resolve().parent.parent / (
+            ".gator/.includes/procedures/gator-loop-protocol.md"
+        )
+        content = proto.read_text(encoding="utf-8")
+        assert "Non-blocking" in content
+        assert "Blocking" in content
+        assert "Classifying uncertainty" in content
+
+    def test_escalate_verdict_requires_cli_escalate(self):
+        """Findings template documents that ESCALATE verdict needs CLI escalate."""
+        from pathlib import Path
+        fmt = Path(__file__).resolve().parent.parent / (
+            ".gator/.includes/reference-notes/loop-artifact-formats.md"
+        )
+        content = fmt.read_text(encoding="utf-8")
+        assert "ESCALATE verdict MUST be accompanied by" in content
+
+    def test_decision_request_template_exists(self):
+        """Artifact formats includes a Decision Request template."""
+        from pathlib import Path
+        fmt = Path(__file__).resolve().parent.parent / (
+            ".gator/.includes/reference-notes/loop-artifact-formats.md"
+        )
+        content = fmt.read_text(encoding="utf-8")
+        assert "## Decision Request" in content
+        assert "Decision Needed" in content
+        assert "Options Considered" in content
+        assert "Consequence of Delay" in content
+
+    def test_decision_response_template_exists(self):
+        """Artifact formats includes a Decision Response template."""
+        from pathlib import Path
+        fmt = Path(__file__).resolve().parent.parent / (
+            ".gator/.includes/reference-notes/loop-artifact-formats.md"
+        )
+        content = fmt.read_text(encoding="utf-8")
+        assert "## Decision Response" in content
+        assert "Rationale" in content
+        assert "Next Action" in content
+
+    def test_starter_copies_match(self):
+        """Shipped template copies are byte-identical to live .includes copies."""
+        from pathlib import Path
+        repo = Path(__file__).resolve().parent.parent
+        pairs = [
+            (
+                repo / ".gator/.includes/reference-notes/loop-artifact-formats.md",
+                repo / "src/gator_command/templates/gator-starter/reference-notes/loop-artifact-formats.md",
+            ),
+            (
+                repo / ".gator/.includes/procedures/gator-loop-protocol.md",
+                repo / "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
+            ),
+        ]
+        for live, shipped in pairs:
+            assert live.read_bytes() == shipped.read_bytes(), (
+                f"{live.name}: live and shipped copies differ"
+            )
+
+
 class TestSessionWrittenBeforeEvent:
     def test_write_ordering(self, loop_env):
         """Event appears in events.jsonl only after session.json is updated."""
