@@ -2,6 +2,21 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.14.1] — 2026-09-20
+
+Patch release. Adds the ability to remove repositories from the dashboard registry through the UI, completing [#33](https://github.com/cumberland-laboratories/gator/issues/33).
+
+### Added
+
+- **Remove repos from dashboard** — three-dot overflow menu on each fleet row exposes Update/Gatorize and a new Remove action. Remove opens a confirmation dialog, posts to the new `POST /api/repos/remove` endpoint, and refreshes the fleet. Registry-only — no files are deleted.
+- **`POST /api/repos/remove` endpoint** — accepts `{"path": "/abs/path"}` in the request body. Identity is the exact registered path, not the display name, so duplicate-named repos cannot cause unintended multi-entry deletion. Synchronous cache mutation: writes registry JSON, filters `_REGISTRY_REPOS`, filters `fast_data["repos"]` before returning success.
+- **7 backend HTTP tests** in `tests/test_dashboard_remove.py` — endpoint dispatch, path-based identity, duplicate-name regression, missing-directory removal, cache coherence, anti-CSRF boundary.
+
+### Changed
+
+- Fleet view action column changed from a direct Update button to a three-dot overflow menu containing Update (or Gatorize) and Remove. Adds one click to the Update flow; the issue explicitly requests this trade-off.
+- Existing Playwright fleet-layout tests updated for the overflow menu interaction path.
+
 ## [2.14.0] — 2026-09-20
 
 Feature release. Adds structured decision lifecycle to `gator loop` — file-backed escalation and unblock, a persistent decision ledger, artifact format alignment, and ESCALATE verdict discipline. Also adds the "Delegating to Sub-Agents" constitution section governing when primary agents may farm out work.
