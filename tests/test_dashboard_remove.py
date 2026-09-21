@@ -123,8 +123,9 @@ class TestRemoveRepo:
         repo_path = str(Path("C:/fake/exists").resolve())
         server.start([{"name": "exists", "path": repo_path}])
 
+        not_here = str(Path("C:/fake/not-here").resolve())
         status, data = _post(server.url, "/api/repos/remove",
-                             {"path": "C:/fake/not-here"})
+                             {"path": not_here})
         assert status == 404
         assert "not found" in data.get("error", "")
 

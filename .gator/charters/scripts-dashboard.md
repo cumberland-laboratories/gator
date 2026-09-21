@@ -110,6 +110,7 @@ Remove a single registry entry identified by its exact registered path. Registry
 -> `gator_core.remove_dashboard_repo()`
 ! Identity is the resolved registered path, not the display name. Duplicate display names cannot cause multi-entry removal.
 ! Cache mutation is synchronous: (1) write registry JSON, (2) filter `_REGISTRY_REPOS`, (3) filter `fast_data["repos"]` — all before the success response.
+! Test paths must be resolved through `Path.resolve()` so the `os.path.isabs()` validation passes on both Windows and Linux CI.
 
 ### DashboardHandler.do_GET() / DashboardHandler.do_POST()
 File: src/gator_command/scripts/gator-dashboard.py
