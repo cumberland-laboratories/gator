@@ -30,3 +30,5 @@ gator loop status --token $ARGUMENTS
    - When `wait` returns, re-read the status output and proceed with your work
 
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.
+
+**Required in every submission**: include a `## Executive Summary` section (four bullets or ~120 words). The Dashboard extracts this for at-a-glance inspection. See the artifact format reference for the full template.

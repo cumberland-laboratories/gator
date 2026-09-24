@@ -5,7 +5,7 @@
 ## Owns
 
 - The framework-free dashboard shell, navigation, responsive layout, and browser-side routing.
-- Fleet, history, repo, audit, updates, and settings views.
+- Fleet, history, repo, audit, loop, updates, and settings views.
 - Document browsing, syntax highlighting, cross-document search, and sandboxed HTML preview controls.
 - Browser requests to the local dashboard server.
 
@@ -91,6 +91,17 @@ Render installed/latest version state and request an explicit upgrade.
 <- updates route
 -> check and upgrade endpoints
 ! Checking and upgrading are visibly separate actions; failure output remains visible after restart attempts.
+
+### renderLoop() / renderLoopStatus() / renderControls() / renderTimeline() / renderArtifacts()
+File: src/gator_command/scripts/dashboard/views/loop.js
+Render the governed planning loop workspace: loop list sidebar, status panel, Architect controls, event timeline, and collapsible artifact inspector.
+<- loop route
+-> loop list/status/events/artifact endpoints, control endpoints (pause/interject/unblock/end) (`/api/repo-by-key/<repo_key>/loops/...`)
+! Polls every 3s for non-terminal loops; stops on terminal state. Teardown clears interval via `window._gatorRepoTeardown`.
+! Artifact content is escaped through `escHtml()` and rendered in `<pre>` — never interpolated as HTML.
+! Active/paused loops sort before terminal loops in the list.
+! Architect controls are contextual: active loops show Pause/Interject/End; paused/blocked loops show Unblock/End; terminal loops show no controls. Each button opens an inline input area; Interject requires non-empty message. Controls POST via `postAction()` with anti-CSRF header and re-poll on success. Non-2xx control responses render a `.loop-ctrl-error` message and preserve the input area for retry.
+! Executive summary extraction: `extractSummary()` (exposed as `window.GatorViews._extractSummary`) parses `## Executive Summary` headings from plan/findings artifacts (case-insensitive, tolerates leading whitespace, truncated at 500 chars). Summaries render in two locations: (1) inline in the artifact inspector via `.loop-summary-text` / `.loop-summary-absent`; (2) inside timeline event cards for `draft_submitted` and `review_submitted` events via `.loop-timeline-summary-text` / `.loop-timeline-summary-absent`, with a "View full artifact" link that scrolls to and opens the corresponding artifact inspector section. Event-to-artifact mapping uses `_EVENT_ARTIFACT_MAP` with round-aware filenames (`plan.round-{R}.md`, `findings.round-{R}.md`).
 
 ### renderSettings()
 File: src/gator_command/scripts/dashboard/views/settings.js

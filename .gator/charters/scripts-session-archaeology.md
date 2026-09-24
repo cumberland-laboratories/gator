@@ -106,7 +106,7 @@ Post-Phase-3 the parser has exactly one owner (`gator_session_reader.py`) and tw
 ## Connections
 
 -> [scripts-enterprise](scripts-enterprise.md) — Enterprise-side vendor transcript discovery + custody (successor to the retired extractors)
--> [scripts-fleet-intelligence](scripts-fleet-intelligence.md) — gator-audit.py::assemble_audit_data consumes gator_session_reader
+-> [Audit and Repo Intelligence](scripts-audit-intelligence.md) — audit and repo-status consume canonical session summaries
 -> [scripts-cross-cutting](scripts-cross-cutting.md) — parse_committed_summary single-owner tripwire, import_sibling pattern
 -> [scripts-dashboard](scripts-dashboard.md) — gator-repo-status.py::get_session_summaries populates recent-sessions panel
 -> [Index](INDEX.md)

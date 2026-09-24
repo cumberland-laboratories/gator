@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-09-16._ Current strategy, priorities, and planned work.
+_Updated 2026-09-20._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,13 +11,13 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.13.4 (2026-09-16) — **six
-consecutive fully first-try green pipelines** (v2.13.0 → v2.13.4).
-v2.13.3 (2026-09-14) shipped the Cumberland HTML style Sketch 2
-arc closure (bounded positive-policy validator + pinned CSP in
-both templates). v2.13.4 (2026-09-16) shipped the Node-24-native
-`actions/*` bump — closes [issue #4](https://github.com/cumberland-laboratories/gator/issues/4)
-ahead of the 2026-09-23 Node 20 availability removal.
+**Latest released version**: v2.14.0 (2026-09-20) — **seven
+consecutive fully first-try green pipelines** (v2.13.0 → v2.14.0).
+v2.14.0 ships structured decision lifecycle for `gator loop`
+(file-backed escalate/unblock, decision ledger, artifact format
+alignment, ESCALATE verdict discipline) plus the "Delegating to
+Sub-Agents" constitution section. Closes
+[issue #8](https://github.com/cumberland-laboratories/gator/issues/8).
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 

@@ -219,6 +219,13 @@ class TestRenderEntryContentLocalCompanion:
             assert ".gator/reference-notes/" in content
             assert ".gator/.includes/reference-notes/" in content
 
+    def test_executive_summary_requirement_present(self):
+        """All three vendors carry the executive summary requirement for loop submissions."""
+        for agent_type in ("claude", "agents", "gemini"):
+            content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
+            assert "Executive Summary" in content
+            assert "four bullets" in content
+
     def test_agents_still_carries_enforcer_note(self):
         """Adding the local-companion block did not displace the AGENTS-only enforcer note."""
         content = gatorize.render_entry_content(has_command_post=False, agent_type="agents")

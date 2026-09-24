@@ -25,22 +25,20 @@ Codex-sketches section retired; historical detail archived at
 `.gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md`).
 Mechanical soft-cap check is #24.
 
-## Where we are (2026-09-16, post-v2.13.4)
+## Where we are (2026-09-20, post-v2.14.0)
 
-v2.13.4 shipped 2026-09-16 — Node-24-native `actions/*` bump
-across all three GitHub Actions workflows. Closes issue #4 ahead
-of the 2026-09-23 Node 20 availability removal. Sixth consecutive
-fully first-try green pipeline (v2.13.0 → v2.13.4).
+v2.14.0 shipped 2026-09-20 — structured decision lifecycle for
+`gator loop` (file-backed escalate/unblock, decision ledger,
+artifact format alignment, ESCALATE verdict discipline) plus
+"Delegating to Sub-Agents" constitution section. Closes issue #8.
+Seventh consecutive fully first-try green pipeline (v2.13.0 →
+v2.14.0).
 
-v2.13.3 (2026-09-14) shipped the Cumberland HTML Sketch 2 arc
-closure — Codex round-15 "no findings, recommend closure";
-bounded self-containment stop rule in force.
-
-The pre-v2.13.0 roadmap priorities are next — see `roadmap.md`:
+Roadmap priorities — see `roadmap.md`:
 
 1. Gator + Enterprise polished and ready for lots of users.
 2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
-3. Gator Loop polish.
+3. Gator Loop polish (#5 umbrella — #6, #7 remain open).
 4. Normalized transcript index (exploratory).
 
 ## Open backlog (GitHub Issues)

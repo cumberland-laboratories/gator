@@ -23,7 +23,7 @@ Constitution repair is NOT owned here — detection-only in v1 per plan Stage 5.
 
 ---
 
-### SCHEMA
+## Schema
 File: `src/gator_command/scripts/gator-state.py`
 Module-level string constant `"gator-state-v1"`. Appears at the top of every JSON payload (`status` and `repair`) per the JSON Schema Versioning TRIPWIRE in `scripts-cross-cutting.md`.
 ! Bumping the schema means downstream consumers (dashboard, tests, JSON-scraping tools) must migrate. New fields inside the v1 shape are additive and do not require a bump.
@@ -99,6 +99,9 @@ Filesystem: delegated (classify_entry_point reads files)
 ### _plan_action_for_state(state, meta)
 File: `src/gator_command/scripts/gator-state.py`
 Maps a `BlockState` to a machine-readable action string. Private.
+<- `plan_repair()`
+-> action vocabulary consumed by `_execute_one()`
+! Planner and executor action strings change together.
 
 ### execute_repair(repo_root, plan)
 File: `src/gator_command/scripts/gator-state.py`
@@ -184,5 +187,4 @@ The source `gator-command` repo IS the constitution baseline — there is no ups
 -> [scripts-repo-lifecycle](scripts-repo-lifecycle.md) — future Stage 4b extension of `plan_updates()` / `execute_updates()` to refresh managed blocks; reuses the same six-state classification
 -> [scripts-cross-cutting](scripts-cross-cutting.md) — UTF-8 stdout, JSON schema versioning, plan/execute separation, `gator_core` import convention
 -> [scripts-layout](scripts-layout.md) — `get_gator_paths()` for constitution path resolution across v1/v2 layouts
--> [Local Agent Overrides + Managed State plan](../artifacts/2026-07-28-local-agent-overrides-and-managed-state-plan.md) — Stage 4 (this module)
 -> [Index](INDEX.md)

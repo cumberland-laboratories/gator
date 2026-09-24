@@ -134,6 +134,57 @@ class TestTokenNotReconstructable:
             assert "token" not in role_data
 
 
+class TestResolveTokenExplicitLoopDir:
+    """Tests for resolve_token(token, loop_dir=...) — the repo-scoped
+    token seam used by the dashboard to bypass find_gator_root()."""
+
+    def test_explicit_loop_dir_skips_cwd_discovery(self, loop_env):
+        """With loop_dir provided, resolve_token returns the correct
+        result without needing find_gator_root()."""
+        token = loop_env["draftor_token"]
+        loop_id, role, resolved = loop_session.resolve_token(
+            token, loop_dir=loop_env["loop_dir"])
+        assert loop_id == loop_env["loop_id"]
+        assert role == "draftor"
+        assert resolved == loop_env["loop_dir"]
+
+    def test_explicit_loop_dir_validates_nonce(self, loop_env):
+        """Nonce validation still runs with explicit loop_dir."""
+        tokens_path = loop_env["loop_dir"] / ".tokens.json"
+        data = json.loads(tokens_path.read_text(encoding="utf-8"))
+        data["draftor"]["nonce"] = "00000000"
+        tokens_path.write_text(json.dumps(data), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="nonce mismatch"):
+            loop_session.resolve_token(
+                loop_env["draftor_token"],
+                loop_dir=loop_env["loop_dir"])
+
+    def test_mismatched_token_loop_id_rejected(self, tmp_path, loop_env):
+        """Token minted for loop A combined with loop_dir pointing to
+        loop B is rejected even if B has valid nonces."""
+        other_id = "other-loop"
+        other_dir = tmp_path / ".gator" / "loops" / other_id
+        other_dir.mkdir(parents=True)
+        tok_o, nonce_o = loop_session.make_token(other_id, "draftor")
+        loop_session.save_tokens(other_dir, {
+            "draftor": {"nonce": nonce_o, "token": tok_o},
+        })
+        with pytest.raises(ValueError, match="does not match"):
+            loop_session.resolve_token(
+                loop_env["draftor_token"],
+                loop_dir=other_dir)
+
+    def test_all_roles_resolve_with_explicit_loop_dir(self, loop_env):
+        """Each role token resolves correctly with explicit loop_dir."""
+        for role_name, token_key in [("draftor", "draftor_token"),
+                                      ("reviewer", "reviewer_token"),
+                                      ("architect", "architect_token")]:
+            _, role, _ = loop_session.resolve_token(
+                loop_env[token_key], loop_dir=loop_env["loop_dir"])
+            assert role == role_name
+
+
 # ===========================================================================
 # Unit tests: State machine
 # ===========================================================================
@@ -473,6 +524,54 @@ class TestEventsEmitted:
             "draft_submitted",
             "plan_approved",
         ]
+
+
+class TestEventArtifactPath:
+    """Submission events carry artifact_path to the immutable round artifact."""
+
+    def test_draft_event_has_artifact_path(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        events = loop_events.read_all_events(e["loop_dir"])
+        draft_ev = [ev for ev in events if ev["event"] == "draft_submitted"]
+        assert len(draft_ev) == 1
+        assert draft_ev[0]["artifact_path"] == "plan.round-0.md"
+
+    def test_revision_requested_event_has_artifact_path(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+        events = loop_events.read_all_events(e["loop_dir"])
+        rev_ev = [ev for ev in events if ev["event"] == "revision_requested"]
+        assert len(rev_ev) == 1
+        assert rev_ev[0]["artifact_path"] == "findings.round-0.md"
+
+    def test_plan_approved_event_has_artifact_path(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(
+            e["reviewer_token"], str(e["findings_file"]), approve=True)
+        events = loop_events.read_all_events(e["loop_dir"])
+        approved_ev = [ev for ev in events if ev["event"] == "plan_approved"]
+        assert len(approved_ev) == 1
+        assert approved_ev[0]["artifact_path"] == "findings.round-0.md"
+
+    def test_multi_round_artifact_paths_are_immutable(self, loop_env):
+        """Each round's event points to its own round artifact, not current."""
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(
+            e["reviewer_token"], str(e["findings_file"]), approve=True)
+        events = loop_events.read_all_events(e["loop_dir"])
+        draft_events = [ev for ev in events if ev["event"] == "draft_submitted"]
+        assert draft_events[0]["artifact_path"] == "plan.round-0.md"
+        assert draft_events[1]["artifact_path"] == "plan.round-1.md"
+        rev_ev = [ev for ev in events if ev["event"] == "revision_requested"]
+        assert rev_ev[0]["artifact_path"] == "findings.round-0.md"
+        approved_ev = [ev for ev in events if ev["event"] == "plan_approved"]
+        assert approved_ev[0]["artifact_path"] == "findings.round-1.md"
 
 
 class TestNoGitCommitOnTerminal:
@@ -1491,6 +1590,11 @@ class TestArchitectToken:
         with pytest.raises(PermissionError, match="architect token"):
             loop_submit.handle_pause(loop_env["draftor_token"])
 
+    def test_model_cannot_interject(self, loop_env):
+        """Model token rejected for interject command."""
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_interject(loop_env["draftor_token"], "test")
+
     def test_model_cannot_end(self, loop_env):
         """Model token rejected for end command."""
         with pytest.raises(PermissionError, match="architect token"):
@@ -1501,6 +1605,42 @@ class TestArchitectToken:
         loop_submit.handle_escalate(loop_env["draftor_token"], "test")
         with pytest.raises(PermissionError, match="architect token"):
             loop_submit.handle_unblock(loop_env["draftor_token"])
+
+    def test_reviewer_cannot_pause(self, loop_env):
+        """Reviewer token also rejected for architect commands."""
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_pause(loop_env["reviewer_token"])
+
+    def test_reviewer_cannot_interject(self, loop_env):
+        """Reviewer token rejected for interject command."""
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_interject(loop_env["reviewer_token"], "test")
+
+    def test_reviewer_cannot_end(self, loop_env):
+        """Reviewer token rejected for end command."""
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_end(loop_env["reviewer_token"])
+
+    def test_reviewer_cannot_unblock(self, loop_env):
+        """Reviewer token rejected for unblock command."""
+        loop_submit.handle_escalate(loop_env["draftor_token"], "test")
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_unblock(loop_env["reviewer_token"])
+
+    def test_handler_with_explicit_loop_dir_rejects_model(self, loop_env):
+        """Model token rejected even when explicit loop_dir provided."""
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_pause(
+                loop_env["draftor_token"],
+                loop_dir=loop_env["loop_dir"])
+
+    def test_handler_with_explicit_loop_dir_accepts_architect(self, loop_env):
+        """Architect token succeeds with explicit loop_dir."""
+        loop_submit.handle_pause(
+            loop_env["architect_token"],
+            loop_dir=loop_env["loop_dir"])
+        s = loop_session.load_session(loop_env["loop_dir"])
+        assert s["status"]["stage"] == "paused_by_architect"
 
 
 class TestArchitectPause:
@@ -1810,3 +1950,35 @@ class TestWaitHandoffAlignment:
             text = (repo_root / name).read_text(encoding="utf-8")
             assert "gator loop wait" in text, f"{name} missing wait instruction"
             assert "escalate first" in text, f"{name} missing escalate-first ordering"
+
+
+class TestExecutiveSummaryProducerPaths:
+    """All participant-facing surfaces must teach the Executive Summary requirement."""
+
+    def test_entry_point_rendering_mentions_executive_summary(self):
+        """render_entry_content() output includes executive summary requirement."""
+        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
+        if gatorize_dir not in sys.path:
+            sys.path.insert(0, gatorize_dir)
+        from entry_points import render_entry_content
+        content = render_entry_content(has_command_post=False)
+        assert "Executive Summary" in content
+        assert "four bullets" in content
+
+    def test_loop_join_template_mentions_executive_summary(self):
+        """Slash-command template tells participants about the executive summary requirement."""
+        text = (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8")
+        assert "Executive Summary" in text
+
+    def test_protocol_mentions_executive_summary(self):
+        """Loop protocol documents the Executive Summary section in draftor/reviewer output."""
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            assert "Executive Summary" in text
+
+    def test_artifact_formats_include_executive_summary_template(self):
+        """Artifact format reference includes Executive Summary section in plan and findings templates."""
+        for base in [INCLUDES_DIR / "reference-notes", TEMPLATES_DIR / "reference-notes"]:
+            text = (base / "loop-artifact-formats.md").read_text(encoding="utf-8")
+            assert "## Executive Summary" in text
+            assert "four bullets" in text.lower() or "Four bullets" in text

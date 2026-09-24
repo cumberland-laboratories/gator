@@ -315,16 +315,16 @@ def seed_repo(fleet_root, name):
     (repo / ".gator" / "mission.md").write_text(
         f"# {name} mission\n\nSeed body.\n", encoding="utf-8")
 
-    # Extension seams for Plans B and C and the syntax-highlight
-    # increment. All module-level no-op stubs (below); each
-    # feature's seed module overrides them by reassigning
-    # `_harness.seed_content_fixtures` / `seed_sidebar_fixtures` /
-    # `seed_syntax_fixtures` when its fixtures load. Called BEFORE
-    # the seed commit so any files each seed writes land in the
-    # initial commit.
+    # Extension seams for Plans B and C, the syntax-highlight
+    # increment, and the Loop workspace. All module-level no-op
+    # stubs (below); each feature's seed module overrides them by
+    # reassigning the stub when its fixtures load. Called BEFORE the
+    # seed commit so any files each seed writes land in the initial
+    # commit.
     seed_content_fixtures(repo)
     seed_sidebar_fixtures(repo)
     seed_syntax_fixtures(repo)
+    seed_loop_fixtures(repo)
 
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", f"seed {name}")
@@ -368,6 +368,14 @@ def seed_syntax_fixtures(repo):
     increment reassigns this in `_harness` from
     `test_syntax_highlight_seed.py` to add `source/` fixtures the
     tokenizer pins exercise.
+    """
+    return None
+
+
+def seed_loop_fixtures(repo):
+    """No-op stub. The Loop workspace view reassigns this in
+    `_harness` from `test_loop_seed.py` to add `.gator/loops/`
+    fixtures the Loop Playwright pins exercise.
     """
     return None
 

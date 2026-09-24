@@ -94,7 +94,7 @@
       html += `
         <tr>
           <td>
-            <button class="link-btn" onclick="window.gatorNavToRepo('${escHtml(repo.name)}')">${escHtml(repo.name)}</button>
+            <button class="link-btn" onclick="window.gatorNavToRepo('${escHtml(repo.name)}', '${escHtml(repo.repo_key || "")}')">${escHtml(repo.name)}</button>
             ${accIcon}
           </td>
           <td>${branch}</td>

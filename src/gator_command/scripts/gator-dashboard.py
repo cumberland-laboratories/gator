@@ -96,6 +96,202 @@ def _is_denied_path(file_path):
     return name in _DENIED_FILENAMES
 
 
+# ── Loop workspace: repo-by-key resolver + loop resolver ─────────────────────
+
+_LOOP_ID_REJECT = re.compile(r'[/\\\x00]|\.\.')
+
+
+def _debug_print(msg):
+    """Conditional stderr log for loop-host diagnostics."""
+    if os.environ.get("GATOR_DASHBOARD_DEBUG") == "1":
+        print(msg, file=sys.stderr, flush=True)
+
+
+# ── Loop workspace: host registry ──────────────────────────────────────────────
+#
+# Server-local registry of loop watcher threads, keyed by
+# (resolved_repo_path, loop_id). Each entry tracks the daemon thread,
+# the loop directory, the held host.lock file descriptor, and an
+# entry_nonce for safe cleanup.
+
+import secrets as _secrets
+
+_LOOP_HOSTS_LOCK = threading.Lock()
+_LOOP_HOSTS = {}  # {(repo_path, loop_id): HostEntry}
+
+
+class _HostEntry:
+    __slots__ = ("thread", "loop_dir", "host_lock_fd",
+                 "entry_nonce", "started_at")
+    def __init__(self, thread, loop_dir, host_lock_fd, entry_nonce):
+        self.thread = thread
+        self.loop_dir = loop_dir
+        self.host_lock_fd = host_lock_fd
+        self.entry_nonce = entry_nonce
+        self.started_at = datetime.now(tz=timezone.utc).isoformat()
+
+
+def _run_watcher(loop_dir, host_lock_fd, repo_path, loop_id, entry_nonce):
+    """Daemon-thread wrapper: calls watch_loop(), owns fd cleanup."""
+    _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+    if _loop_scripts not in sys.path:
+        sys.path.insert(0, _loop_scripts)
+    from host import watch_loop, release_host_lock
+
+    try:
+        watch_loop(loop_dir, host_lock_fd=host_lock_fd)
+    except Exception as exc:
+        _debug_print(f"[loop-host] watcher error for {loop_id}: {exc}")
+    finally:
+        release_host_lock(host_lock_fd)
+        with _LOOP_HOSTS_LOCK:
+            key = (repo_path, loop_id)
+            entry = _LOOP_HOSTS.get(key)
+            if entry and entry.entry_nonce == entry_nonce:
+                del _LOOP_HOSTS[key]
+
+
+def _adopt_orphaned_loops():
+    """Server startup: scan repos for active loops and adopt orphans."""
+    _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+    if _loop_scripts not in sys.path:
+        sys.path.insert(0, _loop_scripts)
+    from host import acquire_host_lock
+
+    for r in _REGISTRY_REPOS:
+        raw_path = r.get("path", "")
+        if not raw_path:
+            continue
+        try:
+            repo_path = str(Path(raw_path).resolve())
+        except OSError:
+            continue
+        loops_dir = Path(repo_path) / ".gator" / "loops"
+        if not loops_dir.is_dir():
+            continue
+        for entry_dir in sorted(loops_dir.iterdir()):
+            if not entry_dir.is_dir() or entry_dir.name.startswith("."):
+                continue
+            session_file = entry_dir / "session.json"
+            if not session_file.is_file():
+                continue
+            try:
+                import json as _j
+                session = _j.loads(
+                    session_file.read_text(encoding="utf-8"))
+                stage = session.get("status", {}).get("stage", "")
+                if stage in ("plan_approved", "max_rounds_exceeded",
+                             "turn_timed_out", "ended_by_architect"):
+                    continue
+            except (OSError, ValueError, KeyError):
+                continue
+            loop_id = entry_dir.name
+            fd = acquire_host_lock(entry_dir)
+            if fd is None:
+                _debug_print(
+                    f"[loop-host] skip {loop_id} — host lock held")
+                continue
+            nonce = _secrets.token_hex(4)
+            t = threading.Thread(
+                target=_run_watcher,
+                args=(entry_dir, fd, repo_path, loop_id, nonce),
+                daemon=True,
+            )
+            with _LOOP_HOSTS_LOCK:
+                _LOOP_HOSTS[(repo_path, loop_id)] = _HostEntry(
+                    t, entry_dir, fd, nonce)
+            try:
+                t.start()
+            except Exception:
+                with _LOOP_HOSTS_LOCK:
+                    cur = _LOOP_HOSTS.get((repo_path, loop_id))
+                    if cur and cur.entry_nonce == nonce:
+                        del _LOOP_HOSTS[(repo_path, loop_id)]
+                try:
+                    from host import release_host_lock
+                    release_host_lock(fd)
+                except Exception:
+                    pass
+                continue
+            _debug_print(f"[loop-host] adopted orphan: {loop_id}")
+
+
+def _resolve_repo_by_key(repo_key):
+    """Resolve a repo_key (path-hash) to its registered filesystem path.
+
+    Returns the resolved absolute path string.
+    Raises KeyError if no registered repo matches.
+    """
+    if not repo_key:
+        raise KeyError("empty repo_key")
+    for r in _REGISTRY_REPOS:
+        if r.get("repo_key") == repo_key:
+            return str(Path(r["path"]).resolve())
+    # repo_key is computed from resolved path via session_cache_key —
+    # recompute for repos that were registered before keys were injected
+    try:
+        agg = import_sibling("gator-session-aggregator")
+    except Exception:
+        raise KeyError(repo_key)
+    for r in _REGISTRY_REPOS:
+        raw = r.get("path", "")
+        if not raw:
+            continue
+        try:
+            resolved = str(Path(raw).resolve())
+        except OSError:
+            continue
+        if agg.session_cache_key(resolved) == repo_key:
+            return resolved
+    raise KeyError(repo_key)
+
+
+def _resolve_loop_dir(repo_key, loop_id):
+    """Containment-safe resolver: repo_key + loop_id → validated loop_dir Path.
+
+    Returns the validated Path to the loop directory.
+    Raises KeyError (repo not found), ValueError (invalid loop_id),
+    or FileNotFoundError (loop dir missing).
+    """
+    repo_path = _resolve_repo_by_key(repo_key)
+    if not loop_id or _LOOP_ID_REJECT.search(loop_id):
+        raise ValueError(f"invalid loop id: {loop_id!r}")
+    repo_root = Path(repo_path)
+    gator_dir = repo_root / ".gator"
+    loops_root = gator_dir / "loops"
+    # Existence before reparse — absent namespace is 404, not 400
+    if not gator_dir.is_dir():
+        raise FileNotFoundError(f".gator directory not found: {gator_dir}")
+    if _is_reparse_point(gator_dir):
+        raise ValueError(".gator is a reparse point or symlink")
+    if not loops_root.is_dir():
+        raise FileNotFoundError(f"loops directory not found: {loops_root}")
+    if _is_reparse_point(loops_root):
+        raise ValueError(".gator/loops is a reparse point or symlink")
+    unresolved = loops_root / loop_id
+    # Catch symlinks before resolve (works even for dangling symlinks)
+    if unresolved.is_symlink():
+        raise ValueError("loop directory is a reparse point or symlink")
+    loop_dir = unresolved.resolve()
+    loops_root_resolved = loops_root.resolve()
+    repo_root_resolved = repo_root.resolve()
+    # Structural containment: loops root must be inside repo root
+    if loops_root_resolved != repo_root_resolved \
+            and repo_root_resolved not in loops_root_resolved.parents:
+        raise ValueError("loops directory escapes repository root")
+    # Structural containment: loop dir must be inside loops root
+    if loop_dir != loops_root_resolved \
+            and loops_root_resolved not in loop_dir.parents:
+        raise ValueError("loop id escapes loops directory")
+    if not loop_dir.is_dir():
+        raise FileNotFoundError(f"loop directory not found: {loop_dir}")
+    # Entry exists — check for junction/reparse point (catches Windows
+    # junctions that is_symlink() misses)
+    if _is_reparse_point(unresolved):
+        raise ValueError("loop directory is a reparse point or symlink")
+    return loop_dir
+
+
 # ── B1 Slice 1 (v2.13.0): safe content transport helpers ──────────
 #
 # Pure-Python helpers introduced in Slice 1: URL parsing, logical-path
@@ -1859,6 +2055,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._handle_repo_discover()
             return
 
+        # ── Loop workspace routes (repo-by-key addressed) ────────────
+        if path.startswith("/api/repo-by-key/"):
+            self._dispatch_loop_get(path)
+            return
+
         # Static files — serve from DASHBOARD_DIR
         rel = path.lstrip("/")
         candidate = DASHBOARD_DIR / rel
@@ -1908,6 +2109,602 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 continue
 
         self._send_json({"roots": roots, "repos": repos})
+
+    # ── Loop workspace handlers ──────────────────────────────────────
+
+    def _dispatch_loop_get(self, path):
+        """Route /api/repo-by-key/<repo_key>/loops/... GET requests."""
+        # /api/repo-by-key/<repo_key>/loops[/<id>/status]
+        prefix = "/api/repo-by-key/"
+        rest = path[len(prefix):]  # <repo_key>/loops...
+        parts = rest.split("/", 1)
+        if len(parts) < 2:
+            self._send_json({"error": "missing route"}, 400)
+            return
+        repo_key = parts[0]
+        tail = "/" + parts[1]  # /loops or /loops/<id>/status
+
+        if tail == "/loops":
+            self._handle_loop_list(repo_key)
+            return
+
+        if tail.startswith("/loops/") and tail.endswith("/status"):
+            loop_id = tail[len("/loops/"):-len("/status")]
+            if not loop_id:
+                self._send_json({"error": "loop id required"}, 400)
+                return
+            self._handle_loop_status(repo_key, loop_id)
+            return
+
+        if tail.startswith("/loops/") and tail.endswith("/events"):
+            loop_id = tail[len("/loops/"):-len("/events")]
+            if not loop_id:
+                self._send_json({"error": "loop id required"}, 400)
+                return
+            self._handle_loop_events(repo_key, loop_id)
+            return
+
+        # /loops/<id>/artifact/<filename>
+        artifact_marker = "/artifact/"
+        inner = tail[len("/loops/"):]  # <id>/artifact/<filename>
+        marker_pos = inner.find(artifact_marker)
+        if tail.startswith("/loops/") and marker_pos > 0:
+            loop_id = inner[:marker_pos]
+            filename = inner[marker_pos + len(artifact_marker):]
+            if not loop_id or not filename:
+                self._send_json({"error": "loop id and filename required"}, 400)
+                return
+            self._handle_loop_artifact(repo_key, loop_id, filename)
+            return
+
+        self._send_json({"error": "unknown loop route"}, 404)
+
+    def _handle_loop_list(self, repo_key):
+        """List all loops for a registered repo, sorted by recency."""
+        try:
+            repo_path = _resolve_repo_by_key(repo_key)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+
+        repo_root = Path(repo_path)
+        loops_dir = repo_root / ".gator" / "loops"
+        if not loops_dir.is_dir() or _is_reparse_point(repo_root / ".gator") \
+                or _is_reparse_point(loops_dir):
+            self._send_json({"loops": []})
+            return
+
+        from loop.session import load_session
+        loops = []
+        try:
+            entries = sorted(loops_dir.iterdir(), key=lambda p: p.name, reverse=True)
+        except OSError:
+            self._send_json({"loops": []})
+            return
+
+        for entry in entries:
+            if not entry.is_dir() or entry.name.startswith(".") \
+                    or _is_reparse_point(entry):
+                continue
+            try:
+                session = load_session(entry)
+            except (FileNotFoundError, json.JSONDecodeError, OSError):
+                continue
+            status = session.get("status", {})
+            loops.append({
+                "loop_id": session.get("loop_id", entry.name),
+                "feature": session.get("feature", ""),
+                "stage": status.get("stage", ""),
+                "round": status.get("round", 0),
+                "max_rounds": status.get("max_rounds", 0),
+                "blocked": status.get("blocked", False),
+                "created_at": session.get("created_at", ""),
+            })
+
+        self._send_json({"loops": loops})
+
+    _LOOP_STATUS_ALLOWED_KEYS = frozenset({
+        "loop_id", "feature", "mode", "created_at",
+        "roles", "status", "current", "turns", "decisions",
+    })
+
+    def _handle_loop_status(self, repo_key, loop_id):
+        """Return session status for a loop, filtered to safe fields only."""
+        try:
+            loop_dir = _resolve_loop_dir(repo_key, loop_id)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+        except FileNotFoundError:
+            self._send_json({"error": "loop not found"}, 404)
+            return
+
+        from loop.session import load_session
+        try:
+            session = load_session(loop_dir)
+        except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+            self._send_json({"error": f"cannot read session: {exc}"}, 500)
+            return
+
+        safe = {k: v for k, v in session.items()
+                if k in self._LOOP_STATUS_ALLOWED_KEYS}
+        self._send_json(safe)
+
+    def _handle_loop_events(self, repo_key, loop_id):
+        """Return the event timeline for a loop."""
+        try:
+            loop_dir = _resolve_loop_dir(repo_key, loop_id)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+        except FileNotFoundError:
+            self._send_json({"error": "loop not found"}, 404)
+            return
+
+        events_path = loop_dir / "events.jsonl"
+        if events_path.is_symlink():
+            self._send_json({"error": "loop not found"}, 404)
+            return
+        if events_path.exists() and _is_reparse_point(events_path):
+            self._send_json({"error": "loop not found"}, 404)
+            return
+
+        from loop.events import read_all_events
+        try:
+            events = read_all_events(loop_dir)
+        except OSError as exc:
+            self._send_json({"error": f"cannot read events: {exc}"}, 500)
+            return
+
+        self._send_json({"events": events})
+
+    _LOOP_ARTIFACT_REJECT = re.compile(r'[/\\\x00]|\.\.')
+
+    _LOOP_ARTIFACT_ALLOWLIST = frozenset({
+        "sketch.md",
+        "plan.current.md",
+        "findings.current.md",
+        "decision-request.md",
+        "decision-response.md",
+    })
+
+    _LOOP_ARTIFACT_PATTERNS = (
+        re.compile(r'^plan\.round-\d+\.md$'),
+        re.compile(r'^findings\.round-\d+\.md$'),
+        re.compile(r'^decision-request\.[a-zA-Z0-9_-]+\.md$'),
+        re.compile(r'^decision-response\.[a-zA-Z0-9_-]+\.md$'),
+    )
+
+    def _is_allowed_loop_artifact(self, filename):
+        if self._LOOP_ARTIFACT_REJECT.search(filename):
+            return False
+        if filename in self._LOOP_ARTIFACT_ALLOWLIST:
+            return True
+        for pattern in self._LOOP_ARTIFACT_PATTERNS:
+            if pattern.match(filename):
+                return True
+        return False
+
+    def _handle_loop_artifact(self, repo_key, loop_id, filename):
+        """Serve a loop artifact file (markdown only, allowlisted names)."""
+        if not filename or self._LOOP_ARTIFACT_REJECT.search(filename):
+            self._send_json({"error": "invalid artifact name"}, 400)
+            return
+
+        try:
+            loop_dir = _resolve_loop_dir(repo_key, loop_id)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+        except FileNotFoundError:
+            self._send_json({"error": "loop not found"}, 404)
+            return
+
+        if not self._is_allowed_loop_artifact(filename):
+            self._send_json({"error": "artifact not allowed"}, 403)
+            return
+
+        artifact_path = loop_dir / filename
+        if artifact_path.is_symlink() or \
+                (artifact_path.exists() and _is_reparse_point(artifact_path)):
+            self._send_json({"error": "not found"}, 404)
+            return
+
+        if not artifact_path.is_file():
+            self._send_json({"error": "artifact not found"}, 404)
+            return
+
+        try:
+            content = artifact_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self._send_json({"error": f"cannot read artifact: {exc}"}, 500)
+            return
+
+        body = content.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            pass
+
+    # ── Loop workspace POST dispatch + handlers ──────────────────────
+
+    def _dispatch_loop_post(self, path):
+        """Route /api/repo-by-key/<repo_key>/loops/... POST requests."""
+        prefix = "/api/repo-by-key/"
+        rest = path[len(prefix):]
+        parts = rest.split("/", 1)
+        if len(parts) < 2:
+            self._send_json({"error": "missing route"}, 400)
+            return
+        repo_key = parts[0]
+        tail = "/" + parts[1]
+
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b""
+        try:
+            req = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            self._send_json({"error": "invalid JSON"}, 400)
+            return
+
+        if tail == "/loops/start":
+            self._handle_loop_start(repo_key, req)
+            return
+
+        if tail.startswith("/loops/") and tail.endswith("/prompt"):
+            loop_id = tail[len("/loops/"):-len("/prompt")]
+            if not loop_id:
+                self._send_json({"error": "loop id required"}, 400)
+                return
+            self._handle_loop_prompt(repo_key, loop_id, req)
+            return
+
+        _LOOP_ACTIONS = {
+            "/pause": "_handle_loop_pause",
+            "/interject": "_handle_loop_interject",
+            "/unblock": "_handle_loop_unblock",
+            "/end": "_handle_loop_end",
+        }
+        if tail.startswith("/loops/"):
+            suffix_idx = tail.rfind("/")
+            if suffix_idx > len("/loops/") - 1:
+                action_suffix = tail[suffix_idx:]
+                handler_name = _LOOP_ACTIONS.get(action_suffix)
+                if handler_name:
+                    loop_id = tail[len("/loops/"):suffix_idx]
+                    if not loop_id:
+                        self._send_json(
+                            {"error": "loop id required"}, 400)
+                        return
+                    getattr(self, handler_name)(repo_key, loop_id, req)
+                    return
+
+        self._send_json({"error": "unknown loop route"}, 404)
+
+    def _handle_loop_start(self, repo_key, req):
+        """Start a new loop — creates session, launches host watcher thread."""
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from host import (
+            init_loop, find_active_loop, acquire_host_lock,
+            acquire_start_lock, release_start_lock, release_host_lock,
+        )
+
+        feature = (req.get("feature") or "").strip()
+        if not feature:
+            self._send_json({"error": "feature is required"}, 400)
+            return
+
+        sketch_path = (req.get("sketch_path") or "").strip()
+        if not sketch_path:
+            self._send_json({"error": "sketch_path is required"}, 400)
+            return
+
+        max_rounds = req.get("max_rounds", 3)
+        turn_timeout = req.get("turn_timeout", 300)
+
+        if (not isinstance(max_rounds, int) or isinstance(max_rounds, bool)
+                or max_rounds < 1 or max_rounds > 20):
+            self._send_json(
+                {"error": "max_rounds must be an integer between 1 and 20"},
+                400)
+            return
+        if (not isinstance(turn_timeout, int)
+                or isinstance(turn_timeout, bool)
+                or turn_timeout < 30 or turn_timeout > 3600):
+            self._send_json(
+                {"error": "turn_timeout must be an integer between "
+                 "30 and 3600"}, 400)
+            return
+
+        try:
+            repo_path = _resolve_repo_by_key(repo_key)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+
+        repo_root = Path(repo_path)
+
+        sketch = Path(sketch_path)
+        if not sketch.is_absolute():
+            sketch = repo_root / sketch
+        sketch = sketch.resolve()
+        if repo_root.resolve() not in sketch.parents \
+                and sketch != repo_root.resolve():
+            self._send_json(
+                {"error": "sketch_path must be inside the repo"}, 400)
+            return
+        if not sketch.is_file():
+            self._send_json({"error": "sketch file not found"}, 400)
+            return
+        if sketch.stat().st_size == 0:
+            self._send_json({"error": "sketch file is empty"}, 400)
+            return
+
+        loops_base = repo_root / ".gator" / "loops"
+        loops_base.mkdir(parents=True, exist_ok=True)
+
+        start_fd = acquire_start_lock(loops_base)
+        if start_fd is None:
+            self._send_json(
+                {"error": "another start is in progress"}, 409)
+            return
+
+        try:
+            existing = find_active_loop(loops_base)
+            if existing:
+                self._send_json({
+                    "error": "active loop exists",
+                    "loop_id": existing,
+                }, 409)
+                return
+
+            loop_id, loop_dir = init_loop(
+                feature, str(sketch), max_rounds, turn_timeout,
+                repo_root=repo_path)
+
+            host_fd = acquire_host_lock(loop_dir)
+            if host_fd is None:
+                self._send_json(
+                    {"error": "failed to acquire host lock"}, 500)
+                return
+
+            nonce = _secrets.token_hex(4)
+            t = threading.Thread(
+                target=_run_watcher,
+                args=(loop_dir, host_fd, repo_path, loop_id, nonce),
+                daemon=True,
+            )
+            with _LOOP_HOSTS_LOCK:
+                _LOOP_HOSTS[(repo_path, loop_id)] = _HostEntry(
+                    t, loop_dir, host_fd, nonce)
+            try:
+                t.start()
+            except Exception:
+                with _LOOP_HOSTS_LOCK:
+                    cur = _LOOP_HOSTS.get((repo_path, loop_id))
+                    if cur and cur.entry_nonce == nonce:
+                        del _LOOP_HOSTS[(repo_path, loop_id)]
+                release_host_lock(host_fd)
+                self._send_json(
+                    {"error": "failed to start host watcher"}, 500)
+                return
+        finally:
+            release_start_lock(start_fd)
+
+        self._send_json({"loop_id": loop_id}, 201)
+
+    def _handle_loop_prompt(self, repo_key, loop_id, req):
+        """Return the formatted participant prompt for a role."""
+        role = (req.get("role") or "").strip()
+        if role not in ("draftor", "reviewer"):
+            self._send_json(
+                {"error": "role must be 'draftor' or 'reviewer'"}, 400,
+                cache_control="no-store")
+            return
+
+        try:
+            loop_dir = _resolve_loop_dir(repo_key, loop_id)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404,
+                            cache_control="no-store")
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400,
+                            cache_control="no-store")
+            return
+        except FileNotFoundError:
+            self._send_json({"error": "loop not found"}, 404,
+                            cache_control="no-store")
+            return
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from session import load_session, load_tokens
+        from state_machine import is_terminal as _is_terminal_session
+
+        try:
+            session = load_session(loop_dir)
+        except FileNotFoundError:
+            self._send_json({"error": "session not found"}, 404,
+                            cache_control="no-store")
+            return
+
+        if _is_terminal_session(session):
+            self._send_json(
+                {"error": "loop is in terminal state"}, 410,
+                cache_control="no-store")
+            return
+
+        try:
+            tokens = load_tokens(loop_dir)
+        except FileNotFoundError:
+            self._send_json({"error": "tokens not found"}, 404,
+                            cache_control="no-store")
+            return
+
+        role_data = tokens.get(role)
+        if not role_data or "token" not in role_data:
+            self._send_json({"error": f"no token for role '{role}'"}, 404,
+                            cache_control="no-store")
+            return
+
+        token = role_data["token"]
+        feature = session.get("feature", loop_id)
+        prompt_text = (
+            f"gator loop join\n\n"
+            f"  Loop: {loop_id}\n"
+            f"  Feature: {feature}\n"
+            f"  Role: {role}\n\n"
+            f"  gator loop status --token {token}\n"
+        )
+
+        self._send_json({"prompt": prompt_text},
+                        cache_control="no-store")
+
+    def _resolve_architect_token(self, repo_key, loop_id):
+        """Resolve loop_dir and read the architect token.
+
+        Returns (loop_dir, token) on success.
+        Sends an error response and returns None on failure.
+        """
+        try:
+            loop_dir = _resolve_loop_dir(repo_key, loop_id)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return None
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return None
+        except FileNotFoundError:
+            self._send_json({"error": "loop not found"}, 404)
+            return None
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from session import load_tokens
+
+        try:
+            tokens = load_tokens(loop_dir)
+        except FileNotFoundError:
+            self._send_json({"error": "tokens not found"}, 404)
+            return None
+
+        arch = tokens.get("architect")
+        if not arch or "token" not in arch:
+            self._send_json({"error": "architect token not found"}, 404)
+            return None
+
+        return loop_dir, arch["token"]
+
+    def _handle_loop_pause(self, repo_key, loop_id, req):
+        """Architect: pause a running loop."""
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from submit import handle_pause
+
+        message = (req.get("message") or "").strip() or None
+        try:
+            handle_pause(token, message=message, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+
+        self._send_json({"ok": True})
+
+    def _handle_loop_interject(self, repo_key, loop_id, req):
+        """Architect: inject guidance without pausing."""
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+
+        message = (req.get("message") or "").strip()
+        if not message:
+            self._send_json(
+                {"error": "message is required for interjection"}, 400)
+            return
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from submit import handle_interject
+
+        try:
+            handle_interject(token, message, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+
+        self._send_json({"ok": True})
+
+    def _handle_loop_unblock(self, repo_key, loop_id, req):
+        """Architect: unblock a paused/blocked loop."""
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+
+        message = (req.get("message") or "").strip() or None
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from submit import handle_unblock
+
+        try:
+            handle_unblock(token, message=message, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+
+        self._send_json({"ok": True})
+
+    def _handle_loop_end(self, repo_key, loop_id, req):
+        """Architect: terminate the loop."""
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+
+        reason = (req.get("reason") or "").strip() or None
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from submit import handle_end
+
+        try:
+            handle_end(token, reason=reason, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+
+        self._send_json({"ok": True})
 
     def _handle_repo_register(self):
         """Register a repo path in the local dashboard registry."""
@@ -2034,6 +2831,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         # ── auth check (anti-CSRF via custom header) ────────────────────────
         if not self._check_post_auth():
+            return
+
+        # ── Loop workspace POST routes (repo-by-key addressed) ─────────
+        if path.startswith("/api/repo-by-key/"):
+            self._dispatch_loop_post(path)
             return
 
         # POST /api/repos/register — add a repo to the dashboard registry
@@ -2307,6 +3109,8 @@ def main():
     fast_data = collect_standalone_data(_REGISTRY_REPOS)
 
     DashboardHandler.fast_data = fast_data
+
+    _adopt_orphaned_loops()
 
     if args.port == 0:
         # Kernel picks — bind directly and read the actual port back

@@ -95,10 +95,15 @@ def make_token(loop_id, role):
     return f"{TOKEN_PREFIX}{encoded}", nonce
 
 
-def resolve_token(token):
+def resolve_token(token, loop_dir=None):
     """Decode a token and validate its nonce against .tokens.json.
 
-    Returns (loop_id, role, loop_dir) on success.
+    When ``loop_dir`` is provided the function skips ``find_gator_root()``
+    and validates against the supplied directory directly.  It also
+    verifies the decoded ``loop_id`` matches ``Path(loop_dir).name`` to
+    preserve the one-token / one-loop binding.
+
+    Returns (loop_id, role, resolved_loop_dir) on success.
     Raises ValueError on invalid or tampered tokens.
     """
     if not token.startswith(TOKEN_PREFIX):
@@ -117,9 +122,15 @@ def resolve_token(token):
 
     loop_id, role, nonce = parts
 
-    # Resolve loop directory
-    repo_root = find_gator_root()
-    loop_dir = repo_root / ".gator" / "loops" / loop_id
+    if loop_dir is not None:
+        loop_dir = Path(loop_dir)
+        if loop_dir.name != loop_id:
+            raise ValueError(
+                f"Token loop_id '{loop_id}' does not match "
+                f"loop_dir name '{loop_dir.name}'")
+    else:
+        repo_root = find_gator_root()
+        loop_dir = repo_root / ".gator" / "loops" / loop_id
 
     if not loop_dir.is_dir():
         raise ValueError(f"Loop directory not found: {loop_dir}")
@@ -361,9 +372,9 @@ def _deadline_from_now(timeout_seconds):
 
 
 def ensure_loops_gitignore(loops_dir):
-    """Ensure .tokens.json files are gitignored in the loops directory."""
+    """Ensure operational files are gitignored in the loops directory."""
     gitignore_path = Path(loops_dir) / ".gitignore"
-    rules = [".tokens.json", "session.lock", "*.tmp"]
+    rules = [".tokens.json", "session.lock", "host.lock", "start.lock", "*.tmp"]
     if gitignore_path.exists():
         existing = gitignore_path.read_text(encoding="utf-8")
         missing = [r for r in rules if r not in existing]

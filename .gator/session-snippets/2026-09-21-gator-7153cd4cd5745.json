@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "",
+  "agent": "claude-opus-4-6",
+  "intent": "Fix cross-platform path in remove 404 test",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "testing",
+    "cross-platform"
+  ],
+  "commit": "7153cd4cd57450e68a7eac627ad678e449422410",
+  "short_commit": "7153cd4",
+  "snippet_id": "snippet-7153cd4cd5745",
+  "session_group_key": "anthropic:a582722b-4ac8-4697-be98-323b06267782",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "aca95bfe566bdd8e2e42d7636b5d664275b9ef4c",
+  "started_at": "2026-09-21T00:06:28Z",
+  "ended_at": "2026-09-21T00:09:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-09-21-gator-aca95bfe566bd.json",
+    "tests/test_dashboard_remove.py"
+  ],
+  "notes": [
+    "Fixed `test_remove_repo_not_found_returns_404`: the \"not-here\" path was",
+    "not resolved through `Path.resolve()`, so on Linux it was treated as",
+    "relative (non-absolute) and hit the 400 validation instead of the 404",
+    "not-found path. Both Ubuntu CI jobs failed on this."
+  ],
+  "transcript_session_id": "a582722b-4ac8-4697-be98-323b06267782",
+  "transcript_ref": null
+}

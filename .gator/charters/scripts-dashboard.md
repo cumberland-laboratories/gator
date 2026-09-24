@@ -112,9 +112,58 @@ Remove a single registry entry identified by its exact registered path. Registry
 ! Cache mutation is synchronous: (1) write registry JSON, (2) filter `_REGISTRY_REPOS`, (3) filter `fast_data["repos"]` — all before the success response.
 ! Test paths must be resolved through `Path.resolve()` so the `os.path.isabs()` validation passes on both Windows and Linux CI.
 
+### _resolve_repo_by_key(repo_key) / _resolve_loop_dir(repo_key, loop_id)
+File: src/gator_command/scripts/gator-dashboard.py
+Resolve `repo_key` (path-hash) to registered repo path, then validate `loop_id` and return a containment-safe loop directory Path. Single gatekeeper for all loop-file access.
+<- loop workspace route handlers
+-> `_REGISTRY_REPOS`, `session_cache_key()` (fallback)
+! `loop_id` is user-visible URL input — reject `..`, `/`, `\`, and null bytes before filesystem access.
+! Reject reparse points/symlinks on `.gator`, `loops`, and the loop entry using `_is_reparse_point()` (catches POSIX symlinks and Windows junctions). Namespace-root checks run before any loop entry access; loop-entry check split: `is_symlink()` before resolve (catches dangling), `_is_reparse_point()` after existence confirmed (catches junctions).
+! Containment is structural: `loops_root_resolved in loop_dir.parents` and `repo_root_resolved in loops_root_resolved.parents` — immune to same-prefix sibling attacks (`loops-escape`).
+! List handler skips reparse/symlink entries via `_is_reparse_point()` and refuses to iterate when `.gator` or `loops` is a reparse point.
+
+### _dispatch_loop_get() / _handle_loop_list() / _handle_loop_status() / _handle_loop_events() / _handle_loop_artifact()
+File: src/gator_command/scripts/gator-dashboard.py
+Route `/api/repo-by-key/<repo_key>/loops/...` GET requests. List loops for a repo (sorted by recency, symlinks skipped), return allowlisted session status fields (no tokens, no schema), return the event timeline as a JSON array, or serve allowlisted markdown artifacts.
+<- `do_GET()` via prefix match on `/api/repo-by-key/`
+-> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.session.load_session()`, `loop.events.read_all_events()`
+! Read-only. No imports from `submit.py`. No token access. `.tokens.json` and `session.lock` never served.
+! Status response uses `_LOOP_STATUS_ALLOWED_KEYS` allowlist — only known-safe fields appear in GET responses. Unknown/future fields are silently dropped.
+! Events endpoint validates `events.jsonl` against symlink/reparse before reading — `is_symlink()` pre-existence, `_is_reparse_point()` post-existence — then returns the raw event timeline via the existing `read_all_events()` reader; missing events file returns an empty array.
+! Artifact endpoint uses `_LOOP_ARTIFACT_ALLOWLIST` plus pattern prefixes — only known markdown artifacts are served (sketch, plan, findings, decision docs). `.tokens.json`, `session.json`, `session.lock`, and `events.jsonl` are never served. Served as `text/plain; charset=utf-8`. Reparse/symlink check on the artifact file itself.
+
+### _dispatch_loop_post() / _handle_loop_start() / _handle_loop_prompt()
+File: src/gator_command/scripts/gator-dashboard.py
+Route `/api/repo-by-key/<repo_key>/loops/...` POST requests. Start a new loop (with host watcher thread) or return participant prompt text.
+<- `do_POST()` via prefix match on `/api/repo-by-key/`
+-> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.host.init_loop()`, `loop.host.acquire_start_lock()`, `loop.host.acquire_host_lock()`, `loop.session.load_session()`, `loop.session.load_tokens()`
+! Start acquires `start.lock` cross-process before scanning for active loops — one active loop per repo enforced by on-disk scan, not just the in-process registry.
+! `sketch_path` must resolve inside the registered repo root — rejects traversal to external files.
+! Prompt endpoint returns only `draftor` or `reviewer` prompts — never `architect`. Response carries `Cache-Control: no-store` on all paths (success and error).
+! Terminal loops reject prompt requests with 410.
+
+### _resolve_architect_token() / _handle_loop_pause() / _handle_loop_interject() / _handle_loop_unblock() / _handle_loop_end()
+File: src/gator_command/scripts/gator-dashboard.py
+Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`, reads the architect token from `.tokens.json`, and delegates to the corresponding `submit.py` handler with `loop_dir=loop_dir`.
+<- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`)
+-> `_resolve_loop_dir()`, `loop.session.load_tokens()`, `loop.submit.handle_pause()`, `loop.submit.handle_interject()`, `loop.submit.handle_unblock()`, `loop.submit.handle_end()`
+! Dashboard never acquires the session lock itself — all writes delegate to `submit.py` handlers.
+! `_resolve_architect_token()` is the shared gatekeeper — resolves loop_dir and reads the architect token; returns None (with error response sent) on failure.
+! Interject requires non-empty message (400 if absent). Other actions accept optional message/reason.
+! State machine rejections (PermissionError from handlers) returned as 409.
+
+### _LOOP_HOSTS / _HostEntry / _run_watcher() / _adopt_orphaned_loops()
+File: src/gator_command/scripts/gator-dashboard.py
+Server-local host registry tracking watcher threads, held `host.lock` file descriptors, and entry nonces. Startup adoption scans registered repos for orphaned active loops.
+<- server startup, `_handle_loop_start()`
+-> `loop.host.watch_loop()`, `loop.host.acquire_host_lock()`, `loop.host.release_host_lock()`
+! `host.lock` acquired once and transferred to `_run_watcher` — no release/reacquire gap. OS exclusive lock prevents duplicate watchers.
+! `_run_watcher` owns the fd — closes it in `finally`, removes its registry entry only if `entry_nonce` matches (prevents a replacement entry from being deleted by an exiting prior incarnation).
+! Adoption skips loops whose `host.lock` is already held (another host is live).
+
 ### DashboardHandler.do_GET() / DashboardHandler.do_POST()
 File: src/gator_command/scripts/gator-dashboard.py
-Dispatch API, asset, repository content, update, and lifecycle routes.
+Dispatch API, asset, repository content, update, lifecycle, and loop workspace routes.
 <- loopback HTTP server
 -> typed request handlers and data adapters
 ! Every POST calls `_check_post_auth()` before mutation and requires `X-Gator-Dashboard: 1`.
@@ -160,4 +209,5 @@ Find and terminate Gator-owned dashboard listeners, with port/all/dry-run scopin
 -> [Fleet Intelligence](scripts-fleet-intelligence.md) - governance data producers
 -> [Session Archaeology](scripts-session-archaeology.md) - session evidence
 -> [Repo Lifecycle](scripts-repo-lifecycle.md) - update/gatorize actions
+-> [Gator Loop](scripts-loop.md) - loop session/event reads for workspace routes
 -> [Cross-Cutting](scripts-cross-cutting.md) - shared schemas and path conventions

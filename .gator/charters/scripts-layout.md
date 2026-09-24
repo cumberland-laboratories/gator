@@ -81,6 +81,12 @@ Three code paths must respect this:
 
 `gator_layout.py` is deployed to governed repos via `templates/gator-starter/scripts/gator_layout.py`. Fleet-repo scripts (pre-commit hook, enforcer-review, session-open) import it via the same `SCRIPTS_DIR` pattern they use for `gator_core`. Listed in `pyproject.toml` package-data for wheel distribution.
 
+## Before Changing This Module
+
+- Exercise v1, v2, mixed, and invalid layouts.
+- Test scaffolding-only directories through install, update, and migration.
+- Keep source and starter-template copies synchronized.
+
 ## Connections
 
 -> [Cross-Cutting](scripts-cross-cutting.md) — layout resolver is a cross-cutting pattern used by 11+ scripts

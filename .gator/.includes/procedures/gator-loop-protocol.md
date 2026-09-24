@@ -74,6 +74,7 @@ Write your output to a markdown file. The file must:
 - Follow the format in the artifact format reference (see below)
 
 **Draftor output** — an implementation plan:
+- `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
 - Clear scope statement
 - Architecture or approach
 - File/module changes with specific paths
@@ -82,6 +83,7 @@ Write your output to a markdown file. The file must:
 - Charter impact
 
 **Reviewer output** — findings OR approval:
+- `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
 - Verdict line (APPROVE, REVISE, or ESCALATE)
 - Numbered findings with severity, location, issue, and suggestion
 - Scope check against the sketch

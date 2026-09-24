@@ -10,13 +10,13 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `state_machine.py` owns state categorization (active/paused/terminal), action validation, and all state transitions
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
 - `submit.py` owns the seven submit handlers: submit-draft, submit-review, escalate, unblock, pause, interject, end
-- `host.py` owns loop initialization (`gator loop start`) and the watch loop with timeout enforcement
+- `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the watch loop with timeout enforcement, platform-aware file locking (`host.lock`, `start.lock`), and active-loop scanning
 - `cli.py` owns argparse subcommand routing for all 12 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, wait, tail, list)
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
 ## Does Not Own
 
-- Dashboard integration (future phase)
+- Dashboard server-side logic — the dashboard calls into this module via `init_loop()` and `watch_loop()` but host registry, route dispatch, and HTTP handling belong to the dashboard charter
 - Auto-launching of agent sessions
 - Code implementation loop (this is planning-phase only)
 - Git commits of session residue (always human/agent-initiated)
@@ -30,13 +30,14 @@ Filesystem: none (pure computation)
 <- `host.start_loop()`
 ! Token format: `glp_<base64url(loop_id:role:nonce)>`. Nonce is 8 hex chars from `secrets.token_hex(4)`. Nonce stored only in gitignored `.tokens.json` — never in committed session state.
 
-### resolve_token(token)
+### resolve_token(token, loop_dir=None)
 File: `src/gator_command/scripts/loop/session.py`
-Decodes token and validates nonce against `.tokens.json`. Returns (loop_id, role, loop_dir).
+Decodes token and validates nonce against `.tokens.json`. Returns (loop_id, role, loop_dir). When `loop_dir` is provided, skips `find_gator_root()` discovery and validates that the token's `loop_id` matches `loop_dir.name`.
 Filesystem: `.gator/loops/<loop-id>/.tokens.json` (R)
-<- `submit.handle_submit_draft()`, `submit.handle_submit_review()`, `submit.handle_escalate()`, `cli._cmd_status()`
--> `find_gator_root()`
+<- `submit.handle_submit_draft()`, `submit.handle_submit_review()`, `submit.handle_escalate()`, `submit.handle_pause()`, `submit.handle_interject()`, `submit.handle_end()`, `submit.handle_unblock()`, `cli._cmd_status()`, dashboard `_handle_loop_prompt()`
+-> `find_gator_root()` (skipped when `loop_dir` provided)
 ! Raises ValueError on invalid/tampered tokens. Nonce validation prevents token reconstruction from committed data.
+! When `loop_dir` provided: validates `loop_dir.name == loop_id` from token — rejects cross-loop token reuse.
 
 ### create_session(feature, loop_id, max_rounds, turn_timeout)
 File: `src/gator_command/scripts/loop/session.py`
@@ -194,20 +195,49 @@ Filesystem: none (session mutation only)
 
 ---
 
+### init_loop(feature, sketch_path, max_rounds, turn_timeout, repo_root=None)
+File: `src/gator_command/scripts/loop/host.py`
+Creates loop on disk without entering the watch loop. Creates directory, copies sketch, generates three tokens (draftor, reviewer, architect), writes session + initial event. Returns `(loop_id, loop_dir)`. When `repo_root` is provided, uses it directly instead of calling `find_gator_root()` — enables dashboard reuse without filesystem discovery.
+Filesystem: `.gator/loops/<loop-id>/` (W, creates), sketch file (R)
+<- `start_loop()`, dashboard `_handle_loop_start()`
+-> `create_session()`, `save_session()`, `make_token()`, `save_tokens()`, `emit_event()`, `ensure_loops_gitignore()`
+
 ### start_loop(feature, sketch_path, max_rounds, turn_timeout)
 File: `src/gator_command/scripts/loop/host.py`
-Initializes loop: creates directory, copies sketch, generates three tokens (draftor, reviewer, architect), writes session + initial event, prints banner, enters watch loop. Blocks until terminal.
-Filesystem: `.gator/loops/<loop-id>/` (W, creates), sketch file (R)
+CLI entry point for starting a loop. Acquires `start.lock` (cross-process, one active loop per repo), scans for existing active loops, calls `init_loop()`, acquires `host.lock`, releases `start.lock`, enters watch loop. Blocks until terminal.
+Filesystem: `.gator/loops/start.lock` (RW), `.gator/loops/<loop-id>/host.lock` (RW)
 <- `cli._cmd_start()`
--> `create_session()`, `save_session()`, `make_token()`, `save_tokens()`, `emit_event()`, `watch_loop()`
+-> `acquire_start_lock()`, `release_start_lock()`, `find_active_loop()`, `init_loop()`, `acquire_host_lock()`, `release_host_lock()`, `watch_loop()`
+! `start.lock` held only during the scan-and-init window — released before entering `watch_loop()`. `host.lock` transferred to `watch_loop()`.
 
-### watch_loop(loop_dir)
+### watch_loop(loop_dir, host_lock_fd=None)
 File: `src/gator_command/scripts/loop/host.py`
-Polls events.jsonl for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on terminal.
-Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline check)
-<- `start_loop()`
--> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`
+Polls events.jsonl for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on terminal. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
+Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline check), `host.lock` (W metadata, when fd provided)
+<- `start_loop()`, dashboard `_run_watcher()`
+-> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`
 ! The host is a READER during normal operation. Timeout enforcement is the one write exception.
+
+### acquire_host_lock(loop_dir) / release_host_lock(fd)
+File: `src/gator_command/scripts/loop/host.py`
+Non-blocking exclusive file lock on `host.lock` — proves process ownership of timeout enforcement for a specific loop. Platform-aware: `msvcrt.locking(LK_NBLCK)` on Windows, `fcntl.flock(LOCK_EX|LOCK_NB)` on POSIX.
+Filesystem: `.gator/loops/<loop-id>/host.lock` (RW)
+<- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
+! Returns fd on success, None if already held. OS exclusive lock prevents duplicate watchers cross-process.
+
+### acquire_start_lock(loops_base) / release_start_lock(fd)
+File: `src/gator_command/scripts/loop/host.py`
+Non-blocking exclusive file lock on `start.lock` — enforces one-active-loop-per-repo during the scan-and-init window. Same platform-aware locking as `host.lock`.
+Filesystem: `.gator/loops/start.lock` (RW)
+<- `start_loop()`, dashboard `_handle_loop_start()`
+! Held only during the start sequence. Released before entering `watch_loop()`.
+
+### find_active_loop(loops_base)
+File: `src/gator_command/scripts/loop/host.py`
+Scans `loops_base` for non-terminal sessions. Returns `loop_id` or None.
+Filesystem: `.gator/loops/*/session.json` (R)
+<- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
+-> `load_session()`, `is_terminal()`
 
 ### _try_enforce_timeout(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
@@ -286,3 +316,4 @@ The protocol's escalation section classifies uncertainty into non-blocking (stat
 -> [Cross-Cutting](scripts-cross-cutting.md) -- Package CLI Entry Point (cli.py COMMANDS dict), sys.path import convention
 -> [Core Library](scripts-core-library.md) -- `find_gator_root()`, `ensure_utf8_stdout()`, `get_version()`
 -> [Installer and Boot](scripts-installer.md) -- `render_entry_content()` cross-vendor orientation, `/loop-join` command template
+-> [Dashboard Server](scripts-dashboard.md) -- calls `init_loop()`, `watch_loop()`, `acquire_host_lock()`, `find_active_loop()`, `resolve_token()`, `load_tokens()`

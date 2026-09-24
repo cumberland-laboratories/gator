@@ -106,6 +106,7 @@ def handle_submit_draft(token, file_path):
             "event": "draft_submitted",
             "role": role,
             "round": round_num,
+            "artifact_path": versioned_name,
             "detail": f"Plan draft submitted, advancing to plan_review",
         }
         return session, event
@@ -181,6 +182,7 @@ def handle_submit_review(token, file_path, approve=False):
                 "event": "plan_approved",
                 "role": role,
                 "round": session["status"]["round"],
+                "artifact_path": versioned_name,
                 "detail": "Reviewer approved the plan",
             }
         elif session["status"]["stage"] == "max_rounds_exceeded":
@@ -188,6 +190,7 @@ def handle_submit_review(token, file_path, approve=False):
                 "event": "max_rounds_exceeded",
                 "role": role,
                 "round": session["status"]["round"],
+                "artifact_path": versioned_name,
                 "detail": f"Round limit reached ({session['status']['max_rounds']})",
             }
         else:
@@ -195,6 +198,7 @@ def handle_submit_review(token, file_path, approve=False):
                 "event": "revision_requested",
                 "role": role,
                 "round": session["status"]["round"],
+                "artifact_path": versioned_name,
                 "detail": "Findings submitted, revision requested",
             }
         return session, event
@@ -289,7 +293,7 @@ def handle_escalate(token, reason, file_path=None):
 
 
 def handle_unblock(token, next_role=None, stage=None, message=None,
-                   file_path=None):
+                   file_path=None, loop_dir=None):
     """Architect command: unblock a paused loop.
 
     Requires architect token. Both next_role and stage are optional;
@@ -307,7 +311,7 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
             raise ValueError(
                 f"Decision-response file is empty: {file_path}")
 
-    loop_id, role, loop_dir = resolve_token(token)
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
     if role != "architect":
         raise PermissionError("Unblock requires the architect token")
 
@@ -372,12 +376,12 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
     return loop_id, loop_dir
 
 
-def handle_pause(token, message=None):
+def handle_pause(token, message=None, loop_dir=None):
     """Architect command: pause a running loop.
 
     Requires architect token. Transitions to paused_by_architect.
     """
-    loop_id, role, loop_dir = resolve_token(token)
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
     if role != "architect":
         raise PermissionError("Pause requires the architect token")
 
@@ -407,7 +411,7 @@ def handle_pause(token, message=None):
     return loop_id, loop_dir
 
 
-def handle_interject(token, message):
+def handle_interject(token, message, loop_dir=None):
     """Architect command: inject guidance without pausing.
 
     Requires architect token. Stores message in session, emits event,
@@ -416,7 +420,7 @@ def handle_interject(token, message):
     if not message or not message.strip():
         raise ValueError("Interjection message is required")
 
-    loop_id, role, loop_dir = resolve_token(token)
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
     if role != "architect":
         raise PermissionError("Interject requires the architect token")
 
@@ -442,12 +446,12 @@ def handle_interject(token, message):
     return loop_id, loop_dir
 
 
-def handle_end(token, reason=None):
+def handle_end(token, reason=None, loop_dir=None):
     """Architect command: terminate the loop prematurely.
 
     Requires architect token. Transitions to ended_by_architect.
     """
-    loop_id, role, loop_dir = resolve_token(token)
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
     if role != "architect":
         raise PermissionError("End requires the architect token")
 

@@ -1,31 +1,28 @@
 # Charter: [Module Name]
 
-**Covers**: `path/to/module/`
+**Covers**: `path/to/module/**`
 
 ## Owns
 
-[What this module is responsible for]
+[Durable responsibilities and contracts. Keep this about ownership, not history.]
 
 ## Does Not Own
 
-[What belongs elsewhere — prevents scope creep]
-
----
+[Adjacent responsibilities that belong elsewhere.]
 
 ### function_name(args)
 File: path/to/file.py
-[One line: what it does]
-Models: [what it reads/writes — e.g., User(R), Order(RW)]
-← [callers — what calls this]
-→ [callees — what this calls]
-! [tripwire — non-obvious behavior to preserve]
-
----
+[One line describing behavior and important state access.]
+Filesystem: [important paths and R/W mode, if any]
+<- [callers or entry points]
+-> [callees or dependencies]
+! [non-obvious invariant to preserve]
 
 ## Before Changing This Module
 
-[Institutional knowledge: implicit contracts, stubs, intentional decisions]
+- [Contract or boundary to verify.]
+- [Focused validation to run.]
 
 ## Connections
 
-→ [Other Charter](other-module.md) — why the link exists
+-> [Other Charter] - replace this placeholder with a real relative link and explain the boundary

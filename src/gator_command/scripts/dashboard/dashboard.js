@@ -32,6 +32,7 @@
     repo:     { title: "Repo",     subtitle: "" },
     docs:     { title: "Docs",     subtitle: "" },
     updates:  { title: "Updates",  subtitle: "" },
+    loop:     { title: "Loop",     subtitle: "" },
     settings: { title: "Settings", subtitle: "" },
   };
 
@@ -42,6 +43,7 @@
   const refreshBtn     = document.getElementById("refresh-btn");
   const repoTab        = document.getElementById("repo-tab");
   const docsTab        = document.getElementById("docs-tab");
+  const loopTab        = document.getElementById("loop-tab");
   const topbarTitle    = document.getElementById("topbar-title");
 
   // ── sidebar toggle ────────────────────────────────────────────────────────
@@ -87,7 +89,7 @@
 
   // ── view routing ───────────────────────────────────────────────────────────
 
-  function showView(name, extra) {
+  function showView(name, extra, repoKeyOverride) {
     // Tear down the previous view's lifecycle resources (poll timers, global
     // listeners) before rendering the next. Only the repo view registers any;
     // the hook is null otherwise. This is what stops the auto-refresh poll
@@ -156,10 +158,17 @@
         return;
       }
       state.activeRepo = repoName;
-      // Resolve repo_key from fleet data
-      const allRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
-      const matchedRepo = allRepos.find(r => r.name === repoName);
-      state.activeRepoKey = (matchedRepo && matchedRepo.repo_key) || null;
+      // Resolve repo_key: explicit override from gatorNavToRepo wins;
+      // otherwise always re-resolve from fleet data so a stale key
+      // from a prior repo selection never persists across name-only
+      // navigation (URL query param, sidebar re-click, refresh).
+      if (repoKeyOverride) {
+        state.activeRepoKey = repoKeyOverride;
+      } else {
+        const allRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
+        const matchedRepo = allRepos.find(r => r.name === repoName);
+        state.activeRepoKey = (matchedRepo && matchedRepo.repo_key) || null;
+      }
       // Update repo sidebar label
       repoTab.textContent = "";
       const icon = document.createElement("span");
@@ -169,6 +178,7 @@
       repoTab.appendChild(document.createTextNode(" " + repoName));
       repoTab.classList.remove("dimmed");
       if (docsTab) docsTab.classList.remove("dimmed");
+      if (loopTab) loopTab.classList.remove("dimmed");
       // Find branch from fleet data
       const fleetRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
       const repoInfo = fleetRepos.find(r => r.name === repoName);
@@ -285,6 +295,22 @@
       return;
     }
 
+    if (name === "loop") {
+      const repoName = state.activeRepo;
+      if (!repoName) {
+        updateTopbar("loop", "Select a repo from Fleet");
+        viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view first.</p>";
+        return;
+      }
+      updateTopbar("loop", repoName);
+      if (views.loop) {
+        views.loop(state.data, viewSlot, repoName, state.activeRepoKey);
+      } else {
+        viewSlot.innerHTML = "<p class='muted'>Loop view not available.</p>";
+      }
+      return;
+    }
+
     if (name === "settings") {
       updateTopbar("settings", "Fleet settings");
       if (views.settings) {
@@ -304,7 +330,7 @@
     const item = e.target.closest(".sidebar-item");
     if (!item || item.classList.contains("dimmed") || item.classList.contains("placeholder")) return;
     const view = item.dataset.view;
-    if ((view === "repo" || view === "docs") && !state.activeRepo) return;
+    if ((view === "repo" || view === "docs" || view === "loop") && !state.activeRepo) return;
     showView(view);
   });
 
@@ -385,8 +411,8 @@
 
   // ── repo navigation (called by fleet view) ─────────────────────────────────
 
-  window.gatorNavToRepo = function (repoName) {
-    showView("repo", repoName);
+  window.gatorNavToRepo = function (repoName, repoKey) {
+    showView("repo", repoName, repoKey || undefined);
   };
 
   // ── refresh ────────────────────────────────────────────────────────────────

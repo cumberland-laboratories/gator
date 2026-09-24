@@ -14,6 +14,8 @@ Host Contract:
   Timeout enforcement: writes session.json + events.jsonl (inside session lock)
 """
 
+import json as _json
+import os
 import shutil
 import sys
 import time
@@ -46,31 +48,136 @@ from state_machine import (
 
 POLL_INTERVAL = 2.0  # seconds
 
+HOST_LOCK_FILENAME = "host.lock"
+START_LOCK_FILENAME = "start.lock"
+
 
 # ---------------------------------------------------------------------------
-# Initialization — gator loop start
+# Platform-aware non-blocking exclusive file lock
 # ---------------------------------------------------------------------------
 
-def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
-    """Initialize a new loop session and enter the watch loop.
+if sys.platform == "win32":
+    import msvcrt
 
-    1. Validate sketch file
-    2. Create loop directory under .gator/loops/
-    3. Copy sketch, generate tokens, write session + initial event
-    4. Print startup banner with tokens
-    5. Enter watch loop (blocks until terminal state)
+    def _try_lock_exclusive_nb(fd):
+        """Try non-blocking exclusive lock. Returns True on success."""
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except (OSError, IOError):
+            return False
 
-    Returns the loop_id (after the watch loop exits).
+    def _unlock_fd(fd):
+        """Release lock on raw fd (Windows)."""
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        except (OSError, IOError):
+            pass
+else:
+    import fcntl
+
+    def _try_lock_exclusive_nb(fd):
+        """Try non-blocking exclusive lock. Returns True on success."""
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except (OSError, IOError):
+            return False
+
+    def _unlock_fd(fd):
+        """Release lock on raw fd (POSIX)."""
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except (OSError, IOError):
+            pass
+
+
+def acquire_host_lock(loop_dir):
+    """Open and acquire host.lock non-blocking. Returns fd or None."""
+    lock_path = Path(loop_dir) / HOST_LOCK_FILENAME
+    try:
+        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT)
+    except OSError:
+        return None
+    if _try_lock_exclusive_nb(fd):
+        return fd
+    os.close(fd)
+    return None
+
+
+def release_host_lock(fd):
+    """Release and close a held host lock fd."""
+    if fd is None:
+        return
+    try:
+        _unlock_fd(fd)
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def acquire_start_lock(loops_base):
+    """Open and acquire start.lock non-blocking. Returns fd or None."""
+    lock_path = Path(loops_base) / START_LOCK_FILENAME
+    try:
+        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT)
+    except OSError:
+        return None
+    if _try_lock_exclusive_nb(fd):
+        return fd
+    os.close(fd)
+    return None
+
+
+def release_start_lock(fd):
+    """Release and close a held start lock fd."""
+    release_host_lock(fd)
+
+
+def write_host_metadata(fd, nonce):
+    """Write diagnostic metadata to the host lock file."""
+    import secrets
+    meta = _json.dumps({
+        "pid": os.getpid(),
+        "nonce": nonce,
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
+    })
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.ftruncate(fd, 0)
+        os.write(fd, meta.encode("utf-8"))
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Initialization — extracted from start_loop for dashboard reuse
+# ---------------------------------------------------------------------------
+
+def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
+              repo_root=None):
+    """Create a new loop session on disk.
+
+    When ``repo_root`` is provided (dashboard path), it is used directly.
+    When ``repo_root`` is None (CLI path), ``find_gator_root()`` discovers
+    the repo from cwd — no behavioral change for CLI callers.
+
+    Returns ``(loop_id, loop_dir)`` without entering the watch loop.
     """
-    # Validate sketch
     sketch = Path(sketch_path)
     if not sketch.exists():
         raise FileNotFoundError(f"Sketch file not found: {sketch_path}")
     if sketch.stat().st_size == 0:
         raise ValueError(f"Sketch file is empty: {sketch_path}")
 
-    # Resolve repo root and create loop directory
-    repo_root = find_gator_root()
+    if repo_root is None:
+        repo_root = find_gator_root()
+    else:
+        repo_root = Path(repo_root)
+
     loop_id = make_loop_id(feature)
     loops_base = repo_root / ".gator" / "loops"
     loops_base.mkdir(parents=True, exist_ok=True)
@@ -79,12 +186,10 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
     loop_dir = loops_base / loop_id
     loop_dir.mkdir()
 
-    # Copy sketch
     sketch_dest = loop_dir / "sketch.md"
     shutil.copy2(str(sketch), str(sketch_dest))
     _make_readonly(sketch_dest)
 
-    # Generate tokens (three roles: draftor, reviewer, architect)
     tok_d, nonce_d = make_token(loop_id, "draftor")
     tok_r, nonce_r = make_token(loop_id, "reviewer")
     tok_a, nonce_a = make_token(loop_id, "architect")
@@ -94,22 +199,89 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
         "architect": {"nonce": nonce_a, "token": tok_a},
     })
 
-    # Write initial session
     session = create_session(feature, loop_id, max_rounds, turn_timeout)
     save_session(loop_dir, session)
 
-    # Write initial event
     create_events_file(loop_dir)
     emit_event(loop_dir, {
         "event": "loop_started",
         "detail": "Loop initialized",
     })
 
-    # Print startup banner
-    _print_banner(loop_id, feature, max_rounds, turn_timeout, tok_d, tok_r, tok_a)
+    return loop_id, loop_dir
 
-    # Enter watch loop (blocks)
-    watch_loop(loop_dir)
+
+def find_active_loop(loops_base):
+    """Scan loops_base for any non-terminal session. Returns loop_id or None."""
+    loops_base = Path(loops_base)
+    if not loops_base.is_dir():
+        return None
+    for entry in sorted(loops_base.iterdir()):
+        if not entry.is_dir() or entry.name.startswith("."):
+            continue
+        session_file = entry / "session.json"
+        if not session_file.is_file():
+            continue
+        try:
+            session = _json.loads(session_file.read_text(encoding="utf-8"))
+            if not is_terminal(session):
+                return entry.name
+        except (OSError, _json.JSONDecodeError, KeyError):
+            continue
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Initialization — gator loop start (CLI entry point)
+# ---------------------------------------------------------------------------
+
+def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
+    """Initialize a new loop session and enter the watch loop.
+
+    Acquires ``start.lock`` to enforce one-active-loop-per-repo, then
+    ``host.lock`` for exclusive host ownership. Delegates initialization
+    to ``init_loop()`` and watch to ``watch_loop()``.
+
+    Returns the loop_id (after the watch loop exits).
+    """
+    repo_root = find_gator_root()
+    loops_base = repo_root / ".gator" / "loops"
+    loops_base.mkdir(parents=True, exist_ok=True)
+
+    start_fd = acquire_start_lock(loops_base)
+    if start_fd is None:
+        raise RuntimeError("Another loop start is in progress")
+
+    try:
+        existing = find_active_loop(loops_base)
+        if existing:
+            raise RuntimeError(
+                f"An active loop already exists: {existing}")
+
+        loop_id, loop_dir = init_loop(
+            feature, sketch_path, max_rounds, turn_timeout,
+            repo_root=repo_root)
+
+        host_fd = acquire_host_lock(loop_dir)
+        if host_fd is None:
+            raise RuntimeError("Failed to acquire host lock")
+    finally:
+        release_start_lock(start_fd)
+
+    from session import load_tokens
+    tokens = load_tokens(loop_dir)
+
+    _print_banner(
+        loop_id, feature, max_rounds, turn_timeout,
+        tokens["draftor"]["token"],
+        tokens["reviewer"]["token"],
+        tokens["architect"]["token"],
+    )
+
+    try:
+        watch_loop(loop_dir, host_lock_fd=host_fd)
+    finally:
+        release_host_lock(host_fd)
 
     return loop_id
 
@@ -164,14 +336,22 @@ def _format_timeout(seconds):
 # Watch loop
 # ---------------------------------------------------------------------------
 
-def watch_loop(loop_dir):
+def watch_loop(loop_dir, host_lock_fd=None):
     """Tail events.jsonl, render log lines, enforce turn timeouts.
 
     Runs until a terminal state is reached. During paused states
     (blocked_on_architect), the host stays alive but suspends timeout
     enforcement — it continues rendering events (e.g., loop_unblocked).
+
+    ``host_lock_fd`` is the already-held host.lock file descriptor.
+    This function writes diagnostic metadata to it but never closes
+    or releases it — the caller owns the fd.
     """
     loop_dir = Path(loop_dir)
+
+    if host_lock_fd is not None:
+        import secrets
+        write_host_metadata(host_lock_fd, secrets.token_hex(4))
     events_path = loop_dir / "events.jsonl"
 
     # Start from current end of file (initial event already printed

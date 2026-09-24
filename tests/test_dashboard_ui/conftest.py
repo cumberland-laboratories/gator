@@ -28,6 +28,10 @@ from . import test_responsive_shell_seed  # noqa: F401
 # import registers `seed_syntax_fixtures` on the harness BEFORE
 # any fixture builds the fleet.
 from . import test_syntax_highlight_seed  # noqa: F401
+# Loop workspace (v2.14.1) — module-scope import registers
+# `seed_loop_fixtures` on the harness BEFORE any fixture builds
+# the fleet.
+from . import test_loop_seed  # noqa: F401
 
 
 # ── §4.1: in-process dashboard module loader ──────────────────────

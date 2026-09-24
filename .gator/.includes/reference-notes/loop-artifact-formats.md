@@ -50,6 +50,13 @@ The plan is the draftor's proposed implementation. It should be specific enough 
 ```markdown
 # Implementation Plan: <feature name>
 
+## Executive Summary
+
+<Four bullets or ~120 words: what this plan proposes, the key design
+decision, the main risk, and the verification approach. This section
+is extracted by the Dashboard for at-a-glance inspection — keep it
+bounded and self-contained.>
+
 ## Summary
 
 <2-4 sentences: what this plan proposes, grounded in the sketch>
@@ -118,6 +125,13 @@ Findings are the reviewer's assessment. They should be specific, numbered, and a
 
 ```markdown
 # Review: <feature name>
+
+## Executive Summary
+
+<Four bullets or ~120 words: the verdict, the most important finding,
+what looks strong, and whether the plan is ready. Extracted by the
+Dashboard for at-a-glance inspection — keep it bounded and
+self-contained.>
 
 ## Verdict
 
