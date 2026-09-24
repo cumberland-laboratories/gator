@@ -1307,7 +1307,15 @@ os.close(fd)
         assert status == 201
 
         loops_base = repo / ".gator" / "loops"
-        fd = acquire_start_lock(loops_base)
+        # Brief retry: server handler's finally block may not have run
+        # by the time the HTTP response is received by the client.
+        import time
+        fd = None
+        for _ in range(20):
+            fd = acquire_start_lock(loops_base)
+            if fd is not None:
+                break
+            time.sleep(0.05)
         assert fd is not None, "start.lock should be released after success"
         release_start_lock(fd)
 
@@ -1340,7 +1348,15 @@ os.close(fd)
             {"feature": "slconfl-feat", "sketch_path": str(sketch)})
         assert status == 409
 
-        fd = acquire_start_lock(loops_dir)
+        # Brief retry: server handler's finally block may not have run
+        # by the time the HTTP response is received by the client.
+        import time
+        fd = None
+        for _ in range(20):
+            fd = acquire_start_lock(loops_dir)
+            if fd is not None:
+                break
+            time.sleep(0.05)
         assert fd is not None, "start.lock should be released after 409"
         release_start_lock(fd)
 
