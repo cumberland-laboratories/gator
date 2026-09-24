@@ -81,7 +81,7 @@ Shared behavior needed by both products belongs behind an explicit library contr
 
 ## Package and License Surface
 
-`src/gator_command/cli.py` is the installed command router. Adding or removing a public subcommand requires coordinated parser, packaging, help, and installed-wheel coverage.
+`src/gator_command/cli.py` is the installed command router. Adding or removing a public subcommand requires coordinated parser, packaging, help, and installed-wheel coverage. `VERSION` and `pyproject.toml` version fields must agree; the release-candidate workflow validates this.
 
 The repository is Apache-2.0. Preserve `LICENSE`, `NOTICE`, and contributor provenance requirements when adding third-party assets or code.
 

@@ -2,6 +2,29 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.15.0] — 2026-09-23
+
+Feature release. Adds the full Dashboard Loop Workspace — six modules covering loop enumeration, read-only UI, loop start and prompt, Architect controls, and executive summary extraction and display.
+
+### Added
+
+- **Loop enumeration API (Modules 1–2)** — `_resolve_repo_by_key()` and `_resolve_loop_dir()` shared resolvers with path-traversal, symlink/reparse, and structural containment rejection. `/api/repo-by-key/<key>/loops/` list endpoint (sorted by recency), `/status` endpoint (allowlisted fields), `/events` endpoint (event timeline from `events.jsonl`).
+- **Read-only loop workspace UI (Module 3)** — Loop sidebar tab, loop list with active/paused sort priority, status panel (stage badge, round progress, role state, time remaining, blocked-on-architect card), event timeline, collapsible artifact inspector with XSS-safe rendering, 3s polling with terminal-state stop, generation-guarded async rendering, mount resurrection protection, and stable fleet identity propagation.
+- **Loop start and prompt API (Module 4)** — `init_loop()` extraction from `start_loop()`, platform-aware non-blocking file locking (`host.lock`/`start.lock` with `msvcrt` on Windows, `fcntl` on POSIX), host registry with orphan adoption on dashboard startup, `POST /start` endpoint, `/prompt` endpoint with `Cache-Control: no-store`.
+- **Architect controls (Module 5)** — Dashboard API endpoints for pause, interject, unblock, and end actions. Contextual UI with inline message input, error display with retry preservation. `resolve_token()` accepts explicit `loop_dir` for dashboard-side calls.
+- **Executive summary extraction (Module 6)** — `extractSummary()` with case-insensitive `## Executive Summary` heading match, truncation at 500 chars. Summary rendered in artifact inspector and timeline event cards. Absent-summary fallback. "View full artifact" link navigates from timeline to inspector. Summary requirement added to all producer paths (entry points, `/loop-join` command, protocol, artifact format reference).
+- **Immutable `artifact_path` on submission events** — `draft_submitted` carries `plan.round-{R}.md`, reviewer outcomes (`revision_requested`, `plan_approved`, `max_rounds_exceeded`) carry `findings.round-{R}.md` where R is the pre-advance round. Timeline consumes this explicit field instead of derived mapping.
+- **Loop artifact endpoint** — serves allowlisted markdown artifacts (`sketch.md`, `plan.current.md`, `findings.current.md`, round files, decision docs) as `text/plain` with reparse/symlink rejection.
+- **318 tests** — 147 backend loop tests, 139 dashboard API tests (security, controls, cross-repo isolation, numeric validation, host ownership, concurrent start), 32 Playwright browser tests (navigation, list, status, timeline, artifacts, XSS escaping, controls, summary extraction).
+
+### Changed
+
+- `start_loop()` rewritten to use lock flow: `start.lock` → scan → `init_loop()` → `host.lock` → release `start.lock` → `watch_loop()` → release `host.lock`.
+- `handle_pause()`, `handle_interject()`, `handle_end()`, `handle_unblock()` in `submit.py` accept optional `loop_dir` parameter for dashboard-side calls.
+- `ensure_loops_gitignore()` updated with `host.lock` and `start.lock` rules.
+- `render_entry_content()` includes executive summary submission requirement.
+- Dashboard HTML/CSS/JS updated with Loop nav item, view dispatch, and full loop workspace styles.
+
 ## [2.14.1] — 2026-09-20
 
 Patch release. Adds the ability to remove repositories from the dashboard registry through the UI, completing [#33](https://github.com/cumberland-laboratories/gator/issues/33).
