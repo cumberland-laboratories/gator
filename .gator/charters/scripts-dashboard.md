@@ -122,15 +122,16 @@ Resolve `repo_key` (path-hash) to registered repo path, then validate `loop_id` 
 ! Containment is structural: `loops_root_resolved in loop_dir.parents` and `repo_root_resolved in loops_root_resolved.parents` — immune to same-prefix sibling attacks (`loops-escape`).
 ! List handler skips reparse/symlink entries via `_is_reparse_point()` and refuses to iterate when `.gator` or `loops` is a reparse point.
 
-### _dispatch_loop_get() / _handle_loop_list() / _handle_loop_status() / _handle_loop_events() / _handle_loop_artifact()
+### _dispatch_loop_get() / _handle_sketch_sources() / _handle_loop_list() / _handle_loop_status() / _handle_loop_events() / _handle_loop_artifact()
 File: src/gator_command/scripts/gator-dashboard.py
-Route `/api/repo-by-key/<repo_key>/loops/...` GET requests. List loops for a repo (sorted by recency, symlinks skipped), return allowlisted session status fields (no tokens, no schema), return the event timeline as a JSON array, or serve allowlisted markdown artifacts.
+Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scoped utility routes (`/sketch-sources`) and loop routes (`/loops/...`). List loops for a repo (sorted by recency, symlinks skipped), return allowlisted session status fields (no tokens, no schema), return the event timeline as a JSON array, serve allowlisted markdown artifacts, or list candidate sketch source files.
 <- `do_GET()` via prefix match on `/api/repo-by-key/`
 -> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.session.load_session()`, `loop.events.read_all_events()`
 ! Read-only. No imports from `submit.py`. No token access. `.tokens.json` and `session.lock` never served.
+! **Sketch sources** (`GET /api/repo-by-key/<key>/sketch-sources`): scans `.gator/artifacts/`, `.gator/threads/`, `.gator/active-threads/` for `.md` files. Returns `{path, name, size, modified}` sorted newest-first. Skips candidate directories that are reparse points/symlinks; excludes hidden files, symlink entries, and reparse-point entries. Uses `_resolve_repo_by_key()` for containment — no user-supplied path component. The `/sketch-sources` route is dispatched inside `_dispatch_loop_get()` before the `/loops` branches.
 ! Status response uses `_LOOP_STATUS_ALLOWED_KEYS` allowlist — only known-safe fields appear in GET responses. Unknown/future fields are silently dropped.
 ! Events endpoint validates `events.jsonl` against symlink/reparse before reading — `is_symlink()` pre-existence, `_is_reparse_point()` post-existence — then returns the raw event timeline via the existing `read_all_events()` reader; missing events file returns an empty array.
-! Artifact endpoint uses `_LOOP_ARTIFACT_ALLOWLIST` plus pattern prefixes — only known markdown artifacts are served (sketch, plan, findings, decision docs). `.tokens.json`, `session.json`, `session.lock`, and `events.jsonl` are never served. Served as `text/plain; charset=utf-8`. Reparse/symlink check on the artifact file itself.
+! Artifact endpoint uses `_LOOP_ARTIFACT_ALLOWLIST` plus `_LOOP_ARTIFACT_PATTERNS` — only known markdown artifacts are served (sketch, plan, findings, decision docs). Decision artifact patterns are tightened to match production filenames exactly: `decision-request.decision-<N>.round-<R>.md` and `decision-response.decision-<N>.md` (integer-only IDs, no arbitrary segments). `.tokens.json`, `session.json`, `session.lock`, and `events.jsonl` are never served. Served as `text/plain; charset=utf-8`. Reparse/symlink check on the artifact file itself.
 
 ### _dispatch_loop_post() / _handle_loop_start() / _handle_loop_prompt()
 File: src/gator_command/scripts/gator-dashboard.py

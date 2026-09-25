@@ -163,7 +163,31 @@ in your repo; the contract's canonical form lives in the Gator source tree
 (`contracts/schemas/gator-blueprint-html-v1.md`) and is not shipped to fleet
 repos.
 
-### 4. Fill the content
+### 4. Write in ASD-STE100-style Simplified Technical English
+
+Apply this standard to all reader-facing prose in the document: headings,
+summary callouts, body text, table labels, captions, and warnings. The goal is
+clear technical communication, not a shorter document at the cost of omitted
+constraints.
+
+- Use direct, concise sentences. Give one instruction or one main idea in each
+  sentence.
+- Use active voice and direct verbs. Write commands as commands when the
+  reader must act.
+- Use one consistent term for one concept. Do not rotate through synonyms for
+  style.
+- Prefer lists or tables for conditions, options, comparisons, and sequences.
+- Define a necessary technical term once. Do not replace it later with vague
+  references such as “this,” “that,” or “it” when the referent is unclear.
+- Remove scene-setting, rhetorical transitions, and repeated conclusions.
+- Keep every constraint, risk, exception, and decision that the reader needs.
+  Simplification must not reduce technical precision.
+
+This is an ASD-STE100-style authoring requirement. Do not claim that a document
+is formally ASD-STE100 compliant unless it has been checked against the
+official writing rules and controlled dictionary.
+
+### 5. Fill the content
 
 **Cumberland master** (`cumberland-html-document-template.html`):
 
@@ -198,7 +222,7 @@ repos.
 - The `.diagram` slot is optional — use for static ASCII/SVG diagrams, or
   delete the block.
 
-### 5. Save + announce
+### 6. Save + announce
 
 Save to the location chosen in step 2. Announce the path to the Architect
 so they can open it in the Dashboard's file browser (per-repo file list,
@@ -208,6 +232,9 @@ click → opens in new tab).
 
 Before you consider the artifact done:
 
+- **Simplified Technical English pass complete.** Reader-facing prose follows
+  Step 4. Do not label the document formally ASD-STE100 compliant without an
+  official rules-and-dictionary check.
 - **All `==TODO==` markers removed.** Applies to every template.
 - **Self-contained.** No `<script src="...">` or `<link rel="stylesheet" href="...">`
   pulling from a CDN. All CSS + JS inlined. Applies to every template.

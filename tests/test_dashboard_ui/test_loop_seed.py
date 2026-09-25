@@ -28,6 +28,8 @@ from . import _harness as _h
 _ACTIVE_LOOP_ID = "active-loop-2026-09-22T10-00-00Z"
 _DONE_LOOP_ID = "done-loop-2026-09-20T10-00-00Z"
 _XSS_LOOP_ID = "xss-loop-2026-09-21T10-00-00Z"
+_BLOCKED_LOOP_ID = "blocked-loop-2026-09-23T10-00-00Z"
+_ROUNDZERO_LOOP_ID = "roundzero-loop-2026-09-24T10-00-00Z"
 
 
 def _make_session(loop_id, feature, stage, round_num, max_rounds,
@@ -142,6 +144,93 @@ def seed_loop_fixtures(repo):
     (xss / "sketch.md").write_text(
         '<script>alert("xss")</script><img src=x onerror=alert(1)>',
         encoding="utf-8")
+
+    # Blocked loop with decisions
+    blocked = loops / _BLOCKED_LOOP_ID
+    blocked.mkdir()
+    blocked_session = _make_session(
+        _BLOCKED_LOOP_ID, "blocked-feature", "blocked_on_architect",
+        round_num=1, max_rounds=3,
+        blocked=True, escalation_reason="Needs Architect input on scope",
+    )
+    blocked_session["decisions"] = [
+        {
+            "id": "decision-1",
+            "request": {
+                "artifact_path": "decision-request.decision-1.round-1.md",
+                "reason": "Scope ambiguity",
+            },
+            "response": {
+                "artifact_path": "decision-response.decision-1.md",
+                "action": "resolved",
+            },
+        },
+        {
+            "id": "decision-2",
+            "request": {
+                "artifact_path": "decision-request.decision-2.round-1.md",
+                "reason": "Resource allocation",
+            },
+            "response": None,
+        },
+    ]
+    (blocked / "session.json").write_text(
+        json.dumps(blocked_session, indent=2), encoding="utf-8")
+    (blocked / "events.jsonl").write_text(
+        _make_events([
+            {"event": "loop_started", "ts": "2026-09-23T10:00:00Z",
+             "round": 0},
+            {"event": "draft_submitted", "ts": "2026-09-23T10:01:00Z",
+             "round": 1, "role": "draftor",
+             "artifact_path": "plan.round-1.md"},
+            {"event": "escalated", "ts": "2026-09-23T10:02:00Z",
+             "round": 1, "role": "reviewer",
+             "reason": "Needs Architect input on scope"},
+        ]), encoding="utf-8")
+    (blocked / "sketch.md").write_text(
+        "# Blocked Feature\n\nBlocked sketch.\n", encoding="utf-8")
+    (blocked / "plan.round-1.md").write_text(
+        "# Plan\n\n## Executive Summary\n\nBlocked plan content\n",
+        encoding="utf-8")
+    (blocked / "plan.current.md").write_text(
+        "# Plan\n\n## Executive Summary\n\nBlocked plan content\n",
+        encoding="utf-8")
+    (blocked / "decision-request.decision-1.round-1.md").write_text(
+        "# Decision Request 1\n\nScope question.\n", encoding="utf-8")
+    (blocked / "decision-response.decision-1.md").write_text(
+        "# Decision Response 1\n\nResolved.\n", encoding="utf-8")
+    (blocked / "decision-request.decision-2.round-1.md").write_text(
+        "# Decision Request 2\n\nResource allocation question.\n",
+        encoding="utf-8")
+    (blocked / "findings.current.md").write_text(
+        "# Findings\n\nPending.\n", encoding="utf-8")
+
+    # Round-zero loop (active, round 0 draft submitted)
+    rz = loops / _ROUNDZERO_LOOP_ID
+    rz.mkdir()
+    (rz / "session.json").write_text(
+        json.dumps(_make_session(
+            _ROUNDZERO_LOOP_ID, "roundzero-test", "plan_review",
+            round_num=0, max_rounds=3,
+        ), indent=2), encoding="utf-8")
+    (rz / "events.jsonl").write_text(
+        _make_events([
+            {"event": "loop_started", "ts": "2026-09-24T10:00:00Z",
+             "round": 0},
+            {"event": "draft_submitted", "ts": "2026-09-24T10:01:00Z",
+             "round": 0, "role": "draftor",
+             "artifact_path": "plan.round-0.md"},
+        ]), encoding="utf-8")
+    (rz / "sketch.md").write_text(
+        "# Round Zero Sketch\n\nRound zero test.\n", encoding="utf-8")
+    (rz / "plan.round-0.md").write_text(
+        "# Plan v0\n\n## Executive Summary\n\nRound zero plan\n",
+        encoding="utf-8")
+    (rz / "plan.current.md").write_text(
+        "# Plan v0\n\n## Executive Summary\n\nRound zero plan\n",
+        encoding="utf-8")
+    (rz / "findings.current.md").write_text(
+        "# Findings\n\nPending review.\n", encoding="utf-8")
 
 
 _h.seed_loop_fixtures = seed_loop_fixtures  # noqa: reassign stub

@@ -164,6 +164,8 @@ Exception: if the piece is a **Blueprint** (`charter-map`, `feature-blueprint`, 
 
 Style (Cumberland visual grammar), role (destination path), and protocol (`gator-blueprint-html-v1` metadata) are three separate concerns. Every HTML document Gator produces uses the Cumberland style; role determines the path; protocol applies only to Blueprints.
 
+Write all reader-facing HTML prose in ASD-STE100-style Simplified Technical English: use direct, concise sentences; one instruction or idea per sentence; active voice; and controlled, consistent terms. Do not claim formal ASD-STE100 compliance unless the document has been checked against the official standard and dictionary. See [`procedures/authoring-html-artifacts.md`](procedures/authoring-html-artifacts.md) for the authoring checklist.
+
 ## Field Guides
 
 Field guides are optional language-specific pattern references in `.gator/field-guides/`. Consult when writing new code in a language that has a guide — same cadence as reference-notes (situational, not always-loaded). If no guide exists for a language, that's normal. Generation procedure: → [`procedures/field-guide-generation.md`](procedures/field-guide-generation.md)

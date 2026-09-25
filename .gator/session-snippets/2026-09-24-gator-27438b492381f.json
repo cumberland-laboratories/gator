@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "ag",
+  "agent": "claude-opus-4-6",
+  "intent": "Fix start.lock race on Linux CI",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "dashboard",
+    "loop"
+  ],
+  "commit": "27438b492381f47fe65ce2a9c45b55021f425ab5",
+  "short_commit": "27438b4",
+  "snippet_id": "snippet-27438b492381f",
+  "session_group_key": "anthropic:cb9a4c63-1bbc-404a-9255-3e500a30471b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "c83b686282a80e11c26516d4b769abbabd292d75",
+  "started_at": "2026-09-24T00:39:41Z",
+  "ended_at": "2026-09-24T01:13:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-09-24-gator-c83b686282a80.json",
+    "tests/test_dashboard_loops.py"
+  ],
+  "notes": [
+    "Fix `test_start_lock_released_after_success` and `test_start_lock_released_on_active_conflict` race condition on Linux: add retry loop for lock acquisition after HTTP response, since server's `finally` block may not have executed by the time the client processes the response"
+  ],
+  "transcript_session_id": "cb9a4c63-1bbc-404a-9255-3e500a30471b",
+  "transcript_ref": null
+}

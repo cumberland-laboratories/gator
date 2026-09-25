@@ -38,7 +38,7 @@ def _navigate_to_loop(page, fleet, repo="alpha"):
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-list", timeout=10000)
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
     return page
 
 
@@ -65,9 +65,8 @@ def test_loop_view_renders_workspace_layout(page, dashboard_fleet):
     main panel sections."""
     _navigate_to_loop(page, dashboard_fleet)
     assert page.locator(".loop-workspace").count() == 1
-    assert page.locator("#loop-list").count() == 1
-    assert page.locator("#loop-status-panel").count() == 1
-    assert page.locator("#loop-timeline").count() == 1
+    assert page.locator("#loop-sidebar-nav").count() == 1
+    assert page.locator("#loop-main-content").count() == 1
 
 
 # ── loop list ────────────────────────────────────────────────────────────────
@@ -317,10 +316,10 @@ def test_loop_view_empty_state_for_repo_without_loops(
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-list", timeout=10000)
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
     text = page.evaluate(
-        "() => document.getElementById('loop-list').textContent")
-    assert "No loops" in text, (
+        "() => document.getElementById('loop-sidebar-nav').textContent")
+    assert "No active loop" in text, (
         "Empty-state message expected for repo with no loops")
 
 
@@ -354,7 +353,7 @@ def test_name_only_navigation_resolves_fresh_key(page, dashboard_fleet):
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-list", timeout=10000)
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
     page.unroute("**/api/repo-by-key/*/loops*")
     assert len(requests_made) > 0, "Expected at least one Loop API request"
     for url in requests_made:
@@ -395,7 +394,7 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-list", timeout=10000)
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
 
     page.evaluate(
         "() => document.querySelector("
@@ -484,7 +483,7 @@ def test_duplicate_name_fleet_row_uses_clicked_key(page, dashboard_fleet):
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-list", timeout=10000)
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
     page.unroute("**/api/repo-by-key/*/loops*")
 
     assert len(requests_made) > 0, "Expected at least one Loop API request"
@@ -866,3 +865,1043 @@ def test_timeline_artifact_link_opens_inspector(page, dashboard_fleet):
         arg=artifact_name,
         timeout=10000,
     )
+
+
+# ── secondary sidebar (Module 1 / B1–B4) ──────────────────────────────────
+
+
+def test_sidebar_three_sections(page, dashboard_fleet):
+    """B1: sidebar renders Create Loop, Active header, History header."""
+    _navigate_to_loop(page, dashboard_fleet)
+    headers = page.evaluate("""
+        () => Array.from(document.querySelectorAll('.loop-sidebar-section-header'))
+            .map(el => el.textContent)
+    """)
+    assert "Active" in headers
+    assert "History" in headers
+    has_create = page.locator(".loop-sidebar-create").count() > 0
+    assert has_create, "Create Loop action should be present"
+
+
+def test_sidebar_active_and_history_classification(page, dashboard_fleet):
+    """B2: active loops in Active section, terminal in History."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+    sections = page.evaluate("""
+        () => {
+            var secs = document.querySelectorAll('.loop-sidebar-section');
+            var result = [];
+            for (var i = 0; i < secs.length; i++) {
+                var header = secs[i].querySelector('.loop-sidebar-section-header');
+                var features = Array.from(secs[i].querySelectorAll('.loop-card-feature'))
+                    .map(el => el.textContent);
+                result.push({ header: header ? header.textContent : '', features: features });
+            }
+            return result;
+        }
+    """)
+    active_sec = [s for s in sections if s["header"] == "Active"][0]
+    history_sec = [s for s in sections if s["header"] == "History"][0]
+    assert "auth-migration" in history_sec["features"], (
+        "Terminal loop should be in History section")
+    assert "auth-migration" not in active_sec["features"], (
+        "Terminal loop should not be in Active section")
+
+
+def test_sidebar_empty_sections(page, dashboard_fleet):
+    """B3: repo with no loops shows empty-state text in both sections."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    text = page.evaluate(
+        "() => document.getElementById('loop-sidebar-nav').textContent")
+    assert "No active loop" in text
+    assert "No completed loops" in text
+
+
+def test_sidebar_create_disabled_when_active(page, dashboard_fleet):
+    """B4: active loop exists → Create shows conflict, Open link works."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
+    is_disabled = page.evaluate("""
+        () => document.querySelector('.loop-sidebar-create')
+            .classList.contains('loop-sidebar-create-disabled')
+    """)
+    assert is_disabled, "Create should be disabled when active loop exists"
+    has_open_link = page.locator(".loop-sidebar-open-active").count() > 0
+    assert has_open_link, "Should show 'Open active loop' link"
+
+
+# ── state transitions (Module 6 / B5–B7) ──────────────────────────────────
+
+
+def test_no_loops_shows_create(page, dashboard_fleet):
+    """B5: no loops → creation workspace rendered."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    assert page.locator(".loop-create-workspace").count() == 1
+
+
+def test_active_loop_auto_selects_inspect(page, dashboard_fleet):
+    """B7: active loop → auto-selected, live workspace shown on mount."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    has_controls = page.locator(".loop-ctrl-btn").count() > 0
+    assert has_controls, "Active loop should show controls on mount"
+
+
+# ── creation workspace (Module 3 / B8–B12) ────────────────────────────────
+
+
+def test_creation_form_renders(page, dashboard_fleet):
+    """B8: creation workspace renders feature input, sketch picker,
+    advanced settings."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    assert page.locator("#loop-feature-input").count() == 1
+    assert page.locator("#loop-sketch-picker").count() == 1
+    assert page.locator(".loop-create-advanced").count() == 1
+    assert page.locator("#loop-create-action").count() == 1
+
+
+def test_creation_validation_blocks_empty_feature(page, dashboard_fleet):
+    """B10: empty feature → client-side validation error."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector("#loop-create-action", timeout=10000)
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+    page.wait_for_selector("#loop-create-error", timeout=5000)
+    error_visible = page.evaluate("""
+        () => {
+            var el = document.querySelector('#loop-create-error');
+            return el && el.style.display !== 'none' && el.textContent;
+        }
+    """)
+    assert error_visible, "Error should be visible for empty feature"
+    assert "Feature" in error_visible or "required" in error_visible.lower()
+
+
+def test_creation_409_shows_open_active(page, dashboard_fleet):
+    """B12: 409 race recovery shows 'Open active loop' message."""
+    import json as _json
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
+
+    # Intercept loops list to report no active loop (so Create enables)
+    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"loops": []})))
+    # Intercept sketch sources to return empty (so manual input shows)
+    page.route("**/sketch-sources", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"sources": []})))
+
+    # Re-navigate to get fresh state with empty loops
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector("#loop-create-action", timeout=10000)
+
+    # Intercept start to return 409
+    page.route("**/loops/start", lambda route: route.fulfill(
+        status=409, content_type="application/json",
+        body=_json.dumps({"error": "active loop exists", "loop_id": "test-loop"})))
+
+    # Wait for manual input to be visible (no sources → shown by default)
+    page.wait_for_selector("#loop-sketch-manual", timeout=5000)
+
+    # Fill form and submit
+    page.fill("#loop-feature-input", "test-feature")
+    page.fill("#loop-sketch-manual", ".gator/artifacts/test.md")
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+
+    page.wait_for_selector("#loop-create-error", timeout=5000)
+    page.wait_for_function(
+        "() => document.querySelector('#loop-create-error').style.display !== 'none'",
+        timeout=5000)
+    error_text = page.evaluate(
+        "() => document.querySelector('#loop-create-error').textContent")
+    assert "active" in error_text.lower()
+    assert page.locator(".loop-create-open-active").count() == 1
+
+    page.unroute("**/api/repo-by-key/*/loops")
+    page.unroute("**/loops/start")
+    page.unroute("**/sketch-sources")
+
+
+# ── live vs history workspace (Module 5 / B18–B23) ────────────────────────
+
+
+def test_active_loop_shows_controls_and_prompts(page, dashboard_fleet):
+    """B18: active loop shows controls and prompt copy."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-ctrl-btn", timeout=10000)
+    assert page.locator(".loop-ctrl-btn").count() > 0
+    assert page.locator(".loop-prompt-copy").count() == 2
+
+
+def test_terminal_loop_read_only(page, dashboard_fleet):
+    """B19: terminal loop shows outcome badge, no controls, no prompts."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "auth-migration")
+    page.wait_for_selector(".loop-badge-outcome", timeout=10000)
+    assert page.locator(".loop-badge-outcome").count() > 0
+    assert page.locator(".loop-ctrl-btn").count() == 0
+    assert page.locator(".loop-prompt-copy").count() == 0
+    has_outcome_meta = page.locator(".loop-outcome-meta").count() > 0
+    assert has_outcome_meta, "Terminal loop should show outcome meta"
+
+
+def test_blocked_loop_shows_prominent_card(page, dashboard_fleet):
+    """B20: blocked loop shows prominent blocked card with decision link."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "blocked-feature")
+    page.wait_for_selector(".loop-blocked-card", timeout=10000)
+    reason = page.evaluate(
+        "() => document.querySelector('.loop-blocked-reason').textContent")
+    assert "scope" in reason.lower()
+    assert page.locator(".loop-blocked-artifact-link").count() == 1
+
+
+def test_blocked_card_decision_link_opens_inspector(page, dashboard_fleet):
+    """B21: clicking decision link opens inspector section with content."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "blocked-feature")
+    page.wait_for_selector(".loop-blocked-artifact-link", timeout=10000)
+    artifact_name = page.evaluate(
+        "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
+    assert "decision-request" in artifact_name
+    page.evaluate(
+        "() => document.querySelector('.loop-blocked-artifact-link').click()")
+    page.wait_for_function(
+        "(name) => {"
+        "  var s = document.querySelector("
+        "    '.loop-artifact-section[data-artifact=\"' + name + '\"] .loop-artifact-pre');"
+        "  return s !== null;"
+        "}",
+        arg=artifact_name,
+        timeout=10000,
+    )
+    content = page.evaluate("""
+        (name) => {
+            var s = document.querySelector(
+                '.loop-artifact-section[data-artifact="' + name + '"] .loop-artifact-pre');
+            return s ? s.textContent : null;
+        }
+    """, artifact_name)
+    assert content is not None, "Decision artifact content should load"
+    assert "Resource" in content or "resource" in content.lower()
+
+
+def test_round_zero_artifact_via_timeline_link(page, dashboard_fleet):
+    """B23: round-zero draft event timeline link opens plan.round-0.md
+    inspector section with submitted content."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "roundzero-test")
+    # Wait for the timeline artifact link for plan.round-0.md
+    page.wait_for_function(
+        "() => {"
+        "  var links = document.querySelectorAll('.loop-timeline-artifact-link');"
+        "  for (var i = 0; i < links.length; i++) {"
+        "    if (links[i].dataset.artifact === 'plan.round-0.md') return true;"
+        "  }"
+        "  return false;"
+        "}",
+        timeout=10000,
+    )
+    # Click the timeline link
+    page.evaluate("""
+        () => {
+            var links = document.querySelectorAll('.loop-timeline-artifact-link');
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].dataset.artifact === 'plan.round-0.md') {
+                    links[i].click(); break;
+                }
+            }
+        }
+    """)
+    page.wait_for_function(
+        "() => {"
+        "  var s = document.querySelector("
+        "    '.loop-artifact-section[data-artifact=\"plan.round-0.md\"] .loop-artifact-pre');"
+        "  return s !== null;"
+        "}",
+        timeout=10000,
+    )
+    content = page.evaluate("""
+        () => {
+            var pre = document.querySelector(
+                '.loop-artifact-section[data-artifact="plan.round-0.md"] .loop-artifact-pre');
+            return pre ? pre.textContent : null;
+        }
+    """)
+    assert content is not None, "plan.round-0.md content should load"
+    assert "Round zero" in content or "round zero" in content.lower()
+
+
+def test_pending_decision_selected_over_resolved(page, dashboard_fleet):
+    """B22: blocked card with resolved older decision + later pending:
+    card links to the pending request artifact, not the resolved one."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "blocked-feature")
+    page.wait_for_selector(".loop-blocked-artifact-link", timeout=10000)
+    artifact_name = page.evaluate(
+        "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
+    assert artifact_name == "decision-request.decision-2.round-1.md", (
+        f"Blocked card should link to the pending decision-2, "
+        f"not the resolved decision-1; got: {artifact_name}")
+
+
+# ── history-only mount (B6) ────────────────────────────────────────────────
+
+
+def test_history_only_defaults_to_create(page, dashboard_fleet):
+    """B6: only history loops → creation workspace shown on mount."""
+    import json as _json
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+
+    # Intercept loops list to return only terminal loops
+    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"loops": [
+            {"loop_id": "old-loop", "feature": "old-feature",
+             "stage": "plan_approved", "round": 2, "max_rounds": 3,
+             "created_at": "2026-09-20T10:00:00Z"},
+        ]})))
+
+    # Re-navigate to pick up intercepted data
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
+    )
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    assert page.locator(".loop-create-workspace").count() == 1
+    page.unroute("**/api/repo-by-key/*/loops")
+
+
+# ── sketch picker (B9) ────────────────────────────────────────────────────
+
+
+def test_sketch_source_dropdown_and_manual_toggle(page, dashboard_fleet):
+    """B9: sketch sources populate dropdown; toggle switches to manual."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+
+    import json as _json
+    # Intercept loops to return empty (enable create)
+    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"loops": []})))
+    # Intercept sketch sources to return known files
+    page.route("**/sketch-sources", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"sources": [
+            {"path": ".gator/artifacts/sketch-a.md", "name": "sketch-a.md",
+             "size": 100, "modified": 1727200000},
+            {"path": ".gator/artifacts/sketch-b.md", "name": "sketch-b.md",
+             "size": 200, "modified": 1727100000},
+        ]})))
+
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()")
+    page.wait_for_selector("#loop-sketch-select", timeout=10000)
+
+    options = page.evaluate("""
+        () => Array.from(document.querySelectorAll('#loop-sketch-select option'))
+            .map(o => o.value).filter(v => v)
+    """)
+    assert ".gator/artifacts/sketch-a.md" in options
+    assert ".gator/artifacts/sketch-b.md" in options
+
+    # Manual input should be hidden
+    manual_hidden = page.evaluate(
+        "() => document.querySelector('#loop-sketch-manual').style.display === 'none'")
+    assert manual_hidden, "Manual input should be hidden when sources exist"
+
+    # Toggle to manual
+    page.evaluate("() => document.querySelector('#loop-sketch-toggle').click()")
+    manual_visible = page.evaluate(
+        "() => document.querySelector('#loop-sketch-manual').style.display !== 'none'")
+    assert manual_visible, "Manual input should be visible after toggle"
+    select_hidden = page.evaluate(
+        "() => document.querySelector('#loop-sketch-select').style.display === 'none'")
+    assert select_hidden, "Dropdown should be hidden after toggle"
+
+    page.unroute("**/api/repo-by-key/*/loops")
+    page.unroute("**/sketch-sources")
+
+
+# ── creation → handoff transition (B11) ────────────────────────────────────
+
+
+def test_successful_creation_transitions_to_handoff(page, dashboard_fleet):
+    """B11: successful creation transitions to handoff mode,
+    sidebar re-renders with new active loop."""
+    import json as _json
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+
+    # Intercept loops to report no loops (enable create)
+    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"loops": []})))
+    page.route("**/sketch-sources", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"sources": []})))
+
+    # Re-navigate to get create workspace
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()")
+    page.wait_for_selector("#loop-create-action", timeout=10000)
+
+    # Intercept start to succeed
+    page.route("**/loops/start", lambda route: route.fulfill(
+        status=201, content_type="application/json",
+        body=_json.dumps({"loop_id": "new-test-loop"})))
+    # After creation, loops list returns the new loop
+    page.unroute("**/api/repo-by-key/*/loops")
+    page.route("**/api/repo-by-key/*/loops", lambda route: (
+        route.fulfill(
+            status=200, content_type="application/json",
+            body=_json.dumps({"loops": [
+                {"loop_id": "new-test-loop", "feature": "test-feature",
+                 "stage": "plan_drafting", "round": 0, "max_rounds": 3,
+                 "created_at": "2026-09-24T12:00:00Z"},
+            ]}))
+        if "/status" not in route.request.url
+        and "/events" not in route.request.url
+        and "/start" not in route.request.url
+        else route.continue_()
+    ))
+    # Intercept status for the new loop
+    page.route("**/loops/new-test-loop/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": "new-test-loop", "feature": "test-feature",
+            "status": {"stage": "plan_drafting", "round": 0, "max_rounds": 3,
+                       "next_role": "draftor", "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": False},
+                      "reviewer": {"role": "reviewer", "joined": False}},
+            "decisions": [],
+        })))
+
+    # Fill and submit
+    page.wait_for_selector("#loop-sketch-manual", timeout=5000)
+    page.fill("#loop-feature-input", "test-feature")
+    page.fill("#loop-sketch-manual", ".gator/artifacts/test.md")
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+
+    # Should transition to handoff
+    page.wait_for_selector(".loop-handoff", timeout=10000)
+    assert page.locator(".loop-handoff-copy").count() == 2, (
+        "Handoff should show two copy buttons")
+
+    page.unroute("**/api/repo-by-key/*/loops")
+    page.unroute("**/loops/start")
+    page.unroute("**/sketch-sources")
+    page.unroute("**/loops/new-test-loop/status")
+
+
+# ── handoff tests (B13–B17) ──────────────────────────────────────────────
+
+
+def _enter_handoff(page, dashboard_fleet):
+    """Helper: set up a mocked handoff state by intercepting APIs."""
+    import json as _json
+
+    _navigate_to_loop(page, dashboard_fleet)
+
+    # Intercept to show no loops → create workspace
+    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"loops": []})))
+    page.route("**/sketch-sources", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"sources": []})))
+    page.route("**/loops/start", lambda route: route.fulfill(
+        status=201, content_type="application/json",
+        body=_json.dumps({"loop_id": "handoff-loop"})))
+    page.route("**/loops/handoff-loop/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": "handoff-loop", "feature": "handoff-test",
+            "status": {"stage": "plan_drafting", "round": 0,
+                       "max_rounds": 3, "next_role": "draftor",
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": False},
+                      "reviewer": {"role": "reviewer", "joined": False}},
+            "decisions": [],
+        })))
+    page.route("**/loops/handoff-loop/events", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"events": []})))
+
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()")
+    page.wait_for_selector("#loop-create-action", timeout=10000)
+    page.wait_for_selector("#loop-sketch-manual", timeout=5000)
+    page.fill("#loop-feature-input", "handoff-test")
+    page.fill("#loop-sketch-manual", ".gator/artifacts/test.md")
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+    page.wait_for_selector(".loop-handoff", timeout=10000)
+
+
+def test_handoff_renders_both_cards_with_guidance(page, dashboard_fleet):
+    """B13: handoff renders both prompt cards with security guidance."""
+    _enter_handoff(page, dashboard_fleet)
+    assert page.locator(".loop-handoff-copy").count() == 2
+    guidance = page.evaluate(
+        "() => document.querySelector('.loop-handoff-guidance').textContent")
+    assert "credential" in guidance.lower() or "role" in guidance.lower()
+
+
+def test_handoff_copy_calls_prompt_endpoint(page, dashboard_fleet):
+    """B14: copy calls prompt endpoint with correct role."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+
+    prompt_calls = []
+
+    def _capture_prompt(route):
+        import json
+        body = json.loads(route.request.post_data or "{}")
+        prompt_calls.append(body.get("role"))
+        route.fulfill(
+            status=200, content_type="application/json",
+            headers={"Cache-Control": "no-store"},
+            body=json.dumps({"prompt": "test prompt for " + body.get("role", "")}))
+
+    page.route("**/loops/handoff-loop/prompt", _capture_prompt)
+
+    # Grant clipboard permissions for the test
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+
+    page.evaluate("""
+        () => document.querySelector('.loop-handoff-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => document.querySelector('.loop-handoff-copy[data-role=\"draftor\"]').textContent !== 'Fetching…'",
+        timeout=10000)
+    assert "draftor" in prompt_calls, (
+        f"Expected draftor prompt call; got: {prompt_calls}")
+
+    page.unroute("**/loops/handoff-loop/prompt")
+
+
+def test_handoff_draftor_join_keeps_reviewer_copy(page, dashboard_fleet):
+    """B16: Draftor join updates indicator but does NOT remove
+    Reviewer copy action."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+
+    # Now update status to show draftor joined
+    page.unroute("**/loops/handoff-loop/status")
+    page.route("**/loops/handoff-loop/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": "handoff-loop", "feature": "handoff-test",
+            "status": {"stage": "plan_drafting", "round": 0,
+                       "max_rounds": 3, "next_role": "draftor",
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": False}},
+            "decisions": [],
+        })))
+
+    # Wait for poll to update
+    page.wait_for_function(
+        "() => {"
+        "  var el = document.getElementById('loop-handoff-draftor-join');"
+        "  return el && el.textContent === 'Joined';"
+        "}",
+        timeout=10000)
+
+    # Reviewer copy button must still exist and be enabled
+    reviewer_btn = page.locator('.loop-handoff-copy[data-role="reviewer"]')
+    assert reviewer_btn.count() == 1, "Reviewer copy button should still exist"
+    is_disabled = page.evaluate(
+        "() => document.querySelector('.loop-handoff-copy[data-role=\"reviewer\"]').disabled")
+    assert not is_disabled, "Reviewer copy should not be disabled"
+
+
+def test_handoff_open_workspace_transitions(page, dashboard_fleet):
+    """B17: 'Open loop workspace' transitions to inspect mode."""
+    _enter_handoff(page, dashboard_fleet)
+
+    page.evaluate("() => document.querySelector('#loop-handoff-open').click()")
+    # Should transition to the selected loop workspace
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    assert page.locator(".loop-handoff").count() == 0, (
+        "Handoff view should be gone after clicking Open workspace")
+
+
+# ── terminal handoff credential removal ──────────────────────────────────
+
+
+def test_terminal_handoff_disables_copy_buttons(page, dashboard_fleet):
+    """Terminal status during handoff disables copy buttons, removes
+    fallback textareas, shows outcome badge, stops polling."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+
+    # Confirm copy buttons exist and are enabled
+    assert page.locator(".loop-handoff-copy").count() == 2
+    assert not page.evaluate(
+        "() => document.querySelector('.loop-handoff-copy').disabled")
+
+    # Transition to terminal status
+    page.unroute("**/loops/handoff-loop/status")
+    page.route("**/loops/handoff-loop/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": "handoff-loop", "feature": "handoff-test",
+            "status": {"stage": "plan_approved", "round": 1,
+                       "max_rounds": 3, "next_role": None,
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": True}},
+            "decisions": [],
+        })))
+
+    # Wait for buttons to become disabled
+    page.wait_for_function(
+        "() => {"
+        "  var btns = document.querySelectorAll('.loop-handoff-copy');"
+        "  if (btns.length === 0) return false;"
+        "  for (var i = 0; i < btns.length; i++) {"
+        "    if (!btns[i].disabled) return false;"
+        "  }"
+        "  return true;"
+        "}",
+        timeout=10000)
+
+    # Buttons should show "Loop ended"
+    btn_text = page.evaluate(
+        "() => document.querySelector('.loop-handoff-copy').textContent")
+    assert "ended" in btn_text.lower()
+
+    # Fallback textareas should be removed
+    assert page.locator(".loop-handoff-fallback").count() == 0
+
+    # Outcome badge should appear
+    assert page.locator(".loop-badge-outcome").count() > 0
+
+
+# ── Escape closes advanced settings ─────────────────────────────────────
+
+
+def test_escape_closes_advanced_settings(page, dashboard_fleet):
+    """Escape key closes the advanced settings disclosure."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()")
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+
+    # Open advanced settings
+    page.evaluate(
+        "() => document.querySelector('.loop-create-advanced').open = true")
+    is_open = page.evaluate(
+        "() => document.querySelector('.loop-create-advanced').open")
+    assert is_open, "Advanced settings should be open"
+
+    # Press Escape
+    page.evaluate("""
+        () => {
+            var details = document.querySelector('.loop-create-advanced');
+            details.dispatchEvent(new KeyboardEvent('keydown',
+                { key: 'Escape', bubbles: true }));
+        }
+    """)
+    is_closed = page.evaluate(
+        "() => !document.querySelector('.loop-create-advanced').open")
+    assert is_closed, "Escape should close advanced settings"
+
+
+# ── prompt-copy race + clipboard assertions (B14/B15) ───────────────────
+
+
+def test_inflight_copy_blocked_by_terminal_race(page, dashboard_fleet):
+    """In-flight prompt copy is discarded when terminal state arrives
+    before the response. Clipboard must not receive the credential."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+
+    # Write a sentinel to the clipboard so we can verify it isn't overwritten
+    page.evaluate("() => navigator.clipboard.writeText('SENTINEL')")
+
+    # Set up a page-level gate: the prompt response won't resolve
+    # until we call window.__releasePrompt()
+    page.evaluate("""
+        () => {
+            window.__promptGate = new Promise(resolve => {
+                window.__releasePrompt = resolve;
+            });
+        }
+    """)
+
+    # Intercept prompt endpoint — wait on the gate before fulfilling
+    def _delayed_prompt(route):
+        page.evaluate("() => window.__promptGate")
+        route.fulfill(
+            status=200, content_type="application/json",
+            headers={"Cache-Control": "no-store"},
+            body=_json.dumps({"prompt": "SECRET_TOKEN_DO_NOT_LEAK"}))
+
+    page.route("**/loops/handoff-loop/prompt", _delayed_prompt)
+
+    # Click copy — request goes in flight, button shows Fetching
+    page.evaluate("""
+        () => document.querySelector('.loop-handoff-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => document.querySelector('.loop-handoff-copy[data-role=\"draftor\"]').textContent === 'Fetching…'",
+        timeout=5000)
+
+    # While fetch is in flight, transition loop to terminal
+    page.unroute("**/loops/handoff-loop/status")
+    page.route("**/loops/handoff-loop/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": "handoff-loop", "feature": "handoff-test",
+            "status": {"stage": "plan_approved", "round": 1,
+                       "max_rounds": 3, "next_role": None,
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": True}},
+            "decisions": [],
+        })))
+
+    # Wait for terminal state to be detected by the poll — buttons
+    # that are NOT the in-flight one should show "Loop ended"
+    page.wait_for_function(
+        "() => {"
+        "  var btns = document.querySelectorAll('.loop-handoff-copy');"
+        "  for (var i = 0; i < btns.length; i++) {"
+        "    if (btns[i].dataset.role === 'reviewer'"
+        "        && btns[i].textContent === 'Loop ended') return true;"
+        "  }"
+        "  return false;"
+        "}",
+        timeout=10000)
+
+    # Now release the prompt response — copyPrompt should discard it
+    page.evaluate("() => window.__releasePrompt()")
+
+    # Give async copyPrompt time to finish processing
+    page.wait_for_timeout(500)
+
+    # Verify: no fallback textarea created
+    assert page.locator(".loop-handoff-fallback").count() == 0, (
+        "No fallback textarea should exist after terminal race")
+
+    # Verify: clipboard still has sentinel, not the secret
+    clip = page.evaluate("() => navigator.clipboard.readText()")
+    assert "SECRET" not in (clip or ""), (
+        f"Clipboard should not contain leaked prompt; got: {clip}")
+
+    # The copy button should also show "Loop ended"
+    btn_text = page.evaluate(
+        "() => document.querySelector('.loop-handoff-copy[data-role=\"draftor\"]').textContent")
+    assert "ended" in btn_text.lower(), (
+        f"In-flight copy button should show 'Loop ended'; got: {btn_text}")
+
+    page.unroute("**/loops/handoff-loop/prompt")
+
+
+def test_copy_writes_prompt_to_clipboard(page, dashboard_fleet):
+    """B14 clipboard: prompt text actually reaches the clipboard."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+
+    page.route("**/loops/handoff-loop/prompt", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        headers={"Cache-Control": "no-store"},
+        body=_json.dumps({"prompt": "gator loop join --token TEST_TOKEN"})))
+
+    page.evaluate("""
+        () => document.querySelector('.loop-handoff-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => {"
+        "  var b = document.querySelector('.loop-handoff-copy[data-role=\"draftor\"]');"
+        "  return b && b.textContent === 'Copied';"
+        "}",
+        timeout=10000)
+
+    clip = page.evaluate("() => navigator.clipboard.readText()")
+    assert clip == "gator loop join --token TEST_TOKEN", (
+        f"Clipboard should contain the prompt text; got: {clip}")
+
+    page.unroute("**/loops/handoff-loop/prompt")
+
+
+def test_prompt_not_persisted_after_navigation(page, dashboard_fleet):
+    """B15: after copying and navigating away, prompt text is absent from
+    localStorage, sessionStorage, and DOM data attributes."""
+    import json as _json
+
+    _enter_handoff(page, dashboard_fleet)
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+
+    page.route("**/loops/handoff-loop/prompt", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        headers={"Cache-Control": "no-store"},
+        body=_json.dumps({"prompt": "gator loop join --token PERSIST_CHECK"})))
+
+    page.evaluate("""
+        () => document.querySelector('.loop-handoff-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => {"
+        "  var b = document.querySelector('.loop-handoff-copy[data-role=\"draftor\"]');"
+        "  return b && b.textContent === 'Copied';"
+        "}",
+        timeout=10000)
+
+    # Navigate away — click Open workspace
+    page.evaluate("() => document.querySelector('#loop-handoff-open').click()")
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+
+    # Check localStorage
+    local_dump = page.evaluate(
+        "() => JSON.stringify(localStorage)")
+    assert "PERSIST_CHECK" not in (local_dump or ""), (
+        "Prompt should not be in localStorage")
+
+    # Check sessionStorage
+    session_dump = page.evaluate(
+        "() => JSON.stringify(sessionStorage)")
+    assert "PERSIST_CHECK" not in (session_dump or ""), (
+        "Prompt should not be in sessionStorage")
+
+    # Check all data attributes in the DOM
+    data_attrs = page.evaluate("""
+        () => {
+            var all = document.querySelectorAll('*');
+            var vals = [];
+            for (var i = 0; i < all.length; i++) {
+                var ds = all[i].dataset;
+                for (var k in ds) { vals.push(ds[k]); }
+            }
+            return vals.join('|');
+        }
+    """)
+    assert "PERSIST_CHECK" not in (data_attrs or ""), (
+        "Prompt should not be in any DOM data attribute")
+
+    page.unroute("**/loops/handoff-loop/prompt")
+
+
+# ── live workspace prompt-copy race ──────────────────────────────────────
+
+
+def test_live_workspace_inflight_copy_blocked_by_terminal(page, dashboard_fleet):
+    """In-flight prompt copy from the live inspection workspace is
+    discarded when the loop becomes terminal before the response arrives."""
+    import json as _json
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-prompt-copy", timeout=10000)
+
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.evaluate("() => navigator.clipboard.writeText('SENTINEL')")
+
+    # Gate the prompt response so we control when it arrives
+    page.evaluate("""
+        () => {
+            window.__promptGate = new Promise(resolve => {
+                window.__releasePrompt = resolve;
+            });
+        }
+    """)
+
+    active_loop_id = "active-loop-2026-09-22T10-00-00Z"
+
+    def _delayed_prompt(route):
+        page.evaluate("() => window.__promptGate")
+        route.fulfill(
+            status=200, content_type="application/json",
+            headers={"Cache-Control": "no-store"},
+            body=_json.dumps({"prompt": "SECRET_LIVE_TOKEN"}))
+
+    page.route("**/" + active_loop_id + "/prompt", _delayed_prompt)
+
+    # Click copy — request goes in flight
+    page.evaluate("""
+        () => document.querySelector('.loop-prompt-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => {"
+        "  var b = document.querySelector('.loop-prompt-copy[data-role=\"draftor\"]');"
+        "  return b && b.textContent === 'Fetching…';"
+        "}",
+        timeout=5000)
+
+    # While fetch is in flight, make the loop terminal via status poll
+    page.route("**/" + active_loop_id + "/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": active_loop_id, "feature": "widget-refactor",
+            "status": {"stage": "plan_approved", "round": 2,
+                       "max_rounds": 3, "next_role": None,
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": True}},
+            "decisions": [],
+        })))
+
+    # Wait for the view to re-render as terminal (outcome badge appears)
+    page.wait_for_selector(".loop-badge-outcome", timeout=10000)
+
+    # Release the prompt response
+    page.evaluate("() => window.__releasePrompt()")
+    page.wait_for_timeout(500)
+
+    # No fallback textarea
+    assert page.locator(".loop-handoff-fallback").count() == 0
+
+    # Clipboard still has sentinel
+    clip = page.evaluate("() => navigator.clipboard.readText()")
+    assert "SECRET" not in (clip or ""), (
+        f"Clipboard should not contain leaked prompt; got: {clip}")
+
+    page.unroute("**/" + active_loop_id + "/prompt")
+    page.unroute("**/" + active_loop_id + "/status")
+
+
+def test_live_delayed_events_does_not_leak_prompt(page, dashboard_fleet):
+    """Prompt released after terminal status but before delayed events
+    response must not reach the clipboard. Covers the poll-sequence
+    window where promptEpoch must be incremented before awaiting events."""
+    import json as _json
+    import threading
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-prompt-copy", timeout=10000)
+
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.evaluate("() => navigator.clipboard.writeText('SENTINEL')")
+
+    active_loop_id = "active-loop-2026-09-22T10-00-00Z"
+
+    # Gate the prompt response
+    page.evaluate("""
+        () => {
+            window.__promptGate = new Promise(resolve => {
+                window.__releasePrompt = resolve;
+            });
+        }
+    """)
+
+    def _delayed_prompt(route):
+        page.evaluate("() => window.__promptGate")
+        route.fulfill(
+            status=200, content_type="application/json",
+            headers={"Cache-Control": "no-store"},
+            body=_json.dumps({"prompt": "SECRET_DELAYED_EVENTS"}))
+
+    page.route("**/" + active_loop_id + "/prompt", _delayed_prompt)
+
+    # Click copy — request goes in flight
+    page.evaluate("""
+        () => document.querySelector('.loop-prompt-copy[data-role="draftor"]').click()
+    """)
+    page.wait_for_function(
+        "() => {"
+        "  var b = document.querySelector('.loop-prompt-copy[data-role=\"draftor\"]');"
+        "  return b && b.textContent === 'Fetching…';"
+        "}",
+        timeout=5000)
+
+    # Make status terminal AND gate the events response so it delays
+    page.route("**/" + active_loop_id + "/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({
+            "loop_id": active_loop_id, "feature": "widget-refactor",
+            "status": {"stage": "ended_by_architect", "round": 2,
+                       "max_rounds": 3, "next_role": None,
+                       "blocked": False},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": True}},
+            "decisions": [],
+        })))
+
+    events_gate = threading.Event()
+
+    def _delayed_events(route):
+        events_gate.wait(timeout=10)
+        route.fulfill(
+            status=200, content_type="application/json",
+            body=_json.dumps({"events": [
+                {"event": "loop_started", "ts": "2026-09-22T10:00:00Z",
+                 "round": 0},
+                {"event": "loop_ended_by_architect",
+                 "ts": "2026-09-22T11:00:00Z", "reason": "done"},
+            ]}))
+
+    page.route("**/" + active_loop_id + "/events", _delayed_events)
+
+    # Wait for status poll to pick up terminal — promptEpoch should
+    # already be incremented even though events are still pending.
+    # Give the poll cycle time to fire and fetch status.
+    page.wait_for_timeout(4000)
+
+    # Release the prompt while events are still held — the epoch
+    # guard in copyPrompt must reject it.
+    page.evaluate("() => window.__releasePrompt()")
+    page.wait_for_timeout(500)
+
+    # Now release events so the poll cycle completes
+    events_gate.set()
+    page.wait_for_timeout(1000)
+
+    # Clipboard must still have sentinel
+    clip = page.evaluate("() => navigator.clipboard.readText()")
+    assert "SECRET" not in (clip or ""), (
+        f"Clipboard should not contain leaked prompt; got: {clip}")
+
+    page.unroute("**/" + active_loop_id + "/prompt")
+    page.unroute("**/" + active_loop_id + "/status")
+    page.unroute("**/" + active_loop_id + "/events")

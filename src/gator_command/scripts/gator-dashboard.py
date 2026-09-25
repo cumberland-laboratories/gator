@@ -2113,16 +2113,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
     # ── Loop workspace handlers ──────────────────────────────────────
 
     def _dispatch_loop_get(self, path):
-        """Route /api/repo-by-key/<repo_key>/loops/... GET requests."""
-        # /api/repo-by-key/<repo_key>/loops[/<id>/status]
+        """Route /api/repo-by-key/<repo_key>/... GET requests.
+
+        Handles both repo-scoped utility routes (/sketch-sources) and
+        loop routes (/loops, /loops/<id>/status, etc.).
+        """
         prefix = "/api/repo-by-key/"
-        rest = path[len(prefix):]  # <repo_key>/loops...
+        rest = path[len(prefix):]  # <repo_key>/...
         parts = rest.split("/", 1)
         if len(parts) < 2:
             self._send_json({"error": "missing route"}, 400)
             return
         repo_key = parts[0]
-        tail = "/" + parts[1]  # /loops or /loops/<id>/status
+        tail = "/" + parts[1]
+
+        if tail == "/sketch-sources":
+            self._handle_sketch_sources(repo_key)
+            return
 
         if tail == "/loops":
             self._handle_loop_list(repo_key)
@@ -2158,6 +2165,58 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         self._send_json({"error": "unknown loop route"}, 404)
+
+    def _handle_sketch_sources(self, repo_key):
+        """List candidate sketch files for loop creation."""
+        try:
+            repo_path = _resolve_repo_by_key(repo_key)
+        except KeyError:
+            self._send_json({"error": "repo not found"}, 404)
+            return
+
+        repo_root = Path(repo_path)
+        candidate_dirs = [
+            repo_root / ".gator" / "artifacts",
+            repo_root / ".gator" / "threads",
+            repo_root / ".gator" / "active-threads",
+        ]
+
+        sources = []
+        for cdir in candidate_dirs:
+            if not cdir.is_dir() or _is_reparse_point(cdir):
+                continue
+            try:
+                entries = list(cdir.iterdir())
+            except OSError:
+                continue
+            for entry in entries:
+                if entry.name.startswith("."):
+                    continue
+                if not entry.name.endswith(".md"):
+                    continue
+                if _is_reparse_point(entry):
+                    continue
+                if entry.is_symlink():
+                    continue
+                if not entry.is_file():
+                    continue
+                try:
+                    st = entry.stat()
+                except OSError:
+                    continue
+                try:
+                    rel = entry.relative_to(repo_root)
+                except ValueError:
+                    continue
+                sources.append({
+                    "path": str(rel).replace("\\", "/"),
+                    "name": entry.name,
+                    "size": st.st_size,
+                    "modified": st.st_mtime,
+                })
+
+        sources.sort(key=lambda s: s["modified"], reverse=True)
+        self._send_json({"sources": sources})
 
     def _handle_loop_list(self, repo_key):
         """List all loops for a registered repo, sorted by recency."""
@@ -2277,8 +2336,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     _LOOP_ARTIFACT_PATTERNS = (
         re.compile(r'^plan\.round-\d+\.md$'),
         re.compile(r'^findings\.round-\d+\.md$'),
-        re.compile(r'^decision-request\.[a-zA-Z0-9_-]+\.md$'),
-        re.compile(r'^decision-response\.[a-zA-Z0-9_-]+\.md$'),
+        re.compile(r'^decision-request\.decision-\d+\.round-\d+\.md$'),
+        re.compile(r'^decision-response\.decision-\d+\.md$'),
     )
 
     def _is_allowed_loop_artifact(self, filename):
