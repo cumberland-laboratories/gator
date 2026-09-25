@@ -2,6 +2,27 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.15.1] — 2026-09-25
+
+Patch release. Dashboard loop workspace: secondary sidebar with creation workspace, participant handoff, and live/history inspection. Fixes a prompt-copy race condition in the poll sequence.
+
+### Added
+
+- **Loop workspace secondary sidebar** — three-section sidebar (Create Loop, Active, History) with mode-driven main content routing (create, handoff, inspect). Active loop auto-selects on mount; no-loops defaults to creation workspace.
+- **Creation workspace** — feature name input, sketch source picker (browse from `/sketch-sources` endpoint + manual path toggle), advanced settings disclosure (max rounds 1–20, turn timeout 30–3600s), Create button with client-side validation and 409 race-recovery.
+- **Participant handoff** — post-creation prompt-copy cards for Draftor/Reviewer roles. Fetches from no-store prompt endpoint, writes to clipboard, nulls prompt variable immediately. Fallback textarea when clipboard API unavailable. Join-state polling. Explicit "Open loop workspace" navigation.
+- **Sketch-sources endpoint** — `GET /api/repo-by-key/<key>/sketch-sources` lists `.md` files from `.gator/artifacts/`, `.gator/threads/`, `.gator/active-threads/` with reparse/symlink rejection.
+- **1 new browser test** — `test_live_delayed_events_does_not_leak_prompt` covers the poll-sequence race window where `promptEpoch` must be incremented before awaiting events. Pin: `tests/test_dashboard_ui/test_loop_workspace.py`.
+
+### Fixed
+
+- **`pollLoop()` terminal-invalidation race** — `promptEpoch` was incremented after `fetchEvents()` and `renderSelectedLoop()`, allowing an in-flight `copyPrompt()` to resolve during the events-fetch wait and write the credential to clipboard with the stale epoch. Now incremented immediately after terminal status is identified, before awaiting events.
+
+### Changed
+
+- `_LOOP_ARTIFACT_PATTERNS` tightened: `decision-request` pattern now matches `decision-request.decision-<N>.round-<R>.md` (dot in production filenames).
+- `_dispatch_loop_get()` routes both `/sketch-sources` and `/loops/...` under the `/api/repo-by-key/` prefix.
+
 ## [2.15.0] — 2026-09-23
 
 Feature release. Adds the full Dashboard Loop Workspace — six modules covering loop enumeration, read-only UI, loop start and prompt, Architect controls, and executive summary extraction and display.
