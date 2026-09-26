@@ -2,6 +2,30 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.16.0] — 2026-09-26
+
+Feature release. Makes `gator loop` participation resilient for agent runtimes and makes Architect unblock decisions deliberate and durable. Addresses the short-term slice of [#36](https://github.com/cumberland-laboratories/gator/issues/36) and [#40](https://github.com/cumberland-laboratories/gator/issues/40).
+
+### Added
+
+- **Resumable bounded wait (#36)** — `gator loop wait --max-seconds N` returns within N seconds when another role still owns the turn, exiting with new code `3` (`wake_reason: "still_waiting"`) and printing the exact command to reissue. Monotonic deadline; the final sleep is capped at the remaining time; a turn change at the deadline still wins. Omitting the flag keeps the unbounded behavior; exit `0`/`2` meanings are unchanged and `wait` remains read-only. JSON (`gator-loop-status-v1`, additive) gains `max_seconds`, `waited_seconds`, `reissue_command`. Pins: `TestBoundedWait` in `tests/test_loop.py`.
+- **Adjustable turn window on unblock (#40)** — `gator loop unblock --timeout <30-3600>` (and the Dashboard unblock `timeout` field) persists a new `turn_timeout_seconds` before the fresh deadline is computed, so it applies to the resumed turn and every later one. The `loop_unblocked` event records the effective window (and the previous one when it changed). Participants see `Turn window: Ns (deadline ...)` in `status`/`wait`; JSON gains `turn_timeout_seconds` and `turn_deadline`. One shared validator, `loop/session.validate_turn_timeout()`, serves the CLI and Dashboard (see the Cross-Cutting charter). Default window remains 300s. Pins: `TestValidateTurnTimeout`, `TestUnblockTurnWindow`.
+- **Explicit deliberate-empty response** — `gator loop unblock --no-response` (Dashboard: `no_response: true`) resolves an escalation without a written reply and is recorded as `response.kind: "deliberate_empty"` — distinct from an omitted value. Exceptional; mutually exclusive with `--message`/`--file`.
+
+### Changed
+
+- **Escalations require a response to unblock (#40)** — when an unblock resolves a pending decision, a message, a response file, or `--no-response` is now required; a blank unblock is rejected before any state change (CLI exit 1, Dashboard HTTP 400). An ordinary Architect pause still unblocks without a response. Decision responses carry `kind` (`message` / `artifact` / `message_and_artifact` / `deliberate_empty`); file-only responses show "See decision-response artifact." to the resumed participant. Pins: `TestUnblockResponseContract`, `TestArchitectControls` in `tests/test_dashboard_loops.py`.
+- **Participant protocol teaches the bounded wait** — the loop protocol (both copies), `/loop-join` command (template + live), entry-point renderer, and live `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` now instruct `gator loop wait --token <token> --max-seconds 45`: act on `0`, reissue on `3`, stop on `2`. Pins: `TestWaitHandoffAlignment`.
+- **Dashboard unblock control is decision-aware** — an escalation shows **Response to participant (required)** with Confirm disabled until non-blank; an ordinary pause keeps **Message (optional)**. A new **Turn window (s)** input defaults to the loop's current value and is sent only when changed.
+
+### Fixed
+
+- **Loop controls no longer wiped by polling** — the 3s status poll re-rendered the Architect control panel, clearing any message being typed into Pause/Interject/Unblock. `pollLoop()` now skips its re-render while a control input is open (terminal transitions still re-render). Pin: `test_poll_does_not_wipe_composed_response` in `tests/test_dashboard_ui/test_loop_workspace.py`.
+
+### Upgrade note
+
+Scripts that unblocked escalations without a message must now pass `--message`, `--file`, or `--no-response`. Fleet repos pick up the bounded-wait participant instructions after `gator update`.
+
 ## [2.15.1] — 2026-09-25
 
 Patch release. Dashboard loop workspace: secondary sidebar with creation workspace, participant handoff, and live/history inspection. Fixes a prompt-copy race condition in the poll sequence.
