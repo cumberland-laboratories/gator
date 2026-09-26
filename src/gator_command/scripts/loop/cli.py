@@ -349,11 +349,38 @@ def _cmd_end(args):
         sys.exit(1)
 
 
+WAIT_EXIT_STILL_WAITING = 3
+
+
+def _positive_seconds(value):
+    """argparse type for --max-seconds: a finite number greater than zero."""
+    import math
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"must be a number of seconds, got {value!r}")
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError(f"must be greater than zero, got {value!r}")
+    return seconds
+
+
 def _cmd_wait(args):
-    """Block until the loop becomes actionable for this role."""
+    """Block until the loop becomes actionable for this role.
+
+    With --max-seconds, return early (exit 3, wake_reason "still_waiting")
+    when the deadline passes while another role still owns the turn.
+    """
     import time as _time
     from session import resolve_token, load_session
     from state_machine import is_terminal, is_paused
+
+    max_seconds = getattr(args, "max_seconds", None)
+    if max_seconds is not None:
+        try:
+            max_seconds = _positive_seconds(max_seconds)
+        except argparse.ArgumentTypeError as e:
+            print(f"  Error: --max-seconds {e}", file=sys.stderr)
+            sys.exit(2)
 
     try:
         loop_id, role, loop_dir = resolve_token(args.token)
@@ -366,9 +393,16 @@ def _cmd_wait(args):
         sys.exit(1)
 
     poll = getattr(args, "poll", 2.0)
+    started = _time.monotonic()
     session, wake_reason = _wait_for_actionable(
-        loop_dir, role, poll, load_session, is_terminal, is_paused
+        loop_dir, role, poll, load_session, is_terminal, is_paused,
+        max_seconds=max_seconds,
     )
+    waited_seconds = round(_time.monotonic() - started, 1)
+    still_waiting = wake_reason == "still_waiting"
+    reissue_cmd = f"gator loop wait --token {args.token}"
+    if max_seconds is not None:
+        reissue_cmd += f" --max-seconds {max_seconds:g}"
 
     # Render the same output as status
     status = session["status"]
@@ -396,6 +430,9 @@ def _cmd_wait(args):
                 if status.get("architect_response_artifact") else None
             ),
             "wake_reason": wake_reason,
+            "max_seconds": max_seconds,
+            "waited_seconds": waited_seconds,
+            "reissue_command": reissue_cmd if still_waiting else None,
         }
         print(json.dumps(out, indent=2))
     else:
@@ -418,22 +455,37 @@ def _cmd_wait(args):
             if response_artifact:
                 print(f"  Architect response artifact: {loop_dir / response_artifact}")
             _print_action_prompt(session, role, loop_dir, args.token)
+        elif still_waiting:
+            print(f"  Still waiting -- another role owns the turn "
+                  f"(waited {waited_seconds:g}s of {max_seconds:g}s).")
+            print("  You are still a loop participant. Reissue the same command now:")
+            print(f"    {reissue_cmd}")
 
         print(f"  Round: {rnd}/{max_rnd}")
 
-    # Exit codes: 0 = your turn, 2 = paused/terminal
+    # Exit codes: 0 = your turn, 2 = paused/terminal, 3 = still waiting (bounded)
     if is_terminal(session) or is_paused(session):
         sys.exit(2)
+    elif still_waiting:
+        sys.exit(WAIT_EXIT_STILL_WAITING)
     else:
         sys.exit(0)
 
 
-def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused):
+def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused,
+                         max_seconds=None, clock=None, sleep=None):
     """Poll session.json until the loop becomes actionable for this role.
 
     Returns (session, wake_reason). Read-only — never writes any file.
+    With max_seconds, returns (session, "still_waiting") once the monotonic
+    deadline passes; each sleep is capped at the remaining time so the call
+    never overruns its limit by a full poll interval. clock/sleep are test
+    seams (default time.monotonic / time.sleep).
     """
     import time as _time
+    clock = clock or _time.monotonic
+    sleep = sleep or _time.sleep
+    deadline = clock() + max_seconds if max_seconds is not None else None
 
     # Check immediately first
     session = load_session(loop_dir)
@@ -446,7 +498,13 @@ def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_termina
 
     # Poll
     while True:
-        _time.sleep(poll_interval)
+        if deadline is None:
+            sleep(poll_interval)
+        else:
+            remaining = deadline - clock()
+            if remaining <= 0:
+                return session, "still_waiting"
+            sleep(min(poll_interval, remaining))
         try:
             session = load_session(loop_dir)
         except (FileNotFoundError, KeyError):
@@ -604,6 +662,11 @@ def main(argv=None):
     p_wait = sub.add_parser("wait", help="Block until it is your turn")
     p_wait.add_argument("--token", required=True, help="Role token")
     p_wait.add_argument("--poll", type=float, default=2.0, help="Poll interval in seconds (default: 2.0)")
+    p_wait.add_argument(
+        "--max-seconds", type=_positive_seconds, default=None,
+        help="Return after this many seconds if still not your turn "
+             "(exit 3, reissue the same command). Omit to wait indefinitely.",
+    )
     p_wait.add_argument("--json", action="store_true", help="JSON output with wake_reason")
 
     # tail

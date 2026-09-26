@@ -1869,6 +1869,186 @@ class TestWaitCommand:
         assert events_before == events_after
 
 
+class _FakeClock:
+    """Deterministic monotonic clock + sleep for bounded-wait tests.
+
+    `on_sleep` (optional) runs after each sleep with the call index, so a
+    test can change loop state "during" the wait without real threads.
+    """
+
+    def __init__(self, on_sleep=None):
+        self.now = 1000.0
+        self.sleeps = []
+        self.on_sleep = on_sleep
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+        if self.on_sleep:
+            self.on_sleep(len(self.sleeps))
+
+
+class TestBoundedWait:
+    """`gator loop wait --max-seconds` (#36 short-term slice)."""
+
+    def _wait(self, loop_env, role, clock, max_seconds, poll=2.0):
+        from cli import _wait_for_actionable
+        from state_machine import is_terminal, is_paused
+        return _wait_for_actionable(
+            loop_env["loop_dir"], role, poll,
+            loop_session.load_session, is_terminal, is_paused,
+            max_seconds=max_seconds, clock=clock.clock, sleep=clock.sleep,
+        )
+
+    def test_already_actionable_returns_without_sleeping(self, loop_env):
+        fc = _FakeClock()
+        _, reason = self._wait(loop_env, "draftor", fc, max_seconds=45)
+        assert reason == "already_your_turn"
+        assert fc.sleeps == []
+
+    def test_becomes_actionable_before_deadline(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        def reviewer_submits(n):
+            if n == 2:
+                loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+
+        fc = _FakeClock(on_sleep=reviewer_submits)
+        _, reason = self._wait(e, "draftor", fc, max_seconds=45)
+        assert reason == "became_your_turn"
+        assert fc.sleeps == [2.0, 2.0]
+
+    def test_turn_change_at_deadline_wins_over_still_waiting(self, loop_env):
+        """The session is re-read after the final capped sleep."""
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        def reviewer_submits_on_last_sleep(n):
+            if n == 3:
+                loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+
+        fc = _FakeClock(on_sleep=reviewer_submits_on_last_sleep)
+        _, reason = self._wait(e, "draftor", fc, max_seconds=5)
+        assert reason == "became_your_turn"
+
+    def test_deadline_returns_still_waiting_without_overrun(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        session_before = (e["loop_dir"] / "session.json").read_bytes()
+        events_before = (e["loop_dir"] / "events.jsonl").read_bytes()
+
+        fc = _FakeClock()
+        session, reason = self._wait(e, "draftor", fc, max_seconds=5)
+
+        assert reason == "still_waiting"
+        assert session["status"]["next_role"] == "reviewer"
+        # Final sleep is capped at the remaining time: 2 + 2 + 1, never 2 + 2 + 2.
+        assert fc.sleeps == [2.0, 2.0, 1.0]
+        assert sum(fc.sleeps) == 5
+        assert (e["loop_dir"] / "session.json").read_bytes() == session_before
+        assert (e["loop_dir"] / "events.jsonl").read_bytes() == events_before
+
+    def test_pause_preempts_deadline(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        def architect_pauses(n):
+            if n == 1:
+                loop_submit.handle_pause(e["architect_token"])
+
+        fc = _FakeClock(on_sleep=architect_pauses)
+        _, reason = self._wait(e, "draftor", fc, max_seconds=45)
+        assert reason == "paused"
+        assert fc.sleeps == [2.0]
+
+    def test_terminal_preempts_deadline(self, loop_env):
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        def architect_ends(n):
+            if n == 1:
+                loop_submit.handle_end(e["architect_token"])
+
+        fc = _FakeClock(on_sleep=architect_ends)
+        _, reason = self._wait(e, "draftor", fc, max_seconds=45)
+        assert reason == "terminal"
+
+    @pytest.mark.parametrize("bad", ["0", "-1", "nan", "inf", "abc", ""])
+    def test_positive_seconds_rejects_invalid(self, bad):
+        import argparse
+        from cli import _positive_seconds
+        with pytest.raises(argparse.ArgumentTypeError):
+            _positive_seconds(bad)
+
+    def test_parser_rejects_nonpositive_max_seconds(self, loop_env):
+        from cli import main
+        with pytest.raises(SystemExit) as exc:
+            main(["wait", "--token", loop_env["draftor_token"], "--max-seconds", "0"])
+        assert exc.value.code == 2
+
+    def test_cmd_wait_rejects_invalid_max_seconds_before_polling(self, loop_env, capsys):
+        import argparse
+        from cli import _cmd_wait
+        args = argparse.Namespace(
+            token=loop_env["draftor_token"], json=False, poll=0.01, max_seconds=-3,
+        )
+        with pytest.raises(SystemExit) as exc:
+            _cmd_wait(args)
+        assert exc.value.code == 2
+        assert "--max-seconds" in capsys.readouterr().err
+
+    def _run_cmd_wait(self, loop_env, as_json):
+        import argparse, io, contextlib
+        from cli import _cmd_wait
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        args = argparse.Namespace(
+            token=e["draftor_token"], json=as_json, poll=0.01, max_seconds=0.05,
+        )
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            with pytest.raises(SystemExit) as exc:
+                _cmd_wait(args)
+        return exc.value.code, output.getvalue()
+
+    def test_cmd_wait_still_waiting_text_exit_3_with_reissue(self, loop_env):
+        from cli import WAIT_EXIT_STILL_WAITING
+        code, text = self._run_cmd_wait(loop_env, as_json=False)
+        assert code == WAIT_EXIT_STILL_WAITING == 3
+        assert "Still waiting" in text
+        assert f"gator loop wait --token {loop_env['draftor_token']} --max-seconds 0.05" in text
+        assert "Your turn: NO" in text
+
+    def test_cmd_wait_still_waiting_json(self, loop_env):
+        code, raw = self._run_cmd_wait(loop_env, as_json=True)
+        data = json.loads(raw)
+        assert code == 3
+        assert data["schema"] == "gator-loop-status-v1"
+        assert data["wake_reason"] == "still_waiting"
+        assert data["your_turn"] is False
+        assert data["max_seconds"] == 0.05
+        assert isinstance(data["waited_seconds"], float)
+        assert data["reissue_command"].endswith("--max-seconds 0.05")
+
+    def test_cmd_wait_unbounded_json_has_null_bounded_fields(self, loop_env):
+        import argparse, io, contextlib
+        from cli import _cmd_wait
+        args = argparse.Namespace(token=loop_env["draftor_token"], json=True, poll=0.1)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            with pytest.raises(SystemExit) as exc:
+                _cmd_wait(args)
+        data = json.loads(output.getvalue())
+        assert exc.value.code == 0
+        assert data["wake_reason"] == "already_your_turn"
+        assert data["max_seconds"] is None
+        assert data["reissue_command"] is None
+
+
 class TestGitignore:
     def test_tokens_gitignored(self, loop_env):
         """loops/.gitignore includes .tokens.json."""
@@ -1902,10 +2082,46 @@ class TestWaitHandoffAlignment:
             assert "Do not poll in a tight loop" not in text
 
     def test_protocol_quick_reference_mentions_wait(self):
-        """Quick Reference section mentions wait command for exit code 1."""
+        """Quick Reference section mentions the bounded wait command for exit code 1."""
         for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
             text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
-            assert "`gator loop wait --token <token>`" in text
+            assert "`gator loop wait --token <token> --max-seconds 45`" in text
+
+    def _participant_surfaces(self):
+        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
+        if gatorize_dir not in sys.path:
+            sys.path.insert(0, gatorize_dir)
+        from entry_points import render_entry_content
+        repo_root = Path(__file__).parent.parent
+        surfaces = {
+            "render_entry_content": render_entry_content(has_command_post=False),
+            "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
+            "loop-join live": (repo_root / ".claude" / "commands" / "loop-join.md").read_text(encoding="utf-8"),
+            "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
+            "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
+        }
+        for name in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]:
+            surfaces[name] = (repo_root / name).read_text(encoding="utf-8")
+        return surfaces
+
+    def test_all_surfaces_teach_bounded_wait_and_reissue(self):
+        """Every participant surface teaches the bounded wait and the exit-3 reissue path."""
+        for name, text in self._participant_surfaces().items():
+            assert "--max-seconds 45" in text, f"{name} missing bounded wait"
+            assert "exit 3" in text.lower() or "exits 3" in text.lower() or "`3`" in text, (
+                f"{name} missing exit-3 guidance"
+            )
+            assert "reissue" in text.lower(), f"{name} missing reissue instruction"
+            # No surface may still teach the bare unbounded form as the participant path.
+            assert "`gator loop wait --token <your-token>`" not in text, f"{name} teaches unbounded wait"
+            assert "`gator loop wait --token <token>`" not in text, f"{name} teaches unbounded wait"
+
+    def test_loop_join_live_copy_matches_template(self):
+        """The repo's live /loop-join command is byte-identical to the shipped template."""
+        repo_root = Path(__file__).parent.parent
+        live = (repo_root / ".claude" / "commands" / "loop-join.md").read_bytes()
+        template = (TEMPLATES_DIR / "commands" / "loop-join.md").read_bytes()
+        assert live == template
 
     def test_entry_point_rendering_references_wait(self):
         """render_entry_content() output includes wait instruction."""

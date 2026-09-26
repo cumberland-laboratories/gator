@@ -46,8 +46,15 @@ Read the output. It tells you:
 
 **Exit codes matter:**
 - `0` — it IS your turn. Proceed with your submission.
-- `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token>` to block until the loop becomes actionable.
+- `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45` to wait until the loop becomes actionable.
 - `2` — the loop is blocked or ended. Stop.
+
+**Waiting is bounded and resumable.** `gator loop wait --max-seconds 45` returns within about 45 seconds so that it fits inside agent tool-call limits. Its exit codes:
+- `0` — it is now your turn. Act immediately.
+- `3` — still not your turn. **Reissue the same `wait` command right away.** A completed `wait` call does not end your participation in the loop.
+- `2` — the loop is paused or ended. Stop and report the status.
+
+Keep reissuing the bounded `wait` until it returns `0` or `2`. Do not tight-poll `status` instead of `wait`. A human can cancel a `wait` command at any time with the normal interrupt.
 
 **Finding files:** The status output always prints a `Dir:` line with the full loop directory path. The relevant files are at fixed names within that directory: `sketch.md`, `plan.current.md`, `findings.current.md`. When it's your turn, the status output also shows the specific artifact paths and next-step command.
 
@@ -116,7 +123,7 @@ After you submit, your turn is over. The other model's turn begins.
 
 ### Rule 1: Only submit on your turn (but you can always escalate)
 
-Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token>` to block until the loop becomes actionable. If exit code is `2`, the loop is over or blocked — stop.
+Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45`, and reissue it each time it exits `3`, until the loop becomes actionable. If exit code is `2`, the loop is over or blocked — stop.
 
 ### Rule 2: Submit through the CLI only
 
@@ -284,10 +291,11 @@ gator loop status --token <token>
 ## Summary For Quick Reference
 
 1. `gator loop status --token <token>` — am I up?
-2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token>`. Exit 2: stop.
-3. Read the relevant files (sketch, plan, or findings) from the loop directory
-4. Write your artifact to a file
-5. Submit: `gator loop submit-draft` or `gator loop submit-review`
-6. If stuck at any time: `gator loop escalate --token <token> --reason "..."`
+2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token> --max-seconds 45`. Exit 2: stop.
+3. `wait` exit 0: act. Exit 3: reissue the same `wait`. Exit 2: stop.
+4. Read the relevant files (sketch, plan, or findings) from the loop directory
+5. Write your artifact to a file
+6. Submit: `gator loop submit-draft` or `gator loop submit-review`
+7. If stuck at any time: `gator loop escalate --token <token> --reason "..."`
 
 The CLI mediates everything. The files are the handoff. The Architect supervises. The loop terminates deterministically. Do your best work within the bounds.

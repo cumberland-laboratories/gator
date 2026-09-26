@@ -263,6 +263,21 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 -> `resolve_token()`, `load_session()`
 ! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
 
+### _cmd_wait(args)
+File: `src/gator_command/scripts/loop/cli.py`
+Model-role wait. Resolves the token, then calls `_wait_for_actionable()` and renders status-shaped output. Exit codes: `0` actionable, `2` paused/terminal (and invalid token or invalid `--max-seconds`), `3` (`WAIT_EXIT_STILL_WAITING`) bounded deadline passed while another role owns the turn. Architect token exits 1.
+Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
+<- `main()`
+-> `resolve_token()`, `_wait_for_actionable()`, `_print_action_prompt()`, `_positive_seconds()`
+! `--max-seconds` omitted = unbounded (human CLI compatibility). Participant surfaces teach the bounded form `--max-seconds 45`; exit 3 means "reissue the same command", never "leave the loop". Text output prints the exact reissue command; JSON (`gator-loop-status-v1`, additive) adds `wake_reason: "still_waiting"`, `max_seconds`, `waited_seconds`, `reissue_command`.
+
+### _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused, max_seconds=None, clock=None, sleep=None)
+File: `src/gator_command/scripts/loop/cli.py`
+Polls until terminal / paused / this role's turn. Returns `(session, wake_reason)` with wake_reason `terminal`, `paused`, `already_your_turn`, `became_your_turn`, or `still_waiting` (bounded only).
+Filesystem: `session.json` (R)
+<- `_cmd_wait()`
+! Read-only — never writes session or events. Bounded mode uses a monotonic deadline and caps each sleep at the remaining time, so it cannot overrun by a full poll interval; the session is re-read after the final sleep, so a turn change at the deadline still wins over `still_waiting`. `clock`/`sleep` are injectable test seams.
+
 ---
 
 ## TRIPWIRE: Session Lock Write Ordering

@@ -71,7 +71,7 @@ Parse the single Gator sentinel region and classify absent, clean, modified, cor
 
 ### render_managed_region() / render_entry_content()
 File: src/gator_command/scripts/gatorize/entry_points.py
-Render vendor-specific entry instructions from one managed baseline. Includes loop-join paragraph with `gator loop wait` handoff, escalate-first ordering, and executive summary submission requirement (Dashboard extracts `## Executive Summary` for at-a-glance inspection).
+Render vendor-specific entry instructions from one managed baseline. Includes loop-join paragraph with bounded `gator loop wait --max-seconds 45` handoff (exit 3 = reissue, 0 = act, 2 = stop), escalate-first ordering, and executive summary submission requirement (Dashboard extracts `## Executive Summary` for at-a-glance inspection).
 <- install, update, state repair
 ! Preserve the `GATOR:BEGIN` / `GATOR:END` boundary and keep cross-vendor semantics equivalent. Loop-join content pinned by `TestWaitHandoffAlignment` in `tests/test_loop.py`. Executive summary requirement pinned by `TestExecutiveSummaryProducerPaths` in the same file.
 

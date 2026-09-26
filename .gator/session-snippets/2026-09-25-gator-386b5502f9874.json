@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "",
+  "agent": "claude-opus-4-6",
+  "intent": "Bump to 2.15.1 — dashboard loop workspace refinement + prompt-race fix",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "386b5502f987481767b829eced5c22d397c1ae36",
+  "short_commit": "386b550",
+  "snippet_id": "snippet-386b5502f9874",
+  "session_group_key": "anthropic:2aed3f60-4ec0-4d70-88bc-475a62f48180",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "501449328d3fee2183576e8dfee8128933ac73b8",
+  "started_at": "2026-09-25T12:34:02Z",
+  "ended_at": "2026-09-25T13:04:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-09-25-gator-501449328d3fe.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump to 2.15.1 in pyproject.toml and VERSION file.",
+    "CHANGELOG.md updated with 2.15.1 entry.",
+    "scripts-core-library.md charter version note updated."
+  ],
+  "transcript_session_id": "2aed3f60-4ec0-4d70-88bc-475a62f48180",
+  "transcript_ref": null
+}
