@@ -148,6 +148,39 @@ def resolve_token(token, loop_dir=None):
 
 
 # ---------------------------------------------------------------------------
+# Turn-window validation (shared by CLI unblock and Dashboard start/unblock)
+# ---------------------------------------------------------------------------
+
+TURN_TIMEOUT_MIN = 30
+TURN_TIMEOUT_MAX = 3600
+
+
+def validate_turn_timeout(value):
+    """Return value as an int turn timeout, or raise ValueError.
+
+    Accepts only integral values in TURN_TIMEOUT_MIN..TURN_TIMEOUT_MAX
+    seconds. bool and non-integral numbers are rejected; strings are
+    accepted only when they spell a plain integer (CLI input).
+    """
+    if isinstance(value, bool):
+        raise ValueError("turn timeout must be an integer number of seconds")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text.lstrip("-").isdigit():
+            raise ValueError(
+                f"turn timeout must be an integer number of seconds, got {value!r}")
+        value = int(text)
+    if not isinstance(value, int):
+        raise ValueError(
+            f"turn timeout must be an integer number of seconds, got {value!r}")
+    if value < TURN_TIMEOUT_MIN or value > TURN_TIMEOUT_MAX:
+        raise ValueError(
+            f"turn timeout must be between {TURN_TIMEOUT_MIN} and "
+            f"{TURN_TIMEOUT_MAX} seconds, got {value}")
+    return value
+
+
+# ---------------------------------------------------------------------------
 # Session CRUD
 # ---------------------------------------------------------------------------
 

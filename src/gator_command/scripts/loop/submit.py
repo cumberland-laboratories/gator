@@ -20,6 +20,7 @@ if _LOOP_DIR not in sys.path:
 from session import (
     resolve_token, with_session_lock, append_turn,
     find_gator_root, _make_writable, _make_readonly,
+    validate_turn_timeout,
 )
 from state_machine import (
     validate_action, validate_unblock,
@@ -292,8 +293,14 @@ def handle_escalate(token, reason, file_path=None):
     return loop_id, role, loop_dir
 
 
+ARTIFACT_ONLY_RESPONSE_SUMMARY = "See decision-response artifact."
+DELIBERATE_EMPTY_RESPONSE_SUMMARY = (
+    "Architect resolved the escalation deliberately without a written response.")
+
+
 def handle_unblock(token, next_role=None, stage=None, message=None,
-                   file_path=None, loop_dir=None):
+                   file_path=None, loop_dir=None, turn_timeout=None,
+                   no_response=False):
     """Architect command: unblock a paused loop.
 
     Requires architect token. Both next_role and stage are optional;
@@ -301,7 +308,25 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
     Optional message is stored in session and shown in the resuming
     model's status output. Optional file_path attaches a durable
     decision-response artifact.
+
+    Response contract: when the unblock resolves a pending decision
+    (an escalation), a non-empty message, a response file, or the
+    explicit no_response opt-in is required — a blank unblock is
+    rejected before any state change. An ordinary Architect pause has
+    no pending decision and may be unblocked with no response.
+
+    Optional turn_timeout (validated 30..3600 s) replaces the loop's
+    stored window before the new deadline is computed; omitted keeps
+    the current window.
     """
+    if message is not None and not message.strip():
+        message = None
+    if no_response and (message is not None or file_path is not None):
+        raise ValueError(
+            "no-response is mutually exclusive with a message or response file")
+    if turn_timeout is not None:
+        turn_timeout = validate_turn_timeout(turn_timeout)
+
     if file_path is not None:
         source = Path(file_path)
         if not source.exists():
@@ -329,10 +354,36 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
             raise ValueError(
                 "--file requires a pending decision request to attach to; "
                 "no outstanding decisions exist")
+        if no_response and not pending:
+            raise ValueError(
+                "no-response applies only when resolving a pending decision; "
+                "no outstanding decisions exist")
+        if pending and message is None and file_path is None and not no_response:
+            raise ValueError(
+                f"Unblocking resolves pending decision {pending[-1]['id']}; "
+                "a response is required: provide a message, a response file, "
+                "or explicitly choose no response")
 
+        # Response classification (only meaningful when resolving a decision)
+        if no_response:
+            response_kind = "deliberate_empty"
+            status_message = DELIBERATE_EMPTY_RESPONSE_SUMMARY
+        elif message is not None and file_path is not None:
+            response_kind = "message_and_artifact"
+            status_message = message
+        elif file_path is not None:
+            response_kind = "artifact"
+            status_message = ARTIFACT_ONLY_RESPONSE_SUMMARY
+        else:
+            response_kind = "message" if message is not None else None
+            status_message = message
+
+        previous_timeout = session["status"]["turn_timeout_seconds"]
+        if turn_timeout is not None:
+            session["status"]["turn_timeout_seconds"] = turn_timeout
         timeout = session["status"]["turn_timeout_seconds"]
         advance_unblocked(session, stage=stage, next_role=next_role,
-                          turn_timeout=timeout, message=message)
+                          turn_timeout=timeout, message=status_message)
 
         # Resolve the most recent pending decision, if any
         resolved_id = None
@@ -346,6 +397,7 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
             decision["response"] = {
                 "message": message,
                 "artifact_path": artifact_name,
+                "kind": response_kind,
                 "ts": datetime.now(tz=timezone.utc).isoformat(),
             }
 
@@ -355,20 +407,26 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
 
         # Record architect turn
         append_turn(session, "architect", "unblock",
-                    message or "Loop unblocked")
+                    status_message or "Loop unblocked")
 
         detail = (f"Resumed to {session['status']['stage']} "
                   f"(next: {session['status']['next_role']})")
-        if message:
-            detail += f" -- Architect: {message}"
+        if status_message:
+            detail += f" -- Architect: {status_message}"
+        if timeout != previous_timeout:
+            detail += f" -- turn window {previous_timeout}s -> {timeout}s"
         event = {
             "event": "loop_unblocked",
             "role": "architect",
             "round": session["status"]["round"],
             "detail": detail,
+            "turn_timeout_seconds": timeout,
         }
+        if timeout != previous_timeout:
+            event["previous_turn_timeout_seconds"] = previous_timeout
         if resolved_id:
             event["decision_id"] = resolved_id
+            event["response_kind"] = response_kind
         return session, event
 
     with_session_lock(loop_dir, _unblock)

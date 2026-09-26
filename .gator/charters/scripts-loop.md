@@ -45,6 +45,13 @@ Builds the initial session dict including empty `decisions: []` ledger. Does not
 Filesystem: none
 <- `host.start_loop()`
 
+### validate_turn_timeout(value)
+File: `src/gator_command/scripts/loop/session.py`
+Single validation path for an Architect-chosen turn window: returns an int in `TURN_TIMEOUT_MIN..TURN_TIMEOUT_MAX` (30..3600) or raises `ValueError`. Rejects bool, floats, and non-integer strings; accepts plain-integer strings (CLI input).
+Filesystem: none
+<- `submit.handle_unblock()`, `cli._turn_timeout_arg()`, dashboard `_handle_loop_start()` / `_handle_loop_unblock()`
+! CLI `start --turn-timeout` is deliberately NOT routed through this (tests and local tooling use short windows); the Dashboard start and every unblock path are. Default window stays 300s.
+
 ### load_session(loop_dir) / save_session(loop_dir, session)
 File: `src/gator_command/scripts/loop/session.py`
 Read/write session.json. Save uses atomic temp+rename. Sets read-only (444) on POSIX after write.
@@ -102,7 +109,7 @@ Filesystem: none (mutates session dict)
 
 ### advance_unblocked(session, stage, next_role, turn_timeout)
 File: `src/gator_command/scripts/loop/state_machine.py`
-`blocked_on_architect` -> restored active state. Validates stage-role consistency.
+`blocked_on_architect` -> restored active state. Validates stage-role consistency. Receives the already-selected timeout (the caller owns CLI/HTTP policy and persisting any changed window); computes the fresh deadline from it.
 Filesystem: none (mutates session dict)
 <- `submit.handle_unblock()`
 ! Stage-role validation: `plan_drafting`/`plan_revision` require `draftor`, `plan_review` requires `reviewer`. Mismatches raise ValueError.
@@ -165,12 +172,15 @@ Filesystem: source file (R, optional), `.gator/loops/<loop-id>/decision-request.
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_escalated()`, `_copy_artifact()` (when file_path provided)
 ! Either model role may escalate from any active stage, including when it is not its turn — `validate_action()` intentionally skips the turn check for escalate.
 
-### handle_unblock(token, next_role, stage, message, file_path=None)
+### handle_unblock(token, next_role, stage, message, file_path=None, loop_dir=None, turn_timeout=None, no_response=False)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path`, and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests. Optional `file_path` attaches a durable response artifact copied to `decision-response.{decision-id}.md` in the loop directory. File validation (must exist, must be non-empty) runs before lock acquisition; `FileNotFoundError`/`ValueError` on failure. `--file` is rejected with `ValueError` inside the lock (before state advancement) when no pending decision exists — prevents silent discard of a response artifact after an Architect pause.
+Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path`, `response.kind`, and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests. Optional `file_path` attaches a durable response artifact copied to `decision-response.{decision-id}.md` in the loop directory. File validation (must exist, must be non-empty) runs before lock acquisition; `FileNotFoundError`/`ValueError` on failure. `--file` is rejected with `ValueError` inside the lock (before state advancement) when no pending decision exists — prevents silent discard of a response artifact after an Architect pause.
+Response contract: a whitespace-only message is treated as absent. When a pending decision exists (escalation), one of message / file / `no_response=True` is required, else `ValueError` before any mutation. `no_response` is mutually exclusive with message/file and rejected when nothing is pending. `response.kind` ∈ `message`, `artifact`, `message_and_artifact`, `deliberate_empty`. Model-facing `architect_message` is the message, or `ARTIFACT_ONLY_RESPONSE_SUMMARY` for file-only, or `DELIBERATE_EMPTY_RESPONSE_SUMMARY` for the explicit empty choice — never silently blank for a resolved decision. An ordinary pause (no pending decision) still unblocks with no response.
+Turn window: optional `turn_timeout` is validated via `validate_turn_timeout()` before the lock; inside the lock it is written to `status.turn_timeout_seconds` BEFORE `advance_unblocked()` computes the fresh deadline, so both this turn and all later transitions use it. Omitted keeps the stored window. The `loop_unblocked` event carries `turn_timeout_seconds` always, plus `previous_turn_timeout_seconds` and a detail suffix when changed, and `response_kind` alongside `decision_id` when a decision was resolved.
 Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when file_path provided), session mutation
-<- `cli._cmd_unblock()`
--> `resolve_token()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
+<- `cli._cmd_unblock()`, dashboard `_handle_loop_unblock()`
+-> `resolve_token()`, `validate_turn_timeout()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
+! All validation that can fail runs before `advance_unblocked()`/`_copy_artifact()`; a raise inside the lock skips the save, so a rejected unblock leaves session.json, events, and the stored timeout untouched.
 
 ### handle_pause(token, message)
 File: `src/gator_command/scripts/loop/submit.py`
@@ -262,6 +272,13 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `load_session()`
 ! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
+! Turn window: model and architect JSON (and wait JSON) carry additive `turn_timeout_seconds` + `turn_deadline`; the acting model's text view prints `Turn window: Ns (deadline ...)` via `_print_turn_window()`. The paused architect view prints the current window and, when a decision is pending, states that a response is required (with the exceptional `--no-response` form); an ordinary pause shows the optional-message form.
+
+### _cmd_unblock(args) / _turn_timeout_arg(value)
+File: `src/gator_command/scripts/loop/cli.py`
+Architect unblock. Forwards `--message`, `--file`, `--timeout` (argparse type `_turn_timeout_arg` → `session.validate_turn_timeout()`, so bad values are usage errors before any write), and `--no-response` to `submit.handle_unblock()`; prints the resumed stage and effective turn window. `ValueError`/`FileNotFoundError` exit 1 with `Error:`; `PermissionError` exits 1 with `Rejected:`.
+<- `main()`
+-> `submit.handle_unblock()`, `session.load_session()`
 
 ### _cmd_wait(args)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -269,7 +286,7 @@ Model-role wait. Resolves the token, then calls `_wait_for_actionable()` and ren
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `_wait_for_actionable()`, `_print_action_prompt()`, `_positive_seconds()`
-! `--max-seconds` omitted = unbounded (human CLI compatibility). Participant surfaces teach the bounded form `--max-seconds 45`; exit 3 means "reissue the same command", never "leave the loop". Text output prints the exact reissue command; JSON (`gator-loop-status-v1`, additive) adds `wake_reason: "still_waiting"`, `max_seconds`, `waited_seconds`, `reissue_command`.
+! `--max-seconds` omitted = unbounded (human CLI compatibility). Participant surfaces teach the bounded form `--max-seconds 45`; exit 3 means "reissue the same command", never "leave the loop". Text output prints the exact reissue command; JSON (`gator-loop-status-v1`, additive) adds `wake_reason: "still_waiting"`, `max_seconds`, `waited_seconds`, `reissue_command`, plus `turn_timeout_seconds` / `turn_deadline`. When actionable, text output prints the turn window like `status`.
 
 ### _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused, max_seconds=None, clock=None, sleep=None)
 File: `src/gator_command/scripts/loop/cli.py`

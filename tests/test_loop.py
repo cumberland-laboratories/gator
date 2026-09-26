@@ -603,8 +603,8 @@ class TestEscalateUnblockResume:
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["stage"] == "blocked_on_architect"
 
-        # Unblock
-        loop_submit.handle_unblock(e["architect_token"])
+        # Unblock (an escalation requires a response)
+        loop_submit.handle_unblock(e["architect_token"], message="Scope confirmed")
 
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["stage"] == "plan_review"
@@ -1554,13 +1554,246 @@ class TestArchitectMessage:
         assert "Architect: Approved, go ahead." in unblock_event["detail"]
 
     def test_unblock_without_message(self, loop_env):
-        """Unblock without message leaves architect_message as None."""
+        """Unblocking an ordinary pause without message leaves architect_message None.
+
+        (An escalation cannot be unblocked blank — see TestUnblockResponseContract.)
+        """
         e = loop_env
-        loop_submit.handle_escalate(e["draftor_token"], "test")
+        loop_submit.handle_pause(e["architect_token"])
         loop_submit.handle_unblock(e["architect_token"])
 
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["architect_message"] is None
+
+
+def _loop_bytes(loop_dir):
+    return ((loop_dir / "session.json").read_bytes(),
+            (loop_dir / "events.jsonl").read_bytes())
+
+
+def _last_event(loop_dir):
+    lines = (loop_dir / "events.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    return json.loads(lines[-1])
+
+
+class TestValidateTurnTimeout:
+    @pytest.mark.parametrize("good,expected", [(30, 30), (3600, 3600), (600, 600), ("600", 600), (" 45 ", 45)])
+    def test_accepts_integral_in_range(self, good, expected):
+        assert loop_session.validate_turn_timeout(good) == expected
+
+    @pytest.mark.parametrize("bad", [29, 3601, 0, -30, 600.0, 600.5, True, None, "abc", "6e2", "", "-45"])
+    def test_rejects_invalid(self, bad):
+        with pytest.raises(ValueError):
+            loop_session.validate_turn_timeout(bad)
+
+
+class TestUnblockTurnWindow:
+    def test_timeout_persists_and_sets_fresh_deadline(self, loop_env):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        loop_submit.handle_unblock(e["architect_token"], turn_timeout=900)
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["turn_timeout_seconds"] == 900
+        remaining = (datetime.fromisoformat(s["status"]["turn_deadline"])
+                     - datetime.now(tz=timezone.utc)).total_seconds()
+        assert 800 < remaining <= 900
+
+        ev = _last_event(e["loop_dir"])
+        assert ev["event"] == "loop_unblocked"
+        assert ev["turn_timeout_seconds"] == 900
+        assert ev["previous_turn_timeout_seconds"] == 300
+        assert "300s -> 900s" in ev["detail"]
+
+    def test_new_timeout_applies_to_next_transition(self, loop_env):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        loop_submit.handle_unblock(e["architect_token"], turn_timeout=1200)
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["turn_timeout_seconds"] == 1200
+        remaining = (datetime.fromisoformat(s["status"]["turn_deadline"])
+                     - datetime.now(tz=timezone.utc)).total_seconds()
+        assert 1100 < remaining <= 1200
+
+    def test_omitted_timeout_keeps_current_window(self, loop_env):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        loop_submit.handle_unblock(e["architect_token"])
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["turn_timeout_seconds"] == 300
+        ev = _last_event(e["loop_dir"])
+        assert ev["turn_timeout_seconds"] == 300
+        assert "previous_turn_timeout_seconds" not in ev
+
+    @pytest.mark.parametrize("bad", [10, 7200, 600.5, "fast", True])
+    def test_invalid_timeout_rejected_without_state_change(self, loop_env, bad):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(ValueError):
+            loop_submit.handle_unblock(e["architect_token"], turn_timeout=bad)
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_cli_rejects_out_of_range_timeout_as_usage_error(self, loop_env):
+        from cli import main
+        loop_submit.handle_pause(loop_env["architect_token"])
+        with pytest.raises(SystemExit) as exc:
+            main(["unblock", "--token", loop_env["architect_token"], "--timeout", "5"])
+        assert exc.value.code == 2
+
+    def test_cli_unblock_timeout_and_status_shows_window(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        main(["unblock", "--token", e["architect_token"], "--timeout", "600"])
+        out = capsys.readouterr().out
+        assert "Turn window: 600s" in out
+
+        with pytest.raises(SystemExit) as exc:
+            main(["status", "--token", e["draftor_token"]])
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "Turn window: 600s" in out
+
+        with pytest.raises(SystemExit):
+            main(["status", "--token", e["draftor_token"], "--json"])
+        data = json.loads(capsys.readouterr().out)
+        assert data["turn_timeout_seconds"] == 600
+        assert data["turn_deadline"]
+
+
+class TestUnblockResponseContract:
+    def _escalate(self, e):
+        loop_submit.handle_escalate(e["draftor_token"], "Need a scope decision")
+
+    def test_blank_unblock_of_escalation_rejected_without_state_change(self, loop_env):
+        e = loop_env
+        self._escalate(e)
+        before = _loop_bytes(e["loop_dir"])
+        for msg in (None, "", "   "):
+            with pytest.raises(ValueError, match="response is required"):
+                loop_submit.handle_unblock(e["architect_token"], message=msg)
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_blank_rejection_also_leaves_timeout_untouched(self, loop_env):
+        e = loop_env
+        self._escalate(e)
+        with pytest.raises(ValueError):
+            loop_submit.handle_unblock(e["architect_token"], turn_timeout=900)
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["turn_timeout_seconds"] == 300
+        assert s["status"]["stage"] == "blocked_on_architect"
+
+    def test_message_response(self, loop_env):
+        e = loop_env
+        self._escalate(e)
+        loop_submit.handle_unblock(e["architect_token"], message="Narrow to #35 only.")
+        s = loop_session.load_session(e["loop_dir"])
+        resp = s["decisions"][0]["response"]
+        assert resp["message"] == "Narrow to #35 only."
+        assert resp["artifact_path"] is None
+        assert resp["kind"] == "message"
+        assert s["status"]["architect_message"] == "Narrow to #35 only."
+        ev = _last_event(e["loop_dir"])
+        assert ev["decision_id"] == "decision-1"
+        assert ev["response_kind"] == "message"
+
+    def test_artifact_only_response_is_meaningful(self, loop_env, tmp_path):
+        e = loop_env
+        self._escalate(e)
+        resp_file = tmp_path / "response.md"
+        resp_file.write_text("# Decision Response\n\nProceed.\n", encoding="utf-8")
+        loop_submit.handle_unblock(e["architect_token"], file_path=str(resp_file))
+        s = loop_session.load_session(e["loop_dir"])
+        resp = s["decisions"][0]["response"]
+        assert resp["message"] is None
+        assert resp["artifact_path"] == "decision-response.decision-1.md"
+        assert resp["kind"] == "artifact"
+        assert s["status"]["architect_message"] == loop_submit.ARTIFACT_ONLY_RESPONSE_SUMMARY
+        assert s["status"]["architect_response_artifact"] == "decision-response.decision-1.md"
+        ev = _last_event(e["loop_dir"])
+        assert loop_submit.ARTIFACT_ONLY_RESPONSE_SUMMARY in ev["detail"]
+        assert ev["response_kind"] == "artifact"
+
+    def test_message_and_artifact_response(self, loop_env, tmp_path):
+        e = loop_env
+        self._escalate(e)
+        resp_file = tmp_path / "response.md"
+        resp_file.write_text("# Decision Response\n", encoding="utf-8")
+        loop_submit.handle_unblock(e["architect_token"], message="See doc.",
+                                   file_path=str(resp_file))
+        resp = loop_session.load_session(e["loop_dir"])["decisions"][0]["response"]
+        assert resp["kind"] == "message_and_artifact"
+        assert resp["message"] == "See doc."
+
+    def test_deliberate_empty_is_distinct_from_omitted(self, loop_env):
+        e = loop_env
+        self._escalate(e)
+        loop_submit.handle_unblock(e["architect_token"], no_response=True)
+        s = loop_session.load_session(e["loop_dir"])
+        resp = s["decisions"][0]["response"]
+        assert resp["kind"] == "deliberate_empty"
+        assert resp["message"] is None and resp["artifact_path"] is None
+        assert s["status"]["architect_message"] == loop_submit.DELIBERATE_EMPTY_RESPONSE_SUMMARY
+        assert _last_event(e["loop_dir"])["response_kind"] == "deliberate_empty"
+
+    def test_no_response_mutually_exclusive(self, loop_env, tmp_path):
+        e = loop_env
+        self._escalate(e)
+        resp_file = tmp_path / "response.md"
+        resp_file.write_text("x\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            loop_submit.handle_unblock(e["architect_token"], message="hi", no_response=True)
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            loop_submit.handle_unblock(e["architect_token"], file_path=str(resp_file),
+                                       no_response=True)
+
+    def test_no_response_rejected_for_ordinary_pause(self, loop_env):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(ValueError, match="no outstanding decisions"):
+            loop_submit.handle_unblock(e["architect_token"], no_response=True)
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_ordinary_pause_unblocks_without_response(self, loop_env):
+        e = loop_env
+        loop_submit.handle_pause(e["architect_token"])
+        loop_submit.handle_unblock(e["architect_token"])
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "plan_drafting"
+        ev = _last_event(e["loop_dir"])
+        assert "response_kind" not in ev
+
+    def test_cli_no_response_flag(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        self._escalate(e)
+        main(["unblock", "--token", e["architect_token"], "--no-response"])
+        resp = loop_session.load_session(e["loop_dir"])["decisions"][0]["response"]
+        assert resp["kind"] == "deliberate_empty"
+
+    def test_cli_blank_unblock_of_escalation_errors(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        self._escalate(e)
+        with pytest.raises(SystemExit) as exc:
+            main(["unblock", "--token", e["architect_token"]])
+        assert exc.value.code == 1
+        assert "response is required" in capsys.readouterr().err
+
+    def test_architect_status_states_response_required(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        self._escalate(e)
+        with pytest.raises(SystemExit):
+            main(["status", "--token", e["architect_token"]])
+        out = capsys.readouterr().out
+        assert "Response required" in out
+        assert "--no-response" in out
+        assert "Turn window: 300s" in out
 
 
 class TestArchitectToken:

@@ -93,6 +93,8 @@ def _cmd_status(args):
                 str(loop_dir / status["architect_response_artifact"])
                 if status.get("architect_response_artifact") else None
             ),
+            "turn_timeout_seconds": status.get("turn_timeout_seconds"),
+            "turn_deadline": status.get("turn_deadline"),
         }
         print(json.dumps(out, indent=2))
     else:
@@ -114,6 +116,7 @@ def _cmd_status(args):
             response_artifact = status.get("architect_response_artifact")
             if response_artifact:
                 print(f"  Architect response artifact: {loop_dir / response_artifact}")
+            _print_turn_window(status)
             _print_action_prompt(session, role, loop_dir, args.token)
         else:
             print(f"  Waiting for: {next_role}")
@@ -154,6 +157,8 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "blocked": status.get("blocked", False),
             "next_role": status.get("next_role"),
             "architect_message": status.get("architect_message"),
+            "turn_timeout_seconds": status.get("turn_timeout_seconds"),
+            "turn_deadline": status.get("turn_deadline"),
             "draftor_joined": roles.get("draftor", {}).get("joined", False),
             "reviewer_joined": roles.get("reviewer", {}).get("joined", False),
             "turns": session.get("turns", []),
@@ -193,9 +198,16 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
                 print(f"    Reason: {req.get('reason', '?')}")
                 if req.get("artifact_path"):
                     print(f"    Request: {loop_dir / req['artifact_path']}")
+            print(f"  Turn window: {status.get('turn_timeout_seconds')}s "
+                  f"(change on unblock with --timeout <30-3600>)")
             print()
             print("  Commands:")
-            print(f"    gator loop unblock --token {args.token} --message \"...\"")
+            if pending:
+                print("    Response required (message or --file) to resolve the pending decision:")
+                print(f"    gator loop unblock --token {args.token} --message \"...\" [--file <response.md>] [--timeout <s>]")
+                print(f"    Exceptional: gator loop unblock --token {args.token} --no-response")
+            else:
+                print(f"    gator loop unblock --token {args.token} [--message \"...\"] [--timeout <s>]")
             print(f"    gator loop end --token {args.token} --reason \"...\"")
 
     # Architect exit codes: 0 = active (can act), 2 = paused/terminal
@@ -203,6 +215,18 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         sys.exit(2)
     else:
         sys.exit(0)
+
+
+def _print_turn_window(status):
+    """Print the active turn window and deadline for the acting participant."""
+    timeout = status.get("turn_timeout_seconds")
+    deadline = status.get("turn_deadline")
+    if timeout is None:
+        return
+    line = f"  Turn window: {timeout}s"
+    if deadline:
+        line += f" (deadline {deadline})"
+    print(line)
 
 
 def _print_action_prompt(session, role, loop_dir, token):
@@ -295,18 +319,31 @@ def _cmd_escalate(args):
         sys.exit(1)
 
 
+def _turn_timeout_arg(value):
+    """argparse type for unblock --timeout; delegates to the shared validator."""
+    from session import validate_turn_timeout
+    try:
+        return validate_turn_timeout(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
 def _cmd_unblock(args):
     from submit import handle_unblock
     try:
         loop_id, loop_dir = handle_unblock(
             args.token, next_role=args.next_role, stage=args.stage,
-            message=args.message, file_path=getattr(args, "file", None)
+            message=args.message, file_path=getattr(args, "file", None),
+            turn_timeout=getattr(args, "timeout", None),
+            no_response=getattr(args, "no_response", False),
         )
         from session import load_session
         session = load_session(loop_dir)
         stage = session["status"]["stage"]
         next_role = session["status"]["next_role"]
+        timeout = session["status"].get("turn_timeout_seconds")
         print(f"  Unblocked. Resumed to {stage} (next: {next_role}).")
+        print(f"  Turn window: {timeout}s")
         print(f"  Loop: {loop_id}")
     except (FileNotFoundError, ValueError) as e:
         print(f"  Error: {e}", file=sys.stderr)
@@ -429,6 +466,8 @@ def _cmd_wait(args):
                 str(loop_dir / status["architect_response_artifact"])
                 if status.get("architect_response_artifact") else None
             ),
+            "turn_timeout_seconds": status.get("turn_timeout_seconds"),
+            "turn_deadline": status.get("turn_deadline"),
             "wake_reason": wake_reason,
             "max_seconds": max_seconds,
             "waited_seconds": waited_seconds,
@@ -454,6 +493,7 @@ def _cmd_wait(args):
             response_artifact = status.get("architect_response_artifact")
             if response_artifact:
                 print(f"  Architect response artifact: {loop_dir / response_artifact}")
+            _print_turn_window(status)
             _print_action_prompt(session, role, loop_dir, args.token)
         elif still_waiting:
             print(f"  Still waiting -- another role owns the turn "
@@ -655,8 +695,20 @@ def main(argv=None):
     p_unblock.add_argument("--token", required=True, help="Architect token")
     p_unblock.add_argument("--next-role", choices=["draftor", "reviewer"], help="Override resume role")
     p_unblock.add_argument("--stage", choices=["plan_drafting", "plan_review", "plan_revision"], help="Override resume stage")
-    p_unblock.add_argument("--message", help="Message to the resuming model (shown in their status)")
+    p_unblock.add_argument("--message", help="Message to the resuming model (shown in their status). "
+                           "Required (or --file / --no-response) when resolving an escalation")
     p_unblock.add_argument("--file", help="Path to a decision-response artifact")
+    p_unblock.add_argument(
+        "--timeout", type=_turn_timeout_arg, default=None,
+        help="New turn window in seconds (30-3600) for this and all later turns. "
+             "Omit to keep the loop's current window",
+    )
+    p_unblock.add_argument(
+        "--no-response", action="store_true",
+        help="Exceptional: resolve a pending escalation deliberately without a written "
+             "response (recorded as a deliberate empty response). "
+             "Mutually exclusive with --message and --file",
+    )
 
     # wait
     p_wait = sub.add_parser("wait", help="Block until it is your turn")

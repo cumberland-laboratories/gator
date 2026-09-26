@@ -635,6 +635,132 @@ def test_pause_then_shows_unblock_controls(page, dashboard_fleet):
     page.unroute("**/loops/*/status")
 
 
+def _route_paused_status(page, stage, pending_decision, turn_timeout=480):
+    """Serve a paused/blocked status for the selected loop (#40 controls)."""
+    import json as _json
+    decisions = []
+    if pending_decision:
+        decisions.append({
+            "id": "decision-1",
+            "request": {"reason": "Need scope decision", "artifact_path": None,
+                        "round": 1, "role": "draftor",
+                        "ts": "2026-09-22T10:01:00+00:00"},
+            "response": None,
+        })
+    body = _json.dumps({
+        "loop_id": "active-loop-2026-09-22T10-00-00Z",
+        "feature": "widget-refactor",
+        "status": {
+            "stage": stage,
+            "next_role": None,
+            "round": 1, "max_rounds": 3,
+            "blocked": True,
+            "turn_timeout_seconds": turn_timeout,
+            "resume_stage": "plan_drafting",
+            "resume_next_role": "draftor",
+            "escalation_reason": "Need scope decision" if pending_decision else None,
+        },
+        "roles": {
+            "draftor": {"role": "draftor", "joined": True},
+            "reviewer": {"role": "reviewer", "joined": True},
+        },
+        "decisions": decisions,
+    })
+
+    def _serve(route):
+        route.fulfill(status=200, content_type="application/json", body=body)
+
+    page.route("**/loops/*/status", _serve)
+
+
+def _open_unblock(page, dashboard_fleet):
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-ctrl-unblock", timeout=10000)
+    page.evaluate("() => document.querySelector('.loop-ctrl-unblock').click()")
+    page.wait_for_selector(".loop-ctrl-input-area", timeout=5000)
+
+
+def test_unblock_escalation_requires_response(page, dashboard_fleet):
+    """Escalation: required label, Confirm disabled until non-blank, no blank POST."""
+    _route_paused_status(page, "blocked_on_architect", pending_decision=True)
+    posts = []
+    page.route("**/loops/*/unblock",
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json", body='{"ok": true}')))
+    _open_unblock(page, dashboard_fleet)
+
+    label = page.evaluate("() => document.querySelector('.loop-ctrl-label').textContent")
+    assert label == "Response to participant (required)"
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm').disabled") is True
+
+    # Whitespace does not enable Confirm; a forced click is refused client-side.
+    page.fill(".loop-ctrl-input", "   ")
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm').disabled") is True
+    page.evaluate("""() => {
+        var b = document.querySelector('.loop-ctrl-confirm');
+        b.disabled = false; b.click();
+    }""")
+    page.wait_for_selector(".loop-ctrl-error", timeout=5000)
+    assert posts == []
+
+    page.fill(".loop-ctrl-input", "Narrow to #35 only.")
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm').disabled") is False
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_timeout(500)
+    assert len(posts) == 1
+    import json as _json
+    body = _json.loads(posts[0])
+    assert body == {"message": "Narrow to #35 only."}, "unchanged timeout must not be sent"
+
+    page.unroute("**/loops/*/unblock")
+    page.unroute("**/loops/*/status")
+
+
+def test_unblock_ordinary_pause_message_optional_and_timeout(page, dashboard_fleet):
+    """Ordinary pause: optional label, timeout defaults to session value, changed value sent."""
+    import json as _json
+    _route_paused_status(page, "paused_by_architect", pending_decision=False,
+                         turn_timeout=480)
+    posts = []
+    page.route("**/loops/*/unblock",
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json", body='{"ok": true}')))
+    _open_unblock(page, dashboard_fleet)
+
+    label = page.evaluate("() => document.querySelector('.loop-ctrl-label').textContent")
+    assert label == "Message (optional)"
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm').disabled") is False
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-timeout').value") == "480"
+
+    # Out-of-range timeout is refused before any request.
+    page.fill(".loop-ctrl-timeout", "10")
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_selector(".loop-ctrl-error", timeout=5000)
+    assert posts == []
+
+    page.fill(".loop-ctrl-timeout", "900")
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_timeout(500)
+    assert len(posts) == 1
+    assert _json.loads(posts[0]) == {"timeout": 900}
+
+    page.unroute("**/loops/*/unblock")
+    page.unroute("**/loops/*/status")
+
+
+def test_poll_does_not_wipe_composed_response(page, dashboard_fleet):
+    """The 3 s status poll must not clear a response being typed."""
+    _route_paused_status(page, "blocked_on_architect", pending_decision=True)
+    _open_unblock(page, dashboard_fleet)
+    page.fill(".loop-ctrl-input", "half-typed answer")
+    page.wait_for_timeout(4000)  # > POLL_INTERVAL_MS
+    value = page.evaluate("() => document.querySelector('.loop-ctrl-input').value")
+    assert value == "half-typed answer"
+    page.unroute("**/loops/*/status")
+
+
 # ── executive summary (Module 6) ──────────────────────────────────────────
 
 

@@ -1997,6 +1997,32 @@ mark.search-hit {
 }
 .loop-ctrl-input-error {
   border-color: #dc3545;
+  border-width: 2px;
+}
+.loop-ctrl-label {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.loop-ctrl-label:empty { display: none; }
+.loop-ctrl-timeout-label {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--color-text-muted, #666);
+}
+.loop-ctrl-timeout {
+  width: 72px;
+  margin-left: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.loop-ctrl-confirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .loop-ctrl-confirm {
   padding: 6px 12px;

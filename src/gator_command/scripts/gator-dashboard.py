@@ -246,6 +246,21 @@ def _resolve_repo_by_key(repo_key):
     raise KeyError(repo_key)
 
 
+def _validate_http_turn_timeout(value):
+    """Validate a JSON turn timeout via the loop's shared validator.
+
+    JSON callers must send a number: strings are rejected here even though
+    the shared validator accepts plain-integer strings for CLI input.
+    """
+    _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+    if _loop_scripts not in sys.path:
+        sys.path.insert(0, _loop_scripts)
+    from session import validate_turn_timeout
+    if isinstance(value, str):
+        raise ValueError("turn timeout must be a JSON integer")
+    return validate_turn_timeout(value)
+
+
 def _resolve_loop_dir(repo_key, loop_id):
     """Containment-safe resolver: repo_key + loop_id → validated loop_dir Path.
 
@@ -2464,6 +2479,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             init_loop, find_active_loop, acquire_host_lock,
             acquire_start_lock, release_start_lock, release_host_lock,
         )
+        from session import TURN_TIMEOUT_MIN, TURN_TIMEOUT_MAX
 
         feature = (req.get("feature") or "").strip()
         if not feature:
@@ -2484,12 +2500,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 {"error": "max_rounds must be an integer between 1 and 20"},
                 400)
             return
-        if (not isinstance(turn_timeout, int)
-                or isinstance(turn_timeout, bool)
-                or turn_timeout < 30 or turn_timeout > 3600):
+        try:
+            turn_timeout = _validate_http_turn_timeout(turn_timeout)
+        except ValueError:
             self._send_json(
                 {"error": "turn_timeout must be an integer between "
-                 "30 and 3600"}, 400)
+                 f"{TURN_TIMEOUT_MIN} and {TURN_TIMEOUT_MAX}"}, 400)
             return
 
         try:
@@ -2728,17 +2744,42 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         loop_dir, token = result
 
-        message = (req.get("message") or "").strip() or None
-
         _loop_scripts = str(Path(__file__).resolve().parent / "loop")
         if _loop_scripts not in sys.path:
             sys.path.insert(0, _loop_scripts)
         from submit import handle_unblock
+        from session import TURN_TIMEOUT_MIN, TURN_TIMEOUT_MAX
+
+        message = req.get("message")
+        if message is not None and not isinstance(message, str):
+            self._send_json({"error": "message must be a string"}, 400)
+            return
+        message = (message or "").strip() or None
+
+        no_response = req.get("no_response", False)
+        if not isinstance(no_response, bool):
+            self._send_json({"error": "no_response must be a boolean"}, 400)
+            return
+
+        turn_timeout = req.get("timeout")
+        if turn_timeout is not None:
+            try:
+                turn_timeout = _validate_http_turn_timeout(turn_timeout)
+            except ValueError:
+                self._send_json(
+                    {"error": "timeout must be an integer between "
+                     f"{TURN_TIMEOUT_MIN} and {TURN_TIMEOUT_MAX}"}, 400)
+                return
 
         try:
-            handle_unblock(token, message=message, loop_dir=loop_dir)
+            handle_unblock(token, message=message, loop_dir=loop_dir,
+                           turn_timeout=turn_timeout, no_response=no_response)
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
+            return
+        except ValueError as exc:
+            # Response contract / timeout violations — nothing was written.
+            self._send_json({"error": str(exc)}, 400)
             return
 
         self._send_json({"ok": True})

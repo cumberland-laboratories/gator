@@ -922,8 +922,12 @@ class TestLoopStart:
 
 
 def _setup_loop_with_tokens(tmp_path, name, stage="plan_drafting",
-                            blocked=False):
-    """Create a repo with a loop that has tokens. Returns (repo, rk, loop_id)."""
+                            blocked=False, pending_decision=False):
+    """Create a repo with a loop that has tokens. Returns (repo, rk, loop_id).
+
+    pending_decision=True seeds an unresolved escalation decision, which
+    is what distinguishes an escalation from an ordinary Architect pause.
+    """
     _loop_dir = str(
         Path(__file__).resolve().parent.parent
         / "src" / "gator_command" / "scripts" / "loop"
@@ -936,8 +940,16 @@ def _setup_loop_with_tokens(tmp_path, name, stage="plan_drafting",
     loops_dir = repo / ".gator" / "loops"
     loop_id = f"{name}-2026-09-22T10-00-00Z"
     loop_dir = loops_dir / loop_id
-    _write_session(loop_dir, _make_session(loop_id, stage=stage,
-                                           blocked=blocked))
+    session = _make_session(loop_id, stage=stage, blocked=blocked)
+    if pending_decision:
+        session["decisions"].append({
+            "id": "decision-1",
+            "request": {"reason": "Need scope decision", "artifact_path": None,
+                        "round": 0, "role": "draftor",
+                        "ts": "2026-09-22T10:01:00+00:00"},
+            "response": None,
+        })
+    _write_session(loop_dir, session)
 
     tok_d, nonce_d = make_token(loop_id, "draftor")
     tok_r, nonce_r = make_token(loop_id, "reviewer")
@@ -1711,6 +1723,136 @@ class TestArchitectControls:
             server.url,
             f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock", {})
         assert status == 409
+
+    # -- unblock: response contract + turn window (#40) ------------------------
+
+    def _read_session(self, repo, loop_id):
+        path = repo / ".gator" / "loops" / loop_id / "session.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_unblock_escalation_blank_rejected_without_write(self, server, tmp_path):
+        """A pending escalation cannot be resolved by a blank unblock."""
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-blank", stage="blocked_on_architect",
+            blocked=True, pending_decision=True)
+        server.start([{"name": "ctrl-unbl-blank", "path": str(repo),
+                       "repo_key": rk}])
+        before = (repo / ".gator" / "loops" / loop_id / "session.json").read_bytes()
+        for body in ({}, {"message": "   "}):
+            status, data, _ = _post(
+                server.url,
+                f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock", body)
+            assert status == 400
+            assert "response is required" in data.get("error", "")
+        after = (repo / ".gator" / "loops" / loop_id / "session.json").read_bytes()
+        assert before == after
+
+    def test_unblock_escalation_with_response_resolves_decision(self, server, tmp_path):
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-resp", stage="blocked_on_architect",
+            blocked=True, pending_decision=True)
+        server.start([{"name": "ctrl-unbl-resp", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock",
+            {"message": "Use the narrowed scope."})
+        assert status == 200
+        sess = self._read_session(repo, loop_id)
+        resp = sess["decisions"][0]["response"]
+        assert resp["message"] == "Use the narrowed scope."
+        assert resp["kind"] == "message"
+        assert sess["status"]["architect_message"] == "Use the narrowed scope."
+
+    def test_unblock_escalation_no_response_flag(self, server, tmp_path):
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-nr", stage="blocked_on_architect",
+            blocked=True, pending_decision=True)
+        server.start([{"name": "ctrl-unbl-nr", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock",
+            {"no_response": True})
+        assert status == 200
+        resp = self._read_session(repo, loop_id)["decisions"][0]["response"]
+        assert resp["kind"] == "deliberate_empty"
+        assert resp["message"] is None
+
+    def test_unblock_no_response_must_be_bool(self, server, tmp_path):
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-nrb", stage="blocked_on_architect",
+            blocked=True, pending_decision=True)
+        server.start([{"name": "ctrl-unbl-nrb", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock",
+            {"no_response": "yes"})
+        assert status == 400
+
+    def test_unblock_ordinary_pause_needs_no_response(self, server, tmp_path):
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-pause", stage="paused_by_architect",
+            blocked=True)
+        server.start([{"name": "ctrl-unbl-pause", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock", {})
+        assert status == 200
+
+    def test_unblock_timeout_persists_and_sets_deadline(self, server, tmp_path):
+        from datetime import datetime, timezone
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, "ctrl-unbl-to", stage="paused_by_architect",
+            blocked=True)
+        server.start([{"name": "ctrl-unbl-to", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock",
+            {"timeout": 900})
+        assert status == 200
+        sess = self._read_session(repo, loop_id)
+        assert sess["status"]["turn_timeout_seconds"] == 900
+        remaining = (datetime.fromisoformat(sess["status"]["turn_deadline"])
+                     - datetime.now(tz=timezone.utc)).total_seconds()
+        assert 800 < remaining <= 900
+
+    @pytest.mark.parametrize("bad", [10, 7200, 600.5, "600", True])
+    def test_unblock_invalid_timeout_rejected_without_write(self, server, tmp_path, bad):
+        name = "ctrl-unbl-bad"
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, name, stage="paused_by_architect", blocked=True)
+        server.start([{"name": name, "path": str(repo), "repo_key": rk}])
+        before = (repo / ".gator" / "loops" / loop_id / "session.json").read_bytes()
+        status, data, _ = _post(
+            server.url,
+            f"/api/repo-by-key/{rk}/loops/{loop_id}/unblock",
+            {"timeout": bad})
+        assert status == 400
+        assert "timeout" in data.get("error", "")
+        after = (repo / ".gator" / "loops" / loop_id / "session.json").read_bytes()
+        assert before == after
+
+    def test_start_default_turn_timeout_is_300(self, server, tmp_path):
+        """Dashboard start with no custom value still stores 300."""
+        repo = tmp_path / "repo-default-to"
+        (repo / ".gator").mkdir(parents=True)
+        sketch = repo / "sketch.md"
+        sketch.write_text("# Sketch\n", encoding="utf-8")
+        rk = _repo_key(repo)
+        server.start([{"name": "default-to", "path": str(repo),
+                       "repo_key": rk}])
+        status, data, _ = _post(
+            server.url, f"/api/repo-by-key/{rk}/loops/start",
+            {"feature": "defaults", "sketch_path": str(sketch)})
+        assert status == 201
+        loops = list((repo / ".gator" / "loops").glob("defaults-*"))
+        assert len(loops) == 1
+        sess = json.loads((loops[0] / "session.json").read_text(encoding="utf-8"))
+        assert sess["status"]["turn_timeout_seconds"] == 300
 
     # -- end -----------------------------------------------------------------
 

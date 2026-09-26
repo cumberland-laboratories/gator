@@ -150,7 +150,14 @@ Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`,
 -> `_resolve_loop_dir()`, `loop.session.load_tokens()`, `loop.submit.handle_pause()`, `loop.submit.handle_interject()`, `loop.submit.handle_unblock()`, `loop.submit.handle_end()`
 ! Dashboard never acquires the session lock itself — all writes delegate to `submit.py` handlers.
 ! `_resolve_architect_token()` is the shared gatekeeper — resolves loop_dir and reads the architect token; returns None (with error response sent) on failure.
-! Interject requires non-empty message (400 if absent). Other actions accept optional message/reason.
+! Interject requires non-empty message (400 if absent). Pause and end accept optional message/reason.
+! Unblock accepts `message` (string, optional), `no_response` (bool, default false), and `timeout` (optional JSON integer 30..3600 via `_validate_http_turn_timeout()`; strings/floats/bools → 400). The response contract (a pending escalation needs a message or explicit `no_response`) is enforced by `submit.handle_unblock()`, not by the endpoint; its `ValueError` maps to 400 with nothing written, `PermissionError` to 409. An ordinary pause unblocks with no response.
+
+### _validate_http_turn_timeout(value)
+File: src/gator_command/scripts/gator-dashboard.py
+Wraps `loop.session.validate_turn_timeout()` for JSON bodies, additionally rejecting strings. Used by loop start (`turn_timeout`, default 300) and unblock (`timeout`, optional) so CLI and Dashboard share one range.
+<- `_handle_loop_start()`, `_handle_loop_unblock()`
+-> `loop.session.validate_turn_timeout()`
 ! State machine rejections (PermissionError from handlers) returned as 409.
 
 ### _LOOP_HOSTS / _HostEntry / _run_watcher() / _adopt_orphaned_loops()

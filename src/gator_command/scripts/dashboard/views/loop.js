@@ -23,6 +23,10 @@
 
   var POLL_INTERVAL_MS = 3000;
 
+  // Mirrors loop/session.py TURN_TIMEOUT_MIN/MAX; the server re-validates.
+  var TURN_TIMEOUT_MIN = 30;
+  var TURN_TIMEOUT_MAX = 3600;
+
   var TERMINAL_STAGES = {
     plan_approved: true,
     max_rounds_exceeded: true,
@@ -1088,9 +1092,19 @@
       html += '<button class="loop-ctrl-btn loop-ctrl-end" data-action="end">End</button>';
     }
 
+    // An escalation leaves a pending decision; an ordinary Architect pause
+    // does not. Only the former requires a response to unblock.
+    var pd = pendingDecision(status);
+    var currentTimeout = s.turn_timeout_seconds || 300;
+
     html += '</div>';
     html += '<div class="loop-ctrl-input-area" style="display:none;">'
+      + '<label class="loop-ctrl-label"></label>'
       + '<input type="text" class="loop-ctrl-input" placeholder="Message (optional)">'
+      + '<label class="loop-ctrl-timeout-label" style="display:none;">Turn window (s) '
+      + '<input type="number" class="loop-ctrl-timeout" min="' + TURN_TIMEOUT_MIN
+      + '" max="' + TURN_TIMEOUT_MAX + '" step="1" value="' + escHtml(String(currentTimeout)) + '">'
+      + '</label>'
       + '<button class="loop-ctrl-confirm">Confirm</button>'
       + '<button class="loop-ctrl-cancel">Cancel</button>'
       + '</div>';
@@ -1098,7 +1112,40 @@
 
     var inputArea = panel.querySelector(".loop-ctrl-input-area");
     var input = panel.querySelector(".loop-ctrl-input");
+    var label = panel.querySelector(".loop-ctrl-label");
+    var timeoutLabel = panel.querySelector(".loop-ctrl-timeout-label");
+    var timeoutInput = panel.querySelector(".loop-ctrl-timeout");
+    var confirmBtn = panel.querySelector(".loop-ctrl-confirm");
     var pendingAction = null;
+    var responseRequired = false;
+
+    function syncConfirmEnabled() {
+      confirmBtn.disabled = responseRequired && !input.value.trim();
+    }
+
+    function showInput(action, labelText, placeholder, required) {
+      pendingAction = action;
+      responseRequired = required;
+      label.textContent = labelText;
+      input.placeholder = placeholder;
+      input.value = "";
+      input.classList.remove("loop-ctrl-input-error");
+      timeoutLabel.style.display = action === "unblock" ? "" : "none";
+      timeoutInput.value = String(currentTimeout);
+      timeoutInput.classList.remove("loop-ctrl-input-error");
+      inputArea.style.display = "flex";
+      syncConfirmEnabled();
+    }
+
+    function showCtrlError(text) {
+      var errEl = panel.querySelector(".loop-ctrl-error");
+      if (!errEl) {
+        errEl = document.createElement("div");
+        errEl.className = "loop-ctrl-error";
+        inputArea.parentNode.insertBefore(errEl, inputArea.nextSibling);
+      }
+      errEl.textContent = text;
+    }
 
     function clearCtrlError() {
       var el = panel.querySelector(".loop-ctrl-error");
@@ -1110,20 +1157,18 @@
         clearCtrlError();
         var action = btn.dataset.action;
         if (action === "interject") {
-          pendingAction = action;
-          input.placeholder = "Message (required)";
-          input.value = "";
-          inputArea.style.display = "flex";
-        } else if (action === "pause" || action === "unblock") {
-          pendingAction = action;
-          input.placeholder = "Message (optional)";
-          input.value = "";
-          inputArea.style.display = "flex";
+          showInput(action, "", "Message (required)", false);
+        } else if (action === "pause") {
+          showInput(action, "", "Message (optional)", false);
+        } else if (action === "unblock") {
+          if (pd) {
+            showInput(action, "Response to participant (required)",
+              "Answer the escalation (" + pd.id + ")", true);
+          } else {
+            showInput(action, "Message (optional)", "Message (optional)", false);
+          }
         } else if (action === "end") {
-          pendingAction = action;
-          input.placeholder = "Reason (optional)";
-          input.value = "";
-          inputArea.style.display = "flex";
+          showInput(action, "", "Reason (optional)", false);
         }
       });
     });
@@ -1132,15 +1177,19 @@
       clearCtrlError();
       inputArea.style.display = "none";
       pendingAction = null;
+      responseRequired = false;
     });
 
-    panel.querySelector(".loop-ctrl-confirm").addEventListener("click", function () {
+    confirmBtn.addEventListener("click", function () {
       if (!pendingAction) return;
       var action = pendingAction;
       var msg = input.value.trim();
 
-      if (action === "interject" && !msg) {
+      if ((action === "interject" || responseRequired) && !msg) {
         input.classList.add("loop-ctrl-input-error");
+        showCtrlError(responseRequired
+          ? "A response is required to resolve the escalation."
+          : "A message is required.");
         return;
       }
 
@@ -1151,25 +1200,36 @@
         if (msg) body.message = msg;
       }
 
+      if (action === "unblock") {
+        var raw = timeoutInput.value.trim();
+        var t = Number(raw);
+        if (!/^\d+$/.test(raw) || t < TURN_TIMEOUT_MIN || t > TURN_TIMEOUT_MAX) {
+          timeoutInput.classList.add("loop-ctrl-input-error");
+          showCtrlError("Turn window must be a whole number of seconds between "
+            + TURN_TIMEOUT_MIN + " and " + TURN_TIMEOUT_MAX + ".");
+          return;
+        }
+        if (t !== currentTimeout) body.timeout = t;
+      }
+
       postAction(loopId, action, body).then(function (result) {
         if (result && result._failed) {
-          var errEl = panel.querySelector(".loop-ctrl-error");
-          if (!errEl) {
-            errEl = document.createElement("div");
-            errEl.className = "loop-ctrl-error";
-            inputArea.parentNode.insertBefore(errEl, inputArea.nextSibling);
-          }
-          errEl.textContent = result.error || "Action failed";
+          showCtrlError(result.error || "Action failed");
           return;
         }
         inputArea.style.display = "none";
         pendingAction = null;
+        responseRequired = false;
         loadSelectedLoop();
       });
     });
 
     input.addEventListener("input", function () {
       input.classList.remove("loop-ctrl-input-error");
+      syncConfirmEnabled();
+    });
+    timeoutInput.addEventListener("input", function () {
+      timeoutInput.classList.remove("loop-ctrl-input-error");
     });
   }
 
@@ -1383,6 +1443,11 @@
     renderSelectedLoop(status, events, _state.container);
   }
 
+  function isComposingControl(container) {
+    var area = container && container.querySelector(".loop-ctrl-input-area");
+    return !!(area && area.style.display !== "none");
+  }
+
   async function pollLoop() {
     var gen = _state.generation;
     if (document.hidden) return;
@@ -1406,6 +1471,10 @@
 
     var events = await fetchEvents(_state.selectedLoopId);
     if (gen !== _state.generation) return;
+
+    // Do not wipe a control the Architect is composing (e.g. a required
+    // escalation response). Terminal transitions still re-render.
+    if (isComposingControl(_state.container) && !isTerminal(stage)) return;
 
     renderSelectedLoop(status, events, _state.container);
 

@@ -67,7 +67,9 @@ Paths persisted by Windows, MSYS, or POSIX callers are normalized through `norma
 
 ## TRIPWIRE: CLI and Git Compatibility
 
-Machine-readable CLI output has a top-level `schema` identifier. Additive fields may remain within a version; removing, renaming, or changing meaning requires a schema bump and consumer migration.
+Machine-readable CLI output has a top-level `schema` identifier. Additive fields may remain within a version; removing, renaming, or changing meaning requires a schema bump and consumer migration. Example: `gator-loop-status-v1` gained `turn_timeout_seconds` / `turn_deadline` (status and wait) and bounded-wait fields additively; the Dashboard and agents must tolerate their absence in older output.
+
+Loop turn windows have one validation authority: `loop/session.validate_turn_timeout()` (30..3600 s, integral). The loop CLI (`unblock --timeout`) and the Dashboard HTTP endpoints (loop start `turn_timeout`, unblock `timeout`, via `_validate_http_turn_timeout()`) must both route through it; the browser mirrors the bounds only for early feedback. Do not re-implement the range at a call site.
 
 Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.
 
