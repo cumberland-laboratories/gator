@@ -2,6 +2,33 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.17.0] — 2026-09-27
+
+Feature release. The Architect can continue a loop that ran out of rounds without losing its history ([#39](https://github.com/cumberland-laboratories/gator/issues/39)), and the Dashboard loop workspace no longer flashes or loses local state on each poll ([#38](https://github.com/cumberland-laboratories/gator/issues/38)).
+
+### Added
+
+- **Continue a loop after its round limit (#39)** — `gator loop extend --token <architect> --rounds <1-20> --message "..."` and a Dashboard **Continue loop** control. Only a loop that ended in `max_rounds_exceeded` can be extended. The extension raises the round ceiling by the given increment, resumes at `plan_revision` for the Draftor with a fresh deadline from the loop's turn window, and keeps every prior round, artifact, turn, and decision. A reason is required and is shown to the resumed Draftor. One additive, non-terminal `loop_extended` event records the reason, increment, and old/new ceilings. Pins: `TestAdvanceExtended`, `TestHandleExtend`, `TestCliExtend` in `tests/test_loop.py`; `TestLoopExtend` in `tests/test_dashboard_loops.py`.
+- **Dashboard `POST /loops/<id>/extend`** — validates `rounds` (JSON int 1–20) and `message` before any write, extends, then reattaches a watcher. The response reports `watcher: attached | already_hosted | failed` and never claims timeout enforcement resumed when it did not.
+- **Shared `validate_round_count()`** (1–20) alongside `validate_turn_timeout()`, with one bounded-integer implementation behind both.
+
+### Changed
+
+- **Extension is guarded like a start** — it holds `start.lock` and refuses while another loop is active, preserving one active loop per repo. `plan_approved`, `turn_timed_out`, and `ended_by_architect` remain final.
+- **CLI extension always hosts** — like `gator loop start`, `extend` attaches a foreground watcher. It exits 0 when another live process already hosts the loop, and exits 1 (extension saved, timeouts not enforced) when no watcher can attach. There is no state-only form.
+- **One Dashboard watcher attach path** — start, startup adoption, and extension all go through `_ensure_loop_watcher()` (nonce-protected registry entry before thread start; never a duplicate watcher).
+- **Dashboard loop workspace renders incrementally (#38)** — the selected loop is built once as stable regions and patched per region only when its data changes. Identical polls no longer touch the panel (only the countdown text updates). The timeline appends new events. Artifact sections keep their expanded state and loaded text. Open control inputs survive polling without a special case. `plan.current.md` / `findings.current.md` refresh in place after new events, with per-section request revisions so an older response can never overwrite newer content. Pins: incremental-rendering and stale-response tests in `tests/test_dashboard_ui/test_loop_workspace.py`.
+- **Participant protocol** — Rule 10 documents the Architect-only extension and re-engagement by fresh join prompt. The State Machine table now lists every stage (adds `paused_by_architect` and `ended_by_architect`) with Active / Paused / Terminal summaries. Pin: `test_protocol_state_table_matches_state_machine`, derived from the state machine's stage sets.
+
+### Fixed
+
+- **Watcher replay after a revived loop** — `watch_loop()` read `events.jsonl` from the start and exited at the first terminal event, so any watcher attached to a revived loop would have exited immediately. Terminal detection is now session-authoritative. Pin: `TestWatchLoopReplay`.
+- **Dashboard loop flash** — the 3-second poll no longer rebuilds the whole selected-loop panel (#38).
+
+### Upgrade note
+
+Participants should stop when a loop ends; after an extension, the Architect re-engages them with fresh join prompts (Dashboard **Copy prompt**). Run `gator update` in governed repos to receive the updated protocol text.
+
 ## [2.16.0] — 2026-09-26
 
 Feature release. Makes `gator loop` participation resilient for agent runtimes and makes Architect unblock decisions deliberate and durable. Addresses the short-term slice of [#36](https://github.com/cumberland-laboratories/gator/issues/36) and [#40](https://github.com/cumberland-laboratories/gator/issues/40).
