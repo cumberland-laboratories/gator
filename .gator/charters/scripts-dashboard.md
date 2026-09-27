@@ -138,7 +138,7 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
 File: src/gator_command/scripts/gator-dashboard.py
 Route `/api/repo-by-key/<repo_key>/loops/...` POST requests. Start a new loop (with host watcher thread) or return participant prompt text.
 <- `do_POST()` via prefix match on `/api/repo-by-key/`
--> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.host.init_loop()`, `loop.host.acquire_start_lock()`, `loop.host.acquire_host_lock()`, `loop.session.load_session()`, `loop.session.load_tokens()`
+-> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.host.init_loop()`, `loop.host.acquire_start_lock()`, `_ensure_loop_watcher()`, `loop.session.load_session()`, `loop.session.load_tokens()`
 ! Start acquires `start.lock` cross-process before scanning for active loops — one active loop per repo enforced by on-disk scan, not just the in-process registry.
 ! `sketch_path` must resolve inside the registered repo root — rejects traversal to external files.
 ! Prompt endpoint returns only `draftor` or `reviewer` prompts — never `architect`. Response carries `Cache-Control: no-store` on all paths (success and error).
@@ -147,28 +147,37 @@ Route `/api/repo-by-key/<repo_key>/loops/...` POST requests. Start a new loop (w
 ### _resolve_architect_token() / _handle_loop_pause() / _handle_loop_interject() / _handle_loop_unblock() / _handle_loop_end()
 File: src/gator_command/scripts/gator-dashboard.py
 Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`, reads the architect token from `.tokens.json`, and delegates to the corresponding `submit.py` handler with `loop_dir=loop_dir`.
-<- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`)
+<- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`; `/extend` has its own entry below)
 -> `_resolve_loop_dir()`, `loop.session.load_tokens()`, `loop.submit.handle_pause()`, `loop.submit.handle_interject()`, `loop.submit.handle_unblock()`, `loop.submit.handle_end()`
 ! Dashboard never acquires the session lock itself — all writes delegate to `submit.py` handlers.
 ! `_resolve_architect_token()` is the shared gatekeeper — resolves loop_dir and reads the architect token; returns None (with error response sent) on failure.
 ! Interject requires non-empty message (400 if absent). Pause and end accept optional message/reason.
 ! Unblock accepts `message` (string, optional), `no_response` (bool, default false), and `timeout` (optional JSON integer 30..3600 via `_validate_http_turn_timeout()`; strings/floats/bools → 400). The response contract (a pending escalation needs a message or explicit `no_response`) is enforced by `submit.handle_unblock()`, not by the endpoint; its `ValueError` maps to 400 with nothing written, `PermissionError` to 409. An ordinary pause unblocks with no response.
 
-### _validate_http_turn_timeout(value)
+### _validate_http_turn_timeout(value) / _validate_http_round_count(value)
 File: src/gator_command/scripts/gator-dashboard.py
-Wraps `loop.session.validate_turn_timeout()` for JSON bodies, additionally rejecting strings. Used by loop start (`turn_timeout`, default 300) and unblock (`timeout`, optional) so CLI and Dashboard share one range.
-<- `_handle_loop_start()`, `_handle_loop_unblock()`
--> `loop.session.validate_turn_timeout()`
+Wrap `loop.session.validate_turn_timeout()` / `validate_round_count()` for JSON bodies, additionally rejecting strings. Turn timeout: loop start (`turn_timeout`, default 300) and unblock (`timeout`, optional). Round count: extend (`rounds`, required, 1..20). CLI and Dashboard share one range per field.
+<- `_handle_loop_start()`, `_handle_loop_unblock()`, `_handle_loop_extend()`
+-> `loop.session.validate_turn_timeout()`, `loop.session.validate_round_count()`
 ! State machine rejections (PermissionError from handlers) returned as 409.
 
-### _LOOP_HOSTS / _HostEntry / _run_watcher() / _adopt_orphaned_loops()
+### _handle_loop_extend(repo_key, loop_id, req)
 File: src/gator_command/scripts/gator-dashboard.py
-Server-local host registry tracking watcher threads, held `host.lock` file descriptors, and entry nonces. Startup adoption scans registered repos for orphaned active loops.
-<- server startup, `_handle_loop_start()`
--> `loop.host.watch_loop()`, `loop.host.acquire_host_lock()`, `loop.host.release_host_lock()`
+POST `/api/repo-by-key/<key>/loops/<id>/extend` (#39). Body: `rounds` (JSON int 1..20 via `_validate_http_round_count()`) and `message` (required non-blank string) — both checked before any write (400). Resolves the architect token, calls `loop.host.extend_loop(token, rounds, message, loop_dir=...)` (start.lock + single-active guard + `handle_extend()` transaction), then `_ensure_loop_watcher(repo_path, loop_id, loop_dir, retry=True)`. Response 200: `{ok, previous_max_rounds, max_rounds, round, watcher: attached|already_hosted|failed, watcher_detail}`.
+<- `_dispatch_loop_post()` via action suffix `/extend`
+-> `_resolve_architect_token()`, `_validate_http_round_count()`, `loop.host.extend_loop()`, `_ensure_loop_watcher()`, `loop.session.load_session()`
+! Error map: `PermissionError` (wrong stage) -> 409; `RuntimeError` (another active loop / start or extension in progress) -> 409; handler `ValueError` -> 400. Every rejection leaves session/events unchanged and attaches no watcher.
+! The extension is durable even when `watcher == "failed"`; the response must report that state honestly — never imply timeout enforcement resumed. `already_hosted` (in-process thread or another process holds `host.lock`) never starts a second watcher.
+
+### _LOOP_HOSTS / _HostEntry / _run_watcher() / _ensure_loop_watcher() / _adopt_orphaned_loops()
+File: src/gator_command/scripts/gator-dashboard.py
+Server-local host registry tracking watcher threads, held `host.lock` file descriptors, and entry nonces. Startup adoption scans registered repos for orphaned active loops. `_ensure_loop_watcher(repo_path, loop_id, loop_dir, retry=False)` is the **single attach path** for every Dashboard watcher (start, adoption, and #39 extension) and returns `(state, detail)` with `WATCHER_ATTACHED` / `WATCHER_ALREADY_HOSTED` / `WATCHER_FAILED`.
+<- server startup, `_handle_loop_start()`, `_handle_loop_extend()` (M5b)
+-> `loop.host.watch_loop()`, `loop.host.acquire_host_lock_with_retry()`, `loop.host.release_host_lock()`
+! Invariant: never create a watcher thread outside `_ensure_loop_watcher()`. It (1) returns `already_hosted` if this process already has a live thread for the key, (2) acquires `host.lock` — one attempt for start/adoption, the ~3 s `acquire_host_lock_with_retry()` window when `retry=True` — and returns `already_hosted` if another process still holds it, (3) inserts the nonce-protected `_HostEntry` BEFORE `t.start()`, and (4) on thread-start failure removes the entry only if the nonce matches and releases the fd (`failed`, detail `failed to start host watcher: ...`).
 ! `host.lock` acquired once and transferred to `_run_watcher` — no release/reacquire gap. OS exclusive lock prevents duplicate watchers.
 ! `_run_watcher` owns the fd — closes it in `finally`, removes its registry entry only if `entry_nonce` matches (prevents a replacement entry from being deleted by an exiting prior incarnation).
-! Adoption skips loops whose `host.lock` is already held (another host is live).
+! Adoption skips loops whose `host.lock` is already held (another host is live). Loop start maps any non-attached result to HTTP 500 (`failed to start host watcher` or `failed to acquire host lock`) — a brand-new loop cannot legitimately be hosted elsewhere.
 
 ### DashboardHandler.do_GET() / DashboardHandler.do_POST()
 File: src/gator_command/scripts/gator-dashboard.py

@@ -1978,6 +1978,26 @@ mark.search-hit {
 .loop-ctrl-pause { border-color: #d59e00; color: #b58900; }
 .loop-ctrl-interject { border-color: #268bd2; color: #268bd2; }
 .loop-ctrl-unblock { border-color: #2aa198; color: #2aa198; }
+.loop-ctrl-continue { border-color: #2aa198; color: #2aa198; font-weight: 600; }
+
+/* #39 — extension notice (meaning carried by text, not colour alone) */
+.loop-extend-notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.loop-extend-warning {
+  margin-top: 6px;
+  font-weight: 600;
+}
+.loop-extend-hosted {
+  margin-top: 6px;
+  color: var(--color-text-muted, #666);
+}
 .loop-ctrl-end { border-color: #dc3545; color: #dc3545; }
 
 .loop-ctrl-input-area {

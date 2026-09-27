@@ -146,6 +146,7 @@ _EVENT_FORMATS = {
     "max_rounds_exceeded": ("MAX ROUNDS", "limit reached at round {round}"),
     "turn_timed_out": ("TIMED OUT", "{role} did not submit in time"),
     "loop_unblocked": ("unblocked", "{detail}"),
+    "loop_extended": ("EXTENDED", "{detail}"),  # not terminal (#39)
     "loop_paused": ("PAUSED", "{detail}"),
     "architect_interjection": ("ARCHITECT", "{detail}"),
     "loop_ended_by_architect": ("ENDED", "{detail}"),

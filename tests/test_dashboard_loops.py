@@ -1928,6 +1928,229 @@ class TestArchitectControls:
         assert status == 400
 
 
+def _loop_host_module():
+    _loop_dir = str(Path(__file__).resolve().parent.parent
+                    / "src" / "gator_command" / "scripts" / "loop")
+    if _loop_dir not in sys.path:
+        sys.path.insert(0, _loop_dir)
+    import host as loop_host
+    return loop_host
+
+
+class TestLoopExtend:
+    """#39 M5b — POST /loops/<id>/extend + safe watcher reattachment."""
+
+    def _setup(self, tmp_path, name, stage="max_rounds_exceeded"):
+        repo, rk, loop_id = _setup_loop_with_tokens(
+            tmp_path, name, stage=stage,
+            blocked=(stage == "max_rounds_exceeded"))
+        loop_dir = repo / ".gator" / "loops" / loop_id
+        return repo, rk, loop_id, loop_dir
+
+    def _bytes(self, loop_dir):
+        ev = loop_dir / "events.jsonl"
+        return ((loop_dir / "session.json").read_bytes(),
+                ev.read_bytes() if ev.exists() else b"")
+
+    def _entries(self, loop_id):
+        with dashboard._LOOP_HOSTS_LOCK:
+            return [(k, v) for k, v in dashboard._LOOP_HOSTS.items() if k[1] == loop_id]
+
+    def _extend(self, server, rk, loop_id, body):
+        return _post(server.url,
+                     f"/api/repo-by-key/{rk}/loops/{loop_id}/extend", body)
+
+    def _end_and_reap(self, server, rk, loop_id, loop_dir):
+        """End the loop so any attached watcher exits; assert no leaks."""
+        entries = self._entries(loop_id)
+        _post(server.url, f"/api/repo-by-key/{rk}/loops/{loop_id}/end",
+              {"reason": "test cleanup"})
+        for _, entry in entries:
+            entry.thread.join(timeout=10)
+            assert not entry.thread.is_alive(), "watcher must exit on a real terminal state"
+        assert self._entries(loop_id) == [], "registry entry must be removed"
+        loop_host = _loop_host_module()
+        fd = loop_host.acquire_host_lock(loop_dir)
+        assert fd is not None, "host.lock must be released (no leaked fd)"
+        loop_host.release_host_lock(fd)
+
+    def test_extend_attaches_one_watcher(self, server, tmp_path):
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-ok")
+        server.start([{"name": "ext-ok", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+
+        status, data, _ = self._extend(server, rk, loop_id,
+                                       {"rounds": 2, "message": "Verify boundaries"})
+        assert status == 200, data
+        assert data["ok"] is True
+        assert (data["previous_max_rounds"], data["max_rounds"]) == (3, 5)
+        assert data["round"] == 0
+        assert data["watcher"] == "attached" and data["watcher_detail"] is None
+
+        sess = json.loads((loop_dir / "session.json").read_text(encoding="utf-8"))
+        assert sess["status"]["stage"] == "plan_revision"
+        assert sess["status"]["next_role"] == "draftor"
+        last = (loop_dir / "events.jsonl").read_text(encoding="utf-8").strip().splitlines()[-1]
+        assert json.loads(last)["event"] == "loop_extended"
+
+        entries = self._entries(loop_id)
+        assert len(entries) == 1 and entries[0][1].thread.is_alive()
+
+        # Same process asking again: already hosted, still one watcher.
+        state, detail = dashboard._ensure_loop_watcher(
+            entries[0][0][0], loop_id, loop_dir, retry=True)
+        assert state == "already_hosted" and "this Dashboard" in detail
+        assert len(self._entries(loop_id)) == 1
+
+        # A second extend is rejected by stage and adds no watcher.
+        status, data, _ = self._extend(server, rk, loop_id, {"rounds": 1, "message": "again"})
+        assert status == 409 and "round limit" in data["error"]
+        assert len(self._entries(loop_id)) == 1
+
+        self._end_and_reap(server, rk, loop_id, loop_dir)
+
+    def _holder(self, loop_dir):
+        import subprocess
+        proc = subprocess.Popen(
+            [sys.executable, "-c", TestHostOwnership._LOCK_HOLDER_SCRIPT,
+             str(loop_dir / "host.lock")],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        assert proc.stdout.readline().strip() == "locked"
+        return proc
+
+    def _release_holder(self, proc):
+        if proc.poll() is None:
+            proc.stdin.write("quit\n")
+            proc.stdin.flush()
+            proc.wait(timeout=5)
+
+    def test_lock_held_by_other_process_reports_already_hosted(
+            self, server, tmp_path, monkeypatch):
+        loop_host = _loop_host_module()
+        orig = loop_host.acquire_host_lock_with_retry
+        monkeypatch.setattr(loop_host, "acquire_host_lock_with_retry",
+                            lambda d, **kw: orig(d, attempts=2, delay=0.05))
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-held")
+        server.start([{"name": "ext-held", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        proc = self._holder(loop_dir)
+        try:
+            status, data, _ = self._extend(server, rk, loop_id, {"rounds": 2, "message": "go"})
+            assert status == 200, data
+            assert data["watcher"] == "already_hosted"
+            assert "host.lock held" in data["watcher_detail"]
+            assert self._entries(loop_id) == [], "must not start a second watcher"
+            sess = json.loads((loop_dir / "session.json").read_text(encoding="utf-8"))
+            assert sess["status"]["max_rounds"] == 5  # extension is durable
+        finally:
+            self._release_holder(proc)
+
+    def test_holder_releasing_during_retry_window_attaches(
+            self, server, tmp_path, monkeypatch):
+        import time as _time
+        loop_host = _loop_host_module()
+        orig = loop_host.acquire_host_lock_with_retry
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-race")
+        proc = self._holder(loop_dir)
+
+        def releasing_sleep(d):
+            self._release_holder(proc)  # the terminal watcher finishes exiting
+            _time.sleep(d)
+
+        monkeypatch.setattr(
+            loop_host, "acquire_host_lock_with_retry",
+            lambda d, **kw: orig(d, attempts=10, delay=0.05, sleep=releasing_sleep))
+        server.start([{"name": "ext-race", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        try:
+            status, data, _ = self._extend(server, rk, loop_id, {"rounds": 1, "message": "go"})
+            assert status == 200, data
+            assert data["watcher"] == "attached"
+            assert len(self._entries(loop_id)) == 1
+        finally:
+            self._release_holder(proc)
+        self._end_and_reap(server, rk, loop_id, loop_dir)
+
+    def test_watcher_failure_keeps_extension_and_reports_failed(
+            self, server, tmp_path, monkeypatch):
+        loop_host = _loop_host_module()
+        monkeypatch.setattr(loop_host, "acquire_host_lock_with_retry",
+                            lambda d, **kw: (None, "failed", "open failed: denied"))
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-fail")
+        server.start([{"name": "ext-fail", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        status, data, _ = self._extend(server, rk, loop_id, {"rounds": 2, "message": "go"})
+        assert status == 200, data
+        assert data["watcher"] == "failed"
+        assert data["watcher_detail"] == "open failed: denied"
+        assert self._entries(loop_id) == []
+        sess = json.loads((loop_dir / "session.json").read_text(encoding="utf-8"))
+        assert sess["status"]["stage"] == "plan_revision"
+
+    def test_rejected_while_another_loop_is_active(self, server, tmp_path):
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-other")
+        other_id = "other-active-2026-09-22T10-00-00Z"
+        _write_session(loop_dir.parent / other_id,
+                       _make_session(other_id, stage="plan_drafting"))
+        server.start([{"name": "ext-other", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        before = self._bytes(loop_dir)
+        status, data, _ = self._extend(server, rk, loop_id, {"rounds": 2, "message": "go"})
+        assert status == 409
+        assert "active loop already exists" in data["error"]
+        assert self._bytes(loop_dir) == before
+        assert self._entries(loop_id) == []
+
+    def test_rejected_while_start_lock_held(self, server, tmp_path):
+        loop_host = _loop_host_module()
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-startlock")
+        server.start([{"name": "ext-startlock", "path": str(repo), "repo_key": rk}])
+        held = loop_host.acquire_start_lock(loop_dir.parent)
+        before = self._bytes(loop_dir)
+        try:
+            status, data, _ = self._extend(server, rk, loop_id, {"rounds": 2, "message": "go"})
+        finally:
+            loop_host.release_start_lock(held)
+        assert status == 409 and "in progress" in data["error"]
+        assert self._bytes(loop_dir) == before
+
+    @pytest.mark.parametrize("stage", [
+        "plan_approved", "turn_timed_out", "ended_by_architect", "plan_drafting",
+    ])
+    def test_non_extendable_stage_409_without_write(self, server, tmp_path, stage):
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-stage", stage=stage)
+        server.start([{"name": "ext-stage", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        before = self._bytes(loop_dir)
+        status, data, _ = self._extend(server, rk, loop_id, {"rounds": 2, "message": "go"})
+        assert status == 409
+        assert "round limit" in data["error"]
+        assert self._bytes(loop_dir) == before
+        assert self._entries(loop_id) == []
+
+    @pytest.mark.parametrize("body", [
+        {"message": "go"},                       # rounds missing
+        {"rounds": "2", "message": "go"},
+        {"rounds": 2.5, "message": "go"},
+        {"rounds": True, "message": "go"},
+        {"rounds": 0, "message": "go"},
+        {"rounds": 21, "message": "go"},
+        {"rounds": 2},                           # message missing
+        {"rounds": 2, "message": "   "},
+        {"rounds": 2, "message": 7},
+    ])
+    def test_invalid_body_400_without_write(self, server, tmp_path, body):
+        repo, rk, loop_id, loop_dir = self._setup(tmp_path, "ext-bad")
+        server.start([{"name": "ext-bad", "path": str(repo), "repo_key": rk}])
+        dashboard._LOOP_HOSTS.clear()
+        before = self._bytes(loop_dir)
+        status, data, _ = self._extend(server, rk, loop_id, body)
+        assert status == 400, data
+        assert ("rounds" in data["error"]) or ("message" in data["error"])
+        assert self._bytes(loop_dir) == before
+        assert self._entries(loop_id) == []
+
+
 class TestArchitectControlsErrorPayload:
     """Control failures return structured error JSON the UI can display."""
 

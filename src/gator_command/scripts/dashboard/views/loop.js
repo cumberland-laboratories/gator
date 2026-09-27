@@ -27,6 +27,11 @@
   var TURN_TIMEOUT_MIN = 30;
   var TURN_TIMEOUT_MAX = 3600;
 
+  // Mirrors loop/session.py ROUNDS_MIN/MAX (per-extension increment, #39).
+  var ROUNDS_MIN = 1;
+  var ROUNDS_MAX = 20;
+  var EXTENDABLE_STAGE = "max_rounds_exceeded";
+
   var TERMINAL_STAGES = {
     plan_approved: true,
     max_rounds_exceeded: true,
@@ -80,6 +85,7 @@
     max_rounds_exceeded:    "MAX ROUNDS",
     turn_timed_out:         "TIMED OUT",
     loop_unblocked:         "Unblocked",
+    loop_extended:          "Extended",
     loop_paused:            "PAUSED",
     architect_interjection: "ARCHITECT",
     loop_ended_by_architect:"ENDED",
@@ -947,13 +953,14 @@
   }
 
   function controlsFingerprint(status, terminal) {
-    // Only inputs renderControls() actually reads: which buttons exist,
-    // whether unblock needs a response, and the turn-window default.
+    // Only inputs renderControls() actually reads: which buttons exist
+    // (including the max-rounds Continue control, #39), whether unblock
+    // needs a response, and the turn-window default.
     var s = status.status || {};
     var pd = pendingDecision(status);
     return JSON.stringify([
-      terminal, !!PAUSED_STAGES[s.stage || ""], pd ? pd.id : null,
-      s.turn_timeout_seconds || null,
+      terminal, !!PAUSED_STAGES[s.stage || ""], s.stage === EXTENDABLE_STAGE,
+      pd ? pd.id : null, s.turn_timeout_seconds || null,
     ]);
   }
 
@@ -978,6 +985,7 @@
       + '<div id="loop-region-header"></div>'
       + '<div id="loop-region-blocked"></div>'
       + '<div id="loop-region-prompts"></div>'
+      + '<div id="loop-region-notice"></div>'
       + '<div id="loop-controls"></div>'
       + '<div class="section-title" style="margin-top:20px;">Timeline</div>'
       + '<div id="loop-timeline"></div>'
@@ -1171,6 +1179,133 @@
 
   // ── architect controls ──────────────────────────────────────────────────────
 
+  // ── continue after max rounds (#39) ────────────────────────────────────────
+
+  function ensurePolling() {
+    // Polling stops when a loop turns terminal; an extension makes it live
+    // again, so the view must resume polling.
+    if (!_state.timerId) {
+      _state.timerId = setInterval(pollLoop, POLL_INTERVAL_MS);
+    }
+    var ws = _state.container && _state.container.querySelector(".loop-workspace");
+    if (ws) ws.dataset.polling = "1";
+  }
+
+  function showExtendNotice(root, data) {
+    // Lives in #loop-region-notice, which incremental rendering never
+    // patches, so it survives the terminal-to-live region updates.
+    var region = root && root.querySelector("#loop-region-notice");
+    if (!region) return;
+    var html = '<div class="loop-extend-notice">'
+      + '<div class="loop-extend-notice-text">Extended: max rounds '
+      + escHtml(String(data.previous_max_rounds)) + ' → '
+      + escHtml(String(data.max_rounds))
+      + '. Give the Draftor and Reviewer fresh join prompts to re-engage them.</div>';
+    if (data.watcher === "failed") {
+      html += '<div class="loop-extend-warning"><strong>Warning:</strong> '
+        + 'Turn timeouts are not being enforced. '
+        + escHtml(data.watcher_detail || "The watcher could not attach.") + '</div>';
+    } else if (data.watcher === "already_hosted") {
+      html += '<div class="loop-extend-hosted">Hosted by an existing watcher ('
+        + escHtml(data.watcher_detail || "host.lock held") + ').</div>';
+    }
+    html += '</div>';
+    region.innerHTML = html;
+  }
+
+  function renderContinueControl(panel, loopId, parentEl) {
+    panel.innerHTML = '<div class="loop-controls-bar">'
+      + '<button class="loop-ctrl-btn loop-ctrl-continue" data-action="continue">Continue loop</button>'
+      + '</div>'
+      + '<div class="loop-ctrl-input-area loop-continue-area" style="display:none;">'
+      + '<label class="loop-ctrl-timeout-label">Additional rounds '
+      + '<input type="number" class="loop-ctrl-timeout loop-continue-rounds" min="' + ROUNDS_MIN
+      + '" max="' + ROUNDS_MAX + '" step="1" value="2">'
+      + '</label>'
+      + '<label class="loop-ctrl-label">Reason (required)</label>'
+      + '<input type="text" class="loop-ctrl-input loop-continue-reason" '
+      + 'placeholder="Why continue? Shown to the Draftor">'
+      + '<button class="loop-ctrl-confirm">Confirm</button>'
+      + '<button class="loop-ctrl-cancel">Cancel</button>'
+      + '</div>';
+
+    var area = panel.querySelector(".loop-continue-area");
+    var roundsInput = panel.querySelector(".loop-continue-rounds");
+    var reasonInput = panel.querySelector(".loop-continue-reason");
+    var confirmBtn = panel.querySelector(".loop-ctrl-confirm");
+
+    function clearError() {
+      var el = panel.querySelector(".loop-ctrl-error");
+      if (el) el.remove();
+    }
+    function showError(text) {
+      var el = panel.querySelector(".loop-ctrl-error");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "loop-ctrl-error";
+        area.parentNode.insertBefore(el, area.nextSibling);
+      }
+      el.textContent = text;
+    }
+    function syncConfirm() {
+      confirmBtn.disabled = !reasonInput.value.trim();
+    }
+
+    panel.querySelector(".loop-ctrl-continue").addEventListener("click", function () {
+      clearError();
+      roundsInput.value = "2";
+      reasonInput.value = "";
+      roundsInput.classList.remove("loop-ctrl-input-error");
+      reasonInput.classList.remove("loop-ctrl-input-error");
+      area.style.display = "flex";
+      syncConfirm();
+    });
+
+    panel.querySelector(".loop-ctrl-cancel").addEventListener("click", function () {
+      clearError();
+      area.style.display = "none";
+    });
+
+    confirmBtn.addEventListener("click", function () {
+      var reason = reasonInput.value.trim();
+      if (!reason) {
+        reasonInput.classList.add("loop-ctrl-input-error");
+        showError("A reason is required to continue the loop.");
+        return;
+      }
+      var raw = roundsInput.value.trim();
+      var rounds = Number(raw);
+      if (!/^\d+$/.test(raw) || rounds < ROUNDS_MIN || rounds > ROUNDS_MAX) {
+        roundsInput.classList.add("loop-ctrl-input-error");
+        showError("Additional rounds must be a whole number between "
+          + ROUNDS_MIN + " and " + ROUNDS_MAX + ".");
+        return;
+      }
+      confirmBtn.disabled = true;
+      postAction(loopId, "extend", { rounds: rounds, message: reason }).then(function (result) {
+        if (result && result._failed) {
+          showError(result.error || "Could not continue the loop.");
+          syncConfirm();
+          return;
+        }
+        area.style.display = "none";
+        var root = parentEl && parentEl.closest ? parentEl.closest(".loop-detail") || parentEl : parentEl;
+        showExtendNotice(root, result);
+        ensurePolling();
+        refreshSidebarOnly();
+        loadSelectedLoop();
+      });
+    });
+
+    reasonInput.addEventListener("input", function () {
+      reasonInput.classList.remove("loop-ctrl-input-error");
+      syncConfirm();
+    });
+    roundsInput.addEventListener("input", function () {
+      roundsInput.classList.remove("loop-ctrl-input-error");
+    });
+  }
+
   function renderControls(status, parentEl) {
     var panel = parentEl.querySelector("#loop-controls");
     if (!panel) return;
@@ -1185,7 +1320,11 @@
     var loopId = _state.selectedLoopId;
 
     if (isTerminal(stage)) {
-      panel.innerHTML = "";
+      if (stage === EXTENDABLE_STAGE) {
+        renderContinueControl(panel, loopId, parentEl);
+      } else {
+        panel.innerHTML = "";
+      }
       return;
     }
 

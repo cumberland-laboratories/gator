@@ -25,6 +25,8 @@ Coverage:
 import hashlib
 from pathlib import Path
 
+import pytest
+
 
 def _repo_key(path):
     resolved = str(Path(path).resolve())
@@ -2310,4 +2312,161 @@ def test_terminal_transition_patches_in_place_and_stops_polling(page, dashboard_
     page.wait_for_function(
         "() => document.querySelector('.loop-workspace').dataset.polling === '0'",
         timeout=5000)
+    _unserve_mutable_loop(page)
+
+
+# ── continue after max rounds (#39 M6) ──────────────────────────────────────
+
+def _max_rounds_payload():
+    payload = _live_payload()
+    payload["status"]["status"].update({
+        "stage": "max_rounds_exceeded", "next_role": None, "round": 3,
+        "max_rounds": 3, "blocked": True, "turn_deadline": None,
+        "last_updated": "2026-09-22T10:04:00+00:00"})
+    # artifact_path must exist in the seed fixture: _open_incremental()
+    # waits for every timeline card's executive-summary fetch to settle.
+    payload["events"].append(
+        {"event": "max_rounds_exceeded", "ts": "2026-09-22T10:04:00Z", "round": 3,
+         "role": "reviewer", "artifact_path": "findings.round-1.md"})
+    return payload
+
+
+def _route_extend(page, payload, rounds_added=None, watcher="attached", detail=None):
+    """Mock POST /extend: record the body and make the served loop live."""
+    import json as _json
+    posts = []
+
+    def _extend(route):
+        body = _json.loads(route.request.post_data or "{}")
+        posts.append(body)
+        st = payload["status"]["status"]
+        prev = st["max_rounds"]
+        new = prev + (rounds_added or body["rounds"])
+        st.update({"stage": "plan_revision", "next_role": "draftor", "blocked": False,
+                   "max_rounds": new, "turn_deadline": "2099-12-31T23:59:59+00:00",
+                   "last_updated": "2026-09-22T10:10:00+00:00"})
+        payload["events"].append(
+            {"event": "loop_extended", "ts": "2026-09-22T10:10:00Z", "round": st["round"],
+             "role": "architect", "detail": f"Extended: {prev} -> {new}"})
+        route.fulfill(status=200, content_type="application/json", body=_json.dumps({
+            "ok": True, "previous_max_rounds": prev, "max_rounds": new,
+            "round": st["round"], "watcher": watcher, "watcher_detail": detail}))
+
+    page.route("**/" + _ACTIVE_ID + "/extend", _extend)
+    return posts
+
+
+@pytest.mark.parametrize("stage,visible", [
+    ("max_rounds_exceeded", True),
+    ("plan_approved", False),
+    ("turn_timed_out", False),
+    ("ended_by_architect", False),
+])
+def test_continue_control_only_for_max_rounds(page, dashboard_fleet, stage, visible):
+    payload = _max_rounds_payload()
+    payload["status"]["status"]["stage"] = stage
+    _open_incremental(page, dashboard_fleet, payload)
+    page.wait_for_selector(".loop-badge-outcome", timeout=8000)
+    assert (page.locator(".loop-ctrl-continue").count() == 1) is visible
+    if not visible:
+        assert page.locator(".loop-ctrl-btn").count() == 0
+    _unserve_mutable_loop(page)
+
+
+def test_continue_validation_sends_nothing_until_valid(page, dashboard_fleet):
+    payload = _max_rounds_payload()
+    posts = _route_extend(page, payload)
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => document.querySelector('.loop-ctrl-continue').click()")
+    page.wait_for_selector(".loop-continue-area", state="visible", timeout=5000)
+
+    assert page.evaluate("() => document.querySelector('.loop-continue-area .loop-ctrl-confirm').disabled")
+    # Forced click with a blank reason is refused client-side.
+    page.evaluate("""() => { var b = document.querySelector('.loop-continue-area .loop-ctrl-confirm');
+                             b.disabled = false; b.click(); }""")
+    page.wait_for_selector(".loop-ctrl-error", timeout=5000)
+    assert "reason is required" in page.inner_text(".loop-ctrl-error")
+
+    page.fill(".loop-continue-reason", "go on")
+    for bad in ("0", "21", "2.5"):
+        page.fill(".loop-continue-rounds", bad)
+        page.evaluate("() => document.querySelector('.loop-continue-area .loop-ctrl-confirm').click()")
+        page.wait_for_timeout(200)
+        assert "between 1 and 20" in page.inner_text(".loop-ctrl-error")
+    assert posts == []
+    page.unroute("**/" + _ACTIVE_ID + "/extend")
+    _unserve_mutable_loop(page)
+
+
+def test_continue_success_goes_live_in_place(page, dashboard_fleet):
+    payload = _max_rounds_payload()
+    posts = _route_extend(page, payload)
+    _open_incremental(page, dashboard_fleet, payload)
+    page.wait_for_function(
+        "() => document.querySelector('.loop-workspace').dataset.polling === '0'", timeout=8000)
+    _expand_sketch(page)
+    events_before = page.evaluate("() => document.querySelectorAll('#loop-timeline .loop-event').length")
+
+    page.evaluate("() => document.querySelector('.loop-ctrl-continue').click()")
+    page.fill(".loop-continue-rounds", "3")
+    page.fill(".loop-continue-reason", "Verify the revised boundary behavior.")
+    page.evaluate("() => document.querySelector('.loop-continue-area .loop-ctrl-confirm').click()")
+
+    page.wait_for_selector(".loop-ctrl-pause", timeout=8000)
+    assert posts == [{"rounds": 3, "message": "Verify the revised boundary behavior."}]
+    notice = page.inner_text("#loop-region-notice")
+    assert "Extended: max rounds 3 → 6" in notice and "re-engage" in notice
+    assert "Warning" not in notice
+
+    # Live again, patched in place (#38): same root, prompts back, polling on.
+    assert _same(page, "root")
+    assert page.evaluate("() => window.__emptied") is False
+    assert page.locator(".loop-prompt-copy").count() == 2
+    assert page.locator(".loop-badge-outcome").count() == 0
+    assert page.evaluate("() => document.querySelector('.loop-workspace').dataset.polling") == "1"
+    assert _sketch_still_expanded(page)
+    page.wait_for_function(
+        f"() => document.querySelectorAll('#loop-timeline .loop-event').length === {events_before + 1}",
+        timeout=8000)
+    assert "Extended" in page.inner_text("#loop-timeline .loop-event:last-child")
+    assert _same(page, "firstEvent")
+
+    # The notice survives subsequent polls (unpatched region).
+    page.wait_for_timeout(3500)
+    assert "Extended: max rounds 3 → 6" in page.inner_text("#loop-region-notice")
+    page.unroute("**/" + _ACTIVE_ID + "/extend")
+    _unserve_mutable_loop(page)
+
+
+def test_continue_reports_watcher_failure_as_text_warning(page, dashboard_fleet):
+    payload = _max_rounds_payload()
+    _route_extend(page, payload, watcher="failed", detail="open failed: denied")
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => document.querySelector('.loop-ctrl-continue').click()")
+    page.fill(".loop-continue-reason", "continue")
+    page.evaluate("() => document.querySelector('.loop-continue-area .loop-ctrl-confirm').click()")
+    page.wait_for_selector(".loop-extend-warning", timeout=8000)
+    warning = page.inner_text(".loop-extend-warning")
+    assert "Warning:" in warning
+    assert "not being enforced" in warning and "open failed: denied" in warning
+    page.unroute("**/" + _ACTIVE_ID + "/extend")
+    _unserve_mutable_loop(page)
+
+
+def test_continue_server_error_keeps_dialog_for_retry(page, dashboard_fleet):
+    import json as _json
+    payload = _max_rounds_payload()
+    page.route("**/" + _ACTIVE_ID + "/extend", lambda route: route.fulfill(
+        status=409, content_type="application/json",
+        body=_json.dumps({"error": "An active loop already exists: other-loop"})))
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => document.querySelector('.loop-ctrl-continue').click()")
+    page.fill(".loop-continue-reason", "continue")
+    page.evaluate("() => document.querySelector('.loop-continue-area .loop-ctrl-confirm').click()")
+    page.wait_for_selector(".loop-ctrl-error", timeout=8000)
+    assert "active loop already exists" in page.inner_text(".loop-ctrl-error")
+    assert page.evaluate(
+        "() => document.querySelector('.loop-continue-area').style.display") == "flex"
+    assert page.locator(".loop-badge-outcome").count() == 1
+    page.unroute("**/" + _ACTIVE_ID + "/extend")
     _unserve_mutable_loop(page)

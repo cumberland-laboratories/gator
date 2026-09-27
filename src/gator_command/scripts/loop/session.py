@@ -148,36 +148,54 @@ def resolve_token(token, loop_dir=None):
 
 
 # ---------------------------------------------------------------------------
-# Turn-window validation (shared by CLI unblock and Dashboard start/unblock)
+# Bounded-integer validation (shared by CLI and Dashboard loop inputs)
 # ---------------------------------------------------------------------------
 
 TURN_TIMEOUT_MIN = 30
 TURN_TIMEOUT_MAX = 3600
 
+ROUNDS_MIN = 1
+ROUNDS_MAX = 20
 
-def validate_turn_timeout(value):
-    """Return value as an int turn timeout, or raise ValueError.
 
-    Accepts only integral values in TURN_TIMEOUT_MIN..TURN_TIMEOUT_MAX
-    seconds. bool and non-integral numbers are rejected; strings are
-    accepted only when they spell a plain integer (CLI input).
+def _validate_bounded_int(value, low, high, what, kind):
+    """Return value as an int in low..high, or raise ValueError.
+
+    Only integral values are accepted: bool and non-integral numbers are
+    rejected; strings are accepted only when they spell a plain integer
+    (CLI input). ``what`` names the field and ``kind`` describes the unit
+    in error messages, e.g. ("turn timeout", "number of seconds").
     """
     if isinstance(value, bool):
-        raise ValueError("turn timeout must be an integer number of seconds")
+        raise ValueError(f"{what} must be an integer {kind}")
     if isinstance(value, str):
         text = value.strip()
         if not text.lstrip("-").isdigit():
-            raise ValueError(
-                f"turn timeout must be an integer number of seconds, got {value!r}")
+            raise ValueError(f"{what} must be an integer {kind}, got {value!r}")
         value = int(text)
     if not isinstance(value, int):
+        raise ValueError(f"{what} must be an integer {kind}, got {value!r}")
+    if value < low or value > high:
+        unit = " seconds" if kind == "number of seconds" else ""
         raise ValueError(
-            f"turn timeout must be an integer number of seconds, got {value!r}")
-    if value < TURN_TIMEOUT_MIN or value > TURN_TIMEOUT_MAX:
-        raise ValueError(
-            f"turn timeout must be between {TURN_TIMEOUT_MIN} and "
-            f"{TURN_TIMEOUT_MAX} seconds, got {value}")
+            f"{what} must be between {low} and {high}{unit}, got {value}")
     return value
+
+
+def validate_turn_timeout(value):
+    """Return value as an int turn timeout (TURN_TIMEOUT_MIN..MAX s), or raise ValueError."""
+    return _validate_bounded_int(value, TURN_TIMEOUT_MIN, TURN_TIMEOUT_MAX,
+                                 "turn timeout", "number of seconds")
+
+
+def validate_round_count(value):
+    """Return value as an int round count (ROUNDS_MIN..ROUNDS_MAX), or raise ValueError.
+
+    Used for loop-start `max_rounds` (Dashboard) and for the per-extension
+    round increment (#39). No total-ceiling cap is applied here.
+    """
+    return _validate_bounded_int(value, ROUNDS_MIN, ROUNDS_MAX,
+                                 "rounds", "number of rounds")
 
 
 # ---------------------------------------------------------------------------

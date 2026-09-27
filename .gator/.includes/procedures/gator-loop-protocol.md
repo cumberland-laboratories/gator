@@ -165,7 +165,9 @@ Do not create, delete, rename, or move files in `.gator/loops/<loop-id>/`. Do no
 
 ### Rule 10: Terminal means done
 
-When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, `turn_timed_out`), it is over. Do not attempt further submissions. The session residue remains for the Architect to inspect.
+When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, `turn_timed_out`, `ended_by_architect`), it is over for you. Do not attempt further submissions. The session residue remains for the Architect to inspect.
+
+**One exception belongs to the Architect.** The Architect may extend a loop that ended at `max_rounds_exceeded` (`gator loop extend`), which adds rounds and resumes it at `plan_revision` for the Draftor. The earlier rounds, artifacts, and decisions are kept. Do not wait for or poll for an extension: stop when the loop ends. If the Architect extends the loop, the Architect re-engages you with a fresh join prompt. Then run `gator loop status`, read the `Architect message:` line (the reason for continuing), and proceed. The Draftor revises against `findings.current.md`. No other terminal state can be resumed.
 
 ---
 
@@ -176,12 +178,16 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 | `plan_drafting` | First draft needed | Draftor |
 | `plan_review` | Plan awaiting review | Reviewer |
 | `plan_revision` | Findings received, revision needed | Draftor |
-| `blocked_on_architect` | Escalated, waiting for human | Nobody (paused) |
-| `plan_approved` | Reviewer approved | Nobody (done) |
-| `max_rounds_exceeded` | Round limit reached without approval | Nobody (done) |
-| `turn_timed_out` | Active role did not submit in time | Nobody (done) |
+| `blocked_on_architect` | Escalated, waiting for human | Nobody (paused until the Architect unblocks) |
+| `paused_by_architect` | Architect paused the loop | Nobody (paused until the Architect unblocks) |
+| `plan_approved` | Reviewer approved | Nobody (done, final) |
+| `max_rounds_exceeded` | Round limit reached without approval | Nobody (done unless the Architect extends it — see Rule 10) |
+| `turn_timed_out` | Active role did not submit in time | Nobody (done, final) |
+| `ended_by_architect` | Architect ended the loop | Nobody (done, final) |
 
-The first three are active states — one of you should be working. The last four mean the loop is over or paused.
+**Active (3):** `plan_drafting`, `plan_review`, `plan_revision`. One of you should be working.
+**Paused (2):** `blocked_on_architect`, `paused_by_architect`. Nobody acts, and the loop resumes only when the Architect unblocks it. `status` and `wait` exit `2`.
+**Terminal (4):** `plan_approved`, `max_rounds_exceeded`, `turn_timed_out`, `ended_by_architect`. The loop is over for you, and `status` and `wait` exit `2`. All four are final, except that the Architect alone may extend `max_rounds_exceeded` (Rule 10).
 
 ---
 

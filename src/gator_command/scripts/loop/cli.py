@@ -11,6 +11,7 @@ Subcommands:
   submit-review Submit review findings or approve (reviewer)
   escalate      Escalate to Architect from any active state
   unblock       Architect: resume a blocked loop
+  extend        Architect: continue a loop that ended at its round limit
   tail          Follow events in real time
   list          List all loop sessions
 """
@@ -179,6 +180,10 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         elif is_terminal(session):
             _print_terminal_reason(session, "architect")
             print("  Loop ended.")
+            if stage == "max_rounds_exceeded":
+                print()
+                print("  Continue with more rounds (requires a reason):")
+                print(f"    gator loop extend --token {args.token} --rounds <1-20> --message \"...\"")
 
         print(f"  Round: {rnd}/{max_rnd}")
         print(f"  Draftor: {'joined' if roles.get('draftor', {}).get('joined') else 'waiting'}")
@@ -351,6 +356,70 @@ def _cmd_unblock(args):
     except PermissionError as e:
         print(f"  Rejected: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def _round_count_arg(value):
+    """argparse type for extend --rounds; delegates to the shared validator."""
+    from session import validate_round_count
+    try:
+        return validate_round_count(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
+def _cmd_extend(args):
+    """Architect: continue a loop that ended at its round limit (#39).
+
+    Host contract (mirrors `gator loop start`): after a successful
+    extension this command always attaches the foreground watcher, so the
+    revived loop is never left live-but-unhosted by this command.
+      - attached        -> watch in the foreground until terminal / Ctrl+C
+      - already_hosted  -> another live process hosts it; exit 0
+      - failed          -> extension is saved, timeouts NOT enforced; exit 1
+    """
+    import host as loop_host
+    from session import load_session
+
+    try:
+        loop_id, loop_dir, previous, new = loop_host.extend_loop(
+            args.token, args.rounds, args.message)
+    except PermissionError as e:
+        print(f"  Rejected: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (RuntimeError, ValueError, FileNotFoundError) as e:
+        print(f"  Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    status = load_session(loop_dir)["status"]
+    print(f"  Extended: max rounds {previous} -> {new} (round {status.get('round', 0)}).")
+    print(f"  Resumed to {status['stage']} (next: {status['next_role']}).")
+    print(f"  Turn window: {status.get('turn_timeout_seconds')}s")
+    print(f"  Loop: {loop_id}")
+    print()
+    print("  Participants must be re-engaged: give the Draftor and Reviewer fresh")
+    print("  join prompts (Dashboard \"Copy prompt\", or their loop tokens).")
+    print()
+
+    fd, state, detail = loop_host.acquire_host_lock_with_retry(loop_dir)
+    if state == loop_host.HOST_ALREADY_HOSTED:
+        print(f"  Host: already hosted ({detail}). That process enforces turn timeouts.")
+        return
+    if state != loop_host.HOST_ATTACHED:
+        print(f"  Host: could not attach a watcher ({detail}).", file=sys.stderr)
+        print("  The extension is saved, but turn timeouts are NOT being enforced.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    print("  Host: watching in the foreground (Ctrl+C stops turn-timeout enforcement).")
+    print()
+    sys.stdout.flush()
+    try:
+        loop_host.watch_loop(loop_dir, host_lock_fd=fd)
+    except KeyboardInterrupt:
+        print()
+        print("  Host stopped. Turn timeouts are no longer enforced for this loop.")
+    finally:
+        loop_host.release_host_lock(fd)
 
 
 def _cmd_pause(args):
@@ -710,6 +779,17 @@ def main(argv=None):
              "Mutually exclusive with --message and --file",
     )
 
+    # extend (Architect, #39)
+    p_extend = sub.add_parser(
+        "extend", help="Continue a loop that ended at its round limit (Architect)")
+    p_extend.add_argument("--token", required=True, help="Architect token")
+    p_extend.add_argument(
+        "--rounds", required=True, type=_round_count_arg,
+        help="Additional rounds (1-20) added to the current ceiling; history is not renumbered")
+    p_extend.add_argument(
+        "--message", required=True,
+        help="Required reason for continuing; shown to the resumed Draftor")
+
     # wait
     p_wait = sub.add_parser("wait", help="Block until it is your turn")
     p_wait.add_argument("--token", required=True, help="Role token")
@@ -745,6 +825,7 @@ def main(argv=None):
         "interject": _cmd_interject,
         "end": _cmd_end,
         "unblock": _cmd_unblock,
+        "extend": _cmd_extend,
         "wait": _cmd_wait,
         "tail": _cmd_tail,
         "list": _cmd_list,

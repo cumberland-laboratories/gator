@@ -64,7 +64,11 @@ _MODEL_ACTION_RULES = {
 }
 
 # Architect actions — require role == "architect"
-_ARCHITECT_ACTIONS = frozenset({"pause", "interject", "end", "unblock"})
+_ARCHITECT_ACTIONS = frozenset({"pause", "interject", "end", "unblock", "extend"})
+
+# The only terminal stage that may be resumed (via extend). Every other
+# terminal stage is final.
+EXTENDABLE_STAGE = "max_rounds_exceeded"
 
 # Model roles — used to reject architect from model commands
 _MODEL_ROLES = frozenset({"draftor", "reviewer"})
@@ -143,6 +147,13 @@ def _validate_architect_action(session, action):
     if action == "unblock":
         if stage not in PAUSED_STAGES:
             return False, f"Loop is not paused (current stage: {stage})"
+        return True, "ok"
+
+    if action == "extend":
+        if stage != EXTENDABLE_STAGE:
+            return False, (
+                "Only a loop that ended at its round limit can be extended "
+                f"(stage: {stage})")
         return True, "ok"
 
     return False, f"Unknown architect action: {action}"
@@ -288,6 +299,48 @@ def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, mes
     status["turn_deadline"] = _deadline_from_now(turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
+
+
+def advance_extended(session, rounds, turn_timeout, message=None):
+    """Resume a loop that ended at its round limit.
+
+    max_rounds_exceeded -> plan_revision (next_role=draftor), with the
+    round ceiling raised by ``rounds``. The round counter, current
+    artifact references, turns, decisions, and unresolved findings are
+    preserved — history is never renumbered or rewritten.
+
+    ``rounds`` is an already-validated positive increment; the caller owns
+    CLI/HTTP input policy. Returns (previous_max_rounds, new_max_rounds).
+    Raises ValueError when the source state is not extendable.
+    """
+    status = session["status"]
+    stage = status.get("stage")
+    if stage != EXTENDABLE_STAGE:
+        raise ValueError(
+            "Only a loop that ended at its round limit can be extended "
+            f"(stage: {stage})")
+    if isinstance(rounds, bool) or not isinstance(rounds, int) or rounds < 1:
+        raise ValueError(f"rounds must be a positive integer, got {rounds!r}")
+
+    previous = status["max_rounds"]
+    if status.get("round", 0) > previous:
+        raise ValueError(
+            f"Inconsistent session: round {status.get('round')} exceeds "
+            f"max_rounds {previous}")
+
+    status["max_rounds"] = previous + rounds
+    status["stage"] = "plan_revision"
+    status["next_role"] = "draftor"
+    status["plan_status"] = "revision"
+    status["blocked"] = False
+    status["architect_action_required"] = False
+    status["architect_message"] = message
+    status["architect_response_artifact"] = None
+    status["resume_stage"] = None
+    status["resume_next_role"] = None
+    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+    return previous, status["max_rounds"]
 
 
 def advance_turn_timed_out(session, timed_out_role):

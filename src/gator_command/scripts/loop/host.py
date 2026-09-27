@@ -93,17 +93,80 @@ else:
             pass
 
 
-def acquire_host_lock(loop_dir):
-    """Open and acquire host.lock non-blocking. Returns fd or None."""
+def _try_host_lock(loop_dir):
+    """One non-blocking host.lock attempt.
+
+    Returns (fd, None) on success, (None, "held") when another holder has
+    it, or (None, "open failed: <err>") when the lock file cannot be opened.
+    """
     lock_path = Path(loop_dir) / HOST_LOCK_FILENAME
     try:
         fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT)
-    except OSError:
-        return None
+    except OSError as exc:
+        return None, f"open failed: {exc}"
     if _try_lock_exclusive_nb(fd):
-        return fd
+        return fd, None
     os.close(fd)
-    return None
+    return None, "held"
+
+
+def acquire_host_lock(loop_dir):
+    """Open and acquire host.lock non-blocking. Returns fd or None."""
+    fd, _ = _try_host_lock(loop_dir)
+    return fd
+
+
+HOST_ATTACHED = "attached"
+HOST_ALREADY_HOSTED = "already_hosted"
+HOST_FAILED = "failed"
+
+
+def acquire_host_lock_with_retry(loop_dir, attempts=15, delay=0.2, sleep=None):
+    """Acquire host.lock, retrying briefly while another holder releases it.
+
+    Used when attaching a watcher to a loop that just became active again
+    (#39): the watcher that saw the terminal event may still be releasing
+    its lock. Returns (fd, state, detail):
+
+      (fd,   "attached",       None)   lock acquired — caller owns the fd
+      (None, "already_hosted", detail) still held after all attempts; a live
+                                        process owns host.lock (the OS drops
+                                        locks of dead processes), so the loop
+                                        is hosted — never start a second one
+      (None, "failed",         detail) the lock file could not be opened
+
+    ``sleep`` is a test seam (default time.sleep).
+    """
+    sleep = sleep or time.sleep
+    attempts = max(1, int(attempts))
+    for i in range(attempts):
+        fd, err = _try_host_lock(loop_dir)
+        if fd is not None:
+            return fd, HOST_ATTACHED, None
+        if err != "held":
+            return None, HOST_FAILED, err
+        if i < attempts - 1:
+            sleep(delay)
+    meta = read_host_metadata(loop_dir)
+    pid = meta.get("pid") if meta else None
+    detail = (f"host.lock held by pid {pid}" if pid
+              else "host.lock held by another process")
+    return None, HOST_ALREADY_HOSTED, detail
+
+
+def read_host_metadata(loop_dir):
+    """Best-effort, non-locking read of host.lock diagnostic metadata.
+
+    Returns a dict (pid, nonce, started_at) or None. On Windows the held
+    byte range is unreadable by other handles, so None is common there.
+    """
+    lock_path = Path(loop_dir) / HOST_LOCK_FILENAME
+    try:
+        text = lock_path.read_text(encoding="utf-8")
+        data = _json.loads(text) if text.strip() else None
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def release_host_lock(fd):
@@ -232,6 +295,42 @@ def find_active_loop(loops_base):
 
 
 # ---------------------------------------------------------------------------
+# Extension — continue a loop after its round limit (#39)
+# ---------------------------------------------------------------------------
+
+def extend_loop(token, rounds, message, loop_dir=None):
+    """Continue a max_rounds_exceeded loop with the single-active guarantee.
+
+    An extension revives a terminal loop, so it is guarded exactly like a
+    start: hold ``start.lock`` on the loops base, refuse if any OTHER loop
+    is active, then run the session transaction (``submit.handle_extend``),
+    and release ``start.lock``. Watcher attachment is the caller's next
+    step (CLI foreground watch or Dashboard daemon watcher).
+
+    Raises RuntimeError (start/extension in progress, or another active
+    loop), plus the handler's ValueError / PermissionError. Every
+    rejection leaves the target loop's session and events unchanged.
+    Returns (loop_id, loop_dir, previous_max_rounds, new_max_rounds).
+    """
+    from session import resolve_token
+    from submit import handle_extend
+
+    loop_id, _role, loop_dir = resolve_token(token, loop_dir=loop_dir)
+    loops_base = Path(loop_dir).parent
+
+    start_fd = acquire_start_lock(loops_base)
+    if start_fd is None:
+        raise RuntimeError("Another loop start or extension is in progress")
+    try:
+        existing = find_active_loop(loops_base)
+        if existing and existing != loop_id:
+            raise RuntimeError(f"An active loop already exists: {existing}")
+        return handle_extend(token, rounds, message, loop_dir=loop_dir)
+    finally:
+        release_start_lock(start_fd)
+
+
+# ---------------------------------------------------------------------------
 # Initialization — gator loop start (CLI entry point)
 # ---------------------------------------------------------------------------
 
@@ -317,6 +416,7 @@ def _print_banner(loop_id, feature, max_rounds, turn_timeout, tok_d, tok_r, tok_
     gator loop interject --token {tok_a} --message "..."
     gator loop end --token {tok_a} --reason "..."
     gator loop unblock --token {tok_a} --message "..."
+    gator loop extend --token {tok_a} --rounds <N> --message "..."   (after max rounds)
 
   -- Watching -----------------------------------------------
 """)
@@ -381,7 +481,12 @@ def watch_loop(loop_dir, host_lock_fd=None):
                     print(format_event(event))
                     sys.stdout.flush()
 
-                    if event.get("event") in TERMINAL_EVENTS:
+                    # A terminal event ends the watch only if the session is
+                    # still terminal. max_rounds_exceeded is resumable (#39):
+                    # a watcher attached after an extension replays the old
+                    # terminal event from offset 0 and must keep hosting.
+                    if (event.get("event") in TERMINAL_EVENTS
+                            and _session_is_terminal(loop_dir)):
                         _print_terminal_summary(loop_dir)
                         return
 
@@ -416,6 +521,18 @@ def watch_loop(loop_dir, host_lock_fd=None):
                     pass
 
         time.sleep(POLL_INTERVAL)
+
+
+def _session_is_terminal(loop_dir):
+    """True if session.json is currently terminal.
+
+    Fails safe toward the historical behavior: an unreadable session is
+    treated as terminal so the watcher exits rather than hosting blind.
+    """
+    try:
+        return is_terminal(load_session(loop_dir))
+    except (FileNotFoundError, KeyError, ValueError, OSError):
+        return True
 
 
 # ---------------------------------------------------------------------------

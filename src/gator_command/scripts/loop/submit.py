@@ -20,12 +20,12 @@ if _LOOP_DIR not in sys.path:
 from session import (
     resolve_token, with_session_lock, append_turn,
     find_gator_root, _make_writable, _make_readonly,
-    validate_turn_timeout,
+    validate_turn_timeout, validate_round_count,
 )
 from state_machine import (
     validate_action, validate_unblock,
     advance_draft_submitted, advance_review_submitted,
-    advance_escalated, advance_unblocked,
+    advance_escalated, advance_unblocked, advance_extended,
     advance_paused_by_architect, advance_interjected,
     advance_ended_by_architect,
 )
@@ -432,6 +432,68 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
     with_session_lock(loop_dir, _unblock)
 
     return loop_id, loop_dir
+
+
+def handle_extend(token, rounds, message, loop_dir=None):
+    """Architect command: continue a loop that ended at its round limit (#39).
+
+    Raises the round ceiling by ``rounds`` (validated 1..20) and resumes the
+    loop at plan_revision for the Draftor, with a fresh deadline from the
+    loop's stored turn window. ``message`` is required: it is the durable
+    reason for continuing and is shown to the resumed Draftor.
+
+    All input and identity validation runs before the session lock; stage
+    validation runs inside it before any mutation, so a rejected extension
+    leaves session.json and events.jsonl untouched.
+
+    This handler is the session transaction only. The single-active-loop
+    guard (start.lock + scan) and watcher attachment are the caller's
+    responsibility — see host.extend_loop().
+
+    Returns (loop_id, loop_dir, previous_max_rounds, new_max_rounds).
+    """
+    if message is None or not str(message).strip():
+        raise ValueError("A reason (--message) is required to extend a loop")
+    message = str(message).strip()
+    rounds = validate_round_count(rounds)
+
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
+    if role != "architect":
+        raise PermissionError("Extend requires the architect token")
+
+    result = {}
+
+    def _extend(session):
+        allowed, reason = validate_action(session, "architect", "extend")
+        if not allowed:
+            raise PermissionError(reason)
+
+        timeout = session["status"]["turn_timeout_seconds"]
+        previous, new = advance_extended(
+            session, rounds, turn_timeout=timeout, message=message)
+        result["previous"], result["new"] = previous, new
+
+        append_turn(session, "architect", "extend", message)
+
+        status = session["status"]
+        event = {
+            "event": "loop_extended",
+            "role": "architect",
+            "round": status["round"],
+            "rounds_added": rounds,
+            "previous_max_rounds": previous,
+            "max_rounds": new,
+            "stage": status["stage"],
+            "next_role": status["next_role"],
+            "reason": message,
+            "detail": (f"Extended by {rounds} round(s): {previous} -> {new}"
+                       f" -- Architect: {message}"),
+        }
+        return session, event
+
+    with_session_lock(loop_dir, _extend)
+
+    return loop_id, loop_dir, result["previous"], result["new"]
 
 
 def handle_pause(token, message=None, loop_dir=None):

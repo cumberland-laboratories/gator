@@ -9,9 +9,9 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `session.py` owns session CRUD, token generation/resolution (with secret nonce), platform-aware file locking, atomic writes, turn tracking, and loop ID generation
 - `state_machine.py` owns state categorization (active/paused/terminal), action validation, and all state transitions
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
-- `submit.py` owns the seven submit handlers: submit-draft, submit-review, escalate, unblock, pause, interject, end
-- `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the watch loop with timeout enforcement, platform-aware file locking (`host.lock`, `start.lock`), and active-loop scanning
-- `cli.py` owns argparse subcommand routing for all 12 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, wait, tail, list)
+- `submit.py` owns the eight submit handlers: submit-draft, submit-review, escalate, unblock, extend, pause, interject, end
+- `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop with timeout enforcement, platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
+- `cli.py` owns argparse subcommand routing for all 13 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, extend, wait, tail, list)
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
 ## Does Not Own
@@ -45,11 +45,11 @@ Builds the initial session dict including empty `decisions: []` ledger. Does not
 Filesystem: none
 <- `host.start_loop()`
 
-### validate_turn_timeout(value)
+### validate_turn_timeout(value) / validate_round_count(value) / _validate_bounded_int(...)
 File: `src/gator_command/scripts/loop/session.py`
-Single validation path for an Architect-chosen turn window: returns an int in `TURN_TIMEOUT_MIN..TURN_TIMEOUT_MAX` (30..3600) or raises `ValueError`. Rejects bool, floats, and non-integer strings; accepts plain-integer strings (CLI input).
+Single validation paths for Architect-chosen loop integers, both built on `_validate_bounded_int()`: `validate_turn_timeout` returns an int in `TURN_TIMEOUT_MIN..TURN_TIMEOUT_MAX` (30..3600); `validate_round_count` returns an int in `ROUNDS_MIN..ROUNDS_MAX` (1..20, the same bound as Dashboard start `max_rounds`) — used for the per-extension increment (#39). Both raise `ValueError`, reject bool/floats/non-integer strings, and accept plain-integer strings (CLI input). No total round ceiling is enforced.
 Filesystem: none
-<- `submit.handle_unblock()`, `cli._turn_timeout_arg()`, dashboard `_handle_loop_start()` / `_handle_loop_unblock()`
+<- turn timeout: `submit.handle_unblock()`, `cli._turn_timeout_arg()`, dashboard `_handle_loop_start()` / `_handle_loop_unblock()`; round count: `submit.handle_extend()`
 ! CLI `start --turn-timeout` is deliberately NOT routed through this (tests and local tooling use short windows); the Dashboard start and every unblock path are. Default window stays 300s.
 
 ### load_session(loop_dir) / save_session(loop_dir, session)
@@ -114,6 +114,13 @@ Filesystem: none (mutates session dict)
 <- `submit.handle_unblock()`
 ! Stage-role validation: `plan_drafting`/`plan_revision` require `draftor`, `plan_review` requires `reviewer`. Mismatches raise ValueError.
 
+### advance_extended(session, rounds, turn_timeout, message=None)
+File: `src/gator_command/scripts/loop/state_machine.py`
+`max_rounds_exceeded` -> `plan_revision` (next_role `draftor`) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, resume fields, and `architect_response_artifact`; sets `architect_message=message` and a fresh deadline from the given timeout. Returns `(previous_max_rounds, new_max_rounds)`.
+Filesystem: none (mutates session dict)
+<- `submit.handle_extend()` (#39)
+! All guards run before any mutation: source stage must be exactly `EXTENDABLE_STAGE`; `rounds` a positive int (bool rejected); `round <= max_rounds`. Violations raise ValueError. Input range policy (1..20) belongs to the caller.
+
 ### advance_turn_timed_out(session, timed_out_role)
 File: `src/gator_command/scripts/loop/state_machine.py`
 Any active -> `turn_timed_out` (terminal).
@@ -143,7 +150,7 @@ Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R)
 
 ### format_event(event) / format_next_prompt(session)
 File: `src/gator_command/scripts/loop/events.py`
-Human-readable formatting. Events: `[HH:MM:SS] label (detail)`. Prompt: next role and stage.
+Human-readable formatting. Events: `[HH:MM:SS] label (detail)`. Prompt: next role and stage. `loop_extended` renders as `EXTENDED (<detail>)` and is deliberately NOT in `TERMINAL_EVENTS` (#39).
 Filesystem: none
 <- `host.watch_loop()`, `cli._cmd_tail()`
 
@@ -181,6 +188,14 @@ Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when fi
 <- `cli._cmd_unblock()`, dashboard `_handle_loop_unblock()`
 -> `resolve_token()`, `validate_turn_timeout()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
 ! All validation that can fail runs before `advance_unblocked()`/`_copy_artifact()`; a raise inside the lock skips the save, so a rejected unblock leaves session.json, events, and the stored timeout untouched.
+
+### handle_extend(token, rounds, message, loop_dir=None)
+File: `src/gator_command/scripts/loop/submit.py`
+Architect command (#39): the session transaction for continuing a loop that ended at its round limit. Before the lock: `message` required (blank/whitespace -> `ValueError`, stored stripped), `validate_round_count(rounds)` (1..20), `resolve_token()`, non-architect -> `PermissionError`. Inside `with_session_lock`: `validate_action(session, "architect", "extend")` (wrong stage -> `PermissionError`), `advance_extended()` with the stored `turn_timeout_seconds`, `append_turn(architect, "extend", message)`, and one `loop_extended` event `{role: architect, round, rounds_added, previous_max_rounds, max_rounds, stage, next_role, reason, detail}`. Returns `(loop_id, loop_dir, previous_max_rounds, new_max_rounds)`.
+Filesystem: session mutation + one event (inside the session lock)
+<- `host.extend_loop()` (M3)
+-> `validate_round_count()`, `resolve_token()`, `with_session_lock()`, `validate_action()`, `advance_extended()`, `append_turn()`
+! Transaction only. It does NOT take `start.lock`, scan for other active loops, or attach a watcher — callers must go through `host.extend_loop()` so the single-active-loop guarantee holds. Every rejection leaves `session.json` and `events.jsonl` byte-identical.
 
 ### handle_pause(token, message)
 File: `src/gator_command/scripts/loop/submit.py`
@@ -222,25 +237,42 @@ Filesystem: `.gator/loops/start.lock` (RW), `.gator/loops/<loop-id>/host.lock` (
 
 ### watch_loop(loop_dir, host_lock_fd=None)
 File: `src/gator_command/scripts/loop/host.py`
-Polls events.jsonl for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on terminal. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
-Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline check), `host.lock` (W metadata, when fd provided)
+Polls events.jsonl (from offset 0) for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on a terminal event **only if the session is still terminal** (`_session_is_terminal()`); otherwise the event is rendered as history and watching continues. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
+Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline + terminal check), `host.lock` (W metadata, when fd provided)
 <- `start_loop()`, dashboard `_run_watcher()`
--> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`
+-> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`, `_session_is_terminal()`
 ! The host is a READER during normal operation. Timeout enforcement is the one write exception.
+! Terminal detection is session-authoritative (#39): a watcher attached after an extension replays the old `max_rounds_exceeded` event and must keep hosting; a watcher that reads the terminal event after an extension already landed also keeps hosting. `_session_is_terminal()` fails safe (unreadable session -> terminal -> exit), preserving the pre-#39 behavior.
+! `tail_events()` (`gator loop tail`) is intentionally NOT session-authoritative: a human tail started before an extension ends at the old terminal event.
 
-### acquire_host_lock(loop_dir) / release_host_lock(fd)
+### acquire_host_lock(loop_dir) / release_host_lock(fd) / _try_host_lock(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
-Non-blocking exclusive file lock on `host.lock` — proves process ownership of timeout enforcement for a specific loop. Platform-aware: `msvcrt.locking(LK_NBLCK)` on Windows, `fcntl.flock(LOCK_EX|LOCK_NB)` on POSIX.
+Non-blocking exclusive file lock on `host.lock` — proves process ownership of timeout enforcement for a specific loop. Platform-aware: `msvcrt.locking(LK_NBLCK)` on Windows, `fcntl.flock(LOCK_EX|LOCK_NB)` on POSIX. `_try_host_lock()` is the single attempt that distinguishes `"held"` from `"open failed: ..."`; `acquire_host_lock()` wraps it with the unchanged fd-or-None contract.
 Filesystem: `.gator/loops/<loop-id>/host.lock` (RW)
 <- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
 ! Returns fd on success, None if already held. OS exclusive lock prevents duplicate watchers cross-process.
 
+### acquire_host_lock_with_retry(loop_dir, attempts=15, delay=0.2, sleep=None) / read_host_metadata(loop_dir)
+File: `src/gator_command/scripts/loop/host.py`
+Watcher attachment for a loop that just became active again (#39). Retries `_try_host_lock()` (~3 s default) so a terminal watcher still releasing its lock can finish. Returns `(fd, state, detail)` with `state` ∈ `HOST_ATTACHED` / `HOST_ALREADY_HOSTED` / `HOST_FAILED`. `read_host_metadata()` is a best-effort, non-locking JSON read of the holder's metadata (often unreadable on Windows while held) used only for the `already_hosted` detail (pid).
+Filesystem: `.gator/loops/<loop-id>/host.lock` (RW attempt; R metadata)
+<- CLI `_cmd_extend()` (M4), dashboard `_ensure_loop_watcher()` (M5)
+! `already_hosted` means a live process owns `host.lock` (the OS releases locks of dead processes); callers must NOT start a second watcher. With session-authoritative `watch_loop()`, that holder keeps hosting the extended loop. `failed` (open error) returns immediately without retry. Residual risk: a watcher that decided to exit *before* the extension but takes longer than the retry window to release is misreported as hosted; Dashboard startup adoption is the backstop.
+
+### extend_loop(token, rounds, message, loop_dir=None)
+File: `src/gator_command/scripts/loop/host.py`
+Single-active-loop guard for #39: resolves the token, takes `start.lock` on the loops base (unavailable -> `RuntimeError`), refuses if `find_active_loop()` returns a *different* loop (`RuntimeError`), then delegates to `submit.handle_extend()` and releases `start.lock` in `finally`. Does not attach a watcher.
+Filesystem: `.gator/loops/start.lock` (RW), target session/events via `handle_extend()`
+<- CLI `_cmd_extend()` (M4), dashboard `_handle_loop_extend()` (M5)
+-> `resolve_token()`, `acquire_start_lock()`, `find_active_loop()`, `submit.handle_extend()`, `release_start_lock()`
+! Every extension path must go through this function — calling `handle_extend()` directly would bypass the one-active-loop invariant. Rejections leave the target loop byte-unchanged.
+
 ### acquire_start_lock(loops_base) / release_start_lock(fd)
 File: `src/gator_command/scripts/loop/host.py`
-Non-blocking exclusive file lock on `start.lock` — enforces one-active-loop-per-repo during the scan-and-init window. Same platform-aware locking as `host.lock`.
+Non-blocking exclusive file lock on `start.lock` — enforces one-active-loop-per-repo during the scan-and-init window (and the scan-and-extend window, #39). Same platform-aware locking as `host.lock`.
 Filesystem: `.gator/loops/start.lock` (RW)
-<- `start_loop()`, dashboard `_handle_loop_start()`
-! Held only during the start sequence. Released before entering `watch_loop()`.
+<- `start_loop()`, `extend_loop()`, dashboard `_handle_loop_start()`
+! Held only during the start or extend sequence. Released before entering `watch_loop()`.
 
 ### find_active_loop(loops_base)
 File: `src/gator_command/scripts/loop/host.py`
@@ -261,7 +293,7 @@ Filesystem: `session.json` (RW via lock), `events.jsonl` (W via lock)
 
 ### main(argv)
 File: `src/gator_command/scripts/loop/cli.py`
-Argparse dispatcher for 8 subcommands: start, status, submit-draft, submit-review, escalate, unblock, tail, list.
+Argparse dispatcher for 13 subcommands: start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, extend, wait, tail, list.
 Filesystem: none (delegates to handlers)
 <- `gator-loop.py`
 
@@ -273,6 +305,14 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 -> `resolve_token()`, `load_session()`
 ! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
 ! Turn window: model and architect JSON (and wait JSON) carry additive `turn_timeout_seconds` + `turn_deadline`; the acting model's text view prints `Turn window: Ns (deadline ...)` via `_print_turn_window()`. The paused architect view prints the current window and, when a decision is pending, states that a response is required (with the exceptional `--no-response` form); an ordinary pause shows the optional-message form.
+
+### _cmd_extend(args) / _round_count_arg(value)
+File: `src/gator_command/scripts/loop/cli.py`
+Architect `gator loop extend --token --rounds <1-20> --message "..."` (#39). `--rounds` and `--message` are required; `--rounds` uses argparse type `_round_count_arg` -> `session.validate_round_count()` (usage error exit 2 before any write). Calls `host.extend_loop()`; `PermissionError` -> `Rejected:` exit 1, `RuntimeError`/`ValueError`/`FileNotFoundError` -> `Error:` exit 1 (no host step). On success prints old -> new ceiling, resumed stage/role, turn window, and a participant re-engagement notice, then applies the host contract via `host.acquire_host_lock_with_retry()`: `attached` -> foreground `watch_loop()` (Ctrl+C prints that enforcement stopped; fd released in `finally`); `already_hosted` -> prints holder detail, exit 0; `failed` -> stderr says the extension is saved but timeouts are NOT enforced, exit 1.
+<- `main()`
+-> `host.extend_loop()`, `host.acquire_host_lock_with_retry()`, `host.watch_loop()`, `host.release_host_lock()`, `session.load_session()`
+! Always attaches (no state-only `--no-watch` form): a state-only extension would leave a live-but-unhosted loop with no recovery command, because `extend` rejects once the stage is `plan_revision`.
+! Architect status for a `max_rounds_exceeded` loop prints the `extend` command hint; `start`'s banner lists it too.
 
 ### _cmd_unblock(args) / _turn_timeout_arg(value)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -313,6 +353,10 @@ Violation: committing `.tokens.json` or adding nonces to `session.json` makes to
 
 The host has exactly ONE write exception: timeout enforcement. During normal operation the host is a reader of `events.jsonl` and a renderer to terminal. No other section of code grants the host additional write paths.
 
+## TRIPWIRE: Resumable Terminal Stage
+
+`max_rounds_exceeded` is terminal but resumable — only via the Architect `extend` action (`validate_action(..., "extend")` / `advance_extended()`, #39). `plan_approved`, `turn_timed_out`, and `ended_by_architect` are final and must never be reactivated. Code that treats "terminal" as "never changes again" (watchers, pollers, caches) must re-check the session rather than assume finality.
+
 ## TRIPWIRE: Stage-Role Consistency
 
 Each active stage belongs to exactly one role: `plan_drafting` -> draftor, `plan_review` -> reviewer, `plan_revision` -> draftor. `advance_unblocked()` validates this. Bypassing the validation creates impossible session states.
@@ -323,7 +367,7 @@ Each active stage belongs to exactly one role: `plan_drafting` -> draftor, `plan
 
 ## TRIPWIRE: Role-Based Access Control
 
-Three roles: `draftor`, `reviewer`, `architect`. Each has a token with a secret nonce. `validate_action()` enforces a strict matrix: model actions (submit-draft, submit-review, escalate) reject `architect`, architect actions (pause, interject, end, unblock) reject model roles. This is a structural barrier — models don't have the architect nonce and cannot execute architect commands.
+Three roles: `draftor`, `reviewer`, `architect`. Each has a token with a secret nonce. `validate_action()` enforces a strict matrix: model actions (submit-draft, submit-review, escalate) reject `architect`, architect actions (pause, interject, end, unblock, extend) reject model roles. This is a structural barrier — models don't have the architect nonce and cannot execute architect commands.
 
 ! The architect token is stored in the same `.tokens.json` as model tokens. The protection is that models are not given the token and have no protocol-sanctioned way to obtain it. This is defense-in-depth, not a cryptographic guarantee.
 

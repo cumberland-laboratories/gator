@@ -240,6 +240,121 @@ class TestStateMachineMaxRounds:
         assert loop_sm.is_terminal(s)
 
 
+def _max_rounds_session(max_rounds=2, turn_timeout=300):
+    """A session driven to max_rounds_exceeded through real transitions."""
+    s = loop_session.create_session("t", "l", max_rounds=max_rounds,
+                                    turn_timeout=turn_timeout)
+    for _ in range(max_rounds):
+        loop_sm.advance_draft_submitted(s, turn_timeout)
+        loop_sm.advance_review_submitted(s, False, 1, turn_timeout)
+    assert s["status"]["stage"] == "max_rounds_exceeded"
+    return s
+
+
+class TestAdvanceExtended:
+    """#39 M1 — max_rounds_exceeded -> plan_revision via extend."""
+
+    def test_resumes_plan_revision_for_draftor(self):
+        s = _max_rounds_session(max_rounds=3)
+        prev, new = loop_sm.advance_extended(s, 2, 300, message="Keep going")
+        st = s["status"]
+        assert (prev, new) == (3, 5)
+        assert st["max_rounds"] == 5
+        assert st["stage"] == "plan_revision"
+        assert st["next_role"] == "draftor"
+        assert st["plan_status"] == "revision"
+        assert st["blocked"] is False
+        assert st["architect_action_required"] is False
+        assert st["architect_message"] == "Keep going"
+        assert st["architect_response_artifact"] is None
+        assert loop_sm.is_active(s) and not loop_sm.is_terminal(s)
+
+    def test_preserves_history(self):
+        s = _max_rounds_session(max_rounds=2)
+        s["turns"].append({"id": "draftor-001", "summary": "x"})
+        s["decisions"].append({"id": "decision-1", "request": {}, "response": {"message": "m"}})
+        s["current"]["draft"] = {"turn_id": "draftor-001", "artifact_path": "plan.round-1.md"}
+        before = json.loads(json.dumps({k: s[k] for k in ("turns", "decisions", "current")}))
+        round_before = s["status"]["round"]
+        findings_before = s["status"]["unresolved_findings"]
+
+        loop_sm.advance_extended(s, 1, 300, message="m")
+
+        assert s["status"]["round"] == round_before, "round must never be renumbered"
+        assert s["status"]["unresolved_findings"] == findings_before
+        assert {k: s[k] for k in ("turns", "decisions", "current")} == before
+
+    def test_deadline_uses_given_timeout(self):
+        s = _max_rounds_session(max_rounds=2)
+        loop_sm.advance_extended(s, 1, 900, message="m")
+        remaining = (datetime.fromisoformat(s["status"]["turn_deadline"])
+                     - datetime.now(tz=timezone.utc)).total_seconds()
+        assert 800 < remaining <= 900
+
+    def test_extended_loop_runs_normal_cycle_to_new_ceiling(self):
+        s = _max_rounds_session(max_rounds=2)
+        loop_sm.advance_extended(s, 1, 300, message="one more")
+        loop_sm.advance_draft_submitted(s, 300)
+        assert s["status"]["architect_message"] is None  # cleared once acted on
+        loop_sm.advance_review_submitted(s, False, 1, 300)
+        assert s["status"]["round"] == 3
+        assert s["status"]["stage"] == "max_rounds_exceeded"
+        # ...and it can be extended again
+        assert loop_sm.advance_extended(s, 2, 300, message="again") == (3, 5)
+
+    @pytest.mark.parametrize("stage", [
+        "plan_approved", "turn_timed_out", "ended_by_architect",
+        "plan_drafting", "plan_review", "plan_revision",
+        "blocked_on_architect", "paused_by_architect",
+    ])
+    def test_rejects_every_other_stage_without_mutation(self, stage):
+        s = _max_rounds_session(max_rounds=2)
+        s["status"]["stage"] = stage
+        before = json.dumps(s, sort_keys=True)
+        with pytest.raises(ValueError, match="round limit"):
+            loop_sm.advance_extended(s, 1, 300, message="m")
+        assert json.dumps(s, sort_keys=True) == before
+
+    @pytest.mark.parametrize("bad", [0, -1, True, 1.5, "2", None])
+    def test_rejects_non_positive_int_rounds_without_mutation(self, bad):
+        s = _max_rounds_session(max_rounds=2)
+        before = json.dumps(s, sort_keys=True)
+        with pytest.raises(ValueError, match="positive integer"):
+            loop_sm.advance_extended(s, bad, 300, message="m")
+        assert json.dumps(s, sort_keys=True) == before
+
+    def test_rejects_inconsistent_round_over_ceiling(self):
+        s = _max_rounds_session(max_rounds=2)
+        s["status"]["round"] = 5
+        with pytest.raises(ValueError, match="Inconsistent"):
+            loop_sm.advance_extended(s, 1, 300, message="m")
+        assert s["status"]["stage"] == "max_rounds_exceeded"
+
+
+class TestValidateExtendAction:
+    def test_architect_may_extend_max_rounds(self):
+        s = _max_rounds_session()
+        assert loop_sm.validate_action(s, "architect", "extend") == (True, "ok")
+
+    @pytest.mark.parametrize("role", ["draftor", "reviewer"])
+    def test_model_roles_rejected(self, role):
+        s = _max_rounds_session()
+        allowed, reason = loop_sm.validate_action(s, role, "extend")
+        assert allowed is False
+        assert "architect token" in reason
+
+    @pytest.mark.parametrize("stage", [
+        "plan_approved", "turn_timed_out", "ended_by_architect",
+        "plan_revision", "blocked_on_architect",
+    ])
+    def test_non_extendable_stages_rejected(self, stage):
+        s = _max_rounds_session()
+        s["status"]["stage"] = stage
+        allowed, reason = loop_sm.validate_action(s, "architect", "extend")
+        assert allowed is False
+        assert "round limit" in reason and stage in reason
+
+
 class TestStateMachineEscalation:
     def test_escalate_from_any_active(self):
         """Escalate from any active state sets blocked."""
@@ -1587,6 +1702,480 @@ class TestValidateTurnTimeout:
             loop_session.validate_turn_timeout(bad)
 
 
+class TestValidateRoundCount:
+    @pytest.mark.parametrize("good,expected", [(1, 1), (20, 20), (2, 2), ("5", 5), (" 3 ", 3)])
+    def test_accepts_integral_in_range(self, good, expected):
+        assert loop_session.validate_round_count(good) == expected
+
+    @pytest.mark.parametrize("bad", [0, 21, -1, 1.5, 2.0, True, None, "x", "", "-2", "1e1"])
+    def test_rejects_invalid(self, bad):
+        with pytest.raises(ValueError, match="rounds"):
+            loop_session.validate_round_count(bad)
+
+    def test_turn_timeout_messages_unchanged_by_refactor(self):
+        with pytest.raises(ValueError, match="turn timeout must be between 30 and 3600 seconds"):
+            loop_session.validate_turn_timeout(10)
+        with pytest.raises(ValueError, match="turn timeout must be an integer number of seconds"):
+            loop_session.validate_turn_timeout("fast")
+
+
+def _drive_to_max_rounds(e):
+    """Run real draft/review submissions until the loop hits its ceiling."""
+    for _ in range(loop_session.load_session(e["loop_dir"])["status"]["max_rounds"]):
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+    s = loop_session.load_session(e["loop_dir"])
+    assert s["status"]["stage"] == "max_rounds_exceeded"
+    return s
+
+
+class TestHandleExtend:
+    """#39 M2 — durable extend transaction + loop_extended event."""
+
+    def test_extend_resumes_and_records_audit(self, loop_env):
+        e = loop_env
+        before = _drive_to_max_rounds(e)
+        turns_before = len(before["turns"])
+
+        loop_id, loop_dir, prev, new = loop_submit.handle_extend(
+            e["architect_token"], 2, "  Verify the revised boundary.  ")
+
+        assert (prev, new) == (3, 5)
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "plan_revision"
+        assert s["status"]["next_role"] == "draftor"
+        assert s["status"]["round"] == 3
+        assert s["status"]["max_rounds"] == 5
+        assert s["status"]["architect_message"] == "Verify the revised boundary."
+        assert "extension_count" not in s["status"]
+
+        assert len(s["turns"]) == turns_before + 1
+        turn = s["turns"][-1]
+        assert turn["role"] == "architect"
+        assert turn["summary"] == "Verify the revised boundary."
+
+        ev = _last_event(e["loop_dir"])
+        assert ev["event"] == "loop_extended"
+        assert ev["role"] == "architect"
+        assert ev["round"] == 3
+        assert ev["rounds_added"] == 2
+        assert ev["previous_max_rounds"] == 3
+        assert ev["max_rounds"] == 5
+        assert ev["stage"] == "plan_revision"
+        assert ev["next_role"] == "draftor"
+        assert ev["reason"] == "Verify the revised boundary."
+        assert "3 -> 5" in ev["detail"]
+        assert "EXTENDED" in loop_events.format_event(ev)
+        assert "loop_extended" not in loop_events.TERMINAL_EVENTS
+
+    def test_resumed_loop_accepts_draftor_revision(self, loop_env):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        loop_submit.handle_extend(e["architect_token"], 1, "one more")
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "plan_review"
+        assert s["status"]["architect_message"] is None
+
+    def test_second_cycle_can_be_extended_again(self, loop_env):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        loop_submit.handle_extend(e["architect_token"], 1, "first extension")
+        # One more draft/review cycle -> round 4 == new ceiling.
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]))
+        assert loop_session.load_session(e["loop_dir"])["status"]["stage"] == "max_rounds_exceeded"
+        _, _, prev, new = loop_submit.handle_extend(e["architect_token"], 2, "second extension")
+        assert (prev, new) == (4, 6)
+        events = loop_events.read_all_events(e["loop_dir"])
+        ext = [(ev["previous_max_rounds"], ev["max_rounds"])
+               for ev in events if ev["event"] == "loop_extended"]
+        assert ext == [(3, 4), (4, 6)]
+
+    @pytest.mark.parametrize("role", ["draftor", "reviewer"])
+    def test_model_token_rejected_without_write(self, loop_env, role):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_submit.handle_extend(e[f"{role}_token"], 2, "reason")
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    @pytest.mark.parametrize("msg", [None, "", "   "])
+    def test_blank_reason_rejected_without_write(self, loop_env, msg):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(ValueError, match="reason"):
+            loop_submit.handle_extend(e["architect_token"], 2, msg)
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    @pytest.mark.parametrize("bad", [0, 21, -1, 1.5, True, "x", None])
+    def test_bad_rounds_rejected_without_write(self, loop_env, bad):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(ValueError, match="rounds"):
+            loop_submit.handle_extend(e["architect_token"], bad, "reason")
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def _to_stage(self, e, stage):
+        if stage == "plan_approved":
+            loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+            loop_submit.handle_submit_review(e["reviewer_token"], str(e["findings_file"]),
+                                             approve=True)
+        elif stage == "turn_timed_out":
+            from host import _try_enforce_timeout
+            s = loop_session.load_session(e["loop_dir"])
+            s["status"]["turn_deadline"] = (
+                datetime.now(tz=timezone.utc) - timedelta(seconds=10)).isoformat()
+            loop_session.save_session(e["loop_dir"], s)
+            _try_enforce_timeout(e["loop_dir"])
+        elif stage == "ended_by_architect":
+            loop_submit.handle_end(e["architect_token"])
+        elif stage == "paused_by_architect":
+            loop_submit.handle_pause(e["architect_token"])
+        elif stage == "blocked_on_architect":
+            loop_submit.handle_escalate(e["draftor_token"], "need input")
+        # "plan_drafting": fresh loop, nothing to do
+        assert loop_session.load_session(e["loop_dir"])["status"]["stage"] == stage
+
+    @pytest.mark.parametrize("stage", [
+        "plan_approved", "turn_timed_out", "ended_by_architect",
+        "plan_drafting", "paused_by_architect", "blocked_on_architect",
+    ])
+    def test_non_extendable_stage_rejected_without_write(self, loop_env, stage):
+        e = loop_env
+        self._to_stage(e, stage)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(PermissionError, match="round limit"):
+            loop_submit.handle_extend(e["architect_token"], 2, "reason")
+        assert _loop_bytes(e["loop_dir"]) == before
+
+
+class TestWatchLoopReplay:
+    """#39 M3 — terminal detection is session-authoritative."""
+
+    def _start_watcher(self, loop_dir, monkeypatch):
+        import threading
+        import host as loop_host
+        monkeypatch.setattr(loop_host, "POLL_INTERVAL", 0.05)
+        t = threading.Thread(target=loop_host.watch_loop, args=(loop_dir,), daemon=True)
+        t.start()
+        return t
+
+    def test_replayed_terminal_event_does_not_end_live_watcher(self, loop_env, monkeypatch):
+        import host as loop_host
+        e = loop_env
+        _drive_to_max_rounds(e)
+        loop_host.extend_loop(e["architect_token"], 2, "continue")
+        events = [ev["event"] for ev in loop_events.read_all_events(e["loop_dir"])]
+        assert events.index("max_rounds_exceeded") < events.index("loop_extended")
+
+        t = self._start_watcher(e["loop_dir"], monkeypatch)
+        t.join(timeout=0.6)
+        assert t.is_alive(), "watcher exited on a historical terminal event"
+
+        loop_submit.handle_end(e["architect_token"])  # a real terminal state
+        t.join(timeout=5)
+        assert not t.is_alive(), "watcher must exit once the session is terminal"
+
+    def test_real_terminal_still_exits(self, loop_env, monkeypatch):
+        e = loop_env
+        _drive_to_max_rounds(e)
+        t = self._start_watcher(e["loop_dir"], monkeypatch)
+        t.join(timeout=5)
+        assert not t.is_alive()
+
+    def test_unreadable_session_fails_safe_to_terminal(self, tmp_path):
+        import host as loop_host
+        assert loop_host._session_is_terminal(tmp_path / "missing-loop") is True
+
+
+class TestHostLockRetry:
+    """#39 M3 — watcher attachment states."""
+
+    def test_free_lock_attaches(self, loop_env):
+        import host as loop_host
+        fd, state, detail = loop_host.acquire_host_lock_with_retry(
+            loop_env["loop_dir"], attempts=3, delay=0, sleep=lambda s: None)
+        try:
+            assert state == loop_host.HOST_ATTACHED and fd is not None and detail is None
+        finally:
+            loop_host.release_host_lock(fd)
+
+    def test_held_lock_reports_already_hosted_without_second_fd(self, loop_env):
+        import host as loop_host
+        holder = loop_host.acquire_host_lock(loop_env["loop_dir"])
+        assert holder is not None
+        sleeps = []
+        try:
+            fd, state, detail = loop_host.acquire_host_lock_with_retry(
+                loop_env["loop_dir"], attempts=3, delay=0.2, sleep=sleeps.append)
+            assert fd is None
+            assert state == loop_host.HOST_ALREADY_HOSTED
+            assert "host.lock held" in detail
+            assert sleeps == [0.2, 0.2], "retries between attempts only"
+        finally:
+            loop_host.release_host_lock(holder)
+
+    def test_release_during_retry_window_attaches(self, loop_env):
+        import host as loop_host
+        holder = [loop_host.acquire_host_lock(loop_env["loop_dir"])]
+
+        def releasing_sleep(_s):
+            if holder[0] is not None:
+                loop_host.release_host_lock(holder[0])  # terminal watcher exits
+                holder[0] = None
+
+        fd, state, _ = loop_host.acquire_host_lock_with_retry(
+            loop_env["loop_dir"], attempts=5, delay=0.2, sleep=releasing_sleep)
+        try:
+            assert state == loop_host.HOST_ATTACHED and fd is not None
+        finally:
+            loop_host.release_host_lock(fd)
+
+    def test_open_error_fails_immediately(self, loop_env, monkeypatch):
+        import host as loop_host
+
+        def boom(*a, **k):
+            raise OSError("disk says no")
+
+        monkeypatch.setattr(loop_host.os, "open", boom)
+        sleeps = []
+        fd, state, detail = loop_host.acquire_host_lock_with_retry(
+            loop_env["loop_dir"], attempts=5, delay=0.2, sleep=sleeps.append)
+        assert (fd, state) == (None, loop_host.HOST_FAILED)
+        assert "disk says no" in detail
+        assert sleeps == []
+
+    def test_acquire_host_lock_contract_unchanged(self, loop_env):
+        import host as loop_host
+        first = loop_host.acquire_host_lock(loop_env["loop_dir"])
+        try:
+            assert first is not None
+            assert loop_host.acquire_host_lock(loop_env["loop_dir"]) is None
+        finally:
+            loop_host.release_host_lock(first)
+
+    def test_read_host_metadata_best_effort(self, loop_env):
+        import host as loop_host
+        lock_file = loop_env["loop_dir"] / loop_host.HOST_LOCK_FILENAME
+        assert loop_host.read_host_metadata(loop_env["loop_dir"]) is None  # absent
+        lock_file.write_text('{"pid": 4242, "nonce": "ab"}', encoding="utf-8")
+        assert loop_host.read_host_metadata(loop_env["loop_dir"])["pid"] == 4242
+        lock_file.write_text("not json", encoding="utf-8")
+        assert loop_host.read_host_metadata(loop_env["loop_dir"]) is None
+
+
+class TestExtendLoopGuard:
+    """#39 M3 — extension holds start.lock and keeps one active loop per repo."""
+
+    def _start_lock_free(self, loops_base):
+        import host as loop_host
+        fd = loop_host.acquire_start_lock(loops_base)
+        if fd is None:
+            return False
+        loop_host.release_start_lock(fd)
+        return True
+
+    def test_extend_success_releases_start_lock(self, loop_env):
+        import host as loop_host
+        e = loop_env
+        _drive_to_max_rounds(e)
+        loop_id, loop_dir, prev, new = loop_host.extend_loop(e["architect_token"], 2, "go")
+        assert (loop_id, prev, new) == (e["loop_id"], 3, 5)
+        assert self._start_lock_free(e["loop_dir"].parent)
+
+    def test_rejected_when_another_loop_is_active(self, loop_env):
+        import host as loop_host
+        e = loop_env
+        _drive_to_max_rounds(e)
+        other = e["loop_dir"].parent / "other-active-loop"
+        other.mkdir()
+        loop_session.save_session(other, loop_session.create_session(
+            "other", "other-active-loop", max_rounds=3, turn_timeout=300))
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(RuntimeError, match="active loop already exists: other-active-loop"):
+            loop_host.extend_loop(e["architect_token"], 2, "go")
+        assert _loop_bytes(e["loop_dir"]) == before
+        assert self._start_lock_free(e["loop_dir"].parent)
+
+    def test_rejected_while_start_lock_held(self, loop_env):
+        import host as loop_host
+        e = loop_env
+        _drive_to_max_rounds(e)
+        held = loop_host.acquire_start_lock(e["loop_dir"].parent)
+        before = _loop_bytes(e["loop_dir"])
+        try:
+            with pytest.raises(RuntimeError, match="in progress"):
+                loop_host.extend_loop(e["architect_token"], 2, "go")
+        finally:
+            loop_host.release_start_lock(held)
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_handler_rejection_propagates_and_releases_start_lock(self, loop_env):
+        import host as loop_host
+        e = loop_env
+        _drive_to_max_rounds(e)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(ValueError, match="reason"):
+            loop_host.extend_loop(e["architect_token"], 2, "   ")
+        with pytest.raises(PermissionError, match="architect token"):
+            loop_host.extend_loop(e["draftor_token"], 2, "go")
+        assert _loop_bytes(e["loop_dir"]) == before
+        assert self._start_lock_free(e["loop_dir"].parent)
+
+    def test_invalid_token_rejected_before_locking(self, loop_env):
+        import host as loop_host
+        with pytest.raises(ValueError):
+            loop_host.extend_loop("not-a-token", 2, "go")
+        assert self._start_lock_free(loop_env["loop_dir"].parent)
+
+
+class TestCliExtend:
+    """#39 M4 — `gator loop extend` with the always-attach host contract."""
+
+    def _fast_retry(self, monkeypatch):
+        import host as loop_host
+        orig = loop_host.acquire_host_lock_with_retry
+        monkeypatch.setattr(
+            loop_host, "acquire_host_lock_with_retry",
+            lambda loop_dir: orig(loop_dir, attempts=2, delay=0, sleep=lambda s: None))
+
+    def _lock_is_free(self, loop_dir):
+        import host as loop_host
+        fd = loop_host.acquire_host_lock(loop_dir)
+        if fd is None:
+            return False
+        loop_host.release_host_lock(fd)
+        return True
+
+    @pytest.mark.parametrize("argv", [
+        ["--rounds", "2"],                       # missing --message
+        ["--message", "go"],                     # missing --rounds
+        ["--rounds", "0", "--message", "go"],
+        ["--rounds", "21", "--message", "go"],
+        ["--rounds", "x", "--message", "go"],
+    ])
+    def test_usage_errors_exit_2_without_write(self, loop_env, argv):
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(SystemExit) as exc:
+            main(["extend", "--token", e["architect_token"]] + argv)
+        assert exc.value.code == 2
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_attached_runs_foreground_watcher_and_releases_lock(self, loop_env, monkeypatch, capsys):
+        import host as loop_host
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        seen = {}
+
+        def fake_watch(loop_dir, host_lock_fd=None):
+            seen["fd"] = host_lock_fd
+            seen["held"] = not self._lock_is_free(loop_dir)
+
+        monkeypatch.setattr(loop_host, "watch_loop", fake_watch)
+        main(["extend", "--token", e["architect_token"], "--rounds", "2",
+              "--message", "Verify boundaries"])
+
+        out = capsys.readouterr().out
+        assert "Extended: max rounds 3 -> 5 (round 3)." in out
+        assert "Resumed to plan_revision (next: draftor)." in out
+        assert "re-engaged" in out
+        assert "watching in the foreground" in out
+        assert seen["fd"] is not None and seen["held"] is True
+        assert self._lock_is_free(e["loop_dir"]), "host.lock must be released after watching"
+        assert loop_session.load_session(e["loop_dir"])["status"]["stage"] == "plan_revision"
+
+    def test_ctrl_c_reports_enforcement_stopped_and_releases(self, loop_env, monkeypatch, capsys):
+        import host as loop_host
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+
+        def interrupted(loop_dir, host_lock_fd=None):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(loop_host, "watch_loop", interrupted)
+        main(["extend", "--token", e["architect_token"], "--rounds", "1", "--message", "go"])
+        assert "no longer enforced" in capsys.readouterr().out
+        assert self._lock_is_free(e["loop_dir"])
+
+    def test_already_hosted_exits_0_without_second_watcher(self, loop_env, monkeypatch, capsys):
+        import host as loop_host
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        self._fast_retry(monkeypatch)
+        monkeypatch.setattr(loop_host, "watch_loop",
+                            lambda *a, **k: pytest.fail("must not start a second watcher"))
+        holder = loop_host.acquire_host_lock(e["loop_dir"])
+        try:
+            main(["extend", "--token", e["architect_token"], "--rounds", "2", "--message", "go"])
+        finally:
+            loop_host.release_host_lock(holder)
+        assert "already hosted" in capsys.readouterr().out
+        assert loop_session.load_session(e["loop_dir"])["status"]["max_rounds"] == 5
+
+    def test_attach_failure_keeps_extension_and_exits_1(self, loop_env, monkeypatch, capsys):
+        import host as loop_host
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        monkeypatch.setattr(loop_host, "acquire_host_lock_with_retry",
+                            lambda loop_dir: (None, loop_host.HOST_FAILED, "open failed: nope"))
+        with pytest.raises(SystemExit) as exc:
+            main(["extend", "--token", e["architect_token"], "--rounds", "2", "--message", "go"])
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "NOT being enforced" in err and "open failed: nope" in err
+        s = loop_session.load_session(e["loop_dir"])
+        assert s["status"]["stage"] == "plan_revision" and s["status"]["max_rounds"] == 5
+
+    def test_rejected_extension_exits_1_before_any_host_step(self, loop_env, monkeypatch, capsys):
+        import host as loop_host
+        from cli import main
+        e = loop_env  # fresh loop: plan_drafting, not extendable
+        monkeypatch.setattr(loop_host, "acquire_host_lock_with_retry",
+                            lambda *a, **k: pytest.fail("no host step after a rejection"))
+        before = _loop_bytes(e["loop_dir"])
+        with pytest.raises(SystemExit) as exc:
+            main(["extend", "--token", e["architect_token"], "--rounds", "2", "--message", "go"])
+        assert exc.value.code == 1
+        assert "Rejected:" in capsys.readouterr().err
+        assert _loop_bytes(e["loop_dir"]) == before
+
+    def test_blank_message_is_an_error(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        with pytest.raises(SystemExit) as exc:
+            main(["extend", "--token", e["architect_token"], "--rounds", "2", "--message", "  "])
+        assert exc.value.code == 1
+        assert "reason" in capsys.readouterr().err
+
+    def test_architect_status_shows_extend_hint_only_at_max_rounds(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        _drive_to_max_rounds(e)
+        with pytest.raises(SystemExit):
+            main(["status", "--token", e["architect_token"]])
+        assert "gator loop extend --token" in capsys.readouterr().out
+
+    def test_no_extend_hint_for_other_terminal(self, loop_env, capsys):
+        from cli import main
+        e = loop_env
+        loop_submit.handle_end(e["architect_token"])
+        with pytest.raises(SystemExit):
+            main(["status", "--token", e["architect_token"]])
+        assert "gator loop extend" not in capsys.readouterr().out
+
+
 class TestUnblockTurnWindow:
     def test_timeout_persists_and_sets_fresh_deadline(self, loop_env):
         e = loop_env
@@ -2370,6 +2959,41 @@ class TestWaitHandoffAlignment:
         includes = (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8")
         template = (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8")
         assert includes == template
+
+    def test_protocol_documents_architect_extension(self):
+        """#39: Rule 10 keeps 'stop at terminal' for participants but documents
+        the Architect-only max-rounds extension and the re-engagement path."""
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            rule10 = text[text.index("### Rule 10"):text.index("## State Machine")]
+            assert "gator loop extend" in rule10
+            assert "`max_rounds_exceeded`" in rule10
+            assert "fresh join prompt" in rule10
+            assert "Do not wait for or poll for an extension" in rule10
+            assert "No other terminal state can be resumed" in rule10
+            assert "`ended_by_architect`" in rule10
+            assert "done unless the Architect extends it" in text
+
+    def test_protocol_state_table_matches_state_machine(self):
+        """The participant State Machine table lists every stage the state
+        machine defines, and the category summary matches its sets."""
+        import re
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            section = text[text.index("## State Machine"):]
+            section = section[:section.index("\n---")]
+            rows = set(re.findall(r"^\| `([a-z_]+)` \|", section, re.MULTILINE))
+            assert rows == set(loop_sm.ALL_STAGES), (
+                f"{base}: table stages {sorted(rows)} != state machine {sorted(loop_sm.ALL_STAGES)}")
+            for label, stages in (("Active (3)", loop_sm.ACTIVE_STAGES),
+                                  ("Paused (2)", loop_sm.PAUSED_STAGES),
+                                  ("Terminal (4)", loop_sm.TERMINAL_STAGES)):
+                line = next(l for l in section.splitlines() if label in l)
+                for stage in stages:
+                    assert f"`{stage}`" in line, f"{label} summary missing {stage}"
+            final_rows = [l for l in section.splitlines() if "done, final" in l]
+            assert {re.match(r"^\| `([a-z_]+)`", l).group(1) for l in final_rows} == \
+                set(loop_sm.TERMINAL_STAGES) - {loop_sm.EXTENDABLE_STAGE}
 
     def test_escalate_before_wait_ordering(self):
         """All surfaces teach escalate-first, then wait — not the reverse."""

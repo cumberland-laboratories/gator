@@ -151,13 +151,71 @@ def _run_watcher(loop_dir, host_lock_fd, repo_path, loop_id, entry_nonce):
                 del _LOOP_HOSTS[key]
 
 
-def _adopt_orphaned_loops():
-    """Server startup: scan repos for active loops and adopt orphans."""
+WATCHER_ATTACHED = "attached"
+WATCHER_ALREADY_HOSTED = "already_hosted"
+WATCHER_FAILED = "failed"
+
+
+def _ensure_loop_watcher(repo_path, loop_id, loop_dir, retry=False):
+    """Single attach path for Dashboard loop watchers (start, adoption, extend).
+
+    Returns (state, detail) with state in attached / already_hosted / failed:
+
+    - already_hosted: this Dashboard already has a live watcher thread for
+      the loop, or another process holds host.lock (a live owner — the OS
+      releases locks of dead processes). Never starts a second watcher.
+    - attached: host.lock acquired, a nonce-protected _LOOP_HOSTS entry
+      inserted BEFORE the daemon thread starts, and the thread started.
+    - failed: the lock file could not be opened, or the thread could not
+      start (entry removed by nonce, fd released).
+
+    ``retry=True`` (extension) retries host.lock briefly so a terminal
+    watcher that is still exiting can release it; start and adoption keep
+    their single non-blocking attempt.
+    """
     _loop_scripts = str(Path(__file__).resolve().parent / "loop")
     if _loop_scripts not in sys.path:
         sys.path.insert(0, _loop_scripts)
-    from host import acquire_host_lock
+    from host import acquire_host_lock_with_retry, release_host_lock
 
+    key = (repo_path, loop_id)
+    with _LOOP_HOSTS_LOCK:
+        cur = _LOOP_HOSTS.get(key)
+        if cur is not None and cur.thread.is_alive():
+            return WATCHER_ALREADY_HOSTED, "watched by this Dashboard"
+
+    if retry:
+        fd, state, detail = acquire_host_lock_with_retry(loop_dir)
+    else:
+        fd, state, detail = acquire_host_lock_with_retry(loop_dir, attempts=1)
+    if fd is None:
+        return state, detail
+
+    nonce = _secrets.token_hex(4)
+    t = threading.Thread(
+        target=_run_watcher,
+        args=(loop_dir, fd, repo_path, loop_id, nonce),
+        daemon=True,
+    )
+    with _LOOP_HOSTS_LOCK:
+        _LOOP_HOSTS[key] = _HostEntry(t, loop_dir, fd, nonce)
+    try:
+        t.start()
+    except Exception as exc:
+        with _LOOP_HOSTS_LOCK:
+            cur = _LOOP_HOSTS.get(key)
+            if cur and cur.entry_nonce == nonce:
+                del _LOOP_HOSTS[key]
+        try:
+            release_host_lock(fd)
+        except Exception:
+            pass
+        return WATCHER_FAILED, f"failed to start host watcher: {exc}"
+    return WATCHER_ATTACHED, None
+
+
+def _adopt_orphaned_loops():
+    """Server startup: scan repos for active loops and adopt orphans."""
     for r in _REGISTRY_REPOS:
         raw_path = r.get("path", "")
         if not raw_path:
@@ -186,32 +244,13 @@ def _adopt_orphaned_loops():
             except (OSError, ValueError, KeyError):
                 continue
             loop_id = entry_dir.name
-            fd = acquire_host_lock(entry_dir)
-            if fd is None:
+            state, detail = _ensure_loop_watcher(repo_path, loop_id, entry_dir)
+            if state == WATCHER_ALREADY_HOSTED:
                 _debug_print(
                     f"[loop-host] skip {loop_id} — host lock held")
                 continue
-            nonce = _secrets.token_hex(4)
-            t = threading.Thread(
-                target=_run_watcher,
-                args=(entry_dir, fd, repo_path, loop_id, nonce),
-                daemon=True,
-            )
-            with _LOOP_HOSTS_LOCK:
-                _LOOP_HOSTS[(repo_path, loop_id)] = _HostEntry(
-                    t, entry_dir, fd, nonce)
-            try:
-                t.start()
-            except Exception:
-                with _LOOP_HOSTS_LOCK:
-                    cur = _LOOP_HOSTS.get((repo_path, loop_id))
-                    if cur and cur.entry_nonce == nonce:
-                        del _LOOP_HOSTS[(repo_path, loop_id)]
-                try:
-                    from host import release_host_lock
-                    release_host_lock(fd)
-                except Exception:
-                    pass
+            if state != WATCHER_ATTACHED:
+                _debug_print(f"[loop-host] could not adopt {loop_id}: {detail}")
                 continue
             _debug_print(f"[loop-host] adopted orphan: {loop_id}")
 
@@ -259,6 +298,21 @@ def _validate_http_turn_timeout(value):
     if isinstance(value, str):
         raise ValueError("turn timeout must be a JSON integer")
     return validate_turn_timeout(value)
+
+
+def _validate_http_round_count(value):
+    """Validate a JSON round increment via the loop's shared validator.
+
+    Like `_validate_http_turn_timeout()`, JSON strings are rejected even
+    though the shared validator accepts plain-integer strings for CLI input.
+    """
+    _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+    if _loop_scripts not in sys.path:
+        sys.path.insert(0, _loop_scripts)
+    from session import validate_round_count
+    if isinstance(value, str):
+        raise ValueError("rounds must be a JSON integer")
+    return validate_round_count(value)
 
 
 def _resolve_loop_dir(repo_key, loop_id):
@@ -2452,6 +2506,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/pause": "_handle_loop_pause",
             "/interject": "_handle_loop_interject",
             "/unblock": "_handle_loop_unblock",
+            "/extend": "_handle_loop_extend",
             "/end": "_handle_loop_end",
         }
         if tail.startswith("/loops/"):
@@ -2476,8 +2531,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if _loop_scripts not in sys.path:
             sys.path.insert(0, _loop_scripts)
         from host import (
-            init_loop, find_active_loop, acquire_host_lock,
-            acquire_start_lock, release_start_lock, release_host_lock,
+            init_loop, find_active_loop,
+            acquire_start_lock, release_start_lock,
         )
         from session import TURN_TIMEOUT_MIN, TURN_TIMEOUT_MAX
 
@@ -2554,31 +2609,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 feature, str(sketch), max_rounds, turn_timeout,
                 repo_root=repo_path)
 
-            host_fd = acquire_host_lock(loop_dir)
-            if host_fd is None:
-                self._send_json(
-                    {"error": "failed to acquire host lock"}, 500)
-                return
-
-            nonce = _secrets.token_hex(4)
-            t = threading.Thread(
-                target=_run_watcher,
-                args=(loop_dir, host_fd, repo_path, loop_id, nonce),
-                daemon=True,
-            )
-            with _LOOP_HOSTS_LOCK:
-                _LOOP_HOSTS[(repo_path, loop_id)] = _HostEntry(
-                    t, loop_dir, host_fd, nonce)
-            try:
-                t.start()
-            except Exception:
-                with _LOOP_HOSTS_LOCK:
-                    cur = _LOOP_HOSTS.get((repo_path, loop_id))
-                    if cur and cur.entry_nonce == nonce:
-                        del _LOOP_HOSTS[(repo_path, loop_id)]
-                release_host_lock(host_fd)
-                self._send_json(
-                    {"error": "failed to start host watcher"}, 500)
+            state, detail = _ensure_loop_watcher(repo_path, loop_id, loop_dir)
+            if state != WATCHER_ATTACHED:
+                # A brand-new loop cannot legitimately be hosted elsewhere.
+                if detail and detail.startswith("failed to start host watcher"):
+                    msg = "failed to start host watcher"
+                else:
+                    msg = "failed to acquire host lock"
+                self._send_json({"error": msg}, 500)
                 return
         finally:
             release_start_lock(start_fd)
@@ -2783,6 +2821,76 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         self._send_json({"ok": True})
+
+    def _handle_loop_extend(self, repo_key, loop_id, req):
+        """Architect: continue a loop that ended at its round limit (#39).
+
+        Validates the body, extends through `host.extend_loop()` (start.lock
+        + single-active guard + session transaction), then attaches a daemon
+        watcher via `_ensure_loop_watcher(retry=True)`. The extension stays
+        durable even if the watcher cannot attach; the response reports the
+        watcher state and never claims enforcement resumed when it did not.
+        """
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from host import extend_loop
+        from session import ROUNDS_MIN, ROUNDS_MAX
+
+        try:
+            rounds = _validate_http_round_count(req.get("rounds"))
+        except ValueError:
+            self._send_json(
+                {"error": "rounds must be an integer between "
+                 f"{ROUNDS_MIN} and {ROUNDS_MAX}"}, 400)
+            return
+
+        message = req.get("message")
+        if not isinstance(message, str) or not message.strip():
+            self._send_json(
+                {"error": "message (reason) is required to extend a loop"}, 400)
+            return
+
+        try:
+            _lid, loop_dir, previous, new = extend_loop(
+                token, rounds, message, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+        except RuntimeError as exc:
+            # Another active loop, or a start/extension in progress.
+            self._send_json({"error": str(exc)}, 409)
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+
+        try:
+            repo_path = str(Path(_resolve_repo_by_key(repo_key)).resolve())
+        except (KeyError, OSError):
+            repo_path = str(Path(loop_dir).parent.parent.parent.resolve())
+        state, detail = _ensure_loop_watcher(
+            repo_path, loop_id, loop_dir, retry=True)
+
+        try:
+            from session import load_session
+            current_round = load_session(loop_dir)["status"].get("round")
+        except (OSError, ValueError, KeyError):
+            current_round = None
+
+        self._send_json({
+            "ok": True,
+            "previous_max_rounds": previous,
+            "max_rounds": new,
+            "round": current_round,
+            "watcher": state,
+            "watcher_detail": detail,
+        })
 
     def _handle_loop_end(self, repo_key, loop_id, req):
         """Architect: terminate the loop."""

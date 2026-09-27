@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard loop: incremental rendering — unchanged polls no longer redraw the workspace (#38)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "loop",
+    "rendering"
+  ],
+  "commit": "3ce7f4f7dbb05a1b28bf3165236504d47f977ba8",
+  "short_commit": "3ce7f4f",
+  "snippet_id": "snippet-3ce7f4f7dbb05",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-26T19:36:25Z",
+  "ended_at": "2026-09-27T17:01:30Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-09-26-gator-661da9af75ba3.json",
+    "src/gator_command/scripts/dashboard/views/loop.js",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "`dashboard/views/loop.js`: selected-loop panel now renders a stable skeleton once per selection (`buildLoopSkeleton()` — header, blocked, prompts, controls, timeline, artifacts regions) and patches per region on each poll via `patchRegion()` + fingerprints (`headerFingerprint`, `blockedFingerprint`, `controlsFingerprint`, `artifactsFingerprint`). Snapshot `_state.render` is keyed to `_state.generation`/`selectedLoopId`; cleared on teardown and null status. Identical polls perform no main-panel DOM writes except a text-only countdown patch (`updateTimeRemaining()`), removing the visible flash.",
+    "Timeline: `updateTimeline()` appends strictly-new event cards when the prior tail event is unchanged (`eventKey()`), else redraws only `#loop-timeline`; card markup/wiring split into `eventCardHtml()` / `wireTimelineCards()`.",
+    "Artifacts: `renderArtifacts()` reconciles sections by `data-artifact` (`createArtifactSection()`), preserving expanded state and loaded content; on event-log change the mutable `plan.current.md` / `findings.current.md` refresh their summary and (if expanded) content in place. `fetchArtifact()` now uses `cache: \"no-store\"` so refreshes are real.",
+    "Review fix (whiteboard P1): artifact summary/body fetches carry a per-node request revision (`nextRequestRev()`); an older in-flight response for `plan.current.md` / `findings.current.md` can no longer overwrite newer content. Collapsed-refresh invalidates in-flight body fetches; expanded-but-still-loading sections are refetched. Test: `test_stale_mutable_artifact_response_cannot_overwrite_newer` (deferred route fulfilment; verified failing without the fix).",
+    "Removed the #40 `isComposingControl()` poll-skip: controls are only rebuilt when their inputs change, so an open control input survives polling by construction; terminal transitions patch in place (no blank panel) and stop polling.",
+    "Tests (`tests/test_dashboard_ui/test_loop_workspace.py`): identical polls touch nothing (node identity + MutationObserver), status change patches header while preserving timeline + expanded artifact, new events append and add artifacts without resetting expansion, composed control survives unrelated changes, terminal transition patches in place and stops polling. Verified the identical-poll and append tests fail against the previous loop.js.",
+    "Charter: `scripts-dashboard-ui.md` loop-workspace entry updated with the incremental-rendering contract (replaces the compose-guard note; drops stale `renderPromptCopy()` name).",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}
