@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.16.0 — loop bounded wait + turn windows and required unblock responses",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "loop"
+  ],
+  "commit": "661da9af75ba3cc2ba7010b2bea086bb9e350fc0",
+  "short_commit": "661da9a",
+  "snippet_id": "snippet-661da9af75ba3",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "b483c1c67ba8dbdce6214c74d5455320e5ba171e",
+  "started_at": "2026-09-26T19:36:25Z",
+  "ended_at": "2026-09-26T23:24:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-6",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-26-gator-b483c1c67ba8d.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.15.1 -> 2.16.0 in `pyproject.toml` and `VERSION` (kept byte-consistent).",
+    "`CHANGELOG.md` `[2.16.0]`: resumable bounded wait (#36 short-term slice), adjustable turn window on unblock + required escalation responses + explicit deliberate-empty response (#40), decision-aware Dashboard unblock control, poll-no-longer-wipes-controls fix, upgrade note for scripts that unblocked escalations blank.",
+    "`scripts-core-library.md`: version-sync tripwire note updated to current 2.16.0.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}

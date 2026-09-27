@@ -132,6 +132,7 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
 ! Status response uses `_LOOP_STATUS_ALLOWED_KEYS` allowlist — only known-safe fields appear in GET responses. Unknown/future fields are silently dropped.
 ! Events endpoint validates `events.jsonl` against symlink/reparse before reading — `is_symlink()` pre-existence, `_is_reparse_point()` post-existence — then returns the raw event timeline via the existing `read_all_events()` reader; missing events file returns an empty array.
 ! Artifact endpoint uses `_LOOP_ARTIFACT_ALLOWLIST` plus `_LOOP_ARTIFACT_PATTERNS` — only known markdown artifacts are served (sketch, plan, findings, decision docs). Decision artifact patterns are tightened to match production filenames exactly: `decision-request.decision-<N>.round-<R>.md` and `decision-response.decision-<N>.md` (integer-only IDs, no arbitrary segments). `.tokens.json`, `session.json`, `session.lock`, and `events.jsonl` are never served. Served as `text/plain; charset=utf-8`. Reparse/symlink check on the artifact file itself.
+! Artifact reads must reflect the file on disk at request time — no server-side caching or memoization. `plan.current.md` / `findings.current.md` are rewritten in place by each submission, and the browser's incremental loop view (#38) refetches them with `cache: "no-store"` after event-log changes, relying on each response being current.
 
 ### _dispatch_loop_post() / _handle_loop_start() / _handle_loop_prompt()
 File: src/gator_command/scripts/gator-dashboard.py

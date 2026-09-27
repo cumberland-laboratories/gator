@@ -99,6 +99,7 @@
     handoffId: null,       // loop_id during handoff
     promptEpoch: 0,        // incremented on terminal — invalidates in-flight copies
     loops: [],             // cached loop list
+    render: null,          // incremental-render snapshot for the selected loop (#38)
   };
 
   // ── teardown ───────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@
     _state.mode = "create";
     _state.handoffId = null;
     _state.loops = [];
+    _state.render = null;
     var ws = _state.container && _state.container.querySelector(".loop-workspace");
     if (ws) ws.dataset.polling = "0";
     window._gatorRepoTeardown = null;
@@ -161,9 +163,12 @@
 
   async function fetchArtifact(loopId, filename) {
     try {
+      // no-store: plan.current.md / findings.current.md are rewritten in
+      // place, and incremental refresh must not read a stale cached copy.
       var resp = await fetch(
         apiBase() + "/" + encodeURIComponent(loopId)
-        + "/artifact/" + encodeURIComponent(filename)
+        + "/artifact/" + encodeURIComponent(filename),
+        { cache: "no-store" }
       );
       if (!resp.ok) return null;
       return await resp.text();
@@ -900,66 +905,162 @@
     return paths;
   }
 
+  // ── incremental selected-loop rendering (#38) ─────────────────────────────
+  //
+  // The selected-loop panel is built once per selection (a stable skeleton of
+  // named regions) and then patched per region on each poll:
+  //   1. `_state.render` snapshot — root node + per-region fingerprints +
+  //      timeline cursor. Keyed to `_state.generation`, so any selection,
+  //      mount, or mode change rebuilds the skeleton.
+  //   2. A region is rewritten only when its fingerprint changes; an
+  //      unchanged poll performs no main-panel DOM writes except the
+  //      countdown text (patched only when its text differs).
+  //   3. Timeline appends strictly-new events; artifacts reconcile by name,
+  //      preserving expanded/loaded sections.
+  // Fingerprints come from returned data only, never wall-clock time.
+
+  function eventKey(ev) {
+    return [ev.ts || "", ev.event || ev.type || "",
+            ev.round === undefined ? "" : ev.round].join("|");
+  }
+
+  function headerFingerprint(status, terminal) {
+    var s = status.status || {};
+    var roles = status.roles || {};
+    return JSON.stringify([
+      terminal, s.stage, s.round, s.max_rounds, s.next_role, s.blocked,
+      s.last_updated, s.turn_deadline, status.feature, status.loop_id,
+      status.created_at,
+      !!(roles.draftor && roles.draftor.joined),
+      !!(roles.reviewer && roles.reviewer.joined),
+    ]);
+  }
+
+  function blockedFingerprint(status) {
+    var s = status.status || {};
+    var pd = pendingDecision(status);
+    return JSON.stringify([
+      !!s.blocked, s.escalation_reason || null,
+      pd ? pd.id : null,
+      pd && pd.request ? pd.request.artifact_path || null : null,
+    ]);
+  }
+
+  function controlsFingerprint(status, terminal) {
+    // Only inputs renderControls() actually reads: which buttons exist,
+    // whether unblock needs a response, and the turn-window default.
+    var s = status.status || {};
+    var pd = pendingDecision(status);
+    return JSON.stringify([
+      terminal, !!PAUSED_STAGES[s.stage || ""], pd ? pd.id : null,
+      s.turn_timeout_seconds || null,
+    ]);
+  }
+
+  function artifactsFingerprint(status, events) {
+    var decisions = (status && status.decisions) || [];
+    var n = events.length;
+    return JSON.stringify([
+      n, n ? eventKey(events[n - 1]) : null,
+      collectArtifactPaths([], decisions),
+    ]);
+  }
+
+  function patchRegion(snap, name, fingerprint, render) {
+    if (snap.fp[name] === fingerprint) return false;
+    render();
+    snap.fp[name] = fingerprint;
+    return true;
+  }
+
+  function buildLoopSkeleton(mainEl) {
+    mainEl.innerHTML = '<div class="loop-detail">'
+      + '<div id="loop-region-header"></div>'
+      + '<div id="loop-region-blocked"></div>'
+      + '<div id="loop-region-prompts"></div>'
+      + '<div id="loop-controls"></div>'
+      + '<div class="section-title" style="margin-top:20px;">Timeline</div>'
+      + '<div id="loop-timeline"></div>'
+      + '<div id="loop-artifacts"></div>'
+      + '</div>';
+    return {
+      generation: _state.generation,
+      loopId: _state.selectedLoopId,
+      root: mainEl.querySelector(".loop-detail"),
+      fp: {},
+      eventCount: 0,
+      lastEventKey: null,
+      timelineRendered: false,
+    };
+  }
+
   function renderSelectedLoop(status, events, container) {
     var mainEl = container.querySelector("#loop-main-content");
     if (!mainEl) return;
     if (!status) {
+      _state.render = null;
       mainEl.innerHTML = '<div class="muted" style="padding:24px;text-align:center;">'
         + 'Select a loop to view details.</div>';
       return;
     }
+    events = events || [];
+
+    var snap = _state.render;
+    if (!snap || snap.generation !== _state.generation
+        || snap.loopId !== _state.selectedLoopId
+        || !snap.root || !snap.root.isConnected) {
+      snap = _state.render = buildLoopSkeleton(mainEl);
+    }
+    var root = snap.root;
+    var firstRender = !snap.timelineRendered;
 
     var s = status.status || {};
-    var stage = s.stage || "";
-    var terminal = isTerminal(stage);
+    var terminal = isTerminal(s.stage || "");
 
-    var html = '<div class="loop-detail">';
+    patchRegion(snap, "header", headerFingerprint(status, terminal), function () {
+      root.querySelector("#loop-region-header").innerHTML =
+        terminal ? renderOutcomeHeader(status) : renderLiveHeader(status);
+    });
+    if (!terminal) updateTimeRemaining(root, s);
 
-    // Status/outcome header
-    if (terminal) {
-      html += renderOutcomeHeader(status);
-    } else {
-      html += renderLiveHeader(status);
+    patchRegion(snap, "blocked", blockedFingerprint(status), function () {
+      renderBlockedCard(status, root, container);
+    });
+
+    patchRegion(snap, "prompts", terminal ? "terminal" : "live", function () {
+      renderPromptSection(terminal, root);
+    });
+
+    patchRegion(snap, "controls", controlsFingerprint(status, terminal), function () {
+      renderControls(status, root);
+    });
+
+    updateTimeline(snap, events, root);
+
+    patchRegion(snap, "artifacts", artifactsFingerprint(status, events), function () {
+      renderArtifacts(status, events, root, !firstRender);
+    });
+  }
+
+  function renderBlockedCard(status, root, container) {
+    var region = root.querySelector("#loop-region-blocked");
+    var s = status.status || {};
+    if (!(s.blocked && s.escalation_reason)) {
+      region.innerHTML = "";
+      return;
     }
-
-    // Blocked-on-Architect card (between header and controls)
-    if (s.blocked && s.escalation_reason) {
-      var pd = pendingDecision(status);
-      html += '<div class="loop-blocked-card">'
-        + '<div class="loop-blocked-title">Blocked on Architect</div>'
-        + '<div class="loop-blocked-reason">' + escHtml(s.escalation_reason) + '</div>';
-      if (pd && pd.request && pd.request.artifact_path) {
-        html += '<a class="loop-blocked-artifact-link" data-artifact="'
-          + escHtml(pd.request.artifact_path) + '" href="#">View decision request</a>';
-      }
-      html += '</div>';
+    var pd = pendingDecision(status);
+    var html = '<div class="loop-blocked-card">'
+      + '<div class="loop-blocked-title">Blocked on Architect</div>'
+      + '<div class="loop-blocked-reason">' + escHtml(s.escalation_reason) + '</div>';
+    if (pd && pd.request && pd.request.artifact_path) {
+      html += '<a class="loop-blocked-artifact-link" data-artifact="'
+        + escHtml(pd.request.artifact_path) + '" href="#">View decision request</a>';
     }
-
-    // Prompt copy section (active loops only)
-    if (!terminal) {
-      html += '<div class="loop-prompt-section">'
-        + '<button class="loop-prompt-copy" data-role="draftor">Copy Draftor prompt</button>'
-        + '<button class="loop-prompt-copy" data-role="reviewer">Copy Reviewer prompt</button>'
-        + '</div>';
-    }
-
-    // Controls placeholder (active loops only)
-    if (!terminal) {
-      html += '<div id="loop-controls"></div>';
-    }
-
-    // Timeline
-    html += '<div class="section-title" style="margin-top:20px;">Timeline</div>'
-      + '<div id="loop-timeline"></div>';
-
-    // Artifacts
-    html += '<div id="loop-artifacts"></div>';
-
     html += '</div>';
-    mainEl.innerHTML = html;
+    region.innerHTML = html;
 
-    // Wire blocked-card artifact link
-    var blockedLink = mainEl.querySelector(".loop-blocked-artifact-link");
+    var blockedLink = region.querySelector(".loop-blocked-artifact-link");
     if (blockedLink) {
       blockedLink.addEventListener("click", function (e) {
         e.preventDefault();
@@ -971,20 +1072,40 @@
         }
       });
     }
+  }
 
-    // Wire prompt copy buttons
-    mainEl.querySelectorAll(".loop-prompt-copy").forEach(function (btn) {
+  function renderPromptSection(terminal, root) {
+    var region = root.querySelector("#loop-region-prompts");
+    if (terminal) {
+      region.innerHTML = "";
+      return;
+    }
+    region.innerHTML = '<div class="loop-prompt-section">'
+      + '<button class="loop-prompt-copy" data-role="draftor">Copy Draftor prompt</button>'
+      + '<button class="loop-prompt-copy" data-role="reviewer">Copy Reviewer prompt</button>'
+      + '</div>';
+    region.querySelectorAll(".loop-prompt-copy").forEach(function (btn) {
       btn.addEventListener("click", function () {
         copyPrompt(_state.selectedLoopId, btn.dataset.role, btn);
       });
     });
+  }
 
-    // Render sub-sections
-    if (!terminal) {
-      renderControls(status, mainEl);
-    }
-    renderTimeline(events, mainEl);
-    renderArtifacts(status, events, mainEl);
+  function timeRemainingText(s) {
+    if (!s.turn_deadline) return "";
+    var diffMs = new Date(s.turn_deadline) - new Date();
+    if (diffMs <= 0) return "overdue";
+    var mins = Math.floor(diffMs / 60000);
+    var secs = Math.floor((diffMs % 60000) / 1000);
+    return mins + "m " + secs + "s";
+  }
+
+  function updateTimeRemaining(root, s) {
+    // Text-only patch: the countdown must never force a region rebuild.
+    var el = root.querySelector(".loop-time-remaining");
+    if (!el) return;
+    var text = timeRemainingText(s);
+    if (el.textContent !== text) el.textContent = text;
   }
 
   function renderLiveHeader(status) {
@@ -994,19 +1115,7 @@
     var draftorJoined = roles.draftor && roles.draftor.joined;
     var reviewerJoined = roles.reviewer && roles.reviewer.joined;
 
-    var timeRemaining = "";
-    if (s.turn_deadline) {
-      var deadline = new Date(s.turn_deadline);
-      var now = new Date();
-      var diffMs = deadline - now;
-      if (diffMs > 0) {
-        var mins = Math.floor(diffMs / 60000);
-        var secs = Math.floor((diffMs % 60000) / 1000);
-        timeRemaining = mins + "m " + secs + "s";
-      } else {
-        timeRemaining = "overdue";
-      }
-    }
+    var timeRemaining = timeRemainingText(s);
 
     var html = '<div class="loop-status-header">'
       + '<h3>' + escHtml(status.feature || status.loop_id || "") + '</h3>'
@@ -1033,7 +1142,7 @@
     if (timeRemaining) {
       html += '<div class="loop-status-item">'
         + '<div class="loop-status-label">Time Remaining</div>'
-        + '<div class="loop-status-value">' + escHtml(timeRemaining) + '</div>'
+        + '<div class="loop-status-value loop-time-remaining">' + escHtml(timeRemaining) + '</div>'
         + '</div>';
     }
     html += '</div>';
@@ -1235,6 +1344,62 @@
 
   // ── rendering: event timeline ──────────────────────────────────────────────
 
+  function eventCardHtml(ev) {
+    var eventType = ev.event || ev.type || "unknown";
+    var label = EVENT_LABELS[eventType] || eventType;
+    var isTerminalEv = !!TERMINAL_STAGES[eventType];
+    var artifact = ev.artifact_path || null;
+
+    var detail = "";
+    if (ev.round !== undefined) detail = "round " + ev.round;
+    if (ev.role) detail = ev.role;
+    if (ev.detail) detail = ev.detail;
+    if (ev.reason) detail = ev.reason;
+
+    var html = '<div class="loop-event' + (isTerminalEv ? " loop-event-terminal" : "") + '"'
+      + (artifact ? ' data-artifact="' + escHtml(artifact) + '"' : '')
+      + '>'
+      + '<span class="loop-event-time">' + escHtml(formatTime(ev.ts)) + '</span>'
+      + '<span class="loop-event-label">' + escHtml(label) + '</span>';
+    if (detail) {
+      html += '<span class="loop-event-detail">' + escHtml(detail) + '</span>';
+    }
+    if (artifact) {
+      html += '<div class="loop-event-summary"></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function updateTimeline(snap, events, root) {
+    // Returns true when the timeline changed. Appends strictly-new events
+    // when the previously rendered tail is still the same event; otherwise
+    // redraws only the timeline container.
+    var n = events.length;
+    var lastKey = n ? eventKey(events[n - 1]) : null;
+    if (snap.timelineRendered && snap.eventCount === n && snap.lastEventKey === lastKey) {
+      return false;
+    }
+    var timeline = root.querySelector("#loop-timeline");
+    var canAppend = snap.timelineRendered && snap.eventCount > 0
+      && n > snap.eventCount
+      && eventKey(events[snap.eventCount - 1]) === snap.lastEventKey;
+    if (canAppend && timeline) {
+      var before = timeline.children.length;
+      var html = "";
+      for (var i = snap.eventCount; i < n; i++) html += eventCardHtml(events[i]);
+      timeline.insertAdjacentHTML("beforeend", html);
+      var added = Array.prototype.slice.call(timeline.children, before);
+      wireTimelineCards(added, root);
+    } else {
+      renderTimeline(events, root);
+    }
+    snap.eventCount = n;
+    snap.lastEventKey = lastKey;
+    snap.timelineRendered = true;
+    return true;
+  }
+
   function renderTimeline(events, parentEl) {
     var timeline = parentEl.querySelector("#loop-timeline");
     if (!timeline) return;
@@ -1245,37 +1410,16 @@
     }
 
     var html = "";
-    for (var i = 0; i < events.length; i++) {
-      var ev = events[i];
-      var eventType = ev.event || ev.type || "unknown";
-      var label = EVENT_LABELS[eventType] || eventType;
-      var isTerminalEv = !!TERMINAL_STAGES[eventType];
-      var artifact = ev.artifact_path || null;
-
-      var detail = "";
-      if (ev.round !== undefined) detail = "round " + ev.round;
-      if (ev.role) detail = ev.role;
-      if (ev.detail) detail = ev.detail;
-      if (ev.reason) detail = ev.reason;
-
-      html += '<div class="loop-event' + (isTerminalEv ? " loop-event-terminal" : "") + '"'
-        + (artifact ? ' data-artifact="' + escHtml(artifact) + '"' : '')
-        + '>'
-        + '<span class="loop-event-time">' + escHtml(formatTime(ev.ts)) + '</span>'
-        + '<span class="loop-event-label">' + escHtml(label) + '</span>';
-      if (detail) {
-        html += '<span class="loop-event-detail">' + escHtml(detail) + '</span>';
-      }
-      if (artifact) {
-        html += '<div class="loop-event-summary"></div>';
-      }
-      html += '</div>';
-    }
+    for (var i = 0; i < events.length; i++) html += eventCardHtml(events[i]);
     timeline.innerHTML = html;
+    wireTimelineCards(Array.prototype.slice.call(timeline.children), parentEl);
+  }
 
+  function wireTimelineCards(cards, parentEl) {
     var clickGen = _state.generation;
     var clickLoopId = _state.selectedLoopId;
-    timeline.querySelectorAll(".loop-event[data-artifact]").forEach(function (card) {
+    cards.forEach(function (card) {
+      if (!card.matches || !card.matches(".loop-event[data-artifact]")) return;
       var filename = card.dataset.artifact;
       fetchArtifact(clickLoopId, filename).then(function (text) {
         if (clickGen !== _state.generation) return;
@@ -1333,7 +1477,88 @@
 
   // ── rendering: artifact inspector ──────────────────────────────────────────
 
-  function renderArtifacts(status, events, parentEl) {
+  // Current artifacts are overwritten in place by each submission; their
+  // loaded content/summaries are refreshed when the event log advances.
+  var MUTABLE_ARTIFACTS = ["plan.current.md", "findings.current.md"];
+
+  function isSummaryArtifact(name) {
+    return name.indexOf("plan.") === 0 || name.indexOf("findings.") === 0;
+  }
+
+  // Per-node request revisions: every summary/body fetch bumps its node's
+  // revision, and a completion is applied only if it is still the latest
+  // for that node. Without this, an older in-flight fetch of a mutable
+  // artifact (plan.current.md / findings.current.md) that resolves after a
+  // newer one would overwrite fresh content with stale content.
+  function nextRequestRev(node, key) {
+    node[key] = (node[key] || 0) + 1;
+    return node[key];
+  }
+
+  function loadArtifactSummary(section) {
+    var filename = section.dataset.artifact;
+    var clickGen = _state.generation;
+    var clickLoopId = _state.selectedLoopId;
+    var rev = nextRequestRev(section, "_gatorSummaryRev");
+    fetchArtifact(clickLoopId, filename).then(function (text) {
+      if (clickGen !== _state.generation) return;
+      if (!section.isConnected) return;
+      if (section._gatorSummaryRev !== rev) return;
+      var summaryEl = section.querySelector(".loop-artifact-summary");
+      if (!summaryEl) return;
+      var summary = extractSummary(text);
+      if (summary) {
+        summaryEl.innerHTML = '<div class="loop-summary-text">'
+          + escHtml(summary) + '</div>';
+      } else if (text !== null) {
+        summaryEl.innerHTML = '<div class="loop-summary-absent">'
+          + 'No executive summary supplied</div>';
+      }
+    });
+  }
+
+  function loadArtifactContent(section, content) {
+    var filename = section.dataset.artifact;
+    var clickGen = _state.generation;
+    var clickLoopId = _state.selectedLoopId;
+    var rev = nextRequestRev(content, "_gatorContentRev");
+    fetchArtifact(clickLoopId, filename).then(function (text) {
+      if (clickGen !== _state.generation) return;
+      if (!content.isConnected) return;
+      if (content._gatorContentRev !== rev) return;
+      content.dataset.loaded = "1";
+      if (text === null) {
+        content.innerHTML = '<div class="muted">Not available.</div>';
+      } else {
+        content.innerHTML = '<pre class="loop-artifact-pre">' + escHtml(text) + '</pre>';
+      }
+    });
+  }
+
+  function createArtifactSection(name) {
+    var section = document.createElement("div");
+    section.className = "loop-artifact-section";
+    section.dataset.artifact = name;
+    section.innerHTML = '<button class="loop-artifact-toggle">' + escHtml(name) + '</button>'
+      + '<div class="loop-artifact-summary"></div>'
+      + '<div class="loop-artifact-content" style="display:none;"></div>';
+    var btn = section.querySelector(".loop-artifact-toggle");
+    var content = section.querySelector(".loop-artifact-content");
+    btn.addEventListener("click", function () {
+      if (content.style.display === "none") {
+        content.style.display = "block";
+        if (!content.dataset.loaded) {
+          content.innerHTML = '<div class="muted">Loading…</div>';
+          loadArtifactContent(section, content);
+        }
+      } else {
+        content.style.display = "none";
+      }
+    });
+    return section;
+  }
+
+  function renderArtifacts(status, events, parentEl, refreshMutable) {
     var inspector = parentEl.querySelector("#loop-artifacts");
     if (!inspector) return;
 
@@ -1353,68 +1578,59 @@
       }
     }
 
-    var html = '<div class="section-title">Artifacts</div>';
+    // Reconcile by data-artifact: existing section nodes (with their
+    // expanded state and loaded content) are kept and only re-ordered.
+    var title = inspector.querySelector(":scope > .section-title");
+    if (!title) {
+      inspector.innerHTML = '<div class="section-title">Artifacts</div>';
+      title = inspector.firstChild;
+    }
+    var existing = {};
+    inspector.querySelectorAll(":scope > .loop-artifact-section").forEach(function (sec) {
+      existing[sec.dataset.artifact] = sec;
+    });
+
+    var prev = title;
+    var added = [];
     for (var j = 0; j < artifacts.length; j++) {
       var name = artifacts[j];
-      html += '<div class="loop-artifact-section" data-artifact="' + escHtml(name) + '">'
-        + '<button class="loop-artifact-toggle">' + escHtml(name) + '</button>'
-        + '<div class="loop-artifact-summary"></div>'
-        + '<div class="loop-artifact-content" style="display:none;"></div>'
-        + '</div>';
+      var section = existing[name];
+      if (section) {
+        delete existing[name];
+      } else {
+        section = createArtifactSection(name);
+        added.push(section);
+      }
+      if (prev.nextSibling !== section) {
+        inspector.insertBefore(section, prev.nextSibling);
+      }
+      prev = section;
     }
-    inspector.innerHTML = html;
+    Object.keys(existing).forEach(function (stale) { existing[stale].remove(); });
 
-    var summaryArtifacts = artifacts.filter(function (n) {
-      return n.indexOf("plan.") === 0 || n.indexOf("findings.") === 0;
-    });
-    summaryArtifacts.forEach(function (filename) {
-      var clickGen = _state.generation;
-      var clickLoopId = _state.selectedLoopId;
-      fetchArtifact(clickLoopId, filename).then(function (text) {
-        if (clickGen !== _state.generation) return;
-        var section = inspector.querySelector(
-          '.loop-artifact-section[data-artifact="' + filename + '"]');
-        if (!section || !section.isConnected) return;
-        var summaryEl = section.querySelector(".loop-artifact-summary");
-        if (!summaryEl) return;
-        var summary = extractSummary(text);
-        if (summary) {
-          summaryEl.innerHTML = '<div class="loop-summary-text">'
-            + escHtml(summary) + '</div>';
-        } else if (text !== null) {
-          summaryEl.innerHTML = '<div class="loop-summary-absent">'
-            + 'No executive summary supplied</div>';
-        }
-      });
+    added.forEach(function (sec) {
+      if (isSummaryArtifact(sec.dataset.artifact)) loadArtifactSummary(sec);
     });
 
-    inspector.querySelectorAll(".loop-artifact-toggle").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var section = btn.closest(".loop-artifact-section");
-        var content = section.querySelector(".loop-artifact-content");
+    if (refreshMutable) {
+      MUTABLE_ARTIFACTS.forEach(function (name) {
+        var sec = inspector.querySelector(
+          ':scope > .loop-artifact-section[data-artifact="' + name + '"]');
+        if (!sec || added.indexOf(sec) !== -1) return;
+        loadArtifactSummary(sec);
+        var content = sec.querySelector(".loop-artifact-content");
+        if (!content) return;
         if (content.style.display === "none") {
-          content.style.display = "block";
-          if (!content.dataset.loaded) {
-            content.innerHTML = '<div class="muted">Loading…</div>';
-            var filename = section.dataset.artifact;
-            var clickGen = _state.generation;
-            var clickLoopId = _state.selectedLoopId;
-            fetchArtifact(clickLoopId, filename).then(function (text) {
-              if (clickGen !== _state.generation) return;
-              if (!content.isConnected) return;
-              content.dataset.loaded = "1";
-              if (text === null) {
-                content.innerHTML = '<div class="muted">Not available.</div>';
-              } else {
-                content.innerHTML = '<pre class="loop-artifact-pre">' + escHtml(text) + '</pre>';
-              }
-            });
-          }
+          // Refetch on next expand, and invalidate any body fetch still in
+          // flight so it cannot mark the section loaded with stale text.
+          nextRequestRev(content, "_gatorContentRev");
+          delete content.dataset.loaded;
         } else {
-          content.style.display = "none";
+          // Expanded (loaded or still loading): a fresh fetch supersedes.
+          loadArtifactContent(sec, content); // refresh in place, stays expanded
         }
       });
-    });
+    }
   }
 
   // ── main content router ────────────────────────────────────────────────────
@@ -1443,11 +1659,6 @@
     renderSelectedLoop(status, events, _state.container);
   }
 
-  function isComposingControl(container) {
-    var area = container && container.querySelector(".loop-ctrl-input-area");
-    return !!(area && area.style.display !== "none");
-  }
-
   async function pollLoop() {
     var gen = _state.generation;
     if (document.hidden) return;
@@ -1472,10 +1683,8 @@
     var events = await fetchEvents(_state.selectedLoopId);
     if (gen !== _state.generation) return;
 
-    // Do not wipe a control the Architect is composing (e.g. a required
-    // escalation response). Terminal transitions still re-render.
-    if (isComposingControl(_state.container) && !isTerminal(stage)) return;
-
+    // Incremental: unchanged regions (including an open control input) are
+    // not touched; see renderSelectedLoop().
     renderSelectedLoop(status, events, _state.container);
 
     if (isTerminal(stage)) {

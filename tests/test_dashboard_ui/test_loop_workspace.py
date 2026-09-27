@@ -2031,3 +2031,283 @@ def test_live_delayed_events_does_not_leak_prompt(page, dashboard_fleet):
     page.unroute("**/" + active_loop_id + "/prompt")
     page.unroute("**/" + active_loop_id + "/status")
     page.unroute("**/" + active_loop_id + "/events")
+
+
+# ── incremental rendering (#38) ────────────────────────────────────────────
+
+_ACTIVE_ID = "active-loop-2026-09-22T10-00-00Z"
+_BASE_EVENTS = [
+    {"event": "loop_started", "ts": "2026-09-22T10:00:00Z", "round": 0},
+    {"event": "draft_submitted", "ts": "2026-09-22T10:01:00Z", "round": 1,
+     "role": "draftor", "artifact_path": "plan.round-1.md"},
+    {"event": "revision_requested", "ts": "2026-09-22T10:02:00Z", "round": 2,
+     "role": "reviewer", "artifact_path": "findings.round-1.md"},
+]
+
+
+def _live_payload():
+    return {
+        "status": {
+            "loop_id": _ACTIVE_ID, "feature": "widget-refactor",
+            "created_at": "2026-09-22T10:00:00+00:00",
+            "status": {"stage": "plan_revision", "next_role": "draftor",
+                       "round": 2, "max_rounds": 3, "blocked": False,
+                       "turn_deadline": "2099-12-31T23:59:59+00:00",
+                       "turn_timeout_seconds": 300,
+                       "last_updated": "2026-09-22T10:02:00+00:00"},
+            "roles": {"draftor": {"role": "draftor", "joined": True},
+                      "reviewer": {"role": "reviewer", "joined": True}},
+            "decisions": [],
+        },
+        "events": list(_BASE_EVENTS),
+    }
+
+
+def _serve_mutable_loop(page, payload):
+    """Serve status/events from a dict the test mutates between polls."""
+    import json as _json
+    page.route("**/" + _ACTIVE_ID + "/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps(payload["status"])))
+    page.route("**/" + _ACTIVE_ID + "/events", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=_json.dumps({"events": payload["events"]})))
+
+
+def _unserve_mutable_loop(page):
+    page.unroute("**/" + _ACTIVE_ID + "/status")
+    page.unroute("**/" + _ACTIVE_ID + "/events")
+
+
+def _open_incremental(page, dashboard_fleet, payload):
+    _serve_mutable_loop(page, payload)
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-artifact-section", timeout=10000)
+    page.wait_for_selector(".loop-event", timeout=10000)
+    # Let async executive-summary fills (timeline cards + plan/findings
+    # sections) settle so they are not counted as poll mutations.
+    page.wait_for_timeout(500)
+    page.wait_for_function("""() => {
+        var pending = Array.from(document.querySelectorAll(
+            '#loop-timeline .loop-event-summary, '
+            + '.loop-artifact-section[data-artifact^="plan."] .loop-artifact-summary, '
+            + '.loop-artifact-section[data-artifact^="findings."] .loop-artifact-summary'));
+        return pending.length > 0 && pending.every(el => el.childElementCount > 0);
+    }""", timeout=10000)
+    # Remember node identities and count main-panel mutations, ignoring the
+    # text-only countdown patch.
+    page.evaluate("""() => {
+        var q = s => document.querySelector(s);
+        window.__nodes = {
+            root: q('#loop-main-content .loop-detail'),
+            header: q('#loop-region-header').firstElementChild,
+            controls: q('#loop-controls').firstElementChild,
+            firstEvent: q('#loop-timeline').firstElementChild,
+            sketch: q('.loop-artifact-section[data-artifact="sketch.md"]'),
+        };
+        window.__mutations = 0;
+        window.__emptied = false;
+        var main = q('#loop-main-content');
+        new MutationObserver(function (records) {
+            records.forEach(function (r) {
+                var t = r.target.nodeType === 3 ? r.target.parentElement : r.target;
+                if (t && t.closest && t.closest('.loop-time-remaining')) return;
+                window.__mutations++;
+            });
+            if (!main.querySelector('.loop-detail')) window.__emptied = true;
+        }).observe(main, {childList: true, subtree: true, characterData: true,
+                          attributes: true});
+    }""")
+
+
+def _same(page, key):
+    return page.evaluate(
+        "k => { var n = window.__nodes[k]; return !!n && n.isConnected; }", key)
+
+
+def _expand_sketch(page):
+    page.evaluate("""() => document.querySelector(
+        '.loop-artifact-section[data-artifact="sketch.md"] .loop-artifact-toggle').click()""")
+    page.wait_for_function("""() => {
+        var c = document.querySelector(
+            '.loop-artifact-section[data-artifact="sketch.md"] .loop-artifact-content');
+        return c && c.dataset.loaded === '1';
+    }""", timeout=5000)
+    # Baseline after the user's own expansion.
+    page.evaluate("() => { window.__mutations = 0; }")
+
+
+def _sketch_still_expanded(page):
+    return page.evaluate("""() => {
+        var sec = document.querySelector('.loop-artifact-section[data-artifact="sketch.md"]');
+        var c = sec && sec.querySelector('.loop-artifact-content');
+        return !!c && c.style.display === 'block'
+            && c.textContent.indexOf('Widget Refactor Sketch') !== -1;
+    }""")
+
+
+def test_identical_polls_do_not_touch_main_panel(page, dashboard_fleet):
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => { window.__mutations = 0; }")
+    page.wait_for_timeout(7000)  # >= two polls
+    for key in ("root", "header", "controls", "firstEvent", "sketch"):
+        assert _same(page, key), f"{key} node was replaced by an identical poll"
+    assert page.evaluate("() => window.__mutations") == 0
+    assert page.evaluate("() => window.__emptied") is False
+    _unserve_mutable_loop(page)
+
+
+def test_status_change_patches_header_preserves_artifacts_and_timeline(page, dashboard_fleet):
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    _expand_sketch(page)
+
+    st = payload["status"]["status"]
+    st.update({"stage": "plan_review", "next_role": "reviewer",
+               "last_updated": "2026-09-22T10:05:00+00:00"})
+    page.wait_for_function("""() => {
+        var h = document.querySelector('#loop-region-header');
+        return h && h.textContent.indexOf('reviewer') !== -1;
+    }""", timeout=8000)
+
+    assert _same(page, "root")
+    assert not _same(page, "header"), "header should be re-rendered on a status change"
+    assert _same(page, "firstEvent"), "timeline must be preserved on a status-only change"
+    assert _same(page, "sketch")
+    assert _sketch_still_expanded(page)
+    assert page.evaluate("() => window.__emptied") is False
+    _unserve_mutable_loop(page)
+
+
+def test_new_events_append_and_preserve_artifact_expansion(page, dashboard_fleet):
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    _expand_sketch(page)
+    before = page.evaluate("() => document.querySelectorAll('#loop-timeline .loop-event').length")
+
+    payload["events"].append(
+        {"event": "draft_submitted", "ts": "2026-09-22T10:06:00Z", "round": 2,
+         "role": "draftor", "artifact_path": "plan.round-2.md"})
+    page.wait_for_selector(
+        '.loop-artifact-section[data-artifact="plan.round-2.md"]', timeout=8000)
+
+    after = page.evaluate("() => document.querySelectorAll('#loop-timeline .loop-event').length")
+    assert after == before + 1
+    assert _same(page, "firstEvent"), "existing timeline cards must not be rebuilt"
+    assert _same(page, "sketch")
+    assert _sketch_still_expanded(page)
+    # New artifact appended after the existing ones.
+    names = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#loop-artifacts > .loop-artifact-section')).map(s => s.dataset.artifact)""")
+    assert names[-1] == "plan.round-2.md"
+    assert names[:3] == ["sketch.md", "plan.current.md", "findings.current.md"]
+    _unserve_mutable_loop(page)
+
+
+def test_composed_control_survives_unrelated_status_change(page, dashboard_fleet):
+    """No 'skip while composing' rule: controls simply aren't touched."""
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => document.querySelector('.loop-ctrl-interject').click()")
+    page.wait_for_selector(".loop-ctrl-input-area", timeout=5000)
+    page.fill(".loop-ctrl-input", "half-typed guidance")
+
+    payload["status"]["status"]["last_updated"] = "2026-09-22T10:07:00+00:00"
+    payload["events"].append(
+        {"event": "architect_interjection", "ts": "2026-09-22T10:07:00Z",
+         "round": 2, "detail": "earlier note"})
+    page.wait_for_function(
+        "() => document.querySelectorAll('#loop-timeline .loop-event').length === 4",
+        timeout=8000)
+
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-input').value") \
+        == "half-typed guidance"
+    assert page.evaluate(
+        "() => document.querySelector('.loop-ctrl-input-area').style.display") == "flex"
+    _unserve_mutable_loop(page)
+
+
+def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_fleet):
+    """An older plan.current.md response that resolves after a newer one
+    must not overwrite the refreshed summary or expanded body."""
+    old_text = "# Plan v1\n\n## Executive Summary\n\nOLD-SUMMARY\n\n## Body\n\nOLD-BODY\n"
+    new_text = "# Plan v2\n\n## Executive Summary\n\nNEW-SUMMARY\n\n## Body\n\nNEW-BODY\n"
+    held = []
+    mode = {"hold": True}
+
+    def _plan(route):
+        if mode["hold"]:
+            held.append(route)          # fulfilled later from the test thread
+        else:
+            route.fulfill(status=200, content_type="text/plain; charset=utf-8",
+                          body=new_text)
+
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    page.route("**/" + _ACTIVE_ID + "/artifact/plan.current.md", _plan)
+
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    sel = '.loop-artifact-section[data-artifact="plan.current.md"]'
+    page.wait_for_selector(sel, timeout=10000)
+    # Expand: the body fetch is held too.
+    page.evaluate("s => document.querySelector(s + ' .loop-artifact-toggle').click()", sel)
+    for _ in range(50):                 # held routes accumulate on this thread
+        if len(held) >= 2:
+            break
+        page.wait_for_timeout(100)
+    assert len(held) >= 2, f"expected held summary + body fetches, got {len(held)}"
+
+    # A newer submission lands; refresh fetches are served NEW immediately.
+    mode["hold"] = False
+    payload["events"].append(
+        {"event": "draft_submitted", "ts": "2026-09-22T10:06:00Z", "round": 2,
+         "role": "draftor", "artifact_path": "plan.round-2.md"})
+    page.wait_for_function("""s => {
+        var sec = document.querySelector(s);
+        return sec && sec.querySelector('.loop-artifact-summary').textContent.indexOf('NEW-SUMMARY') !== -1
+            && sec.querySelector('.loop-artifact-content').textContent.indexOf('NEW-BODY') !== -1;
+    }""", arg=sel, timeout=8000)
+
+    # Now the stale responses arrive.
+    for route in held:
+        route.fulfill(status=200, content_type="text/plain; charset=utf-8", body=old_text)
+    page.wait_for_timeout(800)
+
+    summary = page.evaluate(
+        "s => document.querySelector(s + ' .loop-artifact-summary').textContent", sel)
+    body = page.evaluate(
+        "s => document.querySelector(s + ' .loop-artifact-content').textContent", sel)
+    assert "NEW-SUMMARY" in summary and "OLD-SUMMARY" not in summary
+    assert "NEW-BODY" in body and "OLD-BODY" not in body
+
+    page.unroute("**/" + _ACTIVE_ID + "/artifact/plan.current.md")
+    _unserve_mutable_loop(page)
+
+
+def test_terminal_transition_patches_in_place_and_stops_polling(page, dashboard_fleet):
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    _expand_sketch(page)
+
+    payload["status"]["status"].update(
+        {"stage": "plan_approved", "next_role": None,
+         "last_updated": "2026-09-22T10:09:00+00:00"})
+    payload["events"].append(
+        {"event": "plan_approved", "ts": "2026-09-22T10:09:00Z", "round": 2,
+         "artifact_path": "findings.round-2.md"})
+    page.wait_for_selector(".loop-badge-outcome", timeout=8000)
+
+    assert _same(page, "root"), "terminal transition must patch, not replace, the panel"
+    assert page.evaluate("() => window.__emptied") is False
+    assert page.locator(".loop-ctrl-btn").count() == 0
+    assert page.locator(".loop-prompt-copy").count() == 0
+    assert _sketch_still_expanded(page)
+    page.wait_for_function(
+        "() => document.querySelector('.loop-workspace').dataset.polling === '0'",
+        timeout=5000)
+    _unserve_mutable_loop(page)
