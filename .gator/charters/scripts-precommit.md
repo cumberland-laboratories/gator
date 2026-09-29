@@ -153,6 +153,15 @@ File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
 Shared status text: block id, age, expiry, whether the current tree still matches, each failure with its resolution, files, and any approval.
 <- `gator-approve.py`
 
+## Testing Notes
+
+`tests/test_precommit_override.py` drives REAL git commits in throwaway temp repos whose `pre-commit` / `commit-msg` / `post-commit` hooks are generated `sh` scripts calling the template (or Enterprise bundled) `gator-pre-commit.py`. Two constraints:
+
+- Hook scripts must be written with LF line endings (`sh` on Windows rejects CRLF), using `open(path, "w", newline="\n")` — not `Path.write_text(newline=...)`, which requires Python 3.10+.
+- Test code and fixtures must run on Python 3.9, the lowest version in the CI matrix (`source-ci` fast lanes on Ubuntu and Windows). A 3.10+ API in a fixture errors every test in the file on those lanes.
+
+Approval in these tests runs `gator-approve.py approve` only inside the temp repos — never against this repository's own blocks.
+
 ## Delivery (where these scripts run)
 
 | Runtime | Source | Reaches a repo via | Pin |

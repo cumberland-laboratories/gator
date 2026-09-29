@@ -62,7 +62,10 @@ def _git(repo, *args, check=True):
 
 def _write_hook(hooks, name, body):
     p = hooks / name
-    p.write_text("#!/bin/sh\n" + body + "\n", encoding="utf-8", newline="\n")
+    # open(..., newline=) rather than Path.write_text(newline=), which needs
+    # Python 3.10+; CI still runs 3.9. LF endings matter for sh on Windows.
+    with open(p, "w", encoding="utf-8", newline="\n") as f:
+        f.write("#!/bin/sh\n" + body + "\n")
     p.chmod(0o755)
 
 
