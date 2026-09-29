@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: Python 3.9-compatible hook writer in test_precommit_override",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "ci",
+    "python-compat"
+  ],
+  "commit": "34575794e95aec0c2d0fcaefe1a420044dce97bd",
+  "short_commit": "3457579",
+  "snippet_id": "snippet-34575794e95ae",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-09-29T11:35:00Z",
+  "ended_at": "2026-09-29T11:35:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-09-29-gator-a9fddedb32a8e.json",
+    "tests/test_precommit_override.py"
+  ],
+  "notes": [
+    "`tests/test_precommit_override.py`: the fixture's `_write_hook()` used `Path.write_text(newline=\"\\n\")`, which exists only on Python 3.10+. Both py3.9 CI lanes errored in setup (52 errors, source-ci run 36509957769). It now uses `open(..., newline=\"\\n\")`, keeping LF hook scripts for sh on Windows. A static 3.9-grammar parse of all 21 files changed since 2.17.0 found no other incompatibility. No product code changed.",
+    "`scripts-precommit.md`: new Testing Notes — the override tests generate real `sh` git hooks (must be LF, written with `open(..., newline=)`), and test code must run on Python 3.9, the CI floor.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

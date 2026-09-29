@@ -2,6 +2,42 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [2.18.0] — 2026-09-28
+
+Feature and governance-integrity release. It reworks pre-commit override approval so that a retry blocked for a second reason no longer loses the Architect's approval ([#35](https://github.com/cumberland-laboratories/gator/issues/35)), and binds approvals to the exact staged change with a durable audit trail ([#34](https://github.com/cumberland-laboratories/gator/issues/34)). It also makes the Dashboard loop workspace render incrementally ([#38](https://github.com/cumberland-laboratories/gator/issues/38)).
+
+### Fixed
+
+- **A second pre-commit block after an approval can now be resolved (#35).** Previously the approval was consumed before all rules ran, and only charter rules created a request. A retry blocked by a different rule (for example an invalid `change-type`) therefore left `gator hook approve` reporting "No pending override request" while the commit stayed blocked. Now every rule is evaluated first. The approval is applied only for the exact staged change and is kept across a retry that is blocked for another reason. Every blocked attempt is recorded, with each finding tagged `fix-required`, `approvable`, or `lint`. Pin: `TestSecondBlockIsApprovableAndDiagnosable` in `tests/test_precommit_override.py`.
+- **Trailer readers report overrides.** `gator audit` and repo status keyed on a `Gator-Override:` trailer that the hook never emitted, so they reported no overrides. The shared `gator_core.override_event_fields()` now detects the v1, v2, and legacy shapes. Pins: `TestOverrideEventFields`, plus a real-history check.
+- **The Dashboard no longer serves override internals.** The denylist named `.override-request.json` / `.override-approved.json`, but the hook wrote the undotted names, which were browsable. Both forms, plus `.override`, are denied on the listing and on `/file` and `/raw`, including historical reads. Pins in `tests/test_dashboard_ui/test_content_transport_slice2.py`.
+- **Gitignore convergence uses exact lines.** `.gator/.override` was treated as present whenever `.gator/.override-meta.json` was listed. Pin: `test_exact_line_matching_not_substring`.
+- **Dashboard loop workspace no longer flashes (#38).** The selected loop is built once as stable regions and patched per region only when its data changes. Expanded artifacts, loaded text, composed control input, and timeline cards survive polling. An out-of-order response can no longer overwrite newer `plan.current.md` / `findings.current.md` content.
+
+### Added
+
+- **`gator hook override status | approve | cancel`.** `gator hook approve` remains the alias of `override approve`. Arguments are parsed before any prompt (#14). `approve` refuses with a specific reason (no block recorded, staged change differs, expired, nothing approvable, or a block younger than 10 s) and never approves fix-required findings. `status` and `cancel` are safe for anyone. Both verbs work from a governed subdirectory and in linked worktrees.
+- **Tree-bound override state** in `.git/gator-override/` (per worktree; never staged, never served): block, immutable approval snapshot, and the validate→commit-msg handoff. The approval is consumed only in `post-commit`, so a failure after validation leaves an unchanged retry approvable. Approvals expire after 24 h. The envelope is fully validated on read, and malformed state fails closed.
+- **Durable, sanitized audit trailers:** `Gator-Override-Approved-By`, `-Block`, `-Reason` (new), and `-Rules` (new).
+- **The Enterprise bundled runtime** now ships `precommit_override.py` and `gator-approve.py`. Enterprise-provisioned repos previously had no approve CLI. Enterprise `evidence_only` lint uses the same envelope.
+
+### Changed
+
+- **Override identity:** a digest of the staged index (`git ls-files --stage`), excluding hook-managed `.gator/` files. Any staged add, delete, rename, or content change invalidates an approval. An index with unmerged entries fails closed.
+- **HIGH/CRITICAL lint** joins the approval envelope. The deprecated `.gator/lint-allow.json` no longer suppresses findings, and it is never rewritten or staged; a `lint-allow-deprecated` warning explains it.
+- **`.gator/commit_issues.md`** is gitignored and no longer staged. `ensure_repo_gitignore()` also ignores the retired v1 override files and untracks any tracked copies (index only).
+- **Hook dispatcher:** new `override` route. `approve` / `override` resolve the Git top level (this deliberately reverses the #32-era `approve` cwd pin; `enforcer-review` is unchanged).
+
+### Removed
+
+- **The `.gator/.override` bypass.** The hook now blocks when that file exists (`legacy-override-file`). The v1 `override-request.json` / `override-approved.json` / `.override-meta.json` files are no longer read; post-commit retires them.
+
+### Upgrade notes
+
+- Run `gator update` in governed repos. It converges `.gitignore` and may stage the removal of a tracked `.gator/commit_issues.md` or v1 override files; commit that with the update.
+- Architects: follow the rewritten `procedures/architect-override.md`. Approve with `gator hook approve --reason "..." --name "..."`; inspect with `gator hook override status`.
+- Agents must never approve and must never create override files. The `/commit` command no longer instructs creating `.gator/.override`.
+
 ## [2.17.0] — 2026-09-27
 
 Feature release. The Architect can continue a loop that ran out of rounds without losing its history ([#39](https://github.com/cumberland-laboratories/gator/issues/39)), and the Dashboard loop workspace no longer flashes or loses local state on each poll ([#38](https://github.com/cumberland-laboratories/gator/issues/38)).
