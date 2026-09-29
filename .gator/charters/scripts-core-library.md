@@ -135,6 +135,13 @@ Filesystem: git repo (R or W depending on command)
 ! Silent emptiness is not a success signal. Always check the `success` bool. An empty `stdout` with `success=True` means git returned nothing; `success=False` means git failed or timed out.
 ! Subprocess call uses `encoding="utf-8", errors="replace"` — NOT bare `text=True`. Bare `text=True` decodes with the platform-default locale codec (`cp1252` on Windows), which crashes with `UnicodeDecodeError` on any git output containing bytes unrepresentable in cp1252 — commit subjects with non-ASCII, author names with diacritics, or trailer content copied from external sources. Symptom in the Dashboard: History endpoint returns "Empty reply from server" mid-response because the handler crashes and closes the socket. Fixed in v2.4.4. Same pattern already lives in `dashboard/helpers.py::git_run` and `dashboard/helpers.py::run_text`. Do NOT reintroduce bare `text=True` on any subprocess whose child may emit non-ASCII output.
 
+### override_event_fields(trailers)
+File: `src/gator_command/scripts/gator_core.py`
+Classify an Architect override from one commit's trailer map. Returns None, or `{override_type, approver, block_id, reason, rules}`. Detects v2 (#34, #35) `Gator-Override-Approved-By` / `-Block` / `-Reason` / `-Rules`, v1 `Gator-Charter-Changed: override-skip` + approver/block, and a bare legacy `Gator-Override:`. `override_type` is the legacy value, else `charter-skip`, else `lint` (rules only), else `override`.
+Filesystem: none
+<- `gator-audit._collect_trailer_intelligence()`, `gator-repo-status.get_trailer_data()`
+! Single source of override detection for readers. Readers previously keyed only on `Gator-Override:`, which the hook never emitted, so no override was ever reported. The package copy only — the starter/bundled `gator_core.py` copies are separate files and not byte-pinned.
+
 ### import_sibling(name)
 File: `src/gator_command/scripts/gator_core.py`
 Loads a sibling script by filename (handles hyphens in module names).

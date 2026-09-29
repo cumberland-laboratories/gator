@@ -26,6 +26,8 @@ internals. Slice 1 unit tests cover the pure helpers.
 
 import json
 import urllib.error
+
+import pytest
 import urllib.parse
 import urllib.request
 
@@ -235,11 +237,55 @@ def test_files_never_lists_sessions_active(dashboard_fleet):
             f"sessions/_active leaked: {f}")
 
 
+_OVERRIDE_INTERNALS = (
+    "override-request.json",     # real v1 name (#34)
+    "override-approved.json",    # real v1 name (#34)
+    ".override-approved.json",   # historical dotted alias
+    ".override",                 # retired v1 bypass file
+)
+
+
 def test_files_never_lists_override_internal(dashboard_fleet):
     _, data, _ = _get_json(dashboard_fleet, "/api/repo/alpha/files")
+    names = {f["name"] for f in data["files"]}
+    for name in _OVERRIDE_INTERNALS:
+        assert name not in names, f"{name} leaked into /files"
     for f in data["files"]:
         assert "override-approved" not in f["name"], (
             f"override-approved leaked: {f}")
+        assert "override-request" not in f["name"], (
+            f"override-request leaked: {f}")
+
+
+@pytest.mark.parametrize("name", _OVERRIDE_INTERNALS)
+def test_override_internals_denied_on_historical_reads(dashboard_fleet, name):
+    """#34 Phase 3 review: the shared policy must also hold on the
+    historical code paths — `?version=<sha>` for /file, /raw, and /files,
+    and `/history/<path>` — for blobs that really exist in that commit."""
+    import subprocess
+    alpha = dashboard_fleet["repos"]["alpha"]
+    sha = alpha["commits"]["override-internals"]
+    present = subprocess.run(
+        ["git", "-C", str(alpha["path"]), "cat-file", "-e", f"{sha}:.gator/{name}"],
+        capture_output=True)
+    assert present.returncode == 0, f".gator/{name} must exist at {sha} for this test to mean anything"
+
+    for route in ("file", "raw"):
+        status, _, _ = _get(dashboard_fleet, f"/api/repo/alpha/{route}/{name}?version={sha}")
+        assert status == 404, f"/{route}/{name}?version= served with {status}"
+    status, _, _ = _get(dashboard_fleet, f"/api/repo/alpha/history/{name}")
+    assert status == 404, f"/history/{name} served with {status}"
+    _, data, _ = _get_json(dashboard_fleet, f"/api/repo/alpha/files?version={sha}")
+    assert name not in {f["name"] for f in data["files"]}, f"{name} listed at {sha}"
+
+
+@pytest.mark.parametrize("name", _OVERRIDE_INTERNALS)
+@pytest.mark.parametrize("route", ["file", "raw"])
+def test_override_internals_never_served(dashboard_fleet, route, name):
+    """#34: the actual undotted request/approval names were browsable
+    because the denylist only named the dotted aliases."""
+    status, _, _ = _get(dashboard_fleet, f"/api/repo/alpha/{route}/{name}")
+    assert status == 404, f"/{route}/{name} served with {status}"
 
 
 # ── /file JSON envelope ─────────────────────────────────────────

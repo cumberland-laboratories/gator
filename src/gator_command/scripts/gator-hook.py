@@ -22,6 +22,7 @@ the governing runtime from wherever the decision says it lives:
 
 Usage:  gator-hook.py <hook-name> [passthrough-args...]
 Hooks:  pre-commit | commit-msg | post-commit | session-open | session-start
+Verbs:  enforcer-review | override <status|approve|cancel> | approve (alias)
 
 Invoked by the pin-aware stubs `build_git_hook_wrappers` generates (git
 hooks) and by the `gator hook` CLI verb (vendor SessionStart hooks).
@@ -55,14 +56,16 @@ HOOK_MAP = {
     # constitution's enforcement path needs a machine-side invocation —
     # `gator hook enforcer-review [args...]`. Non-blocking; passthrough.
     "enforcer-review": ("enforcer-review.py", [], True),
-    # Architect-only override approval (Phase 4d): post-removal repos
-    # carry no gator-approve.py — `gator hook approve --reason ... --name
-    # ...` is the machine-side path. The AGENT must never run this
-    # (constitution: unauthorized self-approval is a governance
-    # violation); the dispatcher merely makes it reachable for the
-    # ARCHITECT. The script itself is cwd-based and interactive-safe
-    # (stdin inherited).
-    "approve": ("gator-approve.py", [], True),
+    # Pre-commit override control (#34, #35): `gator hook override
+    # status|approve|cancel [flags]` forwards argv to gator-approve.py,
+    # whose argparse rejects unknown subcommands (exit 2). `approve` is
+    # the compatibility alias for `override approve` (Phase 4d path:
+    # `gator hook approve --reason ... --name ...`). APPROVAL IS
+    # ARCHITECT-ONLY — the AGENT must never run it (constitution:
+    # unauthorized self-approval is a governance violation); status and
+    # cancel are safe for anyone. stdin is inherited for prompts.
+    "override": ("gator-approve.py", [], True),
+    "approve": ("gator-approve.py", ["approve"], True),
 }
 
 # Hooks whose failure must block the git operation. Everything else
@@ -80,12 +83,21 @@ BLOCKING_HOOKS = {"pre-commit"}
 # Commit hooks (pre-commit / commit-msg / post-commit) are NOT in
 # this set: git itself invokes them with cwd already at the top
 # level, and re-resolving would introduce a behavior change the
-# runtime-split intentionally avoids. `enforcer-review` and
-# `approve` are also excluded — they are user-driven verbs whose
-# cwd expectations are owned by the caller.
+# runtime-split intentionally avoids. `enforcer-review` is also
+# excluded — a user-driven verb whose cwd expectations are owned by
+# the caller.
+#
+# `override` / `approve` (#34, #35) ARE resolved: runtime selection
+# reads `<root>/.gator/`, so from a governed subdirectory the verb
+# would otherwise be reported ungoverned and never run. The approve
+# script resolves the same top level itself, and override state is
+# per-worktree (`git rev-parse --git-path`), so a linked worktree
+# resolves to its own root and its own state.
 #
 # Issue #32 (2026-09-16).
-_HOOKS_NEEDING_GIT_TOPLEVEL = frozenset({"session-open", "session-start"})
+_HOOKS_NEEDING_GIT_TOPLEVEL = frozenset({
+    "session-open", "session-start", "override", "approve",
+})
 
 
 def _resolve_repo_root(cwd, hook_name):

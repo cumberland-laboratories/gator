@@ -63,29 +63,30 @@ Different training means different blind spots. The wall between coding and revi
 
 ## Override Protocol
 
-When the hook blocks a commit, it writes an `override-request.json` with a unique block ID. The Architect — not the agent — runs the approval:
+When the hook blocks a commit, it records the blocked attempt with a block ID. Each finding is tagged `fix-required` (it must be fixed), `approvable` (a charter rule), or `lint` (a HIGH/CRITICAL lint finding). The Architect — not the agent — approves:
 
 ```bash
-gator hook approve
+gator hook override status
+gator hook approve --reason "..." --name "..."
 ```
 
-(On pre-2.9 repos that still carry repo-resident scripts: `python .gator/scripts/gator-approve.py`.)
+(On pre-2.9 repos that still carry repo-resident scripts: `python .gator/scripts/gator-approve.py approve ...`.)
 
 The approval flow:
 
-1. **Hook blocks** — writes `override-request.json` with block ID, failure details, timestamp
-2. **Architect reviews** — reads the whiteboard findings, decides whether to approve
-3. **Architect runs `gator-approve.py`** — interactive: requires reason and name, writes `override-approved.json`
-4. **Hook validates** — block IDs must match, approval must be newer than request, minimum delay must have passed
-5. **Override recorded** — in commit trailers, visible to fleet reports and audits
+1. **Hook blocks.** It records the attempt, bound to the exact staged change, with every finding tagged. The record lives in `.git/gator-override/`, never in the working tree.
+2. **Architect reviews.** They read the findings and decide whether to approve the approvable ones.
+3. **Architect runs `gator hook approve`.** It requires a reason and a name, and writes an approval for that exact staged change only. Fix-required findings can never be approved.
+4. **Hook validates on retry.** The approval applies only if the staged change is unchanged. It is kept if the retry is blocked for another reason, and is used up only after the commit lands.
+5. **Override recorded.** The `Gator-Override-Approved-By`, `-Block`, `-Reason`, and `-Rules` commit trailers are visible to fleet reports and audits.
 
-The agent may NOT run `gator-approve.py` or create override files. Unauthorized self-approval is an auditable governance violation.
+The agent may NOT run `gator hook approve` or create override files. Unauthorized self-approval is an auditable governance violation.
 
 Every override across the organization is surfaced by fleet reports and audit dashboards. There is no silent bypass path.
 
 **Note:** The current gate is behavioral, not cryptographic. A determined model could technically circumvent the approval flow. Token-based approval requiring an Architect-held secret is under consideration. See → [Threat Model](threat-model.md) for explicit scope of protection.
 
-> *Legacy: an older `echo charter-skip > .gator/.override` mechanism still works as a backward-compatible fallback but is deprecated. New installations use the block-ID approval flow.*
+> *Retired: the older `echo charter-skip > .gator/.override` mechanism no longer authorizes anything — the hook now blocks when that file exists. The deprecated `.gator/lint-allow.json` likewise no longer suppresses lint findings on its own.*
 
 ## Policy Inheritance
 

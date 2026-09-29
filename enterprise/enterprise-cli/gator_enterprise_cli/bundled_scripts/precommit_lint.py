@@ -161,10 +161,11 @@ def parse_diff_added_lines(repo_root):
 
 
 def load_lint_allowlist(gator_dir):
-    """Load the PI-approved lint allowlist from .gator/lint-allow.json.
+    """Load the DEPRECATED lint allowlist from .gator/lint-allow.json.
 
     Each entry is: {"rule": "SQL-001", "file": "path", ...}
-    Returns a set of (rule, file) tuples for fast lookup.
+    Returns a set of (rule, file) tuples. Used only to tag findings for a
+    deprecation diagnostic — it no longer suppresses anything (#34).
     """
     allowlist_file = gator_dir / "lint-allow.json"
     if not allowlist_file.exists():
@@ -220,8 +221,13 @@ def run_layer1_lint(staged_files, repo_root):
     This eliminates false alarm fatigue and means the PI only reviews
     what they're actually introducing.
 
-    The allowlist (.gator/lint-allow.json) handles the rare case where
-    new dangerous code is intentional.
+    Deprecated allowlist (.gator/lint-allow.json, #34): it no longer
+    suppresses findings on its own — an unscoped (rule, file) entry could
+    otherwise bypass HIGH/CRITICAL lint for any content. Every finding is
+    returned; entries listed in the allowlist carry ``"allowlisted": True``
+    for the caller's deprecation diagnostic. Intentional dangerous code is
+    authorized only by an Architect approval bound to the exact staged
+    change (`gator hook approve`, precommit_override.py).
     """
     findings = []
     gator_dir = repo_root / ".gator"
@@ -246,14 +252,14 @@ def run_layer1_lint(staged_files, repo_root):
             any(basename.startswith(p) for p in DANGEROUS_PREFIXES)
             and basename not in DANGEROUS_SAFE
         ):
-            if ("HYG-002", filepath) not in allowed:
-                findings.append({
-                    "rule": "HYG-002",
-                    "severity": "HIGH",
-                    "file": filepath,
-                    "line": 0,
-                    "message": f"{basename} should not be committed. Add to .gitignore.",
-                })
+            findings.append({
+                "rule": "HYG-002",
+                "severity": "HIGH",
+                "file": filepath,
+                "line": 0,
+                "message": f"{basename} should not be committed. Add to .gitignore.",
+                "allowlisted": ("HYG-002", filepath) in allowed,
+            })
 
     # Parse diff for added lines only
     added_lines = parse_diff_added_lines(repo_root)
@@ -271,8 +277,7 @@ def run_layer1_lint(staged_files, repo_root):
         for rule in LINT_RULES:
             if ext in rule.get("exclude_extensions", set()):
                 continue
-            if (rule["id"], filepath) in allowed:
-                continue
+            is_allowlisted = (rule["id"], filepath) in allowed
             pattern = rule["pattern"]
             for i, (lineno, line_text) in enumerate(lines):
                 if re.search(pattern, line_text):
@@ -300,6 +305,7 @@ def run_layer1_lint(staged_files, repo_root):
                         "line": lineno,
                         "message": rule["message"],
                         "match": line_text.strip()[:120],
+                        "allowlisted": is_allowlisted,
                     })
 
     return findings

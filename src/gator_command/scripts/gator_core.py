@@ -915,6 +915,49 @@ def ensure_utf8_stdout():
 
 
 # ---------------------------------------------------------------------------
+# Commit-trailer intelligence
+# ---------------------------------------------------------------------------
+
+def override_event_fields(trailers):
+    """Classify an Architect override from one commit's trailers.
+
+    ``trailers`` maps trailer key -> value. Returns None for a commit with
+    no override, else {override_type, approver, block_id, reason, rules}.
+
+    Detection covers everything the pre-commit hook has emitted: v2
+    (#34, #35) `Gator-Override-Approved-By` / `-Block` / `-Reason` /
+    `-Rules`, v1 `Gator-Charter-Changed: override-skip` +
+    `-Approved-By` / `-Block`, and a bare legacy `Gator-Override:` value.
+    (Readers previously keyed only on `Gator-Override:`, which the hook
+    never emitted, so no override was ever reported.)
+    """
+    legacy = (trailers.get("Gator-Override") or "").strip()
+    approver = (trailers.get("Gator-Override-Approved-By") or "").strip()
+    block_id = (trailers.get("Gator-Override-Block") or "").strip()
+    reason = (trailers.get("Gator-Override-Reason") or "").strip()
+    rules = [r.strip() for r in (trailers.get("Gator-Override-Rules") or "").split(",")
+             if r.strip()]
+    charter_skip = (trailers.get("Gator-Charter-Changed") or "").strip() == "override-skip"
+    if not (legacy or approver or block_id or rules or charter_skip):
+        return None
+    if legacy:
+        override_type = legacy
+    elif charter_skip:
+        override_type = "charter-skip"
+    elif rules:
+        override_type = "lint"
+    else:
+        override_type = "override"
+    return {
+        "override_type": override_type,
+        "approver": approver,
+        "block_id": block_id,
+        "reason": reason,
+        "rules": rules,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Script import helper
 # ---------------------------------------------------------------------------
 

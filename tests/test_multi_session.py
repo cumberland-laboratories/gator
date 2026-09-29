@@ -649,6 +649,12 @@ class TestByteIdentityAcrossThreeCopies:
     @pytest.mark.parametrize("filename", [
         "precommit_session.py",
         "gator-session-start.py",
+        # #34/#35: the override state module, the Architect approval CLI,
+        # and lint (whose allowlist semantics changed) must not drift —
+        # Enterprise-provisioned repos run the bundled copies.
+        "precommit_override.py",
+        "gator-approve.py",
+        "precommit_lint.py",
         # `gator-pre-commit.py` is DELIBERATELY NOT included here — the
         # three copies of that file drifted pre-2026-08-08 for reasons
         # unrelated to the transcripts-first MVP work, and reconciling
@@ -675,6 +681,33 @@ class TestByteIdentityAcrossThreeCopies:
             f"bundled_scripts. Enterprise-provisioned repos would run "
             f"different code than the wheel runtime."
         )
+
+    def test_bundled_runtime_is_self_sufficient_after_install(self, tmp_path):
+        """#34/#35 delivery matrix: `_install_bundled_scripts()` copies every
+        `*.py` (except `__init__.py`) from bundled_scripts into a repo's
+        `.gator/scripts/`. Emulate that copy and prove the installed
+        gator-pre-commit.py and gator-approve.py resolve their sibling
+        imports (precommit_override among them) — a runtime that receives
+        the changed hook must also receive the module it imports."""
+        import subprocess
+        import sys as _sys
+        bundled = (self._REPO_ROOT / "enterprise" / "enterprise-cli"
+                   / "gator_enterprise_cli" / "bundled_scripts")
+        installed = tmp_path / ".gator" / "scripts"
+        installed.mkdir(parents=True)
+        for item in bundled.iterdir():
+            if item.name.endswith(".py") and item.name != "__init__.py":
+                (installed / item.name).write_text(
+                    item.read_text(encoding="utf-8"), encoding="utf-8")
+        assert (installed / "precommit_override.py").is_file()
+        assert (installed / "gator-approve.py").is_file()
+        for script in ("gator-pre-commit.py", "gator-approve.py"):
+            r = subprocess.run([_sys.executable, str(installed / script), "--help"],
+                               capture_output=True, text=True, cwd=str(tmp_path))
+            assert r.returncode == 0, f"{script} failed to import: {r.stderr}"
+        src = (installed / "gator-pre-commit.py").read_text(encoding="utf-8")
+        assert "import precommit_override as override_state" in src
+        assert "def check_override(" not in src, "v1 override flow must be gone"
 
     @pytest.mark.parametrize("filename", [
         "precommit_session.py",

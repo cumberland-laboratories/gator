@@ -23,7 +23,8 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `enterprise/app/**`, `enterprise/migrations/**`, `enterprise/Dockerfile`, `enterprise/alembic.ini`, `enterprise/fly.toml`, `enterprise/requirements.txt` | [Enterprise Server](scripts-enterprise-server.md) · [Contracts](contracts.md) |
 | `src/gator_command/scripts/gator-state.py` | [Managed State](scripts-managed-state.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator_layout.py`, starter `gator_layout.py` | [Layout Resolver](scripts-layout.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| `.gator/.includes/scripts/enforcer-review.py`, `gator-pre-commit.py`, `precommit_*.py`, `gator-approve.py`, and starter copies | [Cross-Cutting](scripts-cross-cutting.md) |
+| `gator-pre-commit.py`, `precommit_*.py`, `gator-approve.py`, starter copies, and synchronized Enterprise bundled copies | [Pre-Commit Governance](scripts-precommit.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `.gator/.includes/scripts/enforcer-review.py` and starter copy | [Cross-Cutting](scripts-cross-cutting.md) |
 | `contracts/**` | [Contracts](contracts.md) |
 | `.github/workflows/**`, `scripts/release-individual.sh`, `scripts/test-install-cycle.sh` | [Release Pipeline](release-pipeline.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `LICENSE`, `NOTICE`, `CONTRIBUTING.md` | [Cross-Cutting](scripts-cross-cutting.md) |

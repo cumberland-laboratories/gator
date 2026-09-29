@@ -29,7 +29,10 @@ import webbrowser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from gator_core import get_version, ensure_utf8_stdout, import_sibling, find_gator_root
+from gator_core import (
+    get_version, ensure_utf8_stdout, import_sibling, find_gator_root,
+    override_event_fields,
+)
 
 # Renderers live in a separate module — pure functions, no shared state.
 # Loaded lazily so --sessions and --json don't crash if renderers are missing.
@@ -206,22 +209,15 @@ def _collect_trailer_intelligence(fleet_status, since_days):
 
                 repo_governed += 1
 
-                # Override events
-                override_val = trailer_dict.get("Gator-Override", "")
-                if override_val:
-                    override_events.append({
-                        "repo": name,
-                        "hash": commit_hash[:7],
-                        "timestamp": commit_ts,
-                        "override_type": override_val,
-                        # Approver comes from Gator-Override-Approved-By, not
-                        # Gator-Architect. The hook writes this trailer from
-                        # .override-meta.json at commit time — it records who
-                        # actually ran gator-approve.py, which may differ from
-                        # the session PI identity.
-                        "approver": trailer_dict.get("Gator-Override-Approved-By", ""),
-                        "block_id": trailer_dict.get("Gator-Override-Block", ""),
-                    })
+                # Override events (gator_core.override_event_fields covers
+                # every trailer shape the hook has emitted). The approver is
+                # Gator-Override-Approved-By — who actually approved, which
+                # may differ from the session Gator-Architect.
+                override = override_event_fields(trailer_dict)
+                if override:
+                    override_events.append(dict(
+                        override, repo=name, hash=commit_hash[:7],
+                        timestamp=commit_ts))
 
                 # Significance distribution
                 sig = trailer_dict.get("Gator-Significance", "").lower()

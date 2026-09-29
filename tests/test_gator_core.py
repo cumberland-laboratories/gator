@@ -18,6 +18,45 @@ if str(SCRIPTS_DIR) not in sys.path:
 import gator_core
 
 
+class TestOverrideEventFields:
+    """#34: readers must detect every override trailer shape the hook emits."""
+
+    def test_no_override(self):
+        assert gator_core.override_event_fields(
+            {"Gator-Charter-Changed": "yes", "Gator-Agent": "claude"}) is None
+
+    def test_v2_charter_override(self):
+        ev = gator_core.override_event_fields({
+            "Gator-Charter-Changed": "override-skip",
+            "Gator-Override-Approved-By": "Architect",
+            "Gator-Override-Block": "ab12cd34",
+            "Gator-Override-Reason": "docs-only",
+            "Gator-Override-Rules": "charter-alongside-code, SQL-001",
+        })
+        assert ev == {"override_type": "charter-skip", "approver": "Architect",
+                      "block_id": "ab12cd34", "reason": "docs-only",
+                      "rules": ["charter-alongside-code", "SQL-001"]}
+
+    def test_v2_lint_only_override(self):
+        ev = gator_core.override_event_fields({
+            "Gator-Charter-Changed": "no",
+            "Gator-Override-Approved-By": "Architect",
+            "Gator-Override-Rules": "SQL-001"})
+        assert ev["override_type"] == "lint" and ev["rules"] == ["SQL-001"]
+
+    def test_v1_shape_without_reason(self):
+        """The v1 hook emitted override-skip + approver + block only."""
+        ev = gator_core.override_event_fields({
+            "Gator-Charter-Changed": "override-skip",
+            "Gator-Override-Approved-By": "PI", "Gator-Override-Block": "deadbeef"})
+        assert ev["override_type"] == "charter-skip"
+        assert ev["reason"] == "" and ev["rules"] == []
+
+    def test_bare_legacy_trailer(self):
+        assert gator_core.override_event_fields(
+            {"Gator-Override": "charter-skip"})["override_type"] == "charter-skip"
+
+
 class TestNormalizePath:
     def test_msys2_path(self):
         """MSYS2/Git Bash paths get converted to Windows native."""

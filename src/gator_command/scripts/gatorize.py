@@ -366,11 +366,26 @@ def write_stubs(gator_dir):
     ensure_repo_gitignore(gator_dir.parent)
 
 
+# Hook-transient .gator files that must never be committed (#34). Beyond
+# being ignored, any already-tracked copy is untracked (index only) so the
+# ignore rule actually takes effect.
+TRANSIENT_GATOR_FILES = (
+    ".gator/commit_issues.md",
+    ".gator/override-request.json",
+    ".gator/override-approved.json",
+    ".gator/.override-meta.json",
+    ".gator/.override",
+)
+
+
 def ensure_repo_gitignore(repo_root):
     """Ensure standard gitignore rules exist in the repo's .gitignore.
 
     Called on both fresh install and upgrade paths so all governed repos
-    converge on the same set of ignore rules.
+    converge on the same set of ignore rules. Matching is on exact,
+    whitespace-stripped lines — a substring test would treat
+    `.gator/.override` as present whenever `.gator/.override-meta.json` is.
+    Afterwards, tracked copies of TRANSIENT_GATOR_FILES are untracked.
     """
     repo_gi = repo_root / ".gitignore"
     gi_rules = {
@@ -380,6 +395,11 @@ def ensure_repo_gitignore(repo_root):
         ".gator/whiteboard.md": "# Hook ephemera — written and cleared each commit cycle",
         ".gator/commit_draft.md": "# Hook ephemera — commit message source, reset after commit",
         ".gator/status.json": "# Hook ephemera — pre-commit validation state",
+        ".gator/commit_issues.md": "# Hook ephemera — lint findings for the current attempt",
+        ".gator/override-request.json": "# Retired v1 override internals — never commit",
+        ".gator/override-approved.json": "# Retired v1 override internals — never commit",
+        ".gator/.override-meta.json": "# Retired v1 override internals — never commit",
+        ".gator/.override": "# Retired v1 override bypass — no longer authorizes; never commit",
         ".gator/diagnostics/": "# Session-hook diagnostic log (machine-local, bounded, appended-to on non-happy-path)",
         ".vscode/": "# IDE settings",
         "__pycache__/": "# Python cache",
@@ -391,13 +411,43 @@ def ensure_repo_gitignore(repo_root):
         gi_text = repo_gi.read_text(encoding="utf-8", errors="replace")
     else:
         gi_text = ""
+    present = {line.strip() for line in gi_text.splitlines()}
     additions = []
     for rule, comment in gi_rules.items():
-        if rule not in gi_text:
+        if rule not in present:
             additions.append(f"{comment}\n{rule}")
     if additions:
         with open(repo_gi, "a" if gi_text else "w", encoding="utf-8") as f:
             f.write("\n" + "\n".join(additions) + "\n")
+    untrack_transient_files(repo_root)
+
+
+def untrack_transient_files(repo_root):
+    """Remove tracked copies of TRANSIENT_GATOR_FILES from the index only.
+
+    The working-tree files are kept (`git rm --cached`). Silent no-op
+    outside a git repo or when nothing is tracked. Returns the untracked
+    paths.
+    """
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["git", "ls-files", "--", *TRANSIENT_GATOR_FILES],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    tracked = [p for p in (r.stdout or "").splitlines() if p.strip()]
+    if r.returncode != 0 or not tracked:
+        return []
+    try:
+        subprocess.run(
+            ["git", "rm", "--cached", "--quiet", "--", *tracked],
+            cwd=str(repo_root), capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return tracked
 
 
 def write_gator_version(gator_dir, action):

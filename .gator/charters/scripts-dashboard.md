@@ -89,6 +89,7 @@ File: src/gator_command/scripts/dashboard/content_policy.py
 Apply one extension/path policy to live and historical listings and canonicalize wire entries.
 <- list, search, file, and raw endpoints
 ! Listing and serving use the same predicate. Adding a file type requires coordinated allowlist and MIME-map changes.
+! `_DENIED_EXACT_BASENAMES` covers override internals by their REAL names (#34): `override-request.json` and `override-approved.json` (the v1 hook wrote these undotted), plus the historical dotted aliases `.override-request.json` / `.override-approved.json` / `.override-meta.json` and the retired `.override` bypass. v2 override state lives under `.git/gator-override/`, outside the working tree, so it is never scanned. Pinned by `test_files_never_lists_override_internal` and `test_override_internals_never_served` (both `/file` and `/raw`, 404 — no oracle) in `tests/test_dashboard_ui/test_content_transport_slice2.py`.
 
 ### resolve_version_ref() / git_show_at_ref()
 File: src/gator_command/scripts/gator-dashboard.py

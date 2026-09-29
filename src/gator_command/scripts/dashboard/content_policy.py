@@ -85,9 +85,15 @@ _DENIED_BASENAME_SUFFIXES = frozenset({
 _DENIED_EXACT_BASENAMES = frozenset({
     ".tokens.json",
     "session.lock",
+    # Override internals (#34). The v1 hook wrote the UNDOTTED names; the
+    # dotted forms are historical aliases kept as negative controls. v2
+    # state lives under .git/gator-override/ (never in the working tree).
+    "override-request.json",
+    "override-approved.json",
     ".override-request.json",
     ".override-approved.json",
     ".override-meta.json",
+    ".override",
     "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
 })
 

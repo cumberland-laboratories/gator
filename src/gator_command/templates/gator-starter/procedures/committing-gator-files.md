@@ -35,6 +35,19 @@ Vault is gitignored by design. Nothing in `.gator/vault/` is committed. If you s
 
 `.gator/commit_draft.md` and `.gator/whiteboard.md` may appear modified after a successful `git commit` — Gator's post-commit hook intentionally resets/clears them. This is expected. Do NOT re-commit them just because they show as modified. See [`../reference-notes/expected-governance-residue.md`](../reference-notes/expected-governance-residue.md).
 
+### 2c-bis. Override and lint internals (#34, #35)
+
+Never stage these, even when following a "stage all `.gator/` changes" instruction:
+
+| File | Tracked? | Lifetime | Agent action |
+|------|----------|----------|--------------|
+| `.git/gator-override/{block,approval,handoff}.json` | Never (outside the working tree) | From a blocked attempt until the commit lands, `cancel`, or 24 h expiry | Inspect with `gator hook override status`. Never create or edit. |
+| `.gator/commit_issues.md` | No (gitignored) | Current attempt | Read only |
+| `.gator/lint-allow.json` | Baseline `[]` only | Deprecated: it no longer authorizes lint findings, and the hook never rewrites or stages it | Never add entries |
+| `.gator/.override`, `override-request.json`, `override-approved.json`, `.override-meta.json` | No (gitignored) | Retired v1 files, removed after the next commit | Never create. `.override` blocks the commit. |
+
+If `gator update` shows a staged deletion of `.gator/commit_issues.md` or a v1 override file, that is the update untracking a transient file. Commit it with the rest of the update.
+
 ### 2d. Session snippets from unrelated sessions
 
 `.gator/session-snippets/*.json` files ARE committed as part of the transcripts-first evidence trail — one snippet emitted per commit. That is the normal flow. However, if you see a snippet in the working tree that does NOT correspond to a commit YOU are about to make (e.g. an untracked snippet from a prior session that wasn't caught by that session's commit), the correct handling is to let the NEXT `git commit` sweep it up naturally via the post-commit hook — do not manually stage or commit it as its own artifact.

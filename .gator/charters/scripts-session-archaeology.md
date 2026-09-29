@@ -16,6 +16,7 @@ Snippet-based session pipeline — the entire surviving surface.
 - Machine identity storage — that is `gator-machine-id.py` (standalone CLI); the reader owns the canonical read/create helper.
 - Vendor transcript discovery, parsing, and custody — Enterprise-side since the audit-surface tranche: `enterprise/enterprise-cli/gator_enterprise_cli/transcripts_discovery.py` (Claude + Codex + Gemini). See [`scripts-enterprise`](scripts-enterprise.md).
 - Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py::assemble_audit_data()`.
+- Override intelligence. Session snippets do not carry override data; `gator-audit.py` and `gator-repo-status.py` classify Architect overrides from commit trailers via `gator_core.override_event_fields()` (#34, #35 — v1, v2, and legacy trailer shapes). See [`scripts-core-library.md`](scripts-core-library.md) and [`scripts-audit-intelligence.md`](scripts-audit-intelligence.md).
 - The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()`.
 - The committed summary read path in repo-status — `gator-repo-status.py::get_session_summaries()` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
 

@@ -18,8 +18,10 @@ Repositories built via `build_dashboard_fleet` will have:
   namespace.
 - `.gator/sessions/_active/token.json` — MUST NEVER appear in
   `/files` responses.
-- `.gator/.override-approved.json` — hidden override internal;
-  MUST NEVER be listed.
+- `.gator/override-request.json`, `.gator/override-approved.json`
+  (the real v1 names), `.gator/.override-approved.json` (historical
+  dotted alias), `.gator/.override` — override internals; MUST NEVER
+  be listed or served.
 - `gator-command/README.md` — governance secondary namespace.
 - `source/example.py` — canonical source file at repo root.
 - `source/private.pem` — secret material, MUST NEVER be listed.
@@ -146,8 +148,15 @@ def seed_content_fixtures(repo):
     (active / "token.json").write_text(
         '{"secret": "must-not-leak"}\n', encoding="utf-8")
 
+    # Override internals (#34): the v1 hook wrote the UNDOTTED names;
+    # the dotted form stays as a historical-alias negative control.
     (repo / ".gator" / ".override-approved.json").write_text(
         '{"approved": true}\n', encoding="utf-8")
+    (repo / ".gator" / "override-approved.json").write_text(
+        '{"approved": true}\n', encoding="utf-8")
+    (repo / ".gator" / "override-request.json").write_text(
+        '{"block_id": "deadbeef"}\n', encoding="utf-8")
+    (repo / ".gator" / ".override").write_text("charter-skip\n", encoding="utf-8")
 
     # B2 Slice 2 (v2.13.0) — CSP negative-control fixture for
     # the mandatory Playwright detector-liveness pin. See
@@ -251,6 +260,15 @@ def seed_history_commits(repo, name):
 
     result = {"mission-r2": mission_r2}
     if name == "alpha":
+        # #34: guarantee the override internals exist in history, even though
+        # Gator's gitignore now ignores them, so historical-read denial is
+        # tested against real blobs (a missing blob would 404 trivially).
+        _git("add", "-f", ".gator/override-request.json",
+             ".gator/override-approved.json", ".gator/.override-approved.json",
+             ".gator/.override")
+        _git("commit", "-q", "--allow-empty", "-m", "commit override internals")
+        result["override-internals"] = _rev()
+
         import shutil
         shutil.rmtree(repo / "gator-command")
         _git("add", "-A")

@@ -49,12 +49,15 @@ Filesystem: managed hook path and Git config (RW)
 -> `gator-update.install_git_hooks()`
 ! Installer and updater use one hook implementation so health checks cannot drift from fresh installs.
 
-### ensure_repo_gitignore(repo_root)
+### ensure_repo_gitignore(repo_root) / untrack_transient_files(repo_root)
 File: src/gator_command/scripts/gatorize.py
-Converge required machine-local and sensitive Gator ignore entries without removing user rules.
-Filesystem: `.gitignore` (RW)
-<- every successful install/upgrade scenario
+Converge required machine-local, sensitive, and hook-transient Gator ignore entries without removing user rules, then untrack (index only, `git rm --cached`) any tracked copy of `TRANSIENT_GATOR_FILES` (`.gator/commit_issues.md` and the retired v1 override files `override-request.json`, `override-approved.json`, `.override-meta.json`, `.override`) so the ignore rule takes effect.
+Filesystem: `.gitignore` (RW), git index (W: removals only)
+<- every successful install/upgrade scenario (gatorize install/upgrade, `gator update`)
 ! Append only missing canonical entries; preserve comments, ordering, and unrelated patterns.
+! Presence is tested on exact, whitespace-stripped lines (#34). The earlier substring test treated `.gator/.override` as present whenever `.gator/.override-meta.json` was listed.
+! Untracking never deletes working-tree files and is a silent no-op outside git. The resulting staged deletion is committed by the operator with the rest of the update.
+! Hook-written files the pre-commit hook must not stage: see `scripts-precommit.md` (commit_issues.md is no longer staged by validate).
 
 ### write_gator_version(gator_dir, action)
 File: src/gator_command/scripts/gatorize.py

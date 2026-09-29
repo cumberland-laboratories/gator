@@ -55,11 +55,17 @@ Resolve the governed repo, self-check hooks, register the repo in the dashboard 
 
 ### _resolve_repo_root(cwd, hook_name)
 File: src/gator_command/scripts/gator-hook.py
-Resolve the Git top level for `session-open` and `session-start`; preserve the caller directory for commit hooks.
+Resolve the Git top level for `session-open`, `session-start`, and the override verbs `override` / `approve` (#34, #35); preserve the caller directory for commit hooks and `enforcer-review`.
 <- hook dispatcher `main()`
 -> `git -C <cwd> rev-parse --show-toplevel`
 ! Git failure, empty output, or subprocess failure returns the original cwd.
 ! A nested ungoverned Git repository inside a governed parent resolves to the nested root and remains ungoverned.
+! `override` / `approve` are resolved because runtime selection reads `<root>/.gator/`: from a governed subdirectory they would otherwise dispatch as ungoverned and never run. This is a user-verb decision, not a commit-hook change.
+
+### HOOK_MAP (override / approve entries)
+File: src/gator_command/scripts/gator-hook.py
+`override` -> `gator-approve.py` with argv passthrough (`status|approve|cancel [flags]`; unknown subcommands exit 2 via the script's argparse). `approve` -> `gator-approve.py approve` + passthrough (compatibility alias). Both non-blocking. See [`scripts-precommit.md`](scripts-precommit.md).
+! Approval is Architect-only (constitution); the dispatcher only makes it reachable. `status` / `cancel` are safe for anyone.
 
 ### plan_dispatch(hook_name, repo_root, decision, wheel_dir=None)
 File: src/gator_command/scripts/gator-hook.py

@@ -76,6 +76,7 @@ from precommit_session import (  # noqa: E402
     _reassemble_ledger,
     write_commit_summary,
 )
+import precommit_override as override_state  # noqa: E402  (#34, #35)
 
 
 # ---------------------------------------------------------------------------
@@ -489,141 +490,10 @@ def classify_staged_files(staged_files, _charter_patterns_cache=[None]):
     return bool(code_files), bool(charter_files), code_files, charter_files
 
 
-def _generate_block_id():
-    """Generate a short unique block ID for override tracking."""
-    import hashlib
-    import time
-    raw = f"{time.time()}-{os.getpid()}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:8]
-
-
-def _write_override_request(gator_dir, failure_type, files, override_type="charter-skip"):
-    """Write an override request for PI review."""
-    import time
-    request = {
-        "block_id": _generate_block_id(),
-        "failure_type": failure_type,
-        "override_type": override_type,
-        "files": files[:10],
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "epoch": time.time(),
-    }
-    request_file = gator_dir / "override-request.json"
-    request_file.write_text(
-        json.dumps(request, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return request
-
-
-OVERRIDE_DELAY_SECONDS = 10
-
-
-def check_override(gator_dir):
-    """Check for a PI-approved two-phase override.
-
-    Two-phase override flow:
-      1. Hook blocks -> writes override-request.json (block ID, failure)
-      2. PI reviews findings, runs gator-approve.py -> writes override-approved.json
-      3. Agent retries git commit -> hook checks approval matches request
-
-    Approval is valid only if:
-      - Both request and approval files exist
-      - Block IDs match
-      - Approval timestamp is later than request
-      - Minimum delay has passed (agent cannot instantly self-approve)
-
-    Also supports legacy .override file for backward compatibility,
-    but prints a deprecation notice.
-
-    Returns the override value if approved, None otherwise.
-    """
-    import time
-
-    # --- New two-phase flow ---
-    request_file = gator_dir / "override-request.json"
-    approved_file = gator_dir / "override-approved.json"
-
-    two_phase_valid = False
-    if request_file.exists() and approved_file.exists():
-        try:
-            request = json.loads(request_file.read_text(encoding="utf-8"))
-            approval = json.loads(approved_file.read_text(encoding="utf-8"))
-
-            ids_match = request.get("block_id") == approval.get("block_id")
-
-            req_epoch = request.get("epoch", 0)
-            try:
-                appr_str = approval["approved_at"]
-                # Parse with timezone offset (e.g. 2026-06-04T10:58:37-0400)
-                # Python 3.7+ fromisoformat handles most ISO formats;
-                # strptime with %z handles the +HHMM offset reliably.
-                try:
-                    appr_dt = datetime.fromisoformat(appr_str)
-                except ValueError:
-                    appr_dt = datetime.strptime(appr_str[:24], "%Y-%m-%dT%H:%M:%S%z")
-                appr_epoch = appr_dt.timestamp()
-            except (KeyError, ValueError):
-                appr_epoch = 0
-
-            timing_ok = appr_epoch >= req_epoch
-            delay_ok = time.time() - req_epoch >= OVERRIDE_DELAY_SECONDS
-
-            two_phase_valid = ids_match and timing_ok and delay_ok
-        except (json.JSONDecodeError, OSError):
-            two_phase_valid = False
-
-    if two_phase_valid:
-        # Valid two-phase approval — consume both files (one-shot)
-        override_type = approval.get("override_type", "charter-skip")
-        approved_by = approval.get("approved_by", "unknown")
-        reason = approval.get("reason", "")
-
-        for f in (request_file, approved_file):
-            try:
-                f.unlink()
-            except OSError:
-                pass
-            git("rm", "--cached", "--quiet", "--force", "--",
-                str(f.relative_to(gator_dir.parent)),
-                cwd=gator_dir.parent)
-
-        # Stash approval metadata for trailer assembly
-        _override_meta = {
-            "type": override_type,
-            "approved_by": approved_by,
-            "reason": reason,
-            "block_id": request.get("block_id", ""),
-        }
-        meta_file = gator_dir / ".override-meta.json"
-        meta_file.write_text(json.dumps(_override_meta), encoding="utf-8")
-
-        return override_type
-
-    # --- Legacy .override file (fallback when two-phase fails or is absent) ---
-    override_file = gator_dir / ".override"
-    if override_file.exists():
-        value = override_file.read_text(encoding="utf-8").strip()
-        try:
-            override_file.unlink()
-        except OSError:
-            pass
-        git("rm", "--cached", "--quiet", "--force", "--",
-            str(override_file.relative_to(gator_dir.parent)),
-            cwd=gator_dir.parent)
-
-        if value:
-            # Write minimal meta for trailers
-            meta_file = gator_dir / ".override-meta.json"
-            meta_file.write_text(json.dumps({
-                "type": value,
-                "approved_by": "legacy-override",
-                "reason": "",
-                "block_id": "",
-            }), encoding="utf-8")
-        return value or None
-
-    return None
+# The v1 override flow (check_override / _write_override_request / the
+# legacy .gator/.override bypass) was replaced by the tree-bound
+# block/approval envelope in precommit_override.py (#34, #35). See
+# scripts-precommit.md and phase_validate() below.
 
 
 # ---------------------------------------------------------------------------
@@ -813,8 +683,14 @@ def validate_soft_rules(staged_files, frontmatter, body, gator_dir):
 # Trailer assembly
 # ---------------------------------------------------------------------------
 
-def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None):
-    """Build Gator-* trailer lines from all available sources."""
+def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
+                      handoff=None):
+    """Build Gator-* trailer lines from all available sources.
+
+    ``handoff`` is the validate->commit-msg override handoff (read via
+    ``override_state.read_handoff`` for the current tree). ``override`` is
+    retained for signature compatibility and is ignored.
+    """
     charter_count, func_count = count_charters(gator_dir)
     thread_count = count_threads(gator_dir)
     generation = read_generation(gator_dir)
@@ -837,26 +713,15 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None)
     if issue_count > 0:
         trailers.append(f"Gator-Issues: {issue_count}")
 
-    # Charter changed (from git diff --cached — deterministic)
-    if override == "charter-skip":
+    # Charter changed (from git diff --cached — deterministic), unless an
+    # Architect approval for this exact tree overrode a charter rule.
+    if handoff and handoff.get("charter_override"):
         trailers.append("Gator-Charter-Changed: override-skip")
-        # Include PI attribution from approval metadata
-        meta_file = gator_dir / ".override-meta.json"
-        if meta_file.exists():
-            try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                approved_by = meta.get("approved_by", "")
-                block_id = meta.get("block_id", "")
-                if approved_by and approved_by != "legacy-override":
-                    trailers.append(f"Gator-Override-Approved-By: {approved_by}")
-                if block_id:
-                    trailers.append(f"Gator-Override-Block: {block_id}")
-                # Consume the meta file
-                meta_file.unlink(missing_ok=True)
-            except (json.JSONDecodeError, OSError):
-                pass
     else:
         trailers.append(f"Gator-Charter-Changed: {'yes' if has_charter else 'no'}")
+    # Durable, sanitized audit of any approval used (#34 Phase F). The
+    # handoff is only read here — it is consumed in post-commit.
+    trailers.extend(override_state.override_trailers(handoff))
 
     # Change type (frontmatter preferred, fallback to inference)
     change_type = frontmatter.get("change-type") or infer_change_type(body, has_code)
@@ -915,8 +780,12 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None)
 # Status snapshot
 # ---------------------------------------------------------------------------
 
-def build_status(gator_dir, staged_files, frontmatter, body, override=None):
-    """Build the status.json content."""
+def build_status(gator_dir, staged_files, frontmatter, body, handoff=None):
+    """Build the status.json content.
+
+    ``handoff`` is the override handoff for this attempt (None when no
+    approval was used); a charter override records ``override-skip``.
+    """
     charter_count, func_count = count_charters(gator_dir)
     thread_count = count_threads(gator_dir)
     generation = read_generation(gator_dir)
@@ -940,7 +809,9 @@ def build_status(gator_dir, staged_files, frontmatter, body, override=None):
     agent = frontmatter.get("agent") or detect_agent_from_body(body)
     architect = frontmatter.get("architect") or frontmatter.get("pi") or detect_architect_from_body(body)
 
-    charter_changed = "override-skip" if override == "charter-skip" else has_charter
+    charter_changed = ("override-skip"
+                       if handoff and handoff.get("charter_override")
+                       else has_charter)
 
     return {
         "repo": gator_dir.parent.name,
@@ -977,9 +848,12 @@ def write_status_json(gator_dir, status):
 # Whiteboard & output artifacts
 # ---------------------------------------------------------------------------
 
-def write_whiteboard(gator_dir, failures, warnings, override,
+def write_whiteboard(gator_dir, failures, warnings, handoff,
                      enforcement_level="strict"):
-    """Write findings to .gator/whiteboard.md."""
+    """Write findings to .gator/whiteboard.md.
+
+    ``handoff`` is the override handoff used by this attempt, or None.
+    """
     whiteboard = gator_dir / "whiteboard.md"
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -1012,29 +886,18 @@ def write_whiteboard(gator_dir, failures, warnings, override,
             lines.append(f"- **{rule}**: {msg}")
         lines.append("")
 
-    if override:
+    if handoff:
         lines.append("## Overrides")
         lines.append("")
-        override_detail = f"{override} (committed at {timestamp})"
-        meta_file = gator_dir / ".override-meta.json"
-        if meta_file.exists():
-            try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                approved_by = meta.get("approved_by", "")
-                reason = meta.get("reason", "")
-                block_id = meta.get("block_id", "")
-                if approved_by and approved_by != "legacy-override":
-                    override_detail += f" — approved by {approved_by}"
-                if reason:
-                    override_detail += f" — reason: {reason}"
-                if block_id:
-                    override_detail += f" — block: {block_id}"
-            except (json.JSONDecodeError, OSError):
-                pass
-        lines.append(f"- **Gator-Override**: {override_detail}")
+        rules = ", ".join(handoff.get("overridden_rules", [])) or "?"
+        lines.append(
+            f"- **Gator-Override**: {rules} (committed at {timestamp})"
+            f" — approved by {handoff.get('approved_by', '?')}"
+            f" — reason: {handoff.get('reason', '')}"
+            f" — block: {handoff.get('block_id', '?')}")
         lines.append("")
 
-    if not failures and not warnings and not override:
+    if not failures and not warnings and not handoff:
         lines.append("No findings.")
         lines.append("")
 
@@ -1052,8 +915,9 @@ def write_commit_issues(gator_dir, findings):
         "",
         f"Lint findings from pre-commit hook — {timestamp}",
         "",
-        "Review each finding. If intentional, tell the agent to approve it.",
-        "The agent will add the approval to `.gator/lint-allow.json` and retry the commit.",
+        "Review each finding. HIGH/CRITICAL findings block the commit: fix them,",
+        "or the Architect approves this exact staged change with `gator hook approve`.",
+        "The agent must not approve its own findings.",
         "",
     ]
 
@@ -1076,24 +940,8 @@ def clear_commit_issues(gator_dir):
         ci_file.write_text("# Commit Issues\n\nNo findings.\n", encoding="utf-8")
 
 
-def clear_lint_allowlist(gator_dir, repo_root):
-    """Clear lint-allow.json after a successful commit.
-
-    The allowlist is a one-shot approval mechanism. Once the commit lands,
-    the dangerous code is in the codebase and future diffs won't show it
-    as new — so the allowlist entry is no longer needed. Clear it to
-    prevent stale approvals from accumulating.
-    """
-    allowlist_file = gator_dir / "lint-allow.json"
-    if not allowlist_file.exists():
-        return
-    try:
-        entries = json.loads(allowlist_file.read_text(encoding="utf-8"))
-        if entries:  # Only clear if non-empty (was actually used)
-            allowlist_file.write_text("[]\n", encoding="utf-8")
-            stage_file(allowlist_file, repo_root)
-    except (json.JSONDecodeError, OSError):
-        pass
+# clear_lint_allowlist() was retired (#34): lint-allow.json is a
+# deprecated read-only input and is never rewritten or staged.
 
 
 # ---------------------------------------------------------------------------
@@ -1151,18 +999,49 @@ def phase_validate():
         lint_failures = [f for f in lint_findings if f["severity"] in ("CRITICAL", "HIGH")]
         lint_warnings = [f for f in lint_findings if f["severity"] not in ("CRITICAL", "HIGH")]
 
+        # HIGH/CRITICAL lint joins the same tree-bound envelope as strict
+        # mode (#34, #35): the block is recorded, an Architect approval of
+        # the exact staged change clears it, and it is consumed only in
+        # post-commit. No charter/commit_draft rules in this mode.
         if lint_failures:
+            lint_rules = {f["rule"] for f in lint_failures}
+            ev_failures = [(f["rule"], f"{f['file']}:{f['line']} — {f['message']}")
+                           for f in lint_failures]
+            ev_warnings = [(f["rule"], f"{f['file']}:{f['line']} — {f['message']}")
+                           for f in lint_warnings]
+            tree = sdir = None
+            try:
+                tree = override_state.index_tree(repo_root)
+                sdir = override_state.state_dir(repo_root)
+            except override_state.OverrideStateError as exc:
+                ev_failures.append(("unmerged-index", str(exc)))
+            remaining, handoff, notes = override_state.apply_approval(
+                sdir, tree, ev_failures, lint_rules)
+            listed = sorted({f"{f['rule']} in {f['file']}" for f in lint_failures
+                             if f.get("allowlisted")})
+            if listed:
+                notes.append(
+                    ".gator/lint-allow.json no longer authorizes lint findings on "
+                    f"its own (still blocking: {', '.join(listed)}). The Architect "
+                    "approves this exact staged change with `gator hook approve`.")
+            if remaining:
+                block = None
+                if sdir is not None and tree is not None:
+                    try:
+                        block = override_state.write_block(
+                            sdir, tree, ev_failures, staged_files, lint_rules)
+                    except OSError as exc:
+                        notes.append(f"Could not record the block: {exc}")
+                for line in override_state.render_block_report(
+                        "gator pre-commit: BLOCKED (evidence_only — dangerous pattern detected)",
+                        remaining, ev_warnings, lint_rules, notes, block):
+                    print(line)
+                sys.exit(1)
             print()
-            print("  gator pre-commit: BLOCKED (evidence_only — dangerous pattern detected)")
+            print(f"  gator pre-commit: OVERRIDE ({', '.join(handoff['overridden_rules'])}) "
+                  f"approved by {handoff['approved_by']} (evidence_only)")
+            print(f"  Recorded in commit trailers (block {handoff['block_id']})")
             print()
-            for f in lint_failures:
-                print(f"  ✗ {f['rule']}: {f['file']}:{f['line']} — {f['message']}")
-            if lint_warnings:
-                print()
-                for f in lint_warnings:
-                    print(f"  ⚠ {f['rule']}: {f['file']}:{f['line']} — {f['message']}")
-            print()
-            sys.exit(1)
 
         if lint_warnings:
             print()
@@ -1178,10 +1057,7 @@ def phase_validate():
     # so the repo doesn't misrepresent its posture. Trailers and cleanup
     # still run in their own phases.
     if enforcement == "off":
-        clear_commit_issues(gator_dir)
-        ci_file = gator_dir / "commit_issues.md"
-        if ci_file.exists():
-            stage_file(ci_file, repo_root)
+        clear_commit_issues(gator_dir)  # transient; never staged (#34)
         wb = write_whiteboard(gator_dir, [], [], None, enforcement_level="off")
         stage_file(wb, repo_root)
         status = build_status(gator_dir, staged_files, {}, "", None)
@@ -1195,12 +1071,34 @@ def phase_validate():
     # Parse commit_draft
     frontmatter, body, parse_error = parse_commit_draft(gator_dir)
 
-    # Check override — read once, pass everywhere, file deleted atomically
-    override = check_override(gator_dir)
+    # Override state (#34, #35). Every rule is evaluated first with no
+    # override consulted; an approval is applied afterwards only if it is
+    # valid for this exact staged tree. Nothing is consumed here — a retry
+    # that is blocked for another reason keeps the approval, and only
+    # phase_cleanup() (post-commit) retires it. See scripts-precommit.md.
+    tree = sdir = None
+    state_problem = None
+    try:
+        tree = override_state.index_tree(repo_root)
+        sdir = override_state.state_dir(repo_root)
+    except override_state.OverrideStateError as exc:
+        state_problem = str(exc)
 
-    # Validate governance rules
-    failures = validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir, override)
+    # Validate governance rules (no override: approvals apply below)
+    failures = validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir)
     warnings = validate_soft_rules(staged_files, frontmatter, body, gator_dir)
+
+    if state_problem:
+        failures.append(("unmerged-index", state_problem))
+
+    # The v1 direct bypass file no longer authorizes anything.
+    if (gator_dir / ".override").exists():
+        failures.append((
+            "legacy-override-file",
+            ".gator/.override is a retired v1 bypass and no longer authorizes "
+            "a commit. Delete it. Overrides are Architect-approved with "
+            "`gator hook approve` for the exact staged change."
+        ))
 
     # Run Layer 1 mechanical lint on staged files (dangerous code patterns)
     lint_findings = run_layer1_lint(staged_files, repo_root)
@@ -1220,14 +1118,36 @@ def phase_validate():
                 finding["rule"],
                 f"{finding['file']}:{finding['line']} — {finding['message']}",
             ))
+    lint_rules = {f["rule"] for f in lint_failures}
 
-    # Write lint findings to commit_issues.md (PI reviews these to approve)
+    # Deprecated lint-allow.json (#34): it no longer suppresses findings.
+    if load_lint_allowlist(gator_dir):
+        listed = sorted({f"{f['rule']} in {f['file']}" for f in lint_findings
+                         if f.get("allowlisted")})
+        warnings.append((
+            "lint-allow-deprecated",
+            ".gator/lint-allow.json no longer authorizes lint findings on its "
+            "own. HIGH/CRITICAL findings block until fixed or the Architect "
+            "approves this exact staged change with `gator hook approve`."
+            + (f" Still blocking despite being listed: {', '.join(listed)}."
+               if listed else "")
+        ))
+
+    # Write lint findings to commit_issues.md (Architect reviews these)
+    # commit_issues.md is hook-transient and gitignored (#34): written for
+    # the Architect to read, never staged or committed.
     if lint_failures or lint_warnings:
-        ci_file = write_commit_issues(gator_dir, lint_failures + lint_warnings)
-        stage_file(ci_file, repo_root)
+        write_commit_issues(gator_dir, lint_failures + lint_warnings)
     else:
         # Clear any stale commit_issues from a previous blocked attempt
         clear_commit_issues(gator_dir)
+
+    # Apply an Architect approval — only for this exact tree, only for the
+    # rules it names, and never for fix-required rules (shared with the
+    # Enterprise evidence_only path via precommit_override).
+    all_failures = list(failures)
+    failures, handoff, approval_notes = override_state.apply_approval(
+        sdir, tree, failures, lint_rules)
 
     # Warn mode: move failures to warnings (still report, but don't block)
     if enforcement == "warn" and failures:
@@ -1235,65 +1155,40 @@ def phase_validate():
         failures = []
 
     # Write status.json (even on failure — captures the state at attempt time)
-    status = build_status(gator_dir, staged_files, frontmatter, body, override)
+    status = build_status(gator_dir, staged_files, frontmatter, body, handoff)
     status_file = write_status_json(gator_dir, status)
     stage_file(status_file, repo_root)
 
     # Write whiteboard (always — clears stale findings on clean pass)
-    wb_file = write_whiteboard(gator_dir, failures, warnings, override,
+    wb_file = write_whiteboard(gator_dir, failures, warnings, handoff,
                                enforcement_level=enforcement)
     stage_file(wb_file, repo_root)
 
     # Output
     if failures:
-        print()
-        print("  gator pre-commit: BLOCKED")
-        print()
-        for rule, msg in failures:
-            print(f"  ✗ {rule}: {msg}")
-        if warnings:
-            print()
-            for rule, msg in warnings:
-                print(f"  ⚠ {rule}: {msg}")
-        print()
-        if lint_failures:
-            print("  Lint findings written to .gator/commit_issues.md")
-            print("  PI: review findings, approve with lint-allow.json, retry commit")
-        else:
-            print("  Findings written to .gator/whiteboard.md")
+        # Record every blocked attempt — including ones with nothing
+        # approvable — so `gator hook approve` / `override status` can
+        # always diagnose it (#35). The block lists ALL current failures
+        # (approval-covered ones included) so a re-approval covers them all.
+        block = None
+        if sdir is not None and tree is not None:
+            try:
+                block = override_state.write_block(
+                    sdir, tree, all_failures, staged_files, lint_rules)
+            except OSError as exc:
+                approval_notes.append(f"Could not record the block: {exc}")
 
-        # Write override request for PI approval flow
-        charter_failures = [
-            r for r, _ in failures
-            if r in ("charter-alongside-code", "cross-cutting-missing", "charter-index-gap")
-        ]
-        if charter_failures:
-            _, has_charter, code_files, _ = classify_staged_files(staged_files)
-            request = _write_override_request(
-                gator_dir, charter_failures[0], code_files
-            )
-            block_id = request["block_id"]
-            print()
-            print("  ┌─────────────────────────────────────────────────────────┐")
-            print("  │ STOP. Do not override this yourself.                   │")
-            print("  │                                                        │")
-            print("  │ Present these findings to the PI. The PI decides:      │")
-            print("  │   1. Update the affected charters and retry the commit │")
-            print("  │   2. Approve override:                                 │")
-            print(f"  │      python .gator/scripts/gator-approve.py           │")
-            print("  │                                                        │")
-            print("  │ You may NOT create override files yourself.            │")
-            print("  │ You may NOT run gator-approve.py yourself.             │")
-            print("  │ Unauthorized self-approval is a governance violation.  │")
-            print("  └─────────────────────────────────────────────────────────┘")
-            print()
-            print(f"  Block ID: {block_id}")
-
-        print()
+        info = ["  Lint findings written to .gator/commit_issues.md"] if lint_failures else []
+        info.append("  Findings written to .gator/whiteboard.md")
+        for line in override_state.render_block_report(
+                "gator pre-commit: BLOCKED", failures, warnings, lint_rules,
+                approval_notes, block, info):
+            print(line)
         sys.exit(1)
 
-    # Commit is passing — consume and clear lint-allow.json (one-shot approvals)
-    clear_lint_allowlist(gator_dir, repo_root)
+    # lint-allow.json is a deprecated, read-only compatibility input (#34):
+    # it no longer authorizes anything, so the hook never rewrites or
+    # stages it.
 
     if warnings:
         print()
@@ -1306,10 +1201,12 @@ def phase_validate():
             print(f"  ⚠ {rule}: {msg}")
         print()
 
-    if override:
+    if handoff:
         print()
-        print(f"  gator pre-commit: OVERRIDE ({override})")
-        print(f"  Override recorded in trailers and whiteboard.md")
+        print(f"  gator pre-commit: OVERRIDE ({', '.join(handoff['overridden_rules'])}) "
+              f"approved by {handoff['approved_by']}")
+        print(f"  Recorded in commit trailers and whiteboard.md "
+              f"(block {handoff['block_id']})")
         print()
 
     sys.exit(0)
@@ -1330,21 +1227,20 @@ def phase_trailers(msg_file_path):
     staged_files = get_staged_files(repo_root)
     frontmatter, body, _ = parse_commit_draft(gator_dir)
 
-    # Read override from status.json (written by validate phase, which
-    # already consumed and deleted the .override file)
-    override = None
-    status_file = gator_dir / "status.json"
-    if status_file.exists():
-        try:
-            status_data = json.loads(status_file.read_text(encoding="utf-8"))
-            charter_changed = status_data.get("charter_changed")
-            if charter_changed == "override-skip":
-                override = "charter-skip"
-        except (json.JSONDecodeError, OSError):
-            pass
+    # Override handoff written by validate for THIS staged tree (#34, #35).
+    # Read-only here: if this hook or git fails after it, an unchanged
+    # retry still finds the approval and handoff. post-commit consumes them.
+    handoff = None
+    try:
+        handoff = override_state.read_handoff(
+            override_state.state_dir(repo_root),
+            tree=override_state.index_tree(repo_root))
+    except override_state.OverrideStateError:
+        handoff = None
 
     # Build trailers
-    trailers = assemble_trailers(frontmatter, body, gator_dir, staged_files, override)
+    trailers = assemble_trailers(frontmatter, body, gator_dir, staged_files,
+                                 handoff=handoff)
 
     # Read current message (the -m message the agent provided, if any)
     msg_path = Path(msg_file_path)
@@ -1448,6 +1344,15 @@ def phase_cleanup():
     # Emit session snippet (runs in ALL modes except "off" — evidence capture)
     if mode != "off":
         _emit_session_snippet(gator_dir, repo_root)
+
+    # The commit exists — only now is any override state consumed (#34, #35).
+    # Runs in EVERY mode (evidence_only lint uses the same envelope) and
+    # before any early exit. Idempotent; also retires abandoned state and
+    # legacy v1 files. Guarded: cleanup must never fail a landed commit.
+    try:
+        override_state.retire(override_state.state_dir(repo_root), gator_dir)
+    except Exception:
+        pass
 
     # Evidence-only mode: skip governance cleanup (no commit_draft or whiteboard to reset)
     if mode == "evidence_only":

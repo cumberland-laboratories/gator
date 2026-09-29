@@ -40,7 +40,7 @@ from pathlib import Path
 
 from gator_core import (
     get_version, find_command_post, normalize_path, parse_registry,
-    git, ensure_utf8_stdout,
+    git, ensure_utf8_stdout, override_event_fields,
 )
 from gator_layout import get_gator_paths
 
@@ -352,7 +352,7 @@ def get_trailer_data(repo_path, lookback_days=_LOOKBACK_DAYS, limit=_RECENT_LIMI
             "significance": trailer_dict.get("Gator-Significance", ""),
             "change_type": trailer_dict.get("Gator-Change-Type", ""),
             "charter_changed": trailer_dict.get("Gator-Charter-Changed", "") not in ("no", ""),
-            "override": bool(trailer_dict.get("Gator-Override", "")),
+            "override": override_event_fields(trailer_dict) is not None,
             "agent": trailer_dict.get("Gator-Agent", ""),
             "architect": trailer_dict.get("Gator-Architect", trailer_dict.get("Gator-PI", "")),
         }
@@ -372,19 +372,14 @@ def get_trailer_data(repo_path, lookback_days=_LOOKBACK_DAYS, limit=_RECENT_LIMI
         if len(recent_trailers) < limit:
             recent_trailers.append(entry)
 
-        # Override events
-        override_val = trailer_dict.get("Gator-Override", "")
-        if override_val:
-            override_events.append({
-                "hash": commit_hash[:7],
-                "timestamp": commit_ts,
-                "override_type": override_val,
-                # Approver is Gator-Override-Approved-By, not Gator-PI.
-                # The hook writes this from .override-meta.json — it records
-                # who ran gator-approve.py, which may differ from the session Architect.
-                "approver": trailer_dict.get("Gator-Override-Approved-By", ""),
-                "block_id": trailer_dict.get("Gator-Override-Block", ""),
-            })
+        # Override events (gator_core.override_event_fields covers every
+        # trailer shape the hook has emitted). The approver is
+        # Gator-Override-Approved-By — who actually approved, which may
+        # differ from the session Architect.
+        override = override_event_fields(trailer_dict)
+        if override:
+            override_events.append(dict(
+                override, hash=commit_hash[:7], timestamp=commit_ts))
 
     return last_governed, recent_trailers, override_events
 

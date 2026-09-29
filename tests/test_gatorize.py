@@ -136,6 +136,58 @@ class TestEnsureRepoGitignore:
         assert ".vscode/" in gi_text
         assert "# Old rules" in gi_text  # preserved
 
+    def test_adds_transient_override_rules(self, tmp_path):
+        """#34: hook-transient and retired v1 override files are ignored."""
+        gatorize.ensure_repo_gitignore(tmp_path)
+        lines = {l.strip() for l in (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()}
+        for rule in (".gator/commit_issues.md", ".gator/override-request.json",
+                     ".gator/override-approved.json", ".gator/.override-meta.json",
+                     ".gator/.override"):
+            assert rule in lines, f"missing {rule}"
+
+    def test_exact_line_matching_not_substring(self, tmp_path):
+        """#34 regression: `.gator/.override` is a substring of
+        `.gator/.override-meta.json`; it must still be added as its own line."""
+        gi = tmp_path / ".gitignore"
+        gi.write_text(".gator/.override-meta.json\n", encoding="utf-8")
+        gatorize.ensure_repo_gitignore(tmp_path)
+        lines = [l.strip() for l in gi.read_text(encoding="utf-8").splitlines()]
+        assert ".gator/.override" in lines
+        assert lines.count(".gator/.override-meta.json") == 1
+        gatorize.ensure_repo_gitignore(tmp_path)
+        lines = [l.strip() for l in gi.read_text(encoding="utf-8").splitlines()]
+        assert lines.count(".gator/.override") == 1, "idempotent on exact lines"
+
+    def test_untracks_tracked_transient_files(self, tmp_path):
+        """A repo that committed commit_issues.md / v1 override files gets
+        them removed from the index (working files kept) so the ignore
+        rule takes effect."""
+        import subprocess
+        def git(*a):
+            return subprocess.run(["git", *a], cwd=str(tmp_path), capture_output=True, text=True)
+        git("init", "-q")
+        git("config", "user.email", "t@example.com")
+        git("config", "user.name", "T")
+        gator = tmp_path / ".gator"
+        gator.mkdir()
+        (gator / "commit_issues.md").write_text("# Commit Issues\n", encoding="utf-8")
+        (gator / "override-request.json").write_text("{}", encoding="utf-8")
+        (gator / "keep.md").write_text("x", encoding="utf-8")
+        git("add", "-A")
+        git("-c", "core.hooksPath=/dev/null", "commit", "-q", "--no-verify", "-m", "init")
+
+        gatorize.ensure_repo_gitignore(tmp_path)
+
+        tracked = git("ls-files").stdout.splitlines()
+        assert ".gator/commit_issues.md" not in tracked
+        assert ".gator/override-request.json" not in tracked
+        assert ".gator/keep.md" in tracked
+        assert (gator / "commit_issues.md").exists(), "working file must be kept"
+        assert gatorize.untrack_transient_files(tmp_path) == [], "idempotent"
+
+    def test_untrack_is_noop_outside_git(self, tmp_path):
+        assert gatorize.untrack_transient_files(tmp_path) == []
+
     def test_adds_local_agent_companion_rules(self, tmp_path):
         """The three *.local.md companion rules are added on a bare repo."""
         gatorize.ensure_repo_gitignore(tmp_path)

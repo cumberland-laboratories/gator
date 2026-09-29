@@ -25,9 +25,12 @@ The body of `commit_draft.md` remains the free-form session change log.
    - Assembles Gator-* trailers and appends them to the commit
    - Writes `.gator/status.json` snapshot
    - Writes any warnings to `.gator/whiteboard.md`
-5. If the hook blocks the commit, read `.gator/whiteboard.md` and present the findings to the Architect
+5. If the hook blocks the commit, present the findings to the Architect (they are in the hook output and `.gator/whiteboard.md`). Each finding is tagged:
+   - `[fix-required]` — fix it and retry; it can never be approved.
+   - `[approvable]` / `[lint]` — fix it, or the Architect may approve this exact staged change.
+   `gator hook override status` shows the recorded block at any time (safe for anyone).
 6. Clear `commit_draft.md` after successful commit (reset to header only)
 
 **Do not run git commit automatically.** The constitution requires Architect confirmation before committing. Present the proposed message and wait for the Architect to approve, adjust, or decline.
 
-**Override** (emergency only): write `charter-skip` to `.gator/.override` before committing: `echo charter-skip > .gator/.override && git commit -m "msg"`. The hook reads and deletes the file — one file, one commit, no sticky state. The override is audited in trailers and whiteboard.md — it cannot be hidden.
+**Overrides are Architect-only.** Never approve your own block, and never create override files. The Architect runs `gator hook approve` (alias of `gator hook override approve`), which authorizes the approvable findings for the exact staged change that was blocked. The approval survives a retry that is blocked for another reason, becomes invalid if the staged change changes, is used up only after the commit lands, and is recorded in the commit trailers. The retired `.gator/.override` file no longer authorizes anything — the hook blocks on it.

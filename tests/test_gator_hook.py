@@ -138,22 +138,33 @@ class TestPlanDispatch:
 
 
 class TestHookMap:
-    def test_all_seven_entries_mapped(self):
+    def test_all_eight_entries_mapped(self):
         assert set(hook.HOOK_MAP) == {"pre-commit", "commit-msg",
                                       "post-commit", "session-open",
                                       "session-start", "enforcer-review",
-                                      "approve"}
+                                      "override", "approve"}
 
     def test_approve_is_non_blocking_passthrough(self):
         """Phase 4d: the Architect override path stays reachable post-
-        removal via `gator hook approve` — non-blocking, argv passthrough
-        (--reason/--name). Reachability is verified here rather than by
-        executing the script: the constitution forbids the agent running
-        gator-approve.py."""
+        removal via `gator hook approve` — now the alias of `override
+        approve` (#34, #35): non-blocking, argv passthrough (--reason/--name).
+        Reachability is verified here rather than by executing the script
+        against a real repo: the constitution forbids the agent approving."""
         assert "approve" not in hook.BLOCKING_HOOKS
-        assert hook.HOOK_MAP["approve"] == ("gator-approve.py", [], True)
+        assert hook.HOOK_MAP["approve"] == ("gator-approve.py", ["approve"], True)
         wheel = hook._wheel_runtime_dir()
         assert (wheel / "gator-approve.py").is_file()
+        assert (wheel / "precommit_override.py").is_file()
+
+    def test_override_forwards_subcommands(self):
+        assert "override" not in hook.BLOCKING_HOOKS
+        assert hook.HOOK_MAP["override"] == ("gator-approve.py", [], True)
+
+    def test_override_verbs_resolve_git_toplevel(self):
+        """Runtime selection reads <root>/.gator, so the verbs must resolve
+        the top level to work from a governed subdirectory."""
+        assert {"override", "approve"} <= hook._HOOKS_NEEDING_GIT_TOPLEVEL
+        assert not {"pre-commit", "commit-msg", "post-commit"} & hook._HOOKS_NEEDING_GIT_TOPLEVEL
 
     def test_enforcer_review_reachable_in_wheel_runtime(self):
         wheel = hook._wheel_runtime_dir()
@@ -367,20 +378,29 @@ class TestResolveRepoRootAdditionalGuards:
         got = hook._resolve_repo_root(tmp_path, "session-open")
         assert got == tmp_path
 
-    def test_enforcer_review_and_approve_return_cwd_unchanged(
-            self, tmp_path):
-        """The dispatcher also handles `enforcer-review` and
-        `approve` (non-git hooks); they run with cwd owned by the
-        caller and MUST NOT get the Git-top-level lookup. Only
-        session-open and session-start opt in."""
+    def test_enforcer_review_returns_cwd_unchanged(self, tmp_path):
+        """`enforcer-review` is a user-driven verb whose cwd is owned by
+        the caller; it MUST NOT get the Git-top-level lookup."""
         _git_init(tmp_path)
         (tmp_path / ".gator").mkdir()
         subdir = tmp_path / "src"
         subdir.mkdir()
-        for hook_name in ("enforcer-review", "approve"):
+        got = hook._resolve_repo_root(subdir, "enforcer-review")
+        assert got == subdir, "enforcer-review should NOT walk to git top-level"
+
+    def test_override_verbs_walk_to_git_toplevel(self, tmp_path):
+        """#34/#35 (reverses the #32-era `approve` pin, deliberately):
+        runtime selection reads <root>/.gator, so from a governed
+        subdirectory `approve`/`override` would otherwise dispatch as
+        ungoverned and never run."""
+        _git_init(tmp_path)
+        (tmp_path / ".gator").mkdir()
+        subdir = tmp_path / "src"
+        subdir.mkdir()
+        for hook_name in ("override", "approve"):
             got = hook._resolve_repo_root(subdir, hook_name)
-            assert got == subdir, (
-                f"{hook_name} should NOT walk to git top-level")
+            assert Path(got).resolve() == tmp_path.resolve(), (
+                f"{hook_name} should walk to the git top-level")
 
 
 class TestMainSeamWiring:

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.17.0 — continue loops after max rounds + incremental Dashboard loop rendering",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "loop",
+    "dashboard"
+  ],
+  "commit": "a58a6dcb66895aa85e16bf9b349634488dde678a",
+  "short_commit": "a58a6dc",
+  "snippet_id": "snippet-a58a6dcb66895",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "bc7e393fa0facceb8007f5e62c4b624474b29027",
+  "started_at": "2026-09-27T19:46:33Z",
+  "ended_at": "2026-09-27T19:46:33Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-27-gator-bc7e393fa0fac.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.16.0 -> 2.17.0 in `pyproject.toml` and `VERSION` (kept byte-consistent).",
+    "`CHANGELOG.md` `[2.17.0]`: loop extension after the round limit (#39) — CLI `extend`, Dashboard Continue control and `/extend` endpoint, start-equivalent guard, always-hosting CLI contract, single Dashboard watcher attach path, session-authoritative watcher replay fix, protocol Rule 10 + complete State Machine table; incremental Dashboard loop rendering (#38) with stale-response protection; upgrade note on participant re-engagement.",
+    "`scripts-core-library.md`: version-sync tripwire note updated to current 2.17.0.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

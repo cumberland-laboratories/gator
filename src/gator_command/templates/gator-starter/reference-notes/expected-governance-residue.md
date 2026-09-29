@@ -16,6 +16,12 @@ Gator's commit hooks intentionally rotate these files as part of the governance 
 
 These edits are not unfinished product work. They are post-commit housekeeping performed by the Gator hooks.
 
+## Other hook files you may see
+
+- `.gator/commit_issues.md` holds lint findings for the current attempt. It is gitignored and never staged.
+- Override state (the block, the approval, and the handoff) lives in `.git/gator-override/`. It is outside the working tree, so it never shows up in `git status`. Inspect it with `gator hook override status`.
+- The retired v1 override files (`.gator/.override`, `override-request.json`, `override-approved.json`, `.override-meta.json`) are gitignored, and are removed after the next successful commit. Never create or stage them. `.override` blocks the commit.
+
 ## How to interpret it
 
 Treat these files differently from ordinary source changes.

@@ -69,7 +69,7 @@ If validation blocks:
 - findings are written to `.gator/whiteboard.md`
 - dangerous-pattern lint findings are written to `.gator/commit_issues.md`
 - status is written to `.gator/status.json`
-- an Architect approval path may be opened via override request files
+- the attempt is recorded as a block in `.git/gator-override/block.json`, with each finding tagged `fix-required`, `approvable`, or `lint`, so `gator hook override status` / `gator hook approve` can always diagnose it
 
 ## The Three Hook Phases
 
@@ -125,7 +125,7 @@ What it uses:
 - `.gator/status.json`
 - `commit_draft.md` (source of truth for commit message content)
 - current staged reality
-- any approved override metadata
+- the override handoff for the current staged change, if an Architect approval was used (read, never consumed here)
 
 Examples of trailer payload:
 
@@ -153,6 +153,7 @@ What it does:
 
 - appends the latest commit to `.gator/sessions/_active/*.md`
 - resets `.gator/commit_draft.md` to the blank stub
+- retires all override state (block, approval, handoff, and any retired v1 files) — the only place an approval is used up
 
 Important boundary:
 
@@ -200,22 +201,25 @@ These still matter. They are written into the Architect-visible surfaces, but th
 
 ## Architect Override Flow
 
-Gator supports a two-phase Architect-approved override for charter-gate failures.
+Gator supports an Architect-approved override for charter-gate and HIGH/CRITICAL lint failures. It is bound to one exact staged change (#34, #35).
 
-The intended flow is:
+The flow is:
 
-1. Hook blocks and writes `.gator/override-request.json`
-2. Architect reviews the findings
-3. Architect runs approval flow via `gator-approve.py`
-4. Agent retries the commit
-5. Hook validates the approval and consumes it one-shot
+1. The hook evaluates every rule, then blocks. It records the attempt, and tags each finding `fix-required`, `approvable`, or `lint`.
+2. The Architect reviews the findings (`gator hook override status`).
+3. The Architect runs `gator hook approve`. It authorizes the approvable and lint findings for that exact staged change, and never the fix-required ones.
+4. The agent fixes any fix-required findings and retries the commit.
+5. The hook applies the approval only if the staged change is unchanged. If the retry is blocked for a different reason, the approval is kept.
+6. `commit-msg` records the override in trailers, and `post-commit` uses the approval up.
 
-Important product point:
+Important product points:
 
-- the agent is not supposed to self-approve
-- override metadata is recorded into trailers and whiteboard output
+- the agent is not supposed to self-approve, and no override file in the working tree authorizes anything (the retired `.gator/.override` now blocks)
+- any staged add, delete, rename, or edit invalidates the approval
+- the approval expires after 24 hours; `gator hook override cancel` drops it
+- `Gator-Override-Approved-By`, `-Block`, `-Reason`, and `-Rules` trailers make every override durable in history
 
-This keeps the exception path visible instead of becoming an invisible bypass.
+This keeps the exception path visible instead of becoming an invisible bypass. Full procedure: `procedures/architect-override.md`.
 
 ## Files Written by the Pipeline
 
@@ -223,11 +227,14 @@ Working governance state:
 
 - `.gator/status.json`
 - `.gator/whiteboard.md`
-- `.gator/commit_issues.md`
-- `.gator/override-request.json`
-- `.gator/override-approved.json`
-- `.gator/.override-meta.json`
+- `.gator/commit_issues.md` (gitignored; never staged)
 - `.gator/commit_draft.md`
+
+Override state (per worktree, outside the working tree — never staged or Dashboard-served):
+
+- `.git/gator-override/block.json`, `approval.json`, `handoff.json`
+
+Retired v1 files (gitignored, removed after the next commit): `.gator/override-request.json`, `.gator/override-approved.json`, `.gator/.override-meta.json`, `.gator/.override`
 
 Rolling local session state:
 
@@ -242,8 +249,9 @@ Portable commit history state:
 Primary live implementation:
 
 - `.gator/scripts/gator-pre-commit.py`
+- `.gator/scripts/precommit_override.py` (override state machine)
 - `.gator/scripts/enforcer-review.py`
-- `.gator/scripts/gator-approve.py`
+- `.gator/scripts/gator-approve.py` (`gator hook override status|approve|cancel`)
 
 Installed hook wrappers:
 
