@@ -2000,6 +2000,40 @@ mark.search-hit {
 }
 .loop-ctrl-end { border-color: #dc3545; color: #dc3545; }
 
+/* #36 — participant liveness panel. Meaning is carried by the text label
+   plus a distinct glyph (●◐◇■○) and weight/style — never hue alone. */
+.loop-liveness-rows { display: flex; flex-direction: column; gap: 8px; }
+.loop-liveness-row {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.loop-liveness-role { font-weight: 600; margin-right: 6px; }
+.loop-liveness-state[data-state="stale"] { font-weight: 700; text-decoration: underline; }
+.loop-liveness-state[data-state="closed"],
+.loop-liveness-state[data-state="not_registered"] { font-style: italic; }
+.loop-liveness-note { color: var(--color-text-muted, #666); }
+.loop-liveness-action { margin-top: 6px; }
+.loop-liveness-action:empty { display: none; }
+.loop-liveness-form .loop-ctrl-actions { display: flex; gap: 6px; margin-top: 6px; }
+.loop-liveness-degraded,
+.loop-liveness-notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.loop-liveness-notice-error { font-weight: 600; }
+.loop-liveness-footnote {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted, #666);
+}
+
 .loop-ctrl-input-area {
   display: flex;
   gap: 6px;

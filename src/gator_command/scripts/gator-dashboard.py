@@ -32,6 +32,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time as _time_mod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape as _html_escape
@@ -214,6 +215,19 @@ def _ensure_loop_watcher(repo_path, loop_id, loop_dir, retry=False):
     return WATCHER_ATTACHED, None
 
 
+def _sweep_liveness(repo_path):
+    """Startup retention sweep of the private liveness sidecar (#36).
+    Best-effort; never affects adoption or loop state."""
+    try:
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        import liveness
+        liveness.sweep(repo_path)
+    except Exception as exc:
+        _debug_print(f"[liveness] sweep failed for {repo_path}: {exc}")
+
+
 def _adopt_orphaned_loops():
     """Server startup: scan repos for active loops and adopt orphans."""
     for r in _REGISTRY_REPOS:
@@ -224,6 +238,7 @@ def _adopt_orphaned_loops():
             repo_path = str(Path(raw_path).resolve())
         except OSError:
             continue
+        _sweep_liveness(repo_path)
         loops_dir = Path(repo_path) / ".gator" / "loops"
         if not loops_dir.is_dir():
             continue
@@ -2220,6 +2235,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._handle_loop_events(repo_key, loop_id)
             return
 
+        # /loops/<id>/liveness — Architect-only liveness view (#36). A
+        # loop_id containing "/" is not this route (e.g. an artifact path).
+        if tail.startswith("/loops/") and tail.endswith("/liveness"):
+            loop_id = tail[len("/loops/"):-len("/liveness")]
+            if loop_id and "/" not in loop_id:
+                self._handle_loop_liveness(repo_key, loop_id)
+                return
+
         # /loops/<id>/artifact/<filename>
         artifact_marker = "/artifact/"
         inner = tail[len("/loops/"):]  # <id>/artifact/<filename>
@@ -2508,6 +2531,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/unblock": "_handle_loop_unblock",
             "/extend": "_handle_loop_extend",
             "/end": "_handle_loop_end",
+            "/renotify": "_handle_loop_renotify",
         }
         if tail.startswith("/loops/"):
             suffix_idx = tail.rfind("/")
@@ -2692,23 +2716,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json({"prompt": prompt_text},
                         cache_control="no-store")
 
-    def _resolve_architect_token(self, repo_key, loop_id):
+    def _resolve_architect_token(self, repo_key, loop_id, cache_control=None):
         """Resolve loop_dir and read the architect token.
 
         Returns (loop_dir, token) on success.
-        Sends an error response and returns None on failure.
+        Sends an error response and returns None on failure. A malformed
+        token store is a 404 ("tokens unreadable"), never an unhandled 500.
+        ``cache_control`` is passed through to error responses.
         """
+        def _err(body, status):
+            self._send_json(body, status, cache_control=cache_control)
+            return None
+
         try:
             loop_dir = _resolve_loop_dir(repo_key, loop_id)
         except KeyError:
-            self._send_json({"error": "repo not found"}, 404)
-            return None
+            return _err({"error": "repo not found"}, 404)
         except ValueError as exc:
-            self._send_json({"error": str(exc)}, 400)
-            return None
+            return _err({"error": str(exc)}, 400)
         except FileNotFoundError:
-            self._send_json({"error": "loop not found"}, 404)
-            return None
+            return _err({"error": "loop not found"}, 404)
 
         _loop_scripts = str(Path(__file__).resolve().parent / "loop")
         if _loop_scripts not in sys.path:
@@ -2718,15 +2745,149 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             tokens = load_tokens(loop_dir)
         except FileNotFoundError:
-            self._send_json({"error": "tokens not found"}, 404)
-            return None
+            return _err({"error": "tokens not found"}, 404)
+        except (OSError, ValueError):
+            return _err({"error": "tokens unreadable"}, 404)
 
-        arch = tokens.get("architect")
-        if not arch or "token" not in arch:
-            self._send_json({"error": "architect token not found"}, 404)
-            return None
+        arch = tokens.get("architect") if isinstance(tokens, dict) else None
+        if not isinstance(arch, dict) or not isinstance(arch.get("token"), str):
+            return _err({"error": "architect token not found"}, 404)
 
         return loop_dir, arch["token"]
+
+    # ── Participant liveness (#36): Architect observer + Re-notify ──
+    #
+    # Private operational data from the Git-path sidecar. Responses use the
+    # explicit allowlist serializer liveness.observer_view() and
+    # Cache-Control: no-store. Never add liveness data to /status, /events,
+    # or /artifact (participant-visible routes).
+
+    _RENOTIFY_MIN_INTERVAL = 10.0  # seconds, per (repo_key, loop_id, role)
+    _renotify_last = {}
+    _renotify_lock = threading.Lock()
+
+    def _liveness_modules(self):
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        import liveness
+        from session import load_session
+        return liveness, load_session
+
+    def _resolve_liveness_loop(self, repo_key, loop_id):
+        """Architect authority for BOTH liveness routes (GET view and POST
+        Re-notify): the standard ``_resolve_architect_token()`` resolver,
+        plus a nonce check that the stored token really resolves to the
+        architect role for this loop (Re-notify never calls a handle_*
+        that would validate it). The token is used only here — never
+        passed on, returned, or echoed. Errors carry no-store."""
+        result = self._resolve_architect_token(repo_key, loop_id,
+                                               cache_control="no-store")
+        if result is None:
+            return None
+        loop_dir, token = result
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from session import resolve_token
+        try:
+            _, role, _ = resolve_token(token, loop_dir)
+        except (ValueError, OSError):
+            role = None
+        if role != "architect":
+            self._send_json({"error": "architect authority unavailable"},
+                            403, cache_control="no-store")
+            return None
+        return loop_dir
+
+    def _handle_loop_liveness(self, repo_key, loop_id):
+        """GET liveness view. Degrades (available=false), never errors, when
+        the sidecar is unavailable or mid-write."""
+        loop_dir = self._resolve_liveness_loop(repo_key, loop_id)
+        if loop_dir is None:
+            return
+        liveness, load_session = self._liveness_modules()
+        base = {"schema": liveness.OBSERVER_SCHEMA, "available": False,
+                "roles": None, "audit": None, "degraded": None}
+        try:
+            store = liveness.open_store(loop_dir)
+        except liveness.LivenessUnavailableError:
+            self._send_json(dict(base, degraded="unavailable"),
+                            cache_control="no-store")
+            return
+        state = store.read()
+        if state is None:
+            self._send_json(dict(base, degraded="retry"),
+                            cache_control="no-store")
+            return
+        try:
+            session = load_session(loop_dir)
+        except (OSError, ValueError, KeyError):
+            session = None
+        view = liveness.observer_view(state, session)
+        degraded = store.last_error  # e.g. "corrupt" (read-only; untouched)
+        if degraded is None and session is None:
+            degraded = "session_unreadable"
+        view.update(available=True, degraded=degraded)
+        self._send_json(view, cache_control="no-store")
+
+    def _handle_loop_renotify(self, repo_key, loop_id, req):
+        """POST Architect Re-notify: a communication/audit action only —
+        never a loop-state change (no session, event, deadline writes)."""
+        loop_dir = self._resolve_liveness_loop(repo_key, loop_id)
+        if loop_dir is None:
+            return
+        liveness, _ = self._liveness_modules()
+        role = req.get("role")
+        if role not in liveness.MODEL_ROLES:
+            self._send_json({"error": "role must be draftor or reviewer"},
+                            400, cache_control="no-store")
+            return
+        reason = req.get("reason")
+        if reason is not None and not isinstance(reason, str):
+            self._send_json({"error": "reason must be a string"}, 400,
+                            cache_control="no-store")
+            return
+        try:
+            store = liveness.open_store(loop_dir)
+        except liveness.LivenessUnavailableError:
+            self._send_json({"error": "liveness delivery unavailable",
+                             "code": "unavailable"}, 503,
+                            cache_control="no-store")
+            return
+
+        cls = self.__class__
+        key = (repo_key, loop_id, role)
+        now = _time_mod.monotonic()
+        with cls._renotify_lock:
+            last = cls._renotify_last.get(key)
+            if last is not None and now - last < cls._RENOTIFY_MIN_INTERVAL:
+                self._send_json({"error": "re-notify rate limited",
+                                 "code": "rate_limited"}, 429,
+                                cache_control="no-store")
+                return
+            cls._renotify_last[key] = now
+
+        try:
+            ok, code, kind = liveness.renotify(loop_dir, store, role, reason)
+        except (OSError, ValueError, KeyError) as exc:
+            with cls._renotify_lock:
+                if cls._renotify_last.get(key) == now:
+                    del cls._renotify_last[key]
+            self._send_json({"error": "re-notify failed",
+                             "code": "unavailable",
+                             "detail": liveness.sanitize_text(exc, 200)},
+                            503, cache_control="no-store")
+            return
+        if not ok:
+            with cls._renotify_lock:  # a refusal does not consume the slot
+                if cls._renotify_last.get(key) == now:
+                    del cls._renotify_last[key]
+            self._send_json({"error": "re-notify not eligible",
+                             "code": code}, 409, cache_control="no-store")
+            return
+        self._send_json({"ok": True, "role": role, "kind": kind},
+                        cache_control="no-store")
 
     def _handle_loop_pause(self, repo_key, loop_id, req):
         """Architect: pause a running loop."""

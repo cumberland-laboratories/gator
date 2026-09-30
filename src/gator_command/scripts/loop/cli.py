@@ -708,6 +708,93 @@ def _cmd_list(args):
 # Argparse
 # ---------------------------------------------------------------------------
 
+def _render_participant(payload, as_json):
+    """One JSON line (adapter contract) or short human text. Never prints
+    the token or registration_id — neither is ever in ``payload``."""
+    if as_json:
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        sys.stdout.flush()
+        return
+    wake = payload.get("wake_reason")
+    if wake == "error":
+        print(f"  Error: {payload.get('error')}", file=sys.stderr)
+        return
+    print(f"  Loop: {payload.get('loop_id')}")
+    print(f"  Role: {payload.get('role')}")
+    messages = {
+        "turn_ready": "Turn ready -- it is your turn now. Run: gator loop status --token <your-token>",
+        "architect_block": "Loop paused or blocked on the Architect. Relaunch the watcher to wait for the unblock.",
+        "terminal": "Loop ended. Stop; do not relaunch the watcher.",
+        "still_waiting": "Still waiting -- another role owns the turn. Relaunch the same watch command.",
+        "superseded": "Superseded -- a newer watcher owns this role. Stop.",
+        "interrupted": "Watcher interrupted.",
+    }
+    print(f"  {messages.get(wake, wake)}")
+    if payload.get("acked"):
+        print("  (Acknowledged means this watcher received the notification -- "
+              "not that any work was done.)")
+
+
+def _cmd_participant_watch(args):
+    """D2a receiver: register, heartbeat, deliver + ack one notification, exit.
+
+    Exit: 0 turn_ready, 2 architect_block/terminal, 3 still_waiting,
+    4 superseded, 1 error, 130 interrupted (SIGINT/SIGTERM).
+    """
+    import signal
+    import liveness
+
+    def _term(signum, frame):
+        raise KeyboardInterrupt()
+    try:
+        signal.signal(signal.SIGTERM, _term)
+    except (ValueError, OSError, AttributeError):
+        pass  # not main thread / unsupported platform
+
+    code, payload = liveness.run_watch(
+        args.token, args.max_seconds, poll_seconds=args.poll_seconds,
+        adapter_label=args.adapter_label)
+    _render_participant(payload, args.json)
+    sys.exit(code)
+
+
+def _cmd_participant_status(args):
+    """Own-role liveness summary. Read-only; never shows the other role."""
+    import liveness
+    try:
+        out = liveness.own_status(args.token)
+    except (ValueError, PermissionError) as e:
+        payload = {"schema": liveness.PARTICIPANT_SCHEMA,
+                   "wake_reason": "error", "error": liveness.redact(e)}
+        _render_participant(payload, args.json)
+        sys.exit(1)
+    if args.json:
+        print(json.dumps(out, sort_keys=True, separators=(",", ":")))
+    else:
+        print(f"  Loop: {out['loop_id']}")
+        print(f"  Role: {out['role']}")
+        print(f"  Watcher: {out['state']}")
+        if out.get("available"):
+            print(f"  Pending notifications: {out['pending']}")
+            last = out.get("last_notification")
+            if last:
+                ack = last.get("acked_at") or "not acknowledged"
+                print(f"  Last notification: {last['kind']} "
+                      f"(created {last['created_at']}; acknowledged: {ack})")
+    sys.exit(0)
+
+
+def _cmd_participant(args):
+    handlers = {"watch": _cmd_participant_watch,
+                "status": _cmd_participant_status}
+    handler = handlers.get(getattr(args, "participant_command", None))
+    if handler is None:
+        print("  Usage: gator loop participant {watch,status} --token <token>",
+              file=sys.stderr)
+        sys.exit(1)
+    handler(args)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="gator loop",
@@ -801,6 +888,30 @@ def main(argv=None):
     )
     p_wait.add_argument("--json", action="store_true", help="JSON output with wake_reason")
 
+    # participant (liveness bridge, #36)
+    p_part = sub.add_parser(
+        "participant",
+        help="Participant liveness: background watcher and own status")
+    part_sub = p_part.add_subparsers(dest="participant_command")
+    p_pwatch = part_sub.add_parser(
+        "watch",
+        help="Register a receiver and exit on the first notification "
+             "(run under a background-process supervisor)")
+    p_pwatch.add_argument("--token", required=True, help="Draftor or Reviewer token")
+    p_pwatch.add_argument(
+        "--max-seconds", type=_positive_seconds, required=True,
+        help="Exit 3 (still waiting) after this many seconds; relaunch to keep waiting")
+    p_pwatch.add_argument(
+        "--poll-seconds", type=_positive_seconds, default=5.0,
+        help="Poll/heartbeat interval in seconds (default: 5)")
+    p_pwatch.add_argument("--adapter-label", default=None,
+                          help="Optional short label shown to the Architect (max 40 chars)")
+    p_pwatch.add_argument("--json", action="store_true",
+                          help="Print exactly one JSON line (adapter contract)")
+    p_pstatus = part_sub.add_parser("status", help="Show your own role's watcher status")
+    p_pstatus.add_argument("--token", required=True, help="Draftor or Reviewer token")
+    p_pstatus.add_argument("--json", action="store_true", help="JSON output")
+
     # tail
     p_tail = sub.add_parser("tail", help="Follow loop events in real time")
     p_tail.add_argument("--loop", required=True, help="Loop ID")
@@ -827,6 +938,7 @@ def main(argv=None):
         "unblock": _cmd_unblock,
         "extend": _cmd_extend,
         "wait": _cmd_wait,
+        "participant": _cmd_participant,
         "tail": _cmd_tail,
         "list": _cmd_list,
     }

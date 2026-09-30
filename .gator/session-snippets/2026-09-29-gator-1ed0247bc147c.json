@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.18.0 — retry-safe override approval (#34, #35) + incremental loop rendering (#38)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "hooks",
+    "governance",
+    "dashboard"
+  ],
+  "commit": "1ed0247bc147c4e795bd6832d4bd5c2ddcef1d05",
+  "short_commit": "1ed0247",
+  "snippet_id": "snippet-1ed0247bc147c",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "34575794e95aec0c2d0fcaefe1a420044dce97bd",
+  "started_at": "2026-09-29T11:52:18Z",
+  "ended_at": "2026-09-29T11:52:18Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-29-gator-34575794e95ae.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.17.0 -> 2.18.0 in `pyproject.toml` and `VERSION` (kept byte-consistent).",
+    "`CHANGELOG.md` `[2.18.0]`: #35 second-block approval fix, #34 tree-bound override lifecycle (override status/approve/cancel, `.git/gator-override/` state, sanitized audit trailers, Enterprise runtime + evidence_only envelope, lint envelope and read-only lint-allow.json, `.override` bypass removed, gitignore exact-line convergence, Dashboard denial of the real override filenames, trailer readers now detect overrides), #38 incremental Dashboard loop rendering; upgrade notes.",
+    "`scripts-core-library.md`: version-sync tripwire note updated to current 2.18.0.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

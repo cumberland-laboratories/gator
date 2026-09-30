@@ -30,6 +30,7 @@ gator loop status --token $ARGUMENTS
    - `wait` exit 0: it is your turn — re-read the status output and proceed with your work
    - `wait` exit 3: still not your turn — reissue the same `wait` command immediately; a returned `wait` does not end your participation
    - `wait` exit 2: the loop is paused or ended — stop and report the status
+   - **Claude Code option (preferred while this session stays open):** instead of repeated `wait` calls, run `gator loop participant watch --token $ARGUMENTS --max-seconds 600 --json` with the Bash tool's `run_in_background: true`, then end your turn. You will be re-invoked when it exits: read the last JSON line of its output file. `turn_ready` (exit 0) → act; `architect_block` or `still_waiting` → relaunch the watcher; `terminal` or `superseded` → stop; `error` → fall back to bounded `wait`. The watcher never submits for you, and it cannot wake a session that has already been closed.
 
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.
 

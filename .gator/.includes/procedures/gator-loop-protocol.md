@@ -56,6 +56,22 @@ Read the output. It tells you:
 
 Keep reissuing the bounded `wait` until it returns `0` or `2`. Do not tight-poll `status` instead of `wait`. A human can cancel a `wait` command at any time with the normal interrupt.
 
+**Optional: a background watcher (only if your runtime supports it).** If your runtime can run a command in the background *and automatically starts a new turn for you when that command exits*, you may wait with a watcher instead of repeated `wait` calls:
+
+```
+gator loop participant watch --token <your-token> --max-seconds 600 --json
+```
+
+Launch it in the background. It registers you with the Architect's Dashboard (which shows you as connected, then released), heartbeats, and exits with exactly one JSON line as soon as something happens. When you are re-invoked, read the **last JSON line** of the watcher's output and act on `wake_reason`:
+- `0` / `turn_ready` — it is your turn. Run `gator loop status` and act.
+- `2` / `architect_block` — paused or blocked on the Architect. Relaunch the watcher to wait for the unblock.
+- `2` / `terminal` — the loop ended. Stop; do not relaunch.
+- `3` / `still_waiting` — nothing yet. Relaunch the same watcher command.
+- `4` / `superseded` — a newer watcher owns your role. Stop.
+- `1` / `error` — read the error; fall back to bounded `wait`.
+
+Supported runtime today: **Claude Code**, with the Bash tool's background mode (`run_in_background: true`) while the session stays open (verified on Claude Code 2.1.283). Any runtime that cannot re-invoke you when a background command exits (Codex CLI today) must keep using bounded `wait`. A watcher cannot resume a session that has already ended, it never submits anything for you, and "acknowledged" means only that the watcher received the notification. The Architect may **Re-notify** you; that only sends a new notification and never changes the loop.
+
 **Finding files:** The status output always prints a `Dir:` line with the full loop directory path. The relevant files are at fixed names within that directory: `sketch.md`, `plan.current.md`, `findings.current.md`. When it's your turn, the status output also shows the specific artifact paths and next-step command.
 
 ### Step 2: Read the relevant material
@@ -299,6 +315,7 @@ gator loop status --token <token>
 1. `gator loop status --token <token>` — am I up?
 2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token> --max-seconds 45`. Exit 2: stop.
 3. `wait` exit 0: act. Exit 3: reissue the same `wait`. Exit 2: stop.
+   (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
 4. Read the relevant files (sketch, plan, or findings) from the loop directory
 5. Write your artifact to a file
 6. Submit: `gator loop submit-draft` or `gator loop submit-review`

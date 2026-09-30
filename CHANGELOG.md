@@ -2,6 +2,28 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Loop participant liveness bridge ([#36](https://github.com/cumberland-laboratories/gator/issues/36)).** This completes #36 after v2.16.0's bounded `wait`.
+  - **What a participant can run:** `gator loop participant watch --token <t> --max-seconds <N> [--json]`, a bounded background receiver.
+    - It registers, heartbeats, and acknowledges one notification (`turn-ready`, `architect-block`, or `terminal`).
+    - It prints one JSON line and exits with the codes 0 act, 2 paused or ended, 3 still waiting, and 4 superseded.
+    - Under a runtime that re-invokes the agent when a background command exits, the participant wakes when its turn arrives instead of being prompted by hand. The first such runtime is Claude Code's background Bash, with the session open, verified on 2.1.283.
+  - **Own-role view:** `gator loop participant status`.
+  - **Dashboard:** the loop view has a new **Participant watchers** panel.
+    - It shows each role as connected, stale, released, closed, or not registered, using a text label and a distinct glyph, never color alone.
+    - It shows the last notification and whether it was delivered and acknowledged.
+    - An Architect-only **Re-notify** action is anti-CSRF protected, rate-limited, and audited. It sends a new notification and never changes loop state.
+  - **Backed by** a private, per-worktree sidecar at `$(git rev-parse --git-path gator-loop-liveness)/`. It is never staged, never served by the Dashboard's content routes, and never written to `events.jsonl`.
+  - **Scope:** acknowledged means received, not that work happened. Nothing auto-submits, and ended vendor sessions are not resumed. Runtimes without a background supervisor (Codex today) keep bounded `gator loop wait`.
+  - **Documentation:** the loop protocol, `/loop-join`, and the new `reference-notes/loop-participant-watcher.md`.
+
+### Changed
+
+- **The Dashboard's Architect token resolver fails safely.** A malformed or non-object `.tokens.json` now returns 404 ("tokens unreadable") instead of an unhandled server error. This affects the pause, interject, unblock, end, extend, liveness, and Re-notify routes.
+
 ## [2.18.0] — 2026-09-28
 
 Feature and governance-integrity release. It reworks pre-commit override approval so that a retry blocked for a second reason no longer loses the Architect's approval ([#35](https://github.com/cumberland-laboratories/gator/issues/35)), and binds approvals to the exact staged change with a durable audit trail ([#34](https://github.com/cumberland-laboratories/gator/issues/34)). It also makes the Dashboard loop workspace render incrementally ([#38](https://github.com/cumberland-laboratories/gator/issues/38)).

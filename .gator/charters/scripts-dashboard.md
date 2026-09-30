@@ -145,10 +145,10 @@ Route `/api/repo-by-key/<repo_key>/loops/...` POST requests. Start a new loop (w
 ! Prompt endpoint returns only `draftor` or `reviewer` prompts — never `architect`. Response carries `Cache-Control: no-store` on all paths (success and error).
 ! Terminal loops reject prompt requests with 410.
 
-### _resolve_architect_token() / _handle_loop_pause() / _handle_loop_interject() / _handle_loop_unblock() / _handle_loop_end()
+### _resolve_architect_token(repo_key, loop_id, cache_control=None) / _handle_loop_pause() / _handle_loop_interject() / _handle_loop_unblock() / _handle_loop_end()
 File: src/gator_command/scripts/gator-dashboard.py
-Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`, reads the architect token from `.tokens.json`, and delegates to the corresponding `submit.py` handler with `loop_dir=loop_dir`.
-<- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`; `/extend` has its own entry below)
+Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`, reads the architect token from `.tokens.json`, and delegates to the corresponding `submit.py` handler with `loop_dir=loop_dir`. A malformed or non-object token store is a 404 (`tokens unreadable` / `architect token not found`), never an unhandled 500. `cache_control` passes through to error responses (the liveness routes pass `no-store`).
+<- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`; `/extend` and `/renotify` have their own entries below)
 -> `_resolve_loop_dir()`, `loop.session.load_tokens()`, `loop.submit.handle_pause()`, `loop.submit.handle_interject()`, `loop.submit.handle_unblock()`, `loop.submit.handle_end()`
 ! Dashboard never acquires the session lock itself — all writes delegate to `submit.py` handlers.
 ! `_resolve_architect_token()` is the shared gatekeeper — resolves loop_dir and reads the architect token; returns None (with error response sent) on failure.
@@ -169,6 +169,26 @@ POST `/api/repo-by-key/<key>/loops/<id>/extend` (#39). Body: `rounds` (JSON int 
 -> `_resolve_architect_token()`, `_validate_http_round_count()`, `loop.host.extend_loop()`, `_ensure_loop_watcher()`, `loop.session.load_session()`
 ! Error map: `PermissionError` (wrong stage) -> 409; `RuntimeError` (another active loop / start or extension in progress) -> 409; handler `ValueError` -> 400. Every rejection leaves session/events unchanged and attaches no watcher.
 ! The extension is durable even when `watcher == "failed"`; the response must report that state honestly — never imply timeout enforcement resumed. `already_hosted` (in-process thread or another process holds `host.lock`) never starts a second watcher.
+
+### _handle_loop_liveness(repo_key, loop_id) / _handle_loop_renotify(repo_key, loop_id, req) / _resolve_liveness_loop() / _liveness_modules()
+File: src/gator_command/scripts/gator-dashboard.py
+Architect-only participant-liveness surface (#36).
+- **GET `/api/repo-by-key/<key>/loops/<id>/liveness`**: responds with `Cache-Control: no-store`. Its body is `loop.liveness.observer_view()`, an explicit allowlist `{schema: gator-loop-liveness-view-v1, available, degraded, roles: {draftor, reviewer}: {state (connected|stale|released|closed|not_registered), adapter_kind, last_seen_at, pending, last_notification {kind, created_at, created_by, delivered_at, acked_at, expired_reason}, renotify_eligible, renotify_reason_code}, audit: {renotify_count, last_at, last_actor}}`.
+  - A GET never writes, not even quarantine; it uses the lock-free `read()`.
+  - Degraded responses are 200 with `available: false`: `degraded: "unavailable"` when there is no Git store, `"retry"` when the transient read retries are exhausted. With `available: true`, `degraded` may be `"corrupt"` (the file is left untouched) or `"session_unreadable"` (eligibility false).
+  - A loop_id containing `/` falls through to the artifact route.
+- **POST `/renotify`** (via `_LOOP_ACTIONS`; anti-CSRF `X-Gator-Dashboard` enforced by `do_POST`):
+  - Body `{role: draftor|reviewer, reason?: string}`. The reason is sanitized to 200 printable characters and defaults to "Architect re-notify".
+  - Calls `loop.liveness.renotify()`, which appends one `created_by: "architect"` record plus an audit entry under the liveness leaf lock only.
+  - Responses: 200 `{ok, role, kind}`; 400 bad role or reason; 404 unknown repo or loop; 409 `{code: terminal|already_acknowledged|not_actionable}`; 429 `{code: rate_limited}` (one per `(repo_key, loop_id, role)` every 10 s; a refusal or failure does not consume the slot); 503 `{code: unavailable}`. All responses carry `no-store`.
+-> `_resolve_liveness_loop()` -> `_resolve_architect_token(cache_control="no-store")` + `loop.session.resolve_token()`; `loop.liveness.open_store()/observer_view()/renotify()`, `loop.session.load_session()`
+! **Architect authority (deliberate, for BOTH routes):** the GET view and the POST Re-notify go through the standard `_resolve_architect_token()` resolver AND a nonce check that the stored architect token resolves to the `architect` role for this loop, because Re-notify never calls a `handle_*` that would validate it. Missing, malformed or non-object tokens, or a missing architect entry, give 404; a nonce mismatch gives 403. All carry `no-store`, and nothing is written (a denied Re-notify consumes no rate-limit slot). The anti-CSRF header is not role authority. The token is used only inside the resolver: never passed to `renotify()`, returned, or echoed.
+! Re-notify is a communication/audit action only: never writes `session.json` or `events.jsonl`, and never changes deadlines or `next_role`.
+! Never add liveness data to participant-visible routes (`/status`, `/events`, `/artifact/*`) or to `_LOOP_STATUS_ALLOWED_KEYS`. Never serialize registration ids, seq lists, state keys, adapter labels, or audit reasons.
+
+### _sweep_liveness(repo_path)
+File: src/gator_command/scripts/gator-dashboard.py
+Startup retention sweep (`loop.liveness.sweep()`), run for each registry repo at the start of `_adopt_orphaned_loops()`. It projects surviving loops (prune / 7-day terminal retention) and deletes sidecar files whose loop directory is gone. It is best-effort: a failure is a debug diagnostic only and never affects adoption.
 
 ### _LOOP_HOSTS / _HostEntry / _run_watcher() / _ensure_loop_watcher() / _adopt_orphaned_loops()
 File: src/gator_command/scripts/gator-dashboard.py

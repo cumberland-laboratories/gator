@@ -167,6 +167,45 @@
     }
   }
 
+  // Participant liveness (#36): Architect-only, never cached. Returns the
+  // allowlisted view, or {_error: status} when the route denies/fails.
+  async function fetchLiveness(loopId) {
+    try {
+      var resp = await fetch(
+        apiBase() + "/" + encodeURIComponent(loopId) + "/liveness",
+        { cache: "no-store" });
+      if (!resp.ok) return { _error: resp.status };
+      return await resp.json();
+    } catch (e) {
+      return { _error: 0 };
+    }
+  }
+
+  async function postRenotify(loopId, role, reason) {
+    try {
+      var resp = await fetch(
+        apiBase() + "/" + encodeURIComponent(loopId) + "/renotify",
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Gator-Dashboard": "1",
+          },
+          body: JSON.stringify({ role: role, reason: reason }),
+        }
+      );
+      var data = await resp.json();
+      if (!resp.ok) {
+        return { _failed: true, _status: resp.status, code: data.code || null,
+                 error: data.error || "Request failed (" + resp.status + ")" };
+      }
+      return data;
+    } catch (e) {
+      return { _failed: true, code: null, error: String(e) };
+    }
+  }
+
   async function fetchArtifact(loopId, filename) {
     try {
       // no-store: plan.current.md / findings.current.md are rewritten in
@@ -986,6 +1025,7 @@
       + '<div id="loop-region-blocked"></div>'
       + '<div id="loop-region-prompts"></div>'
       + '<div id="loop-region-notice"></div>'
+      + '<div id="loop-region-liveness"></div>'
       + '<div id="loop-controls"></div>'
       + '<div class="section-title" style="margin-top:20px;">Timeline</div>'
       + '<div id="loop-timeline"></div>'
@@ -999,6 +1039,7 @@
       eventCount: 0,
       lastEventKey: null,
       timelineRendered: false,
+      liveness: { built: false, actionFp: {}, lastView: null, lastGood: false },
     };
   }
 
@@ -1180,6 +1221,230 @@
   // ── architect controls ──────────────────────────────────────────────────────
 
   // ── continue after max rounds (#39) ────────────────────────────────────────
+
+  // ── participant liveness panel (#36) ───────────────────────────────────
+  //
+  // Built once per selected loop, then patched field by field: status and
+  // notification lines update via textContent; the per-role action area
+  // (Re-notify button / inline reason form) is rebuilt only when its
+  // eligibility changes AND no form is open, so a typed reason survives
+  // polling. Every state is encoded as text + a distinct glyph + weight,
+  // never hue alone.
+
+  var LIVENESS_STATES = {
+    connected:      { glyph: "●", label: "Connected" },
+    stale:          { glyph: "◐", label: "Stale" },
+    released:       { glyph: "◇", label: "Released — watcher exited after delivery" },
+    closed:         { glyph: "■", label: "Closed — loop ended" },
+    not_registered: { glyph: "○", label: "Not registered" },
+  };
+  var LIVENESS_KINDS = {
+    "turn-ready": "Turn ready",
+    "architect-block": "Paused / waiting on Architect",
+    "terminal": "Loop ended",
+  };
+  var RENOTIFY_REFUSALS = {
+    terminal: "The loop has ended; there is nothing to re-notify.",
+    already_acknowledged: "The last notification was already acknowledged.",
+    not_actionable: "This role has no current turn or undelivered notification.",
+    rate_limited: "Re-notify was sent moments ago; wait a few seconds.",
+    unavailable: "Liveness delivery is unavailable; the loop runs normally.",
+  };
+  var LIVENESS_FOOTNOTE = "A notification only tells a watcher it may act. "
+    + "Acknowledged means received — not that the model read, worked on, "
+    + "or will submit anything. A background watcher works only under a runtime "
+    + "that relaunches the agent when the watcher exits (Claude Code background "
+    + "tasks, open session); other participants use gator loop wait.";
+
+  // Text and attributes are written only when they differ, and rendered
+  // text comes from returned data only (absolute times, never "Ns ago"),
+  // so an identical poll produces zero DOM mutations (#38).
+  function setText(el, text) {
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+
+  function setHidden(el, hidden) {
+    if (el && el.hidden !== hidden) el.hidden = hidden;
+  }
+
+  function livenessStateText(role) {
+    var st = LIVENESS_STATES[role.state] || { glyph: "?", label: role.state };
+    var text = st.glyph + " " + st.label;
+    if (role.state === "stale" && role.last_seen_at) {
+      text += " — last seen " + formatTime(role.last_seen_at);
+    } else if (role.state === "connected" && role.last_seen_at) {
+      text += " · seen " + formatTime(role.last_seen_at);
+    }
+    return text;
+  }
+
+  function livenessNoteText(role) {
+    var n = role.last_notification;
+    if (!n) return "No notifications yet.";
+    var parts = [LIVENESS_KINDS[n.kind] || n.kind];
+    if (n.created_by === "architect") parts.push("re-notified by Architect");
+    parts.push("created " + formatTime(n.created_at));
+    parts.push(n.delivered_at ? "delivered " + formatTime(n.delivered_at)
+                              : "not delivered");
+    parts.push(n.acked_at ? "acknowledged " + formatTime(n.acked_at)
+                          : "not acknowledged");
+    if (n.expired_reason) {
+      parts.push("expired (" + (n.expired_reason === "state_changed"
+        ? "loop moved on" : n.expired_reason) + ")");
+    }
+    if (role.pending > 1) parts.push(role.pending + " pending");
+    return parts.join(" · ");
+  }
+
+  function buildLivenessPanel(region) {
+    var rows = ["draftor", "reviewer"].map(function (r) {
+      var name = r === "draftor" ? "Draftor" : "Reviewer";
+      return '<div class="loop-liveness-row" data-role="' + r + '">'
+        + '<div class="loop-liveness-line">'
+        + '<span class="loop-liveness-role">' + name + '</span> '
+        + '<span class="loop-liveness-state"></span></div>'
+        + '<div class="loop-liveness-note"></div>'
+        + '<div class="loop-liveness-action" data-open="0"></div>'
+        + '</div>';
+    }).join("");
+    region.innerHTML = '<div class="loop-liveness">'
+      + '<div class="section-title" style="margin-top:16px;">Participant watchers</div>'
+      + '<div class="loop-liveness-degraded" hidden></div>'
+      + '<div class="loop-liveness-rows">' + rows + '</div>'
+      + '<div class="loop-liveness-footnote"></div>'
+      + '</div>';
+    setText(region.querySelector(".loop-liveness-footnote"), LIVENESS_FOOTNOTE);
+  }
+
+  function showLivenessNotice(root, text, isError) {
+    var region = root && root.querySelector("#loop-region-notice");
+    if (!region) return;
+    region.innerHTML = '<div class="loop-liveness-notice'
+      + (isError ? ' loop-liveness-notice-error' : '') + '">'
+      + (isError ? '<strong>Re-notify not sent:</strong> '
+                 : '<strong>Re-notify sent:</strong> ')
+      + escHtml(text) + '</div>';
+  }
+
+  function renderRenotifyAction(action, role, eligible, snap) {
+    action.innerHTML = "";
+    if (!eligible) return;
+    var btn = document.createElement("button");
+    btn.className = "loop-ctrl-btn loop-liveness-renotify";
+    btn.type = "button";
+    btn.textContent = "Re-notify";
+    btn.addEventListener("click", function () { openRenotifyForm(action, role, snap); });
+    action.appendChild(btn);
+  }
+
+  function openRenotifyForm(action, role, snap) {
+    action.dataset.open = "1";
+    var roleName = role === "draftor" ? "Draftor" : "Reviewer";
+    action.innerHTML = '<div class="loop-liveness-form">'
+      + '<label class="loop-ctrl-label">Reason for re-notifying the ' + roleName
+      + ' (optional)</label>'
+      + '<input class="loop-ctrl-input loop-liveness-reason" type="text" maxlength="200">'
+      + '<div class="loop-ctrl-actions">'
+      + '<button type="button" class="loop-ctrl-btn loop-liveness-send">Send re-notify</button>'
+      + '<button type="button" class="loop-ctrl-btn loop-liveness-cancel">Cancel</button>'
+      + '</div></div>';
+    var loopId = snap.loopId;
+    function close() {
+      action.dataset.open = "0";
+      // Force a rebuild from the latest view on the next patch.
+      delete snap.liveness.actionFp[role];
+      if (snap.liveness.lastView) applyLiveness(snap, snap.liveness.lastView);
+    }
+    action.querySelector(".loop-liveness-cancel").addEventListener("click", close);
+    var send = action.querySelector(".loop-liveness-send");
+    send.addEventListener("click", function () {
+      send.disabled = true;
+      var reason = action.querySelector(".loop-liveness-reason").value.trim();
+      var gen = _state.generation;
+      postRenotify(loopId, role, reason).then(function (result) {
+        if (gen !== _state.generation || _state.render !== snap) return;
+        if (result._failed) {
+          showLivenessNotice(snap.root, RENOTIFY_REFUSALS[result.code]
+            || result.error, true);
+          send.disabled = false;
+          return;
+        }
+        showLivenessNotice(snap.root, roleName + " was sent a new “"
+          + (LIVENESS_KINDS[result.kind] || result.kind)
+          + "” notification. This does not change the loop or prove any work.",
+          false);
+        close();
+        refreshLiveness(snap);
+      });
+    });
+  }
+
+  function applyLiveness(snap, view) {
+    var root = snap.root;
+    var region = root && root.querySelector("#loop-region-liveness");
+    if (!region || !view) return;
+    var L = snap.liveness;
+    if (!L.built) {
+      buildLivenessPanel(region);
+      L.built = true;
+    }
+    var degradedEl = region.querySelector(".loop-liveness-degraded");
+    var rowsEl = region.querySelector(".loop-liveness-rows");
+
+    if (view._error !== undefined || view.available === false) {
+      var msg;
+      if (view._error === 403 || view._error === 404) {
+        msg = "Liveness unavailable for this loop (no Architect authority "
+          + "on record). The loop runs normally; participants use gator loop wait.";
+      } else if (view.degraded === "retry" && L.lastGood) {
+        return;  // transient: keep showing the last good view
+      } else {
+        msg = "Delivery unavailable — the loop runs normally; "
+          + "participants use gator loop wait.";
+      }
+      setText(degradedEl, msg);
+      setHidden(degradedEl, false);
+      setHidden(rowsEl, true);
+      return;
+    }
+    L.lastGood = true;
+    L.lastView = view;
+    setHidden(rowsEl, false);
+    if (view.degraded === "corrupt") {
+      setText(degradedEl, "Liveness record unreadable; delivery degraded. "
+        + "The loop runs normally.");
+      setHidden(degradedEl, false);
+    } else {
+      setHidden(degradedEl, true);
+    }
+
+    ["draftor", "reviewer"].forEach(function (r) {
+      var role = (view.roles || {})[r];
+      var row = region.querySelector('.loop-liveness-row[data-role="' + r + '"]');
+      if (!role || !row) return;
+      var stateEl = row.querySelector(".loop-liveness-state");
+      setText(stateEl, livenessStateText(role));
+      if (stateEl.dataset.state !== role.state) stateEl.dataset.state = role.state;
+      setText(row.querySelector(".loop-liveness-note"), livenessNoteText(role));
+      var action = row.querySelector(".loop-liveness-action");
+      var fp = String(!!role.renotify_eligible);
+      if (action.dataset.open !== "1" && L.actionFp[r] !== fp) {
+        renderRenotifyAction(action, r, !!role.renotify_eligible, snap);
+        L.actionFp[r] = fp;
+      }
+    });
+  }
+
+  async function refreshLiveness(snap) {
+    snap = snap || _state.render;
+    if (!snap || !snap.loopId) return;
+    var gen = _state.generation;
+    var loopId = snap.loopId;
+    var view = await fetchLiveness(loopId);
+    if (gen !== _state.generation || _state.render !== snap
+        || snap.loopId !== loopId) return;
+    applyLiveness(snap, view);
+  }
 
   function ensurePolling() {
     // Polling stops when a loop turns terminal; an extension makes it live
@@ -1796,6 +2061,7 @@
     if (gen !== _state.generation) return;
 
     renderSelectedLoop(status, events, _state.container);
+    if (status) refreshLiveness(_state.render);
   }
 
   async function pollLoop() {
@@ -1825,6 +2091,7 @@
     // Incremental: unchanged regions (including an open control input) are
     // not touched; see renderSelectedLoop().
     renderSelectedLoop(status, events, _state.container);
+    refreshLiveness(_state.render);
 
     if (isTerminal(stage)) {
       if (_state.timerId) {

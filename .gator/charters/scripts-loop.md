@@ -1,6 +1,6 @@
 # Charter: Gator Loop
 
-**Covers**: `src/gator_command/scripts/loop/__init__.py`, `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/gator-loop.py`
+**Covers**: `src/gator_command/scripts/loop/__init__.py`, `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/loop/liveness.py`, `src/gator_command/scripts/gator-loop.py`
 
 ## Owns
 
@@ -11,7 +11,8 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
 - `submit.py` owns the eight submit handlers: submit-draft, submit-review, escalate, unblock, extend, pause, interject, end
 - `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop with timeout enforcement, platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
-- `cli.py` owns argparse subcommand routing for all 13 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, extend, wait, tail, list)
+- `cli.py` owns argparse subcommand routing for all 14 loop subcommands (start, status, submit-draft, submit-review, escalate, pause, interject, end, unblock, extend, wait, participant {watch,status}, tail, list)
+- `liveness.py` owns the private participant-liveness sidecar (#36): the per-worktree store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`, its strict schema allowlist, atomic persistence, the leaf lock, and the pure helpers `state_key()` / `classify()` / `prune()` / `redact()`. Operational data only; never loop authority
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
 ## Does Not Own
@@ -240,8 +241,9 @@ File: `src/gator_command/scripts/loop/host.py`
 Polls events.jsonl (from offset 0) for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on a terminal event **only if the session is still terminal** (`_session_is_terminal()`); otherwise the event is rendered as history and watching continues. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
 Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline + terminal check), `host.lock` (W metadata, when fd provided)
 <- `start_loop()`, dashboard `_run_watcher()`
--> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`, `_session_is_terminal()`
-! The host is a READER during normal operation. Timeout enforcement is the one write exception.
+-> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`, `_session_is_terminal()`, `_open_liveness_store()` / `_project_liveness()` (-> `liveness.project_for_host()`)
+! The host is a READER of loop state during normal operation. Timeout enforcement is the one loop-state write exception.
+! Liveness projection (#36) runs after each event batch and just before a terminal return; a `retry`/`error` result is retried on the next tick even without new events. It writes only the private liveness sidecar, never raises, and is skipped when the store is unavailable.
 ! Terminal detection is session-authoritative (#39): a watcher attached after an extension replays the old `max_rounds_exceeded` event and must keep hosting; a watcher that reads the terminal event after an extension already landed also keeps hosting. `_session_is_terminal()` fails safe (unreadable session -> terminal -> exit), preserving the pre-#39 behavior.
 ! `tail_events()` (`gator loop tail`) is intentionally NOT session-authoritative: a human tail started before an extension ends at the old terminal event.
 
@@ -335,7 +337,68 @@ Filesystem: `session.json` (R)
 <- `_cmd_wait()`
 ! Read-only — never writes session or events. Bounded mode uses a monotonic deadline and caps each sleep at the remaining time, so it cannot overrun by a full poll interval; the session is re-read after the final sleep, so a turn change at the deadline still wins over `still_waiting`. `clock`/`sleep` are injectable test seams.
 
+### LivenessStore(store_dir, loop_id) — read() / with_lock(fn) / delete()
+File: `src/gator_command/scripts/loop/liveness.py`
+One loop's liveness file (`<loop_id>.json`) plus its leaf lock (`<loop_id>.lock`). `read()` is a lock-free, side-effect-free snapshot for observers; a missing or corrupt file reads as the empty state. A transient read `OSError` makes `read()` return `None` with `last_error = "unavailable"` (observer retries / shows degraded). `with_lock(fn)` is the only mutation path: it loads (quarantining a corrupt file to `<loop_id>.json.corrupt-<ts>` with bounded rename retries, never deleting it, and setting `last_error = "corrupt"`), calls `fn(state) -> (new_state_or_None, value)`, then validates and atomically writes (temp + `os.replace`, bounded retry on Windows `PermissionError`, `newline="\n"`).
+Filesystem: `<git-dir>/gator-loop-liveness/<loop_id>.json` (R/W), `<loop_id>.lock`
+! If the corrupt file cannot be renamed aside, or the file is unreadable, `with_lock()` raises `LivenessUnavailableError` WITHOUT calling `fn` (`last_error = "quarantine_failed"`) — a mutation must never overwrite the only copy of a corrupt file.
+! Store directory comes from `resolve_store_dir(repo_root)` (`git rev-parse --git-path gator-loop-liveness`, per worktree); `None` means delivery unavailable — the loop still runs normally.
+
+### validate_state(state, loop_id=None)
+File: `src/gator_command/scripts/loop/liveness.py`
+Strict allowlist at every level (top, roles, registration, adapter, notification, superseded, audit), enum and timestamp checks, sanitized-text checks for adapter `label` (≤40) and audit `reason` (≤200), seq uniqueness below `next_seq`, and a recursive rejection of any token-shaped (`glp_…`) string. Raises `LivenessSchemaError`.
+
+### state_key(session) / classify(role_rec, now) / prune(state, now, loop_exists=True) / redact(text) / sanitize_text(text, max_len)
+File: `src/gator_command/scripts/loop/liveness.py`
+Pure helpers. `state_key` is the SHA-256 idempotency key over `round`, `stage`, `next_role`, `len(turns)`, `turn_deadline`. `classify` returns `not_registered` / `connected` / `stale` (active only, > 3 × heartbeat) / `released` / `closed` / `expired` (> 24 h unseen). `prune` applies retention: delete when the loop dir is gone or terminal > 7 days; drop expired registrations; TTL-expire pending `turn-ready` > 24 h; cap 50 notifications per role (pending never dropped — so a role whose records are all pending may exceed 50; pending records still TTL-expire), 10 superseded, 100 audit.
+
+### authenticate(token, loop_dir=None) / open_store(loop_dir, store_dir=None)
+File: `src/gator_command/scripts/loop/liveness.py`
+`authenticate` wraps `resolve_token` (errors redacted) and rejects the architect token with `PermissionError`. `open_store` resolves the Git-private store for `<repo>/.gator/loops/<id>`; raises `LivenessUnavailableError` outside a Git worktree. `store_dir` is a test seam.
+
+### register / heartbeat / poll / ack / release (token, registration_id, ...)
+File: `src/gator_command/scripts/loop/liveness.py`
+Participant API (D3). Every call re-authenticates with the role token AND the opaque `registration_id` (compared with `hmac.compare_digest`); a mismatch raises `SupersededError`. `register` issues a 32-hex id and a generation that is monotonic over all role history (current, superseded, and every delivered/acked generation), supersedes the prior receiver, and returns the id to the caller only. `poll` is a heartbeat and returns pending records not yet delivered to this generation (so a new receiver gets records an old one never acked), stamping `delivered_*`. `ack` stamps `acked_*` only for the current generation and only for a record delivered to it. `release` sets `released` / `closed` with `released_reason`. `closed` is one-way (terminal): heartbeat/poll/ack/release on a current closed registration raise `RegistrationClosedError` without writing; only a fresh `register()` supersedes it.
+Filesystem: liveness store (R/W via `with_lock`), `.tokens.json` (R via resolve_token). Never `session.json` / `events.jsonl` writes.
+-> `project()` (called outside the liveness lock by register/poll; failures swallowed into `last_error = "projection_failed"`)
+! Ack means "received" — never read, complied, or submitted.
+
+### project(loop_dir, store, now=None) / _apply_projection(state, session, now) / project_for_host(loop_dir, store) / open_host_store(loop_dir)
+File: `src/gator_command/scripts/loop/liveness.py`
+D5 projection. Snapshots `session.json` WITHOUT the session lock (torn/locked read -> `retry`), then applies the rules under the liveness leaf lock: expire every pending record from an older `state_key` (`state_changed`); active -> one `turn-ready` per (next_role, state_key), recorded even for an unregistered role; paused -> one `architect-block` per registered non-closed role; terminal -> one `terminal` per registered non-closed role, closing a registration that was already told for this generation (so a late watcher exits 2 at once), and set `terminal_observed_at` (cleared again when a #39 extension makes the loop non-terminal). Then `prune()`; saves only when something changed (`unchanged` / `updated`); a vanished loop directory or 7-day terminal retention deletes the sidecar (`deleted`). `project_for_host` is the never-raising wrapper for `watch_loop` (sanitized `last_error`, stderr diagnostic only with `GATOR_DASHBOARD_DEBUG=1`).
+! Never reopens a `closed` registration and never writes loop state.
+
+### renotify_eligibility(state, session, role, now=None)
+File: `src/gator_command/scripts/loop/liveness.py`
+Pure D7 eligibility for an Architect Re-notify -> `(eligible, reason_code)`. Eligible when the role owns the current active turn, or has a pending record and no live watcher (stale / released / not registered / expired). Otherwise `terminal`, `already_acknowledged`, or `not_actionable` (including a pending record a connected watcher will receive). Rate limiting belongs to the Dashboard endpoint (M4).
+
+### observer_view(state, session, now=None) / renotify(loop_dir, store, role, reason, now=None) / sweep(repo_root, now=None)
+File: `src/gator_command/scripts/loop/liveness.py`
+- `observer_view` is the Dashboard's explicit allowlist serializer (`gator-loop-liveness-view-v1`). It maps `expired` to `not_registered`, and reports `session_unreadable` for eligibility when the session is None.
+- `renotify` snapshots the session unlocked, then, under the leaf lock only, re-checks `renotify_eligibility` and appends one `created_by: "architect"` record (`turn-ready` for the turn owner, otherwise the kind of the role's newest pending record, with the same `state_key`) plus a sanitized audit entry. It returns `(ok, reason_code, kind)`.
+- `sweep` is the best-effort retention pass over every sidecar file in a worktree.
+<- Dashboard `_handle_loop_liveness()`, `_handle_loop_renotify()`, `_sweep_liveness()`
+! `LivenessStore.read()` retries a transient read `OSError` briefly (the Windows writer `os.replace` window) before returning None.
+
+### own_status(token, ...) / public_notification(n)
+File: `src/gator_command/scripts/loop/liveness.py`
+Read-only own-role summary (`gator-loop-participant-v1`): classification, generation, last seen, pending count, last notification. Never includes the other role, the registration id, `state_key`, or audit data.
+
+### run_watch(token, max_seconds, poll_seconds=5.0, adapter_label=None, loop_dir=None, store_dir=None, clock=None, sleep=None)
+File: `src/gator_command/scripts/loop/liveness.py`
+The D2a receiver. Registers (heartbeat advertised as `max(15, ceil(poll_seconds))`), polls until a delivery or the deadline, acks every record received in that poll, reports the newest, sets the registration state, and returns `(exit_code, payload)`: `0 turn_ready` (released), `2 architect_block` (released) / `2 terminal` (closed), `3 still_waiting` (released), `4 superseded` (no write), `1 error` (redacted), `130 interrupted` (best-effort release). A `RegistrationClosedError` mid-watch (closed by the terminal path) returns `2 terminal` with no write. Never loops forever or relaunches itself. `clock`/`sleep` are test seams.
+
+### _cmd_participant_watch(args) / _cmd_participant_status(args) / _render_participant(payload, as_json)
+File: `src/gator_command/scripts/loop/cli.py`
+`gator loop participant watch --token T --max-seconds N [--poll-seconds S] [--adapter-label L] [--json]` and `gator loop participant status --token T [--json]`. `--max-seconds` is required. `--json` prints exactly one compact JSON line on stdout (the adapter reads the last JSON line of its output file) and nothing on stderr for normal outcomes. SIGTERM is mapped to KeyboardInterrupt so it releases like Ctrl+C. Output never contains the token or registration id.
+
 ---
+
+## TRIPWIRE: Liveness Store Is a Leaf Lock and Never Authority
+
+The liveness lock is a leaf: never acquire the session lock while holding it, and never touch the liveness store inside a `with_session_lock` callback. Snapshot session state unlocked first, then take the liveness lock. The store never holds tokens, nonces, prompts, artifacts, model/provider identity, or session-authoritative fields, and nothing in it may change loop state, deadlines, or `next_role`. It is never written to `events.jsonl`.
+
+Violation: a projection that holds the liveness lock and then waits on the session lock can deadlock against a submit; a store field read as authority lets liveness data drive loop transitions.
 
 ## TRIPWIRE: Session Lock Write Ordering
 
@@ -351,7 +414,7 @@ Violation: committing `.tokens.json` or adding nonces to `session.json` makes to
 
 ## TRIPWIRE: Host Write Authority
 
-The host has exactly ONE write exception: timeout enforcement. During normal operation the host is a reader of `events.jsonl` and a renderer to terminal. No other section of code grants the host additional write paths.
+The host has exactly ONE loop-state write exception: timeout enforcement. During normal operation the host is a reader of `events.jsonl` and a renderer to terminal. No other section of code grants the host additional loop-state write paths. (The guarded liveness projection writes only the private Git-path sidecar — never `session.json`, `events.jsonl`, or anything under `.gator/loops/` — see the Liveness Store TRIPWIRE.)
 
 ## TRIPWIRE: Resumable Terminal Stage
 
@@ -377,7 +440,7 @@ Loop modules use `sys.path.insert(0, LOOP_DIR)` and absolute imports (`from sess
 
 ## Cross-Vendor Orientation
 
-Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`. Artifact format templates are at `reference-notes/loop-artifact-formats.md`. Both files exist as byte-identical pairs between `.gator/.includes/` and `src/.../templates/gator-starter/`; change both copies in the same commit.
+Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`. Artifact format templates are at `reference-notes/loop-artifact-formats.md`. Both files exist as byte-identical pairs between `.gator/.includes/` and `src/.../templates/gator-starter/`; change both copies in the same commit. The participant watcher receiver contract (#36) is at `reference-notes/loop-participant-watcher.md` (same byte-identical pair rule; listed in both `gator_layout.py` shipped-defaults copies). The protocol's Step 1 documents the watcher as optional and only for runtimes that re-invoke the agent when a background command exits (Claude Code background Bash, open session, per the M0 spike); `/loop-join` (`.claude/commands/` and the template copy, byte-identical) gives the Claude Code launch line. The vendor-neutral entry paragraph from `render_entry_content()` deliberately stays on bounded `wait` — it is shared by CLAUDE.md / AGENTS.md / GEMINI.md, and the watcher is not supported for every vendor.
 
 The protocol's escalation section classifies uncertainty into non-blocking (state an assumption, proceed) and blocking (Architect-owned, escalate with `--file`). The artifact format's plan template uses "Assumptions, Risks, and Required Architect Decisions" (not "Risks and Open Questions") to reinforce this classification. The findings template documents that an ESCALATE verdict must be accompanied by `gator loop escalate` — `submit-review` alone enters revision, not blocked state.
 

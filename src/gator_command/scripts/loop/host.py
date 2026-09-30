@@ -454,6 +454,12 @@ def watch_loop(loop_dir, host_lock_fd=None):
         write_host_metadata(host_lock_fd, secrets.token_hex(4))
     events_path = loop_dir / "events.jsonl"
 
+    # Participant liveness (#36): best-effort, never raises, never touches
+    # session/event state. Projection runs AFTER each durable event batch,
+    # outside the session lock (liveness lock is a leaf).
+    liveness_store = _open_liveness_store(loop_dir)
+    liveness_retry = False  # a torn read / failed write retries next tick
+
     # Start from current end of file (initial event already printed
     # conceptually by the banner — but we read it to show the log line)
     last_pos = 0
@@ -487,10 +493,14 @@ def watch_loop(loop_dir, host_lock_fd=None):
                     # terminal event from offset 0 and must keep hosting.
                     if (event.get("event") in TERMINAL_EVENTS
                             and _session_is_terminal(loop_dir)):
+                        _project_liveness(loop_dir, liveness_store)
                         _print_terminal_summary(loop_dir)
                         return
 
                 last_pos = f.tell()
+
+            liveness_retry = _project_liveness(
+                loop_dir, liveness_store) in ("retry", "error")
 
             # After rendering events, show the next-step prompt
             try:
@@ -501,6 +511,10 @@ def watch_loop(loop_dir, host_lock_fd=None):
                     sys.stdout.flush()
             except (FileNotFoundError, KeyError):
                 pass
+
+        elif liveness_retry:
+            liveness_retry = _project_liveness(
+                loop_dir, liveness_store) in ("retry", "error")
 
         # --- Phase 2: timeout enforcement (active states only) ---
         try:
@@ -521,6 +535,26 @@ def watch_loop(loop_dir, host_lock_fd=None):
                     pass
 
         time.sleep(POLL_INTERVAL)
+
+
+def _open_liveness_store(loop_dir):
+    """Liveness store for this loop, or None (unavailable / import error)."""
+    try:
+        import liveness
+        return liveness.open_host_store(loop_dir)
+    except Exception:
+        return None
+
+
+def _project_liveness(loop_dir, store):
+    """Guarded liveness projection; a failure never affects hosting."""
+    if store is None:
+        return None
+    try:
+        import liveness
+        return liveness.project_for_host(loop_dir, store)
+    except Exception:
+        return None
 
 
 def _session_is_terminal(loop_dir):
