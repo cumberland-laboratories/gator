@@ -19,17 +19,69 @@ _LOOP_DIR = str(Path(__file__).resolve().parent)
 if _LOOP_DIR not in sys.path:
     sys.path.insert(0, _LOOP_DIR)
 
-from session import _deadline_from_now
+from session import _deadline_from_now, loop_mode, MODE_PLANNING, MODE_CODING
 
 
 # ---------------------------------------------------------------------------
 # State sets
 # ---------------------------------------------------------------------------
 
+# Planning-mode sets (unchanged; exported for backward compatibility).
 ACTIVE_STAGES = frozenset({"plan_drafting", "plan_review", "plan_revision"})
 PAUSED_STAGES = frozenset({"blocked_on_architect", "paused_by_architect"})
 TERMINAL_STAGES = frozenset({"plan_approved", "max_rounds_exceeded", "turn_timed_out", "ended_by_architect"})
+
+# Coding-mode sets (#41). Paused stages and the shared terminal outcomes
+# (round limit, timeout, Architect end) are common to both modes.
+CODING_ACTIVE_STAGES = frozenset({
+    "implementation_drafting", "implementation_review",
+    "implementation_revision",
+})
+CODING_TERMINAL_STAGES = frozenset({
+    "implementation_approved", "max_rounds_exceeded", "turn_timed_out",
+    "ended_by_architect",
+})
+
+# ALL_STAGES keeps its pre-#41 meaning: every PLANNING-mode stage (the set
+# the participant protocol's state table documents and tests pin).
 ALL_STAGES = ACTIVE_STAGES | PAUSED_STAGES | TERMINAL_STAGES
+CODING_ALL_STAGES = CODING_ACTIVE_STAGES | PAUSED_STAGES | CODING_TERMINAL_STAGES
+EVERY_STAGE = ALL_STAGES | CODING_ALL_STAGES
+
+# The single mode-indexed stage table (#41). Every categorizer, the
+# unblock stage/role check, and the extension target read it through
+# stages_for(); planning entries are the pre-#41 values exactly.
+STAGES = {
+    MODE_PLANNING: {
+        "active": ACTIVE_STAGES,
+        "paused": PAUSED_STAGES,
+        "terminal": TERMINAL_STAGES,
+        "role_by_stage": {
+            "plan_drafting": "draftor",
+            "plan_review": "reviewer",
+            "plan_revision": "draftor",
+        },
+        "initial_stage": "plan_drafting",
+        "extension_resume_stage": "plan_revision",
+    },
+    MODE_CODING: {
+        "active": CODING_ACTIVE_STAGES,
+        "paused": PAUSED_STAGES,
+        "terminal": CODING_TERMINAL_STAGES,
+        "role_by_stage": {
+            "implementation_drafting": "draftor",
+            "implementation_review": "reviewer",
+            "implementation_revision": "draftor",
+        },
+        "initial_stage": "implementation_drafting",
+        "extension_resume_stage": "implementation_revision",
+    },
+}
+
+
+def stages_for(session):
+    """The stage table for this session's (normalized) loop mode."""
+    return STAGES[loop_mode(session)]
 
 
 # ---------------------------------------------------------------------------
@@ -38,33 +90,48 @@ ALL_STAGES = ACTIVE_STAGES | PAUSED_STAGES | TERMINAL_STAGES
 
 def is_active(session):
     """True when a role is expected to submit and timeouts are enforced."""
-    return session["status"]["stage"] in ACTIVE_STAGES
+    return session["status"]["stage"] in stages_for(session)["active"]
 
 
 def is_paused(session):
     """True when the loop is suspended awaiting Architect intervention."""
-    return session["status"]["stage"] in PAUSED_STAGES
+    return session["status"]["stage"] in stages_for(session)["paused"]
 
 
 def is_terminal(session):
     """True when the loop is over."""
-    return session["status"]["stage"] in TERMINAL_STAGES
+    return session["status"]["stage"] in stages_for(session)["terminal"]
 
 
 # ---------------------------------------------------------------------------
 # Action validation
 # ---------------------------------------------------------------------------
 
-# Maps action names to (required_role, valid_source_stages)
-# required_role: specific role string, or None for "any model role"
-_MODEL_ACTION_RULES = {
-    "submit_draft": ("draftor", {"plan_drafting", "plan_revision"}),
-    "submit_review": ("reviewer", {"plan_review"}),
-    "escalate": (None, ACTIVE_STAGES),  # any model role, any active state
+# Maps action names to (required_role, valid_source_stages), per mode.
+# required_role: specific role string, or None for "any model role".
+# A planning action is unknown in coding mode and vice versa.
+_MODEL_ACTION_RULES_BY_MODE = {
+    MODE_PLANNING: {
+        "submit_draft": ("draftor", {"plan_drafting", "plan_revision"}),
+        "submit_review": ("reviewer", {"plan_review"}),
+        "escalate": (None, ACTIVE_STAGES),  # any model role, any active state
+    },
+    MODE_CODING: {
+        "submit_implementation": (
+            "draftor", {"implementation_drafting", "implementation_revision"}),
+        "submit_review": ("reviewer", {"implementation_review"}),
+        "escalate": (None, CODING_ACTIVE_STAGES),
+    },
 }
+# Backward-compatible alias (planning rules).
+_MODEL_ACTION_RULES = _MODEL_ACTION_RULES_BY_MODE[MODE_PLANNING]
 
 # Architect actions — require role == "architect"
-_ARCHITECT_ACTIONS = frozenset({"pause", "interject", "end", "unblock", "extend"})
+_ARCHITECT_ACTIONS = frozenset({"pause", "interject", "end", "unblock", "extend",
+                                "reopen"})
+
+# The only stage a coding loop may be reopened from (#41).
+REOPENABLE_STAGE = "implementation_approved"
 
 # The only terminal stage that may be resumed (via extend). Every other
 # terminal stage is final.
@@ -101,11 +168,15 @@ def validate_action(session, role, action):
     if session["status"].get("blocked", False):
         return False, f"Loop is blocked ({stage}) — waiting for Architect"
 
-    # Action-specific rules
-    if action not in _MODEL_ACTION_RULES:
+    # Action-specific rules (mode-indexed)
+    mode = loop_mode(session)
+    rules = _MODEL_ACTION_RULES_BY_MODE[mode]
+    if action not in rules:
+        if any(action in r for r in _MODEL_ACTION_RULES_BY_MODE.values()):
+            return False, f"Action '{action}' is not valid in a {mode} loop"
         return False, f"Unknown action: {action}"
 
-    required_role, valid_stages = _MODEL_ACTION_RULES[action]
+    required_role, valid_stages = rules[action]
 
     # Role check (escalate allows any model role)
     if required_role and role != required_role:
@@ -153,6 +224,15 @@ def _validate_architect_action(session, action):
         if stage != EXTENDABLE_STAGE:
             return False, (
                 "Only a loop that ended at its round limit can be extended "
+                f"(stage: {stage})")
+        return True, "ok"
+
+    if action == "reopen":
+        if loop_mode(session) != MODE_CODING:
+            return False, "Only a coding loop can be reopened"
+        if stage != REOPENABLE_STAGE:
+            return False, (
+                "Only an approved coding loop can be reopened "
                 f"(stage: {stage})")
         return True, "ok"
 
@@ -269,20 +349,18 @@ def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, mes
     target_stage = stage or status.get("resume_stage")
     target_role = next_role or status.get("resume_next_role")
 
-    if not target_stage or target_stage not in ACTIVE_STAGES:
+    # Resume targets are validated against THIS session's mode table, so a
+    # coding loop can never be unblocked into a planning stage (or v.v.).
+    table = stages_for(session)
+    if not target_stage or target_stage not in table["active"]:
         raise ValueError(
             f"Cannot unblock to stage '{target_stage}' — "
-            f"must be one of {sorted(ACTIVE_STAGES)}"
+            f"must be one of {sorted(table['active'])}"
         )
 
-    # Validate stage-role consistency: the plan's state machine assigns
-    # each active stage to exactly one role.
-    _STAGE_OWNER = {
-        "plan_drafting": "draftor",
-        "plan_review": "reviewer",
-        "plan_revision": "draftor",
-    }
-    expected_role = _STAGE_OWNER[target_stage]
+    # Validate stage-role consistency: the state machine assigns each
+    # active stage to exactly one role.
+    expected_role = table["role_by_stage"][target_stage]
     if target_role and target_role != expected_role:
         raise ValueError(
             f"Stage '{target_stage}' belongs to '{expected_role}', "
@@ -304,8 +382,9 @@ def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, mes
 def advance_extended(session, rounds, turn_timeout, message=None):
     """Resume a loop that ended at its round limit.
 
-    max_rounds_exceeded -> plan_revision (next_role=draftor), with the
-    round ceiling raised by ``rounds``. The round counter, current
+    max_rounds_exceeded -> the mode's ``extension_resume_stage``
+    (plan_revision for planning, implementation_revision for coding #41;
+    next_role=draftor), with the round ceiling raised by ``rounds``. The round counter, current
     artifact references, turns, decisions, and unresolved findings are
     preserved — history is never renumbered or rewritten.
 
@@ -328,9 +407,13 @@ def advance_extended(session, rounds, turn_timeout, message=None):
             f"Inconsistent session: round {status.get('round')} exceeds "
             f"max_rounds {previous}")
 
+    # Mode-indexed resume target (#41): plan_revision for planning,
+    # implementation_revision for coding; the owner comes from the table.
+    table = stages_for(session)
+    resume = table["extension_resume_stage"]
     status["max_rounds"] = previous + rounds
-    status["stage"] = "plan_revision"
-    status["next_role"] = "draftor"
+    status["stage"] = resume
+    status["next_role"] = table["role_by_stage"][resume]
     status["plan_status"] = "revision"
     status["blocked"] = False
     status["architect_action_required"] = False
@@ -341,6 +424,172 @@ def advance_extended(session, rounds, turn_timeout, message=None):
     status["turn_deadline"] = _deadline_from_now(turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return previous, status["max_rounds"]
+
+
+def advance_implementation_submitted(session, turn_timeout):
+    """Coding (#41): Draftor submitted a staged candidate.
+
+    implementation_drafting / implementation_revision -> implementation_review
+    (next_role=reviewer) with a fresh deadline. The candidate binding (the
+    raw snapshot) is recorded by the caller as a new generation.
+    """
+    if loop_mode(session) != MODE_CODING:
+        raise ValueError("Only a coding loop accepts implementation submissions")
+    status = session["status"]
+    if status.get("stage") not in ("implementation_drafting",
+                                   "implementation_revision"):
+        raise ValueError(
+            "Implementation can only be submitted while drafting or revising "
+            f"(stage: {status.get('stage')})")
+    table = stages_for(session)
+    status["stage"] = "implementation_review"
+    status["next_role"] = table["role_by_stage"]["implementation_review"]
+    status["plan_status"] = "in_review"
+    status["architect_message"] = None  # clear after the model acts on it
+    status["architect_response_artifact"] = None
+    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+    return session
+
+
+def advance_implementation_reviewed(session, approved, turn_timeout,
+                                    approval=None):
+    """Coding (#41): Reviewer verdict on the latest candidate generation.
+
+    approved: implementation_review -> implementation_approved (terminal,
+      resumable only via reopen); ``approval`` ({tree, head, round, ts}) is
+      stored as ``coding.approval``.
+    findings: round += 1; at the ceiling -> max_rounds_exceeded (terminal,
+      extendable #39); otherwise -> implementation_revision (Draftor).
+    """
+    if loop_mode(session) != MODE_CODING:
+        raise ValueError("Only a coding loop accepts implementation reviews")
+    status = session["status"]
+    if status.get("stage") != "implementation_review":
+        raise ValueError(
+            f"No implementation is under review (stage: {status.get('stage')})")
+    now = datetime.now(tz=timezone.utc).isoformat()
+    table = stages_for(session)
+
+    if approved:
+        if not isinstance(approval, dict) or not approval.get("tree"):
+            raise ValueError("An approval must bind the reviewed tree")
+        session["coding"]["approval"] = dict(approval)
+        status["stage"] = "implementation_approved"
+        status["next_role"] = None
+        status["plan_status"] = "approved"
+        status["unresolved_findings"] = 0
+        status["architect_message"] = None
+        status["architect_response_artifact"] = None
+        status["turn_deadline"] = None
+        status["blocked"] = False
+        status["last_updated"] = now
+        return session
+
+    status["round"] += 1
+    status["unresolved_findings"] = 1
+    status["architect_message"] = None
+    status["architect_response_artifact"] = None
+    status["last_updated"] = now
+    if status["round"] >= status["max_rounds"]:
+        status["stage"] = "max_rounds_exceeded"
+        status["next_role"] = None
+        status["plan_status"] = "max_rounds"
+        status["turn_deadline"] = None
+        status["blocked"] = True
+        return session
+    status["stage"] = "implementation_revision"
+    status["next_role"] = table["role_by_stage"]["implementation_revision"]
+    status["plan_status"] = "revision"
+    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    return session
+
+
+# Approval resolution states (#41). Meaning is never encoded by these
+# strings alone in a UI — callers pair them with explicit text.
+APPROVAL_COMMITTED = "committed"
+APPROVAL_PENDING = "pending"
+APPROVAL_STALE = "stale"
+APPROVAL_UNKNOWN = "unknown"
+APPROVAL_NONE = "none"
+APPROVAL_INVALIDATED = "invalidated"
+
+
+def resolve_approval(approval, snap):
+    """Pure: where does an approved candidate stand against live Git facts?
+
+    - committed: HEAD moved and ``HEAD^{tree}`` equals the approved tree
+      (the ordinary commit landed exactly the reviewed candidate).
+    - pending: HEAD is still the approved HEAD and the staged tree is still
+      the approved tree (return to the Draftor for one normal commit).
+    - stale: anything else, with a reason — ``staged_tree_changed`` (HEAD
+      unchanged, index differs), ``head_moved_tree_differs`` (a commit or
+      branch move whose tree is not the approved tree, including a hook
+      that changed committed content), or ``detached_mismatch``.
+    - unknown: the snapshot failed; never treated as approved.
+    - none / invalidated: no approval, or one invalidated by reopen.
+    """
+    base = {"approved_tree": None, "approved_head": None}
+    if not isinstance(approval, dict) or not approval.get("tree"):
+        return dict(base, state=APPROVAL_NONE, reason=None)
+    base = {"approved_tree": approval.get("tree"),
+            "approved_head": approval.get("head")}
+    if approval.get("invalidated_at"):
+        return dict(base, state=APPROVAL_INVALIDATED, reason="reopened")
+    if not isinstance(snap, dict) or not snap.get("ok"):
+        return dict(base, state=APPROVAL_UNKNOWN,
+                    reason=(snap or {}).get("error") or "snapshot_failed")
+    out = dict(base, current_head=snap.get("current_head"),
+               head_tree=snap.get("head_tree"),
+               staged_tree=snap.get("staged_tree"),
+               detached=bool(snap.get("detached")))
+    if snap.get("current_head") == approval.get("head"):
+        if snap.get("staged_tree") == approval.get("tree"):
+            return dict(out, state=APPROVAL_PENDING, reason=None)
+        return dict(out, state=APPROVAL_STALE, reason="staged_tree_changed")
+    if snap.get("head_tree") == approval.get("tree"):
+        return dict(out, state=APPROVAL_COMMITTED, reason=None,
+                    commit=snap.get("current_head"))
+    reason = ("detached_mismatch" if snap.get("detached")
+              else "head_moved_tree_differs")
+    return dict(out, state=APPROVAL_STALE, reason=reason)
+
+
+def advance_reopened(session, turn_timeout, message=None):
+    """Reopen an approved coding loop for revision (#41).
+
+    implementation_approved -> implementation_revision (next_role=draftor)
+    with a fresh deadline. The round counter is kept (the next submission
+    is round + 1) and any approval record is marked invalidated so a stale
+    approval can never be read as current. Raises ValueError when the
+    session is not a coding loop in ``implementation_approved``.
+    """
+    status = session["status"]
+    if loop_mode(session) != MODE_CODING:
+        raise ValueError("Only a coding loop can be reopened")
+    if status.get("stage") != REOPENABLE_STAGE:
+        raise ValueError(
+            "Only an approved coding loop can be reopened "
+            f"(stage: {status.get('stage')})")
+
+    now = datetime.now(tz=timezone.utc).isoformat()
+    approval = session.get("coding", {}).get("approval")
+    if isinstance(approval, dict):
+        approval["invalidated_at"] = now
+
+    table = stages_for(session)
+    status["stage"] = "implementation_revision"
+    status["next_role"] = table["role_by_stage"]["implementation_revision"]
+    status["plan_status"] = "revision"
+    status["blocked"] = False
+    status["architect_action_required"] = False
+    status["architect_message"] = message
+    status["architect_response_artifact"] = None
+    status["resume_stage"] = None
+    status["resume_next_role"] = None
+    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    status["last_updated"] = now
+    return session
 
 
 def advance_turn_timed_out(session, timed_out_role):

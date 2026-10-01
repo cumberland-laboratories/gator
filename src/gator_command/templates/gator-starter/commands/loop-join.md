@@ -22,6 +22,7 @@ gator loop status --token $ARGUMENTS
      - **Draftor first turn**: read `sketch.md`
      - **Draftor revising**: read `findings.current.md`
      - **Reviewer**: read `plan.current.md` and `sketch.md`
+     - **Coding loop** (status shows `Mode: coding`): the Draftor reads `approved-plan.md`, implements the change, stages it (no commit), and submits with `gator loop submit-implementation`. The Reviewer reads `implementation.current.md` and reviews exactly the `git diff <base_tree> <staged_tree>` that status prints. After approval, the Draftor makes ONE normal commit. See "Coding Loops" in the protocol.
    - Then proceed with your work as the protocol directs
 
 6. If it is NOT your turn (exit code 1):

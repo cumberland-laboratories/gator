@@ -65,6 +65,7 @@ def create_events_file(loop_dir):
 
 TERMINAL_EVENTS = frozenset({
     "plan_approved",
+    "implementation_approved",  # coding (#41); resumable only via reopen
     "max_rounds_exceeded",
     "turn_timed_out",
     "loop_ended_by_architect",
@@ -139,14 +140,17 @@ def read_all_events(loop_dir):
 _EVENT_FORMATS = {
     "loop_started": ("loop started", None),
     "draft_submitted": ("draft submitted", "round {round}"),
+    "implementation_submitted": ("implementation submitted", "{detail}"),  # #41
     "review_submitted": ("review submitted", "round {round}"),
     "plan_approved": ("plan APPROVED", "round {round}"),
+    "implementation_approved": ("implementation APPROVED", "{detail}"),  # #41
     "revision_requested": ("revision requested", "round {round}"),
     "escalated": ("ESCALATED", "{detail}"),
     "max_rounds_exceeded": ("MAX ROUNDS", "limit reached at round {round}"),
     "turn_timed_out": ("TIMED OUT", "{role} did not submit in time"),
     "loop_unblocked": ("unblocked", "{detail}"),
     "loop_extended": ("EXTENDED", "{detail}"),  # not terminal (#39)
+    "loop_reopened": ("REOPENED", "{detail}"),  # not terminal (#41)
     "loop_paused": ("PAUSED", "{detail}"),
     "architect_interjection": ("ARCHITECT", "{detail}"),
     "loop_ended_by_architect": ("ENDED", "{detail}"),

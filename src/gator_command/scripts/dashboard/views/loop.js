@@ -34,6 +34,7 @@
 
   var TERMINAL_STAGES = {
     plan_approved: true,
+    implementation_approved: true,   // coding (#41); resumable via reopen
     max_rounds_exceeded: true,
     turn_timed_out: true,
     ended_by_architect: true,
@@ -45,6 +46,10 @@
   };
 
   var STAGE_LABELS = {
+    implementation_drafting: "Implementing",
+    implementation_review:   "Code Review",
+    implementation_revision: "Code Revision",
+    implementation_approved: "Code Approved",
     plan_drafting:        "Drafting",
     plan_review:          "Review",
     plan_revision:        "Revision",
@@ -57,6 +62,10 @@
   };
 
   var STAGE_BADGE_CLASS = {
+    implementation_drafting: "loop-badge-active",
+    implementation_review:   "loop-badge-active",
+    implementation_revision: "loop-badge-active",
+    implementation_approved: "loop-badge-terminal",
     plan_drafting:        "loop-badge-active",
     plan_review:          "loop-badge-active",
     plan_revision:        "loop-badge-active",
@@ -69,6 +78,7 @@
   };
 
   var OUTCOME_LABELS = {
+    implementation_approved: "Implementation Approved",
     plan_approved:        "Approved",
     max_rounds_exceeded:  "Max Rounds Reached",
     turn_timed_out:       "Timed Out",
@@ -86,6 +96,9 @@
     turn_timed_out:         "TIMED OUT",
     loop_unblocked:         "Unblocked",
     loop_extended:          "Extended",
+    loop_reopened:          "Reopened",
+    implementation_submitted: "Implementation submitted",
+    implementation_approved:  "Implementation APPROVED",
     loop_paused:            "PAUSED",
     architect_interjection: "ARCHITECT",
     loop_ended_by_architect:"ENDED",
@@ -203,6 +216,19 @@
       return data;
     } catch (e) {
       return { _failed: true, code: null, error: String(e) };
+    }
+  }
+
+  // Coding (#41): Architect-only live candidate resolution; never cached.
+  async function fetchCodingSnapshot(loopId) {
+    try {
+      var resp = await fetch(
+        apiBase() + "/" + encodeURIComponent(loopId) + "/snapshot",
+        { cache: "no-store" });
+      if (!resp.ok) return { _error: resp.status };
+      return await resp.json();
+    } catch (e) {
+      return { _error: 0 };
     }
   }
 
@@ -1023,6 +1049,7 @@
     mainEl.innerHTML = '<div class="loop-detail">'
       + '<div id="loop-region-header"></div>'
       + '<div id="loop-region-blocked"></div>'
+      + '<div id="loop-region-coding"></div>'
       + '<div id="loop-region-prompts"></div>'
       + '<div id="loop-region-notice"></div>'
       + '<div id="loop-region-liveness"></div>'
@@ -1040,6 +1067,7 @@
       lastEventKey: null,
       timelineRendered: false,
       liveness: { built: false, actionFp: {}, lastView: null, lastGood: false },
+      codingLive: null,     // last /snapshot result for an approved coding loop
     };
   }
 
@@ -1075,6 +1103,8 @@
     patchRegion(snap, "blocked", blockedFingerprint(status), function () {
       renderBlockedCard(status, root, container);
     });
+
+    patchCodingRegion(snap, status);
 
     patchRegion(snap, "prompts", terminal ? "terminal" : "live", function () {
       renderPromptSection(terminal, root);
@@ -1444,6 +1474,226 @@
     if (gen !== _state.generation || _state.render !== snap
         || snap.loopId !== loopId) return;
     applyLiveness(snap, view);
+  }
+
+  // ── coding candidate panel (#41) ─────────────────────────────────────────
+  //
+  // Bound facts from the slim status `coding` projection, plus — for an
+  // approved coding loop — the live resolution from /snapshot. Each state
+  // is text + a distinct glyph + weight, never hue alone. The region is
+  // rewritten only when its data fingerprint changes and never while the
+  // inline Reopen reason form is open.
+
+  var RESOLUTION_TEXT = {
+    committed: { glyph: "✓", cls: "loop-coding-ok",
+                 label: "Committed — handoff complete" },
+    pending:   { glyph: "●", cls: "loop-coding-pending",
+                 label: "Pending commit — return to the Draftor session for one normal commit" },
+    stale:     { glyph: "⚠", cls: "loop-coding-stale",
+                 label: "Stale — the approved tree is no longer the candidate" },
+    unknown:   { glyph: "?", cls: "loop-coding-unknown",
+                 label: "Unknown — Git facts unavailable; never treat as approved" },
+  };
+  var STALE_REASON_TEXT = {
+    staged_tree_changed: "the staged tree changed after approval",
+    head_moved_tree_differs: "HEAD moved and its tree is not the approved tree (a different commit, or a hook changed committed content)",
+    detached_mismatch: "detached HEAD whose tree is not the approved tree",
+  };
+
+  function isCoding(status) {
+    return !!(status && status.mode === "coding" && status.coding);
+  }
+
+  function isApprovedCoding(status) {
+    return isCoding(status)
+      && ((status.status || {}).stage === "implementation_approved");
+  }
+
+  function shortOid(oid) {
+    return oid ? String(oid).slice(0, 12) : "—";
+  }
+
+  function codingFingerprint(status, live) {
+    var s = status.status || {};
+    var res = live && live.approval_resolution;
+    return JSON.stringify([
+      s.stage, s.round, status.coding,
+      live ? (live._error !== undefined ? ["err", live._error]
+              : [res && res.state, res && res.reason, res && res.commit,
+                 live.live && live.live.ok, live.live && live.live.error]) : null,
+    ]);
+  }
+
+  function patchCodingRegion(snap, status) {
+    var region = snap.root && snap.root.querySelector("#loop-region-coding");
+    if (!region) return;
+    if (!isCoding(status)) {
+      patchRegion(snap, "coding", "none", function () { region.innerHTML = ""; });
+      return;
+    }
+    // Never rebuild under an open Reopen form; the next poll catches up.
+    if (region.dataset.reopenOpen === "1") return;
+    var live = isApprovedCoding(status) ? snap.codingLive : null;
+    patchRegion(snap, "coding", codingFingerprint(status, live), function () {
+      renderCodingRegion(region, status, live, snap);
+    });
+  }
+
+  function renderCodingRegion(region, status, live, snap) {
+    var c = status.coding || {};
+    var s = status.status || {};
+    var gens = c.generations || [];
+    var g = gens.length ? gens[gens.length - 1] : null;
+
+    var rows = [];
+    function row(label, value) {
+      rows.push('<div class="loop-coding-row"><span class="loop-coding-label">'
+        + escHtml(label) + '</span> <span class="loop-coding-value">'
+        + escHtml(value) + '</span></div>');
+    }
+    row("Approved plan", (c.source_loop_id || "—")
+      + " (sha256 " + shortOid(c.plan_sha256) + ")");
+    row("Base commit", shortOid(c.base_head));
+    if (g) {
+      var counts = g.changed_by_status || {};
+      var parts = Object.keys(counts).sort().map(function (k) {
+        return k + " " + counts[k];
+      });
+      row("Candidate (round " + g.round + ")",
+        "staged tree " + shortOid(g.staged_tree) + " on HEAD "
+        + shortOid(g.current_head)
+        + (g.detached ? " (detached)" : (g.branch
+            ? " (" + String(g.branch).replace("refs/heads/", "") + ")" : "")));
+      row("Changed paths", g.changed_count + (parts.length
+        ? " (" + parts.join(", ") + ")" : ""));
+      row("Review", g.review
+        ? (g.review.verdict === "approve" ? "Approved" : "Revision requested")
+          + " on tree " + shortOid(g.review.reviewed_tree)
+          + (g.review.candidate_changed
+             ? " — the live candidate had changed after submission" : "")
+        : "Awaiting review");
+    } else {
+      row("Candidate", "No implementation submitted yet");
+    }
+
+    var html = '<div class="loop-coding">'
+      + '<div class="section-title" style="margin-top:16px;">Coding candidate</div>'
+      + rows.join("");
+
+    if (g && g.residue_other_count > 0) {
+      html += '<div class="loop-coding-warning"><strong>Note:</strong> '
+        + escHtml(String(g.residue_other_count))
+        + ' unstaged/untracked path(s) outside the loop directory were NOT part of the candidate.</div>';
+    }
+
+    if (s.stage === "implementation_approved") {
+      var res = live && live.approval_resolution;
+      var info;
+      if (!live) {
+        html += '<div class="loop-coding-resolution">Checking live Git state…</div>';
+      } else if (live._error !== undefined) {
+        info = RESOLUTION_TEXT.unknown;
+        html += '<div class="loop-coding-resolution ' + info.cls + '" data-state="unknown">'
+          + escHtml(info.glyph + " " + info.label) + '</div>';
+      } else if (res && RESOLUTION_TEXT[res.state]) {
+        info = RESOLUTION_TEXT[res.state];
+        var detail = "";
+        if (res.state === "committed") {
+          detail = " (commit " + shortOid(res.commit) + ")";
+        } else if (res.state === "pending") {
+          detail = " of tree " + shortOid(res.approved_tree);
+        } else if (res.state === "stale") {
+          detail = ": " + (STALE_REASON_TEXT[res.reason] || res.reason);
+        } else if (res.state === "unknown") {
+          detail = " (" + (res.reason || "error") + ")";
+        }
+        html += '<div class="loop-coding-resolution ' + info.cls
+          + '" data-state="' + escHtml(res.state) + '">'
+          + escHtml(info.glyph + " " + info.label + detail) + '</div>';
+        if (res.state === "stale" || res.state === "unknown") {
+          html += '<div class="loop-coding-reopen">'
+            + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-btn">'
+            + 'Reopen for revision</button></div>';
+        }
+      }
+    }
+    html += '</div>';
+    region.innerHTML = html;
+
+    var btn = region.querySelector(".loop-coding-reopen-btn");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        openReopenForm(region, snap);
+      });
+    }
+  }
+
+  function openReopenForm(region, snap) {
+    var holder = region.querySelector(".loop-coding-reopen");
+    if (!holder) return;
+    region.dataset.reopenOpen = "1";
+    holder.innerHTML = '<div class="loop-liveness-form">'
+      + '<label class="loop-ctrl-label">Reason for reopening (required; shown to the Draftor)</label>'
+      + '<input class="loop-ctrl-input loop-coding-reopen-reason" type="text" maxlength="500">'
+      + '<div class="loop-ctrl-actions">'
+      + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-send" disabled>Reopen</button>'
+      + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-cancel">Cancel</button>'
+      + '</div><div class="loop-coding-reopen-error" hidden></div></div>';
+    var input = holder.querySelector(".loop-coding-reopen-reason");
+    var send = holder.querySelector(".loop-coding-reopen-send");
+    var err = holder.querySelector(".loop-coding-reopen-error");
+    input.addEventListener("input", function () {
+      send.disabled = !input.value.trim();
+    });
+    function close() {
+      region.dataset.reopenOpen = "0";
+      delete snap.fp.coding;  // rebuild from the latest data
+      loadSelectedLoop();
+    }
+    holder.querySelector(".loop-coding-reopen-cancel").addEventListener("click", close);
+    send.addEventListener("click", function () {
+      var reason = input.value.trim();
+      if (!reason) return;
+      send.disabled = true;
+      var gen = _state.generation;
+      postAction(snap.loopId, "reopen", { message: reason }).then(function (result) {
+        if (gen !== _state.generation || _state.render !== snap) return;
+        if (result._failed) {
+          err.textContent = "Not reopened: " + (result.error || "request failed");
+          err.hidden = false;
+          send.disabled = false;
+          return;
+        }
+        var notice = snap.root.querySelector("#loop-region-notice");
+        if (notice) {
+          notice.innerHTML = '<div class="loop-extend-notice"><strong>Reopened:</strong> '
+            + 'the approval is invalidated and the Draftor must resubmit. '
+            + escHtml(result.watcher === "failed"
+                ? "Warning: turn timeouts are NOT being enforced ("
+                  + (result.watcher_detail || "watcher could not attach") + ")."
+                : "Give the Draftor and Reviewer fresh join prompts.")
+            + '</div>';
+        }
+        snap.codingLive = null;
+        close();
+        ensurePolling();
+      });
+    });
+    input.focus();
+  }
+
+  async function refreshCoding(snap, status) {
+    if (!snap || !isApprovedCoding(status)) {
+      if (snap) snap.codingLive = null;
+      return;
+    }
+    var gen = _state.generation;
+    var loopId = snap.loopId;
+    var live = await fetchCodingSnapshot(loopId);
+    if (gen !== _state.generation || _state.render !== snap
+        || snap.loopId !== loopId) return;
+    snap.codingLive = live;
+    patchCodingRegion(snap, status);
   }
 
   function ensurePolling() {
@@ -1883,10 +2133,12 @@
 
   // Current artifacts are overwritten in place by each submission; their
   // loaded content/summaries are refreshed when the event log advances.
-  var MUTABLE_ARTIFACTS = ["plan.current.md", "findings.current.md"];
+  var MUTABLE_ARTIFACTS = ["plan.current.md", "findings.current.md",
+                           "implementation.current.md"];
 
   function isSummaryArtifact(name) {
-    return name.indexOf("plan.") === 0 || name.indexOf("findings.") === 0;
+    return name.indexOf("plan.") === 0 || name.indexOf("findings.") === 0
+      || name.indexOf("implementation.") === 0 || name === "approved-plan.md";
   }
 
   // Per-node request revisions: every summary/body fetch bumps its node's
@@ -1971,8 +2223,11 @@
       return;
     }
 
-    // Stable current artifacts first
-    var artifacts = ["sketch.md", "plan.current.md", "findings.current.md"];
+    // Stable current artifacts first (coding loops: approved plan +
+    // implementation instead of sketch + plan, #41)
+    var artifacts = status.mode === "coding"
+      ? ["approved-plan.md", "implementation.current.md", "findings.current.md"]
+      : ["sketch.md", "plan.current.md", "findings.current.md"];
 
     // Event-driven immutable artifacts (includes round-zero)
     var immutable = collectArtifactPaths(events || [], (status && status.decisions) || []);
@@ -2061,7 +2316,15 @@
     if (gen !== _state.generation) return;
 
     renderSelectedLoop(status, events, _state.container);
-    if (status) refreshLiveness(_state.render);
+    if (status) {
+      refreshLiveness(_state.render);
+      refreshCoding(_state.render, status);
+      // A live loop (or an approved coding loop, whose resolution can still
+      // change) must be polled even if a previously viewed loop stopped the
+      // timer (#44).
+      var st = (status.status || {}).stage || "";
+      if (!isTerminal(st) || isApprovedCoding(status)) ensurePolling();
+    }
   }
 
   async function pollLoop() {
@@ -2092,8 +2355,11 @@
     // not touched; see renderSelectedLoop().
     renderSelectedLoop(status, events, _state.container);
     refreshLiveness(_state.render);
+    refreshCoding(_state.render, status);
 
-    if (isTerminal(stage)) {
+    // An approved coding loop stays polled: its resolution moves from
+    // Pending to Committed/Stale without any loop-state change (#41).
+    if (isTerminal(stage) && !isApprovedCoding(status)) {
       if (_state.timerId) {
         clearInterval(_state.timerId);
         _state.timerId = null;
@@ -2177,9 +2443,9 @@
     }
 
     window._gatorRepoTeardown = teardownLoopView;
-    _state.timerId = setInterval(pollLoop, POLL_INTERVAL_MS);
-    var ws = container.querySelector(".loop-workspace");
-    if (ws) ws.dataset.polling = "1";
+    // Single interval owner: loadSelectedLoop() may already have started
+    // polling; ensurePolling() never creates a second (leaked) interval.
+    ensurePolling();
   };
 
   window.GatorViews._extractSummary = extractSummary;

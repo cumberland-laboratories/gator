@@ -221,15 +221,35 @@ def write_host_metadata(fd, nonce):
 # ---------------------------------------------------------------------------
 
 def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
-              repo_root=None):
+              repo_root=None, mode="planning", from_loop=None):
     """Create a new loop session on disk.
 
     When ``repo_root`` is provided (dashboard path), it is used directly.
     When ``repo_root`` is None (CLI path), ``find_gator_root()`` discovers
     the repo from cwd — no behavioral change for CLI callers.
 
+    ``mode="coding"`` (#41) creates a guarded successor of the approved
+    planning loop ``from_loop`` instead of copying a sketch; see
+    ``_init_coding_loop()``. Callers own ``start.lock`` (start_loop /
+    Dashboard start), exactly as for planning loops.
+
     Returns ``(loop_id, loop_dir)`` without entering the watch loop.
     """
+    if mode == "coding":
+        if sketch_path is not None:
+            raise ValueError(
+                "A coding loop starts from --from-loop; --sketch is not used")
+        if repo_root is None:
+            repo_root = find_gator_root()
+        return _init_coding_loop(feature, from_loop, max_rounds,
+                                 turn_timeout, Path(repo_root))
+    if mode != "planning":
+        raise ValueError(f"Unknown loop mode: {mode!r}")
+    if from_loop is not None:
+        raise ValueError("--from-loop is only valid with --mode coding")
+    if sketch_path is None:
+        raise ValueError("A planning loop requires --sketch")
+
     sketch = Path(sketch_path)
     if not sketch.exists():
         raise FileNotFoundError(f"Sketch file not found: {sketch_path}")
@@ -289,9 +309,202 @@ def find_active_loop(loops_base):
             session = _json.loads(session_file.read_text(encoding="utf-8"))
             if not is_terminal(session):
                 return entry.name
-        except (OSError, _json.JSONDecodeError, KeyError):
+        except (OSError, _json.JSONDecodeError, KeyError, ValueError):
             continue
     return None
+
+
+# ---------------------------------------------------------------------------
+# Coding loop start — guarded successor of an approved planning loop (#41)
+# ---------------------------------------------------------------------------
+
+# Canonical loop-id shape: starts AND ends with an alphanumeric (generated
+# ids end in "Z"), so Windows path aliases such as a trailing "." are
+# rejected before any filesystem lookup.
+_SOURCE_LOOP_ID_RE = __import__("re").compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+APPROVED_PLAN_FILENAME = "approved-plan.md"
+
+
+def _read_approved_source(source_dir, from_loop):
+    """Validate the source planning loop and return its approved plan bytes.
+
+    Reads under the source's session lock (read-only callback: nothing is
+    written), so the identity, stage, and plan checks observe one
+    consistent state. The requested id must equal the source session's own
+    ``loop_id`` exactly — a filesystem alias (Windows trailing dot or case
+    variant) that resolves to the same directory is rejected, so only the
+    canonical id is ever persisted. Raises ValueError on any failure.
+    """
+    from session import with_session_lock, loop_mode
+
+    captured = {}
+
+    def _check(session):
+        if session.get("loop_id") != from_loop:
+            raise ValueError(
+                f"Source loop id {from_loop!r} is not canonical "
+                "(it does not match the source session's loop_id)")
+        try:
+            mode = loop_mode(session)
+        except ValueError as exc:
+            raise ValueError(f"Source loop has an unknown mode: {exc}")
+        if mode != "planning":
+            raise ValueError(
+                "Source loop must be a planning loop (got a coding loop)")
+        stage = session.get("status", {}).get("stage")
+        if stage != "plan_approved":
+            raise ValueError(
+                f"Source loop's plan is not approved (stage: {stage})")
+        plan = source_dir / "plan.current.md"
+        if plan.is_symlink() or not plan.is_file():
+            raise ValueError("Source loop has no plan.current.md")
+        data = plan.read_bytes()
+        if not data.strip():
+            raise ValueError("Source loop's plan.current.md is empty")
+        captured["plan"] = data
+        return None  # read-only: never write the source session
+
+    with_session_lock(source_dir, _check)
+    return captured["plan"]
+
+
+def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
+                      repo_root):
+    """Create a coding loop as a guarded successor (#41, approved plan).
+
+    Order (fail atomically — any failure removes the partial directory and
+    raises one clear error before a session is published):
+      1. canonical source loop id shape (no separators/traversal; starts
+         and ends alphanumeric, so no Windows trailing-dot alias);
+      2. under the source session lock: the requested id equals the
+         session's own ``loop_id`` (rejects case/trailing-dot aliases),
+         the source is planning-mode, ``plan_approved``, with a non-empty
+         ``plan.current.md``;
+      3. the Git base is snapshotted (must be ok: not unborn/conflicted);
+      4. new loop dir; ``approved-plan.md`` written, then re-read and its
+         SHA-256 compared with the source bytes' digest;
+      5. only then tokens, ``session.json``, and events.
+    """
+    import hashlib
+    import gitsnap
+    from session import MODE_CODING
+
+    if (not isinstance(from_loop, str) or not from_loop
+            or not _SOURCE_LOOP_ID_RE.match(from_loop) or ".." in from_loop):
+        raise ValueError(f"Invalid source loop id: {from_loop!r}")
+
+    loops_base = repo_root / ".gator" / "loops"
+    source_dir = loops_base / from_loop
+    if source_dir.is_symlink() or not source_dir.is_dir():
+        raise ValueError(f"Source loop not found: {from_loop}")
+    if not (source_dir / "session.json").is_file():
+        raise ValueError(f"Source loop has no session: {from_loop}")
+
+    plan_bytes = _read_approved_source(source_dir, from_loop)
+    plan_sha = hashlib.sha256(plan_bytes).hexdigest()
+
+    snap = gitsnap.snapshot(repo_root)
+    if not snap.get("ok"):
+        raise ValueError(
+            "Cannot capture the Git base for a coding loop: "
+            f"{snap.get('error')} ({snap.get('detail', '')})")
+
+    loops_base.mkdir(parents=True, exist_ok=True)
+    ensure_loops_gitignore(loops_base)
+    loop_id = make_loop_id(feature)
+    loop_dir = loops_base / loop_id
+    loop_dir.mkdir()
+    try:
+        dest = loop_dir / APPROVED_PLAN_FILENAME
+        with open(dest, "wb") as f:
+            f.write(plan_bytes)
+        copied = hashlib.sha256(dest.read_bytes()).hexdigest()
+        if copied != plan_sha:
+            raise ValueError("Approved plan copy failed its digest check")
+        _make_readonly(dest)
+
+        coding = {
+            "source_loop_id": from_loop,
+            "plan_sha256": plan_sha,
+            "base_head": snap["current_head"],
+            "base_tree": snap["head_tree"],
+            "generations": [],
+            "approval": None,
+        }
+
+        tok_d, nonce_d = make_token(loop_id, "draftor")
+        tok_r, nonce_r = make_token(loop_id, "reviewer")
+        tok_a, nonce_a = make_token(loop_id, "architect")
+        save_tokens(loop_dir, {
+            "draftor": {"nonce": nonce_d, "token": tok_d},
+            "reviewer": {"nonce": nonce_r, "token": tok_r},
+            "architect": {"nonce": nonce_a, "token": tok_a},
+        })
+
+        session = create_session(feature, loop_id, max_rounds, turn_timeout,
+                                 mode=MODE_CODING, coding=coding)
+        save_session(loop_dir, session)
+
+        create_events_file(loop_dir)
+        emit_event(loop_dir, {
+            "event": "loop_started",
+            "mode": "coding",
+            "source_loop_id": from_loop,
+            "detail": (f"Coding loop initialized from {from_loop} "
+                       f"(plan sha256 {plan_sha[:12]}, base "
+                       f"{snap['current_head'][:12]})"),
+        })
+    except BaseException:
+        _remove_partial_loop(loop_dir)
+        raise
+    return loop_id, loop_dir
+
+
+def _remove_partial_loop(loop_dir):
+    """Best-effort removal of a half-created loop dir (read-only files ok)."""
+    def _retry_writable(func, path, _exc):
+        try:
+            os.chmod(path, 0o666)
+            func(path)
+        except OSError:
+            pass
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(str(loop_dir), onexc=_retry_writable)
+    else:  # Python 3.9-3.11 (CI floor is 3.9)
+        shutil.rmtree(str(loop_dir), onerror=_retry_writable)
+
+
+# ---------------------------------------------------------------------------
+# Reopen — return an approved coding loop to review (#41)
+# ---------------------------------------------------------------------------
+
+def reopen_loop(token, message, loop_dir=None):
+    """Reopen an approved coding loop with the single-active guarantee.
+
+    A reopen revives a terminal loop, so it is guarded exactly like
+    ``extend_loop()``: hold ``start.lock``, refuse if any OTHER loop is
+    active, run the locked session transition (``submit.handle_reopen``),
+    release ``start.lock``. Watcher attachment is the caller's next step
+    (CLI foreground watch or Dashboard daemon watcher). Every rejection
+    leaves the session and events unchanged. Returns (loop_id, loop_dir).
+    """
+    from session import resolve_token
+    from submit import handle_reopen
+
+    loop_id, _role, loop_dir = resolve_token(token, loop_dir=loop_dir)
+    loops_base = Path(loop_dir).parent
+
+    start_fd = acquire_start_lock(loops_base)
+    if start_fd is None:
+        raise RuntimeError("Another loop start, extension, or reopen is in progress")
+    try:
+        existing = find_active_loop(loops_base)
+        if existing and existing != loop_id:
+            raise RuntimeError(f"An active loop already exists: {existing}")
+        return handle_reopen(token, message, loop_dir=loop_dir)
+    finally:
+        release_start_lock(start_fd)
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +547,8 @@ def extend_loop(token, rounds, message, loop_dir=None):
 # Initialization — gator loop start (CLI entry point)
 # ---------------------------------------------------------------------------
 
-def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
+def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
+               mode="planning", from_loop=None):
     """Initialize a new loop session and enter the watch loop.
 
     Acquires ``start.lock`` to enforce one-active-loop-per-repo, then
@@ -359,7 +573,7 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300):
 
         loop_id, loop_dir = init_loop(
             feature, sketch_path, max_rounds, turn_timeout,
-            repo_root=repo_root)
+            repo_root=repo_root, mode=mode, from_loop=from_loop)
 
         host_fd = acquire_host_lock(loop_dir)
         if host_fd is None:
@@ -523,8 +737,11 @@ def watch_loop(loop_dir, host_lock_fd=None):
             time.sleep(POLL_INTERVAL)
             continue
 
-        stage = session["status"].get("stage")
-        if stage in ACTIVE_STAGES:
+        try:
+            active = is_active(session)
+        except ValueError:  # unknown loop mode: never enforce blind
+            active = False
+        if active:
             deadline_str = session["status"].get("turn_deadline")
             if deadline_str:
                 try:

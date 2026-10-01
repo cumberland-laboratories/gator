@@ -1,81 +1,100 @@
 ---
-message: "Loop: participant liveness bridge — background watcher, Dashboard liveness view, Architect Re-notify (#36)"
+message: "Loop: coding mode with diff-aware implementation review (#41) + Dashboard polling fix (#44 core)"
 change-type: feature
 significance: high
-decision-tags: [loop, liveness, dashboard, security, governance]
+decision-tags: [loop, coding-mode, git, dashboard, governance]
 agent: claude-opus-5-5
 architect: Alan Gillette
 ---
 
 # Session Change Log
 
-- Add implementation plan for the loop participant liveness bridge (#36 remainder): `.gator/vault/artifacts/2026-09-29-loop-participant-liveness-bridge-implementation-plan.md` (rev 1, for plan review; no code changes).
-- Revise the liveness plan to rev 2 per the whiteboard P1 finding: add D2a (the supervised background-watcher receiver contract, with Claude Code background tasks as the first supervisor and Codex deferred to a follow-on issue); add the registration lifecycle (active/released/closed); align `watch` exit codes with `wait`; add a supervised end-to-end lifecycle test (M3/M4) and receiver-contract docs (M6). Resolution noted on the whiteboard.
-- Revise the liveness plan to rev 3 per the whiteboard re-review: add the M0 vendor spike and release gate (a version-pinned manual proof that Claude Code background Bash re-invokes an idle agent); demote Claude Code to a candidate supervisor until M0 passes; narrow the claim to an open session with an idle agent; pre-decide the experimental-adapter fallback; make the M5/M6 vendor copy conditional on M0.
-- Run the M0 vendor spike and record it at `.gator/vault/artifacts/2026-09-29-liveness-m0-vendor-spike.md`: it passes on Claude Code 2.1.283 on Windows 10. A background Bash exit re-invoked the idle agent about 3 s later with no user input; the output is delivered as a file path. The negative control is still pending. D2a is updated with the result and the M2 single-JSON-line stdout requirement.
-- #36 M1: add `src/gator_command/scripts/loop/liveness.py`, the private per-worktree participant-liveness store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`. It provides:
-  - a strict schema allowlist that also recursively rejects token-shaped strings;
-  - atomic writes that are LF-only, retry on Windows `PermissionError`, and never leave a temp file behind;
-  - lock-free `read()` for observers, and a `with_lock()` mutation path with a leaf lock that quarantines corrupt files instead of deleting them;
-  - `resolve_store_dir()`, which returns `None` when the store is unavailable;
-  - the pure helpers `state_key()` (the idempotency key), `classify()` (connected / stale / released / closed / expired / not registered), `prune()` (retention) and `redact()` / `sanitize_text()`.
-- Add `tests/test_loop_liveness_store.py` (76 tests).
-- Add `scripts/loop/liveness.py` to pyproject package-data.
-- Charters: `scripts-loop.md` (Covers, Owns, the LivenessStore/validator/helper entries, a new TRIPWIRE "Liveness Store Is a Leaf Lock and Never Authority"); `scripts-cross-cutting.md` (explicit package-data rule; per-worktree Git-private state).
-- #36 M1 review fix (whiteboard P2): corrupt-file quarantine now retries the rename and reports failure. If the original cannot be preserved, `with_lock()` raises `LivenessUnavailableError` without running the mutation, so a corrupt file is never overwritten. Lock-free `read()` returns `None` (`last_error="unavailable"`) on a transient `OSError`. Documented that all-pending notifications may exceed the per-role cap. Added 5 tests (81 total); the P2 regression was verified to fail against the pre-fix code.
-- #36 M2: participant API in `loop/liveness.py`: `authenticate()` (redacted errors; architect token rejected), `open_store()`, `register` / `heartbeat` / `poll` / `ack` / `release` (token plus registration id on every call; `hmac.compare_digest`; `SupersededError`), `own_status()`, `public_notification()`, and the D2a receiver `run_watch()`.
-  - The generation is monotonic across all role history, so a registration dropped by retention is never reused.
-  - `poll` redelivers pending records to a new generation.
-  - `ack` is limited to records delivered to the current generation.
-  - `project()` is an M2 no-op stub that M3 replaces.
-- New CLI `gator loop participant watch --token T --max-seconds N [--poll-seconds S] [--adapter-label L] [--json]` and `participant status`.
-  - Exit codes: 0 turn_ready, 2 architect_block/terminal, 3 still_waiting, 4 superseded, 1 error, 130 interrupted (SIGTERM mapped to Ctrl+C).
-  - `--json` prints exactly one JSON line with empty stderr. Output never contains the token or the registration id.
-- Added `tests/test_loop_liveness_cli.py` (33 tests, including real-subprocess CLI contract tests).
-- `scripts-loop.md`: 14 subcommands, plus new entries for the participant API, `run_watch` and the CLI handlers.
-- #36 M2 review fix (whiteboard P2): `closed` registrations are one-way. The new `RegistrationClosedError` rejects heartbeat/poll/ack/release on a current closed registration without writing, and only a fresh `register()` supersedes it. `run_watch` reports a mid-watch close as exit 2 `terminal`. Added 2 regression tests (verified to fail on the pre-fix code).
-- #36 M3: real D5 projection in `loop/liveness.py`: `project()`, `_apply_projection()`, `project_for_host()`, `open_host_store()` and the pure `renotify_eligibility()`.
-  - It snapshots `session.json` without the session lock (a torn read returns `retry`), then applies the rules under the liveness leaf lock:
-    - expire pending records from older generations;
-    - one `turn-ready` per (next_role, state_key), recorded even for an unregistered role;
-    - `architect-block` and `terminal` records only for registered, non-closed roles;
-    - close a registration that was already told for this terminal generation, so a late watcher exits 2 immediately;
-    - set/clear `terminal_observed_at` (clearing covers #39 extensions);
-    - then prune. It saves only on change, and deletes the sidecar when the loop dir is gone or after 7 days terminal.
-  - It never reopens a closed registration and never writes loop state.
-- `loop/host.py`: `watch_loop()` runs a guarded projection after each event batch and before a terminal return, retries `retry`/`error` on the next tick, and never raises (`_open_liveness_store`, `_project_liveness`).
-- New tests:
-  - `tests/test_loop_liveness_projection.py` (24): rules on real transitions, idempotency, lock order both ways, torn read, host failure isolation (timeout still enforced), restart recovery, retention, eligibility.
-  - `tests/test_loop_liveness_lifecycle.py` (2, real detached subprocesses under a test supervisor): launcher exits, turn_ready exit 0 / released, relaunch, terminal exit 2 / closed, an immediate terminal exit on a further launch, a killed watcher goes stale and becomes Re-notify-eligible when its turn arrives, and no loop-state writes.
-- Adapted the M2 in-process tests to stub projection and to seed with the real state_key; the subprocess still-waiting test now uses the reviewer.
-- `scripts-loop.md`: `watch_loop` hook, a clarified Host Write Authority tripwire (loop-state writes only), and the `project` and `renotify_eligibility` entries.
-- #36 M4 Dashboard: GET `/api/repo-by-key/<key>/loops/<id>/liveness` and POST `.../renotify`.
-  - The GET uses the explicit allowlist serializer `liveness.observer_view()` with `no-store`. It never writes, and it degrades to `available: false` (`unavailable` / `retry`) or flags `corrupt` / `session_unreadable`.
-  - Re-notify uses the anti-CSRF header, validates role and reason, and appends one `created_by: "architect"` record plus an audit entry under the liveness leaf lock only. It returns 409 with a reason code when ineligible, 429 when rate-limited (10 s per loop and role; a refusal does not consume the slot), and 503 when unavailable. It never writes loop state.
-  - At startup, `_sweep_liveness()` runs the new `liveness.sweep()` retention pass, which is best-effort and never affects adoption.
-- `liveness.py`: `observer_view()`, `renotify()`, `sweep()`. Lock-free `read()` now retries transient Windows read denials before degrading; found via a flaky E2E read that collided with a watcher write.
+- #41 coding loop, Module 2 (Git snapshot helper; approved plan copied to `.gator/vault/artifacts/2026-10-01-coding-loop-diff-aware-review-implementation-plan.md`): new `src/gator_command/scripts/loop/gitsnap.py`. It provides `snapshot(worktree_root, base_head)`, which returns raw, unfiltered Git facts or an explicit error code.
+  - Facts: worktree root, HEAD and its tree, detached/branch, the staged-tree OID from `write-tree`, changed paths against the base (with renames), and unstaged/untracked residue.
+  - Error codes: `git_unavailable`, `not_a_repo`, `bare`, `unborn`, `conflict`, `bad_base`, `git_busy` (an index lock is retried once), `git_error`.
+  - Path lists are capped at 1000, with counts of what was truncated. It never modifies refs, the index or the worktree.
+- New `tests/test_loop_gitsnap.py` (20 tests, all on real temp repos isolated by `GIT_CEILING_DIRECTORIES`): clean, staged-vs-base, branch moved, rename, residue vs ignored, subdirectory, detached, linked worktree, path cap, unborn, conflict, bad base, bare, not a repo, missing path, Git missing, the busy retry and its recovery, no mutation, and malformed parse records.
+- `pyproject.toml` package-data now includes `gitsnap.py`.
+- Module 2 review fix (whiteboard P2): a non-directory `worktree_root` (for example an existing file) is rejected as `not_a_repo` before any Git invocation. `_invoke()` classifies launch failures: `git_unavailable` only when Git itself cannot run, `not_a_repo` for a bad cwd, `git_error` for any other OSError. Added 3 regression tests (23 total), each verified to fail on the pre-fix code.
+- `scripts-loop.md`: Covers/Owns, a `snapshot()` entry with a field/command table, and the new TRIPWIRE "Raw Staged Tree Is Review Authority".
+- #41 Module 1 (mode, stage table, guarded start, reopen):
+  - `session.py`: `loop_mode()` is the only mode reader. Missing, `planning` and the legacy `planning-only` (still written for planning loops, so planning residue is byte-identical) all mean planning; an unknown mode fails closed. `create_session(mode=, coding=)` builds coding sessions.
+  - `state_machine.py`: one mode-indexed `STAGES` table and `stages_for()`. The categorizers, mode-indexed model action rules (`submit_implementation`), unblock stage/role validation, and the extension resume target (`implementation_revision` for coding) all read it. New Architect `reopen` action and `advance_reopened()`. `ALL_STAGES` keeps its planning meaning; `CODING_ALL_STAGES` and `EVERY_STAGE` are added.
+  - `host.py`: the guarded successor `init_loop(mode="coding", from_loop=)` / `_init_coding_loop()`:
+    - a canonical id check;
+    - a source check under its session lock (planning, `plan_approved`, non-empty plan);
+    - a Git base from `gitsnap`;
+    - an `approved-plan.md` copy plus a SHA-256 re-read check;
+    - atomic cleanup of a partial directory.
+
+    `reopen_loop()` holds `start.lock` and enforces the single-active-loop rule. Timeout enforcement and `find_active_loop` are mode-aware.
+  - `submit.py`: `handle_reopen()`. `events.py`: `loop_reopened`.
+  - `cli.py`: `start --mode/--from-loop` and the `reopen` command. `_attach_foreground_watcher()` is the host contract shared with `extend`. Status gains a coding prompt, `mode` in JSON, and the approved-commit handoff text.
+  - `liveness.py` now uses the mode-aware categorizers.
+  - Dashboard `_adopt_orphaned_loops()` uses `is_terminal()` instead of a hard-coded stage list.
+- Module 1 review fix (whiteboard P1): source loop ids must be canonical. The id regex must start and end alphanumeric (rejecting the Windows trailing-dot alias), and under the source session lock the requested id must equal the source session's own `loop_id`. That also rejects case-variant aliases, which resolve to the same directory on Windows (found while fixing). Added 7 regression tests; the aliases were verified to be accepted by the pre-fix code.
+- Tests: new `tests/test_loop_coding_mode.py` (92). The planning suite is unchanged, at 299. Also fixed a Windows flake in `test_requires_anti_csrf_header` (#36) by sending no body.
+- Charters: `scripts-loop.md` (new and updated entries; Resumable Terminal Stage and Stage-Role tripwires extended for coding), `scripts-dashboard.md` (mode-aware adoption).
+- #41 Module 3 (implementation submission):
+  - `state_machine.advance_implementation_submitted()`.
+  - `submit.handle_submit_implementation()`:
+    - checks the required headings before the lock;
+    - under the session lock, takes a raw `gitsnap` snapshot against the captured base, requires something staged, and writes `implementation.round-N.md` / `.current.md` with a CLI-owned Commit State section;
+    - persists the raw snapshot generation and emits `implementation_submitted`.
+  - Helpers: `missing_implementation_headings`, `render_commit_state` (exact-candidate review command `git diff <base_tree> <staged_tree>`; fenced, injection-safe path lists), `replace_commit_state`, and `split_residue`.
+  - `split_residue` is a display-only split of residue into loop residue (`.gator/loops/`) and other residue, so the warning fires only for real residue. Raw facts are unchanged.
+- Module 3 review fix (whiteboard P2): an implementation artifact must have exactly one level-2 `## Commit State` outside code fences (`commit_state_heading_count`). Duplicates are rejected before the lock, and `replace_commit_state` also refuses them, so the stored artifact always has a single CLI-owned state block. Added 3 regression tests; the duplicate cases were verified to fail on the pre-fix code.
+- New CLI `gator loop submit-implementation`. The Reviewer's coding status shows the candidate tree and the review command. New `implementation_submitted` event label.
+- Tests: new `tests/test_loop_coding_submit.py` (28). The `test_loop_coding_mode.py` fixture now writes its sketch outside the repo, so it is not residue.
+- `scripts-loop.md`: handler, transition, helpers and CLI entries; subcommand counts.
+- #41 Module 4 (review, approval binding, resolution):
+  - `state_machine.advance_implementation_reviewed()` and the pure `resolve_approval()`, which returns committed / pending / stale (with a reason) / unknown / none / invalidated.
+  - `submit.handle_submit_review()` gains a `loop_dir` argument and a coding path, `_coding_review()`:
+    - the review binds to the latest generation's submitted candidate;
+    - APPROVE requires the live staged tree and HEAD to still match (or the live check to succeed);
+    - findings are always accepted and flagged `candidate_changed`, so the loop can't deadlock in review;
+    - a CLI-owned `## Reviewed Candidate` section is appended, and an author-written one is rejected;
+    - the review is recorded on the generation and the approval as `{tree, head, round, ts}`.
+  - `events`: `implementation_approved` (terminal event and label).
+  - `cli`:
+    - status, wait and architect status print the live approval resolution with text markers, plus a reopen hint for stale or unknown; JSON gains `approval_resolution`;
+    - `submit-review` gives a coding-specific handoff message.
+- Tests: new `tests/test_loop_coding_review.py` (26):
+  - pure resolution matrix and transition rules;
+  - end to end: approval then commit resolves Committed; a changed candidate blocks approval but not findings; HEAD moved; an unverifiable live state; post-approval drift goes Stale, then reopen, resubmit and approval; multi-round revision; a hook-like commit is Stale; author-written Reviewed Candidate rejected; max rounds then extend; watcher exit plus a terminal notification;
+  - CLI restart recovery and Architect stale/reopen hints.
+- `scripts-loop.md`: entries for the transition, resolution, coding review path and status resolution; a `TERMINAL_EVENTS` note.
+- #41 Module 5 (Dashboard):
+  - Server:
+    - the status poll serves the slim `submit.coding_status_view()` instead of the raw coding binding (no path lists);
+    - new Architect-only `GET /loops/<id>/snapshot` (no-store): the live `resolve_approval()` result plus slim facts, 409 for planning loops;
+    - `POST /reopen` mirrors `/extend` (`reopen_loop`, then `_ensure_loop_watcher(retry=True)`, with honest watcher reporting);
+    - the coding artifacts are allowlisted.
+  - UI (`loop.js` / `dashboard.css`):
+    - a `#loop-region-coding` panel with candidate facts, the review verdict and a residue note;
+    - a live resolution banner for approved coding loops, using text plus glyph plus weight: ✓ Committed, ● Pending, ⚠ Stale (reason), ? Unknown;
+    - a Reopen-for-revision inline form (required reason; survives polling);
+    - coding stage labels and badges, `implementation_approved` as terminal, coding artifacts and event labels;
+    - approved coding loops keep polling.
+  - Polling ownership: `ensurePolling()` is now the only interval creator, at mount and on selection. Selecting a live loop after a terminal one resumes polling; this is the core of #44. It also fixes a leaked second interval that the existing `test_terminal_loop_stops_polling` caught.
 - Tests:
-  - new `tests/test_dashboard_loop_liveness.py` (22): every state, the allowlist and secret exclusion, the degraded modes, the corrupt file left untouched, 403/400/404/409/429/503, no loop writes, `/status` and `/events` unchanged, the participant routes carrying no liveness data, the startup sweep, and a supervised lifecycle through the endpoint (connected, released, connected, closed; killed leads to stale and eligible);
-  - one new store read-retry test.
-- Charters: `scripts-dashboard.md` (the liveness and renotify handlers, `_sweep_liveness`); `scripts-loop.md` (`observer_view` / `renotify` / `sweep`, read retry).
-- #36 M4 review fix (whiteboard P1): both liveness routes (the GET view and the POST Re-notify) now require Architect authority through the standard `_resolve_architect_token()` plus a nonce check that the stored token resolves to the `architect` role. A missing, malformed or architect-less token store gives 404; a wrong nonce gives 403. Every denial is `no-store` and writes nothing: no sidecar write and no rate-limit slot. The shared resolver is hardened: a malformed or non-object `.tokens.json` returns 404 instead of an unhandled 500 (this also covers the pause/interject/unblock/end/extend routes), and it gains a `cache_control` passthrough. Added 12 regression tests; the Re-notify cases were verified to fail on the pre-fix code.
-- #36 M5 Dashboard UI: added a "Participant watchers" panel (`#loop-region-liveness`) to the loop view in `dashboard/views/loop.js`, with `fetchLiveness`, `postRenotify`, `refreshLiveness`, `applyLiveness` and an inline Re-notify reason form.
-  - The panel is built once per selection and patched field by field; values are written only when they differ, and times are absolute data values rather than wall-clock relative text. Identical polls and repeated denials cause zero DOM mutations.
-  - Each state is shown as text plus a glyph plus weight/style (colorblind-safe).
-  - The Re-notify button appears only when the role is eligible, and a typed reason survives polling. Posts send the anti-CSRF header and `no-store`, with sent/refused notices in `#loop-region-notice`.
-  - Degraded and denied modes are handled, and the fixed "not proof of work" footnote is included.
-- `dashboard.css`: liveness styles.
-- Added `tests/test_dashboard_ui/test_loop_liveness_ui.py` (8 Playwright tests).
-- Found by the existing #38 test `test_identical_polls_do_not_touch_main_panel`: repeated `hidden` assignments caused attribute mutations; fixed with `setHidden()`.
-- `scripts-dashboard-ui.md`: liveness panel contract.
-- #36 M6 documentation/protocol:
-  - `procedures/gator-loop-protocol.md` (both byte-identical copies): an optional background-watcher paragraph in Step 1 with the exit/relaunch table, Claude Code as the supported runtime (open session, 2.1.283), bounded `wait` required elsewhere, and the no-auto-submit / no-resume / ack-means-received boundaries; a quick-reference line.
-  - `/loop-join` (`.claude/commands/` plus the template copy): the Claude Code background launch line and how to read the result.
-  - New `reference-notes/loop-participant-watcher.md` (both copies): the supervisor/watcher/agent contract, exit table, JSON keys, semantics, storage and privacy, and the adapter extension point. It is added to both `gator_layout.py` shipped-defaults lists.
-  - The vendor-neutral entry paragraph (`render_entry_content()`) is deliberately unchanged, because it is shared across vendors.
-- CHANGELOG `[Unreleased]`: the #36 entry and the resolver hardening.
-- Compatibility test `test_wait_unchanged_without_registration`: bounded `wait` keeps exits 0/3/2 and never creates the sidecar.
-- Charters: `scripts-loop.md` (Cross-Vendor Orientation), `scripts-layout.md` (keep both layout copies in sync).
-- Pre-commit SQL-003 false positive ("truncate" in a docstring): reworded the `sanitize_text()` docstring to "shorten"; no behavior change.
+  - new `tests/test_dashboard_loop_coding.py` (19): the projection has no raw lists or tokens; artifact allow and deny; snapshot pending, committed, stale, unknown, planning 409 and Architect authority; reopen anti-CSRF, message, stage, success with watcher, single-active;
+  - new `tests/test_dashboard_ui/test_loop_coding_ui.py` (6 Playwright): facts and artifacts; pending then committed while polling; stale reopen flow with the form surviving polls and the POST shape; unknown; zero-mutation polls; the #44 polling restart (verified to fail without the fix).
+- Charters: `scripts-dashboard.md`, `scripts-dashboard-ui.md`, `scripts-loop.md`.
+- #41 Module 6 (protocol and docs):
+  - `procedures/gator-loop-protocol.md` (both copies) gains a new "Coding Loops (Implementation Review)" section:
+    - the staged tree is the candidate;
+    - Draftor steps: stage the charter and `commit_draft` changes, no commits, `submit-implementation` and its required sections;
+    - Reviewer steps: the exact `git diff <base_tree> <staged_tree>`, no `## Reviewed Candidate`, approval refused on a changed candidate;
+    - the one-normal-commit handoff, the PENDING / COMMITTED / STALE / UNKNOWN meanings and Architect `reopen`;
+    - a coding state table with its category summary; the quick reference is updated.
+  - `reference-notes/loop-artifact-formats.md` (both copies): implementation artifact template and rules.
+  - `/loop-join` (both copies): coding-loop steps.
+  - The vendor-neutral entry paragraph is unchanged.
+- CHANGELOG `[Unreleased]`: #41 added, and #44 (core) fixed.
+- `tests/test_loop.py` gains two drift guards: the coding state table must match `CODING_ALL_STAGES` and the mode table, and the implementation template must match `IMPLEMENTATION_HEADINGS` with exactly one Commit State.
+- `scripts-loop.md`: Cross-Vendor Orientation covers the coding docs and their pins.
+- `scripts-cross-cutting.md`: the package-data rule now also names `scripts/loop/gitsnap.py` (#41), which `pyproject.toml` lists.
+- Dashboard POST reliability: `_check_post_auth()` now drains a rejected request's body (bounded at 1 MiB) before sending 403. Unread request data made Windows reset the connection, which caused intermittent `ConnectionAbortedError` in `test_dashboard_remove` and the #36 liveness test. New `test_rejected_post_with_body_is_delivered_reliably` (40 POSTs) failed 2 of 3 runs against the pre-fix server and passed 5 of 5 with the fix. `scripts-dashboard.md` documents it.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

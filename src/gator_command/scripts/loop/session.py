@@ -202,15 +202,52 @@ def validate_round_count(value):
 # Session CRUD
 # ---------------------------------------------------------------------------
 
-def create_session(feature, loop_id, max_rounds=3, turn_timeout=300):
+# ---------------------------------------------------------------------------
+# Loop mode (#41)
+# ---------------------------------------------------------------------------
+
+MODE_PLANNING = "planning"
+MODE_CODING = "coding"
+# Values written before #41 that mean planning: absent (very old sessions)
+# and "planning-only" (what create_session() has always written for
+# planning loops, and still writes so planning residue is unchanged).
+_PLANNING_MODE_VALUES = frozenset({None, "planning", "planning-only"})
+
+
+def loop_mode(session):
+    """Normalized loop mode: ``"planning"`` or ``"coding"``.
+
+    The ONLY way loop mode may be read. A missing ``mode`` or the legacy
+    ``"planning-only"`` value is planning. An unknown value raises
+    ValueError (fail closed rather than guess a state machine).
+    """
+    raw = session.get("mode")
+    if raw in _PLANNING_MODE_VALUES:
+        return MODE_PLANNING
+    if raw == MODE_CODING:
+        return MODE_CODING
+    raise ValueError(f"Unknown loop mode: {raw!r}")
+
+
+def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
+                   mode=MODE_PLANNING, coding=None):
     """Build the initial session dict.
 
     Does not write to disk — caller is responsible for saving.
+
+    Planning sessions are byte-for-byte what they were before #41
+    (``"mode": "planning-only"``). Coding sessions carry ``"mode":
+    "coding"``, start at ``implementation_drafting``, and require the
+    ``coding`` binding block (source loop, plan digest, base commit).
     """
+    if mode not in (MODE_PLANNING, MODE_CODING):
+        raise ValueError(f"Unknown loop mode: {mode!r}")
+    if mode == MODE_CODING and not coding:
+        raise ValueError("A coding session requires its coding binding")
     now = datetime.now(tz=timezone.utc).isoformat()
     deadline = _deadline_from_now(turn_timeout)
 
-    return {
+    session = {
         "schema": SESSION_SCHEMA,
         "loop_id": loop_id,
         "feature": feature,
@@ -243,6 +280,15 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300):
         "turns": [],
         "decisions": [],
     }
+    if mode == MODE_CODING:
+        session["mode"] = MODE_CODING
+        session["status"]["stage"] = "implementation_drafting"
+        session["status"]["plan_status"] = "implementation"
+        session["current"]["implementation"] = None
+        session["coding"] = dict(coding)
+        session["coding"].setdefault("generations", [])
+        session["coding"].setdefault("approval", None)
+    return session
 
 
 def load_session(loop_dir):

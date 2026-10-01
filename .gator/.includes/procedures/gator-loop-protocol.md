@@ -207,6 +207,47 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 
 ---
 
+## Coding Loops (Implementation Review)
+
+A **coding loop** reviews real code instead of a plan. The Architect starts it from an approved planning loop (`gator loop start --mode coding --from-loop <approved-loop-id>`). `gator loop status` then shows `Mode: coding`, and the loop directory holds an immutable copy of the plan, `approved-plan.md`. Everything else in this protocol still applies: turns, the bounded wait, escalation, pause, unblock and timeouts. These rules are added:
+
+**The staged tree is the candidate.** The reviewed and approved thing is the exact `git write-tree` of the staged index, captured by the CLI. Your artifact describes it; prose never substitutes for it. Unstaged and untracked files are shown to the Reviewer but are NOT part of the candidate. The loop directory's own files under `.gator/loops/` are expected residue.
+
+**Draftor (`implementation_drafting` / `implementation_revision`):**
+1. Read `approved-plan.md` (and `findings.current.md` when revising) and the charters for the files you will touch.
+2. Implement the change, update the affected charters and `commit_draft` material, and run the relevant checks.
+3. Stage everything that belongs in the commit, including the charter and `commit_draft` files you changed: `git add ...`. Do not commit. Do not create one commit per round.
+4. Submit with `gator loop submit-implementation --token <your-token> --file <implementation.md>`. The artifact needs exactly these level-2 sections: `## Executive Summary`, `## Implementation Summary`, `## Charter Updates`, `## Verification`, and **exactly one** `## Commit State`, which the CLI fills with the captured facts, replacing your text there. A submission with nothing staged is rejected.
+
+**Reviewer (`implementation_review`):**
+1. `gator loop status` prints the candidate's staged-tree ID and the exact review command, `git diff <base_tree> <staged_tree>`. That diff is fixed: it shows exactly the submitted candidate even if the index changes later.
+2. Read `implementation.current.md`, run the review command, and check the affected charters.
+3. Submit findings (`gator loop submit-review --token <your-token> --file <findings.md>`) or approve (`... --approve`). Do not write a `## Reviewed Candidate` section; the CLI appends it. **Approval is refused if the staged tree or HEAD changed after submission.** Submit findings instead, so the Draftor resubmits the current tree.
+
+**After approval (`implementation_approved`): one normal commit.** The Draftor returns to its ordinary session and creates **one** normal Git commit of the approved staged tree, using the repository's existing hooks and the Architect's normal confirmation. There is no loop commit command. Do not stage or change anything else first. `gator loop status` shows the result:
+- `[..] PENDING COMMIT` — the approved tree is still staged and not yet committed;
+- `[OK] COMMITTED` — the commit contains exactly the approved tree;
+- `[!!] STALE` — something changed; the approved tree is no longer the candidate. Stop. The Architect returns the loop to review with `gator loop reopen --token <architect-token> --message "..."`, and the Draftor resubmits;
+- `[??] UNKNOWN` — Git facts could not be read; never treat it as approved.
+
+| Stage | What's happening | Who acts |
+|-------|-----------------|----------|
+| `implementation_drafting` | First implementation needed | Draftor |
+| `implementation_review` | Staged candidate awaiting review | Reviewer |
+| `implementation_revision` | Findings received, revision needed | Draftor |
+| `blocked_on_architect` | Escalated, waiting for human | Nobody (paused until the Architect unblocks) |
+| `paused_by_architect` | Architect paused the loop | Nobody (paused until the Architect unblocks) |
+| `implementation_approved` | Reviewer approved the staged tree | Draftor makes one normal commit (done unless the Architect reopens it) |
+| `max_rounds_exceeded` | Round limit reached without approval | Nobody (done unless the Architect extends it) |
+| `turn_timed_out` | Active role did not submit in time | Nobody (done, final) |
+| `ended_by_architect` | Architect ended the loop | Nobody (done, final) |
+
+**Coding Active (3):** `implementation_drafting`, `implementation_review`, `implementation_revision`.
+**Coding Paused (2):** `blocked_on_architect`, `paused_by_architect`.
+**Coding Terminal (4):** `implementation_approved`, `max_rounds_exceeded`, `turn_timed_out`, `ended_by_architect`. An extension resumes a coding loop at `implementation_revision`.
+
+---
+
 ## What Good Participation Looks Like
 
 **Good draftor behavior:**
@@ -318,7 +359,7 @@ gator loop status --token <token>
    (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
 4. Read the relevant files (sketch, plan, or findings) from the loop directory
 5. Write your artifact to a file
-6. Submit: `gator loop submit-draft` or `gator loop submit-review`
+6. Submit: `gator loop submit-draft` or `gator loop submit-review` (coding loops: `gator loop submit-implementation` with the change staged — see Coding Loops)
 7. If stuck at any time: `gator loop escalate --token <token> --reason "..."`
 
 The CLI mediates everything. The files are the handoff. The Architect supervises. The loop terminates deterministically. Do your best work within the bounds.

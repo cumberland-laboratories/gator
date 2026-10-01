@@ -200,6 +200,45 @@ gator loop submit-review --token <token> --file review.md --approve
 
 ---
 
+## Implementation (written by the draftor, coding loops)
+
+In a coding loop the Draftor submits an implementation artifact with `gator loop submit-implementation` after staging the change. The staged tree is the candidate; this artifact is concise evidence and orientation for the Reviewer.
+
+```markdown
+# Implementation: <feature name>
+
+## Executive Summary
+
+<Four bullets or ~120 words: what changed, the key decision, the main
+risk, and how it was verified.>
+
+## Implementation Summary
+
+<Behavior changed, and the key files and functions.>
+
+## Charter Updates
+
+<Which charter sections and tripwires were updated, and how you checked
+them against the code.>
+
+## Verification
+
+<Commands run, results, and known gaps.>
+
+## Commit State
+
+<Leave a placeholder. The CLI replaces this section with the captured
+base and current HEAD, the staged-tree ID, the changed paths, the residue,
+and the exact review command `git diff <base_tree> <staged_tree>`.>
+```
+
+**Rules:**
+- Exactly one level-2 `## Commit State` section (a fenced example does not count). A duplicate is rejected.
+- Stage the change, including charter and `commit_draft` updates, before submitting. Nothing staged means the submission is rejected.
+- The Reviewer's findings or approval use the Findings format above. The CLI appends a `## Reviewed Candidate` section recording the exact reviewed tree, so do not write one yourself. Approval is refused if the staged tree or HEAD changed after submission.
+
+---
+
 ## Decision Request (written by either model, attached via `escalate --file`)
 
 A decision request is a structured document attached to an escalation when the model needs an Architect-owned decision before continuing. It is copied into the loop directory as `decision-request.decision-{N}.round-{R}.md` and recorded in the `decisions[]` ledger.

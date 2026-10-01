@@ -2995,6 +2995,44 @@ class TestWaitHandoffAlignment:
             assert {re.match(r"^\| `([a-z_]+)`", l).group(1) for l in final_rows} == \
                 set(loop_sm.TERMINAL_STAGES) - {loop_sm.EXTENDABLE_STAGE}
 
+    def test_protocol_coding_state_table_matches_state_machine(self):
+        """#41: the Coding Loops section's state table lists exactly the
+        coding stage set, and its category summary matches the mode table."""
+        import re
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            section = text[text.index("## Coding Loops"):]
+            section = section[:section.index("\n---")]
+            rows = set(re.findall(r"^\| `([a-z_]+)` \|", section, re.MULTILINE))
+            assert rows == set(loop_sm.CODING_ALL_STAGES), (
+                f"{base}: coding table {sorted(rows)} != "
+                f"{sorted(loop_sm.CODING_ALL_STAGES)}")
+            coding = loop_sm.STAGES["coding"]
+            for label, stages in (("Coding Active (3)", coding["active"]),
+                                  ("Coding Paused (2)", coding["paused"]),
+                                  ("Coding Terminal (4)", coding["terminal"])):
+                line = next(l for l in section.splitlines() if label in l)
+                for stage in stages:
+                    assert f"`{stage}`" in line, f"{label} summary missing {stage}"
+            for cmd in ("submit-implementation", "gator loop reopen",
+                        "git diff <base_tree> <staged_tree>", "approved-plan.md"):
+                assert cmd in section
+
+    def test_implementation_template_matches_cli_headings(self):
+        """#41: the format reference's implementation template lists exactly
+        the level-2 sections the CLI requires, with one Commit State."""
+        import re
+        import submit as _submit
+        for base in [INCLUDES_DIR / "reference-notes", TEMPLATES_DIR / "reference-notes"]:
+            text = (base / "loop-artifact-formats.md").read_text(encoding="utf-8")
+            section = text[text.index("## Implementation (written by the draftor"):]
+            block = section[section.index("```markdown") + len("```markdown"):]
+            block = block[:block.index("```")]
+            headings = re.findall(r"^## (.+)$", block, re.MULTILINE)
+            assert headings == list(_submit.IMPLEMENTATION_HEADINGS)
+            assert _submit.missing_implementation_headings(block) == []
+            assert _submit.commit_state_heading_count(block) == 1
+
     def test_escalate_before_wait_ordering(self):
         """All surfaces teach escalate-first, then wait — not the reverse."""
         gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")

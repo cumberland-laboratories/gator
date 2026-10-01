@@ -252,11 +252,16 @@ def _adopt_orphaned_loops():
                 import json as _j
                 session = _j.loads(
                     session_file.read_text(encoding="utf-8"))
-                stage = session.get("status", {}).get("stage", "")
-                if stage in ("plan_approved", "max_rounds_exceeded",
-                             "turn_timed_out", "ended_by_architect"):
+                # Mode-aware (#41): coding loops have their own terminal
+                # stage (implementation_approved); an unknown mode raises
+                # ValueError and is skipped rather than hosted blind.
+                _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+                if _loop_scripts not in sys.path:
+                    sys.path.insert(0, _loop_scripts)
+                from state_machine import is_terminal as _sm_is_terminal
+                if _sm_is_terminal(session):
                     continue
-            except (OSError, ValueError, KeyError):
+            except (OSError, ValueError, KeyError, TypeError):
                 continue
             loop_id = entry_dir.name
             state, detail = _ensure_loop_watcher(repo_path, loop_id, entry_dir)
@@ -2235,6 +2240,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._handle_loop_events(repo_key, loop_id)
             return
 
+        # /loops/<id>/snapshot — Architect-only live coding resolution (#41).
+        if tail.startswith("/loops/") and tail.endswith("/snapshot"):
+            loop_id = tail[len("/loops/"):-len("/snapshot")]
+            if loop_id and "/" not in loop_id:
+                self._handle_loop_coding_snapshot(repo_key, loop_id)
+                return
+
         # /loops/<id>/liveness — Architect-only liveness view (#36). A
         # loop_id containing "/" is not this route (e.g. an artifact path).
         if tail.startswith("/loops/") and tail.endswith("/liveness"):
@@ -2382,6 +2394,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         safe = {k: v for k, v in session.items()
                 if k in self._LOOP_STATUS_ALLOWED_KEYS}
+        if isinstance(session.get("coding"), dict):
+            # #41: a slim allowlisted projection (ids, counts, verdicts,
+            # approval) — never the raw path lists on every 3 s poll.
+            _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+            if _loop_scripts not in sys.path:
+                sys.path.insert(0, _loop_scripts)
+            from submit import coding_status_view
+            safe["coding"] = coding_status_view(session["coding"])
         self._send_json(safe)
 
     def _handle_loop_events(self, repo_key, loop_id):
@@ -2423,11 +2443,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "findings.current.md",
         "decision-request.md",
         "decision-response.md",
+        "approved-plan.md",            # coding (#41)
+        "implementation.current.md",   # coding (#41)
     })
 
     _LOOP_ARTIFACT_PATTERNS = (
         re.compile(r'^plan\.round-\d+\.md$'),
         re.compile(r'^findings\.round-\d+\.md$'),
+        re.compile(r'^implementation\.round-\d+\.md$'),  # coding (#41)
         re.compile(r'^decision-request\.decision-\d+\.round-\d+\.md$'),
         re.compile(r'^decision-response\.decision-\d+\.md$'),
     )
@@ -2532,6 +2555,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/extend": "_handle_loop_extend",
             "/end": "_handle_loop_end",
             "/renotify": "_handle_loop_renotify",
+            "/reopen": "_handle_loop_reopen",
         }
         if tail.startswith("/loops/"):
             suffix_idx = tail.rfind("/")
@@ -3053,6 +3077,118 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "watcher_detail": detail,
         })
 
+    def _handle_loop_coding_snapshot(self, repo_key, loop_id):
+        """GET live coding-candidate resolution (#41). Architect authority
+        (same resolver + nonce check as the liveness routes); no-store.
+
+        Returns the pure ``resolve_approval()`` result against a fresh
+        ``gitsnap`` snapshot plus slim live facts (ids and counts, never
+        raw path lists). A planning loop is 409; Git trouble is reported
+        as ``live.ok = false`` and resolution ``unknown``, never approved.
+        """
+        loop_dir = self._resolve_liveness_loop(repo_key, loop_id)
+        if loop_dir is None:
+            return
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        import gitsnap
+        from session import load_session, loop_mode
+        from state_machine import resolve_approval
+        from submit import split_residue
+        try:
+            session = load_session(loop_dir)
+            mode = loop_mode(session)
+        except (OSError, ValueError, KeyError):
+            self._send_json({"error": "cannot read session"}, 500,
+                            cache_control="no-store")
+            return
+        if mode != "coding":
+            self._send_json({"error": "not a coding loop"}, 409,
+                            cache_control="no-store")
+            return
+        coding = session.get("coding") or {}
+        snap = gitsnap.snapshot(Path(loop_dir).parent.parent.parent,
+                                coding.get("base_head"))
+        if snap.get("ok"):
+            loop_res, other_res = split_residue(snap.get("unstaged_paths") or [])
+            live = {
+                "ok": True,
+                "current_head": snap.get("current_head"),
+                "head_tree": snap.get("head_tree"),
+                "staged_tree": snap.get("staged_tree"),
+                "branch": snap.get("branch"),
+                "detached": snap.get("detached"),
+                "changed_count": (len(snap.get("changed_paths") or [])
+                                  + (snap.get("changed_truncated") or 0)),
+                "residue_other_count": (len(other_res)
+                                        + (snap.get("unstaged_truncated") or 0)),
+                "residue_loop_count": len(loop_res),
+            }
+        else:
+            live = {"ok": False, "error": snap.get("error")}
+        self._send_json({
+            "schema": "gator-loop-coding-snapshot-v1",
+            "stage": session.get("status", {}).get("stage"),
+            "approval_resolution": resolve_approval(coding.get("approval"), snap),
+            "live": live,
+        }, cache_control="no-store")
+
+    def _handle_loop_reopen(self, repo_key, loop_id, req):
+        """Architect: reopen an approved coding loop for revision (#41).
+
+        Mirrors `_handle_loop_extend`: requires a non-blank message, goes
+        through `host.reopen_loop()` (start.lock + single-active guard +
+        session transaction), then attaches a daemon watcher via
+        `_ensure_loop_watcher(retry=True)`. The reopen stays durable even
+        if the watcher cannot attach; the response reports the watcher
+        state honestly.
+        """
+        result = self._resolve_architect_token(repo_key, loop_id)
+        if result is None:
+            return
+        loop_dir, token = result
+        message = req.get("message")
+        if not isinstance(message, str) or not message.strip():
+            self._send_json(
+                {"error": "message (reason) is required to reopen a loop"}, 400)
+            return
+
+        _loop_scripts = str(Path(__file__).resolve().parent / "loop")
+        if _loop_scripts not in sys.path:
+            sys.path.insert(0, _loop_scripts)
+        from host import reopen_loop
+        try:
+            _lid, loop_dir = reopen_loop(token, message, loop_dir=loop_dir)
+        except PermissionError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+        except RuntimeError as exc:
+            self._send_json({"error": str(exc)}, 409)
+            return
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, 400)
+            return
+
+        try:
+            repo_path = str(Path(_resolve_repo_by_key(repo_key)).resolve())
+        except (KeyError, OSError):
+            repo_path = str(Path(loop_dir).parent.parent.parent.resolve())
+        state, detail = _ensure_loop_watcher(
+            repo_path, loop_id, loop_dir, retry=True)
+        try:
+            from session import load_session
+            st = load_session(loop_dir)["status"]
+        except (OSError, ValueError, KeyError):
+            st = {}
+        self._send_json({
+            "ok": True,
+            "stage": st.get("stage"),
+            "round": st.get("round"),
+            "watcher": state,
+            "watcher_detail": detail,
+        })
+
     def _handle_loop_end(self, repo_key, loop_id, req):
         """Architect: terminate the loop."""
         result = self._resolve_architect_token(repo_key, loop_id)
@@ -3191,9 +3327,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
         browser-based attack vectors (forms, fetch, embeds).
         """
         if self.headers.get("X-Gator-Dashboard") != "1":
+            self._drain_request_body()
             self._send_json({"error": "missing required header"}, 403)
             return False
         return True
+
+    _MAX_DRAIN_BYTES = 1024 * 1024
+
+    def _drain_request_body(self):
+        """Read and discard a rejected request's body (bounded).
+
+        Closing a socket that still holds unread request data makes the OS
+        reset the connection (RST) on Windows, so a client can see
+        ConnectionAbortedError instead of the 403. Draining first lets the
+        rejection be delivered reliably. Bodies above the cap are not read;
+        the connection is closed instead.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            length = 0
+        if length <= 0:
+            return
+        if length > self._MAX_DRAIN_BYTES:
+            self.close_connection = True
+            return
+        remaining = length
+        try:
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError:
+            self.close_connection = True
 
     def do_POST(self):
         path = self.path.split("?")[0]

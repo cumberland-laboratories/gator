@@ -186,6 +186,22 @@ Architect-only participant-liveness surface (#36).
 ! Re-notify is a communication/audit action only: never writes `session.json` or `events.jsonl`, and never changes deadlines or `next_role`.
 ! Never add liveness data to participant-visible routes (`/status`, `/events`, `/artifact/*`) or to `_LOOP_STATUS_ALLOWED_KEYS`. Never serialize registration ids, seq lists, state keys, adapter labels, or audit reasons.
 
+### _handle_loop_coding_snapshot(repo_key, loop_id) / _handle_loop_reopen(repo_key, loop_id, req) — coding loops (#41)
+File: src/gator_command/scripts/gator-dashboard.py
+- **GET `/api/repo-by-key/<key>/loops/<id>/snapshot`:** requires Architect authority through the same `_resolve_liveness_loop()` (architect resolver plus nonce check: 404 / 403), and responds with `Cache-Control: no-store`.
+  - A planning loop gets 409.
+  - The response, `gator-loop-coding-snapshot-v1`, is `{stage, approval_resolution, live}`. `approval_resolution` is the pure `state_machine.resolve_approval()` result against a fresh `gitsnap.snapshot()`. `live` holds slim facts (`ok`, HEAD, HEAD tree, staged tree, branch, detached, changed count, residue other/loop counts), or `{ok: false, error}`.
+  - Raw path lists are never served. Git trouble shows as `unknown`, never approved.
+- **POST `/reopen`** (via `_LOOP_ACTIONS`; anti-CSRF header enforced by `do_POST`). It mirrors `/extend`:
+  - it goes through `_resolve_architect_token()`, and a non-blank `message` is required (400);
+  - `host.reopen_loop()` errors map to 409 (`PermissionError` / `RuntimeError`) or 400 (`ValueError`);
+  - it then calls `_ensure_loop_watcher(retry=True)`.
+
+  The response is `{ok, stage, round, watcher, watcher_detail}`. The reopen stays durable even when `watcher == "failed"`, and the response says so honestly.
+- **Status (`_handle_loop_status`):** a coding session's `coding` block is replaced by the slim allowlisted `submit.coding_status_view()`: ids, counts, review verdicts and approval. The raw path lists in the generations are never shipped on the 3 s poll.
+- **Artifact allowlist:** gains `approved-plan.md`, `implementation.current.md`, and `implementation.round-N.md`.
+-> `loop.gitsnap.snapshot()`, `loop.state_machine.resolve_approval()`, `loop.submit.split_residue()` / `coding_status_view()`, `loop.host.reopen_loop()`, `_ensure_loop_watcher()`
+
 ### _sweep_liveness(repo_path)
 File: src/gator_command/scripts/gator-dashboard.py
 Startup retention sweep (`loop.liveness.sweep()`), run for each registry repo at the start of `_adopt_orphaned_loops()`. It projects surviving loops (prune / 7-day terminal retention) and deletes sidecar files whose loop directory is gone. It is best-effort: a failure is a debug diagnostic only and never affects adoption.
@@ -198,6 +214,7 @@ Server-local host registry tracking watcher threads, held `host.lock` file descr
 ! Invariant: never create a watcher thread outside `_ensure_loop_watcher()`. It (1) returns `already_hosted` if this process already has a live thread for the key, (2) acquires `host.lock` — one attempt for start/adoption, the ~3 s `acquire_host_lock_with_retry()` window when `retry=True` — and returns `already_hosted` if another process still holds it, (3) inserts the nonce-protected `_HostEntry` BEFORE `t.start()`, and (4) on thread-start failure removes the entry only if the nonce matches and releases the fd (`failed`, detail `failed to start host watcher: ...`).
 ! `host.lock` acquired once and transferred to `_run_watcher` — no release/reacquire gap. OS exclusive lock prevents duplicate watchers.
 ! `_run_watcher` owns the fd — closes it in `finally`, removes its registry entry only if `entry_nonce` matches (prevents a replacement entry from being deleted by an exiting prior incarnation).
+! Adoption decides "terminal" with the mode-aware `state_machine.is_terminal()` (#41), not a hard-coded stage list, so an approved coding loop (`implementation_approved`) is never re-hosted, and a session with an unknown mode is skipped rather than hosted blind.
 ! Adoption skips loops whose `host.lock` is already held (another host is live). Loop start maps any non-attached result to HTTP 500 (`failed to start host watcher` or `failed to acquire host lock`) — a brand-new loop cannot legitimately be hosted elsewhere.
 
 ### DashboardHandler.do_GET() / DashboardHandler.do_POST()
@@ -205,7 +222,7 @@ File: src/gator_command/scripts/gator-dashboard.py
 Dispatch API, asset, repository content, update, lifecycle, and loop workspace routes.
 <- loopback HTTP server
 -> typed request handlers and data adapters
-! Every POST calls `_check_post_auth()` before mutation and requires `X-Gator-Dashboard: 1`.
+! Every POST calls `_check_post_auth()` before mutation and requires `X-Gator-Dashboard: 1`. A rejected POST first drains its body (`_drain_request_body()`, bounded at `_MAX_DRAIN_BYTES` = 1 MiB; larger bodies close the connection instead), so the 403 is delivered reliably. Closing a socket with unread request data makes Windows reset the connection, which clients saw as an intermittent `ConnectionAbortedError`. Pinned by `test_rejected_post_with_body_is_delivered_reliably` (40 header-less POSTs with a body).
 ! Do not add permissive CORS. The custom header plus unanswered cross-origin preflight is the local anti-CSRF boundary.
 ! Debug GET routes return 404 unless `GATOR_DASHBOARD_DEBUG=1` is set for the test process.
 

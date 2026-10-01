@@ -32,17 +32,31 @@ if _LOOP_DIR not in sys.path:
 
 def _cmd_start(args):
     from host import start_loop
+    mode = getattr(args, "mode", "planning") or "planning"
+    from_loop = getattr(args, "from_loop", None)
+    if mode == "planning" and not args.sketch:
+        print("  Error: a planning loop requires --sketch", file=sys.stderr)
+        sys.exit(1)
+    if mode == "coding" and not from_loop:
+        print("  Error: a coding loop requires --from-loop <approved planning loop id>",
+              file=sys.stderr)
+        sys.exit(1)
     try:
         start_loop(
             feature=args.feature,
             sketch_path=args.sketch,
             max_rounds=args.max_rounds,
             turn_timeout=args.turn_timeout,
+            mode=mode,
+            from_loop=from_loop,
         )
     except FileNotFoundError as e:
         print(f"  Error: {e}", file=sys.stderr)
         sys.exit(1)
     except ValueError as e:
+        print(f"  Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except RuntimeError as e:
         print(f"  Error: {e}", file=sys.stderr)
         sys.exit(1)
 
@@ -96,7 +110,11 @@ def _cmd_status(args):
             ),
             "turn_timeout_seconds": status.get("turn_timeout_seconds"),
             "turn_deadline": status.get("turn_deadline"),
+            "mode": _mode_of(session),
         }
+        res = _approval_resolution(session, loop_dir)
+        if res is not None:
+            out["approval_resolution"] = res
         print(json.dumps(out, indent=2))
     else:
         print(f"  Loop: {loop_id}")
@@ -104,9 +122,12 @@ def _cmd_status(args):
         print(f"  Role: {role}")
         print(f"  Your turn: {'YES' if my_turn else 'NO'}")
         print(f"  Stage: {stage}")
+        if _mode_of(session) == "coding":
+            print("  Mode: coding")
 
         if is_terminal(session):
             _print_terminal_reason(session, role)
+            _print_approval_resolution(_approval_resolution(session, loop_dir))
             print("  Loop ended.")
         elif is_paused(session):
             print("  Blocked -- waiting for Architect")
@@ -165,7 +186,11 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "turns": session.get("turns", []),
             "decisions": decisions,
             "pending_decisions": pending,
+            "mode": _mode_of(session),
         }
+        res = _approval_resolution(session, loop_dir)
+        if res is not None:
+            out["approval_resolution"] = res
         print(json.dumps(out, indent=2))
     else:
         print(f"  Loop: {loop_id}")
@@ -179,6 +204,8 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             print(f"  Paused: {stage}")
         elif is_terminal(session):
             _print_terminal_reason(session, "architect")
+            _print_approval_resolution(_approval_resolution(session, loop_dir),
+                                       token=args.token)
             print("  Loop ended.")
             if stage == "max_rounds_exceeded":
                 print()
@@ -234,9 +261,22 @@ def _print_turn_window(status):
     print(line)
 
 
+def _mode_of(session):
+    """Normalized loop mode for display; unknown modes show as-is."""
+    from session import loop_mode
+    try:
+        return loop_mode(session)
+    except ValueError:
+        return str(session.get("mode"))
+
+
 def _print_action_prompt(session, role, loop_dir, token):
     """Print the action hint and next-step command for the active role."""
     stage = session["status"]["stage"]
+
+    if _mode_of(session) == "coding":
+        _print_coding_action_prompt(session, role, loop_dir, token)
+        return
 
     if role == "draftor":
         if stage == "plan_drafting":
@@ -257,10 +297,88 @@ def _print_action_prompt(session, role, loop_dir, token):
         print(f"    gator loop submit-review --token {token} --file <review.md> --approve")
 
 
+_STALE_REASONS = {
+    "staged_tree_changed": "the staged tree changed after approval",
+    "head_moved_tree_differs": ("HEAD moved and its tree is not the approved "
+                                "tree (a different commit, or a hook changed "
+                                "committed content)"),
+    "detached_mismatch": "detached HEAD whose tree is not the approved tree",
+}
+
+
+def _approval_resolution(session, loop_dir):
+    """Live approval resolution for an approved coding loop, else None."""
+    if _mode_of(session) != "coding":
+        return None
+    if session["status"].get("stage") != "implementation_approved":
+        return None
+    import gitsnap
+    from state_machine import resolve_approval
+    coding = session.get("coding") or {}
+    repo_root = Path(loop_dir).parent.parent.parent
+    snap = gitsnap.snapshot(repo_root, coding.get("base_head"))
+    return resolve_approval(coding.get("approval"), snap)
+
+
+def _print_approval_resolution(res, token=None):
+    """Text + marker lines (never meaning by color alone)."""
+    if not res:
+        return
+    state = res["state"]
+    tree = (res.get("approved_tree") or "")
+    if state == "committed":
+        print(f"  Approval: [OK] COMMITTED -- handoff complete (commit {res.get('commit')})")
+    elif state == "pending":
+        print("  Approval: [..] PENDING COMMIT -- return to the Draftor session for")
+        print(f"            one normal commit of staged tree {tree}")
+    elif state == "stale":
+        why = _STALE_REASONS.get(res.get("reason"), res.get("reason"))
+        print(f"  Approval: [!!] STALE -- {why}.")
+        print("            The approved tree is no longer the candidate.")
+    elif state == "unknown":
+        print(f"  Approval: [??] UNKNOWN -- Git facts unavailable ({res.get('reason')});")
+        print("            never treat this as approved.")
+    if token and state in ("stale", "unknown"):
+        print("  Return it to implementation review (requires a reason):")
+        print(f"    gator loop reopen --token {token} --message \"...\"")
+
+
+def _print_coding_action_prompt(session, role, loop_dir, token):
+    """Coding-mode action hint (#41). The staged tree is the candidate."""
+    stage = session["status"]["stage"]
+    if role == "draftor":
+        if stage == "implementation_drafting":
+            print("  Action: Implement the approved plan, stage the intended change")
+            print("          (code, charters, and commit_draft material), then submit.")
+        else:
+            print("  Action: Revise the staged implementation based on reviewer findings.")
+            print(f"  Findings: {loop_dir / 'findings.current.md'}")
+        print(f"  Approved plan: {loop_dir / 'approved-plan.md'}")
+        print()
+        print("  Next step:")
+        print(f"    gator loop submit-implementation --token {token} --file <implementation.md>")
+    elif role == "reviewer":
+        print("  Action: Review the submitted candidate tree and the")
+        print("          implementation artifact; submit findings or approve.")
+        print(f"  Implementation: {loop_dir / 'implementation.current.md'}")
+        gens = session.get("coding", {}).get("generations") or []
+        if gens:
+            snap = gens[-1]["snapshot"]
+            print(f"  Candidate staged tree: {snap['staged_tree']} (round {gens[-1]['round']})")
+            print(f"  Review exactly that candidate: git diff {snap['base_tree']} {snap['staged_tree']}")
+        print()
+        print("  Next step:")
+        print(f"    gator loop submit-review --token {token} --file <findings.md>")
+        print(f"    gator loop submit-review --token {token} --file <review.md> --approve")
+
+
 def _print_terminal_reason(session, role):
     """Print why the loop ended."""
     stage = session["status"]["stage"]
-    if stage == "plan_approved":
+    if stage == "implementation_approved":
+        print("  Result: Implementation approved -- return to the Draftor session")
+        print("          for one normal commit (existing hooks, Architect confirmation).")
+    elif stage == "plan_approved":
         print("  Result: Plan approved")
     elif stage == "max_rounds_exceeded":
         max_r = session["status"].get("max_rounds", "?")
@@ -273,6 +391,33 @@ def _print_terminal_reason(session, role):
             print(f"  Result: Ended by Architect -- {reason}")
         else:
             print("  Result: Ended by Architect")
+
+
+def _cmd_submit_implementation(args):
+    """Coding (#41): submit the staged candidate + implementation artifact."""
+    from submit import handle_submit_implementation, split_residue
+    try:
+        loop_id, role, loop_dir, gen = handle_submit_implementation(
+            args.token, args.file)
+    except PermissionError as e:
+        print(f"  Rejected: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"  Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    snap = gen["snapshot"]
+    n_changed = len(snap["changed_paths"]) + snap.get("changed_truncated", 0)
+    loop_res, other_res = split_residue(snap["unstaged_paths"])
+    n_other = len(other_res) + snap.get("unstaged_truncated", 0)
+    print(f"  Implementation submitted (round {gen['round']}). Advancing to implementation_review.")
+    print(f"  Candidate staged tree: {snap['staged_tree']}")
+    print(f"  Changed paths vs base: {n_changed}")
+    if n_other:
+        print(f"  WARNING: {n_other} unstaged/untracked path(s) are NOT part of the candidate.")
+    if loop_res:
+        print(f"  Loop residue under .gator/loops/: {len(loop_res)} path(s) (expected; not part of the candidate).")
+    print(f"  Artifact: {loop_dir / 'implementation.current.md'}")
+    print(f"  Loop: {loop_id}")
 
 
 def _cmd_submit_draft(args):
@@ -295,7 +440,23 @@ def _cmd_submit_review(args):
         loop_id, role, loop_dir = handle_submit_review(
             args.token, args.file, approve=args.approve
         )
-        if args.approve:
+        from session import load_session
+        session = load_session(loop_dir)
+        if _mode_of(session) == "coding":
+            gen = (session.get("coding", {}).get("generations") or [{}])[-1]
+            review = gen.get("review") or {}
+            if args.approve:
+                print(f"  Implementation approved: staged tree {review.get('reviewed_tree')}.")
+                print("  Return to the Draftor session for ONE normal commit (existing")
+                print("  hooks, Architect confirmation). If the staged tree changes first,")
+                print("  the approval becomes stale and the loop must be reopened.")
+            else:
+                print(f"  Review submitted for staged tree {review.get('reviewed_tree')}.")
+                if review.get("candidate_changed"):
+                    print("  Note: the live candidate changed after submission; the Draftor")
+                    print("  must resubmit the current tree.")
+                print(f"  Stage: {session['status']['stage']}")
+        elif args.approve:
             print(f"  Plan approved. Loop complete.")
         else:
             print(f"  Review submitted. Revision requested.")
@@ -400,13 +561,23 @@ def _cmd_extend(args):
     print("  join prompts (Dashboard \"Copy prompt\", or their loop tokens).")
     print()
 
+    _attach_foreground_watcher(loop_host, loop_dir, "extension")
+
+
+def _attach_foreground_watcher(loop_host, loop_dir, what):
+    """Host contract shared by extend (#39) and reopen (#41).
+
+    attached -> watch in the foreground until terminal / Ctrl+C;
+    already_hosted -> another live process enforces timeouts, exit 0;
+    failed -> the revival is saved but timeouts are NOT enforced, exit 1.
+    """
     fd, state, detail = loop_host.acquire_host_lock_with_retry(loop_dir)
     if state == loop_host.HOST_ALREADY_HOSTED:
         print(f"  Host: already hosted ({detail}). That process enforces turn timeouts.")
         return
     if state != loop_host.HOST_ATTACHED:
         print(f"  Host: could not attach a watcher ({detail}).", file=sys.stderr)
-        print("  The extension is saved, but turn timeouts are NOT being enforced.",
+        print(f"  The {what} is saved, but turn timeouts are NOT being enforced.",
               file=sys.stderr)
         sys.exit(1)
 
@@ -420,6 +591,39 @@ def _cmd_extend(args):
         print("  Host stopped. Turn timeouts are no longer enforced for this loop.")
     finally:
         loop_host.release_host_lock(fd)
+
+
+def _cmd_reopen(args):
+    """Architect: reopen an approved coding loop for revision (#41).
+
+    Same host contract as `gator loop extend`: after a successful reopen
+    this command always attaches the foreground watcher, so the revived
+    loop is never left live-but-unhosted by this command.
+    """
+    import host as loop_host
+    from session import load_session
+
+    try:
+        loop_id, loop_dir = loop_host.reopen_loop(args.token, args.message)
+    except PermissionError as e:
+        print(f"  Rejected: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (RuntimeError, ValueError, FileNotFoundError) as e:
+        print(f"  Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    status = load_session(loop_dir)["status"]
+    print(f"  Reopened: {status['stage']} (next: {status['next_role']}, "
+          f"round {status.get('round', 0)}).")
+    print("  The previous approval is invalidated; the Draftor must resubmit.")
+    print(f"  Turn window: {status.get('turn_timeout_seconds')}s")
+    print(f"  Loop: {loop_id}")
+    print()
+    print("  Participants must be re-engaged: give the Draftor and Reviewer fresh")
+    print("  join prompts (Dashboard \"Copy prompt\", or their loop tokens).")
+    print()
+
+    _attach_foreground_watcher(loop_host, loop_dir, "reopen")
 
 
 def _cmd_pause(args):
@@ -552,6 +756,7 @@ def _cmd_wait(args):
 
         if is_terminal(session):
             _print_terminal_reason(session, role)
+            _print_approval_resolution(_approval_resolution(session, loop_dir))
             print("  Loop ended.")
         elif is_paused(session):
             print("  Blocked -- waiting for Architect")
@@ -803,9 +1008,15 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="subcommand")
 
     # start
-    p_start = sub.add_parser("start", help="Initialize a new planning loop")
+    p_start = sub.add_parser("start", help="Initialize a new planning or coding loop")
     p_start.add_argument("--feature", required=True, help="Feature slug")
-    p_start.add_argument("--sketch", required=True, help="Path to sketch file")
+    p_start.add_argument("--sketch", default=None,
+                         help="Path to sketch file (planning loops; required)")
+    p_start.add_argument("--mode", choices=["planning", "coding"], default="planning",
+                         help="Loop mode (default: planning). A coding loop is a "
+                              "guarded successor of an approved planning loop")
+    p_start.add_argument("--from-loop", dest="from_loop", default=None,
+                         help="Approved planning loop id to implement (coding loops; required)")
     p_start.add_argument("--max-rounds", type=int, default=3, help="Max revision rounds (default: 3)")
     p_start.add_argument("--turn-timeout", type=int, default=300, help="Turn timeout in seconds (default: 300)")
 
@@ -818,6 +1029,13 @@ def main(argv=None):
     p_draft = sub.add_parser("submit-draft", help="Submit a plan draft")
     p_draft.add_argument("--token", required=True, help="Draftor role token")
     p_draft.add_argument("--file", required=True, help="Path to plan file")
+
+    # submit-implementation (coding, #41)
+    p_impl = sub.add_parser(
+        "submit-implementation",
+        help="Submit the staged candidate and implementation artifact (coding loops)")
+    p_impl.add_argument("--token", required=True, help="Draftor token")
+    p_impl.add_argument("--file", required=True, help="Path to the implementation artifact")
 
     # submit-review
     p_review = sub.add_parser("submit-review", help="Submit review findings or approve")
@@ -877,6 +1095,14 @@ def main(argv=None):
         "--message", required=True,
         help="Required reason for continuing; shown to the resumed Draftor")
 
+    # reopen (Architect, #41)
+    p_reopen = sub.add_parser(
+        "reopen", help="Reopen an approved coding loop for revision (Architect)")
+    p_reopen.add_argument("--token", required=True, help="Architect token")
+    p_reopen.add_argument(
+        "--message", required=True,
+        help="Required reason for reopening; shown to the resumed Draftor")
+
     # wait
     p_wait = sub.add_parser("wait", help="Block until it is your turn")
     p_wait.add_argument("--token", required=True, help="Role token")
@@ -930,6 +1156,7 @@ def main(argv=None):
         "start": _cmd_start,
         "status": _cmd_status,
         "submit-draft": _cmd_submit_draft,
+        "submit-implementation": _cmd_submit_implementation,
         "submit-review": _cmd_submit_review,
         "escalate": _cmd_escalate,
         "pause": _cmd_pause,
@@ -937,6 +1164,7 @@ def main(argv=None):
         "end": _cmd_end,
         "unblock": _cmd_unblock,
         "extend": _cmd_extend,
+        "reopen": _cmd_reopen,
         "wait": _cmd_wait,
         "participant": _cmd_participant,
         "tail": _cmd_tail,

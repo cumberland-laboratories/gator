@@ -223,7 +223,14 @@ class TestView:
 
 class TestRenotify:
     def test_requires_anti_csrf_header(self, env):
-        status, body, _ = _renotify(env, "draftor", header=False)
+        # No body: the server rejects before reading one, and on Windows an
+        # unread request body can surface as ConnectionAbortedError (flake).
+        req = Request(env["url"] + "/renotify", data=b"", method="POST")
+        try:
+            urlopen(req, timeout=10)
+            status = 200
+        except HTTPError as e:
+            status = e.code
         assert status == 403
         assert not env["store"].path.exists()
 

@@ -20,6 +20,20 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
   - **Scope:** acknowledged means received, not that work happened. Nothing auto-submits, and ended vendor sessions are not resumed. Runtimes without a background supervisor (Codex today) keep bounded `gator loop wait`.
   - **Documentation:** the loop protocol, `/loop-join`, and the new `reference-notes/loop-participant-watcher.md`.
 
+- **Coding loops with diff-aware implementation review ([#41](https://github.com/cumberland-laboratories/gator/issues/41)).** A new, optional loop mode in which the Reviewer reviews the actual staged code, not a prose summary.
+  - **Starting:** `gator loop start --mode coding --from-loop <approved-planning-loop>` starts a guarded successor of an approved planning loop. It copies the plan as `approved-plan.md` with a SHA-256 digest, and records the Git base commit. The source id must be canonical, and every failure is atomic.
+  - **Submitting:** the Draftor stages the change and runs `gator loop submit-implementation`. The CLI captures the raw staged tree (`git write-tree`), the changed paths against the base, and the unstaged residue (disclosed, never part of the candidate). It writes the artifact's `## Commit State` section itself.
+  - **Reviewing:** the Reviewer reviews exactly `git diff <base_tree> <staged_tree>`. Approval binds to that tree and is refused if the staged tree or HEAD changed after submission. Findings are always accepted.
+  - **After approval:** the Draftor makes **one normal commit** with the existing hooks. There is no loop commit command, no hook bypass and no per-round commits. `status` and the Dashboard show **Committed**, **Pending commit**, **Stale** (with the reason) or **Unknown**.
+  - **Reopen:** `gator loop reopen` (Architect) returns a stale approved loop to review. It uses the single-active guard and reattaches the watcher, like `extend`. A coding loop that reaches its round limit resumes at `implementation_revision` when extended.
+  - **Dashboard:** a coding candidate panel; a live resolution banner using text plus a glyph, never color alone; an Architect-only `/snapshot` route; and a Reopen-for-revision control.
+  - **Compatibility:** planning loops are unchanged. Loop mode is read only through `loop_mode()`, which treats a missing value and the legacy `"planning-only"` value as planning.
+  - **Documentation:** a "Coding Loops" section in the protocol, an implementation template in `loop-artifact-formats.md`, and coding steps in `/loop-join`.
+
+### Fixed
+
+- **The Dashboard loop view keeps polling the selected live loop ([#44](https://github.com/cumberland-laboratories/gator/issues/44), core).** Previously, after a terminal loop stopped polling, selecting a live loop never restarted it, so the workspace stayed stale until the view was re-entered. `ensurePolling()` is now the only interval creator; this also removes a leaked duplicate interval at mount.
+
 ### Changed
 
 - **The Dashboard's Architect token resolver fails safely.** A malformed or non-object `.tokens.json` now returns 404 ("tokens unreadable") instead of an unhandled server error. This affects the pause, interject, unblock, end, extend, liveness, and Re-notify routes.

@@ -2000,6 +2000,27 @@ mark.search-hit {
 }
 .loop-ctrl-end { border-color: #dc3545; color: #dc3545; }
 
+/* #41 — coding candidate panel. Each resolution is text + a distinct glyph
+   (✓ ● ⚠ ?) + weight/style — never hue alone. */
+.loop-coding-row { font-size: 12px; line-height: 1.6; }
+.loop-coding-label { font-weight: 600; margin-right: 6px; }
+.loop-coding-value { font-family: var(--font-mono, monospace); }
+.loop-coding-warning,
+.loop-coding-resolution {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.loop-coding-resolution[data-state="committed"] { font-weight: 600; }
+.loop-coding-resolution[data-state="pending"] { font-weight: 600; font-style: italic; }
+.loop-coding-resolution[data-state="stale"] { font-weight: 700; text-decoration: underline; }
+.loop-coding-resolution[data-state="unknown"] { font-weight: 700; font-style: italic; }
+.loop-coding-reopen { margin-top: 6px; }
+.loop-coding-reopen-error { margin-top: 6px; font-weight: 600; font-size: 12px; }
+
 /* #36 — participant liveness panel. Meaning is carried by the text label
    plus a distinct glyph (●◐◇■○) and weight/style — never hue alone. */
 .loop-liveness-rows { display: flex; flex-direction: column; gap: 8px; }

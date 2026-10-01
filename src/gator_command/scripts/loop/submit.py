@@ -20,12 +20,14 @@ if _LOOP_DIR not in sys.path:
 from session import (
     resolve_token, with_session_lock, append_turn,
     find_gator_root, _make_writable, _make_readonly,
-    validate_turn_timeout, validate_round_count,
+    validate_turn_timeout, validate_round_count, loop_mode,
 )
 from state_machine import (
     validate_action, validate_unblock,
     advance_draft_submitted, advance_review_submitted,
     advance_escalated, advance_unblocked, advance_extended,
+    advance_reopened, advance_implementation_submitted,
+    advance_implementation_reviewed,
     advance_paused_by_architect, advance_interjected,
     advance_ended_by_architect,
 )
@@ -44,6 +46,266 @@ def _copy_artifact(source_path, loop_dir, target_name):
     target = Path(loop_dir) / target_name
     _make_writable(target)
     shutil.copy2(str(source), str(target))
+    _make_readonly(target)
+    return target_name
+
+
+# ---------------------------------------------------------------------------
+# Coding-mode implementation artifact (#41)
+# ---------------------------------------------------------------------------
+
+IMPLEMENTATION_HEADINGS = (
+    "Executive Summary",
+    "Implementation Summary",
+    "Charter Updates",
+    "Verification",
+    "Commit State",
+)
+
+_H2 = __import__("re").compile(r"^##[ \t]+(.+?)[ \t]*#*[ \t]*$")
+
+
+def _h2_title(line):
+    m = _H2.match(line.rstrip("\r\n"))
+    if not m or line.startswith("###"):
+        return None
+    return m.group(1).strip()
+
+
+def _h2_titles(text):
+    """Lower-cased level-2 heading titles outside fenced code, in order."""
+    titles = []
+    in_fence = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        title = _h2_title(line)
+        if title:
+            titles.append(title.lower())
+    return titles
+
+
+def missing_implementation_headings(text):
+    """Required ``## `` headings absent from an implementation artifact.
+
+    Matching is case-insensitive on the exact heading text, level 2 only,
+    and ignores headings inside fenced code blocks.
+    """
+    seen = set(_h2_titles(text))
+    return [h for h in IMPLEMENTATION_HEADINGS if h.lower() not in seen]
+
+
+def commit_state_heading_count(text):
+    """How many level-2 ``Commit State`` headings (outside fences) exist.
+
+    The CLI owns exactly one Commit State section, so a valid artifact has
+    exactly one; duplicates would leave an author-controlled competing
+    state block next to the captured one.
+    """
+    return _h2_titles(text).count("commit state")
+
+
+def _display_path(path):
+    # Raw facts are persisted unchanged; this only keeps one path per line
+    # in the rendered artifact (a newline in a filename is shown escaped).
+    return path.replace("\r", "\\r").replace("\n", "\\n")
+
+
+LOOP_RESIDUE_PREFIX = ".gator/loops/"
+
+
+def split_residue(paths):
+    """Display-only classification of RAW residue paths (never filtering).
+
+    Loop residue (the loop's own audit files under ``.gator/loops/``) is
+    always untracked and keeps changing while a loop runs, so it is shown
+    separately as expected; everything else is "other" residue the
+    Reviewer should notice. The persisted snapshot keeps the raw list.
+    Returns (loop_paths, other_paths).
+    """
+    loop, other = [], []
+    for p in paths:
+        (loop if p.startswith(LOOP_RESIDUE_PREFIX) else other).append(p)
+    return loop, other
+
+
+def _change_counts(changed):
+    counts = {}
+    for c in changed or []:
+        counts[c["status"]] = counts.get(c["status"], 0) + 1
+    return counts
+
+
+def coding_status_view(coding):
+    """Slim, allowlisted projection of ``session["coding"]`` for the
+    Dashboard status poll (#41). Never ships raw path lists (up to
+    MAX_PATHS per generation) on every poll: identifiers, counts, review
+    verdicts, and the approval binding only. The raw facts stay on disk.
+    """
+    if not isinstance(coding, dict):
+        return None
+    gens = []
+    for g in coding.get("generations") or []:
+        snap = g.get("snapshot") or {}
+        loop_res, other_res = split_residue(snap.get("unstaged_paths") or [])
+        review = g.get("review") or None
+        gens.append({
+            "round": g.get("round"),
+            "submitted_at": g.get("submitted_at"),
+            "artifact_path": g.get("artifact_path"),
+            "staged_tree": snap.get("staged_tree"),
+            "current_head": snap.get("current_head"),
+            "branch": snap.get("branch"),
+            "detached": snap.get("detached"),
+            "changed_count": (len(snap.get("changed_paths") or [])
+                              + (snap.get("changed_truncated") or 0)),
+            "changed_by_status": _change_counts(snap.get("changed_paths")),
+            "residue_other_count": (len(other_res)
+                                    + (snap.get("unstaged_truncated") or 0)),
+            "residue_loop_count": len(loop_res),
+            "review": ({
+                "verdict": review.get("verdict"),
+                "reviewed_tree": review.get("reviewed_tree"),
+                "reviewed_head": review.get("reviewed_head"),
+                "candidate_changed": review.get("candidate_changed"),
+                "reviewed_at": review.get("reviewed_at"),
+            } if isinstance(review, dict) else None),
+        })
+    approval = coding.get("approval")
+    return {
+        "source_loop_id": coding.get("source_loop_id"),
+        "plan_sha256": coding.get("plan_sha256"),
+        "base_head": coding.get("base_head"),
+        "base_tree": coding.get("base_tree"),
+        "generations": gens,
+        "approval": ({k: approval.get(k) for k in
+                      ("tree", "head", "round", "ts", "invalidated_at")}
+                     if isinstance(approval, dict) else None),
+    }
+
+
+def render_commit_state(snap):
+    """CLI-owned ``## Commit State`` section built from the raw snapshot.
+
+    The facts here are authoritative; the author's text in this section is
+    always replaced. Path lists are shown inside ``text`` fences so no
+    filename can inject Markdown.
+    """
+    changed = snap.get("changed_paths") or []
+    unstaged = snap.get("unstaged_paths") or []
+    loop_residue, other_residue = split_residue(unstaged)
+    counts = {}
+    for c in changed:
+        counts[c["status"]] = counts.get(c["status"], 0) + 1
+    summary = ", ".join(f"{k} {counts[k]}" for k in sorted(counts)) or "none"
+    head_ref = ("detached HEAD" if snap.get("detached")
+                else (snap.get("branch") or "").replace("refs/heads/", ""))
+    lines = [
+        "## Commit State",
+        "",
+        "<!-- Captured by the gator loop CLI at submission. Authoritative:",
+        "     author text in this section is replaced. The reviewed candidate",
+        "     is the staged tree below, not this artifact's prose. -->",
+        "",
+        "| Fact | Value |",
+        "|---|---|",
+        f"| Base HEAD | `{snap.get('base_head')}` |",
+        f"| Base tree | `{snap.get('base_tree')}` |",
+        f"| Current HEAD | `{snap.get('current_head')}` ({head_ref}) |",
+        f"| Staged tree (candidate) | `{snap.get('staged_tree')}` |",
+        f"| Changed paths vs base | {len(changed) + snap.get('changed_truncated', 0)} ({summary}) |",
+        f"| Unstaged / untracked residue | {len(other_residue)} other + {len(loop_residue)} loop residue under `.gator/loops/`"
+        + (f" + {snap['unstaged_truncated']} truncated" if snap.get("unstaged_truncated") else "")
+        + " (none of it is part of the candidate) |",
+        "",
+        "Review exactly this candidate with:",
+        "",
+        "```text",
+        f"git diff {snap.get('base_tree')} {snap.get('staged_tree')}",
+        "```",
+        "",
+        "Changed paths (status, path):",
+        "",
+        "```text",
+    ]
+    for c in changed:
+        if "old_path" in c:
+            lines.append(f"{c['status']} {_display_path(c['old_path'])} -> "
+                         f"{_display_path(c['path'])}")
+        else:
+            lines.append(f"{c['status']} {_display_path(c['path'])}")
+    if not changed:
+        lines.append("(none)")
+    if snap.get("changed_truncated"):
+        lines.append(f"... {snap['changed_truncated']} more (truncated)")
+    lines += ["```", ""]
+    if other_residue or snap.get("unstaged_truncated"):
+        lines += ["Unstaged / untracked residue (disclosed; NOT part of the "
+                  "candidate):", "", "```text"]
+        lines += [_display_path(u) for u in other_residue]
+        if snap.get("unstaged_truncated"):
+            lines.append(f"... {snap['unstaged_truncated']} more (truncated)")
+        lines += ["```", ""]
+    else:
+        lines += ["Unstaged / untracked residue outside the loop directory: "
+                  "none.", ""]
+    if loop_residue:
+        lines += [f"Loop residue: {len(loop_residue)} path(s) under "
+                  "`.gator/loops/` (this loop's own audit files; expected, "
+                  "not part of the candidate).", ""]
+    return "\n".join(lines)
+
+
+def replace_commit_state(text, block):
+    """Replace the ``## Commit State`` section (to the next level-2 heading
+    outside a fence, or EOF) with ``block``. Exactly one such heading must
+    exist; duplicates are refused so no competing state block survives."""
+    if commit_state_heading_count(text) > 1:
+        raise ValueError(
+            "Implementation artifact has more than one '## Commit State' "
+            "section; keep exactly one (the CLI replaces its contents)")
+    lines = text.splitlines()
+    out = []
+    i = 0
+    in_fence = False
+    replaced = False
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+        title = None if in_fence else _h2_title(line)
+        if (not replaced and title is not None
+                and title.lower() == "commit state"):
+            out.extend(block.rstrip("\n").split("\n"))
+            i += 1
+            sec_fence = False
+            while i < len(lines):
+                s = lines[i].lstrip()
+                if s.startswith("```") or s.startswith("~~~"):
+                    sec_fence = not sec_fence
+                elif not sec_fence and _h2_title(lines[i]) is not None:
+                    break
+                i += 1
+            out.append("")
+            replaced = True
+            continue
+        out.append(line)
+        i += 1
+    if not replaced:
+        raise ValueError("Implementation artifact has no '## Commit State' section")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def _write_artifact_text(loop_dir, target_name, text):
+    target = Path(loop_dir) / target_name
+    _make_writable(target)
+    with open(target, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
     _make_readonly(target)
     return target_name
 
@@ -117,11 +379,16 @@ def handle_submit_draft(token, file_path):
     return loop_id, role, loop_dir
 
 
-def handle_submit_review(token, file_path, approve=False):
+def handle_submit_review(token, file_path, approve=False, loop_dir=None):
     """Process a reviewer submission (findings or approval).
 
     Resolves token, validates role and turn, copies findings to
     findings.current.md, advances state based on --approve flag.
+
+    Coding loops (#41) take the tree-bound path in ``_coding_review()``
+    under the same lock: the review is recorded against the submitted
+    candidate generation, and APPROVE additionally requires the live staged
+    tree and HEAD to still equal that candidate.
     """
     source = Path(file_path)
     if not source.exists():
@@ -140,12 +407,15 @@ def handle_submit_review(token, file_path, approve=False):
         except OSError:
             pass
 
-    loop_id, role, loop_dir = resolve_token(token)
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
 
     def _submit(session):
         allowed, reason = validate_action(session, role, "submit_review")
         if not allowed:
             raise PermissionError(reason)
+
+        if loop_mode(session) == "coding":
+            return _coding_review(session, role, loop_dir, source, approve)
 
         # Copy artifact — round-versioned first, then current
         # Capture round BEFORE advance (advance increments on findings)
@@ -216,6 +486,141 @@ def handle_submit_review(token, file_path, approve=False):
         )
 
     return loop_id, role, loop_dir
+
+
+REVIEWED_CANDIDATE_HEADING = "Reviewed Candidate"
+
+
+def render_reviewed_candidate(review):
+    """CLI-owned ``## Reviewed Candidate`` section appended to a coding
+    review artifact: which exact tree the verdict is about."""
+    verdict = "APPROVE" if review["verdict"] == "approve" else "REVISE"
+    lines = [
+        "## Reviewed Candidate",
+        "",
+        "<!-- Captured by the gator loop CLI at review submission. -->",
+        "",
+        "| Fact | Value |",
+        "|---|---|",
+        f"| Verdict | {verdict} |",
+        f"| Reviewed staged tree | `{review['reviewed_tree']}` |",
+        f"| Reviewed HEAD | `{review['reviewed_head']}` |",
+        f"| Candidate round | {review['round']} |",
+        f"| Live candidate unchanged at review | "
+        f"{'no — the index or HEAD moved after submission' if review['candidate_changed'] else 'yes'} |",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _coding_review(session, role, loop_dir, source, approve):
+    """Coding review transaction (#41); runs inside the session lock.
+
+    - The review binds to the LATEST generation's submitted candidate
+      (``reviewed_tree`` / ``reviewed_head``). Reviewers inspect it with
+      ``git diff <base_tree> <staged_tree>``, which is immutable, so
+      findings remain valid even if the live index later moves.
+    - A fresh snapshot is taken. APPROVE is rejected unless the live staged
+      tree AND HEAD still equal the submitted candidate (the approval
+      authorizes exactly that tree for the one normal commit). Findings are
+      always accepted and flagged ``candidate_changed`` when it moved.
+    - The artifact must be UTF-8 and must not author its own
+      ``## Reviewed Candidate`` section; the CLI appends that section.
+    """
+    import gitsnap
+    from datetime import datetime, timezone
+
+    try:
+        text = source.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Review file must be UTF-8 text")
+    if REVIEWED_CANDIDATE_HEADING.lower() in _h2_titles(text):
+        raise ValueError(
+            "Review artifact must not include a '## Reviewed Candidate' "
+            "section; the CLI appends it")
+
+    coding = session["coding"]
+    gens = coding.get("generations") or []
+    if not gens:
+        raise ValueError("No implementation candidate has been submitted")
+    gen = gens[-1]
+    submitted = gen["snapshot"]
+
+    repo_root = Path(loop_dir).parent.parent.parent
+    snap = gitsnap.snapshot(repo_root, coding["base_head"])
+    live_ok = bool(snap.get("ok"))
+    changed = (not live_ok
+               or snap["staged_tree"] != submitted["staged_tree"]
+               or snap["current_head"] != submitted["current_head"])
+    if approve and changed:
+        if not live_ok:
+            raise ValueError(
+                "Cannot verify the live candidate before approval: "
+                f"{snap.get('error')} ({snap.get('detail', '')})")
+        raise ValueError(
+            "The candidate changed since submission (staged tree or HEAD "
+            "differs); approval is blocked. Submit findings so the Draftor "
+            "resubmits the current tree.")
+
+    round_num = session["status"]["round"]
+    now = datetime.now(tz=timezone.utc).isoformat()
+    versioned_name = f"findings.round-{round_num}.md"
+    review = {
+        "verdict": "approve" if approve else "revise",
+        "round": gen["round"],
+        "reviewed_tree": submitted["staged_tree"],
+        "reviewed_head": submitted["current_head"],
+        "candidate_changed": changed,
+        "live_snapshot_ok": live_ok,
+        "artifact_path": versioned_name,
+        "reviewed_at": now,
+    }
+    rendered = (text.rstrip("\n") + "\n\n" + render_reviewed_candidate(review)
+                ).rstrip("\n") + "\n"
+    _write_artifact_text(loop_dir, versioned_name, rendered)
+    _write_artifact_text(loop_dir, "findings.current.md", rendered)
+    gen["review"] = review
+
+    session["roles"]["reviewer"]["joined"] = True
+    summary = ("Implementation approved" if approve
+               else "Implementation review findings submitted")
+    turn = append_turn(session, role, "implementation_review", summary,
+                       versioned_name)
+    session["current"]["findings"] = {
+        "turn_id": turn["turn_id"],
+        "summary": turn["summary"],
+        "artifact_path": "findings.current.md",
+    }
+
+    timeout = session["status"]["turn_timeout_seconds"]
+    approval = None
+    if approve:
+        approval = {"tree": review["reviewed_tree"],
+                    "head": review["reviewed_head"],
+                    "round": gen["round"], "ts": now}
+    advance_implementation_reviewed(session, approve, timeout,
+                                    approval=approval)
+
+    status = session["status"]
+    base_event = {"role": role, "round": status["round"],
+                  "artifact_path": versioned_name,
+                  "reviewed_tree": review["reviewed_tree"],
+                  "candidate_changed": changed}
+    if approve:
+        event = dict(base_event, event="implementation_approved",
+                     detail=(f"Reviewer approved staged tree "
+                             f"{review['reviewed_tree'][:12]} -- return to "
+                             "the Draftor session for one normal commit"))
+    elif status["stage"] == "max_rounds_exceeded":
+        event = dict(base_event, event="max_rounds_exceeded",
+                     detail=f"Round limit reached ({status['max_rounds']})")
+    else:
+        event = dict(base_event, event="revision_requested",
+                     detail=("Findings on staged tree "
+                             f"{review['reviewed_tree'][:12]}, revision requested"
+                             + (" (candidate changed since submission)"
+                                if changed else "")))
+    return session, event
 
 
 def handle_escalate(token, reason, file_path=None):
@@ -494,6 +899,168 @@ def handle_extend(token, rounds, message, loop_dir=None):
     with_session_lock(loop_dir, _extend)
 
     return loop_id, loop_dir, result["previous"], result["new"]
+
+
+def handle_submit_implementation(token, file_path, loop_dir=None):
+    """Coding (#41): Draftor submits the staged candidate for review.
+
+    Before the lock: the artifact must exist, be UTF-8, non-empty, and carry
+    the required headings (Executive Summary, Implementation Summary,
+    Charter Updates, Verification, Commit State).
+
+    Under the session lock: role/stage/turn validation, then a raw Git
+    snapshot against the loop's captured ``base_head``. It must be ok and
+    must stage something (``staged_tree != base_tree``). Unstaged residue
+    is disclosed, never blocking. The CLI replaces the artifact's Commit
+    State section with the captured facts, writes
+    ``implementation.round-N.md`` + ``implementation.current.md``, appends
+    the generation ``{round, submitted_at, artifact_path, snapshot}`` (the
+    raw snapshot, unfiltered), and advances to implementation_review.
+
+    Returns (loop_id, role, loop_dir, generation).
+    """
+    import gitsnap
+    from datetime import datetime, timezone
+
+    source = Path(file_path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Implementation file not found: {file_path}")
+    try:
+        text = source.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Implementation file must be UTF-8 text")
+    if not text.strip():
+        raise ValueError(f"Implementation file is empty: {file_path}")
+    missing = missing_implementation_headings(text)
+    if missing:
+        raise ValueError(
+            "Implementation artifact is missing required section(s): "
+            + ", ".join(f"## {h}" for h in missing))
+    if commit_state_heading_count(text) != 1:
+        raise ValueError(
+            "Implementation artifact has more than one '## Commit State' "
+            "section; keep exactly one (the CLI replaces its contents)")
+
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
+    repo_root = Path(loop_dir).parent.parent.parent
+    result = {}
+
+    def _submit(session):
+        allowed, reason = validate_action(session, role, "submit_implementation")
+        if not allowed:
+            raise PermissionError(reason)
+
+        coding = session["coding"]
+        snap = gitsnap.snapshot(repo_root, coding["base_head"])
+        if not snap.get("ok"):
+            raise ValueError(
+                "Cannot capture the staged candidate: "
+                f"{snap.get('error')} ({snap.get('detail', '')})")
+        if snap["staged_tree"] == snap["base_tree"]:
+            raise ValueError(
+                "Nothing is staged relative to the loop's base commit; "
+                "stage the intended change (git add) before submitting")
+
+        rendered = replace_commit_state(text, render_commit_state(snap))
+        round_num = session["status"]["round"]
+        versioned_name = f"implementation.round-{round_num}.md"
+        _write_artifact_text(loop_dir, versioned_name, rendered)
+        _write_artifact_text(loop_dir, "implementation.current.md", rendered)
+
+        session["roles"]["draftor"]["joined"] = True
+        turn = append_turn(session, role, "implementation",
+                           "Implementation submitted", versioned_name)
+        session["current"]["implementation"] = {
+            "turn_id": turn["turn_id"],
+            "summary": turn["summary"],
+            "artifact_path": "implementation.current.md",
+        }
+
+        generation = {
+            "round": round_num,
+            "submitted_at": datetime.now(tz=timezone.utc).isoformat(),
+            "artifact_path": versioned_name,
+            "snapshot": snap,
+        }
+        coding.setdefault("generations", []).append(generation)
+        result["generation"] = generation
+
+        advance_implementation_submitted(
+            session, session["status"]["turn_timeout_seconds"])
+
+        n_changed = len(snap["changed_paths"]) + snap.get("changed_truncated", 0)
+        n_unstaged = (len(snap["unstaged_paths"])
+                      + snap.get("unstaged_truncated", 0))
+        loop_res, other_res = split_residue(snap["unstaged_paths"])
+        event = {
+            "event": "implementation_submitted",
+            "role": role,
+            "round": round_num,
+            "artifact_path": versioned_name,
+            "staged_tree": snap["staged_tree"],
+            "current_head": snap["current_head"],
+            "changed_count": n_changed,
+            "unstaged_count": n_unstaged,
+            "residue_other_count": (len(other_res)
+                                    + snap.get("unstaged_truncated", 0)),
+            "residue_loop_count": len(loop_res),
+            "detail": (f"Implementation submitted: staged tree "
+                       f"{snap['staged_tree'][:12]}, {n_changed} changed "
+                       f"path(s), {len(other_res)} other unstaged/untracked"),
+        }
+        return session, event
+
+    with_session_lock(loop_dir, _submit)
+    return loop_id, role, loop_dir, result["generation"]
+
+
+def handle_reopen(token, message, loop_dir=None):
+    """Architect command: reopen an approved coding loop for revision (#41).
+
+    implementation_approved -> implementation_revision for the Draftor with
+    a fresh deadline from the loop's stored turn window; the round counter
+    is kept and the prior approval is marked invalidated. ``message`` is
+    required: the durable reason, shown to the resumed Draftor.
+
+    Input/identity validation runs before the session lock; stage/mode
+    validation runs inside it before any mutation, so a rejected reopen
+    leaves session.json and events.jsonl untouched.
+
+    Session transaction only — the single-active guard (start.lock + scan)
+    and watcher attachment belong to host.reopen_loop() and its callers.
+    Returns (loop_id, loop_dir).
+    """
+    if message is None or not str(message).strip():
+        raise ValueError("A reason (--message) is required to reopen a loop")
+    message = str(message).strip()
+
+    loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
+    if role != "architect":
+        raise PermissionError("Reopen requires the architect token")
+
+    def _reopen(session):
+        allowed, reason = validate_action(session, "architect", "reopen")
+        if not allowed:
+            raise PermissionError(reason)
+
+        timeout = session["status"]["turn_timeout_seconds"]
+        advance_reopened(session, turn_timeout=timeout, message=message)
+        append_turn(session, "architect", "reopen", message)
+
+        status = session["status"]
+        event = {
+            "event": "loop_reopened",
+            "role": "architect",
+            "round": status["round"],
+            "stage": status["stage"],
+            "next_role": status["next_role"],
+            "reason": message,
+            "detail": f"Reopened for revision -- Architect: {message}",
+        }
+        return session, event
+
+    with_session_lock(loop_dir, _reopen)
+    return loop_id, loop_dir
 
 
 def handle_pause(token, message=None, loop_dir=None):

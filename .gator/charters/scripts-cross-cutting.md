@@ -89,7 +89,7 @@ Shared behavior needed by both products belongs behind an explicit library contr
 
 ## Package and License Surface
 
-`src/gator_command/cli.py` is the installed command router. Adding or removing a public subcommand requires coordinated parser, packaging, help, and installed-wheel coverage. `VERSION` and `pyproject.toml` version fields must agree; the release-candidate workflow validates this. `[tool.setuptools.package-data]` lists script files explicitly, so every new module under `scripts/` (for example `scripts/loop/liveness.py`) must be added there; `tests/test_packaging.py` guards the gap.
+`src/gator_command/cli.py` is the installed command router. Adding or removing a public subcommand requires coordinated parser, packaging, help, and installed-wheel coverage. `VERSION` and `pyproject.toml` version fields must agree; the release-candidate workflow validates this. `[tool.setuptools.package-data]` lists script files explicitly, so every new module under `scripts/` (for example `scripts/loop/liveness.py`) must be added there, as with `scripts/loop/gitsnap.py` (#41); `tests/test_packaging.py` guards the gap.
 
 Per-worktree Git-private state lives under `$(git rev-parse --git-path <name>)`: `gator-override/` (pre-commit override envelope) and `gator-loop-liveness/` (loop participant liveness sidecar, #36). Both are never staged, never served by the Dashboard content APIs, and never shared through the repository.
 

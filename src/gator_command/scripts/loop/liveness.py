@@ -716,7 +716,7 @@ def _apply_projection(state, session, now):
     Never reopens a ``closed`` registration and never touches session or
     event state.
     """
-    from state_machine import ACTIVE_STAGES, PAUSED_STAGES, TERMINAL_STAGES
+    from state_machine import is_active, is_paused, is_terminal
 
     status = session["status"]
     stage = status["stage"]
@@ -734,21 +734,21 @@ def _apply_projection(state, session, now):
         reg = state["roles"][role]["registration"]
         return reg is not None and reg["state"] != "closed"
 
-    if stage in ACTIVE_STAGES:
+    if is_active(session):
         state["terminal_observed_at"] = None
         role = status.get("next_role")
         if role in MODEL_ROLES:
             rec = state["roles"][role]
             if not _has_record(rec, "turn-ready", key):
                 _append_record(rec, "turn-ready", key, stage, rnd, ts)
-    elif stage in PAUSED_STAGES:
+    elif is_paused(session):
         state["terminal_observed_at"] = None
         for role in MODEL_ROLES:
             rec = state["roles"][role]
             if _open_registration(role) and \
                     not _has_record(rec, "architect-block", key):
                 _append_record(rec, "architect-block", key, stage, rnd, ts)
-    elif stage in TERMINAL_STAGES:
+    elif is_terminal(session):
         if state["terminal_observed_at"] is None:
             state["terminal_observed_at"] = ts
         for role in MODEL_ROLES:
@@ -815,13 +815,13 @@ def renotify_eligibility(state, session, role, now=None):
     pending (unacked, unexpired) record and no live watcher (stale /
     released / not registered / expired). Rate limiting is endpoint-level.
     """
-    from state_machine import ACTIVE_STAGES, TERMINAL_STAGES
+    from state_machine import is_active, is_terminal
     if role not in MODEL_ROLES:
         return False, "not_actionable"
     status = session["status"]
-    if status["stage"] in TERMINAL_STAGES:
+    if is_terminal(session):
         return False, "terminal"
-    if status["stage"] in ACTIVE_STAGES and status.get("next_role") == role:
+    if is_active(session) and status.get("next_role") == role:
         return True, None
     rec = state["roles"][role]
     notes = rec["notifications"]
@@ -899,7 +899,7 @@ def renotify(loop_dir, store, role, reason, now=None):
     newest pending record, with the same state_key.
     """
     from session import load_session
-    from state_machine import ACTIVE_STAGES
+    from state_machine import is_active
 
     now = _now(now)
     ts = iso(now)
@@ -915,7 +915,7 @@ def renotify(loop_dir, store, role, reason, now=None):
             return None, (False, code, None)
         rec = state["roles"][role]
         status = session["status"]
-        if status["stage"] in ACTIVE_STAGES and \
+        if is_active(session) and \
                 status.get("next_role") == role:
             kind, key = "turn-ready", state_key(session)
             stage, rnd = status["stage"], int(status.get("round") or 0)
