@@ -171,12 +171,16 @@
   }
 
   async function fetchEvents(loopId) {
+    // null = the fetch failed (HTTP error, network, bad JSON); [] = the loop
+    // genuinely has no events. Callers must not render a failure as an
+    // empty history — that would prune event-derived artifact sections.
     try {
       var resp = await fetch(apiBase() + "/" + encodeURIComponent(loopId) + "/events");
+      if (!resp.ok) return null;
       var data = await resp.json();
-      return data.events || [];
+      return Array.isArray(data.events) ? data.events : null;
     } catch (e) {
-      return [];
+      return null;
     }
   }
 
@@ -1051,7 +1055,10 @@
       + '<div id="loop-region-blocked"></div>'
       + '<div id="loop-region-coding"></div>'
       + '<div id="loop-region-prompts"></div>'
-      + '<div id="loop-region-notice"></div>'
+      + '<div id="loop-region-notice">'
+      + '<div class="loop-notice-slot" data-slot="refresh"></div>'
+      + '<div class="loop-notice-slot" data-slot="action"></div>'
+      + '</div>'
       + '<div id="loop-region-liveness"></div>'
       + '<div id="loop-controls"></div>'
       + '<div class="section-title" style="margin-top:20px;">Timeline</div>'
@@ -1347,7 +1354,7 @@
   }
 
   function showLivenessNotice(root, text, isError) {
-    var region = root && root.querySelector("#loop-region-notice");
+    var region = noticeSlot(root, "action");
     if (!region) return;
     region.innerHTML = '<div class="loop-liveness-notice'
       + (isError ? ' loop-liveness-notice-error' : '') + '">'
@@ -1664,7 +1671,7 @@
           send.disabled = false;
           return;
         }
-        var notice = snap.root.querySelector("#loop-region-notice");
+        var notice = noticeSlot(snap.root, "action");
         if (notice) {
           notice.innerHTML = '<div class="loop-extend-notice"><strong>Reopened:</strong> '
             + 'the approval is invalidated and the Draftor must resubmit. '
@@ -1696,6 +1703,42 @@
     patchCodingRegion(snap, status);
   }
 
+  // ── notice slots (#44) ───────────────────────────────────────────────────
+  //
+  // #loop-region-notice is never patched by incremental rendering. It holds
+  // named slots so each writer owns exactly one: "action" for Architect
+  // action results (Continue/extend, Re-notify, Reopen) and "refresh" for
+  // the poll's own refresh-failure notice. Clearing one slot never touches
+  // another's message.
+
+  function noticeSlot(root, slot) {
+    return root ? root.querySelector(
+      '#loop-region-notice > [data-slot="' + slot + '"]') : null;
+  }
+
+  function setNotice(root, slot, html) {
+    var el = noticeSlot(root, slot);
+    if (el) el.innerHTML = html;
+  }
+
+  var REFRESH_FAILED_HTML = '<div class="loop-refresh-failed" role="status">'
+    + '<strong>Refresh failed \u2014 retrying.</strong> '
+    + 'Showing the last loaded state of this loop; it updates automatically '
+    + 'when the next refresh succeeds.</div>';
+
+  // Owned by pollLoop only. Applies to `snap` only if it is still the live
+  // snapshot for the same generation/selection with an attached root, so a
+  // stale in-flight response can never set or clear a notice on a newer
+  // selection. Writes only on a state change (no-op polls stay mutation-free).
+  function setRefreshFailed(snap, gen, failed) {
+    if (!snap || gen !== _state.generation || _state.render !== snap
+        || snap.loopId !== _state.selectedLoopId
+        || !snap.root || !snap.root.isConnected) return;
+    if (!!snap.refreshFailed === failed) return;
+    snap.refreshFailed = failed;
+    setNotice(snap.root, "refresh", failed ? REFRESH_FAILED_HTML : "");
+  }
+
   function ensurePolling() {
     // Polling stops when a loop turns terminal; an extension makes it live
     // again, so the view must resume polling.
@@ -1707,9 +1750,9 @@
   }
 
   function showExtendNotice(root, data) {
-    // Lives in #loop-region-notice, which incremental rendering never
-    // patches, so it survives the terminal-to-live region updates.
-    var region = root && root.querySelector("#loop-region-notice");
+    // Lives in #loop-region-notice (action slot), which incremental
+    // rendering never patches, so it survives the terminal-to-live updates.
+    var region = noticeSlot(root, "action");
     if (!region) return;
     var html = '<div class="loop-extend-notice">'
       + '<div class="loop-extend-notice-text">Extended: max rounds '
@@ -2315,7 +2358,7 @@
     var events = await fetchEvents(_state.selectedLoopId);
     if (gen !== _state.generation) return;
 
-    renderSelectedLoop(status, events, _state.container);
+    renderSelectedLoop(status, events || [], _state.container);
     if (status) {
       refreshLiveness(_state.render);
       refreshCoding(_state.render, status);
@@ -2338,9 +2381,18 @@
 
     if (_state.mode !== "inspect" || !_state.selectedLoopId) return;
 
+    // Only a poll after a valid render of this selection owns the
+    // refresh-failure notice; initial-load failure keeps its own behavior.
+    var snap0 = _state.render;
+    var rendered = !!(snap0 && snap0.loopId === _state.selectedLoopId
+                      && snap0.root && snap0.root.isConnected);
+
     var status = await fetchStatus(_state.selectedLoopId);
     if (gen !== _state.generation) return;
-    if (!status) return;
+    if (!status) {
+      if (rendered) setRefreshFailed(snap0, gen, true);
+      return;  // keep the last valid workspace untouched
+    }
 
     var stage = (status.status || {}).stage || "";
 
@@ -2350,10 +2402,18 @@
 
     var events = await fetchEvents(_state.selectedLoopId);
     if (gen !== _state.generation) return;
+    if (events === null) {
+      // Never render a failed events fetch as an empty history.
+      if (rendered) setRefreshFailed(snap0, gen, true);
+      return;
+    }
 
     // Incremental: unchanged regions (including an open control input) are
     // not touched; see renderSelectedLoop().
     renderSelectedLoop(status, events, _state.container);
+    // A successful full status+events refresh clears only the notice the
+    // poll owns (the "refresh" slot), never an Architect action notice.
+    setRefreshFailed(_state.render, gen, false);
     refreshLiveness(_state.render);
     refreshCoding(_state.render, status);
 

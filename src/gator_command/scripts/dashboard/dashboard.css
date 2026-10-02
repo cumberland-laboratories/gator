@@ -2000,6 +2000,17 @@ mark.search-hit {
 }
 .loop-ctrl-end { border-color: #dc3545; color: #dc3545; }
 
+/* #44 — refresh-failure notice (text-led; weight, not hue, carries it). */
+.loop-refresh-failed {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-border);
+  border-left-width: 4px;
+  border-left-style: solid;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
 /* #41 — coding candidate panel. Each resolution is text + a distinct glyph
    (✓ ● ⚠ ?) + weight/style — never hue alone. */
 .loop-coding-row { font-size: 12px; line-height: 1.6; }
