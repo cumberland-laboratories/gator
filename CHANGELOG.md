@@ -2,7 +2,14 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.19.0] — 2026-10-02
+
+Feature release for the governed planning loop.
+- **Coding mode:** a new loop mode in which the Reviewer reviews the exact staged diff, and approval leads to one governed commit ([#41](https://github.com/cumberland-laboratories/gator/issues/41)).
+- **Liveness bridge:** participants under Claude Code wake on their turn ([#36](https://github.com/cumberland-laboratories/gator/issues/36)).
+- **Architect brief:** the Architect can attach a digest-pinned brief that participants must read ([#43](https://github.com/cumberland-laboratories/gator/issues/43)).
+- **Context Checked:** plans must state the context they checked ([#46](https://github.com/cumberland-laboratories/gator/issues/46)).
+- **Dashboard workspace:** it stays live, and keeps showing the last good state when a poll fails ([#44](https://github.com/cumberland-laboratories/gator/issues/44)).
 
 ### Added
 
@@ -55,6 +62,12 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 ### Changed
 
 - **The Dashboard's Architect token resolver fails safely.** A malformed or non-object `.tokens.json` now returns 404 ("tokens unreadable") instead of an unhandled server error. This affects the pause, interject, unblock, end, extend, liveness, and Re-notify routes.
+
+### Upgrade notes
+
+- Run `gator update` in governed repos to refresh the loop protocol, `loop-artifact-formats.md` and the `/loop-join` command.
+- **Planning loops created on 2.19.0 require a `## Context Checked` section** in every plan draft (or `None — <reason>`). Loops started before the upgrade are not checked, so in-flight loops keep working. Participants on older protocol copies get a clear rejection message naming the missing section.
+- Coding loops and Architect briefs are opt-in: `gator loop start --mode coding --from-loop <id>`, and `--brief FILE`.
 
 ## [2.18.0] — 2026-09-28
 
