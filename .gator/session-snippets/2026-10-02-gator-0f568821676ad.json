@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.19.0 — coding loops (#41), liveness bridge (#36), Architect brief (#43), Context Checked (#46), Dashboard live workspace (#44)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "loop",
+    "dashboard",
+    "governance"
+  ],
+  "commit": "0f568821676ad75a4244523ba2b266303d96d28e",
+  "short_commit": "0f56882",
+  "snippet_id": "snippet-0f568821676ad",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "a91c745b26e31d5f24cd8ae9696aae7de5dbd95a",
+  "started_at": "2026-10-02T15:41:18Z",
+  "ended_at": "2026-10-02T18:58:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-02-gator-a91c745b26e31.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}

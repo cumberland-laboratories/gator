@@ -90,6 +90,7 @@ Filesystem: none
 File: `src/gator_command/scripts/loop/session.py`
 Read/write session.json. Save uses atomic temp+rename. Sets read-only (444) on POSIX after write.
 Filesystem: `.gator/loops/<loop-id>/session.json` (RW)
+! **Test hygiene:** loop files (`session.json`, plan, findings and implementation artifacts, briefs) are read-only on POSIX, and `_make_readonly` is a no-op on Windows. A test that tampers with one directly must call `_make_writable(path)` (or `os.chmod`) first. A miss passes on Windows and fails only on the POSIX CI legs, as `test_corrupt_session_json_retries` did at 2.19.0.
 <- all loop modules
 ! Atomic rename prevents partial reads by the host's non-locking read path.
 

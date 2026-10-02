@@ -274,7 +274,9 @@ class TestRobustness:
         assert _project(env) == lv.PROJECT_UPDATED
 
     def test_corrupt_session_json_retries(self, env):
-        (env["loop_dir"] / "session.json").write_text("{", encoding="utf-8")
+        path = env["loop_dir"] / "session.json"
+        loop_session._make_writable(path)  # read-only on POSIX
+        path.write_text("{", encoding="utf-8")
         assert _project(env) == lv.PROJECT_RETRY
 
     def test_store_write_failure_isolated_in_host(self, env, monkeypatch):
