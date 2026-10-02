@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: make liveness corrupt-session test POSIX-safe (read-only session.json)",
+  "change_type": "test",
+  "significance": "low",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "ci",
+    "loop"
+  ],
+  "commit": "7e85f7e41417f538cd1febf2005942c135ee5348",
+  "short_commit": "7e85f7e",
+  "snippet_id": "snippet-7e85f7e41417f",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "0f568821676ad75a4244523ba2b266303d96d28e",
+  "started_at": "2026-10-02T15:41:18Z",
+  "ended_at": "2026-10-02T20:54:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-loop.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-02-gator-0f568821676ad.json",
+    "tests/test_loop_liveness_projection.py"
+  ],
+  "notes": [
+    "`tests/test_loop_liveness_projection.py::test_corrupt_session_json_retries`: the test wrote over `session.json`, which the loop makes read-only on POSIX (`_make_readonly`), so it failed with `PermissionError` on the Ubuntu CI legs for 2.19.0 (run 37051055033). It passed on Windows, where read-only is a no-op. It now calls `_make_writable` first. Test-only, no product change.",
+    "`scripts-loop.md` (`load_session` / `save_session`): a test-hygiene note. Loop files are read-only on POSIX only, so tests that tamper with them must make them writable first; Windows CI legs cannot catch a miss.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}

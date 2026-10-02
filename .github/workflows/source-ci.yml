@@ -89,7 +89,9 @@ jobs:
     name: dashboard-ui (${{ matrix.os }} · py3.12)
     needs: fast
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    # Windows needs ~4 min setup (Playwright + Chromium) plus ~8 min for
+    # the 332-test suite at 2.19.0; 10 min cancelled the job at 79%.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

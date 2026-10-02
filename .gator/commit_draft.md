@@ -1,15 +1,15 @@
 ---
-message: "Tests: make liveness corrupt-session test POSIX-safe (read-only session.json)"
-change-type: test
+message: "CI: raise dashboard-ui job timeout to 20 minutes"
+change-type: maintenance
 significance: low
-decision-tags: [tests, ci, loop]
+decision-tags: [ci, release]
 agent: claude-opus-5-5
 architect: Alan Gillette
 ---
 
 # Session Change Log
 
-- `tests/test_loop_liveness_projection.py::test_corrupt_session_json_retries`: the test wrote over `session.json`, which the loop makes read-only on POSIX (`_make_readonly`), so it failed with `PermissionError` on the Ubuntu CI legs for 2.19.0 (run 37051055033). It passed on Windows, where read-only is a no-op. It now calls `_make_writable` first. Test-only, no product change.
-- `scripts-loop.md` (`load_session` / `save_session`): a test-hygiene note. Loop files are read-only on POSIX only, so tests that tamper with them must make them writable first; Windows CI legs cannot catch a miss.
+- `.github/workflows/source-ci.yml`: the `dashboard-ui` `timeout-minutes` goes from 10 to 20. On 2.19.0 dev CI (run 37063620912) the Windows leg was cancelled at the cap with 255 of 332 tests passed and none failed. Windows setup takes about 4 minutes and the grown suite about 8.
+- `release-pipeline.md` (Workflow A): records the cap and why.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

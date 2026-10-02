@@ -27,6 +27,7 @@ Runs fast platform/Python lanes plus packaging and compatibility work required f
 ! Jobs that execute contract tests install `contracts/requirements.txt`.
 ! Workflow syntax/action policy is validated by a real workflow linter and focused tests, not YAML parsing alone.
 ! Third-party actions use reviewed immutable pins or the repository's explicit major-version policy; permissions remain least-privilege per job.
+! The `dashboard-ui` job's `timeout-minutes` is 20, raised from 10 at 2.19.0. On Windows, setup (pip, Playwright, Chromium) takes about 4 minutes and the 332-test suite about 8, so the 10-minute cap cancelled a healthy run at 79%. Revisit the cap when the UI suite grows; a cancelled run is not a pass.
 
 ## Workflow B: Release Candidate
 
