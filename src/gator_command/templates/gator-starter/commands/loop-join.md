@@ -19,7 +19,8 @@ gator loop status --token $ARGUMENTS
 
 5. If it IS your turn (exit code 0):
    - Read the relevant files from the loop directory shown in status:
-     - **Draftor first turn**: read `sketch.md`
+     - **Architect brief (any role)**: if status lists `Architect brief: ... [OK] (required reading)`, read `architect-brief.md` first. Coding loops may also list the planning brief, `source-architect-brief.md`; read both. If a brief is marked `[!!]`, do not rely on it; escalate to the Architect.
+     - **Draftor first turn**: read `sketch.md`, then the charters and code it touches
      - **Draftor revising**: read `findings.current.md`
      - **Reviewer**: read `plan.current.md` and `sketch.md`
      - **Coding loop** (status shows `Mode: coding`): the Draftor reads `approved-plan.md`, implements the change, stages it (no commit), and submits with `gator loop submit-implementation`. The Reviewer reads `implementation.current.md` and reviews exactly the `git diff <base_tree> <staged_tree>` that status prints. After approval, the Draftor makes ONE normal commit. See "Coding Loops" in the protocol.
@@ -36,3 +37,5 @@ gator loop status --token $ARGUMENTS
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.
 
 **Required in every submission**: include a `## Executive Summary` section (four bullets or ~120 words). The Dashboard extracts this for at-a-glance inspection. See the artifact format reference for the full template.
+
+**Required in every plan draft and revision** (planning loops): exactly one `## Context Checked` section listing the Architect brief, charters, and code you actually consulted, or `None — <reason>`. The CLI rejects a missing, empty, or bare-placeholder section. Reviewers: check that it is credible.

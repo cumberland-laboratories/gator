@@ -2000,6 +2000,34 @@ mark.search-hit {
 }
 .loop-ctrl-end { border-color: #dc3545; color: #dc3545; }
 
+/* #43 — Architect brief: create-form textarea, byte counter, and notes.
+   Integrity state is carried by text ("[!! DIGEST MISMATCH]"), not hue. */
+.loop-brief-input { width: 100%; font-family: var(--font-mono, monospace); resize: vertical; }
+.loop-brief-over { font-weight: 700; text-decoration: underline; }
+.loop-brief-note {
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.loop-brief-note:not([data-check="dropped"]) { font-weight: 700; }
+
+/* #43 M2a — create form: loop type and approved-source brief choice. */
+.loop-create-mode { border: none; padding: 0; margin: 0 0 12px; }
+.loop-create-mode label { font-size: 13px; }
+.loop-source-brief-choice { display: block; margin-top: 8px; font-size: 13px; }
+.loop-source-brief-warning {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* #44 — refresh-failure notice (text-led; weight, not hue, carries it). */
 .loop-refresh-failed {
   margin: 8px 0;

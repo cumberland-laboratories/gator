@@ -60,7 +60,11 @@ def loop_env(tmp_path, monkeypatch):
     })
 
     draft_file = tmp_path / "plan.md"
-    draft_file.write_text("# Plan\n\nImplementation details.\n", encoding="utf-8")
+    # Fixture sessions carry the #46 context-evidence contract, so drafts
+    # must include a populated ## Context Checked section.
+    draft_file.write_text(
+        "# Plan\n\n## Context Checked\n\n- scripts-loop charter\n\n"
+        "Implementation details.\n", encoding="utf-8")
 
     findings_file = tmp_path / "findings.md"
     findings_file.write_text("# Findings\n\n1. Fix error handling.\n", encoding="utf-8")

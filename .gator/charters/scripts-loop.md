@@ -41,14 +41,37 @@ Filesystem: `.gator/loops/<loop-id>/.tokens.json` (R)
 ! Raises ValueError on invalid/tampered tokens. Nonce validation prevents token reconstruction from committed data.
 ! When `loop_dir` provided: validates `loop_dir.name == loop_id` from token — rejects cross-loop token reuse.
 
-### create_session(feature, loop_id, max_rounds, turn_timeout, mode="planning", coding=None)
+### create_session(feature, loop_id, max_rounds, turn_timeout, mode="planning", coding=None, brief=None)
 File: `src/gator_command/scripts/loop/session.py`
 Builds the initial session dict including empty `decisions: []` ledger. Does not write to disk.
-- Planning sessions are byte-identical to pre-#41 output (`"mode": "planning-only"`, stage `plan_drafting`).
+- Planning sessions keep `"mode": "planning-only"` and stage `plan_drafting`. Since #46 they also carry `"contract": {"context_evidence": 1}`, the migration boundary: only flagged sessions get Context Checked enforcement, and sessions created earlier never do.
+- `brief` (#43): top-level brief metadata when a brief was supplied. The key is absent otherwise, so no-brief sessions are unchanged.
+- Coding sessions have no `contract` flag (Context Checked is planning-only). Their `coding` block gains `source_brief` (metadata or null) and `source_brief_decision` (`kept` / `dropped` / `none_available`).
 - Coding sessions (#41) carry `"mode": "coding"`, stage `implementation_drafting` (Draftor), `plan_status: "implementation"`, `current.implementation`, and the required `coding` binding `{source_loop_id, plan_sha256, base_head, base_tree, generations: [], approval: null}`.
 - A coding session without its binding, or an unknown mode, raises ValueError.
 Filesystem: none
 <- `host.init_loop()`, `host._init_coding_loop()`
+
+### Architect brief (#43): validate_brief_bytes / brief_bytes_from_text / read_brief_file / brief_meta / verify_brief / read_verified_brief / brief_status_view
+File: `src/gator_command/scripts/loop/session.py`
+An optional, immutable Markdown brief supplied at loop creation. It is stored as `architect-brief.md`, or, for a carried-forward planning brief in a coding loop, as `source-architect-brief.md`. Sessions record only metadata, `{artifact, sha256, bytes}`.
+- **Validation** (`validate_brief_bytes`): UTF-8, non-blank, no NUL, **≤ `MAX_BRIEF_BYTES` = 32,768 bytes**.
+  - `brief_bytes_from_text` (Dashboard text): a blank string means no brief, and CRLF/CR are normalized to LF.
+  - `read_brief_file` (CLI): a regular file only. Symlinks and **Windows reparse points / junctions** are refused first, before `exists` / `is_file` / `stat` / `open`, using the same `_is_reparse_point` guard as `verify_brief`, so the input and stored-artifact trust boundaries match. Directories are refused, and the size is checked before reading.
+- **`verify_brief(loop_dir, ref, expected_name)`** takes a FIXED expected name and never a path from session data. It returns one result string and never content:
+
+  | Result | Meaning |
+  |---|---|
+  | `absent` | ref is None: neutral, hidden everywhere |
+  | `invalid_ref` | present but malformed / wrong-typed, or names a file other than `expected_name` (positional binding) |
+  | `unsafe` | symlink, reparse point (`lstat` attribute `0x400`), or escapes the loop dir |
+  | `missing` | no regular file |
+  | `unreadable` | read error |
+  | `mismatch` | size or SHA-256 differs |
+  | `ok` | matches |
+
+- **`read_verified_brief`** returns the exact verified bytes (used for carry-forward).
+- **`brief_status_view(ref, expected_name)`** is the strict, positionally bound status view: `{artifact, sha256, bytes}` or None. Unknown keys such as `content` or `path` are always dropped.
 
 ### loop_mode(session)
 File: `src/gator_command/scripts/loop/session.py`
@@ -220,11 +243,25 @@ Filesystem: none
 
 ### handle_submit_draft(token, file_path)
 File: `src/gator_command/scripts/loop/submit.py`
-Resolves token, validates file, acquires lock, validates action, copies artifact to `plan.current.md`, appends turn, updates `current.draft` with turn reference dict, advances to `plan_review`, emits event.
-Filesystem: source file (R), `.gator/loops/<loop-id>/plan.current.md` (W)
+Resolves token, validates file, acquires lock, validates action, writes the artifact to `plan.round-N.md` then `plan.current.md`, appends turn, updates `current.draft` with turn reference dict, advances to `plan_review`, emits event.
+Filesystem: source file (R, once), `.gator/loops/<loop-id>/plan.round-N.md` and `plan.current.md` (W)
 <- `cli._cmd_submit_draft()`
--> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_draft_submitted()`
+-> `resolve_token()`, `with_session_lock()`, `validate_action()`, `context_checked_problems()`, `append_turn()`, `advance_draft_submitted()`
 ! `current.draft` stores `{turn_id, summary, artifact_path}`, not a bare string.
+! **Context evidence (#46).** The source file is read **once** into a captured byte buffer before the lock.
+  - **Flagged sessions** (`contract.context_evidence` is an int ≥ 1, never a bool): a preflight check on the captured bytes gives an early error. A preflight session-read failure is ignored, never misreported. The **in-lock check is authoritative**: decode as UTF-8, run `context_checked_problems`, then write **those exact bytes** with `_write_artifact_bytes`. There is no second read and no path copy, so a file swapped after capture is never persisted. Rejection raises `ValueError("Plan draft rejected: …")` before any write or state change, which is atomic. This covers first drafts and revisions.
+  - **Unflagged (legacy) sessions** keep `_copy_artifact` byte-for-byte, unchanged.
+  - Coding loops never call this (implementation submissions have their own headings).
+
+### context_checked_problems(text)
+File: `src/gator_command/scripts/loop/submit.py`
+Structural check of a plan's `## Context Checked` (#46). It returns a list of reasons (`[]` = ok).
+- Exactly one level-2 heading, case-insensitive, found by the fence-aware `_h2_titles` scan. Fenced examples never count, and `###` is not the section.
+- The body (to the next unfenced `##`) must be non-empty once HTML comments and blank lines are removed.
+- The body must not be only a placeholder: after reducing to `[a-z0-9]`, `none` / `na` / `nothing` / `tbd` / `todo` / empty (e.g. `-`) are rejected.
+- `None — <reason>` (any separator plus a reason) is accepted.
+- Adequacy is the Reviewer's judgment, never checked here.
+! The shipped plan template in `loop-artifact-formats.md` must contain exactly one section that passes this check (drift-guarded in `tests/test_loop_context_evidence.py`).
 
 ### handle_submit_review(token, file_path, approve)
 File: `src/gator_command/scripts/loop/submit.py`
@@ -328,14 +365,14 @@ Filesystem: none (session mutation only)
 
 ---
 
-### init_loop(feature, sketch_path, max_rounds, turn_timeout, repo_root=None, mode="planning", from_loop=None)
+### init_loop(feature, sketch_path, max_rounds, turn_timeout, repo_root=None, mode="planning", from_loop=None, brief_path=None, brief_text=None, source_brief=None)
 File: `src/gator_command/scripts/loop/host.py`
-`mode="coding"` (#41) delegates to `_init_coding_loop()`; then `sketch_path` must be None and `from_loop` is required. Planning requires `sketch_path` and rejects `from_loop`. Planning: creates loop on disk without entering the watch loop. Creates directory, copies sketch, generates three tokens (draftor, reviewer, architect), writes session + initial event. Returns `(loop_id, loop_dir)`. When `repo_root` is provided, uses it directly instead of calling `find_gator_root()` — enables dashboard reuse without filesystem discovery.
+**Brief (#43):** at most one of `brief_path` (CLI) or `brief_text` (Dashboard) is accepted, and it is validated before any directory is created (`_resolve_brief_input`). `_write_brief` writes the bytes, makes the file read-only (POSIX; on Windows the digest is the enforcement), re-verifies, and returns the metadata. The `loop_started` event records `brief_sha256` / `brief_bytes`, never content. **Planning starts are now atomic as well:** any failure after the directory exists removes it (`_remove_partial_loop`). `source_brief` is rejected on planning starts. `mode="coding"` (#41) delegates to `_init_coding_loop()`; then `sketch_path` must be None and `from_loop` is required. Planning requires `sketch_path` and rejects `from_loop`. Planning: creates loop on disk without entering the watch loop. Creates directory, copies sketch, generates three tokens (draftor, reviewer, architect), writes session + initial event. Returns `(loop_id, loop_dir)`. When `repo_root` is provided, uses it directly instead of calling `find_gator_root()` — enables dashboard reuse without filesystem discovery.
 Filesystem: `.gator/loops/<loop-id>/` (W, creates), sketch file (R)
 <- `start_loop()`, dashboard `_handle_loop_start()`
 -> `create_session()`, `save_session()`, `make_token()`, `save_tokens()`, `emit_event()`, `ensure_loops_gitignore()`
 
-### _init_coding_loop(feature, from_loop, max_rounds, turn_timeout, repo_root) / _read_approved_source(source_dir, from_loop) / _remove_partial_loop(loop_dir)
+### _init_coding_loop(feature, from_loop, max_rounds, turn_timeout, repo_root, brief_bytes=None, source_brief="keep") / _read_approved_source(source_dir, from_loop, source_brief="keep") / _remove_partial_loop(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
 The guarded coding successor (#41). Steps, in order:
 1. Validate the canonical shape of `from_loop`: `_SOURCE_LOOP_ID_RE` starts AND ends alphanumeric, so a Windows trailing-dot alias is rejected; no `..` / separators. The source must be a real directory with `session.json`.
@@ -345,6 +382,12 @@ The guarded coding successor (#41). Steps, in order:
 5. Only then write tokens, `session.json`, and a `loop_started` event (with `mode`, `source_loop_id`).
 
 Any failure removes the partial directory (`_remove_partial_loop`, read-only tolerant; `onexc` on 3.12+, `onerror` below) and raises one clear error.
+**Brief carry-forward (#43 D1; the Architect chooses):** inside the same source-lock read:
+- the source has no `brief`: `none_available`, whatever the choice;
+- `drop`: `dropped`; the source brief is never opened or verified, so a corrupt one cannot block;
+- `keep` (the default): `read_verified_brief(source, ref, BRIEF_FILENAME)` must be `ok`. Otherwise the start is rejected atomically with the integrity state and a `--source-brief drop` hint.
+
+Kept bytes are written as `source-architect-brief.md` (copy-then-verify). `submit.coding_status_view(coding, loop_dir)` projects `source_brief` (strict view), `source_brief_check` and `source_brief_decision` for the Dashboard. An optional new `--brief` is written as the coding loop's own `architect-brief.md`. That gives four arrangements: keep or drop, each with or without a new brief. The decision is recorded in `coding.source_brief_decision` and in the `loop_started` event (plus the source brief sha and size when kept).
 Filesystem: source `session.json` / `session.lock` (R, lock), source `plan.current.md` (R), `.gator/loops/<new>/` (W)
 ! The source session is never written. Callers hold `start.lock` (`start_loop`; the Dashboard start in Module 5); lock order is start.lock, then the source session lock, the same as extend.
 
@@ -354,7 +397,7 @@ Single-active guard for reopen (#41), mirroring `extend_loop()`: take `start.loc
 <- CLI `_cmd_reopen()` (the Dashboard `/reopen` arrives in Module 5)
 ! Every reopen path must go through this function. Rejections leave the loop byte-unchanged.
 
-### start_loop(feature, sketch_path, max_rounds, turn_timeout, mode="planning", from_loop=None)
+### start_loop(feature, sketch_path, max_rounds, turn_timeout, mode="planning", from_loop=None, brief_path=None, source_brief=None)
 File: `src/gator_command/scripts/loop/host.py`
 CLI entry point for starting a loop. Acquires `start.lock` (cross-process, one active loop per repo), scans for existing active loops, calls `init_loop()`, acquires `host.lock`, releases `start.lock`, enters watch loop. Blocks until terminal.
 Filesystem: `.gator/loops/start.lock` (RW), `.gator/loops/<loop-id>/host.lock` (RW)
@@ -460,8 +503,13 @@ File: `src/gator_command/scripts/loop/cli.py`
 
 ### _cmd_start(args) / _mode_of(session) / _print_coding_action_prompt(...)
 File: `src/gator_command/scripts/loop/cli.py`
-- `start --mode planning|coding [--from-loop ID] [--sketch PATH]`: planning requires `--sketch`; coding requires `--from-loop`. Argument errors and `RuntimeError` exit 1 with `Error:`.
+- `start --mode planning|coding [--from-loop ID] [--sketch PATH] [--brief FILE] [--source-brief keep|drop]`: planning requires `--sketch`; coding requires `--from-loop`. `--brief` (#43) is optional in both modes. `--source-brief` is coding-only (exit 1 on planning) and defaults to keep. Argument errors and `RuntimeError` exit 1 with `Error:`.
 - Status JSON gains additive `mode` (normalized). Coding text status prints `Mode: coding` and a coding action prompt (approved plan path, `submit-implementation`, review the STAGED tree).
+- **Architect brief lines (#43):** `_brief_entries` / `_print_briefs` / `_briefs_json` cover the model and Architect views.
+  - Each non-absent position prints a labeled FIXED path plus a marker: `[OK] (required reading)`, `[!!] MISSING`, `[!!] DIGEST MISMATCH`, `[!!] UNREADABLE`, `[!!] INVALID REFERENCE` or `[!!] UNSAFE PATH`. A failed brief adds "do not rely on it", and model roles are also told to escalate.
+  - A dropped planning brief prints "Planning brief: not carried forward (Architect's choice at coding start)".
+  - `absent` prints nothing, so no-brief loops keep their exact text output.
+  - JSON gains `brief` / `source_brief` (`{path, check}`) and `source_brief_decision` only when present.
 - Terminal text for `implementation_approved` gives the one-normal-commit handoff.
 
 ### _cmd_extend(args) / _round_count_arg(value)
@@ -578,6 +626,18 @@ Filesystem: Git object database (W — tree objects written by `write-tree`, unr
 ! Facts are RAW. Never filter or normalize paths (for example hook-managed `.gator/` files) out of the binding. The approved #41 plan keeps the raw staged tree authoritative everywhere.
 
 ---
+
+## TRIPWIRE: Architect Brief Is Immutable Residue, Not a Channel (#43)
+
+The Architect brief is written once at loop creation and never edited. Later direction goes through interject, escalate or unblock. Every read of a brief goes through `verify_brief` with the FIXED expected name for its position (`architect-brief.md` / `source-architect-brief.md`), never a path from session data. Status surfaces use only `brief_status_view` (metadata, positionally bound); brief content never appears in session, events, `/status`, or the liveness sidecar. A missing brief is `absent` and neutral, never an alarm.
+
+Violation: trusting `session.brief.artifact` as a path enables traversal or swapped-label reads; passing raw `session.brief` through a generic status allowlist can leak injected content.
+
+## TRIPWIRE: Validated Bytes Are Persisted Bytes (#46)
+
+For context-evidence sessions, `handle_submit_draft` persists exactly the buffer it validated inside the session lock. Never re-read the source path or `copy2` it after validation, and never make the preflight authoritative. Only `contract.context_evidence` gates enforcement. Never infer it from dates, mode strings, or the presence of a brief: legacy sessions must keep accepting old plans.
+
+Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`.
 
 ## TRIPWIRE: Raw Staged Tree Is Review Authority (coding mode, #41)
 

@@ -45,7 +45,8 @@ def env(tmp_path, monkeypatch):
         stored[role] = {"nonce": nonce, "token": t}
     loop_session.save_tokens(loop_dir, stored)
     draft = tmp_path / "plan.md"
-    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n", encoding="utf-8")
+    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n\n"
+                     "## Context Checked\n\n- scripts-loop charter\n", encoding="utf-8")
     findings = tmp_path / "findings.md"
     findings.write_text("# Findings\n\n## Executive Summary\n\n- y\n",
                         encoding="utf-8")

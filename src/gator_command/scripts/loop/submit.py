@@ -99,6 +99,65 @@ def missing_implementation_headings(text):
     return [h for h in IMPLEMENTATION_HEADINGS if h.lower() not in seen]
 
 
+CONTEXT_CHECKED_HEADING = "Context Checked"
+_PLACEHOLDER_BODIES = frozenset({"", "none", "na", "nothing", "tbd", "todo"})
+
+
+def _section_body(text, title):
+    """Body lines of the first level-2 section named ``title`` (case-
+    insensitive), up to the next unfenced level-2 heading or EOF."""
+    lines = text.splitlines()
+    in_fence = False
+    body = None
+    for line in lines:
+        stripped = line.lstrip()
+        is_fence = stripped.startswith("```") or stripped.startswith("~~~")
+        if body is not None:
+            if is_fence:
+                in_fence = not in_fence
+            elif not in_fence and _h2_title(line) is not None:
+                break
+            body.append(line)
+            continue
+        if is_fence:
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            h = _h2_title(line)
+            if h is not None and h.lower() == title.lower():
+                body = []
+    return body
+
+
+def context_checked_problems(text):
+    """Structural problems with a plan's ``## Context Checked`` (#46).
+
+    Exactly one level-2 heading outside fences; a non-empty body once HTML
+    comments and blank lines are removed; and not merely a placeholder
+    (none / n/a / nothing / tbd / '-'). "None — <reason>" is accepted:
+    "None" needs a short reason. Adequacy is the Reviewer's judgment, never
+    checked here. Returns a list of human-readable problems ([] = ok).
+    """
+    import re as _re
+    count = _h2_titles(text).count(CONTEXT_CHECKED_HEADING.lower())
+    if count == 0:
+        return ["missing a '## Context Checked' section (list the charters, "
+                "code/source artifacts, and Architect brief you consulted, or "
+                "'None — <reason>')"]
+    if count > 1:
+        return ["more than one '## Context Checked' section; keep exactly one"]
+    body = "\n".join(_section_body(text, CONTEXT_CHECKED_HEADING) or [])
+    body = _re.sub(r"<!--.*?-->", "", body, flags=_re.S)
+    meaningful = [l.strip() for l in body.splitlines() if l.strip()]
+    if not meaningful:
+        return ["'## Context Checked' is empty"]
+    normalized = _re.sub(r"[^a-z0-9]+", "", " ".join(meaningful).lower())
+    if normalized in _PLACEHOLDER_BODIES:
+        return ["'## Context Checked' is only a placeholder; list what you "
+                "checked, or write 'None — <reason>'"]
+    return []
+
+
 def commit_state_heading_count(text):
     """How many level-2 ``Commit State`` headings (outside fences) exist.
 
@@ -140,7 +199,7 @@ def _change_counts(changed):
     return counts
 
 
-def coding_status_view(coding):
+def coding_status_view(coding, loop_dir=None):
     """Slim, allowlisted projection of ``session["coding"]`` for the
     Dashboard status poll (#41). Never ships raw path lists (up to
     MAX_PATHS per generation) on every poll: identifiers, counts, review
@@ -176,7 +235,20 @@ def coding_status_view(coding):
             } if isinstance(review, dict) else None),
         })
     approval = coding.get("approval")
+    # #43: strict, positionally bound source-brief metadata + integrity.
+    from session import (brief_status_view, verify_brief,
+                         SOURCE_BRIEF_FILENAME, SOURCE_BRIEF_DECISIONS)
+    src_ref = coding.get("source_brief")
+    decision = coding.get("source_brief_decision")
+    if decision not in SOURCE_BRIEF_DECISIONS:
+        decision = None
     return {
+        "source_brief": brief_status_view(src_ref, SOURCE_BRIEF_FILENAME),
+        "source_brief_check": (
+            verify_brief(loop_dir, src_ref, SOURCE_BRIEF_FILENAME)
+            if loop_dir is not None else
+            ("absent" if src_ref is None else "unknown")),
+        "source_brief_decision": decision,
         "source_loop_id": coding.get("source_loop_id"),
         "plan_sha256": coding.get("plan_sha256"),
         "base_head": coding.get("base_head"),
@@ -314,6 +386,35 @@ def _write_artifact_text(loop_dir, target_name, text):
 # Submit handlers
 # ---------------------------------------------------------------------------
 
+def _context_evidence_required(session):
+    """#46 migration boundary: only sessions created with the contract flag
+    (planning loops created after the release) are validated."""
+    contract = session.get("contract") if isinstance(session, dict) else None
+    if not isinstance(contract, dict):
+        return False
+    level = contract.get("context_evidence")
+    return isinstance(level, int) and not isinstance(level, bool) and level >= 1
+
+
+def _check_context_evidence(data):
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Plan draft must be UTF-8 text")
+    problems = context_checked_problems(text)
+    if problems:
+        raise ValueError("Plan draft rejected: " + "; ".join(problems))
+
+
+def _write_artifact_bytes(loop_dir, target_name, data):
+    target = Path(loop_dir) / target_name
+    _make_writable(target)
+    with open(target, "wb") as f:
+        f.write(data)
+    _make_readonly(target)
+    return target_name
+
+
 def handle_submit_draft(token, file_path):
     """Process a draftor plan submission.
 
@@ -329,6 +430,20 @@ def handle_submit_draft(token, file_path):
 
     loop_id, role, loop_dir = resolve_token(token)
 
+    # #46: read the draft ONCE. For new-contract sessions the exact
+    # captured bytes are validated inside the lock and persisted — no
+    # second read and no path copy — so a file swapped after validation can
+    # never be persisted unchecked. A preflight check gives a friendly early
+    # error; the in-lock check is authoritative.
+    captured = source.read_bytes()
+    try:
+        from session import load_session as _peek
+        preflight_session = _peek(loop_dir)
+    except Exception:
+        preflight_session = None  # the locked transaction reports problems
+    if _context_evidence_required(preflight_session):
+        _check_context_evidence(captured)
+
     def _submit(session):
         # Validate inside lock (session may have changed)
         allowed, reason = validate_action(session, role, "submit_draft")
@@ -338,8 +453,14 @@ def handle_submit_draft(token, file_path):
         # Copy artifact — round-versioned first, then current
         round_num = session["status"]["round"]
         versioned_name = f"plan.round-{round_num}.md"
-        _copy_artifact(source, loop_dir, versioned_name)
-        _copy_artifact(source, loop_dir, "plan.current.md")
+        if _context_evidence_required(session):
+            _check_context_evidence(captured)
+            _write_artifact_bytes(loop_dir, versioned_name, captured)
+            _write_artifact_bytes(loop_dir, "plan.current.md", captured)
+        else:
+            # Legacy (pre-#46) sessions: unchanged behavior.
+            _copy_artifact(source, loop_dir, versioned_name)
+            _copy_artifact(source, loop_dir, "plan.current.md")
 
         # Mark role as joined
         session["roles"]["draftor"]["joined"] = True

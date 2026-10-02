@@ -67,7 +67,8 @@ def env(tmp_path, monkeypatch):
         stored[role] = {"nonce": nonce, "token": t}
     loop_session.save_tokens(loop_dir, stored)
     draft = tmp_path / "plan.md"
-    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n", encoding="utf-8")
+    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n\n"
+                     "## Context Checked\n\n- scripts-loop charter\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     return {"root": tmp_path, "loop_dir": loop_dir, "tok": tok,
             "store": lv.open_store(loop_dir), "draft": str(draft)}

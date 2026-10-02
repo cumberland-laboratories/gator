@@ -30,6 +30,24 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
   - **Compatibility:** planning loops are unchanged. Loop mode is read only through `loop_mode()`, which treats a missing value and the legacy `"planning-only"` value as planning.
   - **Documentation:** a "Coding Loops" section in the protocol, an implementation template in `loop-artifact-formats.md`, and coding steps in `/loop-join`.
 
+- **Architect brief at loop creation ([#43](https://github.com/cumberland-laboratories/gator/issues/43)).** The Architect can attach must-read guidance to a loop when starting it.
+  - **Starting:** `gator loop start --brief FILE`, or the new brief field on the Dashboard's create form (with a live UTF-8 byte counter). The cap is 32 KiB. The brief must be UTF-8 and non-blank, with no NUL bytes. Symlinks and reparse points are rejected, and every failure happens before any loop directory is created.
+  - **Storage and integrity:** the brief is written once to the fixed artifact name `architect-brief.md` and pinned by digest in session metadata (`{artifact, sha256, bytes}`, with no content). On POSIX the file is made read-only; Windows relies on the digest check. `status` (CLI and Dashboard) and coding-loop carry-forward verify the digest and report an integrity state (`ok`, `missing`, `mismatch`, `unreadable`, `invalid_ref`, `unsafe`). A failed check is flagged, and carry-forward refuses it. Viewing the brief through the Dashboard's artifact route serves the file's current text; the integrity marker shown beside it comes from the status check.
+  - **Status:** `gator loop status` (every role) and the Dashboard list the brief as **required reading** with a text marker (`[OK]` / `[!!] DIGEST MISMATCH` …), never color alone. Brief content never enters session data, events or `/status`; it is served only through the artifact allowlist.
+  - **Coding loops:**
+    - `--source-brief keep|drop` (default keep) decides whether the approved planning loop's brief carries forward as `source-architect-brief.md`, and an optional new `--brief` adds a coding brief. The decision is recorded as `kept` / `dropped` / `none_available`. Keeping a corrupt source brief fails with a hint to drop it.
+    - The Dashboard can now start coding loops too, with an approved-plan picker and a keep/drop control.
+  - **Compatibility:** loops without a brief look and behave exactly as before.
+
+- **Plans must show the context they checked ([#46](https://github.com/cumberland-laboratories/gator/issues/46)).** Every draft and revision in a newly created planning loop must include exactly one `## Context Checked` section. It lists the Architect brief, charters, and code consulted, or says `None — <reason>`.
+  - **Rejected at submit:** `submit-draft` rejects a missing, duplicate, empty (comments don't count) or bare-placeholder (`None`, `N/A`, `-`, `TBD`) section. Nothing changes when it does. The check is structural only; whether the context is adequate is the Reviewer's call, and the protocol now asks Reviewers to check that it is credible.
+  - **Validated bytes are the persisted bytes:** the draft is read once and validated inside the session lock, so a file changed mid-submit cannot land unchecked.
+  - **Migration:** only planning loops created by this version carry the `contract.context_evidence` flag. Existing loops and coding loops are not checked.
+  - **Documentation:**
+    - The loop protocol: the brief as required reading, charters before drafting, the brief vs. the sketch's Context section, the coding two-brief rule.
+    - `loop-artifact-formats.md`: the plan-template section and the Scope Check prompt.
+    - `/loop-join`.
+
 ### Fixed
 
 - **The Dashboard loop view keeps polling the selected live loop ([#44](https://github.com/cumberland-laboratories/gator/issues/44), core).** Previously, after a terminal loop stopped polling, selecting a live loop never restarted it, so the workspace stayed stale until the view was re-entered. `ensurePolling()` is now the only interval creator; this also removes a leaked duplicate interval at mount.

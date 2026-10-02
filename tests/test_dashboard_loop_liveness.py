@@ -75,7 +75,8 @@ def env(tmp_path, monkeypatch):
         stored[role] = {"nonce": nonce, "token": t}
     loop_session.save_tokens(loop_dir, stored)
     draft = repo / "plan.md"
-    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n", encoding="utf-8")
+    draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n\n"
+                     "## Context Checked\n\n- scripts-loop charter\n", encoding="utf-8")
     monkeypatch.chdir(repo)
 
     rk = _repo_key(repo)

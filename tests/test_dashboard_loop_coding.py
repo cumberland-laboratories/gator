@@ -124,7 +124,13 @@ class TestStatusProjection:
         assert body["mode"] == "coding"
         c = body["coding"]
         assert set(c) == {"source_loop_id", "plan_sha256", "base_head",
-                          "base_tree", "generations", "approval"}
+                          "base_tree", "generations", "approval",
+                          # #43: strict source-brief metadata + integrity
+                          "source_brief", "source_brief_check",
+                          "source_brief_decision"}
+        assert c["source_brief"] is None
+        assert c["source_brief_check"] == "absent"
+        assert c["source_brief_decision"] == "none_available"
         g = c["generations"][0]
         assert g["changed_count"] == 1 and g["changed_by_status"] == {"A": 1}
         assert g["residue_other_count"] == 1

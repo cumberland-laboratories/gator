@@ -32,6 +32,47 @@
   var ROUNDS_MAX = 20;
   var EXTENDABLE_STAGE = "max_rounds_exceeded";
 
+  // Architect brief (#43). Mirrors loop/session.py MAX_BRIEF_BYTES; the
+  // server re-validates and is authoritative.
+  var BRIEF_MAX_BYTES = 32768;
+  var BRIEF_FILENAME = "architect-brief.md";
+  var SOURCE_BRIEF_FILENAME = "source-architect-brief.md";
+  var BRIEF_CHECK_TEXT = {
+    missing: "MISSING", mismatch: "DIGEST MISMATCH", unreadable: "UNREADABLE",
+    invalid_ref: "INVALID REFERENCE", unsafe: "UNSAFE PATH",
+  };
+
+  function briefByteLength(text) {
+    return new TextEncoder().encode(text || "").length;
+  }
+
+  // Brief positions to show, from the strict status projection only. A
+  // position is listed when its check is not "absent"; it is LINKED only
+  // when its positionally bound view is non-null, and the artifact name is
+  // the fixed constant for the position — never taken from metadata.
+  function briefEntries(status) {
+    var out = [];
+    var coding = status && status.mode === "coding" ? (status.coding || {}) : null;
+    var check = status && status.brief_check;
+    if (check && check !== "absent") {
+      out.push({ name: BRIEF_FILENAME, check: check,
+                 linked: !!status.brief,
+                 label: coding ? "Architect brief (this coding loop)" : "Architect brief" });
+    }
+    if (coding && coding.source_brief_check && coding.source_brief_check !== "absent") {
+      out.push({ name: SOURCE_BRIEF_FILENAME, check: coding.source_brief_check,
+                 linked: !!coding.source_brief,
+                 label: "Architect brief \u2014 from approved plan" });
+    }
+    return out;
+  }
+
+  function briefEntryLabel(e) {
+    var bad = BRIEF_CHECK_TEXT[e.check];
+    return e.label + (e.check === "ok" ? " (required reading)"
+      : " [!! " + (bad || e.check) + "]");
+  }
+
   var TERMINAL_STAGES = {
     plan_approved: true,
     implementation_approved: true,   // coding (#41); resumable via reopen
@@ -504,15 +545,33 @@
     // Section 1: Define the work
     html += '<div class="loop-create-section">'
       + '<div class="loop-create-section-title">1. Define the work</div>'
+      + '<fieldset class="loop-create-field loop-create-mode">'
+      + '<legend class="loop-create-label">Loop type</legend>'
+      + '<label><input type="radio" name="loop-mode" value="planning" checked> '
+      + 'Planning \u2014 draft a plan from a sketch</label><br>'
+      + '<label><input type="radio" name="loop-mode" value="coding"> '
+      + 'Coding \u2014 implement an approved plan</label>'
+      + '</fieldset>'
       + '<div class="loop-create-field">'
       + '<label class="loop-create-label" for="loop-feature-input">Feature name</label>'
       + '<input type="text" id="loop-feature-input" class="loop-create-input" placeholder="e.g., input-validation">'
       + '</div>'
-      + '<div class="loop-create-field">'
+      + '<div class="loop-create-field" id="loop-source-field" hidden>'
+      + '<label class="loop-create-label" for="loop-source-select">Approved planning loop</label>'
+      + '<div id="loop-source-picker"></div>'
+      + '<div id="loop-source-brief"></div>'
+      + '</div>'
+      + '<div class="loop-create-field" id="loop-sketch-field">'
       + '<label class="loop-create-label">Sketch source</label>'
       + '<div id="loop-sketch-picker">'
       + '<div class="muted" style="padding:8px 0;">Loading sketch sources…</div>'
       + '</div>'
+      + '</div>'
+      + '<div class="loop-create-field">'
+      + '<label class="loop-create-label" for="loop-brief-input">Architect brief (optional, Markdown)</label>'
+      + '<textarea id="loop-brief-input" class="loop-create-input loop-brief-input" rows="6" '
+      + 'placeholder="Priorities, constraints, required coverage, sources that deserve scrutiny"></textarea>'
+      + '<div class="loop-create-hint" id="loop-brief-count">0 / ' + BRIEF_MAX_BYTES.toLocaleString("en-US") + ' bytes</div>'
       + '</div>'
       + '<div class="loop-create-context">'
       + '<span class="loop-create-context-label">Repository:</span> ' + escHtml(_state.repoName || "")
@@ -558,6 +617,31 @@
 
     // Load sketch sources
     loadSketchPicker(container);
+
+    // Architect brief byte counter (#43): UTF-8 BYTES, never string length.
+    var briefInput = mainEl.querySelector("#loop-brief-input");
+    var briefCount = mainEl.querySelector("#loop-brief-count");
+    if (briefInput && briefCount) {
+      briefInput.addEventListener("input", function () {
+        var n = briefByteLength(briefInput.value);
+        var over = n > BRIEF_MAX_BYTES;
+        briefCount.textContent = n.toLocaleString("en-US") + " / "
+          + BRIEF_MAX_BYTES.toLocaleString("en-US") + " bytes"
+          + (over ? " \u2014 over the limit; shorten the brief to create the loop" : "");
+        briefCount.classList.toggle("loop-brief-over", over);
+        _create.overLimit = over;
+        updateCreateEnabled(container);
+      });
+    }
+
+    // Loop type (#43 M2a): planning (sketch) or coding (approved plan).
+    _create = { mode: "planning", overLimit: false, sourcePending: false,
+                noSources: false, sourceRev: 0, sourceBrief: null };
+    mainEl.querySelectorAll('input[name="loop-mode"]').forEach(function (r) {
+      r.addEventListener("change", function () {
+        setCreateMode(container, r.value);
+      });
+    });
 
     // Wire timeout hint
     var timeoutInput = mainEl.querySelector("#loop-turn-timeout");
@@ -658,6 +742,106 @@
     return "";
   }
 
+  // ── coding-loop creation (#43 M2a) ───────────────────────────────────────
+  //
+  // `_create` is the create form's view state. The approved-source list is
+  // the /loops summary filtered to planning loops in plan_approved; the
+  // selected source's brief state comes from its own /status (strict
+  // projection), guarded by a per-select revision so a stale response can
+  // never update the control. The server re-validates everything.
+
+  var _create = null;
+
+  var SOURCE_BRIEF_PROBLEM = {
+    missing: "MISSING", mismatch: "DIGEST MISMATCH", unreadable: "UNREADABLE",
+    invalid_ref: "INVALID REFERENCE", unsafe: "UNSAFE PATH",
+  };
+
+  function updateCreateEnabled(container) {
+    var btn = container.querySelector("#loop-create-action");
+    if (!btn || !_create) return;
+    var blocked = _create.overLimit
+      || (_create.mode === "coding" && (_create.noSources || _create.sourcePending));
+    if (btn.textContent !== "Creating…") btn.disabled = blocked;
+  }
+
+  async function setCreateMode(container, mode) {
+    _create.mode = mode;
+    var sourceField = container.querySelector("#loop-source-field");
+    var sketchField = container.querySelector("#loop-sketch-field");
+    sourceField.hidden = mode !== "coding";
+    sketchField.hidden = mode === "coding";
+    if (mode === "coding") {
+      await loadSourcePicker(container);
+    }
+    updateCreateEnabled(container);
+  }
+
+  async function loadSourcePicker(container) {
+    var picker = container.querySelector("#loop-source-picker");
+    var gen = _state.generation;
+    var loops = await fetchLoops();
+    if (gen !== _state.generation || !picker.isConnected) return;
+    var approved = loops.filter(function (l) {
+      return l.mode === "planning" && l.stage === "plan_approved";
+    });
+    _create.noSources = approved.length === 0;
+    if (!approved.length) {
+      picker.innerHTML = '<div class="loop-create-hint">No approved planning '
+        + 'loops to implement. Approve a planning loop first.</div>';
+      container.querySelector("#loop-source-brief").innerHTML = "";
+      updateCreateEnabled(container);
+      return;
+    }
+    var html = '<select id="loop-source-select" class="loop-create-input">';
+    approved.forEach(function (l) {
+      html += '<option value="' + escHtml(l.loop_id) + '">'
+        + escHtml(l.feature + " — " + l.loop_id) + '</option>';
+    });
+    html += '</select>';
+    picker.innerHTML = html;
+    var sel = picker.querySelector("#loop-source-select");
+    sel.addEventListener("change", function () {
+      loadSourceBrief(container, sel.value);
+    });
+    loadSourceBrief(container, sel.value);
+  }
+
+  async function loadSourceBrief(container, sourceId) {
+    var holder = container.querySelector("#loop-source-brief");
+    var rev = ++_create.sourceRev;
+    _create.sourcePending = true;
+    _create.sourceBrief = null;
+    holder.innerHTML = '<div class="loop-create-hint">Checking the approved '
+      + 'plan’s brief…</div>';
+    updateCreateEnabled(container);
+    var gen = _state.generation;
+    var st = await fetchStatus(sourceId);
+    if (gen !== _state.generation || rev !== _create.sourceRev) return;
+    var sel = container.querySelector("#loop-source-select");
+    if (!sel || sel.value !== sourceId) return;
+    _create.sourcePending = false;
+    var check = st ? st.brief_check : null;
+    _create.sourceBrief = check || "unknown";
+    if (check === "absent") {
+      holder.innerHTML = "";  // nothing to carry; server records none_available
+    } else {
+      var warn = "";
+      if (!check) {
+        warn = "Brief state unknown (status unavailable); the server checks it on create.";
+      } else if (check !== "ok") {
+        warn = "The approved plan’s brief failed its integrity check ("
+          + (SOURCE_BRIEF_PROBLEM[check] || check) + "). Keeping it will fail; "
+          + "uncheck to start without it.";
+      }
+      holder.innerHTML = '<label class="loop-source-brief-choice">'
+        + '<input type="checkbox" id="loop-keep-source-brief" checked> '
+        + 'Include the approved plan’s Architect brief</label>'
+        + (warn ? '<div class="loop-source-brief-warning">' + escHtml(warn) + '</div>' : '');
+    }
+    updateCreateEnabled(container);
+  }
+
   async function handleCreateSubmit(container) {
     var errorEl = container.querySelector("#loop-create-error");
     var featureEl = container.querySelector("#loop-feature-input");
@@ -678,7 +862,17 @@
       return;
     }
 
-    if (!sketchPath) {
+    var coding = !!(_create && _create.mode === "coding");
+    var fromLoop = "";
+    if (coding) {
+      var srcSel = container.querySelector("#loop-source-select");
+      fromLoop = srcSel ? srcSel.value : "";
+      if (!fromLoop) {
+        errorEl.textContent = "Choose an approved planning loop to implement.";
+        errorEl.style.display = "block";
+        return;
+      }
+    } else if (!sketchPath) {
       errorEl.textContent = "A sketch source is required.";
       errorEl.style.display = "block";
       return;
@@ -700,19 +894,38 @@
       return;
     }
 
+    var briefEl = container.querySelector("#loop-brief-input");
+    var briefText = briefEl ? briefEl.value : "";
+    if (briefByteLength(briefText) > BRIEF_MAX_BYTES) {
+      errorEl.textContent = "The Architect brief is over the "
+        + BRIEF_MAX_BYTES.toLocaleString("en-US") + "-byte limit.";
+      errorEl.style.display = "block";
+      return;
+    }
+
     var createBtn = container.querySelector("#loop-create-action");
     createBtn.disabled = true;
     createBtn.textContent = "Creating…";
 
-    var result = await postStart({
+    var body = {
       feature: feature,
-      sketch_path: sketchPath,
       max_rounds: maxRounds,
       turn_timeout: turnTimeout,
-    });
+    };
+    if (coding) {
+      body.mode = "coding";
+      body.from_loop = fromLoop;
+      var keepEl = container.querySelector("#loop-keep-source-brief");
+      if (keepEl) body.source_brief = keepEl.checked ? "keep" : "drop";
+    } else {
+      body.sketch_path = sketchPath;
+    }
+    if (briefText.trim()) body.brief = briefText;  // blank = no brief
+    var result = await postStart(body);
 
     createBtn.disabled = false;
     createBtn.textContent = "Create Loop";
+    updateCreateEnabled(container);  // re-apply byte-limit / source rules
 
     if (result._failed) {
       if (result._status === 409 && result.error === "active loop exists") {
@@ -1036,9 +1249,15 @@
   function artifactsFingerprint(status, events) {
     var decisions = (status && status.decisions) || [];
     var n = events.length;
+    var coding = status && status.mode === "coding" ? (status.coding || {}) : {};
     return JSON.stringify([
       n, n ? eventKey(events[n - 1]) : null,
       collectArtifactPaths([], decisions),
+      // #43 brief positions (metadata + integrity only)
+      status ? status.brief || null : null,
+      status ? status.brief_check || null : null,
+      coding.source_brief || null, coding.source_brief_check || null,
+      coding.source_brief_decision || null,
     ]);
   }
 
@@ -2272,6 +2491,18 @@
       ? ["approved-plan.md", "implementation.current.md", "findings.current.md"]
       : ["sketch.md", "plan.current.md", "findings.current.md"];
 
+    // Architect briefs first (#43): only linked (valid-view) positions get
+    // an artifact entry; invalid references and the dropped decision are
+    // text-only notes with no link and no fetch.
+    var briefs = briefEntries(status);
+    var briefLabels = {};
+    for (var bi = briefs.length - 1; bi >= 0; bi--) {
+      if (briefs[bi].linked) {
+        artifacts.unshift(briefs[bi].name);
+        briefLabels[briefs[bi].name] = briefEntryLabel(briefs[bi]);
+      }
+    }
+
     // Event-driven immutable artifacts (includes round-zero)
     var immutable = collectArtifactPaths(events || [], (status && status.decisions) || []);
     for (var i = 0; i < immutable.length; i++) {
@@ -2284,9 +2515,29 @@
     // expanded state and loaded content) are kept and only re-ordered.
     var title = inspector.querySelector(":scope > .section-title");
     if (!title) {
-      inspector.innerHTML = '<div class="section-title">Artifacts</div>';
+      inspector.innerHTML = '<div class="section-title">Artifacts</div>'
+        + '<div class="loop-brief-notes"></div>';
       title = inspector.firstChild;
     }
+    var notesEl = inspector.querySelector(":scope > .loop-brief-notes");
+    var notes = [];
+    briefs.forEach(function (b) {
+      if (!b.linked) {
+        notes.push('<div class="loop-brief-note" data-check="' + escHtml(b.check) + '">'
+          + escHtml(b.label + ": " + (BRIEF_CHECK_TEXT[b.check] || b.check)
+                    + " \u2014 escalate to the Architect") + '</div>');
+      }
+    });
+    var codingInfo = status.mode === "coding" ? (status.coding || {}) : {};
+    if (codingInfo.source_brief_decision === "dropped") {
+      notes.push('<div class="loop-brief-note" data-check="dropped">'
+        + "Planning brief: not carried forward (Architect\u2019s choice at coding start)"
+        + '</div>');
+    }
+    var notesHtml = notes.join("");
+    if (notesEl && notesEl.innerHTML !== notesHtml) notesEl.innerHTML = notesHtml;
+    // Artifact sections reconcile after the notes container.
+    if (notesEl) title = notesEl;
     var existing = {};
     inspector.querySelectorAll(":scope > .loop-artifact-section").forEach(function (sec) {
       existing[sec.dataset.artifact] = sec;
@@ -2303,6 +2554,9 @@
         section = createArtifactSection(name);
         added.push(section);
       }
+      var want = briefLabels[name] || name;
+      var toggle = section.querySelector(".loop-artifact-toggle");
+      if (toggle && toggle.textContent !== want) toggle.textContent = want;
       if (prev.nextSibling !== section) {
         inspector.insertBefore(section, prev.nextSibling);
       }

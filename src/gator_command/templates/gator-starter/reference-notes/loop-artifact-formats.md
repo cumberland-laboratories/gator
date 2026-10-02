@@ -32,14 +32,16 @@ performance requirements, compatibility boundaries, security rules>
 
 ## Context
 
-<Optional: pointers to relevant charters, blueprints, or prior artifacts
-that the models should read before drafting/reviewing>
+<Optional background pointers: relevant charters, blueprints, or prior
+artifacts. Must-read guidance — what the models are required to read or
+honor — belongs in the Architect brief, not here.>
 ```
 
 **Guidelines for the Architect:**
 - Be specific about scope boundaries. "Build X" is weaker than "Build X. Do not build Y."
 - Constraints are load-bearing — if the draftor ignores one, the reviewer should flag it
 - Context pointers save rounds. If there's a charter the models need, link it here.
+- For must-read guidance, start the loop with an **Architect brief** (`gator loop start --brief FILE`, or the Dashboard's brief field). It is stored as `architect-brief.md`, digest-checked, and listed as required reading in every participant's status. The sketch's Context section stays background.
 
 ---
 
@@ -60,6 +62,14 @@ bounded and self-contained.>
 ## Summary
 
 <2-4 sentences: what this plan proposes, grounded in the sketch>
+
+## Context Checked
+
+- <Architect brief, if status lists one: `architect-brief.md`>
+- <Charter(s) read, e.g. `.gator/charters/<area>.md`, and what they constrain>
+- <Code or prior artifacts inspected, e.g. `src/<module>.py`>
+<Or, when nothing applies: "None — <short reason>" (e.g. "None — greenfield
+script, no existing charter or code"). A bare "None" or "N/A" is rejected.>
 
 ## Approach
 
@@ -116,6 +126,7 @@ New modules that need new charters.>
 - Respect every constraint — if you can't, say why and escalate
 - Be concrete. "Refactor the module" is not a plan. "Split `render()` into `render_html()` and `render_markdown()` in `dashboard/helpers.py`" is a plan.
 - If the reviewer sent findings on a previous round, address every finding explicitly — don't silently drop any
+- **Context Checked is required** on every draft and revision of planning loops created since #46: exactly one `## Context Checked` section listing the Architect brief (when present), charters, and code or artifacts you actually consulted — or `None — <reason>`. Submission rejects a missing, duplicate, empty, or bare-placeholder section. Whether the list is *adequate* is the reviewer's call.
 
 ---
 
@@ -153,7 +164,9 @@ self-contained.>
 
 <Does the plan stay within the sketch's scope?
 Does it miss anything the sketch requires?
-Does it add anything the sketch excludes?>
+Does it add anything the sketch excludes?
+Is Context Checked credible — did the draftor read the Architect brief and
+the charters/code this plan touches? Missing context is a finding.>
 
 ## What Looks Good
 

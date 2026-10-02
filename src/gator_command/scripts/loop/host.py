@@ -31,6 +31,8 @@ from session import (
     make_token, save_tokens, make_loop_id,
     find_gator_root, ensure_loops_gitignore,
     _make_readonly,
+    BRIEF_FILENAME, SOURCE_BRIEF_FILENAME, brief_meta, read_brief_file,
+    brief_bytes_from_text, read_verified_brief, verify_brief,
 )
 from events import (
     emit_event, create_events_file, format_event, format_next_prompt,
@@ -221,7 +223,8 @@ def write_host_metadata(fd, nonce):
 # ---------------------------------------------------------------------------
 
 def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
-              repo_root=None, mode="planning", from_loop=None):
+              repo_root=None, mode="planning", from_loop=None,
+              brief_path=None, brief_text=None, source_brief=None):
     """Create a new loop session on disk.
 
     When ``repo_root`` is provided (dashboard path), it is used directly.
@@ -233,20 +236,33 @@ def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
     ``_init_coding_loop()``. Callers own ``start.lock`` (start_loop /
     Dashboard start), exactly as for planning loops.
 
+    Architect brief (#43): at most one of ``brief_path`` (CLI file) or
+    ``brief_text`` (Dashboard textarea; blank = none) is validated BEFORE
+    any directory is created and stored immutably as architect-brief.md.
+    ``source_brief`` ("keep" default / "drop") applies to coding starts only.
+
     Returns ``(loop_id, loop_dir)`` without entering the watch loop.
     """
+    brief_bytes = _resolve_brief_input(brief_path, brief_text)
     if mode == "coding":
         if sketch_path is not None:
             raise ValueError(
                 "A coding loop starts from --from-loop; --sketch is not used")
+        if source_brief not in (None, "keep", "drop"):
+            raise ValueError("source brief choice must be 'keep' or 'drop'")
         if repo_root is None:
             repo_root = find_gator_root()
         return _init_coding_loop(feature, from_loop, max_rounds,
-                                 turn_timeout, Path(repo_root))
+                                 turn_timeout, Path(repo_root),
+                                 brief_bytes=brief_bytes,
+                                 source_brief=source_brief or "keep")
     if mode != "planning":
         raise ValueError(f"Unknown loop mode: {mode!r}")
     if from_loop is not None:
         raise ValueError("--from-loop is only valid with --mode coding")
+    if source_brief is not None:
+        raise ValueError(
+            "--source-brief is only valid when starting a coding loop")
     if sketch_path is None:
         raise ValueError("A planning loop requires --sketch")
 
@@ -268,30 +284,66 @@ def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
 
     loop_dir = loops_base / loop_id
     loop_dir.mkdir()
+    try:
+        sketch_dest = loop_dir / "sketch.md"
+        shutil.copy2(str(sketch), str(sketch_dest))
+        _make_readonly(sketch_dest)
 
-    sketch_dest = loop_dir / "sketch.md"
-    shutil.copy2(str(sketch), str(sketch_dest))
-    _make_readonly(sketch_dest)
+        brief = None
+        if brief_bytes is not None:
+            brief = _write_brief(loop_dir, BRIEF_FILENAME, brief_bytes)
 
-    tok_d, nonce_d = make_token(loop_id, "draftor")
-    tok_r, nonce_r = make_token(loop_id, "reviewer")
-    tok_a, nonce_a = make_token(loop_id, "architect")
-    save_tokens(loop_dir, {
-        "draftor": {"nonce": nonce_d, "token": tok_d},
-        "reviewer": {"nonce": nonce_r, "token": tok_r},
-        "architect": {"nonce": nonce_a, "token": tok_a},
-    })
+        tok_d, nonce_d = make_token(loop_id, "draftor")
+        tok_r, nonce_r = make_token(loop_id, "reviewer")
+        tok_a, nonce_a = make_token(loop_id, "architect")
+        save_tokens(loop_dir, {
+            "draftor": {"nonce": nonce_d, "token": tok_d},
+            "reviewer": {"nonce": nonce_r, "token": tok_r},
+            "architect": {"nonce": nonce_a, "token": tok_a},
+        })
 
-    session = create_session(feature, loop_id, max_rounds, turn_timeout)
-    save_session(loop_dir, session)
+        session = create_session(feature, loop_id, max_rounds, turn_timeout,
+                                 brief=brief)
+        save_session(loop_dir, session)
 
-    create_events_file(loop_dir)
-    emit_event(loop_dir, {
-        "event": "loop_started",
-        "detail": "Loop initialized",
-    })
+        create_events_file(loop_dir)
+        start_event = {
+            "event": "loop_started",
+            "detail": "Loop initialized",
+        }
+        if brief is not None:
+            start_event["brief_sha256"] = brief["sha256"]
+            start_event["brief_bytes"] = brief["bytes"]
+        emit_event(loop_dir, start_event)
+    except BaseException:
+        # #43: a failed start never leaves a partial loop directory.
+        _remove_partial_loop(loop_dir)
+        raise
 
     return loop_id, loop_dir
+
+
+def _resolve_brief_input(brief_path, brief_text):
+    """Validated brief bytes, or None. At most one source may be given."""
+    if brief_path is not None and brief_text is not None:
+        raise ValueError("Give the Architect brief as a file or as text, not both")
+    if brief_path is not None:
+        return read_brief_file(brief_path)
+    if brief_text is not None:
+        return brief_bytes_from_text(brief_text)
+    return None
+
+
+def _write_brief(loop_dir, name, data):
+    """Write brief bytes immutably and verify the copy. Returns metadata."""
+    meta = brief_meta(data, name)
+    dest = Path(loop_dir) / name
+    with open(dest, "wb") as f:
+        f.write(data)
+    _make_readonly(dest)
+    if verify_brief(loop_dir, meta, name) != "ok":
+        raise ValueError(f"Architect brief copy failed its digest check ({name})")
+    return meta
 
 
 def find_active_loop(loops_base):
@@ -326,7 +378,7 @@ _SOURCE_LOOP_ID_RE = __import__("re").compile(
 APPROVED_PLAN_FILENAME = "approved-plan.md"
 
 
-def _read_approved_source(source_dir, from_loop):
+def _read_approved_source(source_dir, from_loop, source_brief="keep"):
     """Validate the source planning loop and return its approved plan bytes.
 
     Reads under the source's session lock (read-only callback: nothing is
@@ -363,14 +415,35 @@ def _read_approved_source(source_dir, from_loop):
         if not data.strip():
             raise ValueError("Source loop's plan.current.md is empty")
         captured["plan"] = data
+
+        # #43 D1: carry the planning brief forward only when asked. "drop"
+        # never opens or verifies it, so a corrupt source brief cannot block
+        # a start that does not use it.
+        ref = session.get("brief")
+        if ref is None:
+            captured["brief_decision"] = "none_available"
+            captured["brief"] = None
+        elif source_brief == "drop":
+            captured["brief_decision"] = "dropped"
+            captured["brief"] = None
+        else:
+            state, brief_data = read_verified_brief(
+                source_dir, ref, BRIEF_FILENAME)
+            if state != "ok":
+                raise ValueError(
+                    "The approved plan's Architect brief failed its integrity "
+                    f"check ({state}); start with --source-brief drop to "
+                    "begin the coding loop without it")
+            captured["brief_decision"] = "kept"
+            captured["brief"] = brief_data
         return None  # read-only: never write the source session
 
     with_session_lock(source_dir, _check)
-    return captured["plan"]
+    return captured["plan"], captured["brief_decision"], captured["brief"]
 
 
 def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
-                      repo_root):
+                      repo_root, brief_bytes=None, source_brief="keep"):
     """Create a coding loop as a guarded successor (#41, approved plan).
 
     Order (fail atomically — any failure removes the partial directory and
@@ -401,7 +474,8 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
     if not (source_dir / "session.json").is_file():
         raise ValueError(f"Source loop has no session: {from_loop}")
 
-    plan_bytes = _read_approved_source(source_dir, from_loop)
+    plan_bytes, source_brief_decision, source_brief_bytes = \
+        _read_approved_source(source_dir, from_loop, source_brief)
     plan_sha = hashlib.sha256(plan_bytes).hexdigest()
 
     snap = gitsnap.snapshot(repo_root)
@@ -424,6 +498,14 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
             raise ValueError("Approved plan copy failed its digest check")
         _make_readonly(dest)
 
+        source_brief_meta = None
+        if source_brief_bytes is not None:
+            source_brief_meta = _write_brief(
+                loop_dir, SOURCE_BRIEF_FILENAME, source_brief_bytes)
+        brief = None
+        if brief_bytes is not None:
+            brief = _write_brief(loop_dir, BRIEF_FILENAME, brief_bytes)
+
         coding = {
             "source_loop_id": from_loop,
             "plan_sha256": plan_sha,
@@ -431,6 +513,8 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
             "base_tree": snap["head_tree"],
             "generations": [],
             "approval": None,
+            "source_brief": source_brief_meta,
+            "source_brief_decision": source_brief_decision,
         }
 
         tok_d, nonce_d = make_token(loop_id, "draftor")
@@ -443,18 +527,26 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
         })
 
         session = create_session(feature, loop_id, max_rounds, turn_timeout,
-                                 mode=MODE_CODING, coding=coding)
+                                 mode=MODE_CODING, coding=coding, brief=brief)
         save_session(loop_dir, session)
 
         create_events_file(loop_dir)
-        emit_event(loop_dir, {
+        start_event = {
             "event": "loop_started",
             "mode": "coding",
             "source_loop_id": from_loop,
+            "source_brief_decision": source_brief_decision,
             "detail": (f"Coding loop initialized from {from_loop} "
                        f"(plan sha256 {plan_sha[:12]}, base "
                        f"{snap['current_head'][:12]})"),
-        })
+        }
+        if source_brief_meta is not None:
+            start_event["source_brief_sha256"] = source_brief_meta["sha256"]
+            start_event["source_brief_bytes"] = source_brief_meta["bytes"]
+        if brief is not None:
+            start_event["brief_sha256"] = brief["sha256"]
+            start_event["brief_bytes"] = brief["bytes"]
+        emit_event(loop_dir, start_event)
     except BaseException:
         _remove_partial_loop(loop_dir)
         raise
@@ -548,7 +640,8 @@ def extend_loop(token, rounds, message, loop_dir=None):
 # ---------------------------------------------------------------------------
 
 def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
-               mode="planning", from_loop=None):
+               mode="planning", from_loop=None, brief_path=None,
+               source_brief=None):
     """Initialize a new loop session and enter the watch loop.
 
     Acquires ``start.lock`` to enforce one-active-loop-per-repo, then
@@ -573,7 +666,8 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
 
         loop_id, loop_dir = init_loop(
             feature, sketch_path, max_rounds, turn_timeout,
-            repo_root=repo_root, mode=mode, from_loop=from_loop)
+            repo_root=repo_root, mode=mode, from_loop=from_loop,
+            brief_path=brief_path, source_brief=source_brief)
 
         host_fd = acquire_host_lock(loop_dir)
         if host_fd is None:

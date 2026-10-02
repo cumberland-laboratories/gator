@@ -41,6 +41,11 @@ def _cmd_start(args):
         print("  Error: a coding loop requires --from-loop <approved planning loop id>",
               file=sys.stderr)
         sys.exit(1)
+    source_brief = getattr(args, "source_brief", None)
+    if source_brief is not None and mode != "coding":
+        print("  Error: --source-brief is only valid with --mode coding",
+              file=sys.stderr)
+        sys.exit(1)
     try:
         start_loop(
             feature=args.feature,
@@ -49,6 +54,8 @@ def _cmd_start(args):
             turn_timeout=args.turn_timeout,
             mode=mode,
             from_loop=from_loop,
+            brief_path=getattr(args, "brief", None),
+            source_brief=source_brief,
         )
     except FileNotFoundError as e:
         print(f"  Error: {e}", file=sys.stderr)
@@ -112,6 +119,7 @@ def _cmd_status(args):
             "turn_deadline": status.get("turn_deadline"),
             "mode": _mode_of(session),
         }
+        out.update(_briefs_json(session, loop_dir))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
             out["approval_resolution"] = res
@@ -124,6 +132,7 @@ def _cmd_status(args):
         print(f"  Stage: {stage}")
         if _mode_of(session) == "coding":
             print("  Mode: coding")
+        _print_briefs(session, loop_dir)
 
         if is_terminal(session):
             _print_terminal_reason(session, role)
@@ -188,6 +197,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "pending_decisions": pending,
             "mode": _mode_of(session),
         }
+        out.update(_briefs_json(session, loop_dir))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
             out["approval_resolution"] = res
@@ -197,6 +207,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         print(f"  Dir: {loop_dir}")
         print(f"  Role: architect (supervisor)")
         print(f"  Stage: {stage}")
+        _print_briefs(session, loop_dir, architect=True)
 
         if is_active(session):
             print(f"  Active role: {status.get('next_role', '?')}")
@@ -304,6 +315,65 @@ _STALE_REASONS = {
                                 "committed content)"),
     "detached_mismatch": "detached HEAD whose tree is not the approved tree",
 }
+
+
+_BRIEF_MARKERS = {
+    "ok": "[OK]",
+    "missing": "[!!] MISSING",
+    "mismatch": "[!!] DIGEST MISMATCH",
+    "unreadable": "[!!] UNREADABLE",
+    "invalid_ref": "[!!] INVALID REFERENCE",
+    "unsafe": "[!!] UNSAFE PATH",
+}
+
+
+def _brief_entries(session, loop_dir):
+    """(label, path_or_None, check) for each brief position (#43).
+
+    ``absent`` positions are omitted, so no-brief loops print nothing.
+    Paths are the FIXED artifact names inside the loop dir, never a path
+    taken from session data.
+    """
+    from session import verify_brief, BRIEF_FILENAME, SOURCE_BRIEF_FILENAME
+    entries = []
+    coding = session.get("coding") if isinstance(session.get("coding"), dict) else None
+    label = ("Architect brief (this coding loop)" if coding is not None
+             else "Architect brief")
+    check = verify_brief(loop_dir, session.get("brief"), BRIEF_FILENAME)
+    if check != "absent":
+        entries.append((label, Path(loop_dir) / BRIEF_FILENAME, check))
+    if coding is not None:
+        check = verify_brief(loop_dir, coding.get("source_brief"),
+                             SOURCE_BRIEF_FILENAME)
+        if check != "absent":
+            entries.append((
+                f"Architect brief (from approved plan {coding.get('source_loop_id')})",
+                Path(loop_dir) / SOURCE_BRIEF_FILENAME, check))
+    return entries
+
+
+def _print_briefs(session, loop_dir, architect=False):
+    for label, path, check in _brief_entries(session, loop_dir):
+        marker = _BRIEF_MARKERS.get(check, check)
+        print(f"  {label}: {path} {marker}"
+              + (" (required reading)" if check == "ok" else ""))
+        if check != "ok":
+            print("    This brief failed its integrity check; do not rely on it."
+                  + ("" if architect else " Escalate to the Architect."))
+    coding = session.get("coding") if isinstance(session.get("coding"), dict) else None
+    if coding is not None and coding.get("source_brief_decision") == "dropped":
+        print("  Planning brief: not carried forward (Architect's choice at coding start)")
+
+
+def _briefs_json(session, loop_dir):
+    out = {}
+    for label, path, check in _brief_entries(session, loop_dir):
+        key = "source_brief" if "approved plan" in label else "brief"
+        out[key] = {"path": str(path), "check": check}
+    coding = session.get("coding") if isinstance(session.get("coding"), dict) else None
+    if coding is not None:
+        out["source_brief_decision"] = coding.get("source_brief_decision")
+    return out
 
 
 def _approval_resolution(session, loop_dir):
@@ -1017,6 +1087,13 @@ def main(argv=None):
                               "guarded successor of an approved planning loop")
     p_start.add_argument("--from-loop", dest="from_loop", default=None,
                          help="Approved planning loop id to implement (coding loops; required)")
+    p_start.add_argument("--brief", default=None,
+                         help="Optional Architect brief (Markdown, UTF-8, <= 32 KiB); "
+                              "stored immutably as architect-brief.md (#43)")
+    p_start.add_argument("--source-brief", dest="source_brief",
+                         choices=["keep", "drop"], default=None,
+                         help="Coding loops: carry the approved plan's Architect brief "
+                              "forward (keep, default) or start without it (drop)")
     p_start.add_argument("--max-rounds", type=int, default=3, help="Max revision rounds (default: 3)")
     p_start.add_argument("--turn-timeout", type=int, default=300, help="Turn timeout in seconds (default: 300)")
 

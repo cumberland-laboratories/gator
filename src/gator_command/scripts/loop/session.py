@@ -229,16 +229,212 @@ def loop_mode(session):
     raise ValueError(f"Unknown loop mode: {raw!r}")
 
 
+# ---------------------------------------------------------------------------
+# Architect brief (#43)
+# ---------------------------------------------------------------------------
+#
+# Optional, immutable Markdown guidance supplied at loop creation. Stored as
+# ordinary loop residue; the session records only metadata
+# {artifact, sha256, bytes}. Every read of it goes through the fixed-name,
+# containment-checked verify_brief() — never through a path from session data.
+
+BRIEF_FILENAME = "architect-brief.md"
+SOURCE_BRIEF_FILENAME = "source-architect-brief.md"
+MAX_BRIEF_BYTES = 32 * 1024  # 32,768 UTF-8 bytes (Architect decision)
+BRIEF_NAMES = frozenset({BRIEF_FILENAME, SOURCE_BRIEF_FILENAME})
+
+# Coding-successor carry-forward decision (#43 D1)
+SOURCE_BRIEF_DECISIONS = frozenset({"kept", "dropped", "none_available"})
+
+# verify_brief() results
+BRIEF_ABSENT = "absent"            # optional brief never supplied (neutral)
+BRIEF_OK = "ok"
+BRIEF_MISSING = "missing"
+BRIEF_MISMATCH = "mismatch"
+BRIEF_UNREADABLE = "unreadable"
+BRIEF_INVALID_REF = "invalid_ref"
+BRIEF_UNSAFE = "unsafe"
+
+# Contract flags recorded on NEW sessions (#46 migration boundary).
+CONTEXT_EVIDENCE_CONTRACT = 1
+
+
+def validate_brief_bytes(data):
+    """Validate brief content bytes. Returns the bytes; raises ValueError.
+
+    UTF-8 text, non-blank, no NUL, at most MAX_BRIEF_BYTES bytes.
+    """
+    if not isinstance(data, (bytes, bytearray)):
+        raise ValueError("Architect brief must be text")
+    data = bytes(data)
+    if len(data) > MAX_BRIEF_BYTES:
+        raise ValueError(
+            f"Architect brief is {len(data)} bytes; the limit is "
+            f"{MAX_BRIEF_BYTES} bytes")
+    if b"\x00" in data:
+        raise ValueError("Architect brief must not contain NUL bytes")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Architect brief must be UTF-8 text")
+    if not text.strip():
+        raise ValueError("Architect brief is empty")
+    return data
+
+
+def brief_bytes_from_text(text):
+    """Dashboard textarea text -> validated LF-normalized UTF-8 bytes.
+
+    Returns None for an empty/whitespace string ("no brief").
+    """
+    if not isinstance(text, str):
+        raise ValueError("Architect brief must be a string")
+    if not text.strip():
+        return None
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return validate_brief_bytes(text.encode("utf-8"))
+
+
+def read_brief_file(path):
+    """Read and validate a brief file supplied by the Architect (CLI).
+
+    Must be a regular file (not a symlink or directory); the size is
+    checked before reading so an oversized file is never loaded.
+    """
+    p = Path(path)
+    # Same trust boundary as verify_brief: never follow a filesystem
+    # indirection (symlink or Windows reparse point / junction) — checked
+    # BEFORE exists()/is_file()/stat()/open().
+    if p.is_symlink() or _is_reparse_point(p):
+        raise ValueError(
+            f"Architect brief must not be a symlink or reparse point: {path}")
+    if not p.exists():
+        raise FileNotFoundError(f"Architect brief not found: {path}")
+    if not p.is_file():
+        raise ValueError(f"Architect brief is not a regular file: {path}")
+    size = p.stat().st_size
+    if size > MAX_BRIEF_BYTES:
+        raise ValueError(
+            f"Architect brief is {size} bytes; the limit is "
+            f"{MAX_BRIEF_BYTES} bytes")
+    with open(p, "rb") as f:
+        data = f.read(MAX_BRIEF_BYTES + 1)
+    return validate_brief_bytes(data)
+
+
+def brief_meta(data, artifact):
+    import hashlib
+    return {"artifact": artifact,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data)}
+
+
+def _valid_brief_ref(ref, expected_name):
+    import re as _re
+    return (isinstance(ref, dict)
+            and ref.get("artifact") == expected_name
+            and isinstance(ref.get("sha256"), str)
+            and _re.fullmatch(r"[0-9a-f]{64}", ref["sha256"]) is not None
+            and isinstance(ref.get("bytes"), int)
+            and not isinstance(ref.get("bytes"), bool)
+            and ref["bytes"] >= 0)
+
+
+def _is_reparse_point(path):
+    try:
+        st = os.lstat(str(path))
+    except OSError:
+        return False
+    attrs = getattr(st, "st_file_attributes", 0)
+    return bool(attrs & 0x400)  # FILE_ATTRIBUTE_REPARSE_POINT
+
+
+def verify_brief(loop_dir, ref, expected_name):
+    """Integrity of one brief position. Returns a result string; never
+    returns content and never opens a path taken from session data.
+
+    absent       ref is None (the optional brief was never supplied)
+    invalid_ref  ref present but malformed, wrong-typed, or names a file
+                 other than ``expected_name`` (positional binding)
+    unsafe       the fixed path is a symlink/reparse point or escapes the
+                 loop directory
+    missing      no regular file at the fixed path
+    unreadable   OSError while reading
+    mismatch     size or SHA-256 differs from the recorded metadata
+    ok           matches
+    """
+    import hashlib
+    if ref is None:
+        return BRIEF_ABSENT
+    if expected_name not in BRIEF_NAMES or not _valid_brief_ref(ref, expected_name):
+        return BRIEF_INVALID_REF
+    loop_dir = Path(loop_dir)
+    path = loop_dir / expected_name
+    if path.is_symlink() or _is_reparse_point(path):
+        return BRIEF_UNSAFE
+    try:
+        if path.resolve().parent != loop_dir.resolve():
+            return BRIEF_UNSAFE
+    except OSError:
+        return BRIEF_UNSAFE
+    if not path.is_file():
+        return BRIEF_MISSING
+    try:
+        with open(path, "rb") as f:
+            data = f.read(MAX_BRIEF_BYTES + 1)
+    except OSError:
+        return BRIEF_UNREADABLE
+    if len(data) != ref["bytes"] or \
+            hashlib.sha256(data).hexdigest() != ref["sha256"]:
+        return BRIEF_MISMATCH
+    return BRIEF_OK
+
+
+def read_verified_brief(loop_dir, ref, expected_name):
+    """(result, bytes_or_None): the verified brief bytes when result is ok.
+
+    Used only to carry a source brief forward; reads once and returns the
+    exact bytes that passed verification.
+    """
+    import hashlib
+    state = verify_brief(loop_dir, ref, expected_name)
+    if state != BRIEF_OK:
+        return state, None
+    with open(Path(loop_dir) / expected_name, "rb") as f:
+        data = f.read(MAX_BRIEF_BYTES + 1)
+    if len(data) != ref["bytes"] or \
+            hashlib.sha256(data).hexdigest() != ref["sha256"]:
+        return BRIEF_MISMATCH, None
+    return BRIEF_OK, data
+
+
+def brief_status_view(ref, expected_name):
+    """Strict, positionally bound metadata view for status surfaces.
+
+    Returns {artifact, sha256, bytes} only when ``ref`` is well-formed AND
+    names exactly ``expected_name``; otherwise None. Unknown keys are always
+    dropped — brief content can never pass through status.
+    """
+    if not _valid_brief_ref(ref, expected_name):
+        return None
+    return {"artifact": ref["artifact"], "sha256": ref["sha256"],
+            "bytes": ref["bytes"]}
+
+
 def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
-                   mode=MODE_PLANNING, coding=None):
+                   mode=MODE_PLANNING, coding=None, brief=None):
     """Build the initial session dict.
 
     Does not write to disk — caller is responsible for saving.
 
-    Planning sessions are byte-for-byte what they were before #41
-    (``"mode": "planning-only"``). Coding sessions carry ``"mode":
-    "coding"``, start at ``implementation_drafting``, and require the
-    ``coding`` binding block (source loop, plan digest, base commit).
+    Planning sessions keep ``"mode": "planning-only"`` (#41) and, since
+    #46, carry ``"contract": {"context_evidence": 1}`` — the migration
+    boundary for Context Checked enforcement. Coding sessions carry
+    ``"mode": "coding"``, start at ``implementation_drafting``, and require
+    the ``coding`` binding block (source loop, plan digest, base commit).
+    ``brief`` (#43) is the Architect-brief metadata
+    ``{artifact, sha256, bytes}`` when one was supplied; the key is absent
+    otherwise.
     """
     if mode not in (MODE_PLANNING, MODE_CODING):
         raise ValueError(f"Unknown loop mode: {mode!r}")
@@ -280,6 +476,12 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
         "turns": [],
         "decisions": [],
     }
+    if brief is not None:
+        session["brief"] = dict(brief)  # metadata only: artifact/sha256/bytes
+    if mode == MODE_PLANNING:
+        # #46 migration boundary: only sessions created with this flag get
+        # Context Checked enforcement; existing sessions never do.
+        session["contract"] = {"context_evidence": CONTEXT_EVIDENCE_CONTRACT}
     if mode == MODE_CODING:
         session["mode"] = MODE_CODING
         session["status"]["stage"] = "implementation_drafting"

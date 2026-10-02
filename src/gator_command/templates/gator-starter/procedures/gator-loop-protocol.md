@@ -76,17 +76,27 @@ Supported runtime today: **Claude Code**, with the Bash tool's background mode (
 
 ### Step 2: Read the relevant material
 
+**Architect brief (every role, every turn it is listed).** When `gator loop status` lists an `Architect brief: ... [OK] (required reading)`, read `architect-brief.md` in the loop directory before anything else. It is the Architect's must-read guidance for this loop: which charters, decisions, or constraints to honor. It is immutable residue, not a channel; do not reply to it. If status marks it `[!!]` (missing, digest mismatch, unreadable, or an invalid reference), do not rely on it: escalate to the Architect.
+
+**Brief vs. sketch.** The sketch is the approved *scope*; its `## Context` section is optional *background* pointers. The brief is *required reading*. When both exist, the brief governs what you must read; the sketch governs what you may build.
+
+**Charters.** Read the charters for the areas the sketch touches (`.gator/charters/`, found through the charter index) and inspect the existing code the plan will change. Do this before drafting, not after: the plan must say what you consulted (see Context Checked in Step 3).
+
 **If you are the draftor on your first turn:**
-- Read the sketch file (path shown in status output)
+- Read the Architect brief if listed, then the sketch file (path shown in status output)
+- Read the charters and code the sketch touches
 - The sketch is the Architect's approved scope. Do not exceed it.
 
 **If you are the draftor revising:**
 - Read the reviewer's findings at `findings.current.md` in the loop directory
 - Address every finding. Do not ignore findings.
+- Re-read the brief and charters if a finding says context was missed
 
 **If you are the reviewer:**
+- Read the Architect brief if listed
 - Read the plan at `plan.current.md` in the loop directory
 - Read the sketch to verify the plan stays within scope
+- Spot-check the charters and code the plan claims to have consulted
 
 ### Step 3: Produce your artifact
 
@@ -104,12 +114,16 @@ Write your output to a markdown file. The file must:
 - Dependencies and ordering
 - Risks or open questions
 - Charter impact
+- `## Context Checked`: **required** on every draft and revision (see below)
+
+**Context Checked (draftor, planning loops).** Every plan includes exactly one `## Context Checked` section listing what you actually consulted: the Architect brief (`architect-brief.md`) when status lists one, the charters you read, and the code or prior artifacts you inspected. When nothing applies, write `None — <short reason>` (e.g. `None — greenfield script, no existing charter or code`). The CLI rejects the submission when the section is missing, duplicated, empty (comments do not count), or a bare placeholder (`None`, `N/A`, `-`, `TBD`). It checks structure only. Listing files you did not read is a protocol violation. This applies to planning loops created since the requirement shipped; older loops are not checked.
 
 **Reviewer output** — findings OR approval:
 - `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
 - Verdict line (APPROVE, REVISE, or ESCALATE)
 - Numbered findings with severity, location, issue, and suggestion
 - Scope check against the sketch
+- Context check: is the plan's `## Context Checked` credible? It should cover the Architect brief (when one exists) and the charters and code the plan changes. Missing or implausible context is a finding, not a nit.
 - If approving: still submit a real document, not a stub
 
 **Format reference**: read `.gator/reference-notes/loop-artifact-formats.md` for the full template for sketches, plans, and findings. Follow the structure shown there.
@@ -155,7 +169,7 @@ When you receive findings as a draftor, you must address every one in your revis
 
 ### Rule 5: Do not rubber-stamp
 
-When you are the reviewer, your job is to find problems. An approval should mean "this plan is ready to implement as written." If you are unsure, submit findings. The round limit exists precisely so that you do not need to approve prematurely.
+When you are the reviewer, your job is to find problems. An approval should mean "this plan is ready to implement as written." A plan whose Context Checked omits the brief or the charters it changes is not ready. If you are unsure, submit findings. The round limit exists precisely so that you do not need to approve prematurely.
 
 ### Rule 6: Escalate when stuck
 
@@ -214,7 +228,7 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 **The staged tree is the candidate.** The reviewed and approved thing is the exact `git write-tree` of the staged index, captured by the CLI. Your artifact describes it; prose never substitutes for it. Unstaged and untracked files are shown to the Reviewer but are NOT part of the candidate. The loop directory's own files under `.gator/loops/` are expected residue.
 
 **Draftor (`implementation_drafting` / `implementation_revision`):**
-1. Read `approved-plan.md` (and `findings.current.md` when revising) and the charters for the files you will touch.
+1. Read `approved-plan.md` (and `findings.current.md` when revising) and the charters for the files you will touch. Read any Architect brief status lists: a coding loop can show two, `source-architect-brief.md` (the planning brief carried forward) and `architect-brief.md` (a new brief for the coding loop). Read both; where they conflict, the coding brief is newer and wins, and a conflict that matters is an escalation. If status says "Planning brief: not carried forward", the Architect dropped it at coding start; do not go looking for it.
 2. Implement the change, update the affected charters and `commit_draft` material, and run the relevant checks.
 3. Stage everything that belongs in the commit, including the charter and `commit_draft` files you changed: `git add ...`. Do not commit. Do not create one commit per round.
 4. Submit with `gator loop submit-implementation --token <your-token> --file <implementation.md>`. The artifact needs exactly these level-2 sections: `## Executive Summary`, `## Implementation Summary`, `## Charter Updates`, `## Verification`, and **exactly one** `## Commit State`, which the CLI fills with the captured facts, replacing your text there. A submission with nothing staged is rejected.
@@ -279,6 +293,8 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 | File | What it is |
 |------|-----------|
 | `sketch.md` | The Architect's approved scope (read-only, do not modify) |
+| `architect-brief.md` | Optional Architect brief: required reading when status lists it (read-only, digest-checked) |
+| `source-architect-brief.md` | Coding loops only: the planning loop's brief, when carried forward (read-only) |
 | `plan.current.md` | The latest draftor submission |
 | `findings.current.md` | The latest reviewer submission |
 | `session.json` | Loop state (do not modify) |
@@ -357,7 +373,8 @@ gator loop status --token <token>
 2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token> --max-seconds 45`. Exit 2: stop.
 3. `wait` exit 0: act. Exit 3: reissue the same `wait`. Exit 2: stop.
    (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
-4. Read the relevant files (sketch, plan, or findings) from the loop directory
+4. Read the Architect brief(s) status lists, then the relevant files (sketch, plan, or findings) and the charters they touch
+   (plans need a `## Context Checked` section: what you consulted, or `None — <reason>`)
 5. Write your artifact to a file
 6. Submit: `gator loop submit-draft` or `gator loop submit-review` (coding loops: `gator loop submit-implementation` with the change staged — see Coding Loops)
 7. If stuck at any time: `gator loop escalate --token <token> --reason "..."`

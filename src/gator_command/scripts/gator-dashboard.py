@@ -2354,9 +2354,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except (FileNotFoundError, json.JSONDecodeError, OSError):
                 continue
             status = session.get("status", {})
+            try:
+                from loop.session import loop_mode as _loop_mode
+                mode = _loop_mode(session)
+            except ValueError:
+                mode = "unknown"
             loops.append({
                 "loop_id": session.get("loop_id", entry.name),
                 "feature": session.get("feature", ""),
+                "mode": mode,  # #43 M2a: normalized planning|coding
                 "stage": status.get("stage", ""),
                 "round": status.get("round", 0),
                 "max_rounds": status.get("max_rounds", 0),
@@ -2394,6 +2400,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         safe = {k: v for k, v in session.items()
                 if k in self._LOOP_STATUS_ALLOWED_KEYS}
+        # #43: Architect brief metadata via the strict, positionally bound
+        # serializer (never through the generic allowlist) + integrity.
+        _ls = str(Path(__file__).resolve().parent / "loop")
+        if _ls not in sys.path:
+            sys.path.insert(0, _ls)
+        from session import brief_status_view, verify_brief, BRIEF_FILENAME
+        brief_ref = session.get("brief")
+        safe["brief"] = brief_status_view(brief_ref, BRIEF_FILENAME)
+        safe["brief_check"] = verify_brief(loop_dir, brief_ref, BRIEF_FILENAME)
         if isinstance(session.get("coding"), dict):
             # #41: a slim allowlisted projection (ids, counts, verdicts,
             # approval) — never the raw path lists on every 3 s poll.
@@ -2401,7 +2416,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if _loop_scripts not in sys.path:
                 sys.path.insert(0, _loop_scripts)
             from submit import coding_status_view
-            safe["coding"] = coding_status_view(session["coding"])
+            safe["coding"] = coding_status_view(session["coding"],
+                                                loop_dir=loop_dir)
         self._send_json(safe)
 
     def _handle_loop_events(self, repo_key, loop_id):
@@ -2444,6 +2460,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "decision-request.md",
         "decision-response.md",
         "approved-plan.md",            # coding (#41)
+        "architect-brief.md",          # Architect brief (#43)
+        "source-architect-brief.md",   # carried-forward plan brief (#43)
         "implementation.current.md",   # coding (#41)
     })
 
@@ -2589,13 +2607,54 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "feature is required"}, 400)
             return
 
-        sketch_path = (req.get("sketch_path") or "").strip()
-        if not sketch_path:
+        # #43 M2a: planning (default) or a guarded coding successor.
+        mode = req.get("mode", "planning")
+        if mode not in ("planning", "coding"):
+            self._send_json({"error": "mode must be 'planning' or 'coding'"}, 400)
+            return
+        from_loop = req.get("from_loop")
+        source_brief = req.get("source_brief")
+        if mode == "coding":
+            if req.get("sketch_path") not in (None, ""):
+                self._send_json(
+                    {"error": "a coding loop starts from from_loop; "
+                              "sketch_path is not used"}, 400)
+                return
+            if not isinstance(from_loop, str) or not from_loop.strip():
+                self._send_json(
+                    {"error": "from_loop (an approved planning loop id) is "
+                              "required for a coding loop"}, 400)
+                return
+            if source_brief is not None and source_brief not in ("keep", "drop"):
+                self._send_json(
+                    {"error": "source_brief must be 'keep' or 'drop'"}, 400)
+                return
+        else:
+            if from_loop is not None or source_brief is not None:
+                self._send_json(
+                    {"error": "from_loop and source_brief are only valid "
+                              "for a coding loop"}, 400)
+                return
+        sketch_path = (req.get("sketch_path") or "").strip() \
+            if mode == "planning" else ""
+        if mode == "planning" and not sketch_path:
             self._send_json({"error": "sketch_path is required"}, 400)
             return
 
         max_rounds = req.get("max_rounds", 3)
         turn_timeout = req.get("turn_timeout", 300)
+
+        brief_text = req.get("brief")  # #43: optional Markdown text
+        if brief_text is not None and not isinstance(brief_text, str):
+            self._send_json({"error": "brief must be a string"}, 400)
+            return
+        if brief_text is not None:
+            from session import brief_bytes_from_text
+            try:
+                brief_bytes_from_text(brief_text)  # validate before locking
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, 400)
+                return
 
         if (not isinstance(max_rounds, int) or isinstance(max_rounds, bool)
                 or max_rounds < 1 or max_rounds > 20):
@@ -2619,21 +2678,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         repo_root = Path(repo_path)
 
-        sketch = Path(sketch_path)
-        if not sketch.is_absolute():
-            sketch = repo_root / sketch
-        sketch = sketch.resolve()
-        if repo_root.resolve() not in sketch.parents \
-                and sketch != repo_root.resolve():
-            self._send_json(
-                {"error": "sketch_path must be inside the repo"}, 400)
-            return
-        if not sketch.is_file():
-            self._send_json({"error": "sketch file not found"}, 400)
-            return
-        if sketch.stat().st_size == 0:
-            self._send_json({"error": "sketch file is empty"}, 400)
-            return
+        sketch = None
+        if mode == "planning":
+            sketch = Path(sketch_path)
+            if not sketch.is_absolute():
+                sketch = repo_root / sketch
+            sketch = sketch.resolve()
+            if repo_root.resolve() not in sketch.parents \
+                    and sketch != repo_root.resolve():
+                self._send_json(
+                    {"error": "sketch_path must be inside the repo"}, 400)
+                return
+            if not sketch.is_file():
+                self._send_json({"error": "sketch file not found"}, 400)
+                return
+            if sketch.stat().st_size == 0:
+                self._send_json({"error": "sketch file is empty"}, 400)
+                return
 
         loops_base = repo_root / ".gator" / "loops"
         loops_base.mkdir(parents=True, exist_ok=True)
@@ -2653,9 +2714,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 }, 409)
                 return
 
-            loop_id, loop_dir = init_loop(
-                feature, str(sketch), max_rounds, turn_timeout,
-                repo_root=repo_path)
+            try:
+                if mode == "coding":
+                    # The guarded successor is the ONLY validator of the
+                    # source (canonical id, planning, plan_approved, plan
+                    # present, Git base, brief keep/drop) — atomic.
+                    loop_id, loop_dir = init_loop(
+                        feature, None, max_rounds, turn_timeout,
+                        repo_root=repo_path, mode="coding",
+                        from_loop=from_loop.strip(), brief_text=brief_text,
+                        source_brief=source_brief)
+                else:
+                    loop_id, loop_dir = init_loop(
+                        feature, str(sketch), max_rounds, turn_timeout,
+                        repo_root=repo_path, brief_text=brief_text)
+            except (ValueError, FileNotFoundError) as exc:
+                # Validation failure: init_loop is atomic (no partial dir).
+                self._send_json({"error": str(exc)}, 400)
+                return
 
             state, detail = _ensure_loop_watcher(repo_path, loop_id, loop_dir)
             if state != WATCHER_ATTACHED:
@@ -2736,6 +2812,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             f"  Role: {role}\n\n"
             f"  gator loop status --token {token}\n"
         )
+        # #43: pointer only (never brief content).
+        has_brief = session.get("brief") is not None or (
+            isinstance(session.get("coding"), dict)
+            and session["coding"].get("source_brief") is not None)
+        if has_brief:
+            prompt_text += ("\n  An Architect brief exists for this loop: read it "
+                            "first (status shows the path).\n")
 
         self._send_json({"prompt": prompt_text},
                         cache_control="no-store")
