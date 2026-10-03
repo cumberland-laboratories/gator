@@ -2,7 +2,9 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.20.0] — 2026-10-03
+
+Feature release for the governed loop. Participants are no longer timed: new loops replace the participant-facing hard turn timeout with an Architect-only **attention interval**. Time never changes loop state. The Architect gets a crash-safe, once-per-turn notice in the CLI and Dashboard, and participants work at the pace the artifact needs ([#47](https://github.com/cumberland-laboratories/gator/issues/47)). Loops created on earlier versions keep their timeout behavior.
 
 ### Changed
 
