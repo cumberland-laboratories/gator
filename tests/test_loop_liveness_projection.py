@@ -151,6 +151,7 @@ class TestRules:
     def test_timeout_is_terminal(self, env):
         lv.register(env["tok"]["draftor"])
         s = loop_session.load_session(env["loop_dir"])
+        s.get("contract", {}).pop("attention_interval", None)  # legacy: #47
         s["status"]["turn_deadline"] = "2000-01-01T00:00:00+00:00"
         loop_session.save_session(env["loop_dir"], s)
         loop_host._try_enforce_timeout(env["loop_dir"])
@@ -296,6 +297,7 @@ class TestRobustness:
         monkeypatch.setattr(lv, "project", boom)
         monkeypatch.setattr(loop_host, "POLL_INTERVAL", 0.05)
         s = loop_session.load_session(env["loop_dir"])
+        s.get("contract", {}).pop("attention_interval", None)  # legacy: #47
         s["status"]["turn_deadline"] = "2000-01-01T00:00:00+00:00"
         loop_session.save_session(env["loop_dir"], s)
         t = threading.Thread(target=loop_host.watch_loop,

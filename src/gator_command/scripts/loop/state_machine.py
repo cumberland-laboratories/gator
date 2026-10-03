@@ -20,6 +20,32 @@ if _LOOP_DIR not in sys.path:
     sys.path.insert(0, _LOOP_DIR)
 
 from session import _deadline_from_now, loop_mode, MODE_PLANNING, MODE_CODING
+from session import attention_mode
+
+
+def _begin_turn(session, turn_timeout):
+    """Start a new active turn (#47).
+
+    Attention-mode sessions record ``turn_started_at`` (the per-turn
+    attention key) and never set a deadline, so the legacy enforcement path
+    cannot fire for them. Legacy sessions get the historical deadline,
+    byte-for-byte unchanged.
+    """
+    status = session["status"]
+    if attention_mode(session):
+        status["turn_deadline"] = None
+        status["turn_started_at"] = datetime.now(tz=timezone.utc).isoformat()
+    else:
+        status["turn_deadline"] = _deadline_from_now(turn_timeout)
+
+
+def _end_turn(session):
+    """No active turn (pause, escalation, terminal). Clears the deadline;
+    attention-mode sessions also clear ``turn_started_at``."""
+    status = session["status"]
+    status["turn_deadline"] = None
+    if attention_mode(session):
+        status["turn_started_at"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +292,7 @@ def advance_draft_submitted(session, turn_timeout):
     status["plan_status"] = "in_review"
     status["architect_message"] = None  # clear after model acts on it
     status["architect_response_artifact"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -289,7 +315,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["unresolved_findings"] = 0
         status["architect_message"] = None
         status["architect_response_artifact"] = None
-        status["turn_deadline"] = None
+        _end_turn(session)
         status["blocked"] = False
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
         return session
@@ -304,7 +330,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["plan_status"] = "max_rounds"
         status["architect_message"] = None
         status["architect_response_artifact"] = None
-        status["turn_deadline"] = None
+        _end_turn(session)
         status["blocked"] = True
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
         return session
@@ -315,7 +341,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
     status["plan_status"] = "revision"
     status["architect_message"] = None
     status["architect_response_artifact"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -332,7 +358,7 @@ def advance_escalated(session, reason):
     status["next_role"] = None
     status["architect_action_required"] = True
     status["blocked"] = True
-    status["turn_deadline"] = None
+    _end_turn(session)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -374,7 +400,7 @@ def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, mes
     status["architect_message"] = message
     status["resume_stage"] = None
     status["resume_next_role"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -421,7 +447,7 @@ def advance_extended(session, rounds, turn_timeout, message=None):
     status["architect_response_artifact"] = None
     status["resume_stage"] = None
     status["resume_next_role"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return previous, status["max_rounds"]
 
@@ -447,7 +473,7 @@ def advance_implementation_submitted(session, turn_timeout):
     status["plan_status"] = "in_review"
     status["architect_message"] = None  # clear after the model acts on it
     status["architect_response_artifact"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -481,7 +507,7 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
         status["unresolved_findings"] = 0
         status["architect_message"] = None
         status["architect_response_artifact"] = None
-        status["turn_deadline"] = None
+        _end_turn(session)
         status["blocked"] = False
         status["last_updated"] = now
         return session
@@ -495,13 +521,13 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
         status["stage"] = "max_rounds_exceeded"
         status["next_role"] = None
         status["plan_status"] = "max_rounds"
-        status["turn_deadline"] = None
+        _end_turn(session)
         status["blocked"] = True
         return session
     status["stage"] = "implementation_revision"
     status["next_role"] = table["role_by_stage"]["implementation_revision"]
     status["plan_status"] = "revision"
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     return session
 
 
@@ -587,7 +613,7 @@ def advance_reopened(session, turn_timeout, message=None):
     status["architect_response_artifact"] = None
     status["resume_stage"] = None
     status["resume_next_role"] = None
-    status["turn_deadline"] = _deadline_from_now(turn_timeout)
+    _begin_turn(session, turn_timeout)
     status["last_updated"] = now
     return session
 
@@ -602,7 +628,7 @@ def advance_turn_timed_out(session, timed_out_role):
     status["stage"] = "turn_timed_out"
     status["next_role"] = None
     status["blocked"] = True
-    status["turn_deadline"] = None
+    _end_turn(session)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -619,7 +645,7 @@ def advance_paused_by_architect(session, message=None):
     status["next_role"] = None
     status["blocked"] = True
     status["architect_message"] = message
-    status["turn_deadline"] = None
+    _end_turn(session)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -645,7 +671,7 @@ def advance_ended_by_architect(session, reason=None):
     status["stage"] = "ended_by_architect"
     status["next_role"] = None
     status["blocked"] = True
-    status["turn_deadline"] = None
+    _end_turn(session)
     if reason:
         status["end_reason"] = reason
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()

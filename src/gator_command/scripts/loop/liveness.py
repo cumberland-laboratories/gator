@@ -345,6 +345,12 @@ def state_key(session):
         "turns": len(session.get("turns", [])),
         "turn_deadline": status.get("turn_deadline"),
     }
+    # #47: attention-mode turns have no deadline; their turn identity is
+    # turn_started_at. Added only when the key exists, so legacy keys hash
+    # exactly as before. attention_notified_turn is deliberately NOT an
+    # input: recording attention must never notify or wake a participant.
+    if "turn_started_at" in status:
+        material["turn_started_at"] = status.get("turn_started_at")
     blob = json.dumps(material, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

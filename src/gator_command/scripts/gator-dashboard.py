@@ -2368,6 +2368,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "max_rounds": status.get("max_rounds", 0),
                 "blocked": status.get("blocked", False),
                 "created_at": session.get("created_at", ""),
+                # #47: cheap marker check only (no event scan) for the sidebar.
+                "attention_notified": bool(
+                    isinstance(status.get("turn_started_at"), str)
+                    and status.get("attention_notified_turn")
+                    == status.get("turn_started_at")),
             })
 
         self._send_json({"loops": loops})
@@ -2409,6 +2414,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         brief_ref = session.get("brief")
         safe["brief"] = brief_status_view(brief_ref, BRIEF_FILENAME)
         safe["brief_check"] = verify_brief(loop_dir, brief_ref, BRIEF_FILENAME)
+        # #47: Architect attention projection (explicit, field by field).
+        from host import attention_status_view
+        attention = attention_status_view(session, loop_dir)
+        if attention is not None:
+            safe["attention"] = attention
         if isinstance(session.get("coding"), dict):
             # #41: a slim allowlisted projection (ids, counts, verdicts,
             # approval) — never the raw path lists on every 3 s poll.
@@ -2642,7 +2652,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         max_rounds = req.get("max_rounds", 3)
-        turn_timeout = req.get("turn_timeout", 300)
+        # #47: ``attention_interval`` is the Architect attention interval;
+        # ``turn_timeout`` remains an accepted alias. Never both.
+        if "attention_interval" in req and "turn_timeout" in req:
+            self._send_json(
+                {"error": "send attention_interval or turn_timeout, not both"},
+                400)
+            return
+        interval_field = ("attention_interval" if "attention_interval" in req
+                          else "turn_timeout")
+        turn_timeout = req.get(interval_field, 300)
 
         brief_text = req.get("brief")  # #43: optional Markdown text
         if brief_text is not None and not isinstance(brief_text, str):
@@ -2666,7 +2685,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             turn_timeout = _validate_http_turn_timeout(turn_timeout)
         except ValueError:
             self._send_json(
-                {"error": "turn_timeout must be an integer between "
+                {"error": f"{interval_field} must be an integer between "
                  f"{TURN_TIMEOUT_MIN} and {TURN_TIMEOUT_MAX}"}, 400)
             return
 
@@ -3085,7 +3104,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         except ValueError as exc:
             # Response contract / timeout violations — nothing was written.
-            self._send_json({"error": str(exc)}, 400)
+            from submit import ATTENTION_TIMEOUT_REFUSAL
+            msg = str(exc)
+            if msg == ATTENTION_TIMEOUT_REFUSAL:
+                msg = ("This loop uses an Architect attention interval (set at "
+                       "start); there is no participant turn window to change. "
+                       "Unblock without a timeout.")
+            self._send_json({"error": msg}, 400)
             return
 
         self._send_json({"ok": True})

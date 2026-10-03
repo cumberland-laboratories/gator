@@ -25,7 +25,7 @@ gator loop participant watch --token <token> --max-seconds <N> [--poll-seconds 5
 gator loop participant status --token <token> [--json]
 ```
 
-- `--max-seconds` is **required**. A suggested value is the loop's turn timeout (for example 600).
+- `--max-seconds` is **required**. A suggested value is 600; relaunch the watcher when it exits `3` (still waiting).
 - `--json` prints exactly one compact JSON line on stdout. Normal outcomes print nothing to stderr.
 - `--adapter-label` is optional: at most 40 printable characters, stored privately. The Dashboard does not display it.
 - Output never contains the token or the private registration id.
@@ -50,7 +50,7 @@ JSON keys: `schema` (`gator-loop-participant-v1`), `wake_reason`, `loop_id`, `ro
 - **One actionable notification per loop-state generation.** Rereading unchanged state never duplicates a notification. Older pending notifications expire when the loop moves on.
 - **Re-registration supersedes.** A newly launched watcher replaces the previous one for its role and receives anything the old one never acknowledged. The old watcher can no longer poll or acknowledge.
 - **Stale** applies only to a watcher that stopped heartbeating without exiting, for example one that was killed or lost with its session. A watcher that exited normally shows as **released**, not stale.
-- **Architect Re-notify** adds a new notification and an audit entry. It never changes loop state, deadlines, or whose turn it is.
+- **Architect Re-notify** adds a new notification and an audit entry. It never changes loop state or whose turn it is.
 
 ## Privacy and Storage
 

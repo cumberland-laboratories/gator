@@ -143,7 +143,7 @@ def _snapshot(loop_dir):
 class TestSubmitFlagged:
     def test_new_planning_session_carries_flag(self):
         s = loop_session.create_session("f", "f-loop", max_rounds=3, turn_timeout=300)
-        assert s["contract"] == {"context_evidence": 1}
+        assert s["contract"]["context_evidence"] == 1
 
     def test_missing_section_rejected_atomically(self, tmp_path, monkeypatch):
         loop_dir, tok = _make_env(tmp_path, monkeypatch)
@@ -235,7 +235,7 @@ class TestSubmitLegacyAndCoding:
             "f", "f-loop", max_rounds=3, turn_timeout=300, mode="coding",
             coding={"source_loop_id": "src", "plan_sha256": "0" * 64,
                     "base_head": "1" * 40, "base_tree": "2" * 40})
-        assert "contract" not in s
+        assert "context_evidence" not in s.get("contract", {})
 
     def test_implementation_submission_unaffected(self):
         # The implementation artifact validator never asks for the section.

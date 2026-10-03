@@ -4,13 +4,13 @@
 
 ## Owns
 
-The governed planning loop — a CLI-mediated debate between two AI models (draftor, reviewer) with role tokens, turn-taking, bounded iteration, timeout enforcement, and durable session residue.
+The governed planning loop — a CLI-mediated debate between two AI models (draftor, reviewer) with role tokens, turn-taking, bounded iteration, Architect oversight of long turns (attention notices for attention-mode loops, #47; hard turn timeouts for legacy loops only), and durable session residue.
 
 - `session.py` owns session CRUD, token generation/resolution (with secret nonce), platform-aware file locking, atomic writes, turn tracking, and loop ID generation
 - `state_machine.py` owns state categorization (active/paused/terminal), action validation, and all state transitions, indexed by loop mode through the single `STAGES` table (planning; coding #41)
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
 - `submit.py` owns the ten submit handlers: submit-draft, submit-implementation (coding, #41), submit-review, escalate, unblock, extend, reopen (#41), pause, interject, end; plus the coding implementation-artifact helpers (required headings, the CLI-owned Commit State section)
-- `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop with timeout enforcement, platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
+- `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop (attention recording for attention-mode loops, #47; legacy timeout enforcement otherwise), platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
 - `cli.py` owns argparse subcommand routing for all 16 loop subcommands (start [--mode planning|coding, --from-loop], status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant {watch,status}, tail, list)
 - `liveness.py` owns the private participant-liveness sidecar (#36): the per-worktree store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`, its strict schema allowlist, atomic persistence, the leaf lock, and the pure helpers `state_key()` / `classify()` / `prune()` / `redact()`. Operational data only; never loop authority
 - `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue) or an explicit error code. Read-only toward refs, index, and worktree
@@ -41,12 +41,21 @@ Filesystem: `.gator/loops/<loop-id>/.tokens.json` (R)
 ! Raises ValueError on invalid/tampered tokens. Nonce validation prevents token reconstruction from committed data.
 ! When `loop_dir` provided: validates `loop_dir.name == loop_id` from token — rejects cross-loop token reuse.
 
+### attention_mode(session) (#47)
+File: `src/gator_command/scripts/loop/session.py`
+The ONLY gate for attention-interval semantics. It is true when `contract.attention_interval` is an int ≥ 1, never a bool. Non-dict sessions and contracts give False. Nothing is inferred from dates, versions or field presence, and legacy sessions keep their recorded hard-timeout behavior.
+<- `state_machine._begin_turn()` / `_end_turn()`
+
 ### create_session(feature, loop_id, max_rounds, turn_timeout, mode="planning", coding=None, brief=None)
 File: `src/gator_command/scripts/loop/session.py`
 Builds the initial session dict including empty `decisions: []` ledger. Does not write to disk.
 - Planning sessions keep `"mode": "planning-only"` and stage `plan_drafting`. Since #46 they also carry `"contract": {"context_evidence": 1}`, the migration boundary: only flagged sessions get Context Checked enforcement, and sessions created earlier never do.
 - `brief` (#43): top-level brief metadata when a brief was supplied. The key is absent otherwise, so no-brief sessions are unchanged.
-- Coding sessions have no `contract` flag (Context Checked is planning-only). Their `coding` block gains `source_brief` (metadata or null) and `source_brief_decision` (`kept` / `dropped` / `none_available`).
+- **#47 attention interval:** every NEW session (planning and coding) carries `contract.attention_interval: 1`, so planning has `{context_evidence: 1, attention_interval: 1}` and coding has `{attention_interval: 1}`. Context Checked stays planning-only because its gate reads only `context_evidence`.
+  - **Initial turn:** flagged sessions start with `turn_deadline: null`, `turn_started_at` (ISO UTC, the per-turn attention key) and `attention_notified_turn: null`.
+  - **Interval storage:** `turn_timeout_seconds` stores the Architect attention interval (default `DEFAULT_ATTENTION_INTERVAL = 300`).
+  - **Legacy:** unflagged sessions keep their historical hard-timeout shape.
+- Coding sessions' `coding` block gains `source_brief` (metadata or null) and `source_brief_decision` (`kept` / `dropped` / `none_available`).
 - Coding sessions (#41) carry `"mode": "coding"`, stage `implementation_drafting` (Draftor), `plan_status: "implementation"`, `current.implementation`, and the required `coding` binding `{source_loop_id, plan_sha256, base_head, base_tree, generations: [], approval: null}`.
 - A coding session without its binding, or an unknown mode, raises ValueError.
 Filesystem: none
@@ -129,6 +138,17 @@ Validates that unblock is only called from `blocked_on_architect`.
 Filesystem: none
 <- `submit.handle_unblock()`
 
+### _begin_turn(session, turn_timeout) / _end_turn(session) (#47)
+File: `src/gator_command/scripts/loop/state_machine.py`
+The single place every transition starts or ends an active turn.
+- `_begin_turn`, called by draft/review revise, unblock, extend, implementation submit/revise and reopen:
+  - **flagged:** `turn_deadline = None` and a fresh `turn_started_at`;
+  - **legacy:** `turn_deadline = _deadline_from_now(turn_timeout)`, byte-for-byte as before.
+- `_end_turn`, called by approve, max rounds, escalate, pause, end and the legacy timeout: clears `turn_deadline`; flagged sessions also clear `turn_started_at`.
+- Interject touches neither.
+- A new turn always gets a new `turn_started_at`, so each turn has an independent attention key.
+! Never set `turn_deadline` for a flagged session: the legacy enforcement path keys on it (#47 defense in depth).
+
 ### advance_draft_submitted(session, turn_timeout)
 File: `src/gator_command/scripts/loop/state_machine.py`
 Transitions `plan_drafting`/`plan_revision` -> `plan_review`.
@@ -150,14 +170,14 @@ Filesystem: none (mutates session dict)
 
 ### advance_unblocked(session, stage, next_role, turn_timeout)
 File: `src/gator_command/scripts/loop/state_machine.py`
-`blocked_on_architect` -> restored active state. Validates stage-role consistency. Receives the already-selected timeout (the caller owns CLI/HTTP policy and persisting any changed window); computes the fresh deadline from it.
+`blocked_on_architect` -> restored active state. Validates stage-role consistency. Receives the already-selected interval/timeout (the caller owns CLI/HTTP policy and persisting any changed legacy window; attention-mode loops refuse a change, #47) and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy).
 Filesystem: none (mutates session dict)
 <- `submit.handle_unblock()`
 ! Stage-role validation comes from the session's mode table (`stages_for(session)`): the target must be an active stage of THIS mode, owned by `role_by_stage` (planning: `plan_drafting` / `plan_revision` → draftor, `plan_review` → reviewer; coding: `implementation_drafting` / `implementation_revision` → draftor, `implementation_review` → reviewer). A cross-mode target or a mismatched role raises ValueError.
 
 ### advance_extended(session, rounds, turn_timeout, message=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
-`max_rounds_exceeded` -> the mode table's `extension_resume_stage` (`plan_revision` for planning, `implementation_revision` for coding #41; next_role from `role_by_stage`, the Draftor) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, resume fields, and `architect_response_artifact`; sets `architect_message=message` and a fresh deadline from the given timeout. Returns `(previous_max_rounds, new_max_rounds)`.
+`max_rounds_exceeded` -> the mode table's `extension_resume_stage` (`plan_revision` for planning, `implementation_revision` for coding #41; next_role from `role_by_stage`, the Draftor) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, resume fields, and `architect_response_artifact`; sets `architect_message=message` and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). Returns `(previous_max_rounds, new_max_rounds)`.
 Filesystem: none (mutates session dict)
 <- `submit.handle_extend()` (#39)
 ! All guards run before any mutation: source stage must be exactly `EXTENDABLE_STAGE`; `rounds` a positive int (bool rejected); `round <= max_rounds`. Violations raise ValueError. Input range policy (1..20) belongs to the caller.
@@ -170,7 +190,7 @@ Filesystem: none (mutates session dict)
 
 ### advance_implementation_submitted(session, turn_timeout)
 File: `src/gator_command/scripts/loop/state_machine.py`
-Coding only (#41): `implementation_drafting` / `implementation_revision` -> `implementation_review` (Reviewer) with a fresh deadline. It clears `architect_message` and the response artifact. A non-coding loop or another stage raises ValueError. The caller records the candidate generation.
+Coding only (#41): `implementation_drafting` / `implementation_revision` -> `implementation_review` (Reviewer) with a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). It clears `architect_message` and the response artifact. A non-coding loop or another stage raises ValueError. The caller records the candidate generation.
 Filesystem: none (mutates session dict)
 <- `submit.handle_submit_implementation()`
 
@@ -200,7 +220,7 @@ Pure. Places an approved candidate against live Git facts:
 
 ### advance_reopened(session, turn_timeout, message=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
-Coding only (#41): `implementation_approved` -> `implementation_revision` (Draftor) with a fresh deadline. It keeps `round`, marks `coding.approval.invalidated_at`, and sets `architect_message`. A non-coding loop or any other stage raises ValueError before mutation.
+Coding only (#41): `implementation_approved` -> `implementation_revision` (Draftor) with a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). It keeps `round`, marks `coding.approval.invalidated_at`, and sets `architect_message`. A non-coding loop or any other stage raises ValueError before mutation.
 Filesystem: none (mutates session dict)
 <- `submit.handle_reopen()`
 
@@ -283,7 +303,7 @@ Filesystem: source file (R, optional), `.gator/loops/<loop-id>/decision-request.
 File: `src/gator_command/scripts/loop/submit.py`
 Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path`, `response.kind`, and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests. Optional `file_path` attaches a durable response artifact copied to `decision-response.{decision-id}.md` in the loop directory. File validation (must exist, must be non-empty) runs before lock acquisition; `FileNotFoundError`/`ValueError` on failure. `--file` is rejected with `ValueError` inside the lock (before state advancement) when no pending decision exists — prevents silent discard of a response artifact after an Architect pause.
 Response contract: a whitespace-only message is treated as absent. When a pending decision exists (escalation), one of message / file / `no_response=True` is required, else `ValueError` before any mutation. `no_response` is mutually exclusive with message/file and rejected when nothing is pending. `response.kind` ∈ `message`, `artifact`, `message_and_artifact`, `deliberate_empty`. Model-facing `architect_message` is the message, or `ARTIFACT_ONLY_RESPONSE_SUMMARY` for file-only, or `DELIBERATE_EMPTY_RESPONSE_SUMMARY` for the explicit empty choice — never silently blank for a resolved decision. An ordinary pause (no pending decision) still unblocks with no response.
-Turn window: optional `turn_timeout` is validated via `validate_turn_timeout()` before the lock; inside the lock it is written to `status.turn_timeout_seconds` BEFORE `advance_unblocked()` computes the fresh deadline, so both this turn and all later transitions use it. Omitted keeps the stored window. The `loop_unblocked` event carries `turn_timeout_seconds` always, plus `previous_turn_timeout_seconds` and a detail suffix when changed, and `response_kind` alongside `decision_id` when a decision was resolved.
+**#47:** for `attention_mode` sessions, a non-None `turn_timeout` raises `ValueError(ATTENTION_TIMEOUT_REFUSAL)` inside the lock before any mutation, because no participant window exists to change. Legacy turn window: optional `turn_timeout` is validated via `validate_turn_timeout()` before the lock; inside the lock it is written to `status.turn_timeout_seconds` BEFORE `advance_unblocked()` computes the fresh deadline, so both this turn and all later transitions use it. Omitted keeps the stored window. The `loop_unblocked` event carries `turn_timeout_seconds` always, plus `previous_turn_timeout_seconds` and a detail suffix when changed, and `response_kind` alongside `decision_id` when a decision was resolved.
 Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when file_path provided), session mutation
 <- `cli._cmd_unblock()`, dashboard `_handle_loop_unblock()`
 -> `resolve_token()`, `validate_turn_timeout()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
@@ -408,18 +428,18 @@ Filesystem: `.gator/loops/start.lock` (RW), `.gator/loops/<loop-id>/host.lock` (
 
 ### watch_loop(loop_dir, host_lock_fd=None)
 File: `src/gator_command/scripts/loop/host.py`
-Polls events.jsonl (from offset 0) for new entries, renders log lines, enforces timeouts. Stays alive through paused states. Exits on a terminal event **only if the session is still terminal** (`_session_is_terminal()`); otherwise the event is rendered as history and watching continues. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
-Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for deadline + terminal check), `host.lock` (W metadata, when fd provided)
+Polls events.jsonl (from offset 0) for new entries, renders log lines, and runs Phase 2 per loop contract: `attention_mode` loops go to `_try_record_attention` (soft and never terminal), and legacy loops get deadline enforcement (`_try_enforce_timeout`). Stays alive through paused states. Exits on a terminal event **only if the session is still terminal** (`_session_is_terminal()`); otherwise the event is rendered as history and watching continues. When `host_lock_fd` is provided, writes diagnostic metadata (PID, loop_id, start time) via `write_host_metadata()`.
+Filesystem: `.gator/loops/<loop-id>/events.jsonl` (R), `session.json` (R for the attention/legacy-deadline check + terminal check), `host.lock` (W metadata, when fd provided)
 <- `start_loop()`, dashboard `_run_watcher()`
 -> `load_session()`, `format_event()`, `format_next_prompt()`, `_try_enforce_timeout()`, `write_host_metadata()`, `_session_is_terminal()`, `_open_liveness_store()` / `_project_liveness()` (-> `liveness.project_for_host()`)
-! The host is a READER of loop state during normal operation. Timeout enforcement is the one loop-state write exception.
+! The host is a READER of loop state during normal operation. Legacy timeout enforcement is the one loop-state write exception. Attention recording (#47) writes only an awareness event and its idempotency marker, never loop state (stage, role, round, turn).
 ! Liveness projection (#36) runs after each event batch and just before a terminal return; a `retry`/`error` result is retried on the next tick even without new events. It writes only the private liveness sidecar, never raises, and is skipped when the store is unavailable.
 ! Terminal detection is session-authoritative (#39): a watcher attached after an extension replays the old `max_rounds_exceeded` event and must keep hosting; a watcher that reads the terminal event after an extension already landed also keeps hosting. `_session_is_terminal()` fails safe (unreadable session -> terminal -> exit), preserving the pre-#39 behavior.
 ! `tail_events()` (`gator loop tail`) is intentionally NOT session-authoritative: a human tail started before an extension ends at the old terminal event.
 
 ### acquire_host_lock(loop_dir) / release_host_lock(fd) / _try_host_lock(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
-Non-blocking exclusive file lock on `host.lock` — proves process ownership of timeout enforcement for a specific loop. Platform-aware: `msvcrt.locking(LK_NBLCK)` on Windows, `fcntl.flock(LOCK_EX|LOCK_NB)` on POSIX. `_try_host_lock()` is the single attempt that distinguishes `"held"` from `"open failed: ..."`; `acquire_host_lock()` wraps it with the unchanged fd-or-None contract.
+Non-blocking exclusive file lock on `host.lock` — proves process ownership of a loop's watcher (attention recording for attention-mode loops, #47; timeout enforcement for legacy loops). `probe_host_state()` reads it authoritatively for the Dashboard. Platform-aware: `msvcrt.locking(LK_NBLCK)` on Windows, `fcntl.flock(LOCK_EX|LOCK_NB)` on POSIX. `_try_host_lock()` is the single attempt that distinguishes `"held"` from `"open failed: ..."`; `acquire_host_lock()` wraps it with the unchanged fd-or-None contract.
 Filesystem: `.gator/loops/<loop-id>/host.lock` (RW)
 <- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
 ! Returns fd on success, None if already held. OS exclusive lock prevents duplicate watchers cross-process.
@@ -453,13 +473,41 @@ Filesystem: `.gator/loops/*/session.json` (R)
 <- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
 -> `load_session()`, `is_terminal()`
 
+### _try_record_attention(loop_dir, now=None) / _attention_due(session, now) / _find_attention_event(loop_dir, key) / _ensure_events_newline(path) (#47)
+File: `src/gator_command/scripts/loop/host.py`
+Records exactly one durable `architect_attention_due` event per active turn of a flagged loop. It never changes stage, role, round or turn, so time never changes loop state.
+- **`_attention_due`** is pure and never raises: flagged, active, not paused, a valid **offset-aware** `turn_started_at` and a positive int interval (`turn_timeout_seconds`), with `now ≥ start + interval`. A naive or unparsable timestamp, or an overflowing comparison, means not due (M2-1).
+- **`_try_record_attention`** runs inside `with_session_lock`, **event-first, marker-second, with recovery**:
+  1. preconditions;
+  2. fast path: `attention_notified_turn == turn_started_at` means no write;
+  3. recovery: `_find_attention_event` (via the shared `read_all_events`, which skips torn lines) finds a valid event with this `attention_key`, so only the marker is repaired;
+  4. otherwise `_ensure_events_newline` terminates any partial last line, `emit_event` appends `{event, attention_key, role, round, stage, interval_seconds, turn_started_at, detail}` (plus `ts` / `loop_id`), and the callback returns `(session, None)`, so the marker is saved AFTER the append.
+- **Not atomic, but convergent:** an emit failure means a retry; a save failure after the append means a repair with no duplicate; a torn line is isolated. Racing observers serialize on the session lock.
+- **Return value:** True only when it appended.
+- **Payload:** no artifact, brief or token content.
+Filesystem: `session.json` (RW via lock), `events.jsonl` (R scan, W append via lock)
+<- `watch_loop()` Phase 2 (flagged branch; an unlocked pre-check skips the lock when already notified or not due; exceptions are swallowed and the next poll converges)
+-> `with_session_lock()`, `read_all_events()`, `emit_event()`
+! The pinned tests are in `tests/test_loop_attention.py` (`TestAttentionFaultInjection` a–f, racing observers, the real `watch_loop` thread).
+
+### attention_status_view(session, loop_dir, now=None) (#47 M4)
+File: `src/gator_command/scripts/loop/host.py`
+The Architect-only Dashboard projection. It returns `None` for legacy sessions, otherwise `{interval_seconds, turn_started_at, notified_turn, notified, due}` built from validated primitives. `notified` is the marker, or a matching event found by `_find_attention_event`; the scan runs only when the marker is missing and the turn is due.
+<- dashboard `_handle_loop_status()`
+`host` (M5 P2): only in the due-and-not-notified state, `probe(loop_dir)` (default `probe_host_state`) gives `attached` / `none` / `unknown`. A probe exception or bogus value means `unknown`; otherwise `host` is null.
+
+### probe_host_state(loop_dir) (#47 M5 P2)
+File: `src/gator_command/scripts/loop/host.py`
+Authoritative and non-blocking: one `_try_host_lock` attempt. `held` means `attached`; acquired means `none`, released immediately; open failed means `unknown`. A second handle conflicts with a held lock even in the same process, so the Dashboard's own watcher reads as attached.
+! Call only rarely (attention due and not recorded). Holding the probe even briefly could collide with a single-attempt acquirer (start, adoption), which never targets a long-running due turn.
+
 ### _try_enforce_timeout(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
-Acquires session lock, re-reads session, fires timeout only if deadline still expired and state still active. Race-safe: if a submit advanced the state, timeout is silently skipped.
+Acquires session lock, re-reads session, fires timeout only if deadline still expired and state still active. Race-safe: if a submit advanced the state, timeout is silently skipped. **Legacy only (#47):** returns without writing for `attention_mode` sessions, even with a forced deadline (defense in depth).
 Filesystem: `session.json` (RW via lock), `events.jsonl` (W via lock)
 <- `watch_loop()`
 -> `with_session_lock()`, `advance_turn_timed_out()`
-! This is the single Host Contract write exception. Lock-then-re-read discipline prevents the timeout-vs-submit race.
+! One of the two Host Contract write exceptions, legacy loops only. The other is `_try_record_attention` for attention-mode loops (#47), which writes no loop state. Lock-then-re-read discipline prevents the timeout-vs-submit race.
 
 ---
 
@@ -476,7 +524,15 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `load_session()`
 ! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
-! Turn window: model and architect JSON (and wait JSON) carry additive `turn_timeout_seconds` + `turn_deadline`; the acting model's text view prints `Turn window: Ns (deadline ...)` via `_print_turn_window()`. The paused architect view prints the current window and, when a decision is pending, states that a response is required (with the exceptional `--no-response` form); an ordinary pause shows the optional-message form.
+! **#47 participant time silence:** for `attention_mode` loops the model status JSON and wait JSON omit `turn_timeout_seconds` / `turn_deadline` (`_strip_participant_time`), and `_print_turn_window(session)` prints nothing, so participants see no interval, deadline or countdown.
+! **#47 Architect view:**
+  - JSON gains additive `attention: {interval_seconds, turn_started_at, elapsed_seconds, notified_turn, notified, due}` (`_attention_view`).
+  - The active text view prints `Attention interval: N min (Architect notice only)`, `Elapsed this turn`, and either "Attention: due (notice recorded)…no action is required" or "interval passed; no notice recorded yet (is a loop host running?)".
+  - The paused view shows the attention interval and omits every `--timeout` hint.
+  - Unblock, extend and reopen output use `_print_window_line`.
+  - The host-attach wording comes from `_host_duty(loop_dir)`: "records attention notices" for flagged loops, legacy wording unchanged.
+  - `start --attention-interval` (preferred) and `--turn-timeout` share `dest=turn_timeout` (default 300). The host banner prints "Attention interval: … (Architect notice only)".
+! Legacy turn window: model and architect JSON (and wait JSON) carry additive `turn_timeout_seconds` + `turn_deadline`; the acting model's text view prints `Turn window: Ns (deadline ...)` via `_print_turn_window()`. The paused architect view prints the current window and, when a decision is pending, states that a response is required (with the exceptional `--no-response` form); an ordinary pause shows the optional-message form.
 
 ### _approval_resolution(session, loop_dir) / _print_approval_resolution(res, token=None)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -497,10 +553,10 @@ File: `src/gator_command/scripts/loop/cli.py`
 
 ### _cmd_reopen(args) / _attach_foreground_watcher(loop_host, loop_dir, what)
 File: `src/gator_command/scripts/loop/cli.py`
-`gator loop reopen --token <architect> --message "..."` (#41) calls `host.reopen_loop()`; on success it prints the resumed stage, the approval invalidation, the turn window and the re-engagement notice. `_attach_foreground_watcher` is the host contract shared with `extend`:
+`gator loop reopen --token <architect> --message "..."` (#41) calls `host.reopen_loop()`; on success it prints the resumed stage, the approval invalidation, the window line (`_print_window_line`: "Attention interval: … (Architect notice only)" for attention-mode loops, #47; "Turn window: Ns" for legacy) and the re-engagement notice. `_attach_foreground_watcher` is the host contract shared with `extend`:
 - `attached`: foreground `watch_loop()`;
 - `already_hosted`: exit 0;
-- `failed`: stderr says "the <reopen|extension> is saved, but turn timeouts are NOT being enforced", exit 1.
+- `failed`: exit 1. Stderr says the <reopen|extension> is saved, but "attention notices are NOT being recorded" (attention-mode, #47) or "turn timeouts are NOT being enforced" (legacy). The wording comes from `_host_duty(loop_dir)`, as do the already-hosted and Ctrl+C messages.
 
 ### _cmd_start(args) / _mode_of(session) / _print_coding_action_prompt(...)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -515,7 +571,7 @@ File: `src/gator_command/scripts/loop/cli.py`
 
 ### _cmd_extend(args) / _round_count_arg(value)
 File: `src/gator_command/scripts/loop/cli.py`
-Architect `gator loop extend --token --rounds <1-20> --message "..."` (#39). `--rounds` and `--message` are required; `--rounds` uses argparse type `_round_count_arg` -> `session.validate_round_count()` (usage error exit 2 before any write). Calls `host.extend_loop()`; `PermissionError` -> `Rejected:` exit 1, `RuntimeError`/`ValueError`/`FileNotFoundError` -> `Error:` exit 1 (no host step). On success prints old -> new ceiling, resumed stage/role, turn window, and a participant re-engagement notice, then applies the host contract via `host.acquire_host_lock_with_retry()`: `attached` -> foreground `watch_loop()` (Ctrl+C prints that enforcement stopped; fd released in `finally`); `already_hosted` -> prints holder detail, exit 0; `failed` -> stderr says the extension is saved but timeouts are NOT enforced, exit 1.
+Architect `gator loop extend --token --rounds <1-20> --message "..."` (#39). `--rounds` and `--message` are required; `--rounds` uses argparse type `_round_count_arg` -> `session.validate_round_count()` (usage error exit 2 before any write). Calls `host.extend_loop()`; `PermissionError` -> `Rejected:` exit 1, `RuntimeError`/`ValueError`/`FileNotFoundError` -> `Error:` exit 1 (no host step). On success prints old -> new ceiling, resumed stage/role, the window line (attention interval for attention-mode loops, #47; turn window for legacy), and a participant re-engagement notice, then applies the host contract via `host.acquire_host_lock_with_retry()`: `attached` -> foreground `watch_loop()` (Ctrl+C prints that attention recording or, for legacy, timeout enforcement stopped; fd released in `finally`); `already_hosted` -> prints holder detail, exit 0; `failed` -> stderr says the extension is saved but attention notices are not recorded (legacy: timeouts not enforced), exit 1.
 <- `main()`
 -> `host.extend_loop()`, `host.acquire_host_lock_with_retry()`, `host.watch_loop()`, `host.release_host_lock()`, `session.load_session()`
 ! Always attaches (no state-only `--no-watch` form): a state-only extension would leave a live-but-unhosted loop with no recovery command, because `extend` rejects once the stage is `plan_revision`.
@@ -523,7 +579,7 @@ Architect `gator loop extend --token --rounds <1-20> --message "..."` (#39). `--
 
 ### _cmd_unblock(args) / _turn_timeout_arg(value)
 File: `src/gator_command/scripts/loop/cli.py`
-Architect unblock. Forwards `--message`, `--file`, `--timeout` (argparse type `_turn_timeout_arg` → `session.validate_turn_timeout()`, so bad values are usage errors before any write), and `--no-response` to `submit.handle_unblock()`; prints the resumed stage and effective turn window. `ValueError`/`FileNotFoundError` exit 1 with `Error:`; `PermissionError` exits 1 with `Rejected:`.
+Architect unblock. Forwards `--message`, `--file`, `--timeout` (argparse type `_turn_timeout_arg` → `session.validate_turn_timeout()`, so bad values are usage errors before any write; **legacy loops only**: attention-mode loops refuse it in `handle_unblock`, exit 1 with `Error:`, #47), and `--no-response` to `submit.handle_unblock()`. It prints the resumed stage and the window line (attention interval for attention-mode loops; effective turn window for legacy). `ValueError`/`FileNotFoundError` exit 1 with `Error:`; `PermissionError` exits 1 with `Rejected:`.
 <- `main()`
 -> `submit.handle_unblock()`, `session.load_session()`
 
@@ -533,7 +589,7 @@ Model-role wait. Resolves the token, then calls `_wait_for_actionable()` and ren
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `_wait_for_actionable()`, `_print_action_prompt()`, `_positive_seconds()`
-! `--max-seconds` omitted = unbounded (human CLI compatibility). Participant surfaces teach the bounded form `--max-seconds 45`; exit 3 means "reissue the same command", never "leave the loop". Text output prints the exact reissue command; JSON (`gator-loop-status-v1`, additive) adds `wake_reason: "still_waiting"`, `max_seconds`, `waited_seconds`, `reissue_command`, plus `turn_timeout_seconds` / `turn_deadline`. When actionable, text output prints the turn window like `status`.
+! `--max-seconds` omitted = unbounded (human CLI compatibility). Participant surfaces teach the bounded form `--max-seconds 45`; exit 3 means "reissue the same command", never "leave the loop". Text output prints the exact reissue command; JSON (`gator-loop-status-v1`, additive) adds `wake_reason: "still_waiting"`, `max_seconds`, `waited_seconds`, `reissue_command`. **Legacy loops only:** it also adds `turn_timeout_seconds` / `turn_deadline`, and actionable text output prints the turn window like `status`. Attention-mode loops (#47) omit both fields and print no window (`_strip_participant_time`, `_print_turn_window(session)`). `--max-seconds` is the command's own bounded wait, not a loop deadline.
 
 ### _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused, max_seconds=None, clock=None, sleep=None)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -555,7 +611,7 @@ Strict allowlist at every level (top, roles, registration, adapter, notification
 
 ### state_key(session) / classify(role_rec, now) / prune(state, now, loop_exists=True) / redact(text) / sanitize_text(text, max_len)
 File: `src/gator_command/scripts/loop/liveness.py`
-Pure helpers. `state_key` is the SHA-256 idempotency key over `round`, `stage`, `next_role`, `len(turns)`, `turn_deadline`. `classify` returns `not_registered` / `connected` / `stale` (active only, > 3 × heartbeat) / `released` / `closed` / `expired` (> 24 h unseen). `prune` applies retention: delete when the loop dir is gone or terminal > 7 days; drop expired registrations; TTL-expire pending `turn-ready` > 24 h; cap 50 notifications per role (pending never dropped — so a role whose records are all pending may exceed 50; pending records still TTL-expire), 10 superseded, 100 audit.
+Pure helpers. `state_key` is the SHA-256 idempotency key over `round`, `stage`, `next_role`, `len(turns)`, `turn_deadline`, plus `turn_started_at` **only when that key exists** (#47 flagged sessions), so legacy keys hash exactly as before. `attention_notified_turn` is deliberately excluded: recording attention never creates a participant notification. `classify` returns `not_registered` / `connected` / `stale` (active only, > 3 × heartbeat) / `released` / `closed` / `expired` (> 24 h unseen). `prune` applies retention: delete when the loop dir is gone or terminal > 7 days; drop expired registrations; TTL-expire pending `turn-ready` > 24 h; cap 50 notifications per role (pending never dropped — so a role whose records are all pending may exceed 50; pending records still TTL-expire), 10 superseded, 100 audit.
 
 ### authenticate(token, loop_dir=None) / open_store(loop_dir, store_dir=None)
 File: `src/gator_command/scripts/loop/liveness.py`
@@ -640,6 +696,16 @@ For context-evidence sessions, `handle_submit_draft` persists exactly the buffer
 
 Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`.
 
+## TRIPWIRE: Attention Is Architect Awareness, Never Participant Pressure or State (#47)
+
+For `attention_mode` loops (`contract.attention_interval`, set on every new session), time passing NEVER changes loop state: no stage, role, round or turn change; no pause; no termination; no participant wake-up. The interval (stored in `turn_timeout_seconds`) produces exactly one durable `architect_attention_due` event per turn.
+- **The host watcher is the only writer.** `_try_record_attention` writes the event first and the marker second, and recovers if interrupted between them; this is the documented sole exception to "Session Lock Write Ordering".
+- **Participants never see time.** Participant status, `wait`, prompts and protocol carry no interval, deadline, countdown or request-more-time flow. Only Architect surfaces (Architect CLI view, Dashboard) show the interval, elapsed time and notice.
+- **Host state is never inferred.** The Dashboard's host wording comes only from `probe_host_state`, never from a missing marker.
+- **Legacy loops are unchanged.** Unflagged sessions keep their recorded hard-timeout semantics byte-for-byte, and `turn_timed_out` residue is never reinterpreted.
+
+Violation: adding a deadline, a participant-visible window, or a state transition for flagged loops reintroduces the pressure #47 removed. Gating on anything other than `attention_mode` (dates, versions, field presence) breaks legacy loops.
+
 ## TRIPWIRE: Raw Staged Tree Is Review Authority (coding mode, #41)
 
 In coding-mode loops the reviewed and approved candidate is the raw `git write-tree` OID captured by `gitsnap.snapshot()` — never artifact prose and never a filtered or normalized tree. Implementation artifacts describe the candidate; the CLI writes their `## Commit State` facts from the snapshot.
@@ -658,6 +724,8 @@ All writers (submit commands, escalate, unblock, and the host's timeout enforcer
 
 Violation: the host reads a terminal event, loads session.json to print a summary, but sees stale pre-terminal state.
 
+**Sole exception (#47): `architect_attention_due`.** `_try_record_attention` appends this event BEFORE saving its `attention_notified_turn` marker, both inside the session lock. The rule protects events that imply a state change, and this awareness-only event implies none: the marker is idempotency metadata. The inverted order is what makes a crash between the two writes recoverable, because the event is found and the marker repaired. Session-first order would instead lose the event forever behind a marker. No other event may use this exception.
+
 ## TRIPWIRE: Token Nonce Separation
 
 Committed `session.json` contains only role names. Secret nonces live only in gitignored `.tokens.json`. Tokens cannot be reconstructed from committed data because the nonce never appears outside `.tokens.json`.
@@ -666,7 +734,7 @@ Violation: committing `.tokens.json` or adding nonces to `session.json` makes to
 
 ## TRIPWIRE: Host Write Authority
 
-The host has exactly ONE loop-state write exception: timeout enforcement. During normal operation the host is a reader of `events.jsonl` and a renderer to terminal. No other section of code grants the host additional loop-state write paths. (The guarded liveness projection writes only the private Git-path sidecar — never `session.json`, `events.jsonl`, or anything under `.gator/loops/` — see the Liveness Store TRIPWIRE.)
+The host has exactly ONE loop-state write exception: legacy timeout enforcement. For attention-mode loops (#47) it also appends `architect_attention_due` and saves its `attention_notified_turn` marker, which is awareness metadata, never a stage, role, round or turn change. During normal operation the host is a reader of `events.jsonl` and a renderer to terminal. No other section of code grants the host additional loop-state write paths. (The guarded liveness projection writes only the private Git-path sidecar — never `session.json`, `events.jsonl`, or anything under `.gator/loops/` — see the Liveness Store TRIPWIRE.)
 
 ## TRIPWIRE: Resumable Terminal Stage
 

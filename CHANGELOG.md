@@ -2,6 +2,26 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Loop turns no longer time out for participants. The Architect gets an attention notice instead ([#47](https://github.com/cumberland-laboratories/gator/issues/47)).** New planning and coding loops use an **Architect attention interval** (default 300 s, `gator loop start --attention-interval`; `--turn-timeout` remains an alias).
+  - **What happens when it passes:** the loop keeps running. The host watcher records one durable `architect_attention_due` event per turn, and the Architect sees it. Participants are never paused, woken, or terminated by time.
+  - **What participants see:** no time at all. `status`, `wait` and its JSON, and the join prompt carry no turn window, deadline or countdown. Protocol Rule 7 is now "Work at the pace the artifact needs": escalate only for genuine blockers, never to negotiate time.
+  - **What the Architect sees:**
+    - The Architect `status` view shows the interval, the time elapsed this turn, and the notice state; the JSON gains an `attention` block.
+    - The Dashboard replaces the countdown with "Elapsed this turn". It shows a text-led ◷ attention notice and a sidebar "◷ attention" marker.
+    - When a notice is due but not yet recorded, the Dashboard checks whether a loop host is actually running, rather than guessing.
+  - **Crash-safe recording:** the notice event is written before its marker, and a missing marker is repaired from the event log, so exactly one notice is kept per turn even across crashes, restarts or racing watchers.
+  - **Unblock:** `unblock --timeout` (CLI and Dashboard) is refused for these loops, since there is no participant window to change.
+  - **Compatibility:** loops created before this version keep their hard turn timeout, countdown, `turn_timed_out` terminal and `--timeout` behavior exactly as recorded.
+
+### Upgrade notes
+
+- Run `gator update` in governed repos to refresh the loop protocol (Rule 7) and `loop-participant-watcher.md`.
+- In-flight loops are unaffected; only loops started after upgrading use attention intervals. Keep a loop host running (`gator loop start` in a terminal, or the Dashboard) to record attention notices. The Dashboard says when none is running.
+
 ## [2.19.0] — 2026-10-02
 
 Feature release for the governed planning loop.

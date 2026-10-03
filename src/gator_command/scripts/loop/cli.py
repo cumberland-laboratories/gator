@@ -119,6 +119,7 @@ def _cmd_status(args):
             "turn_deadline": status.get("turn_deadline"),
             "mode": _mode_of(session),
         }
+        _strip_participant_time(session, out)
         out.update(_briefs_json(session, loop_dir))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
@@ -147,7 +148,7 @@ def _cmd_status(args):
             response_artifact = status.get("architect_response_artifact")
             if response_artifact:
                 print(f"  Architect response artifact: {loop_dir / response_artifact}")
-            _print_turn_window(status)
+            _print_turn_window(session)
             _print_action_prompt(session, role, loop_dir, args.token)
         else:
             print(f"  Waiting for: {next_role}")
@@ -197,6 +198,9 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "pending_decisions": pending,
             "mode": _mode_of(session),
         }
+        attention = _attention_view(session)
+        if attention is not None:
+            out["attention"] = attention
         out.update(_briefs_json(session, loop_dir))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
@@ -211,6 +215,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
 
         if is_active(session):
             print(f"  Active role: {status.get('next_role', '?')}")
+            _print_attention_lines(session)
         elif is_paused(session):
             print(f"  Paused: {stage}")
         elif is_terminal(session):
@@ -241,16 +246,22 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
                 print(f"    Reason: {req.get('reason', '?')}")
                 if req.get("artifact_path"):
                     print(f"    Request: {loop_dir / req['artifact_path']}")
-            print(f"  Turn window: {status.get('turn_timeout_seconds')}s "
-                  f"(change on unblock with --timeout <30-3600>)")
+            legacy_time = not _attention_on(session)
+            if legacy_time:
+                print(f"  Turn window: {status.get('turn_timeout_seconds')}s "
+                      f"(change on unblock with --timeout <30-3600>)")
+            else:
+                print(f"  Attention interval: {_fmt_secs(status.get('turn_timeout_seconds'))} "
+                      f"(Architect notice only)")
+            timeout_hint = " [--timeout <s>]" if legacy_time else ""
             print()
             print("  Commands:")
             if pending:
                 print("    Response required (message or --file) to resolve the pending decision:")
-                print(f"    gator loop unblock --token {args.token} --message \"...\" [--file <response.md>] [--timeout <s>]")
+                print(f"    gator loop unblock --token {args.token} --message \"...\" [--file <response.md>]{timeout_hint}")
                 print(f"    Exceptional: gator loop unblock --token {args.token} --no-response")
             else:
-                print(f"    gator loop unblock --token {args.token} [--message \"...\"] [--timeout <s>]")
+                print(f"    gator loop unblock --token {args.token} [--message \"...\"]{timeout_hint}")
             print(f"    gator loop end --token {args.token} --reason \"...\"")
 
     # Architect exit codes: 0 = active (can act), 2 = paused/terminal
@@ -260,8 +271,115 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         sys.exit(0)
 
 
-def _print_turn_window(status):
-    """Print the active turn window and deadline for the acting participant."""
+def _attention_on(session):
+    from session import attention_mode
+    return attention_mode(session)
+
+
+def _fmt_secs(seconds):
+    if isinstance(seconds, bool) or not isinstance(seconds, int):
+        return "?"
+    if seconds >= 60 and seconds % 60 == 0:
+        return f"{seconds // 60} min"
+    if seconds >= 60:
+        return f"{seconds // 60}m {seconds % 60}s"
+    return f"{seconds}s"
+
+
+def _strip_participant_time(session, out):
+    """#47: participant JSON never carries a time window for attention-mode
+    loops (no deadline, no interval). Legacy loops are unchanged."""
+    if _attention_on(session):
+        out.pop("turn_timeout_seconds", None)
+        out.pop("turn_deadline", None)
+
+
+def _attention_view(session, now=None):
+    """Architect-only attention projection for flagged loops, else None.
+
+    ``due`` is informational (elapsed >= interval); ``notified`` reflects
+    the durable marker for the current turn.
+    """
+    from datetime import datetime, timezone
+    if not _attention_on(session):
+        return None
+    status = session.get("status", {})
+    interval = status.get("turn_timeout_seconds")
+    started = status.get("turn_started_at")
+    notified_turn = status.get("attention_notified_turn")
+    elapsed = None
+    if isinstance(started, str):
+        try:
+            dt = datetime.fromisoformat(started)
+            if dt.tzinfo is not None and dt.utcoffset() is not None:
+                elapsed = max(0, int(((now or datetime.now(tz=timezone.utc)) - dt)
+                                     .total_seconds()))
+        except (ValueError, TypeError, OverflowError):
+            elapsed = None
+    valid_interval = isinstance(interval, int) and not isinstance(interval, bool)
+    return {
+        "interval_seconds": interval if valid_interval else None,
+        "turn_started_at": started if isinstance(started, str) else None,
+        "elapsed_seconds": elapsed,
+        "notified_turn": notified_turn if isinstance(notified_turn, str) else None,
+        "notified": isinstance(started, str) and notified_turn == started,
+        "due": bool(valid_interval and elapsed is not None and elapsed >= interval),
+    }
+
+
+def _print_attention_lines(session):
+    """Architect text view: interval, elapsed time, and notice state."""
+    view = _attention_view(session)
+    if view is None:
+        return
+    print(f"  Attention interval: {_fmt_secs(view['interval_seconds'])} "
+          f"(Architect notice only)")
+    if view["elapsed_seconds"] is not None:
+        print(f"  Elapsed this turn: {_fmt_secs(view['elapsed_seconds'])}")
+    if view["notified"]:
+        print("  Attention: due (notice recorded). The loop is still running; "
+              "no action is required.")
+    elif view["due"]:
+        print("  Attention: interval passed; no notice recorded yet "
+              "(is a loop host running?)")
+
+
+def _print_window_line(session):
+    """Architect output after unblock/extend/reopen."""
+    status = session["status"]
+    if _attention_on(session):
+        print(f"  Attention interval: {_fmt_secs(status.get('turn_timeout_seconds'))} "
+              f"(Architect notice only)")
+    else:
+        print(f"  Turn window: {status.get('turn_timeout_seconds')}s")
+
+
+def _host_duty(loop_dir):
+    """Wording for what an attached host does for this loop (#47)."""
+    from session import load_session
+    try:
+        flagged = _attention_on(load_session(loop_dir))
+    except Exception:
+        flagged = False
+    if flagged:
+        return {"does": "records attention notices",
+                "not": "attention notices are NOT being recorded",
+                "ctrl_c": "attention notices",
+                "stopped": "Attention notices are no longer recorded for this loop."}
+    return {"does": "enforces turn timeouts",
+            "not": "turn timeouts are NOT being enforced",
+            "ctrl_c": "turn-timeout enforcement",
+            "stopped": "Turn timeouts are no longer enforced for this loop."}
+
+
+def _print_turn_window(session):
+    """Print the active turn window and deadline for the acting participant.
+
+    #47: attention-mode loops show participants no time information.
+    """
+    if _attention_on(session):
+        return
+    status = session["status"]
     timeout = status.get("turn_timeout_seconds")
     deadline = status.get("turn_deadline")
     if timeout is None:
@@ -577,9 +695,8 @@ def _cmd_unblock(args):
         session = load_session(loop_dir)
         stage = session["status"]["stage"]
         next_role = session["status"]["next_role"]
-        timeout = session["status"].get("turn_timeout_seconds")
         print(f"  Unblocked. Resumed to {stage} (next: {next_role}).")
-        print(f"  Turn window: {timeout}s")
+        _print_window_line(session)
         print(f"  Loop: {loop_id}")
     except (FileNotFoundError, ValueError) as e:
         print(f"  Error: {e}", file=sys.stderr)
@@ -621,10 +738,11 @@ def _cmd_extend(args):
         print(f"  Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    status = load_session(loop_dir)["status"]
+    session = load_session(loop_dir)
+    status = session["status"]
     print(f"  Extended: max rounds {previous} -> {new} (round {status.get('round', 0)}).")
     print(f"  Resumed to {status['stage']} (next: {status['next_role']}).")
-    print(f"  Turn window: {status.get('turn_timeout_seconds')}s")
+    _print_window_line(session)
     print(f"  Loop: {loop_id}")
     print()
     print("  Participants must be re-engaged: give the Draftor and Reviewer fresh")
@@ -641,24 +759,25 @@ def _attach_foreground_watcher(loop_host, loop_dir, what):
     already_hosted -> another live process enforces timeouts, exit 0;
     failed -> the revival is saved but timeouts are NOT enforced, exit 1.
     """
+    duty = _host_duty(loop_dir)
     fd, state, detail = loop_host.acquire_host_lock_with_retry(loop_dir)
     if state == loop_host.HOST_ALREADY_HOSTED:
-        print(f"  Host: already hosted ({detail}). That process enforces turn timeouts.")
+        print(f"  Host: already hosted ({detail}). That process {duty['does']}.")
         return
     if state != loop_host.HOST_ATTACHED:
         print(f"  Host: could not attach a watcher ({detail}).", file=sys.stderr)
-        print(f"  The {what} is saved, but turn timeouts are NOT being enforced.",
+        print(f"  The {what} is saved, but {duty['not']}.",
               file=sys.stderr)
         sys.exit(1)
 
-    print("  Host: watching in the foreground (Ctrl+C stops turn-timeout enforcement).")
+    print(f"  Host: watching in the foreground (Ctrl+C stops {duty['ctrl_c']}).")
     print()
     sys.stdout.flush()
     try:
         loop_host.watch_loop(loop_dir, host_lock_fd=fd)
     except KeyboardInterrupt:
         print()
-        print("  Host stopped. Turn timeouts are no longer enforced for this loop.")
+        print(f"  Host stopped. {duty['stopped']}")
     finally:
         loop_host.release_host_lock(fd)
 
@@ -682,11 +801,12 @@ def _cmd_reopen(args):
         print(f"  Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    status = load_session(loop_dir)["status"]
+    session = load_session(loop_dir)
+    status = session["status"]
     print(f"  Reopened: {status['stage']} (next: {status['next_role']}, "
           f"round {status.get('round', 0)}).")
     print("  The previous approval is invalidated; the Draftor must resubmit.")
-    print(f"  Turn window: {status.get('turn_timeout_seconds')}s")
+    _print_window_line(session)
     print(f"  Loop: {loop_id}")
     print()
     print("  Participants must be re-engaged: give the Draftor and Reviewer fresh")
@@ -816,6 +936,7 @@ def _cmd_wait(args):
             "waited_seconds": waited_seconds,
             "reissue_command": reissue_cmd if still_waiting else None,
         }
+        _strip_participant_time(session, out)
         print(json.dumps(out, indent=2))
     else:
         print(f"  Loop: {loop_id}")
@@ -837,7 +958,7 @@ def _cmd_wait(args):
             response_artifact = status.get("architect_response_artifact")
             if response_artifact:
                 print(f"  Architect response artifact: {loop_dir / response_artifact}")
-            _print_turn_window(status)
+            _print_turn_window(session)
             _print_action_prompt(session, role, loop_dir, args.token)
         elif still_waiting:
             print(f"  Still waiting -- another role owns the turn "
@@ -1095,7 +1216,12 @@ def main(argv=None):
                          help="Coding loops: carry the approved plan's Architect brief "
                               "forward (keep, default) or start without it (drop)")
     p_start.add_argument("--max-rounds", type=int, default=3, help="Max revision rounds (default: 3)")
-    p_start.add_argument("--turn-timeout", type=int, default=300, help="Turn timeout in seconds (default: 300)")
+    p_start.add_argument(
+        "--attention-interval", "--turn-timeout", dest="turn_timeout",
+        type=int, default=300,
+        help="Architect attention interval in seconds (default: 300). After it "
+             "passes, the Architect gets one notice per turn; participants never "
+             "see it and the loop keeps running. --turn-timeout is an accepted alias")
 
     # status
     p_status = sub.add_parser("status", help="Show role-scoped loop status")
@@ -1151,8 +1277,8 @@ def main(argv=None):
     p_unblock.add_argument("--file", help="Path to a decision-response artifact")
     p_unblock.add_argument(
         "--timeout", type=_turn_timeout_arg, default=None,
-        help="New turn window in seconds (30-3600) for this and all later turns. "
-             "Omit to keep the loop's current window",
+        help="Legacy loops only: new turn window in seconds (30-3600) for this "
+             "and all later turns. Refused for attention-interval loops (#47)",
     )
     p_unblock.add_argument(
         "--no-response", action="store_true",

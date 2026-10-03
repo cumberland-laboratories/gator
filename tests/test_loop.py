@@ -244,10 +244,35 @@ class TestStateMachineMaxRounds:
         assert loop_sm.is_terminal(s)
 
 
+def _legacy(s):
+    """Convert a freshly created session to the pre-#47 (hard-timeout) shape.
+
+    New sessions carry ``contract.attention_interval``; tests that pin the
+    legacy deadline/timeout semantics run against this explicit legacy shape.
+    """
+    contract = s.get("contract") or {}
+    contract.pop("attention_interval", None)
+    if contract:
+        s["contract"] = contract
+    else:
+        s.pop("contract", None)
+    s["status"].pop("turn_started_at", None)
+    s["status"].pop("attention_notified_turn", None)
+    s["status"]["turn_deadline"] = loop_session._deadline_from_now(
+        s["status"]["turn_timeout_seconds"])
+    return s
+
+
+def _legacy_on_disk(loop_dir):
+    s = loop_session.load_session(loop_dir)
+    loop_session.save_session(loop_dir, _legacy(s))
+
+
 def _max_rounds_session(max_rounds=2, turn_timeout=300):
-    """A session driven to max_rounds_exceeded through real transitions."""
-    s = loop_session.create_session("t", "l", max_rounds=max_rounds,
-                                    turn_timeout=turn_timeout)
+    """A (legacy, hard-timeout) session driven to max_rounds_exceeded
+    through real transitions."""
+    s = _legacy(loop_session.create_session("t", "l", max_rounds=max_rounds,
+                                            turn_timeout=turn_timeout))
     for _ in range(max_rounds):
         loop_sm.advance_draft_submitted(s, turn_timeout)
         loop_sm.advance_review_submitted(s, False, 1, turn_timeout)
@@ -427,8 +452,8 @@ class TestTurnTimeout:
         assert loop_sm.is_terminal(s)
 
     def test_deadline_resets_on_submit(self):
-        """Each submit resets turn_deadline for the next role."""
-        s = loop_session.create_session("t", "l", max_rounds=3, turn_timeout=300)
+        """Each submit resets turn_deadline for the next role (legacy)."""
+        s = _legacy(loop_session.create_session("t", "l", max_rounds=3, turn_timeout=300))
         old_deadline = s["status"]["turn_deadline"]
         time.sleep(0.01)  # ensure time difference
         loop_sm.advance_draft_submitted(s, 300)
@@ -1528,6 +1553,12 @@ class TestRoundVersionedArtifacts:
 # ===========================================================================
 
 class TestTimeoutEnforcement:
+    """Legacy (pre-#47) hard-timeout enforcement."""
+
+    @pytest.fixture(autouse=True)
+    def _legacy_session(self, loop_env):
+        _legacy_on_disk(loop_env["loop_dir"])
+
     def test_timeout_fires_when_expired(self, loop_env, monkeypatch):
         """Host re-reads inside lock, sees deadline expired, fires timeout."""
         from host import _try_enforce_timeout
@@ -1830,6 +1861,7 @@ class TestHandleExtend:
                                              approve=True)
         elif stage == "turn_timed_out":
             from host import _try_enforce_timeout
+            _legacy_on_disk(e["loop_dir"])  # only legacy loops time out (#47)
             s = loop_session.load_session(e["loop_dir"])
             s["status"]["turn_deadline"] = (
                 datetime.now(tz=timezone.utc) - timedelta(seconds=10)).isoformat()
@@ -2107,7 +2139,7 @@ class TestCliExtend:
 
         monkeypatch.setattr(loop_host, "watch_loop", interrupted)
         main(["extend", "--token", e["architect_token"], "--rounds", "1", "--message", "go"])
-        assert "no longer enforced" in capsys.readouterr().out
+        assert "no longer recorded" in capsys.readouterr().out  # #47 attention loop
         assert self._lock_is_free(e["loop_dir"])
 
     def test_already_hosted_exits_0_without_second_watcher(self, loop_env, monkeypatch, capsys):
@@ -2137,7 +2169,7 @@ class TestCliExtend:
             main(["extend", "--token", e["architect_token"], "--rounds", "2", "--message", "go"])
         assert exc.value.code == 1
         err = capsys.readouterr().err
-        assert "NOT being enforced" in err and "open failed: nope" in err
+        assert "NOT being recorded" in err and "open failed: nope" in err  # #47
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["stage"] == "plan_revision" and s["status"]["max_rounds"] == 5
 
@@ -2181,6 +2213,12 @@ class TestCliExtend:
 
 
 class TestUnblockTurnWindow:
+    """Pins the legacy (pre-#47) unblock --timeout turn-window contract."""
+
+    @pytest.fixture(autouse=True)
+    def _legacy_session(self, loop_env):
+        _legacy_on_disk(loop_env["loop_dir"])
+
     def test_timeout_persists_and_sets_fresh_deadline(self, loop_env):
         e = loop_env
         loop_submit.handle_pause(e["architect_token"])
@@ -2386,7 +2424,8 @@ class TestUnblockResponseContract:
         out = capsys.readouterr().out
         assert "Response required" in out
         assert "--no-response" in out
-        assert "Turn window: 300s" in out
+        assert "Attention interval: 5 min" in out  # #47: no participant window
+        assert "--timeout" not in out
 
 
 class TestArchitectToken:
@@ -2588,6 +2627,7 @@ class TestWaitCommand:
 
     def test_wait_returns_on_terminal(self, loop_env):
         """Loop already terminal -> returns with terminal."""
+        _legacy_on_disk(loop_env["loop_dir"])  # only legacy loops time out (#47)
         from cli import _wait_for_actionable
         from state_machine import is_terminal, is_paused
         from host import _try_enforce_timeout

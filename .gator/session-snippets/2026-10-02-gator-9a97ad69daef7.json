@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "CI: raise dashboard-ui job timeout to 20 minutes",
+  "change_type": "maintenance",
+  "significance": "low",
+  "charter_changed": true,
+  "decision_tags": [
+    "ci",
+    "release"
+  ],
+  "commit": "9a97ad69daef7122aeaf48c5484f5b1215f86ad1",
+  "short_commit": "9a97ad6",
+  "snippet_id": "snippet-9a97ad69daef7",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "7e85f7e41417f538cd1febf2005942c135ee5348",
+  "started_at": "2026-10-02T15:41:18Z",
+  "ended_at": "2026-10-02T21:14:35Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-02-gator-7e85f7e41417f.json",
+    ".github/workflows/source-ci.yml"
+  ],
+  "notes": [
+    "`.github/workflows/source-ci.yml`: the `dashboard-ui` `timeout-minutes` goes from 10 to 20. On 2.19.0 dev CI (run 37063620912) the Windows leg was cancelled at the cap with 255 of 332 tests passed and none failed. Windows setup takes about 4 minutes and the grown suite about 8.",
+    "`release-pipeline.md` (Workflow A): records the cap and why.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}

@@ -117,6 +117,17 @@ def loop_dirs(repo):
 
 def set_session(loop_dir, **status):
     s = loop_session.load_session(loop_dir)
+    if status.get("turn_deadline"):
+        # Forcing a hard deadline means exercising the legacy (pre-#47)
+        # timeout path, which only unflagged sessions have.
+        contract = s.get("contract") or {}
+        contract.pop("attention_interval", None)
+        if contract:
+            s["contract"] = contract
+        else:
+            s.pop("contract", None)
+        s["status"].pop("turn_started_at", None)
+        s["status"].pop("attention_notified_turn", None)
     s["status"].update(status)
     loop_session.save_session(loop_dir, s)
     return s
@@ -276,7 +287,9 @@ class TestModeAwareTransitions:
         assert sm.advance_extended(s, 2, turn_timeout=300) == (3, 5)
         assert s["status"]["stage"] == resume
         assert s["status"]["next_role"] == "draftor"
-        assert s["status"]["turn_deadline"]
+        # #47: new sessions start a fresh attention turn, not a deadline.
+        assert s["status"]["turn_started_at"]
+        assert s["status"]["turn_deadline"] is None
 
     def test_advance_reopened(self):
         s = coding_session("implementation_approved", round=2)
@@ -287,7 +300,8 @@ class TestModeAwareTransitions:
         assert st["stage"] == "implementation_revision"
         assert st["next_role"] == "draftor" and st["round"] == 2
         assert st["architect_message"] == "tests failed"
-        assert st["turn_deadline"] and st["blocked"] is False
+        assert st["turn_started_at"] and st["turn_deadline"] is None
+        assert st["blocked"] is False
         assert s["coding"]["approval"]["invalidated_at"]
 
     def test_advance_reopened_rejects(self):

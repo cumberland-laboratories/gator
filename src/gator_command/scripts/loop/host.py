@@ -19,7 +19,7 @@ import os
 import shutil
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 _LOOP_DIR = str(Path(__file__).resolve().parent)
@@ -30,13 +30,13 @@ from session import (
     create_session, save_session, load_session, with_session_lock,
     make_token, save_tokens, make_loop_id,
     find_gator_root, ensure_loops_gitignore,
-    _make_readonly,
+    _make_readonly, _make_writable, attention_mode,
     BRIEF_FILENAME, SOURCE_BRIEF_FILENAME, brief_meta, read_brief_file,
     brief_bytes_from_text, read_verified_brief, verify_brief,
 )
 from events import (
     emit_event, create_events_file, format_event, format_next_prompt,
-    TERMINAL_EVENTS,
+    TERMINAL_EVENTS, read_all_events, EVENTS_FILENAME,
 )
 from state_machine import (
     is_active, is_paused, is_terminal,
@@ -706,7 +706,7 @@ def _print_banner(loop_id, feature, max_rounds, turn_timeout, tok_d, tok_r, tok_
   Loop: {loop_id}
   Feature: {feature}
   Max rounds: {max_rounds}
-  Turn timeout: {timeout_str}
+  Attention interval: {timeout_str} (Architect notice only; participants never see it)
 
   -- Tokens (model) ----------------------------------------
 
@@ -835,7 +835,17 @@ def watch_loop(loop_dir, host_lock_fd=None):
             active = is_active(session)
         except ValueError:  # unknown loop mode: never enforce blind
             active = False
-        if active:
+        if active and attention_mode(session):
+            # #47: soft Architect attention, never a state change. Cheap
+            # unlocked pre-check; the locked procedure re-decides.
+            status = session["status"]
+            if (status.get("attention_notified_turn") != status.get("turn_started_at")
+                    and _attention_due(session, datetime.now(tz=timezone.utc))):
+                try:
+                    _try_record_attention(loop_dir)
+                except Exception:
+                    pass  # never fatal; the next poll converges (Decision 3)
+        elif active:
             deadline_str = session["status"].get("turn_deadline")
             if deadline_str:
                 try:
@@ -894,6 +904,8 @@ def _try_enforce_timeout(loop_dir):
         # Re-check inside lock — state may have changed
         if is_terminal(session) or is_paused(session):
             return None
+        if attention_mode(session):
+            return None  # #47: flagged loops never time out
 
         deadline_str = session["status"].get("turn_deadline")
         if not deadline_str:
@@ -923,6 +935,211 @@ def _try_enforce_timeout(loop_dir):
         return session, event
 
     with_session_lock(loop_dir, _enforce)
+
+
+# ---------------------------------------------------------------------------
+# Architect attention (#47) — soft awareness, never a state change
+# ---------------------------------------------------------------------------
+
+ATTENTION_EVENT = "architect_attention_due"
+
+
+def _attention_due(session, now):
+    """True when a flagged, active (not paused) turn has run past its
+    interval. Pure; never raises on malformed status values."""
+    if not attention_mode(session):
+        return False
+    try:
+        if not is_active(session) or is_paused(session):
+            return False
+    except ValueError:
+        return False
+    status = session.get("status", {})
+    key = status.get("turn_started_at")
+    interval = status.get("turn_timeout_seconds")
+    if not isinstance(key, str) or isinstance(interval, bool) \
+            or not isinstance(interval, int) or interval <= 0:
+        return False
+    try:
+        started = datetime.fromisoformat(key)
+    except ValueError:
+        return False
+    # A naive timestamp parses but cannot be compared with the aware clock;
+    # treat it as malformed rather than raising (#47 M2-1).
+    if started.tzinfo is None or started.utcoffset() is None:
+        return False
+    try:
+        return now >= started + timedelta(seconds=interval)
+    except (TypeError, OverflowError):
+        return False
+
+
+def _find_attention_event(loop_dir, key):
+    """True if a VALID attention event for this turn key is in the log.
+
+    Uses the shared reader, which skips blank and torn/unparsable lines.
+    """
+    for event in read_all_events(loop_dir):
+        if (isinstance(event, dict) and event.get("event") == ATTENTION_EVENT
+                and event.get("attention_key") == key):
+            return True
+    return False
+
+
+def _ensure_events_newline(events_path):
+    """If a previous write left a partial final line, terminate it so the
+    next record can never be concatenated onto it."""
+    try:
+        size = events_path.stat().st_size
+    except OSError:
+        return
+    if size == 0:
+        return
+    with open(events_path, "rb") as f:
+        f.seek(-1, os.SEEK_END)
+        last = f.read(1)
+    if last != b"\n":
+        _make_writable(events_path)
+        with open(events_path, "ab") as f:
+            f.write(b"\n")
+        _make_readonly(events_path)
+
+
+def _format_attention_detail(role, stage, interval):
+    return (f"{role} active for at least {_format_timeout(interval)} in "
+            f"{str(stage).replace('_', ' ')}; loop still running")
+
+
+def _try_record_attention(loop_dir, now=None):
+    """Record exactly one durable ``architect_attention_due`` per turn.
+
+    Event-first, marker-second, with a recovery scan (#47 Decision 3).
+    The two files are NOT updated atomically; the procedure converges:
+
+    1. preconditions (flagged, active, not paused, interval elapsed);
+    2. fast path: ``attention_notified_turn == turn_started_at`` -> no write;
+    3. recovery: a valid event with this ``attention_key`` already exists
+       -> repair the marker only, append nothing;
+    4. otherwise terminate any torn final line, append the event, THEN
+       set the marker (saved by with_session_lock after this callback).
+
+    This deliberately inverts the session-before-event rule for this one
+    awareness-only event: it implies no loop state, so an event visible
+    before its marker loses nothing. Returns True if an event was appended.
+    """
+    loop_dir = Path(loop_dir)
+    appended = {"value": False}
+
+    def _record(session):
+        clock = now or datetime.now(tz=timezone.utc)
+        if not _attention_due(session, clock):
+            return None
+        status = session["status"]
+        key = status["turn_started_at"]
+        if status.get("attention_notified_turn") == key:
+            return None
+        if not _find_attention_event(loop_dir, key):
+            _ensure_events_newline(loop_dir / EVENTS_FILENAME)
+            role = status.get("next_role")
+            stage = status.get("stage")
+            interval = status["turn_timeout_seconds"]
+            emit_event(loop_dir, {
+                "event": ATTENTION_EVENT,
+                "attention_key": key,
+                "role": role,
+                "round": status.get("round", 0),
+                "stage": stage,
+                "interval_seconds": interval,
+                "turn_started_at": key,
+                "detail": _format_attention_detail(role, stage, interval),
+            })
+            appended["value"] = True
+        status["attention_notified_turn"] = key
+        return session, None  # saved AFTER the append; nothing more emitted
+
+    with_session_lock(loop_dir, _record)
+    return appended["value"]
+
+
+HOST_STATE_ATTACHED = "attached"
+HOST_STATE_NONE = "none"
+HOST_STATE_UNKNOWN = "unknown"
+
+
+def probe_host_state(loop_dir):
+    """Authoritative, non-blocking: is any process hosting this loop?
+
+    host.lock is the ownership proof for a watcher (CLI or Dashboard, any
+    process). One non-blocking attempt: held -> "attached"; acquired ->
+    "none" (released immediately); the file cannot be opened -> "unknown".
+    A second handle conflicts with a held lock even in the same process.
+    Callers must probe only rarely (attention due and not yet recorded),
+    never on every poll.
+    """
+    fd, err = _try_host_lock(loop_dir)
+    if fd is not None:
+        release_host_lock(fd)
+        return HOST_STATE_NONE
+    if err == "held":
+        return HOST_STATE_ATTACHED
+    return HOST_STATE_UNKNOWN
+
+
+def attention_status_view(session, loop_dir, now=None, probe=None):
+    """Architect-only attention projection for the Dashboard (#47 M4).
+
+    Built field by field from validated primitives (never a passthrough).
+    Returns None for legacy sessions. ``notified`` is true when the durable
+    marker matches the current turn OR the log already holds a valid event
+    for it (the brief event-before-marker window of Decision 3 must never
+    hide the notice). The log is scanned only when the marker is missing and
+    the turn is actually due, so ordinary polls never read events.jsonl.
+
+    ``host`` (M5 P2) is set only in the due-but-not-notified state, from an
+    authoritative host.lock probe ("attached" / "none" / "unknown");
+    otherwise it is None and nothing is probed.
+    """
+    if not attention_mode(session):
+        return None
+    status = session.get("status", {}) if isinstance(session, dict) else {}
+    interval = status.get("turn_timeout_seconds")
+    if isinstance(interval, bool) or not isinstance(interval, int):
+        interval = None
+    key = status.get("turn_started_at")
+    if isinstance(key, str):
+        try:
+            parsed = datetime.fromisoformat(key)
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                key = None
+        except ValueError:
+            key = None
+    else:
+        key = None
+    marker = status.get("attention_notified_turn")
+    marker = marker if isinstance(marker, str) else None
+    due = _attention_due(session, now or datetime.now(tz=timezone.utc))
+    notified = key is not None and marker == key
+    if key is not None and not notified and due:
+        try:
+            notified = _find_attention_event(loop_dir, key)
+        except OSError:
+            notified = False
+    host = None
+    if due and not notified:
+        try:
+            host = (probe or probe_host_state)(loop_dir)
+        except Exception:
+            host = HOST_STATE_UNKNOWN
+        if host not in (HOST_STATE_ATTACHED, HOST_STATE_NONE, HOST_STATE_UNKNOWN):
+            host = HOST_STATE_UNKNOWN
+    return {
+        "interval_seconds": interval,
+        "turn_started_at": key,
+        "notified_turn": marker,
+        "notified": bool(notified),
+        "due": bool(due),
+        "host": host,
+    }
 
 
 # ---------------------------------------------------------------------------

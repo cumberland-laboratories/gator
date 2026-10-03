@@ -2029,6 +2029,20 @@ mark.search-hit {
 }
 
 /* #44 — refresh-failure notice (text-led; weight, not hue, carries it). */
+/* #47 — Architect attention notice: informational, never an error colour.
+   Meaning is carried by the glyph, bold label and dashed border. */
+.loop-attention-notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.loop-attention-glyph { font-weight: 700; }
+.loop-card-attention { font-size: 11px; font-weight: 600; }
+.loop-card-attention:empty { display: none; }
+.loop-attention-hint { font-style: italic; }
+
 .loop-refresh-failed {
   margin: 8px 0;
   padding: 8px 12px;

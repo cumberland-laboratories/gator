@@ -137,6 +137,17 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
   - **Never served as content.** Brief content is never in `/status`; it is reachable only through the artifact route, whose allowlist gains `architect-brief.md` and `source-architect-brief.md`.
   - **Join prompt.** `/prompt` appends a pointer line ("An Architect brief exists for this loop: read it first") only when a brief reference exists, and never includes content.
   - **Start.** `POST /loops/start` accepts an optional `brief` string. It is validated before the start lock with `brief_bytes_from_text`; a non-string, NUL, non-UTF-8 or over-32,768-byte brief gets 400. A blank string means no brief. It is passed to `init_loop(brief_text=…)`, and any `ValueError` / `FileNotFoundError` from `init_loop` is now a 400. `init_loop` is atomic, so no partial directory is left.
+! **Attention interval (#47 M4):**
+  - **Start:** `POST /loops/start` accepts `attention_interval` (preferred) or the legacy `turn_timeout` alias, using the same `_validate_http_turn_timeout` bounds (30..3600, a JSON integer) and default 300. Sending both is a 400. The out-of-range error names the field that was sent.
+  - **Status:** for `attention_mode` loops, `_handle_loop_status` adds an explicit `attention` key from `host.attention_status_view(session, loop_dir)`, built field by field and never via the allowlist: `{interval_seconds, turn_started_at, notified_turn, notified, due}`.
+    - Malformed primitives become null; a naive timestamp counts as invalid.
+    - `notified` is the marker OR a valid matching `architect_attention_due` event, covering the event-before-marker window.
+    - `events.jsonl` is read only when the marker is missing and the turn is due, so ordinary polls do no extra reads.
+    - Legacy loops have no `attention` key.
+    - `host` (M5 P2) is set only when the turn is due and not notified, from `host.probe_host_state(loop_dir)`: a single non-blocking `host.lock` attempt. Held means `attached` (any process, including the Dashboard's own watcher); acquired-and-released means `none`; unopenable means `unknown`. It is null otherwise and never probed on ordinary polls.
+  - **Unblock:** `timeout` on an attention loop maps `submit.ATTENTION_TIMEOUT_REFUSAL` (raised in the lock, nothing written) to a 400 with Dashboard wording ("…no participant turn window to change. Unblock without a timeout.").
+  - **Prompt:** the `/prompt` join text is pinned free of time language.
+  - **List:** `/loops` items gain `attention_notified`, a marker-only check (`attention_notified_turn == turn_started_at`) with no event scan, for the sidebar marker (M5).
 ! **Coding-loop start (#43 M2a):** `POST /loops/start` accepts `mode` (`planning` by default, or `coding`).
   - **Coding** requires a string `from_loop`, rejects `sketch_path`, and accepts an optional `source_brief` (`keep` / `drop`) and `brief`. It calls `init_loop(feature, None, …, mode="coding", from_loop=…, brief_text=…, source_brief=…)` under the existing `start.lock` and single-active guard.
   - **The guarded successor is the ONLY source validator:** canonical id, planning mode, `plan_approved`, plan present, Git base, and brief keep/drop integrity, all atomic. Its `ValueError` returns 400 with the message, including the corrupt-source "--source-brief drop" hint.
@@ -181,7 +192,7 @@ POST `/api/repo-by-key/<key>/loops/<id>/extend` (#39). Body: `rounds` (JSON int 
 <- `_dispatch_loop_post()` via action suffix `/extend`
 -> `_resolve_architect_token()`, `_validate_http_round_count()`, `loop.host.extend_loop()`, `_ensure_loop_watcher()`, `loop.session.load_session()`
 ! Error map: `PermissionError` (wrong stage) -> 409; `RuntimeError` (another active loop / start or extension in progress) -> 409; handler `ValueError` -> 400. Every rejection leaves session/events unchanged and attaches no watcher.
-! The extension is durable even when `watcher == "failed"`; the response must report that state honestly — never imply timeout enforcement resumed. `already_hosted` (in-process thread or another process holds `host.lock`) never starts a second watcher.
+! The extension is durable even when `watcher == "failed"`; the response must report that state honestly — never imply timeout enforcement (legacy) or attention recording (attention-mode, #47) resumed. `already_hosted` (in-process thread or another process holds `host.lock`) never starts a second watcher.
 
 ### _handle_loop_liveness(repo_key, loop_id) / _handle_loop_renotify(repo_key, loop_id, req) / _resolve_liveness_loop() / _liveness_modules()
 File: src/gator_command/scripts/gator-dashboard.py

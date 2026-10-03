@@ -18,6 +18,7 @@ if _LOOP_DIR not in sys.path:
     sys.path.insert(0, _LOOP_DIR)
 
 from session import (
+    attention_mode,
     resolve_token, with_session_lock, append_turn,
     find_gator_root, _make_writable, _make_readonly,
     validate_turn_timeout, validate_round_count, loop_mode,
@@ -824,6 +825,11 @@ DELIBERATE_EMPTY_RESPONSE_SUMMARY = (
     "Architect resolved the escalation deliberately without a written response.")
 
 
+ATTENTION_TIMEOUT_REFUSAL = (
+    "This loop uses an Architect attention interval (set at start); there is "
+    "no participant time window to change. Unblock without --timeout.")
+
+
 def handle_unblock(token, next_role=None, stage=None, message=None,
                    file_path=None, loop_dir=None, turn_timeout=None,
                    no_response=False):
@@ -904,6 +910,10 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
             response_kind = "message" if message is not None else None
             status_message = message
 
+        if turn_timeout is not None and attention_mode(session):
+            # #47: no participant time window exists to change. Raised before
+            # any mutation, inside the lock (authoritative, race-free).
+            raise ValueError(ATTENTION_TIMEOUT_REFUSAL)
         previous_timeout = session["status"]["turn_timeout_seconds"]
         if turn_timeout is not None:
             session["status"]["turn_timeout_seconds"] = turn_timeout

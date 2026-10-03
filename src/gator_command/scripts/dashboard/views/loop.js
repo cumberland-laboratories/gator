@@ -526,6 +526,7 @@
       + '<span class="loop-card-feature">' + escHtml(loop.feature || loop.loop_id) + '</span>'
       + stageBadge(loop.stage)
       + '</div>'
+      + '<div class="loop-card-attention">' + (loop.attention_notified ? ATTENTION_MARKER_TEXT : "") + '</div>'
       + '<div class="loop-card-meta">'
       + '<span>Round ' + loop.round + '/' + loop.max_rounds + '</span>'
       + '<span>' + escHtml(formatDate(loop.created_at)) + '</span>'
@@ -589,9 +590,11 @@
       + '<input type="number" id="loop-max-rounds" class="loop-create-input loop-create-input-small" value="3" min="1" max="20">'
       + '</div>'
       + '<div class="loop-create-field">'
-      + '<label class="loop-create-label" for="loop-turn-timeout">Turn timeout (seconds)</label>'
+      + '<label class="loop-create-label" for="loop-turn-timeout">Architect attention interval (seconds)</label>'
       + '<input type="number" id="loop-turn-timeout" class="loop-create-input loop-create-input-small" value="300" min="30" max="3600">'
       + '<div class="loop-create-hint" id="loop-timeout-hint">5 min</div>'
+      + '<div class="loop-create-hint loop-attention-hint">Architect notice only \u2014 participants never see it, '
+      + 'and the loop keeps running after it passes.</div>'
       + '</div>'
       + '</div>'
       + '</details>'
@@ -889,7 +892,7 @@
       return;
     }
     if (isNaN(turnTimeout) || turnTimeout < 30 || turnTimeout > 3600) {
-      errorEl.textContent = "Turn timeout must be between 30 and 3600 seconds.";
+      errorEl.textContent = "Attention interval must be between 30 and 3600 seconds.";
       errorEl.style.display = "block";
       return;
     }
@@ -910,7 +913,7 @@
     var body = {
       feature: feature,
       max_rounds: maxRounds,
-      turn_timeout: turnTimeout,
+      attention_interval: turnTimeout,  // #47: Architect notice only
     };
     if (coding) {
       body.mode = "coding";
@@ -1218,7 +1221,8 @@
     return JSON.stringify([
       terminal, s.stage, s.round, s.max_rounds, s.next_role, s.blocked,
       s.last_updated, s.turn_deadline, status.feature, status.loop_id,
-      status.created_at,
+      status.created_at, s.turn_started_at || null,
+      status.attention ? status.attention.interval_seconds : null,
       !!(roles.draftor && roles.draftor.joined),
       !!(roles.reviewer && roles.reviewer.joined),
     ]);
@@ -1242,7 +1246,7 @@
     var pd = pendingDecision(status);
     return JSON.stringify([
       terminal, !!PAUSED_STAGES[s.stage || ""], s.stage === EXTENDABLE_STAGE,
-      pd ? pd.id : null, s.turn_timeout_seconds || null,
+      pd ? pd.id : null, s.turn_timeout_seconds || null, !!status.attention,
     ]);
   }
 
@@ -1277,6 +1281,7 @@
       + '<div id="loop-region-notice">'
       + '<div class="loop-notice-slot" data-slot="refresh"></div>'
       + '<div class="loop-notice-slot" data-slot="action"></div>'
+      + '<div class="loop-notice-slot" data-slot="attention"></div>'
       + '</div>'
       + '<div id="loop-region-liveness"></div>'
       + '<div id="loop-controls"></div>'
@@ -1294,6 +1299,7 @@
       timelineRendered: false,
       liveness: { built: false, actionFp: {}, lastView: null, lastGood: false },
       codingLive: null,     // last /snapshot result for an approved coding loop
+      attentionState: "",  // #47: derived attention notice state (write on change)
     };
   }
 
@@ -1324,7 +1330,8 @@
       root.querySelector("#loop-region-header").innerHTML =
         terminal ? renderOutcomeHeader(status) : renderLiveHeader(status);
     });
-    if (!terminal) updateTimeRemaining(root, s);
+    if (!terminal) updateTimeRemaining(root, s, status);
+    setAttentionNotice(snap, status, terminal);
 
     patchRegion(snap, "blocked", blockedFingerprint(status), function () {
       renderBlockedCard(status, root, container);
@@ -1405,12 +1412,102 @@
     return mins + "m " + secs + "s";
   }
 
-  function updateTimeRemaining(root, s) {
+  function updateTimeRemaining(root, s, status) {
     // Text-only patch: the countdown must never force a region rebuild.
     var el = root.querySelector(".loop-time-remaining");
-    if (!el) return;
-    var text = timeRemainingText(s);
-    if (el.textContent !== text) el.textContent = text;
+    if (el) {
+      var text = timeRemainingText(s);
+      if (el.textContent !== text) el.textContent = text;
+    }
+    var el2 = root.querySelector(".loop-elapsed");
+    if (el2) {
+      var text2 = elapsedText(status);
+      if (el2.textContent !== text2) el2.textContent = text2;
+    }
+  }
+
+  // ── #47 Architect attention (Architect-only; participants never see it) ──
+
+  var ATTENTION_MARKER_TEXT = "\u25F7 attention";
+
+  function formatDuration(seconds) {
+    if (seconds >= 60 && seconds % 60 === 0) return (seconds / 60) + " min";
+    if (seconds >= 60) return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s";
+    return seconds + "s";
+  }
+
+  function elapsedText(status) {
+    var att = status && status.attention;
+    if (!att || !att.turn_started_at) return "";
+    var started = new Date(att.turn_started_at);
+    if (isNaN(started.getTime())) return "";
+    var secs = Math.max(0, Math.floor((new Date() - started) / 1000));
+    var text = Math.floor(secs / 60) + "m " + (secs % 60) + "s";
+    if (typeof att.interval_seconds === "number") {
+      text += " \u00B7 attention after " + formatDuration(att.interval_seconds);
+    }
+    return text;
+  }
+
+  function attentionNoticeState(status, terminal) {
+    var att = status && status.attention;
+    if (terminal || !att || !att.turn_started_at) return "";
+    if (att.notified) return "notified|" + att.turn_started_at;
+    if (att.due) {
+      var host = att.host === "attached" || att.host === "none" ? att.host : "unknown";
+      return "unrecorded|" + att.turn_started_at + "|" + host;
+    }
+    return "";
+  }
+
+  function attentionNoticeHtml(state, status) {
+    if (!state) return "";
+    var s = status.status || {};
+    var att = status.attention || {};
+    if (state.indexOf("notified|") === 0) {
+      var role = s.next_role ? s.next_role.charAt(0).toUpperCase() + s.next_role.slice(1) : "The active role";
+      var stage = STAGE_LABELS[s.stage] || s.stage || "this stage";
+      var mins = typeof att.interval_seconds === "number" ? formatDuration(att.interval_seconds) : "the interval";
+      return '<div class="loop-attention-notice" role="status" data-state="notified">'
+        + '<span class="loop-attention-glyph" aria-hidden="true">\u25F7</span> '
+        + '<strong>Attention:</strong> ' + escHtml(role) + ' has been active for at least '
+        + escHtml(mins) + ' in ' + escHtml(String(stage).toLowerCase()) + '. '
+        + 'The loop is still running \u2014 interject, pause, or end if needed; '
+        + 'no action is required.</div>';
+    }
+    // Host wording only from the server's authoritative host.lock probe
+    // (M5 P2); a missing marker alone never implies the host is down.
+    var hostState = state.split("|")[2] || "unknown";
+    var detail;
+    if (hostState === "none") {
+      detail = 'no notice recorded \u2014 no loop host is running for this loop, '
+        + 'so attention notices are not being recorded.';
+    } else if (hostState === "attached") {
+      detail = 'notice pending \u2014 the loop host records it on its next check.';
+    } else {
+      detail = 'no notice has been recorded for this turn yet.';
+    }
+    return '<div class="loop-attention-notice" role="status" data-state="unrecorded"'
+      + ' data-host="' + escHtml(hostState) + '">'
+      + '<span class="loop-attention-glyph" aria-hidden="true">\u25F7</span> '
+      + '<strong>Attention interval passed;</strong> ' + detail + '</div>';
+  }
+
+  // Writes the attention slot and the selected sidebar card's marker only
+  // when the derived state changes, so identical polls stay mutation-free.
+  function setAttentionNotice(snap, status, terminal) {
+    var state = attentionNoticeState(status, terminal);
+    if (snap.attentionState === state) return;
+    snap.attentionState = state;
+    setNotice(snap.root, "attention", attentionNoticeHtml(state, status));
+    var container = _state.container;
+    if (!container || !status.loop_id) return;
+    var card = container.querySelector(
+      '.loop-sidebar-card[data-loop-id="' + String(status.loop_id).replace(/"/g, "") + '"] .loop-card-attention');
+    if (card) {
+      var want = state.indexOf("notified|") === 0 ? ATTENTION_MARKER_TEXT : "";
+      if (card.textContent !== want) card.textContent = want;
+    }
   }
 
   function renderLiveHeader(status) {
@@ -1444,6 +1541,13 @@
       + '<div class="loop-status-label">Reviewer</div>'
       + '<div class="loop-status-value">' + (reviewerJoined ? "Joined" : "Waiting") + '</div>'
       + '</div>';
+    var elapsed = elapsedText(status);
+    if (elapsed) {
+      html += '<div class="loop-status-item">'
+        + '<div class="loop-status-label">Elapsed this turn</div>'
+        + '<div class="loop-status-value loop-elapsed">' + escHtml(elapsed) + '</div>'
+        + '</div>';
+    }
     if (timeRemaining) {
       html += '<div class="loop-status-item">'
         + '<div class="loop-status-label">Time Remaining</div>'
@@ -2121,6 +2225,7 @@
     // does not. Only the former requires a response to unblock.
     var pd = pendingDecision(status);
     var currentTimeout = s.turn_timeout_seconds || 300;
+    var legacyWindow = !status.attention;  // #47: no participant window to change
 
     html += '</div>';
     html += '<div class="loop-ctrl-input-area" style="display:none;">'
@@ -2155,7 +2260,7 @@
       input.placeholder = placeholder;
       input.value = "";
       input.classList.remove("loop-ctrl-input-error");
-      timeoutLabel.style.display = action === "unblock" ? "" : "none";
+      timeoutLabel.style.display = action === "unblock" && legacyWindow ? "" : "none";
       timeoutInput.value = String(currentTimeout);
       timeoutInput.classList.remove("loop-ctrl-input-error");
       inputArea.style.display = "flex";
@@ -2225,7 +2330,7 @@
         if (msg) body.message = msg;
       }
 
-      if (action === "unblock") {
+      if (action === "unblock" && legacyWindow) {
         var raw = timeoutInput.value.trim();
         var t = Number(raw);
         if (!/^\d+$/.test(raw) || t < TURN_TIMEOUT_MIN || t > TURN_TIMEOUT_MAX) {

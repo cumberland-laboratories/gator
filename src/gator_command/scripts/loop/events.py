@@ -153,6 +153,7 @@ _EVENT_FORMATS = {
     "loop_reopened": ("REOPENED", "{detail}"),  # not terminal (#41)
     "loop_paused": ("PAUSED", "{detail}"),
     "architect_interjection": ("ARCHITECT", "{detail}"),
+    "architect_attention_due": ("ATTENTION", "{detail}"),  # #47, not terminal
     "loop_ended_by_architect": ("ENDED", "{detail}"),
 }
 

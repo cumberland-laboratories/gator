@@ -14,7 +14,7 @@ A gator loop is a **governed planning debate** between two AI models, mediated b
 
 The loop is not a conversation. You do not talk to the other model. You talk to the CLI. The CLI talks to files. The other model reads those files on their turn. The files are the handoff surface.
 
-The loop is not autonomous. It has bounded rounds, turn timeouts, and an escalation path to the Architect. It terminates deterministically.
+The loop is not autonomous. It has bounded rounds, Architect oversight, and an escalation path to the Architect. It terminates deterministically.
 
 ---
 
@@ -181,9 +181,13 @@ gator loop escalate --token <your-token> --reason "why you are stuck"
 
 The loop pauses. The Architect will read your reason, and unblock with an optional message that answers your question or grants/denies your request. Check `gator loop status` after the unblock — read the `Architect message:` line before resuming work. See the Escalation section below for the full flow.
 
-### Rule 7: Respect the timeout
+### Rule 7: Work at the pace the artifact needs
 
-You have a limited time to submit (default: 5 minutes, configured at loop start). If you do not submit within the deadline, the loop terminates with `turn_timed_out`. Plan your work to fit within the timeout. If you need more time, escalate before the deadline expires.
+There is no participant deadline. Take the time the work needs: read the Architect brief, the charters and the code it touches, and verify what you claim. The Architect watches long-running turns and may interject, pause, or end the loop; you do not need to ask for time, estimate a duration, or hurry to fit a window.
+
+Escalate only for a genuine blocker, a scope decision, or missing authority (see Rule 6), never to negotiate time.
+
+*Legacy loops:* loops created before this change may still show a `Turn window` in `status` and can end with `turn_timed_out`. If yours does, submit or escalate before that deadline.
 
 ### Rule 8: Do not attempt to communicate with the other model
 
@@ -195,7 +199,7 @@ Do not create, delete, rename, or move files in `.gator/loops/<loop-id>/`. Do no
 
 ### Rule 10: Terminal means done
 
-When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, `turn_timed_out`, `ended_by_architect`), it is over for you. Do not attempt further submissions. The session residue remains for the Architect to inspect.
+When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, `ended_by_architect`, or `turn_timed_out` in legacy loops), it is over for you. Do not attempt further submissions. The session residue remains for the Architect to inspect.
 
 **One exception belongs to the Architect.** The Architect may extend a loop that ended at `max_rounds_exceeded` (`gator loop extend`), which adds rounds and resumes it at `plan_revision` for the Draftor. The earlier rounds, artifacts, and decisions are kept. Do not wait for or poll for an extension: stop when the loop ends. If the Architect extends the loop, the Architect re-engages you with a fresh join prompt. Then run `gator loop status`, read the `Architect message:` line (the reason for continuing), and proceed. The Draftor revises against `findings.current.md`. No other terminal state can be resumed.
 
@@ -212,7 +216,7 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 | `paused_by_architect` | Architect paused the loop | Nobody (paused until the Architect unblocks) |
 | `plan_approved` | Reviewer approved | Nobody (done, final) |
 | `max_rounds_exceeded` | Round limit reached without approval | Nobody (done unless the Architect extends it — see Rule 10) |
-| `turn_timed_out` | Active role did not submit in time | Nobody (done, final) |
+| `turn_timed_out` | Legacy loops only: active role did not submit in time | Nobody (done, final) |
 | `ended_by_architect` | Architect ended the loop | Nobody (done, final) |
 
 **Active (3):** `plan_drafting`, `plan_review`, `plan_revision`. One of you should be working.
@@ -223,7 +227,7 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 
 ## Coding Loops (Implementation Review)
 
-A **coding loop** reviews real code instead of a plan. The Architect starts it from an approved planning loop (`gator loop start --mode coding --from-loop <approved-loop-id>`). `gator loop status` then shows `Mode: coding`, and the loop directory holds an immutable copy of the plan, `approved-plan.md`. Everything else in this protocol still applies: turns, the bounded wait, escalation, pause, unblock and timeouts. These rules are added:
+A **coding loop** reviews real code instead of a plan. The Architect starts it from an approved planning loop (`gator loop start --mode coding --from-loop <approved-loop-id>`). `gator loop status` then shows `Mode: coding`, and the loop directory holds an immutable copy of the plan, `approved-plan.md`. Everything else in this protocol still applies: turns, the bounded wait, escalation, pause and unblock. These rules are added:
 
 **The staged tree is the candidate.** The reviewed and approved thing is the exact `git write-tree` of the staged index, captured by the CLI. Your artifact describes it; prose never substitutes for it. Unstaged and untracked files are shown to the Reviewer but are NOT part of the candidate. The loop directory's own files under `.gator/loops/` are expected residue.
 
@@ -253,7 +257,7 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 | `paused_by_architect` | Architect paused the loop | Nobody (paused until the Architect unblocks) |
 | `implementation_approved` | Reviewer approved the staged tree | Draftor makes one normal commit (done unless the Architect reopens it) |
 | `max_rounds_exceeded` | Round limit reached without approval | Nobody (done unless the Architect extends it) |
-| `turn_timed_out` | Active role did not submit in time | Nobody (done, final) |
+| `turn_timed_out` | Legacy loops only: active role did not submit in time | Nobody (done, final) |
 | `ended_by_architect` | Architect ended the loop | Nobody (done, final) |
 
 **Coding Active (3):** `implementation_drafting`, `implementation_review`, `implementation_revision`.
@@ -268,7 +272,7 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 - Reads the sketch carefully before writing
 - Produces a plan that is implementable, not aspirational
 - Addresses every finding in revision — explicitly
-- Escalates when genuinely stuck rather than producing garbage under time pressure
+- Escalates when genuinely stuck rather than producing a weak or speculative plan
 
 **Good reviewer behavior:**
 - Reviews against the sketch scope, not personal preferences
@@ -278,7 +282,7 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 - Does not invent requirements that aren't in the sketch
 
 **Bad behavior (either role):**
-- Submitting stubs or placeholders to avoid timeout
+- Submitting stubs or placeholders instead of finished work
 - Ignoring findings without explanation
 - Expanding scope beyond the sketch without escalating
 - Producing artifacts that are messages to the other model rather than standalone documents
@@ -314,7 +318,7 @@ Valid reasons to escalate:
 - You need access to information that isn't in the loop directory
 - The scope needs to change and only the Architect can authorize that
 
-When you escalate, the loop pauses. No timeout runs. The Architect reads your reason, makes a decision, and unblocks.
+When you escalate, the loop pauses until the Architect responds. The Architect reads your reason, makes a decision, and unblocks.
 
 ### Classifying uncertainty
 

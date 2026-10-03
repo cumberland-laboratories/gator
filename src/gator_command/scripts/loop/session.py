@@ -257,6 +257,25 @@ BRIEF_UNSAFE = "unsafe"
 
 # Contract flags recorded on NEW sessions (#46 migration boundary).
 CONTEXT_EVIDENCE_CONTRACT = 1
+# #47: new planning AND coding sessions use an Architect attention
+# interval instead of a participant-facing hard turn timeout.
+ATTENTION_INTERVAL_CONTRACT = 1
+# Default interval; stored in status.turn_timeout_seconds (#47 Decision 2).
+DEFAULT_ATTENTION_INTERVAL = 300
+
+
+def attention_mode(session):
+    """True when the session uses #47 attention-interval semantics.
+
+    The ONLY gate: ``contract.attention_interval`` must be an int >= 1
+    (never a bool). Nothing is inferred from dates, versions, or field
+    presence; legacy sessions keep their recorded hard-timeout behavior.
+    """
+    contract = session.get("contract") if isinstance(session, dict) else None
+    if not isinstance(contract, dict):
+        return False
+    level = contract.get("attention_interval")
+    return isinstance(level, int) and not isinstance(level, bool) and level >= 1
 
 
 def validate_brief_bytes(data):
@@ -441,7 +460,8 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     if mode == MODE_CODING and not coding:
         raise ValueError("A coding session requires its coding binding")
     now = datetime.now(tz=timezone.utc).isoformat()
-    deadline = _deadline_from_now(turn_timeout)
+    # #47: new sessions record when the turn started instead of a deadline.
+    deadline = None
 
     session = {
         "schema": SESSION_SCHEMA,
@@ -478,10 +498,15 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     }
     if brief is not None:
         session["brief"] = dict(brief)  # metadata only: artifact/sha256/bytes
+    # #47 migration boundary: every new session (both modes) uses an
+    # Architect attention interval; turn_timeout_seconds stores it.
+    session["contract"] = {"attention_interval": ATTENTION_INTERVAL_CONTRACT}
+    session["status"]["turn_started_at"] = now
+    session["status"]["attention_notified_turn"] = None
     if mode == MODE_PLANNING:
         # #46 migration boundary: only sessions created with this flag get
         # Context Checked enforcement; existing sessions never do.
-        session["contract"] = {"context_evidence": CONTEXT_EVIDENCE_CONTRACT}
+        session["contract"]["context_evidence"] = CONTEXT_EVIDENCE_CONTRACT
     if mode == MODE_CODING:
         session["mode"] = MODE_CODING
         session["status"]["stage"] = "implementation_drafting"
