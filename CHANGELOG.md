@@ -2,7 +2,9 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.21.0] — 2026-10-04
+
+Feature release for the Loop workspace. Expanding an artifact now shows the whole document as readable, safely rendered Markdown, with an exact Raw view one click away. Collapsed artifact cards no longer show or fetch excerpts ([#45](https://github.com/cumberland-laboratories/gator/issues/45)).
 
 ### Changed
 
