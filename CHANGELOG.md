@@ -2,6 +2,18 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Loop artifacts are readable in place ([#45](https://github.com/cumberland-laboratories/gator/issues/45)).** In the Loop workspace, expanding an item in **Artifacts** now shows the **whole document** as readable Markdown, with a **Raw** toggle that shows the exact artifact text.
+  - **Collapsed cards:** they no longer show an excerpt and no longer fetch content until expanded. Executive summaries stay on the timeline cards.
+  - **Rendering:** a small, closed display formatter (`views/loop-markdown.js`) that is DOM-only and has no dependencies. It renders headings, paragraphs, flat lists with visual indentation, fenced code, simple tables, one-line quotes, inline code, bold and links. Everything else is shown as literal text.
+  - **Hostile input stays inert:** artifact text is never parsed as HTML. Only absolute `http`/`https` links are live, opening in a new tab with `rel="noopener noreferrer nofollow"`. Image syntax is shown as text and never loaded, and HTML, scripts and styles appear as literal text.
+  - **Raw and Rendered:** both views come from the same fetched string. Switching uses keyboard-accessible buttons, never refetches, and the choice is kept per artifact across refreshes. Unchanged refreshes cause no redraw.
+  - **Fallbacks:** very large (> 200,000 characters) or unrenderable documents open in Raw with an explanation. The expanded panel is taller (70% of the viewport) for full-document reading.
+  - **Unchanged:** the artifact routes, storage, schemas and the Repository browser are untouched, and the offline snapshot includes the formatter.
+
 ## [2.20.0] — 2026-10-03
 
 Feature release for the governed loop. Participants are no longer timed: new loops replace the participant-facing hard turn timeout with an Architect-only **attention interval**. Time never changes loop state. The Architect gets a crash-safe, once-per-turn notice in the CLI and Dashboard, and participants work at the pace the artifact needs ([#47](https://github.com/cumberland-laboratories/gator/issues/47)). Loops created on earlier versions keep their timeout behavior.

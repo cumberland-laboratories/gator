@@ -44,8 +44,10 @@ class TestBuildSnapshot:
         assert 'src="views/fleet.js"' not in html
         assert 'src="views/repo.js"' not in html
         assert 'src="views/updates.js"' not in html
+        assert 'src="views/loop-markdown.js"' not in html
         assert 'src="views/loop.js"' not in html
         assert 'src="views/settings.js"' not in html
+        assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
         assert 'src="dashboard.js"' not in html
 
     def test_data_embedded(self):
@@ -90,6 +92,7 @@ class TestBuildSnapshot:
             'src="views/syntax.js"',
             'src="views/repo.js"',
             'src="views/updates.js"',
+            'src="views/loop-markdown.js"',
             'src="views/loop.js"',
             'src="views/settings.js"',
             'src="dashboard.js"',

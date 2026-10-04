@@ -2499,14 +2499,11 @@
   // ── rendering: artifact inspector ──────────────────────────────────────────
 
   // Current artifacts are overwritten in place by each submission; their
-  // loaded content/summaries are refreshed when the event log advances.
+  // loaded (expanded) bodies are refreshed when the event log advances.
+  // #45: collapsed artifact cards carry no excerpt and never fetch;
+  // extractSummary() is used only by the timeline cards.
   var MUTABLE_ARTIFACTS = ["plan.current.md", "findings.current.md",
                            "implementation.current.md"];
-
-  function isSummaryArtifact(name) {
-    return name.indexOf("plan.") === 0 || name.indexOf("findings.") === 0
-      || name.indexOf("implementation.") === 0 || name === "approved-plan.md";
-  }
 
   // Per-node request revisions: every summary/body fetch bumps its node's
   // revision, and a completion is applied only if it is still the latest
@@ -2518,28 +2515,6 @@
     return node[key];
   }
 
-  function loadArtifactSummary(section) {
-    var filename = section.dataset.artifact;
-    var clickGen = _state.generation;
-    var clickLoopId = _state.selectedLoopId;
-    var rev = nextRequestRev(section, "_gatorSummaryRev");
-    fetchArtifact(clickLoopId, filename).then(function (text) {
-      if (clickGen !== _state.generation) return;
-      if (!section.isConnected) return;
-      if (section._gatorSummaryRev !== rev) return;
-      var summaryEl = section.querySelector(".loop-artifact-summary");
-      if (!summaryEl) return;
-      var summary = extractSummary(text);
-      if (summary) {
-        summaryEl.innerHTML = '<div class="loop-summary-text">'
-          + escHtml(summary) + '</div>';
-      } else if (text !== null) {
-        summaryEl.innerHTML = '<div class="loop-summary-absent">'
-          + 'No executive summary supplied</div>';
-      }
-    });
-  }
-
   function loadArtifactContent(section, content) {
     var filename = section.dataset.artifact;
     var clickGen = _state.generation;
@@ -2549,13 +2524,107 @@
       if (clickGen !== _state.generation) return;
       if (!content.isConnected) return;
       if (content._gatorContentRev !== rev) return;
-      content.dataset.loaded = "1";
       if (text === null) {
+        content._gatorText = null;
+        content.dataset.loaded = "1";
         content.innerHTML = '<div class="muted">Not available.</div>';
       } else {
-        content.innerHTML = '<pre class="loop-artifact-pre">' + escHtml(text) + '</pre>';
+        renderArtifactBody(section, content, text);
       }
     });
+  }
+
+  // ── #45 expanded artifact body: Rendered (GatorLoopMarkdown) + exact Raw ──
+  //
+  // TRIPWIRE: artifact text reaches the DOM only through the formatter's
+  // DOM construction or `pre.textContent`; never innerHTML. Raw is the
+  // fetched string itself, never reconstructed from rendered nodes.
+
+  var ARTIFACT_VIEW_CAPTION = {
+    rendered: "Showing: rendered Markdown (formatting only \u2014 Raw is the exact text)",
+    raw: "Showing: raw text (exact artifact bytes)",
+  };
+
+  function renderArtifactBody(section, content, text) {
+    // Equality skip: an unchanged refetch never reparses or writes the DOM.
+    if (content._gatorText === text && content.dataset.loaded) return;
+    var raw = document.createElement("pre");
+    raw.className = "loop-artifact-pre";
+    raw.textContent = text;
+    var rendered = document.createElement("div");
+    rendered.className = "loop-md";
+    var lib = window.GatorLoopMarkdown;
+    var problem = null;
+    if (!lib || typeof lib.render !== "function") {
+      problem = "failed";
+    } else if (text.length > lib.MAX_RENDER_CHARS) {
+      problem = "large";
+    } else {
+      try {
+        rendered.appendChild(lib.render(text));
+      } catch (e) {
+        problem = e && e.name === "TooLarge" ? "large" : "failed";
+      }
+    }
+    var bar = content.querySelector(":scope > .loop-artifact-viewbar")
+      || buildArtifactViewBar(section, content);
+    content.textContent = "";
+    content.appendChild(bar);
+    content.appendChild(rendered);
+    content.appendChild(raw);
+    content._gatorText = text;
+    content._gatorProblem = problem ? { kind: problem, chars: text.length } : null;
+    content.dataset.loaded = "1";
+    applyArtifactView(section, content);
+  }
+
+  function buildArtifactViewBar(section, content) {
+    var bar = document.createElement("div");
+    bar.className = "loop-artifact-viewbar";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Artifact view");
+    ["rendered", "raw"].forEach(function (view) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "loop-artifact-viewbtn";
+      b.dataset.view = view;
+      b.textContent = view === "rendered" ? "Rendered" : "Raw";
+      b.addEventListener("click", function () {
+        if (b.disabled) return;
+        section.dataset.view = view;  // the only writer of the view choice
+        applyArtifactView(section, content);
+      });
+      bar.appendChild(b);
+    });
+    var caption = document.createElement("span");
+    caption.className = "loop-artifact-viewstate";
+    caption.setAttribute("aria-live", "polite");
+    bar.appendChild(caption);
+    return bar;
+  }
+
+  // Writes only values that differ. A render problem shows Raw without
+  // overwriting the section's chosen view.
+  function applyArtifactView(section, content) {
+    var problem = content._gatorProblem;
+    var view = problem ? "raw" : (section.dataset.view === "raw" ? "raw" : "rendered");
+    var rendered = content.querySelector(":scope > .loop-md");
+    var raw = content.querySelector(":scope > .loop-artifact-pre");
+    if (rendered && rendered.hidden !== (view !== "rendered")) rendered.hidden = view !== "rendered";
+    if (raw && raw.hidden !== (view !== "raw")) raw.hidden = view !== "raw";
+    content.querySelectorAll(".loop-artifact-viewbtn").forEach(function (b) {
+      var pressed = b.dataset.view === view ? "true" : "false";
+      if (b.getAttribute("aria-pressed") !== pressed) b.setAttribute("aria-pressed", pressed);
+      var disabled = !!problem && b.dataset.view === "rendered";
+      if (b.disabled !== disabled) b.disabled = disabled;
+    });
+    var caption = content.querySelector(".loop-artifact-viewstate");
+    var msg = !problem ? ARTIFACT_VIEW_CAPTION[view]
+      : problem.kind === "large"
+        ? "Too large to render (" + problem.chars.toLocaleString("en-US")
+          + " characters); showing raw text"
+        : "Could not render Markdown; showing raw text";
+    if (caption && caption.textContent !== msg) caption.textContent = msg;
   }
 
   function createArtifactSection(name) {
@@ -2563,7 +2632,6 @@
     section.className = "loop-artifact-section";
     section.dataset.artifact = name;
     section.innerHTML = '<button class="loop-artifact-toggle">' + escHtml(name) + '</button>'
-      + '<div class="loop-artifact-summary"></div>'
       + '<div class="loop-artifact-content" style="display:none;"></div>';
     var btn = section.querySelector(".loop-artifact-toggle");
     var content = section.querySelector(".loop-artifact-content");
@@ -2571,6 +2639,7 @@
       if (content.style.display === "none") {
         content.style.display = "block";
         if (!content.dataset.loaded) {
+          content._gatorText = null;  // panes replaced: never equality-skip
           content.innerHTML = '<div class="muted">Loading…</div>';
           loadArtifactContent(section, content);
         }
@@ -2669,16 +2738,11 @@
     }
     Object.keys(existing).forEach(function (stale) { existing[stale].remove(); });
 
-    added.forEach(function (sec) {
-      if (isSummaryArtifact(sec.dataset.artifact)) loadArtifactSummary(sec);
-    });
-
     if (refreshMutable) {
       MUTABLE_ARTIFACTS.forEach(function (name) {
         var sec = inspector.querySelector(
           ':scope > .loop-artifact-section[data-artifact="' + name + '"]');
         if (!sec || added.indexOf(sec) !== -1) return;
-        loadArtifactSummary(sec);
         var content = sec.querySelector(".loop-artifact-content");
         if (!content) return;
         if (content.style.display === "none") {

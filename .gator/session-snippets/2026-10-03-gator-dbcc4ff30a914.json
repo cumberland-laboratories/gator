@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.20.0 — Architect attention intervals replace participant turn timeouts (#47)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "loop",
+    "attention",
+    "dashboard"
+  ],
+  "commit": "dbcc4ff30a9147677b10787b866180ca619bb412",
+  "short_commit": "dbcc4ff",
+  "snippet_id": "snippet-dbcc4ff30a914",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "15847ab3b2cfc4c093894a60a1175a407d7c5dd3",
+  "started_at": "2026-10-03T21:12:53Z",
+  "ended_at": "2026-10-03T21:12:53Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-03-gator-15847ab3b2cfc.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

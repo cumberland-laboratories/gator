@@ -215,7 +215,7 @@ def test_artifact_toggle_loads_content(page, dashboard_fleet):
             }
         }
     """)
-    page.wait_for_selector(".loop-artifact-pre", timeout=10000)
+    page.wait_for_selector(".loop-artifact-pre", state="attached", timeout=10000)
     content = page.evaluate("""
         () => {
             const pre = document.querySelector('.loop-artifact-pre');
@@ -242,7 +242,7 @@ def test_artifact_html_is_escaped(page, dashboard_fleet):
             }
         }
     """)
-    page.wait_for_selector(".loop-artifact-pre", timeout=10000)
+    page.wait_for_selector(".loop-artifact-pre", state="attached", timeout=10000)
     pre_text = page.evaluate(
         "() => document.querySelector('.loop-artifact-pre').textContent")
     assert '<script>' in pre_text, (
@@ -254,6 +254,10 @@ def test_artifact_html_is_escaped(page, dashboard_fleet):
     """)
     assert scripts_in_artifact == 0, (
         "Script tags should be escaped, not rendered as DOM elements")
+    # #45: the Rendered pane is built from DOM nodes only.
+    assert page.evaluate("""() => document.querySelectorAll(
+        '.loop-artifact-content img, .loop-artifact-content iframe, '
+        + '.loop-artifact-content style').length""") == 0
 
 
 # ── terminal polling stop ────────────────────────────────────────────────────
@@ -861,13 +865,14 @@ def test_extractSummary_truncation(page, dashboard_fleet):
 
 
 def test_summary_renders_in_artifact_inspector(page, dashboard_fleet):
-    """Plan artifact with an executive summary shows it inline."""
+    """#45: executive summaries render on timeline cards (escaped text);
+    artifact cards carry no excerpt."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_function(
         "() => {"
-        "  var els = document.querySelectorAll('.loop-summary-text');"
+        "  var els = document.querySelectorAll('.loop-timeline-summary-text');"
         "  for (var i = 0; i < els.length; i++) {"
         "    if (els[i].textContent.indexOf('event-driven') !== -1) return true;"
         "  }"
@@ -876,7 +881,7 @@ def test_summary_renders_in_artifact_inspector(page, dashboard_fleet):
         timeout=10000,
     )
     summary_texts = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-summary-text'))
+        () => Array.from(document.querySelectorAll('.loop-timeline-summary-text'))
             .map(el => el.textContent)
     """)
     has_summary = any("event-driven" in t for t in summary_texts)
@@ -884,27 +889,31 @@ def test_summary_renders_in_artifact_inspector(page, dashboard_fleet):
         f"Expected executive summary with 'event-driven'; "
         f"got: {summary_texts}")
 
+    # #45: collapsed artifact cards carry no excerpt node at all.
+    assert page.evaluate("""() => document.querySelectorAll(
+        '.loop-artifact-section .loop-artifact-summary, '
+        + '.loop-artifact-section .loop-summary-text, '
+        + '.loop-artifact-section .loop-summary-absent').length""") == 0
+
 
 def test_absent_summary_shows_fallback(page, dashboard_fleet):
-    """Artifact without executive summary shows fallback message.
-
-    The active loop's findings.current.md has content but no
-    ``## Executive Summary`` heading, so it must render the fallback.
+    """#45: a timeline card whose artifact has no executive summary shows
+    the fallback message (artifact cards carry no excerpt).
     """
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_function(
-        "() => document.querySelector('.loop-summary-absent') !== null",
+        "() => document.querySelector('.loop-timeline-summary-absent') !== null",
         timeout=10000,
     )
     absent_texts = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-summary-absent'))
+        () => Array.from(document.querySelectorAll('.loop-timeline-summary-absent'))
             .map(el => el.textContent)
     """)
     assert len(absent_texts) > 0, (
-        "Expected at least one .loop-summary-absent element for "
-        "findings.current.md (which has no executive summary)")
+        "Expected at least one .loop-timeline-summary-absent element for "
+        "a findings artifact with no executive summary")
     has_fallback = any("No executive summary" in t for t in absent_texts)
     assert has_fallback, (
         f"Expected 'No executive summary' fallback; got: {absent_texts}")
@@ -2088,14 +2097,13 @@ def _open_incremental(page, dashboard_fleet, payload):
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-artifact-section", timeout=10000)
     page.wait_for_selector(".loop-event", timeout=10000)
-    # Let async executive-summary fills (timeline cards + plan/findings
-    # sections) settle so they are not counted as poll mutations.
+    # Let async executive-summary fills (timeline cards only; #45 removed
+    # the artifact-card excerpts) settle so they are not counted as poll
+    # mutations.
     page.wait_for_timeout(500)
     page.wait_for_function("""() => {
         var pending = Array.from(document.querySelectorAll(
-            '#loop-timeline .loop-event-summary, '
-            + '.loop-artifact-section[data-artifact^="plan."] .loop-artifact-summary, '
-            + '.loop-artifact-section[data-artifact^="findings."] .loop-artifact-summary'));
+            '#loop-timeline .loop-event-summary'));
         return pending.length > 0 && pending.every(el => el.childElementCount > 0);
     }""", timeout=10000)
     # Remember node identities and count main-panel mutations, ignoring the
@@ -2234,7 +2242,8 @@ def test_composed_control_survives_unrelated_status_change(page, dashboard_fleet
 
 def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_fleet):
     """An older plan.current.md response that resolves after a newer one
-    must not overwrite the refreshed summary or expanded body."""
+    must not overwrite the refreshed expanded body (#45: collapsed cards no
+    longer fetch an excerpt, so only the body fetch is held)."""
     old_text = "# Plan v1\n\n## Executive Summary\n\nOLD-SUMMARY\n\n## Body\n\nOLD-BODY\n"
     new_text = "# Plan v2\n\n## Executive Summary\n\nNEW-SUMMARY\n\n## Body\n\nNEW-BODY\n"
     held = []
@@ -2259,10 +2268,11 @@ def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_
     # Expand: the body fetch is held too.
     page.evaluate("s => document.querySelector(s + ' .loop-artifact-toggle').click()", sel)
     for _ in range(50):                 # held routes accumulate on this thread
-        if len(held) >= 2:
+        if len(held) >= 1:
             break
         page.wait_for_timeout(100)
-    assert len(held) >= 2, f"expected held summary + body fetches, got {len(held)}"
+    page.wait_for_timeout(300)
+    assert len(held) == 1, f"expected exactly the held body fetch, got {len(held)}"
 
     # A newer submission lands; refresh fetches are served NEW immediately.
     mode["hold"] = False
@@ -2271,8 +2281,9 @@ def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_
          "role": "draftor", "artifact_path": "plan.round-2.md"})
     page.wait_for_function("""s => {
         var sec = document.querySelector(s);
-        return sec && sec.querySelector('.loop-artifact-summary').textContent.indexOf('NEW-SUMMARY') !== -1
-            && sec.querySelector('.loop-artifact-content').textContent.indexOf('NEW-BODY') !== -1;
+        var c = sec && sec.querySelector('.loop-artifact-content');
+        return c && c.textContent.indexOf('NEW-SUMMARY') !== -1
+            && c.textContent.indexOf('NEW-BODY') !== -1;
     }""", arg=sel, timeout=8000)
 
     # Now the stale responses arrive.
@@ -2280,11 +2291,9 @@ def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_
         route.fulfill(status=200, content_type="text/plain; charset=utf-8", body=old_text)
     page.wait_for_timeout(800)
 
-    summary = page.evaluate(
-        "s => document.querySelector(s + ' .loop-artifact-summary').textContent", sel)
     body = page.evaluate(
         "s => document.querySelector(s + ' .loop-artifact-content').textContent", sel)
-    assert "NEW-SUMMARY" in summary and "OLD-SUMMARY" not in summary
+    assert "NEW-SUMMARY" in body and "OLD-SUMMARY" not in body
     assert "NEW-BODY" in body and "OLD-BODY" not in body
 
     page.unroute("**/" + _ACTIVE_ID + "/artifact/plan.current.md")
