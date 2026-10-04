@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.21.0 — readable expanded Loop artifacts (#45)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "dashboard",
+    "loop"
+  ],
+  "commit": "c1a5d4d824aaf751b0567089ec2099b1cf9b63e4",
+  "short_commit": "c1a5d4d",
+  "snippet_id": "snippet-c1a5d4d824aaf",
+  "session_group_key": "anthropic:89a15362-3dde-4326-895c-f6ed0bcb529e",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "7a689ab6c337744c670d0f62c98e356e6f36a719",
+  "started_at": "2026-10-03T22:15:02Z",
+  "ended_at": "2026-10-04T12:56:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-04-gator-7a689ab6c3377.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [],
+  "transcript_session_id": "89a15362-3dde-4326-895c-f6ed0bcb529e",
+  "transcript_ref": null
+}

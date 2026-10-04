@@ -1972,22 +1972,9 @@ mark.search-hit {
 .loop-md th, .loop-md td { border: 1px solid var(--color-border); padding: 4px 8px; text-align: left; }
 .loop-md-link-blocked { color: var(--color-text-muted, #666); cursor: default; }
 
-/* Timeline summaries */
-.loop-event-summary {
+/* Timeline artifact link (link-only cards; the reader is the artifact card) */
+.loop-event-link-row {
   margin-top: 4px;
-}
-.loop-timeline-summary-text {
-  padding: 4px 8px;
-  border-left: 3px solid var(--color-border);
-  font-size: 11px;
-  color: var(--color-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.loop-timeline-summary-absent {
-  font-size: 11px;
-  color: var(--color-text-muted, #888);
-  font-style: italic;
 }
 .loop-timeline-artifact-link {
   display: inline-block;

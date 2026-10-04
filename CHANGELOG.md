@@ -2,6 +2,15 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Loop timeline cards are link-only.** A submission event now shows its label and details plus a **View full artifact** link. The link opens the full rendered document in the artifact reader added in 2.21.0 ([#45](https://github.com/cumberland-laboratories/gator/issues/45)).
+  - **Removed from the timeline:** the raw-text Executive Summary excerpt and the "No executive summary supplied" fallback. Timeline cards no longer fetch artifact content at all; the artifact is fetched only when you follow the link.
+  - **Link behaviour:** the link is keyboard-focusable. Following it to an artifact that is already open keeps it open.
+  - **Unchanged:** the `## Executive Summary` section is still required in plans, findings and implementation artifacts. It is part of the full rendered document.
+
 ## [2.21.0] — 2026-10-04
 
 Feature release for the Loop workspace. Expanding an artifact now shows the whole document as readable, safely rendered Markdown, with an exact Raw view one click away. Collapsed artifact cards no longer show or fetch excerpts ([#45](https://github.com/cumberland-laboratories/gator/issues/45)).

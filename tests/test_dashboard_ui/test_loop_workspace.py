@@ -767,179 +767,144 @@ def test_poll_does_not_wipe_composed_response(page, dashboard_fleet):
     page.unroute("**/loops/*/status")
 
 
-# ── executive summary (Module 6) ──────────────────────────────────────────
+# ── timeline artifact links (link-only cards) ─────────────────────────────
+#
+# Timeline cards are link-only: an event with an artifact renders a
+# synchronous "View full artifact" link from its metadata and never fetches
+# artifact text. The full rendered document opens in the artifact reader.
 
 
-def test_extractSummary_exact_heading(page, dashboard_fleet):
-    """extractSummary finds content under ## Executive Summary."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            return fn('# Plan\\n\\n## Executive Summary\\n\\nBullet 1\\nBullet 2\\n\\n## Details\\n\\nMore');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert "Bullet 1" in result
-    assert "Bullet 2" in result
-    assert "More" not in result
+def _count_artifact_requests(page):
+    """Start counting /artifact/ requests from now; returns a getter."""
+    seen = []
+    page.on("request", lambda req: seen.append(req.url)
+            if "/artifact/" in req.url else None)
+    return lambda: list(seen)
 
 
-def test_extractSummary_case_insensitive(page, dashboard_fleet):
-    """extractSummary is case-insensitive on the heading."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            return fn('## executive summary\\n\\nLower case works\\n\\n## Next');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert "Lower case works" in result
-
-
-def test_extractSummary_extra_whitespace(page, dashboard_fleet):
-    """extractSummary tolerates extra whitespace in heading."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            return fn('##  Executive Summary  \\n\\nSpaced heading\\n\\n## Next');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert "Spaced heading" in result
-
-
-def test_extractSummary_no_heading_returns_null(page, dashboard_fleet):
-    """extractSummary returns null when no summary heading exists."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            return fn('# Plan\\n\\n## Summary\\n\\nNo exec summary here');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert result is None
-
-
-def test_extractSummary_leading_whitespace(page, dashboard_fleet):
-    """extractSummary tolerates leading whitespace before ## heading."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            return fn('# Plan\\n\\n  ## Executive Summary\\n\\nIndented heading content\\n\\n## Next');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert result == "Indented heading content"
-
-
-def test_extractSummary_truncation(page, dashboard_fleet):
-    """extractSummary truncates at 500 chars with ellipsis."""
-    _navigate_to_loop(page, dashboard_fleet)
-    result = page.evaluate("""
-        () => {
-            var fn = window.GatorViews._extractSummary;
-            if (!fn) return 'MISSING';
-            var long = 'x'.repeat(600);
-            return fn('## Executive Summary\\n\\n' + long + '\\n\\n## Next');
-        }
-    """)
-    if result == "MISSING":
-        pytest.skip("extractSummary not exported")
-    assert len(result) <= 502
-    assert result.endswith("…")
-
-
-def test_summary_renders_in_artifact_inspector(page, dashboard_fleet):
-    """#45: executive summaries render on timeline cards (escaped text);
-    artifact cards carry no excerpt."""
+def test_timeline_card_is_link_only(page, dashboard_fleet):
+    """An event with an artifact shows the link immediately and no excerpt."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
-    page.wait_for_function(
-        "() => {"
-        "  var els = document.querySelectorAll('.loop-timeline-summary-text');"
-        "  for (var i = 0; i < els.length; i++) {"
-        "    if (els[i].textContent.indexOf('event-driven') !== -1) return true;"
-        "  }"
-        "  return false;"
-        "}",
-        timeout=10000,
-    )
-    summary_texts = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-timeline-summary-text'))
-            .map(el => el.textContent)
-    """)
-    has_summary = any("event-driven" in t for t in summary_texts)
-    assert has_summary, (
-        f"Expected executive summary with 'event-driven'; "
-        f"got: {summary_texts}")
-
-    # #45: collapsed artifact cards carry no excerpt node at all.
-    assert page.evaluate("""() => document.querySelectorAll(
-        '.loop-artifact-section .loop-artifact-summary, '
-        + '.loop-artifact-section .loop-summary-text, '
-        + '.loop-artifact-section .loop-summary-absent').length""") == 0
+    page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
+    cards = page.evaluate("""() => Array.from(
+        document.querySelectorAll('#loop-timeline .loop-event[data-artifact]'))
+        .map(c => ({
+            artifact: c.dataset.artifact,
+            links: Array.from(c.querySelectorAll('.loop-timeline-artifact-link'))
+                .map(a => ({text: a.textContent, artifact: a.dataset.artifact,
+                            href: a.getAttribute('href')})),
+            excerpt: c.querySelectorAll('.loop-event-summary, '
+                + '.loop-timeline-summary-text, .loop-timeline-summary-absent').length,
+        }))""")
+    assert cards, "expected timeline events with artifacts"
+    for c in cards:
+        assert len(c["links"]) == 1, c
+        link = c["links"][0]
+        assert link["text"] == "View full artifact"
+        assert link["artifact"] == c["artifact"]
+        assert link["href"] == "#"          # keyboard-focusable
+        assert c["excerpt"] == 0, c
+    assert page.evaluate(
+        "() => window.GatorViews && window.GatorViews._extractSummary") is None
 
 
-def test_absent_summary_shows_fallback(page, dashboard_fleet):
-    """#45: a timeline card whose artifact has no executive summary shows
-    the fallback message (artifact cards carry no excerpt).
-    """
+def test_event_without_artifact_has_no_link(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
-    page.wait_for_function(
-        "() => document.querySelector('.loop-timeline-summary-absent') !== null",
-        timeout=10000,
-    )
-    absent_texts = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-timeline-summary-absent'))
-            .map(el => el.textContent)
-    """)
-    assert len(absent_texts) > 0, (
-        "Expected at least one .loop-timeline-summary-absent element for "
-        "a findings artifact with no executive summary")
-    has_fallback = any("No executive summary" in t for t in absent_texts)
-    assert has_fallback, (
-        f"Expected 'No executive summary' fallback; got: {absent_texts}")
+    page.wait_for_selector(".loop-event", timeout=10000)
+    counts = page.evaluate("""() => Array.from(
+        document.querySelectorAll('#loop-timeline .loop-event:not([data-artifact])'))
+        .map(c => c.querySelectorAll('.loop-timeline-artifact-link').length)""")
+    assert counts, "expected at least one event without an artifact"
+    assert all(n == 0 for n in counts)
 
 
-# ── timeline summaries ────────────────────────────────────────────────────
-
-
-def test_timeline_draft_event_shows_summary(page, dashboard_fleet):
-    """draft_submitted timeline event shows the plan's executive summary."""
+def test_link_present_without_executive_summary(page, dashboard_fleet):
+    """The link never depends on an Executive Summary heading: the active
+    loop's findings artifact has none, and its event still has the link."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
+    findings_links = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#loop-timeline .loop-event[data-artifact^="findings"] .loop-timeline-artifact-link'))
+        .length""")
+    assert findings_links >= 1
+
+
+def test_timeline_makes_no_artifact_requests_until_link_followed(page, dashboard_fleet):
+    """Initial render and appended events fetch nothing; following a link
+    fetches exactly that artifact once, via the card's expand path."""
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    requests = _count_artifact_requests(page)
+    try:
+        _navigate_to_loop(page, dashboard_fleet)
+        page.wait_for_selector(".loop-status-header", timeout=10000)
+        _select_loop_card(page, "widget-refactor")
+        page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
+        page.wait_for_timeout(1500)
+        assert requests() == [], "timeline/initial render must not fetch artifacts"
+
+        payload["events"].append(
+            {"event": "draft_submitted", "ts": "2026-09-22T10:06:00Z", "round": 2,
+             "role": "draftor", "artifact_path": "plan.round-2.md"})
+        page.wait_for_selector(
+            '.loop-event[data-artifact="plan.round-2.md"] .loop-timeline-artifact-link',
+            timeout=10000)
+        page.wait_for_timeout(1000)
+        assert not [u for u in requests() if "plan.round-2.md" in u], \
+            "appending a timeline event must not fetch its artifact"
+
+        page.evaluate("""() => document.querySelector(
+            '.loop-event[data-artifact="plan.round-2.md"] .loop-timeline-artifact-link').click()""")
+        page.wait_for_function("""() => {
+            var c = document.querySelector(
+                '.loop-artifact-section[data-artifact="plan.round-2.md"] .loop-artifact-content');
+            return c && c.style.display !== 'none' && c.dataset.loaded === '1';
+        }""", timeout=10000)
+        page.wait_for_timeout(300)
+        assert len([u for u in requests() if "plan.round-2.md" in u]) == 1
+    finally:
+        _unserve_mutable_loop(page)
+
+
+def test_timeline_link_keeps_open_section_open(page, dashboard_fleet):
+    """Following a link to an already-expanded artifact leaves it expanded
+    (no toggle-close) and does not refetch it."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-timeline-artifact-link", timeout=10000)
+    name = page.evaluate(
+        "() => document.querySelector('.loop-timeline-artifact-link').dataset.artifact")
+    sel = '.loop-artifact-section[data-artifact="%s"] .loop-artifact-content' % name
+    page.evaluate("() => document.querySelector('.loop-timeline-artifact-link').click()")
+    page.wait_for_function("s => { var c = document.querySelector(s);"
+                           " return c && c.dataset.loaded === '1'; }", arg=sel, timeout=10000)
+    requests = _count_artifact_requests(page)
+    page.evaluate("() => document.querySelector('.loop-timeline-artifact-link').click()")
+    page.wait_for_timeout(500)
+    assert page.evaluate("s => document.querySelector(s).style.display", sel) != "none"
+    assert not [u for u in requests() if name in u]
+
+
+def test_timeline_link_keyboard_activation(page, dashboard_fleet):
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-timeline-artifact-link", timeout=10000)
+    name = page.evaluate(
+        "() => document.querySelector('.loop-timeline-artifact-link').dataset.artifact")
+    page.focus(".loop-timeline-artifact-link")
+    page.keyboard.press("Enter")
     page.wait_for_function(
-        "() => document.querySelector('.loop-timeline-summary-text') !== null",
-        timeout=10000,
-    )
-    summary = page.evaluate("""
-        () => {
-            var ev = document.querySelector(
-                '.loop-event[data-artifact*="plan"] .loop-timeline-summary-text');
-            return ev ? ev.textContent : null;
-        }
-    """)
-    assert summary is not None, "Expected timeline summary for draft event"
-    assert "event-driven" in summary
+        "n => { var c = document.querySelector('.loop-artifact-section[data-artifact=\"'"
+        " + n + '\"] .loop-artifact-content'); return c && c.style.display !== 'none'; }",
+        arg=name, timeout=10000)
 
 
 def test_timeline_event_shows_artifact_link(page, dashboard_fleet):
@@ -957,25 +922,6 @@ def test_timeline_event_shows_artifact_link(page, dashboard_fleet):
     """)
     assert len(links) > 0, "Expected at least one artifact link in timeline"
     assert any("View full artifact" in l["text"] for l in links)
-
-
-def test_timeline_absent_summary_shows_fallback(page, dashboard_fleet):
-    """Timeline event for artifact without summary shows the fallback."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "widget-refactor")
-    page.wait_for_function(
-        "() => document.querySelector('.loop-timeline-summary-absent') !== null",
-        timeout=10000,
-    )
-    absent = page.evaluate("""
-        () => {
-            var el = document.querySelector('.loop-timeline-summary-absent');
-            return el ? el.textContent : null;
-        }
-    """)
-    assert absent is not None
-    assert "No executive summary" in absent
 
 
 def test_timeline_artifact_link_opens_inspector(page, dashboard_fleet):
@@ -2097,15 +2043,9 @@ def _open_incremental(page, dashboard_fleet, payload):
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-artifact-section", timeout=10000)
     page.wait_for_selector(".loop-event", timeout=10000)
-    # Let async executive-summary fills (timeline cards only; #45 removed
-    # the artifact-card excerpts) settle so they are not counted as poll
-    # mutations.
+    # Timeline cards are link-only (no async fills); let the first render
+    # settle so it is not counted as a poll mutation.
     page.wait_for_timeout(500)
-    page.wait_for_function("""() => {
-        var pending = Array.from(document.querySelectorAll(
-            '#loop-timeline .loop-event-summary'));
-        return pending.length > 0 && pending.every(el => el.childElementCount > 0);
-    }""", timeout=10000)
     # Remember node identities and count main-panel mutations, ignoring the
     # text-only countdown patch.
     page.evaluate("""() => {

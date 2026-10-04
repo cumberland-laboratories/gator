@@ -2386,7 +2386,12 @@
       html += '<span class="loop-event-detail">' + escHtml(detail) + '</span>';
     }
     if (artifact) {
-      html += '<div class="loop-event-summary"></div>';
+      // Link-only: rendered synchronously from event metadata. The card
+      // never fetches artifact text; the full rendered document opens in
+      // the artifact reader (#45) when the link is followed.
+      html += '<div class="loop-event-link-row">'
+        + '<a class="loop-timeline-artifact-link" href="#" data-artifact="'
+        + escHtml(artifact) + '">View full artifact</a></div>';
     }
     html += '</div>';
     return html;
@@ -2436,72 +2441,39 @@
     wireTimelineCards(Array.prototype.slice.call(timeline.children), parentEl);
   }
 
+  // Binds the "View full artifact" links only; never fetches. Following a
+  // link scrolls to the matching artifact card and expands it when it is
+  // collapsed (an already-open card is left open), so the artifact is
+  // fetched once, by the card's own expand path (#45).
   function wireTimelineCards(cards, parentEl) {
-    var clickGen = _state.generation;
-    var clickLoopId = _state.selectedLoopId;
     cards.forEach(function (card) {
-      if (!card.matches || !card.matches(".loop-event[data-artifact]")) return;
-      var filename = card.dataset.artifact;
-      fetchArtifact(clickLoopId, filename).then(function (text) {
-        if (clickGen !== _state.generation) return;
-        if (!card.isConnected) return;
-        var summaryEl = card.querySelector(".loop-event-summary");
-        if (!summaryEl) return;
-        var summary = extractSummary(text);
-        if (summary) {
-          summaryEl.innerHTML = '<div class="loop-timeline-summary-text">'
-            + escHtml(summary) + '</div>'
-            + '<a class="loop-timeline-artifact-link" data-artifact="'
-            + escHtml(filename) + '">View full artifact</a>';
-        } else if (text !== null) {
-          summaryEl.innerHTML = '<div class="loop-timeline-summary-absent">'
-            + 'No executive summary supplied</div>'
-            + '<a class="loop-timeline-artifact-link" data-artifact="'
-            + escHtml(filename) + '">View full artifact</a>';
-        }
-        var link = summaryEl.querySelector(".loop-timeline-artifact-link");
-        if (link) {
-          link.addEventListener("click", function (e) {
-            e.preventDefault();
-            var target = parentEl.querySelector(
-              '.loop-artifact-section[data-artifact="' + filename + '"] .loop-artifact-toggle');
-            if (target) {
-              target.scrollIntoView({ behavior: "smooth", block: "center" });
-              target.click();
-            }
-          });
-        }
+      var link = card.querySelector && card.querySelector(".loop-timeline-artifact-link");
+      if (!link) return;
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        openArtifactSection(parentEl, link.dataset.artifact);
       });
     });
   }
 
-  // ── executive summary extraction ────────────────────────────────────────────
-
-  var SUMMARY_MAX_CHARS = 500;
-  var SUMMARY_RE = /^\s*##\s+executive\s+summary\s*$/im;
-
-  function extractSummary(text) {
-    if (!text) return null;
-    var match = SUMMARY_RE.exec(text);
-    if (!match) return null;
-    var start = match.index + match[0].length;
-    var rest = text.slice(start);
-    var nextHeading = rest.search(/^##\s/m);
-    var body = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
-    body = body.trim();
-    if (!body) return null;
-    if (body.length > SUMMARY_MAX_CHARS) {
-      return body.slice(0, SUMMARY_MAX_CHARS) + "…";
-    }
-    return body;
+  function openArtifactSection(parentEl, name) {
+    if (!name) return;
+    var sel = window.CSS && CSS.escape ? CSS.escape(name) : name.replace(/"/g, '\\"');
+    var section = parentEl.querySelector('.loop-artifact-section[data-artifact="' + sel + '"]');
+    if (!section) return;
+    var toggle = section.querySelector(".loop-artifact-toggle");
+    var content = section.querySelector(".loop-artifact-content");
+    if (!toggle) return;
+    toggle.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (content && content.style.display === "none") toggle.click();
   }
 
   // ── rendering: artifact inspector ──────────────────────────────────────────
 
   // Current artifacts are overwritten in place by each submission; their
   // loaded (expanded) bodies are refreshed when the event log advances.
-  // #45: collapsed artifact cards carry no excerpt and never fetch;
-  // extractSummary() is used only by the timeline cards.
+  // #45: collapsed artifact cards carry no excerpt and never fetch. Timeline
+  // cards are link-only and never fetch either.
   var MUTABLE_ARTIFACTS = ["plan.current.md", "findings.current.md",
                            "implementation.current.md"];
 
@@ -2931,5 +2903,4 @@
     ensurePolling();
   };
 
-  window.GatorViews._extractSummary = extractSummary;
 })();
