@@ -1,0 +1,1 @@
+Design should be modular, and select simplicity over complexity where appropriate.

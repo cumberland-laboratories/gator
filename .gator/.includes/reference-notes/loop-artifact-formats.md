@@ -125,6 +125,7 @@ New modules that need new charters.>
 - Address every point in the sketch's Scope section
 - Respect every constraint — if you can't, say why and escalate
 - Be concrete. "Refactor the module" is not a plan. "Split `render()` into `render_html()` and `render_markdown()` in `dashboard/helpers.py`" is a plan.
+- When the repository provides `.gator/procedures/writing-implementation-plans.md`, use it to choose a proportionate planning path and make the module, simplicity, and test boundaries explicit. Reviewers use the same procedure when judging the plan.
 - If the reviewer sent findings on a previous round, address every finding explicitly — don't silently drop any
 - **Context Checked is required** on every draft and revision of planning loops created since #46: exactly one `## Context Checked` section listing the Architect brief (when present), charters, and code or artifacts you actually consulted — or `None — <reason>`. Submission rejects a missing, duplicate, empty, or bare-placeholder section. Whether the list is *adequate* is the reviewer's call.
 

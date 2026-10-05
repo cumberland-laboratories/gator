@@ -1,0 +1,3 @@
+{"event":"loop_started","detail":"Loop initialized","ts":"2026-09-30T23:58:56.113343+00:00","loop_id":"coding-loop-diff-aware-review-2026-09-30T23-58-56Z"}
+{"event":"draft_submitted","role":"draftor","round":0,"artifact_path":"plan.round-0.md","detail":"Plan draft submitted, advancing to plan_review","ts":"2026-09-30T23:59:54.094148+00:00","loop_id":"coding-loop-diff-aware-review-2026-09-30T23-58-56Z"}
+{"event":"loop_ended_by_architect","role":"architect","round":0,"detail":"Loop ended by Architect -- bug in loop token.","ts":"2026-10-01T00:01:33.629960+00:00","loop_id":"coding-loop-diff-aware-review-2026-09-30T23-58-56Z"}

@@ -1,0 +1,81 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "loop-readable-markdown-excerpts-2026-10-03T22-14-35Z",
+  "feature": "loop-readable-markdown-excerpts",
+  "mode": "planning-only",
+  "created_at": "2026-10-03T22:14:35.846426+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "plan_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 0,
+    "max_rounds": 6,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-03T22:21:48.187915+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-03T22:14:35.846426+00:00",
+    "architect_message": null,
+    "architect_response_artifact": null
+  },
+  "current": {
+    "draft": {
+      "turn_id": "draftor-001",
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.current.md"
+    },
+    "findings": {
+      "turn_id": "reviewer-001",
+      "summary": "Plan approved",
+      "artifact_path": "findings.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-10-03T22:20:10.503727+00:00",
+      "round": 0,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-10-03T22:21:48.187878+00:00",
+      "round": 0,
+      "summary": "Plan approved",
+      "artifact_path": "findings.round-0.md"
+    }
+  ],
+  "decisions": [],
+  "brief": {
+    "artifact": "architect-brief.md",
+    "sha256": "43c686c2aae0e6c7a72d61a3aac7e3732395688f5487a073445401fe870810fd",
+    "bytes": 82
+  },
+  "contract": {
+    "attention_interval": 1,
+    "context_evidence": 1
+  }
+}

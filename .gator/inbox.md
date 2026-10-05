@@ -57,6 +57,8 @@ quick session-open scanning; open the issue for full detail.
 - [#17](https://github.com/cumberland-laboratories/gator/issues/17) `new-functions-undocumented` fires on `test_*` in `tests/**` (hooks)
 - [#18](https://github.com/cumberland-laboratories/gator/issues/18) `_required_charters_for_files` vs `INDEX.md` cardinality mismatch (hooks)
 - [#19](https://github.com/cumberland-laboratories/gator/issues/19) `gator update` + gatorize overlay ship `__pycache__/*.pyc` (packaging)
+- [#34](https://github.com/cumberland-laboratories/gator/issues/34) Pre-commit override approval unscoped, consumed too early, leaves stale residue (hooks)
+- [#35](https://github.com/cumberland-laboratories/gator/issues/35) Second block after approval is un-approvable — `gator hook approve` reports no pending request (hooks) — **high severity**
 
 **Enhancements / Features:**
 
@@ -94,6 +96,27 @@ machine-local reference material.
   usage evidence creates a concrete need.
 - **`field-guides/` retirement**: deferred to lowest priority.
   Preserve current behavior; revisit later.
+
+### Loop planning-time heuristic (Architect observation 2026-09-26)
+
+With charters, a draftor needs very little time to research before
+it starts the plan. **If that research takes more than about 2
+minutes, treat it as a warning sign**: the sketch is too broad, or the
+files it touches have no usable charter. In both cases, fix the
+cause instead of lengthening the turn.
+
+Evidence from the `precommit-override-lifecycle` loop: each draft
+took about 3 minutes, and the plan was approved in round 2. The only
+slow part was `gator-pre-commit.py`, `gator-approve.py` and
+`precommit_*.py`. These map only to Cross-Cutting in `INDEX.md` and
+have no function-level charter. Both rounds of review findings (the
+dispatcher route, and the retired `.includes/scripts/` copy) came from
+that gap.
+
+Possible future work:
+- Add a scoping check at `gator loop start`. It flags sketch paths
+  with no charter coverage and sketches that span too many charters.
+- Keep escalation for Architect-owned decisions, not for more time.
 
 ### CDN-widen — watch-only
 

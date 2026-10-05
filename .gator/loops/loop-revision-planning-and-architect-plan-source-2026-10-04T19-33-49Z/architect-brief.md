@@ -1,0 +1,1 @@
+preserve the four responsibility-based modules and scale the negative tests through parameterization/reuse rather than expanding the suite mechanically.

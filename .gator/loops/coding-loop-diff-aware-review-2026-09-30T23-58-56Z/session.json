@@ -1,0 +1,66 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "coding-loop-diff-aware-review-2026-09-30T23-58-56Z",
+  "feature": "coding-loop-diff-aware-review",
+  "mode": "planning-only",
+  "created_at": "2026-09-30T23:58:56.110498+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": false
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "ended_by_architect",
+    "next_role": null,
+    "plan_status": "in_review",
+    "architect_action_required": false,
+    "blocked": true,
+    "round": 0,
+    "max_rounds": 6,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-01T00:01:33.627911+00:00",
+    "architect_message": null,
+    "architect_response_artifact": null,
+    "end_reason": "bug in loop token."
+  },
+  "current": {
+    "draft": {
+      "turn_id": "draftor-001",
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.current.md"
+    },
+    "findings": null
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-09-30T23:59:54.091673+00:00",
+      "round": 0,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-0.md"
+    },
+    {
+      "turn_id": "architect-001",
+      "role": "architect",
+      "type": "end",
+      "ts": "2026-10-01T00:01:33.627932+00:00",
+      "round": 0,
+      "summary": "bug in loop token."
+    }
+  ],
+  "decisions": []
+}

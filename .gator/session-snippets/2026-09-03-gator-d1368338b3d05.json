@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "alan",
+  "agent": "claude-opus-4-7",
+  "intent": "Bump to 2.12.0 — HTML Artifact Protocol Release A",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "version-bump",
+    "release-2-12-0"
+  ],
+  "commit": "d1368338b3d05d2cfb4cf5129d75be5dacf93915",
+  "short_commit": "d136833",
+  "snippet_id": "snippet-d1368338b3d05",
+  "session_group_key": "anthropic:b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "9f31db612d7b6a123c1274a26ca08e9a5a0bf980",
+  "started_at": "2026-09-02T23:01:19Z",
+  "ended_at": "2026-09-03T00:02:58Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-4-7",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-09-03-gator-9f31db612d7b6.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for Release A of the HTML artifact protocol track (roadmap Priority 2 pivot to artifact-first blueprints). Feature commits: `937d890` (Release A deliverables) + `af6163d` (whiteboard fix round 1) + `9f31db6` (whiteboard fix round 2).",
+    "`VERSION` 2.11.1 → 2.12.0.",
+    "`pyproject.toml` version field 2.11.1 → 2.12.0.",
+    "`CHANGELOG.md` — new `[2.12.0] — 2026-09-02` entry covering the protocol, templates, D11 triage, charter-map, authoring procedure, compat test (12 tests incl. scaffolding-exclusion), scaffolding extension, shipped-doc retargeting across both whiteboard rounds, v2.11.0 retirement, and the new `contracts.md` invariant codifying the shipped-template-path discipline.",
+    "`scripts-core-library.md` version-note extended to `..., 2.11.1 (2026-08-30), 2.12.0 (2026-09-02, current: **2.12.0** in both files)`."
+  ],
+  "transcript_session_id": "b5b8fa16-7185-4113-bc14-f18f43855bdc",
+  "transcript_ref": null
+}

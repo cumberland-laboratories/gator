@@ -68,3 +68,8 @@ GEMINI.local.md
 
 # Entry-point managed-block refresh backups (machine-local safety nets)
 *.pre-gator-update
+
+# Retired v1 override internals — never commit
+.gator/.override-meta.json
+# Retired v1 override bypass — no longer authorizes; never commit
+.gator/.override

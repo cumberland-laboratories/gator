@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "AG",
+  "agent": "claude-fable-5",
+  "intent": "v2.9.2 post-release rollforward: roadmap Done row + inbox where-we-are (CDN-poll widening named as small item)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release-2.9.2",
+    "rollforward"
+  ],
+  "commit": "81d3ae283ba21b41bf91f98f1ba64167d5663996",
+  "short_commit": "81d3ae2",
+  "snippet_id": "snippet-81d3ae283ba21",
+  "session_group_key": "anthropic:e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 13,
+  "previous_commit_in_session": "46d24e7d0806bb229d24e3a893e465e7effa5919",
+  "started_at": "2026-08-22T22:08:18Z",
+  "ended_at": "2026-08-23T19:51:51Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-fable-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-08-23-gator-46d24e7d0806b.json"
+  ],
+  "notes": [
+    "v2.9.2 shipped to production PyPI 2026-08-23: the cl-strategy field-case trio (reference-notes reclassification, --dry-run gate, dashboard error surfacing). Pipeline: Workflow B `32661912307` (Ubuntu TestPyPI smoke lost the CDN race again — 2-for-2, slow propagation; rerun green after a propagation-gated poll), promote `32662173667` (Architect-approved; production smoke passed attempt 1). GitHub Release published `--latest`. Fresh-venv verify: `gator 2.9.2` + all three fixes present in the wheel (resolver membership, dry-run gate string, dashboard alert).",
+    "Roadmap: v2.9.2 Done row (field-case narrative + widen-Workflow-B-poll named as a candidate small item). Inbox: where-we-are rolled to v2.9.2; next push remains Blueprints 2.0.",
+    "Riding: session snippet residue for `46d24e7`."
+  ],
+  "transcript_session_id": "e5f4b21d-ba35-4dba-b4ff-712f69112fca",
+  "transcript_ref": null
+}

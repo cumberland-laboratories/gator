@@ -1,0 +1,138 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "precommit-override-lifecycle-2026-09-26T19-53-44Z",
+  "feature": "precommit-override-lifecycle",
+  "mode": "planning-only",
+  "created_at": "2026-09-26T19:53:44.655723+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "plan_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 2,
+    "max_rounds": 5,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-09-26T20:03:56.969788+00:00",
+    "architect_message": null,
+    "architect_response_artifact": null
+  },
+  "current": {
+    "draft": {
+      "turn_id": "draftor-004",
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.current.md"
+    },
+    "findings": {
+      "turn_id": "reviewer-003",
+      "summary": "Plan approved",
+      "artifact_path": "findings.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "escalation",
+      "ts": "2026-09-26T19:55:08.312142+00:00",
+      "round": 0,
+      "summary": "Escalated: Draftor needs more time than the 300s turn allows. The sketch spans gator-pre-commit.py, gator-approve.py, the Enterprise bundled copy (and any byte-identity tests), ensure_repo_gitignore(), Dashboard content denial, the commit.md template, trailer readers, and charters. A grounded plan needs ~20-30 minutes of code and charter reading. Please unblock with a longer turn window (or confirm I should submit a thinner plan now and refine in revision rounds)."
+    },
+    {
+      "turn_id": "architect-001",
+      "role": "architect",
+      "type": "unblock",
+      "ts": "2026-09-26T19:55:34.847789+00:00",
+      "round": 0,
+      "summary": "Loop unblocked"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-09-26T19:57:16.092601+00:00",
+      "round": 0,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-09-26T19:59:20.999535+00:00",
+      "round": 0,
+      "summary": "Review findings submitted",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-09-26T20:00:34.314134+00:00",
+      "round": 1,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-09-26T20:01:46.692007+00:00",
+      "round": 1,
+      "summary": "Review findings submitted",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-09-26T20:02:31.275611+00:00",
+      "round": 2,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-09-26T20:03:56.969763+00:00",
+      "round": 2,
+      "summary": "Plan approved",
+      "artifact_path": "findings.round-2.md"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-1",
+      "request": {
+        "reason": "Draftor needs more time than the 300s turn allows. The sketch spans gator-pre-commit.py, gator-approve.py, the Enterprise bundled copy (and any byte-identity tests), ensure_repo_gitignore(), Dashboard content denial, the commit.md template, trailer readers, and charters. A grounded plan needs ~20-30 minutes of code and charter reading. Please unblock with a longer turn window (or confirm I should submit a thinner plan now and refine in revision rounds).",
+        "artifact_path": null,
+        "round": 0,
+        "role": "draftor",
+        "ts": "2026-09-26T19:55:08.312181+00:00"
+      },
+      "response": {
+        "message": null,
+        "artifact_path": null,
+        "ts": "2026-09-26T19:55:34.847777+00:00"
+      }
+    }
+  ]
+}
