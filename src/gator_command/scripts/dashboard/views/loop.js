@@ -140,6 +140,7 @@
     loop_reopened:          "Reopened",
     implementation_submitted: "Implementation submitted",
     implementation_approved:  "Implementation APPROVED",
+    checkpoint_approved:      "Checkpoint approved",  // #55, not terminal
     loop_paused:            "PAUSED",
     architect_interjection: "ARCHITECT",
     loop_ended_by_architect:"ENDED",
@@ -518,6 +519,53 @@
     });
   }
 
+  // ── checkpoint counters (#55) ──────────────────────────────────────────────
+  //
+  // Checkpoint coding loops show the active checkpoint with its findings
+  // round against the per-checkpoint budget, and the submission generation,
+  // INSTEAD of "Round X/Y" (status.round is informational there and may
+  // exceed max_rounds). Data comes only from the server's allowlisted
+  // projection; every other loop keeps Round X/Y.
+
+  function checkpointCounters(status) {
+    var c = status && status.mode === "coding" ? (status.coding || {}) : {};
+    var m = c.checkpoints;
+    if (!m || !m.items || !m.items.length) return null;
+    var cur = m.items[m.current] || m.items[m.items.length - 1];
+    var s = status.status || {};
+    return {
+      index: cur.index, count: m.count, title: cur.title || "",
+      findings_round: cur.findings_rounds || 0,
+      findings_budget: s.max_rounds || 0,
+      generation: (c.generation === null || c.generation === undefined)
+        ? null : c.generation,
+    };
+  }
+
+  function checkpointHeaderText(cp) {
+    return "Checkpoint " + cp.index + " of " + cp.count
+      + " \u00b7 findings round " + cp.findings_round + " of " + cp.findings_budget;
+  }
+
+  function generationText(g) {
+    return g === null || g === undefined ? "none yet" : String(g);
+  }
+
+  function sidebarCounterText(loop) {
+    var cs = loop.checkpoint_summary;
+    if (!cs) return "Round " + loop.round + "/" + loop.max_rounds;
+    return "Checkpoint " + cs.index + "/" + cs.count
+      + " \u00b7 findings " + cs.findings_round + "/" + cs.findings_budget
+      + (cs.generation === null || cs.generation === undefined
+         ? "" : " \u00b7 gen " + cs.generation);
+  }
+
+  function checkpointSuffix(ev) {
+    if (!ev || typeof ev.checkpoint_id !== "string"
+        || typeof ev.generation !== "number") return "";
+    return " (" + ev.checkpoint_id + " \u00b7 gen " + ev.generation + ")";
+  }
+
   function renderSidebarCard(loop) {
     var selected = loop.loop_id === _state.selectedLoopId && _state.mode === "inspect"
       ? " loop-sidebar-item-selected" : "";
@@ -528,7 +576,7 @@
       + '</div>'
       + '<div class="loop-card-attention">' + (loop.attention_notified ? ATTENTION_MARKER_TEXT : "") + '</div>'
       + '<div class="loop-card-meta">'
-      + '<span>Round ' + loop.round + '/' + loop.max_rounds + '</span>'
+      + '<span class="loop-card-counter">' + escHtml(sidebarCounterText(loop)) + '</span>'
       + '<span>' + escHtml(formatDate(loop.created_at)) + '</span>'
       + '</div>'
       + '</div>';
@@ -1120,7 +1168,9 @@
     if (subtitle) {
       subtitle.textContent = escHtml(feature)
         + " — " + (STAGE_LABELS[s.stage] || s.stage)
-        + " — round " + (s.round || 0) + " of " + (s.max_rounds || 0);
+        + (checkpointCounters(status)
+           ? " — " + checkpointHeaderText(checkpointCounters(status))
+           : " — round " + (s.round || 0) + " of " + (s.max_rounds || 0));
     }
 
     var draftorJoin = container.querySelector("#loop-handoff-draftor-join");
@@ -1225,6 +1275,7 @@
       status.attention ? status.attention.interval_seconds : null,
       !!(roles.draftor && roles.draftor.joined),
       !!(roles.reviewer && roles.reviewer.joined),
+      checkpointCounters(status),
     ]);
   }
 
@@ -1262,7 +1313,18 @@
       status ? status.brief_check || null : null,
       coding.source_brief || null, coding.source_brief_check || null,
       coding.source_brief_decision || null,
+      artifactSuffixes(events),
     ]);
+  }
+
+  // #55: "(cpK · gen N)" artifact suffixes, from event fields only.
+  function artifactSuffixes(events) {
+    var out = {};
+    (events || []).forEach(function (ev) {
+      var sfx = checkpointSuffix(ev);
+      if (sfx && typeof ev.artifact_path === "string") out[ev.artifact_path] = sfx;
+    });
+    return out;
   }
 
   function patchRegion(snap, name, fingerprint, render) {
@@ -1525,10 +1587,22 @@
       + '</div>';
 
     html += '<div class="loop-status-grid">';
-    html += '<div class="loop-status-item">'
-      + '<div class="loop-status-label">Round</div>'
-      + '<div class="loop-status-value">' + (s.round || 0) + ' / ' + (s.max_rounds || 0) + '</div>'
-      + '</div>';
+    var cp = checkpointCounters(status);
+    if (cp) {
+      html += '<div class="loop-status-item">'
+        + '<div class="loop-status-label">Checkpoint</div>'
+        + '<div class="loop-status-value loop-checkpoint-counter">' + escHtml(checkpointHeaderText(cp)) + '</div>'
+        + '</div>';
+      html += '<div class="loop-status-item">'
+        + '<div class="loop-status-label">Generation</div>'
+        + '<div class="loop-status-value loop-generation-counter">' + escHtml(generationText(cp.generation)) + '</div>'
+        + '</div>';
+    } else {
+      html += '<div class="loop-status-item">'
+        + '<div class="loop-status-label">Round</div>'
+        + '<div class="loop-status-value">' + (s.round || 0) + ' / ' + (s.max_rounds || 0) + '</div>'
+        + '</div>';
+    }
     html += '<div class="loop-status-item">'
       + '<div class="loop-status-label">Active Role</div>'
       + '<div class="loop-status-value">' + escHtml(s.next_role || "—") + '</div>'
@@ -1572,7 +1646,13 @@
     if (status.created_at) {
       html += '<span>Completed: ' + escHtml(formatDate(status.created_at)) + '</span>';
     }
-    html += '<span>Final round: ' + (s.round || 0) + ' / ' + (s.max_rounds || 0) + '</span>';
+    var fcp = checkpointCounters(status);
+    if (fcp) {
+      html += '<span class="loop-checkpoint-counter">' + escHtml(checkpointHeaderText(fcp)) + '</span>';
+      html += '<span class="loop-generation-counter">Generation ' + escHtml(generationText(fcp.generation)) + '</span>';
+    } else {
+      html += '<span>Final round: ' + (s.round || 0) + ' / ' + (s.max_rounds || 0) + '</span>';
+    }
     html += '</div>';
 
     return html;
@@ -1847,7 +1927,7 @@
     var s = status.status || {};
     var res = live && live.approval_resolution;
     return JSON.stringify([
-      s.stage, s.round, status.coding,
+      s.stage, s.round, s.max_rounds, status.coding,
       live ? (live._error !== undefined ? ["err", live._error]
               : [res && res.state, res && res.reason, res && res.commit,
                  live.live && live.live.ok, live.live && live.live.error]) : null,
@@ -1884,12 +1964,22 @@
     row("Approved plan", (c.source_loop_id || "—")
       + " (sha256 " + shortOid(c.plan_sha256) + ")");
     row("Base commit", shortOid(c.base_head));
+    var cps = c.checkpoints && c.checkpoints.items ? c.checkpoints : null;
+    var cpc = checkpointCounters(status);
+    if (cpc) {
+      var act = cps.items[cps.current] || {};
+      row("Checkpoint", checkpointHeaderText(cpc) + " \u2014 " + (act.title || "")
+        + " (base tree " + shortOid(act.base_tree) + ")");
+      row("Generation", generationText(cpc.generation));
+    }
     if (g) {
       var counts = g.changed_by_status || {};
       var parts = Object.keys(counts).sort().map(function (k) {
         return k + " " + counts[k];
       });
-      row("Candidate (round " + g.round + ")",
+      row(cpc && g.checkpoint_id
+            ? "Candidate (" + g.checkpoint_id + " \u00b7 gen " + g.generation + ")"
+            : "Candidate (round " + g.round + ")",
         "staged tree " + shortOid(g.staged_tree) + " on HEAD "
         + shortOid(g.current_head)
         + (g.detached ? " (detached)" : (g.branch
@@ -1909,6 +1999,24 @@
     var html = '<div class="loop-coding">'
       + '<div class="section-title" style="margin-top:16px;">Coding candidate</div>'
       + rows.join("");
+
+    if (cpc) {
+      // Progress as text + glyph + weight, never colour alone.
+      html += '<ol class="loop-checkpoint-list">';
+      cps.items.forEach(function (it) {
+        var state = it.state === "approved" ? "approved"
+          : (it.state === "active" ? "active" : "pending");
+        var glyph = state === "approved" ? "\u2713" : (state === "active" ? "\u25cf" : "\u25cb");
+        var text = state === "approved"
+          ? "approved" + (it.accepted_tree ? " (tree " + shortOid(it.accepted_tree) + ")" : "")
+          : (state === "active" ? "active" : "not started");
+        html += '<li class="loop-checkpoint-item" data-state="' + state + '">'
+          + '<span class="loop-checkpoint-glyph" aria-hidden="true">' + glyph + '</span> '
+          + '<span class="loop-checkpoint-name">' + escHtml((it.id || "") + " " + (it.title || "")) + '</span>'
+          + ' \u2014 <span class="loop-checkpoint-state">' + escHtml(text) + '</span></li>';
+      });
+      html += '</ol>';
+    }
 
     if (g && g.residue_other_count > 0) {
       html += '<div class="loop-coding-warning"><strong>Note:</strong> '
@@ -2367,7 +2475,7 @@
 
   function eventCardHtml(ev) {
     var eventType = ev.event || ev.type || "unknown";
-    var label = EVENT_LABELS[eventType] || eventType;
+    var label = (EVENT_LABELS[eventType] || eventType) + checkpointSuffix(ev);
     var isTerminalEv = !!TERMINAL_STAGES[eventType];
     var artifact = ev.artifact_path || null;
 
@@ -2649,6 +2757,8 @@
       }
     }
 
+    var suffixes = artifactSuffixes(events);
+
     // Event-driven immutable artifacts (includes round-zero)
     var immutable = collectArtifactPaths(events || [], (status && status.decisions) || []);
     for (var i = 0; i < immutable.length; i++) {
@@ -2700,7 +2810,7 @@
         section = createArtifactSection(name);
         added.push(section);
       }
-      var want = briefLabels[name] || name;
+      var want = (briefLabels[name] || name) + (suffixes[name] || "");
       var toggle = section.querySelector(".loop-artifact-toggle");
       if (toggle && toggle.textContent !== want) toggle.textContent = want;
       if (prev.nextSibling !== section) {

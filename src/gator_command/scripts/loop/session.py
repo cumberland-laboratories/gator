@@ -260,6 +260,8 @@ CONTEXT_EVIDENCE_CONTRACT = 1
 # #47: new planning AND coding sessions use an Architect attention
 # interval instead of a participant-facing hard turn timeout.
 ATTENTION_INTERVAL_CONTRACT = 1
+# #55: new planning sessions require a '## Coding Checkpoints' section.
+CHECKPOINT_CONTRACT = 1
 # Default interval; stored in status.turn_timeout_seconds (#47 Decision 2).
 DEFAULT_ATTENTION_INTERVAL = 300
 
@@ -507,6 +509,9 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
         # #46 migration boundary: only sessions created with this flag get
         # Context Checked enforcement; existing sessions never do.
         session["contract"]["context_evidence"] = CONTEXT_EVIDENCE_CONTRACT
+        # #55 migration boundary: plans from flagged planning sessions must
+        # declare '## Coding Checkpoints'; legacy plans never are.
+        session["contract"]["coding_checkpoints"] = CHECKPOINT_CONTRACT
     if mode == MODE_CODING:
         session["mode"] = MODE_CODING
         session["status"]["stage"] = "implementation_drafting"
@@ -516,6 +521,109 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
         session["coding"].setdefault("generations", [])
         session["coding"].setdefault("approval", None)
     return session
+
+
+def checkpoint_manifest(session):
+    """The frozen ``coding.checkpoints`` manifest (#55), or None.
+
+    The single gate for checkpoint behaviour: pre-#55 coding sessions and
+    planning sessions have no manifest and keep today's transitions.
+    """
+    coding = session.get("coding") if isinstance(session, dict) else None
+    if not isinstance(coding, dict):
+        return None
+    manifest = coding.get("checkpoints")
+    if (isinstance(manifest, dict)
+            and manifest.get("contract") == CHECKPOINT_CONTRACT
+            and isinstance(manifest.get("items"), list)
+            and manifest["items"]
+            and isinstance(manifest.get("current"), int)
+            and 0 <= manifest["current"] < len(manifest["items"])):
+        return manifest
+    return None
+
+
+def active_checkpoint(session):
+    """``(index, item, count)`` for the active checkpoint, or None."""
+    manifest = checkpoint_manifest(session)
+    if manifest is None:
+        return None
+    i = manifest["current"]
+    return i, manifest["items"][i], len(manifest["items"])
+
+
+def declared_checkpoint(session):
+    """``active_checkpoint`` for a DECLARED manifest only, else None.
+
+    An implicit manifest (one ``Full implementation`` checkpoint for a
+    pre-#55 plan) tracks state but keeps the legacy participant surface:
+    ``--checkpoint`` optional and the pre-#55 Commit State / Reviewed
+    Candidate rendering (its checkpoint base is the loop base, so the
+    checkpoint diff IS the loop diff).
+    """
+    manifest = checkpoint_manifest(session)
+    if manifest is None or manifest.get("source") != "declared":
+        return None
+    return active_checkpoint(session)
+
+
+def checkpoint_summary(session):
+    """Compact counters for a DECLARED checkpoint loop, else None (#55).
+
+    ``{index, count, id, title, state, findings_round, findings_budget,
+    generation}`` built from validated primitives only: ``index`` is
+    1-based, ``findings_round`` is the active item's ``findings_rounds``,
+    ``findings_budget`` is ``max_rounds`` (the per-checkpoint budget) and
+    ``generation`` is the latest submission index, or None before the
+    first. Display surfaces use this INSTEAD of ``Round X/Y``, which is
+    informational only for checkpoint loops. Implicit (legacy-plan)
+    manifests return None and keep the Round display.
+    """
+    active = declared_checkpoint(session)
+    if active is None:
+        return None
+    idx, item, count = active
+    gens = session.get("coding", {}).get("generations")
+    n_gens = len(gens) if isinstance(gens, list) else 0
+    rounds = item.get("findings_rounds")
+    budget = session.get("status", {}).get("max_rounds")
+    title = item.get("title")
+    return {
+        "index": idx + 1,
+        "count": count,
+        "id": item.get("id") if isinstance(item.get("id"), str) else None,
+        "title": title if isinstance(title, str) else "",
+        "state": item.get("state") if isinstance(item.get("state"), str)
+        else None,
+        "findings_round": rounds if isinstance(rounds, int)
+        and not isinstance(rounds, bool) else 0,
+        "findings_budget": budget if isinstance(budget, int)
+        and not isinstance(budget, bool) else 0,
+        "generation": n_gens - 1 if n_gens else None,
+    }
+
+
+def build_checkpoint_manifest(items, source, base_tree):
+    """A fresh manifest from parsed ``items`` (``{id, title, scope,
+    verify}``); the first item is active on ``base_tree``."""
+    out = []
+    for i, it in enumerate(items):
+        out.append({
+            "id": it["id"], "title": it["title"],
+            "scope": it["scope"], "verify": it["verify"],
+            "state": "active" if i == 0 else "pending",
+            "base_tree": base_tree if i == 0 else None,
+            "findings_rounds": 0, "accepted": None,
+        })
+    return {"contract": CHECKPOINT_CONTRACT, "source": source,
+            "current": 0, "items": out}
+
+
+IMPLICIT_CHECKPOINT = {
+    "id": "cp1", "title": "Full implementation",
+    "scope": "The whole approved plan.",
+    "verify": "As stated in the approved plan.",
+}
 
 
 def load_session(loop_dir):

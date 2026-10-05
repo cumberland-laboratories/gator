@@ -4,6 +4,20 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Added
+
+- **Modular checkpoints in coding loops ([#55](https://github.com/cumberland-laboratories/gator/issues/55)).** A coding loop now reviews real code one responsibility at a time, instead of in a single end-of-loop review.
+  - **Plans declare checkpoints:** plans from new planning loops must include a `## Coding Checkpoints` section, written as `N. **Title** — scope. Verify: verification.` (at most 12 items). A small fix declares one checkpoint, and the submission error shows that one-line form. Titles must name a responsibility, never a file. The planning Reviewer judges whether the checkpoints are meaningful.
+  - **One checkpoint at a time:** when a coding loop starts, the checkpoints are frozen from the approved plan. The Draftor stages and submits only the active checkpoint, with `submit-implementation --checkpoint <id>`. The Reviewer reviews exactly that checkpoint's diff (`git diff <checkpoint base> <staged tree>`), and paths revisited from an earlier checkpoint are marked.
+  - **Approval:** approving a checkpoint that is not the last opens the next one. It never authorizes a commit and never changes Git. Only the final checkpoint's approval leads to the existing one-commit handoff.
+  - **Two counters:** the findings round is per checkpoint, against the round budget. The **generation** counts submissions and names the artifacts. The CLI, `gator loop list` and the Dashboard header and sidebar show "Checkpoint K of N · findings round r of b" and "Generation g" for these loops, never a misleading "Round 3/2".
+  - **Dashboard:** the coding panel adds a checkpoint progress list (✓ approved, ● active, ○ not started). Timeline and artifact labels add "(cpK · gen g)", and a new non-terminal **Checkpoint approved** event appears in the timeline.
+  - **Compatibility:** coding loops started from plans of earlier planning loops get one implicit checkpoint and keep today's behaviour and `Round X/Y` display. Status and list JSON gain additive `checkpoint`, `checkpoints`, `generation` and `checkpoint_summary` keys.
+
+### Fixed
+
+- **Reopened coding loops no longer overwrite evidence ([#55](https://github.com/cumberland-laboratories/gator/issues/55)).** Coding artifacts are now named by submission generation. Before, resubmitting after a reopen overwrote the approved round's `implementation.round-N.md` and `findings.round-N.md`. Names are otherwise unchanged.
+
 ### Changed
 
 - **Loop timeline cards are link-only.** A submission event now shows its label and details plus a **View full artifact** link. The link opens the full rendered document in the artifact reader added in 2.21.0 ([#45](https://github.com/cumberland-laboratories/gator/issues/45)).

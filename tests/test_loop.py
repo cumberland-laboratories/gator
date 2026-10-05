@@ -61,10 +61,13 @@ def loop_env(tmp_path, monkeypatch):
 
     draft_file = tmp_path / "plan.md"
     # Fixture sessions carry the #46 context-evidence contract, so drafts
-    # must include a populated ## Context Checked section.
+    # must include a populated ## Context Checked section and (#55) a
+    # ## Coding Checkpoints section.
     draft_file.write_text(
         "# Plan\n\n## Context Checked\n\n- scripts-loop charter\n\n"
-        "Implementation details.\n", encoding="utf-8")
+        "Implementation details.\n\n"
+        "## Coding Checkpoints\n\n1. **Fix** \u2014 Implement the change. "
+        "Verify: the focused test.\n", encoding="utf-8")
 
     findings_file = tmp_path / "findings.md"
     findings_file.write_text("# Findings\n\n1. Fix error handling.\n", encoding="utf-8")

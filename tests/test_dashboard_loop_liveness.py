@@ -76,7 +76,8 @@ def env(tmp_path, monkeypatch):
     loop_session.save_tokens(loop_dir, stored)
     draft = repo / "plan.md"
     draft.write_text("# Plan\n\n## Executive Summary\n\n- x\n\n"
-                     "## Context Checked\n\n- scripts-loop charter\n", encoding="utf-8")
+                     "## Context Checked\n\n- scripts-loop charter\n"
+                     "\n## Coding Checkpoints\n\n1. **Fix** \u2014 Implement the change. Verify: the focused test.\n", encoding="utf-8")
     monkeypatch.chdir(repo)
 
     rk = _repo_key(repo)

@@ -2089,6 +2089,11 @@ mark.search-hit {
    (✓ ● ⚠ ?) + weight/style — never hue alone. */
 .loop-coding-row { font-size: 12px; line-height: 1.6; }
 .loop-coding-label { font-weight: 600; margin-right: 6px; }
+/* #55 checkpoint progress: glyph + text + weight, never colour alone */
+.loop-checkpoint-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; line-height: 1.6; }
+.loop-checkpoint-item[data-state="active"] { font-weight: 600; }
+.loop-checkpoint-item[data-state="pending"] { color: var(--color-text-muted, #666); }
+.loop-checkpoint-glyph { display: inline-block; width: 1.2em; text-align: center; }
 .loop-coding-value { font-family: var(--font-mono, monospace); }
 .loop-coding-warning,
 .loop-coding-resolution {

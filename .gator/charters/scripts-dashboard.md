@@ -148,6 +148,10 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
   - **Unblock:** `timeout` on an attention loop maps `submit.ATTENTION_TIMEOUT_REFUSAL` (raised in the lock, nothing written) to a 400 with Dashboard wording ("…no participant turn window to change. Unblock without a timeout.").
   - **Prompt:** the `/prompt` join text is pinned free of time language.
   - **List:** `/loops` items gain `attention_notified`, a marker-only check (`attention_notified_turn == turn_started_at`) with no event scan, for the sidebar marker (M5).
+! **#55 checkpoint summary.** For a **declared** checkpoint coding loop only, `/loops` items gain `checkpoint_summary: {index, count, findings_round, findings_budget, generation}`.
+  - It comes from `loop.session.checkpoint_summary(session)`, copied field by field from validated primitives, as a cheap session read with no artifact, event or Git access.
+  - Planning, legacy coding and implicit-manifest items have no `checkpoint_summary`.
+  - The item's `round` and `max_rounds` stay for compatibility and are informational for checkpoint loops: `round` may exceed `max_rounds` there, so the sidebar must render the summary instead.
 ! **Coding-loop start (#43 M2a):** `POST /loops/start` accepts `mode` (`planning` by default, or `coding`).
   - **Coding** requires a string `from_loop`, rejects `sketch_path`, and accepts an optional `source_brief` (`keep` / `drop`) and `brief`. It calls `init_loop(feature, None, …, mode="coding", from_loop=…, brief_text=…, source_brief=…)` under the existing `start.lock` and single-active guard.
   - **The guarded successor is the ONLY source validator:** canonical id, planning mode, `plan_approved`, plan present, Git base, and brief keep/drop integrity, all atomic. Its `ValueError` returns 400 with the message, including the corrupt-source "--source-brief drop" hint.
@@ -224,6 +228,9 @@ File: src/gator_command/scripts/gator-dashboard.py
 
   The response is `{ok, stage, round, watcher, watcher_detail}`. The reopen stays durable even when `watcher == "failed"`, and the response says so honestly.
 - **Status (`_handle_loop_status`):** a coding session's `coding` block is replaced by the slim allowlisted `submit.coding_status_view()`: ids, counts, review verdicts and approval. The raw path lists in the generations are never shipped on the 3 s poll.
+  - **#55 additions** (all additive): `generation` (the latest index, or null); per-generation `generation` and `checkpoint_id`; and `checkpoints` (`_checkpoints_view`) for **declared** manifests only (null otherwise): `{source, current, count, items: [{id, index, title, state, base_tree, accepted_tree (null once invalidated), findings_rounds}]}`.
+  - The checkpoint title is plain text. A checkpoint's `scope` and `verify` text are **never** projected.
+  - There are no route or allowlist changes: generation-named artifacts fit `implementation.round-N.md` / `findings.round-N.md`.
 - **Artifact allowlist:** gains `approved-plan.md`, `implementation.current.md`, and `implementation.round-N.md`.
 -> `loop.gitsnap.snapshot()`, `loop.state_machine.resolve_approval()`, `loop.submit.split_residue()` / `coding_status_view()`, `loop.host.reopen_loop()`, `_ensure_loop_watcher()`
 

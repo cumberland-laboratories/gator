@@ -21,6 +21,7 @@ if _LOOP_DIR not in sys.path:
 
 from session import _deadline_from_now, loop_mode, MODE_PLANNING, MODE_CODING
 from session import attention_mode
+from session import checkpoint_manifest
 
 
 def _begin_turn(session, turn_timeout):
@@ -428,7 +429,17 @@ def advance_extended(session, rounds, turn_timeout, message=None):
         raise ValueError(f"rounds must be a positive integer, got {rounds!r}")
 
     previous = status["max_rounds"]
-    if status.get("round", 0) > previous:
+    manifest = checkpoint_manifest(session)
+    if manifest is not None:
+        # #55: the budget is the active checkpoint's findings rounds;
+        # status.round is informational (total findings across the loop).
+        active = manifest["items"][manifest["current"]]
+        if active.get("findings_rounds", 0) > previous:
+            raise ValueError(
+                f"Inconsistent session: checkpoint {active.get('id')} has "
+                f"{active.get('findings_rounds')} findings rounds, above "
+                f"max_rounds {previous}")
+    elif status.get("round", 0) > previous:
         raise ValueError(
             f"Inconsistent session: round {status.get('round')} exceeds "
             f"max_rounds {previous}")
@@ -483,10 +494,19 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
     """Coding (#41): Reviewer verdict on the latest candidate generation.
 
     approved: implementation_review -> implementation_approved (terminal,
-      resumable only via reopen); ``approval`` ({tree, head, round, ts}) is
-      stored as ``coding.approval``.
+      resumable only via reopen); ``approval`` ({tree, head, round,
+      generation, ts}) is stored as ``coding.approval``.
     findings: round += 1; at the ceiling -> max_rounds_exceeded (terminal,
       extendable #39); otherwise -> implementation_revision (Draftor).
+
+    Checkpoint loops (#55, a ``coding.checkpoints`` manifest): approval of a
+    NON-final checkpoint records ``accepted`` on it, activates the next
+    item on that accepted tree, and returns to implementation_drafting for
+    the Draftor — ``coding.approval`` stays untouched, so nothing is
+    authorized to commit. Only the final checkpoint's approval takes the
+    path above. The findings ceiling is the active checkpoint's
+    ``findings_rounds`` against ``max_rounds`` (the per-checkpoint budget);
+    ``status.round`` still increments but is informational only.
     """
     if loop_mode(session) != MODE_CODING:
         raise ValueError("Only a coding loop accepts implementation reviews")
@@ -496,10 +516,34 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
             f"No implementation is under review (stage: {status.get('stage')})")
     now = datetime.now(tz=timezone.utc).isoformat()
     table = stages_for(session)
+    manifest = checkpoint_manifest(session)
+    active = (manifest["items"][manifest["current"]]
+              if manifest is not None else None)
 
     if approved:
         if not isinstance(approval, dict) or not approval.get("tree"):
             raise ValueError("An approval must bind the reviewed tree")
+        if active is not None:
+            active["accepted"] = {"tree": approval["tree"],
+                                  "head": approval.get("head"),
+                                  "generation": approval.get("generation"),
+                                  "ts": approval.get("ts") or now}
+            active["state"] = "approved"
+            if manifest["current"] + 1 < len(manifest["items"]):
+                nxt = manifest["items"][manifest["current"] + 1]
+                nxt["state"] = "active"
+                nxt["base_tree"] = active["accepted"]["tree"]
+                manifest["current"] += 1
+                status["stage"] = "implementation_drafting"
+                status["next_role"] = table["role_by_stage"][
+                    "implementation_drafting"]
+                status["plan_status"] = "implementation"
+                status["unresolved_findings"] = 0
+                status["architect_message"] = None
+                status["architect_response_artifact"] = None
+                _begin_turn(session, turn_timeout)
+                status["last_updated"] = now
+                return session
         session["coding"]["approval"] = dict(approval)
         status["stage"] = "implementation_approved"
         status["next_role"] = None
@@ -517,7 +561,12 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
     status["architect_message"] = None
     status["architect_response_artifact"] = None
     status["last_updated"] = now
-    if status["round"] >= status["max_rounds"]:
+    if active is not None:
+        active["findings_rounds"] = active.get("findings_rounds", 0) + 1
+        spent = active["findings_rounds"]
+    else:
+        spent = status["round"]
+    if spent >= status["max_rounds"]:
         status["stage"] = "max_rounds_exceeded"
         status["next_role"] = None
         status["plan_status"] = "max_rounds"
@@ -585,10 +634,14 @@ def advance_reopened(session, turn_timeout, message=None):
     """Reopen an approved coding loop for revision (#41).
 
     implementation_approved -> implementation_revision (next_role=draftor)
-    with a fresh deadline. The round counter is kept (the next submission
-    is round + 1) and any approval record is marked invalidated so a stale
-    approval can never be read as current. Raises ValueError when the
-    session is not a coding loop in ``implementation_approved``.
+    with a fresh deadline. The round counter is kept unchanged; the next
+    submission is named by its generation (``len(coding.generations)``),
+    so it never overwrites the approved round's artifacts. Any approval
+    record is marked invalidated so a stale approval can never be read as
+    current. In a checkpoint loop (#55) the final checkpoint — always the
+    active one at approval — is reactivated with its ``accepted`` record
+    invalidated; earlier checkpoints are never reopened. Raises ValueError
+    when the session is not a coding loop in ``implementation_approved``.
     """
     status = session["status"]
     if loop_mode(session) != MODE_CODING:
@@ -602,6 +655,12 @@ def advance_reopened(session, turn_timeout, message=None):
     approval = session.get("coding", {}).get("approval")
     if isinstance(approval, dict):
         approval["invalidated_at"] = now
+    manifest = checkpoint_manifest(session)
+    if manifest is not None:
+        last = manifest["items"][manifest["current"]]
+        if isinstance(last.get("accepted"), dict):
+            last["accepted"]["invalidated_at"] = now
+        last["state"] = "active"
 
     table = stages_for(session)
     status["stage"] = "implementation_revision"

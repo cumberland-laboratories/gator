@@ -127,7 +127,10 @@ class TestStatusProjection:
                           "base_tree", "generations", "approval",
                           # #43: strict source-brief metadata + integrity
                           "source_brief", "source_brief_check",
-                          "source_brief_decision"}
+                          "source_brief_decision",
+                          # #55: declared-checkpoint projection + generation
+                          "checkpoints", "generation"}
+        assert c["checkpoints"] is None and c["generation"] == 0
         assert c["source_brief"] is None
         assert c["source_brief_check"] == "absent"
         assert c["source_brief_decision"] == "none_available"
@@ -271,3 +274,65 @@ class TestReopen:
         status, _, _ = req(url(env, "/reopen"), "POST", {"message": "x"})
         assert status == 409
         assert (env["loop_dir"] / "session.json").read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# #55 M4: checkpoint projection on /status and checkpoint_summary on /loops
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def cp_env(env, tmp_path):
+    """env's legacy coding loop ended; a declared two-checkpoint loop driven
+    to max_rounds_exceeded on cp2 (status.round 3 > max_rounds 2)."""
+    from test_loop_checkpoints import TWO_CP_PLAN, _drive_to_budget
+    loop_submit.handle_end(env["tok"]["architect"], "done",
+                           loop_dir=env["loop_dir"])
+    src_id, _ = make_planning_source(env["repo"], plan=TWO_CP_PLAN,
+                                     legacy=False, feature="cp-source")
+    cp_id, cp_dir = start_coding(env["repo"], src_id, feature="cp-feature",
+                                 max_rounds=2)
+    c = {"repo": env["repo"], "loop_dir": cp_dir, "tok": _tokens(cp_dir),
+         "art": env["art"], "tmp": tmp_path}
+    _drive_to_budget(c)
+    return dict(env, cp_id=cp_id, cp_src_id=src_id)
+
+
+@pytest.mark.parametrize("which", ["checkpoint", "legacy-coding", "planning"])
+def test_checkpoint_projection_and_list_summary(cp_env, which):
+    loop_id = {"checkpoint": cp_env["cp_id"], "legacy-coding": cp_env["loop_id"],
+               "planning": cp_env["cp_src_id"]}[which]
+    code, text, _ = req(url(cp_env, "/status", loop_id))
+    assert code == 200
+    body = json.loads(text)
+    code, ltext, _ = req(cp_env["base"].rstrip("/"))
+    assert code == 200
+    item = [i for i in json.loads(ltext)["loops"] if i["loop_id"] == loop_id][0]
+
+    if which != "checkpoint":
+        assert "checkpoint_summary" not in item
+        if which == "legacy-coding":
+            assert body["coding"]["checkpoints"] is None
+        return
+
+    cps = body["coding"]["checkpoints"]
+    assert cps["source"] == "declared" and cps["current"] == 1
+    assert cps["count"] == 2
+    cp1, cp2 = cps["items"]
+    assert set(cp1) == {"id", "index", "title", "state", "base_tree",
+                        "accepted_tree", "findings_rounds"}
+    assert (cp1["id"], cp1["title"], cp1["state"]) == ("cp1", "Widget core",
+                                                       "approved")
+    assert cp1["accepted_tree"] == cp2["base_tree"]
+    assert (cp2["state"], cp2["findings_rounds"]) == ("active", 2)
+    assert body["coding"]["generation"] == 3
+    assert [g["generation"] for g in body["coding"]["generations"]] == [0, 1, 2, 3]
+    assert [g["checkpoint_id"] for g in body["coding"]["generations"]] == \
+        ["cp1", "cp1", "cp2", "cp2"]
+    # Title only: scope and verify are never projected.
+    assert "Wire the widget in" not in text and "integration test" not in text
+    # Global round 3 exceeds the budget 2; the summary reports the budget.
+    assert (item["round"], item["max_rounds"]) == (3, 2)
+    assert item["checkpoint_summary"] == {
+        "index": 2, "count": 2, "findings_round": 2, "findings_budget": 2,
+        "generation": 3}
+    assert "Wire the widget in" not in ltext

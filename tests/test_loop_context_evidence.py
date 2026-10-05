@@ -28,6 +28,8 @@ GOOD_PLAN = (
     "# Plan\n\n## Executive Summary\n\n- x\n\n"
     "## Context Checked\n\n- `.gator/charters/scripts-loop.md`\n"
     "- `src/gator_command/scripts/loop/submit.py`\n\n"
+    "## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
+    "Verify: the focused test.\n\n"
     "## Approach\n\nDo the thing.\n"
 )
 OLD_PLAN = "# Plan\n\n## Executive Summary\n\n- x\n\n## Approach\n\nDo it.\n"
@@ -271,6 +273,9 @@ class TestSwapRace:
         draft = _write(tmp_path, "plan.md", OLD_PLAN)
         monkeypatch.setattr(loop_submit, "_context_evidence_required",
                             _required_only_in_lock())
+        # Isolate the Context Checked gate from the #55 checkpoint gate.
+        monkeypatch.setattr(loop_submit, "_coding_checkpoints_required",
+                            lambda session: False)
         real_lock = loop_submit.with_session_lock
 
         def swapping_lock(d, fn):

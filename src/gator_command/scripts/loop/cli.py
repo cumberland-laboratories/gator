@@ -121,6 +121,7 @@ def _cmd_status(args):
         }
         _strip_participant_time(session, out)
         out.update(_briefs_json(session, loop_dir))
+        out.update(_checkpoints_json(session))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
             out["approval_resolution"] = res
@@ -153,7 +154,7 @@ def _cmd_status(args):
         else:
             print(f"  Waiting for: {next_role}")
 
-        print(f"  Round: {rnd}/{max_rnd}")
+        _print_counters(session)
 
     # Exit codes: 0 = your turn, 1 = not your turn, 2 = blocked/terminal
     if is_terminal(session) or is_paused(session):
@@ -202,6 +203,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         if attention is not None:
             out["attention"] = attention
         out.update(_briefs_json(session, loop_dir))
+        out.update(_checkpoints_json(session))
         res = _approval_resolution(session, loop_dir)
         if res is not None:
             out["approval_resolution"] = res
@@ -228,7 +230,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
                 print("  Continue with more rounds (requires a reason):")
                 print(f"    gator loop extend --token {args.token} --rounds <1-20> --message \"...\"")
 
-        print(f"  Round: {rnd}/{max_rnd}")
+        _print_counters(session)
         print(f"  Draftor: {'joined' if roles.get('draftor', {}).get('joined') else 'waiting'}")
         print(f"  Reviewer: {'joined' if roles.get('reviewer', {}).get('joined') else 'waiting'}")
 
@@ -399,6 +401,50 @@ def _mode_of(session):
         return str(session.get("mode"))
 
 
+def _checkpoint_line(cp):
+    return (f"Checkpoint: {cp['index']} of {cp['count']} -- {cp['title']} "
+            f"(findings round {cp['findings_round']} of "
+            f"{cp['findings_budget']})")
+
+
+def _print_counters(session):
+    """``Round: X/Y``, or for a declared checkpoint loop (#55) the two
+    separate counters: the active checkpoint with its findings round
+    against the per-checkpoint budget, and the submission generation.
+    ``status.round`` is informational there and never shown against
+    ``max_rounds``."""
+    from session import checkpoint_summary
+    cp = checkpoint_summary(session)
+    if cp is None:
+        status = session["status"]
+        print(f"  Round: {status.get('round', 0)}/{status.get('max_rounds', 0)}")
+        return
+    print(f"  {_checkpoint_line(cp)}")
+    gen = cp["generation"]
+    print(f"  Generation: {gen if gen is not None else 'none yet'}")
+
+
+def _checkpoints_json(session):
+    """Additive status JSON keys for a declared checkpoint loop (#55):
+    ``checkpoint``, ``checkpoints`` (id/index/title/state, never scope or
+    verify) and ``generation``. ``round`` / ``max_rounds`` stay present
+    for compatibility and are informational for these loops."""
+    from session import checkpoint_summary, checkpoint_manifest
+    cp = checkpoint_summary(session)
+    if cp is None:
+        return {}
+    items = checkpoint_manifest(session)["items"]
+    return {
+        "checkpoint": {k: cp[k] for k in (
+            "index", "count", "id", "title", "state",
+            "findings_round", "findings_budget")},
+        "checkpoints": [{"id": it.get("id"), "index": i + 1,
+                         "title": it.get("title"), "state": it.get("state")}
+                        for i, it in enumerate(items)],
+        "generation": cp["generation"],
+    }
+
+
 def _print_action_prompt(session, role, loop_dir, token):
     """Print the action hint and next-step command for the active role."""
     stage = session["status"]["stage"]
@@ -533,7 +579,12 @@ def _print_approval_resolution(res, token=None):
 
 def _print_coding_action_prompt(session, role, loop_dir, token):
     """Coding-mode action hint (#41). The staged tree is the candidate."""
+    from session import declared_checkpoint
     stage = session["status"]["stage"]
+    active = declared_checkpoint(session)
+    if active is not None:
+        _print_checkpoint_action_prompt(session, role, loop_dir, token, active)
+        return
     if role == "draftor":
         if stage == "implementation_drafting":
             print("  Action: Implement the approved plan, stage the intended change")
@@ -560,6 +611,52 @@ def _print_coding_action_prompt(session, role, loop_dir, token):
         print(f"    gator loop submit-review --token {token} --file <review.md> --approve")
 
 
+def _print_checkpoint_action_prompt(session, role, loop_dir, token, active):
+    """Declared checkpoint loops (#55): name the active checkpoint, its
+    base, the exact checkpoint diff and both counters."""
+    idx, item, count = active
+    stage = session["status"]["stage"]
+    head = f"checkpoint {idx + 1} of {count} -- {item['title']}"
+    if role == "draftor":
+        if stage == "implementation_revision":
+            print(f"  Action: Revise {head}, based on reviewer findings.")
+            print(f"  Findings: {loop_dir / 'findings.current.md'}")
+        else:
+            print(f"  Action: Implement {head}.")
+        print(f"  Scope: {item['scope']}")
+        print(f"  Verify: {item['verify']}")
+        print(f"  Checkpoint base tree: {item['base_tree']}")
+        print("  Stage only this checkpoint's change on top of the approved")
+        print("  checkpoints (code, charters, and commit_draft material); do not")
+        print("  commit. Later checkpoints come after this one is approved.")
+        print(f"  Approved plan: {loop_dir / 'approved-plan.md'}")
+        print()
+        print("  Next step:")
+        print(f"    gator loop submit-implementation --token {token} "
+              f"--checkpoint {item['id']} --file <implementation.md>")
+    elif role == "reviewer":
+        gens = session.get("coding", {}).get("generations") or []
+        g = len(gens) - 1
+        print(f"  Action: Review real code changed for {head} (generation {g}).")
+        print(f"  Implementation: {loop_dir / 'implementation.current.md'}")
+        if gens:
+            snap = gens[-1]["snapshot"]
+            base = (gens[-1].get("checkpoint") or {}).get(
+                "base_tree", item["base_tree"])
+            print(f"  Candidate staged tree: {snap['staged_tree']}")
+            print(f"  Review exactly this checkpoint: git diff {base} {snap['staged_tree']}")
+        if idx + 1 < count:
+            print("  Approving this checkpoint opens the next one; it does NOT")
+            print("  authorize a commit. Only the final checkpoint's approval does.")
+        else:
+            print("  This is the final checkpoint: approval authorizes the one")
+            print("  normal commit of the cumulative staged tree.")
+        print()
+        print("  Next step:")
+        print(f"    gator loop submit-review --token {token} --file <findings.md>")
+        print(f"    gator loop submit-review --token {token} --file <review.md> --approve")
+
+
 def _print_terminal_reason(session, role):
     """Print why the loop ended."""
     stage = session["status"]["stage"]
@@ -569,8 +666,14 @@ def _print_terminal_reason(session, role):
     elif stage == "plan_approved":
         print("  Result: Plan approved")
     elif stage == "max_rounds_exceeded":
+        from session import checkpoint_summary
+        cp = checkpoint_summary(session)
         max_r = session["status"].get("max_rounds", "?")
-        print(f"  Result: Max rounds exceeded ({max_r})")
+        if cp is not None:
+            print(f"  Result: Findings budget exceeded for checkpoint {cp['id']} "
+                  f"({cp['findings_round']} of {cp['findings_budget']})")
+        else:
+            print(f"  Result: Max rounds exceeded ({max_r})")
     elif stage == "turn_timed_out":
         print("  Result: Turn timed out")
     elif stage == "ended_by_architect":
@@ -586,7 +689,7 @@ def _cmd_submit_implementation(args):
     from submit import handle_submit_implementation, split_residue
     try:
         loop_id, role, loop_dir, gen = handle_submit_implementation(
-            args.token, args.file)
+            args.token, args.file, checkpoint=getattr(args, "checkpoint", None))
     except PermissionError as e:
         print(f"  Rejected: {e}", file=sys.stderr)
         sys.exit(1)
@@ -597,9 +700,19 @@ def _cmd_submit_implementation(args):
     n_changed = len(snap["changed_paths"]) + snap.get("changed_truncated", 0)
     loop_res, other_res = split_residue(snap["unstaged_paths"])
     n_other = len(other_res) + snap.get("unstaged_truncated", 0)
-    print(f"  Implementation submitted (round {gen['round']}). Advancing to implementation_review.")
-    print(f"  Candidate staged tree: {snap['staged_tree']}")
-    print(f"  Changed paths vs base: {n_changed}")
+    cp = gen.get("checkpoint")
+    if cp:
+        print(f"  Checkpoint {cp['id']} submitted (generation {gen['generation']}). "
+              "Advancing to implementation_review.")
+        print(f"  Candidate staged tree: {snap['staged_tree']}")
+        print(f"  Changed paths in this checkpoint: {cp['changed_count']}"
+              + (f" ({cp['revisited_count']} revisit an earlier checkpoint)"
+                 if cp.get("revisited_count") else ""))
+        print(f"  Changed paths vs loop base (cumulative): {n_changed}")
+    else:
+        print(f"  Implementation submitted (round {gen['round']}). Advancing to implementation_review.")
+        print(f"  Candidate staged tree: {snap['staged_tree']}")
+        print(f"  Changed paths vs base: {n_changed}")
     if n_other:
         print(f"  WARNING: {n_other} unstaged/untracked path(s) are NOT part of the candidate.")
     if loop_res:
@@ -633,7 +746,15 @@ def _cmd_submit_review(args):
         if _mode_of(session) == "coding":
             gen = (session.get("coding", {}).get("generations") or [{}])[-1]
             review = gen.get("review") or {}
-            if args.approve:
+            rcp = review.get("checkpoint")
+            from session import checkpoint_summary
+            if args.approve and session["status"]["stage"] == "implementation_drafting":
+                nxt = checkpoint_summary(session) or {}
+                print(f"  Checkpoint {rcp['id']} approved; the Draftor continues "
+                      f"with {nxt.get('id')}. No commit yet.")
+                print(f"  Accepted staged tree: {review.get('reviewed_tree')} "
+                      f"(generation {review.get('generation')}).")
+            elif args.approve:
                 print(f"  Implementation approved: staged tree {review.get('reviewed_tree')}.")
                 print("  Return to the Draftor session for ONE normal commit (existing")
                 print("  hooks, Architect confirmation). If the staged tree changes first,")
@@ -643,6 +764,11 @@ def _cmd_submit_review(args):
                 if review.get("candidate_changed"):
                     print("  Note: the live candidate changed after submission; the Draftor")
                     print("  must resubmit the current tree.")
+                cp = checkpoint_summary(session)
+                if rcp and cp:
+                    print(f"  Checkpoint {rcp['id']}: findings round "
+                          f"{cp['findings_round']} of {cp['findings_budget']} "
+                          f"(generation {review.get('generation')}).")
                 print(f"  Stage: {session['status']['stage']}")
         elif args.approve:
             print(f"  Plan approved. Loop complete.")
@@ -937,6 +1063,7 @@ def _cmd_wait(args):
             "reissue_command": reissue_cmd if still_waiting else None,
         }
         _strip_participant_time(session, out)
+        out.update(_checkpoints_json(session))
         print(json.dumps(out, indent=2))
     else:
         print(f"  Loop: {loop_id}")
@@ -966,7 +1093,7 @@ def _cmd_wait(args):
             print("  You are still a loop participant. Reissue the same command now:")
             print(f"    {reissue_cmd}")
 
-        print(f"  Round: {rnd}/{max_rnd}")
+        _print_counters(session)
 
     # Exit codes: 0 = your turn, 2 = paused/terminal, 3 = still waiting (bounded)
     if is_terminal(session) or is_paused(session):
@@ -1050,7 +1177,7 @@ def _cmd_tail(args):
 
 
 def _cmd_list(args):
-    from session import find_gator_root, load_session
+    from session import find_gator_root, load_session, checkpoint_summary
 
     repo_root = find_gator_root()
     loops_dir = repo_root / ".gator" / "loops"
@@ -1081,6 +1208,11 @@ def _cmd_list(args):
                     "max_rounds": s["status"].get("max_rounds", 0),
                     "blocked": s["status"].get("blocked", False),
                 })
+                cps = checkpoint_summary(s)
+                if cps is not None:
+                    entries[-1]["checkpoint_summary"] = {k: cps[k] for k in (
+                        "index", "count", "findings_round",
+                        "findings_budget", "generation")}
             except (FileNotFoundError, KeyError, json.JSONDecodeError):
                 entries.append({"loop_id": d.name, "error": "unreadable"})
         print(json.dumps({"schema": "gator-loop-list-v1", "loops": entries}, indent=2))
@@ -1094,7 +1226,12 @@ def _cmd_list(args):
                 feat = s.get("feature", "")
                 stage = s["status"]["stage"]
                 blocked = " [BLOCKED]" if s["status"].get("blocked") else ""
-                rnd = f"{s['status'].get('round', 0)}/{s['status'].get('max_rounds', 0)}"
+                cps = checkpoint_summary(s)
+                if cps is not None:
+                    rnd = (f"cp {cps['index']}/{cps['count']} findings "
+                           f"{cps['findings_round']}/{cps['findings_budget']}")
+                else:
+                    rnd = f"{s['status'].get('round', 0)}/{s['status'].get('max_rounds', 0)}"
                 print(f"  {lid:<50} {feat:<20} {stage + blocked:<25} {rnd}")
             except (FileNotFoundError, KeyError, json.JSONDecodeError):
                 print(f"  {d.name:<50} {'?':<20} {'unreadable':<25} {'?'}")
@@ -1239,6 +1376,10 @@ def main(argv=None):
         help="Submit the staged candidate and implementation artifact (coding loops)")
     p_impl.add_argument("--token", required=True, help="Draftor token")
     p_impl.add_argument("--file", required=True, help="Path to the implementation artifact")
+    p_impl.add_argument(
+        "--checkpoint", default=None,
+        help="Active checkpoint id (e.g. cp2); required when the approved "
+             "plan declares Coding Checkpoints (#55)")
 
     # submit-review
     p_review = sub.add_parser("submit-review", help="Submit review findings or approve")

@@ -22,6 +22,7 @@ from session import (
     resolve_token, with_session_lock, append_turn,
     find_gator_root, _make_writable, _make_readonly,
     validate_turn_timeout, validate_round_count, loop_mode,
+    active_checkpoint, declared_checkpoint,
 )
 from state_machine import (
     validate_action, validate_unblock,
@@ -159,6 +160,136 @@ def context_checked_problems(text):
     return []
 
 
+# ---------------------------------------------------------------------------
+# Coding Checkpoints grammar (#55) — a closed, line-based list
+# ---------------------------------------------------------------------------
+
+CODING_CHECKPOINTS_HEADING = "Coding Checkpoints"
+CHECKPOINT_MAX_ITEMS = 12
+CHECKPOINT_TITLE_MAX = 80
+CHECKPOINT_TEXT_MAX = 400
+_CP_ITEM = __import__("re").compile(r"^(\d+)\.\s+(.*)$")
+_CP_FIELDS = __import__("re").compile(
+    r"^\*\*(?P<title>[^*]+?)\*\*\s*(?:\u2014|-|:)\s*(?P<rest>.*)$")
+_CP_VERIFY = __import__("re").compile(r"\bVerify:\s*", __import__("re").I)
+_CP_PATHLIKE = __import__("re").compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
+ONE_CHECKPOINT_EXAMPLE = ("1. **Fix** \u2014 <the change>. Verify: <the focused test>.")
+
+
+def _cp_collapse(text):
+    text = " ".join(text.split())
+    if len(text) > CHECKPOINT_TEXT_MAX:
+        text = text[:CHECKPOINT_TEXT_MAX - 1].rstrip() + "\u2026"
+    return text
+
+
+def _cp_placeholder(text):
+    import re as _re
+    return _re.sub(r"[^a-z0-9]+", "", text.lower()) in _PLACEHOLDER_BODIES
+
+
+def parse_coding_checkpoints(text):
+    """Parse a plan's ``## Coding Checkpoints`` (#55).
+
+    Returns ``(present, items, problems)``. ``present`` is False when the
+    section is absent (no items, no problems). Items are dicts
+    ``{id, title, scope, verify}`` with positional ids ``cp1``..``cpN``.
+
+    Closed grammar: one ``N. **Title** — scope. Verify: verification.``
+    item per checkpoint, ``N`` = 1, 2, 3... at column 0; lines indented by
+    two or more spaces continue the item; HTML comments and fenced blocks in
+    the body are ignored; any other non-blank line is a problem. Titles are
+    1-80 characters, with no backticks or links, and never path-shaped (they
+    name a responsibility, not a file). Scope and verification are
+    non-empty, non-placeholder, collapsed to plain text and capped at 400
+    characters. 1-12 items. Checkpoint *quality* is the Reviewer's judgment.
+    """
+    import re as _re
+    count = _h2_titles(text).count(CODING_CHECKPOINTS_HEADING.lower())
+    if count == 0:
+        return False, [], []
+    if count > 1:
+        return True, [], ["more than one '## Coding Checkpoints' section; "
+                          "keep exactly one"]
+    body = "\n".join(_section_body(text, CODING_CHECKPOINTS_HEADING) or [])
+    body = _re.sub(r"<!--.*?-->", "", body, flags=_re.S)
+    raw_items, problems, in_fence = [], [], False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence or not stripped:
+            continue
+        m = _CP_ITEM.match(line)
+        if m:
+            raw_items.append([int(m.group(1)), m.group(2)])
+        elif line.startswith("  ") and raw_items:
+            raw_items[-1][1] += " " + stripped
+        else:
+            problems.append(
+                f"unexpected text {stripped[:40]!r} (each checkpoint is a "
+                f"numbered item; indent continuation lines by two spaces)")
+    if not raw_items:
+        return True, [], ["'## Coding Checkpoints' has no checkpoints; a small "
+                          f"fix declares one: {ONE_CHECKPOINT_EXAMPLE}"] + problems
+    if len(raw_items) > CHECKPOINT_MAX_ITEMS:
+        problems.append(f"{len(raw_items)} checkpoints; at most "
+                        f"{CHECKPOINT_MAX_ITEMS}")
+    items = []
+    for pos, (number, raw) in enumerate(raw_items, start=1):
+        where = f"checkpoint {pos}"
+        if number != pos:
+            problems.append(f"{where}: numbered {number}; number checkpoints "
+                            f"1, 2, 3... in order")
+        m = _CP_FIELDS.match(raw.strip())
+        if not m:
+            problems.append(f"{where}: expected '**Title** \u2014 scope. "
+                            f"Verify: verification.'")
+            continue
+        title = " ".join(m.group("title").split())
+        rest = m.group("rest")
+        if not title or len(title) > CHECKPOINT_TITLE_MAX:
+            problems.append(f"{where}: title must be 1-{CHECKPOINT_TITLE_MAX} "
+                            f"characters")
+        elif "`" in title or "](" in title or "[" in title:
+            problems.append(f"{where}: title must be plain text (no code or "
+                            f"links)")
+        elif _CP_PATHLIKE.search(title):
+            problems.append(f"{where}: title {title!r} looks like a file; "
+                            f"checkpoint titles name a responsibility, not a "
+                            f"file")
+        parts = _CP_VERIFY.split(rest, maxsplit=1)
+        if len(parts) != 2:
+            problems.append(f"{where}: missing 'Verify:' (state the focused "
+                            f"verification)")
+            continue
+        scope, verify = parts[0].strip(), parts[1].strip()
+        if _cp_placeholder(scope):
+            problems.append(f"{where}: scope is empty or a placeholder")
+        if _cp_placeholder(verify):
+            problems.append(f"{where}: verification is empty or a placeholder")
+        items.append({"id": f"cp{pos}", "title": title,
+                      "scope": _cp_collapse(scope),
+                      "verify": _cp_collapse(verify)})
+    return True, items, problems
+
+
+def coding_checkpoints_problems(text, required):
+    """Problems for the planning-loop draft gate (#55). ``required`` is the
+    session's ``contract.coding_checkpoints`` flag: an absent section is then
+    a problem; a present section is always validated."""
+    present, _items, problems = parse_coding_checkpoints(text)
+    if not present:
+        if required:
+            return ["missing a '## Coding Checkpoints' section (name the "
+                    "responsibility-based checkpoints the coding loop will "
+                    "review; a small fix declares one: "
+                    f"{ONE_CHECKPOINT_EXAMPLE})"]
+        return []
+    return problems
+
+
 def commit_state_heading_count(text):
     """How many level-2 ``Commit State`` headings (outside fences) exist.
 
@@ -213,8 +344,13 @@ def coding_status_view(coding, loop_dir=None):
         snap = g.get("snapshot") or {}
         loop_res, other_res = split_residue(snap.get("unstaged_paths") or [])
         review = g.get("review") or None
+        gcp = g.get("checkpoint")
         gens.append({
             "round": g.get("round"),
+            # #55: additive; None for pre-#55 generation records.
+            "generation": g.get("generation"),
+            "checkpoint_id": (gcp.get("id") if isinstance(gcp, dict)
+                              and isinstance(gcp.get("id"), str) else None),
             "submitted_at": g.get("submitted_at"),
             "artifact_path": g.get("artifact_path"),
             "staged_tree": snap.get("staged_tree"),
@@ -243,7 +379,12 @@ def coding_status_view(coding, loop_dir=None):
     decision = coding.get("source_brief_decision")
     if decision not in SOURCE_BRIEF_DECISIONS:
         decision = None
+    out_gens_n = len(coding.get("generations") or [])
     return {
+        # #55: declared checkpoint manifests only (title text; scope and
+        # verify are never projected). Implicit / pre-#55 loops: None.
+        "checkpoints": _checkpoints_view(coding),
+        "generation": out_gens_n - 1 if out_gens_n else None,
         "source_brief": brief_status_view(src_ref, SOURCE_BRIEF_FILENAME),
         "source_brief_check": (
             verify_brief(loop_dir, src_ref, SOURCE_BRIEF_FILENAME)
@@ -261,13 +402,57 @@ def coding_status_view(coding, loop_dir=None):
     }
 
 
-def render_commit_state(snap):
+def _cell(text):
+    # Plain text inside a Markdown table cell.
+    return str(text).replace("|", "\\|").replace("\n", " ")
+
+
+def _checkpoints_view(coding):
+    """Allowlisted Dashboard projection of a DECLARED manifest (#55)."""
+    from session import checkpoint_manifest
+    manifest = checkpoint_manifest({"coding": coding})
+    if manifest is None or manifest.get("source") != "declared":
+        return None
+
+    def _s(v):
+        return v if isinstance(v, str) else None
+
+    items = []
+    for i, it in enumerate(manifest["items"]):
+        it = it if isinstance(it, dict) else {}
+        acc = it.get("accepted")
+        rounds = it.get("findings_rounds")
+        items.append({
+            "id": _s(it.get("id")), "index": i + 1,
+            "title": _s(it.get("title")) or "",
+            "state": _s(it.get("state")),
+            "base_tree": _s(it.get("base_tree")),
+            "accepted_tree": (_s(acc.get("tree")) if isinstance(acc, dict)
+                              and not acc.get("invalidated_at") else None),
+            "findings_rounds": rounds if isinstance(rounds, int)
+            and not isinstance(rounds, bool) else 0,
+        })
+    return {"source": "declared", "current": manifest["current"],
+            "count": len(items), "items": items}
+
+
+def render_commit_state(snap, checkpoint=None):
     """CLI-owned ``## Commit State`` section built from the raw snapshot.
 
     The facts here are authoritative; the author's text in this section is
     always replaced. Path lists are shown inside ``text`` fences so no
     filename can inject Markdown.
+
+    ``checkpoint`` (#55, checkpoint loops only) is ``{id, index, count,
+    title, base_tree, generation, changed_paths, changed_truncated,
+    revisited}``: the review command and path list become the exact
+    checkpoint diff (``git diff <checkpoint base> <staged>``), revisited
+    paths from earlier checkpoints are marked (information, not a
+    prohibition), and the loop-base facts stay as cumulative context.
+    Without it the output is byte-identical to the pre-#55 rendering.
     """
+    if checkpoint is not None:
+        return _render_checkpoint_commit_state(snap, checkpoint)
     changed = snap.get("changed_paths") or []
     unstaged = snap.get("unstaged_paths") or []
     loop_residue, other_residue = split_residue(unstaged)
@@ -316,6 +501,90 @@ def render_commit_state(snap):
     if snap.get("changed_truncated"):
         lines.append(f"... {snap['changed_truncated']} more (truncated)")
     lines += ["```", ""]
+    if other_residue or snap.get("unstaged_truncated"):
+        lines += ["Unstaged / untracked residue (disclosed; NOT part of the "
+                  "candidate):", "", "```text"]
+        lines += [_display_path(u) for u in other_residue]
+        if snap.get("unstaged_truncated"):
+            lines.append(f"... {snap['unstaged_truncated']} more (truncated)")
+        lines += ["```", ""]
+    else:
+        lines += ["Unstaged / untracked residue outside the loop directory: "
+                  "none.", ""]
+    if loop_residue:
+        lines += [f"Loop residue: {len(loop_residue)} path(s) under "
+                  "`.gator/loops/` (this loop's own audit files; expected, "
+                  "not part of the candidate).", ""]
+    return "\n".join(lines)
+
+
+def _path_line(c, suffix=""):
+    if "old_path" in c:
+        return (f"{c['status']} {_display_path(c['old_path'])} -> "
+                f"{_display_path(c['path'])}{suffix}")
+    return f"{c['status']} {_display_path(c['path'])}{suffix}"
+
+
+def _render_checkpoint_commit_state(snap, cp):
+    unstaged = snap.get("unstaged_paths") or []
+    loop_residue, other_residue = split_residue(unstaged)
+    cumulative = snap.get("changed_paths") or []
+    changed = cp.get("changed_paths") or []
+    revisited = set(cp.get("revisited") or ())
+    summary = ", ".join(f"{k} {v}" for k, v in
+                        sorted(_change_counts(changed).items())) or "none"
+    head_ref = ("detached HEAD" if snap.get("detached")
+                else (snap.get("branch") or "").replace("refs/heads/", ""))
+    n_cp = len(changed) + cp.get("changed_truncated", 0)
+    n_cum = len(cumulative) + snap.get("changed_truncated", 0)
+    lines = [
+        "## Commit State",
+        "",
+        "<!-- Captured by the gator loop CLI at submission. Authoritative:",
+        "     author text in this section is replaced. The reviewed candidate",
+        "     is the staged tree below, not this artifact's prose. -->",
+        "",
+        "| Fact | Value |",
+        "|---|---|",
+        f"| Checkpoint | {cp['id']} ({cp['index']} of {cp['count']}) \u2014 {_cell(cp['title'])} |",
+        f"| Checkpoint base tree | `{cp['base_tree']}` |",
+        f"| Generation | {cp['generation']} |",
+        f"| Staged tree (candidate) | `{snap.get('staged_tree')}` |",
+        f"| Changed paths in this checkpoint | {n_cp} ({summary}) |",
+        f"| Loop base HEAD | `{snap.get('base_head')}` |",
+        f"| Loop base tree | `{snap.get('base_tree')}` |",
+        f"| Current HEAD | `{snap.get('current_head')}` ({head_ref}) |",
+        f"| Changed paths vs loop base (cumulative) | {n_cum} |",
+        f"| Unstaged / untracked residue | {len(other_residue)} other + {len(loop_residue)} loop residue under `.gator/loops/`"
+        + (f" + {snap['unstaged_truncated']} truncated" if snap.get("unstaged_truncated") else "")
+        + " (none of it is part of the candidate) |",
+        "",
+        "Review exactly this checkpoint with:",
+        "",
+        "```text",
+        f"git diff {cp['base_tree']} {snap.get('staged_tree')}",
+        "```",
+        "",
+        "Cumulative context (approved checkpoints plus this one): "
+        f"`git diff {snap.get('base_tree')} {snap.get('staged_tree')}`.",
+        "",
+        "Changed paths in this checkpoint (status, path):",
+        "",
+        "```text",
+    ]
+    for c in changed:
+        hit = c["path"] in revisited or c.get("old_path") in revisited
+        lines.append(_path_line(
+            c, "  [revisits an earlier checkpoint]" if hit else ""))
+    if not changed:
+        lines.append("(none)")
+    if cp.get("changed_truncated"):
+        lines.append(f"... {cp['changed_truncated']} more (truncated)")
+    lines += ["```", ""]
+    if revisited:
+        lines += ["Paths marked as revisiting an earlier checkpoint were also "
+                  "changed by an approved checkpoint; this is information "
+                  "for the Reviewer, not a prohibition.", ""]
     if other_residue or snap.get("unstaged_truncated"):
         lines += ["Unstaged / untracked residue (disclosed; NOT part of the "
                   "candidate):", "", "```text"]
@@ -407,6 +676,38 @@ def _check_context_evidence(data):
         raise ValueError("Plan draft rejected: " + "; ".join(problems))
 
 
+def _coding_checkpoints_required(session):
+    """#55 migration boundary: only planning sessions created with the
+    ``contract.coding_checkpoints`` flag require the section."""
+    contract = session.get("contract") if isinstance(session, dict) else None
+    if not isinstance(contract, dict):
+        return False
+    level = contract.get("coding_checkpoints")
+    return isinstance(level, int) and not isinstance(level, bool) and level >= 1
+
+
+def _plan_contract_flags(session):
+    return (_context_evidence_required(session),
+            _coding_checkpoints_required(session))
+
+
+def _check_plan_draft(data, context_evidence, coding_checkpoints):
+    """One authoritative check of the captured draft bytes against every
+    contract the session carries (#46 Context Checked, #55 checkpoints)."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Plan draft must be UTF-8 text")
+    problems = []
+    if context_evidence:
+        problems += context_checked_problems(text)
+    if coding_checkpoints:
+        problems += ["Coding Checkpoints: " + p
+                     for p in coding_checkpoints_problems(text, required=True)]
+    if problems:
+        raise ValueError("Plan draft rejected: " + "; ".join(problems))
+
+
 def _write_artifact_bytes(loop_dir, target_name, data):
     target = Path(loop_dir) / target_name
     _make_writable(target)
@@ -442,8 +743,9 @@ def handle_submit_draft(token, file_path):
         preflight_session = _peek(loop_dir)
     except Exception:
         preflight_session = None  # the locked transaction reports problems
-    if _context_evidence_required(preflight_session):
-        _check_context_evidence(captured)
+    pre_flags = _plan_contract_flags(preflight_session)
+    if any(pre_flags):
+        _check_plan_draft(captured, *pre_flags)
 
     def _submit(session):
         # Validate inside lock (session may have changed)
@@ -454,8 +756,9 @@ def handle_submit_draft(token, file_path):
         # Copy artifact — round-versioned first, then current
         round_num = session["status"]["round"]
         versioned_name = f"plan.round-{round_num}.md"
-        if _context_evidence_required(session):
-            _check_context_evidence(captured)
+        flags = _plan_contract_flags(session)
+        if any(flags):
+            _check_plan_draft(captured, *flags)
             _write_artifact_bytes(loop_dir, versioned_name, captured)
             _write_artifact_bytes(loop_dir, "plan.current.md", captured)
         else:
@@ -628,6 +931,16 @@ def render_reviewed_candidate(review):
         f"| Reviewed staged tree | `{review['reviewed_tree']}` |",
         f"| Reviewed HEAD | `{review['reviewed_head']}` |",
         f"| Candidate round | {review['round']} |",
+    ]
+    cp = review.get("checkpoint")
+    if cp:  # #55 checkpoint loops only; pre-#55 output is unchanged
+        lines += [
+            f"| Checkpoint | {cp['id']} ({cp['index']} of {cp['count']}) "
+            f"\u2014 {_cell(cp['title'])} |",
+            f"| Checkpoint base tree | `{cp['base_tree']}` |",
+            f"| Generation | {review['generation']} |",
+        ]
+    lines += [
         f"| Live candidate unchanged at review | "
         f"{'no — the index or HEAD moved after submission' if review['candidate_changed'] else 'yes'} |",
         "",
@@ -684,12 +997,17 @@ def _coding_review(session, role, loop_dir, source, approve):
             "differs); approval is blocked. Submit findings so the Draftor "
             "resubmits the current tree.")
 
-    round_num = session["status"]["round"]
     now = datetime.now(tz=timezone.utc).isoformat()
-    versioned_name = f"findings.round-{round_num}.md"
+    # #55: a review is named by the generation it reviews (always the
+    # latest), never by status.round, so no earlier findings are
+    # overwritten (e.g. after a reopen or a non-final checkpoint approval).
+    gen_num = len(gens) - 1
+    versioned_name = f"findings.round-{gen_num}.md"
+    active = declared_checkpoint(session)
     review = {
         "verdict": "approve" if approve else "revise",
         "round": gen["round"],
+        "generation": gen_num,
         "reviewed_tree": submitted["staged_tree"],
         "reviewed_head": submitted["current_head"],
         "candidate_changed": changed,
@@ -697,6 +1015,11 @@ def _coding_review(session, role, loop_dir, source, approve):
         "artifact_path": versioned_name,
         "reviewed_at": now,
     }
+    if active is not None:
+        idx, item, count = active
+        review["checkpoint"] = {"id": item["id"], "index": idx + 1,
+                                "count": count, "title": item["title"],
+                                "base_tree": item["base_tree"]}
     rendered = (text.rstrip("\n") + "\n\n" + render_reviewed_candidate(review)
                 ).rstrip("\n") + "\n"
     _write_artifact_text(loop_dir, versioned_name, rendered)
@@ -719,7 +1042,7 @@ def _coding_review(session, role, loop_dir, source, approve):
     if approve:
         approval = {"tree": review["reviewed_tree"],
                     "head": review["reviewed_head"],
-                    "round": gen["round"], "ts": now}
+                    "round": gen["round"], "generation": gen_num, "ts": now}
     advance_implementation_reviewed(session, approve, timeout,
                                     approval=approval)
 
@@ -727,8 +1050,23 @@ def _coding_review(session, role, loop_dir, source, approve):
     base_event = {"role": role, "round": status["round"],
                   "artifact_path": versioned_name,
                   "reviewed_tree": review["reviewed_tree"],
-                  "candidate_changed": changed}
-    if approve:
+                  "candidate_changed": changed,
+                  "generation": gen_num}
+    if active is not None:
+        idx, item, count = active
+        base_event["checkpoint_id"] = item["id"]
+        if not approve:
+            base_event["findings_round"] = item["findings_rounds"]
+    if approve and status["stage"] == "implementation_drafting":
+        # Non-final checkpoint approval (#55): non-terminal, no commit.
+        nxt = declared_checkpoint(session)[1]
+        event = dict(base_event, event="checkpoint_approved",
+                     accepted_tree=review["reviewed_tree"],
+                     next_checkpoint_id=nxt["id"],
+                     detail=(f"Checkpoint {item['id']} approved (staged tree "
+                             f"{review['reviewed_tree'][:12]}); the Draftor "
+                             f"continues with {nxt['id']}. No commit yet."))
+    elif approve:
         event = dict(base_event, event="implementation_approved",
                      detail=(f"Reviewer approved staged tree "
                              f"{review['reviewed_tree'][:12]} -- return to "
@@ -1032,7 +1370,8 @@ def handle_extend(token, rounds, message, loop_dir=None):
     return loop_id, loop_dir, result["previous"], result["new"]
 
 
-def handle_submit_implementation(token, file_path, loop_dir=None):
+def handle_submit_implementation(token, file_path, loop_dir=None,
+                                 checkpoint=None):
     """Coding (#41): Draftor submits the staged candidate for review.
 
     Before the lock: the artifact must exist, be UTF-8, non-empty, and carry
@@ -1047,6 +1386,13 @@ def handle_submit_implementation(token, file_path, loop_dir=None):
     ``implementation.round-N.md`` + ``implementation.current.md``, appends
     the generation ``{round, submitted_at, artifact_path, snapshot}`` (the
     raw snapshot, unfiltered), and advances to implementation_review.
+
+    #55: artifacts are named by the generation ``g = len(generations)``
+    (all coding loops), never by ``status.round``. In a checkpoint loop
+    ``checkpoint`` is required and must equal the active checkpoint id;
+    "something staged" means a staged tree different from that
+    checkpoint's base, and Commit State shows the exact checkpoint diff.
+    A pre-#55 coding loop rejects ``checkpoint``.
 
     Returns (loop_id, role, loop_dir, generation).
     """
@@ -1082,19 +1428,77 @@ def handle_submit_implementation(token, file_path, loop_dir=None):
             raise PermissionError(reason)
 
         coding = session["coding"]
+        active = active_checkpoint(session)
+        if active is None and checkpoint is not None:
+            raise ValueError(
+                "This coding loop has no checkpoints; submit without "
+                "--checkpoint")
+        # An implicit (pre-#55 plan) checkpoint may omit --checkpoint.
+        implicit_ok = (checkpoint is None
+                       and declared_checkpoint(session) is None)
+        if (active is not None and not implicit_ok
+                and checkpoint != active[1]["id"]):
+            idx, item, count = active
+            raise ValueError(
+                f"The active checkpoint is {item['id']} ({idx + 1} of "
+                f"{count}) -- {item['title']}; submit it with "
+                f"--checkpoint {item['id']}"
+                + ("" if checkpoint is None else f" (got {checkpoint!r})"))
+
         snap = gitsnap.snapshot(repo_root, coding["base_head"])
         if not snap.get("ok"):
             raise ValueError(
                 "Cannot capture the staged candidate: "
                 f"{snap.get('error')} ({snap.get('detail', '')})")
-        if snap["staged_tree"] == snap["base_tree"]:
-            raise ValueError(
-                "Nothing is staged relative to the loop's base commit; "
-                "stage the intended change (git add) before submitting")
+        gen_num = len(coding.get("generations") or [])
+        cp_view = None
+        active = declared_checkpoint(session)
+        if active is None:
+            if snap["staged_tree"] == snap["base_tree"]:
+                raise ValueError(
+                    "Nothing is staged relative to the loop's base commit; "
+                    "stage the intended change (git add) before submitting")
+        else:
+            idx, item, count = active
+            if snap["staged_tree"] == item["base_tree"]:
+                raise ValueError(
+                    f"Nothing is staged beyond checkpoint {item['id']}'s base "
+                    "(the approved previous checkpoints); stage this "
+                    "checkpoint's change (git add) before submitting")
+            cp_diff = gitsnap.diff_trees(repo_root, item["base_tree"],
+                                         snap["staged_tree"])
+            if not cp_diff.get("ok"):
+                raise ValueError(
+                    "Cannot compute the checkpoint diff: "
+                    f"{cp_diff.get('error')} ({cp_diff.get('detail', '')})")
+            revisited = set()
+            if item["base_tree"] != coding["base_tree"]:
+                prior = gitsnap.diff_trees(repo_root, coding["base_tree"],
+                                           item["base_tree"])
+                if not prior.get("ok"):
+                    raise ValueError(
+                        "Cannot compute the approved-checkpoint diff: "
+                        f"{prior.get('error')} ({prior.get('detail', '')})")
+                earlier = set()
+                for c in prior["changed_paths"]:
+                    earlier.add(c["path"])
+                    if "old_path" in c:
+                        earlier.add(c["old_path"])
+                for c in cp_diff["changed_paths"]:
+                    for pth in (c["path"], c.get("old_path")):
+                        if pth in earlier:
+                            revisited.add(pth)
+            cp_view = {"id": item["id"], "index": idx + 1, "count": count,
+                       "title": item["title"], "base_tree": item["base_tree"],
+                       "generation": gen_num,
+                       "changed_paths": cp_diff["changed_paths"],
+                       "changed_truncated": cp_diff["changed_truncated"],
+                       "revisited": sorted(revisited)}
 
-        rendered = replace_commit_state(text, render_commit_state(snap))
+        rendered = replace_commit_state(
+            text, render_commit_state(snap, checkpoint=cp_view))
         round_num = session["status"]["round"]
-        versioned_name = f"implementation.round-{round_num}.md"
+        versioned_name = f"implementation.round-{gen_num}.md"
         _write_artifact_text(loop_dir, versioned_name, rendered)
         _write_artifact_text(loop_dir, "implementation.current.md", rendered)
 
@@ -1109,10 +1513,19 @@ def handle_submit_implementation(token, file_path, loop_dir=None):
 
         generation = {
             "round": round_num,
+            "generation": gen_num,
             "submitted_at": datetime.now(tz=timezone.utc).isoformat(),
             "artifact_path": versioned_name,
             "snapshot": snap,
         }
+        if cp_view is not None:
+            generation["checkpoint"] = {
+                "id": cp_view["id"], "index": cp_view["index"] - 1,
+                "base_tree": cp_view["base_tree"],
+                "changed_count": (len(cp_view["changed_paths"])
+                                  + cp_view["changed_truncated"]),
+                "revisited_count": len(cp_view["revisited"]),
+            }
         coding.setdefault("generations", []).append(generation)
         result["generation"] = generation
 
@@ -1135,10 +1548,23 @@ def handle_submit_implementation(token, file_path, loop_dir=None):
             "residue_other_count": (len(other_res)
                                     + snap.get("unstaged_truncated", 0)),
             "residue_loop_count": len(loop_res),
+            "generation": gen_num,
             "detail": (f"Implementation submitted: staged tree "
                        f"{snap['staged_tree'][:12]}, {n_changed} changed "
                        f"path(s), {len(other_res)} other unstaged/untracked"),
         }
+        if cp_view is not None:
+            event.update({
+                "checkpoint_id": cp_view["id"],
+                "checkpoint_index": cp_view["index"],
+                "checkpoint_count": cp_view["count"],
+                "checkpoint_base_tree": cp_view["base_tree"],
+                "detail": (f"Checkpoint {cp_view['id']} ({cp_view['index']} "
+                           f"of {cp_view['count']}) submitted: staged tree "
+                           f"{snap['staged_tree'][:12]}, "
+                           f"{generation['checkpoint']['changed_count']} "
+                           "path(s) changed in this checkpoint"),
+            })
         return session, event
 
     with_session_lock(loop_dir, _submit)

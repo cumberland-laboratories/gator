@@ -190,7 +190,18 @@ Render the governed planning loop workspace with a three-section secondary sideb
     - ⚠ Stale (reason text),
     - ? Unknown — never treat as approved.
   - **Reopen:** a **Reopen for revision** button appears only for Stale or Unknown. It opens an inline required-reason form, Reopen stays disabled while the reason is blank, and it POSTs `/reopen` `{message}` with `X-Gator-Dashboard`. The notice reports invalidation and the watcher state.
-  - **Patching:** the region is rewritten only when `codingFingerprint()` (stage, round, coding projection, resolution state, reason, commit) changes, and never while the Reopen form is open (`data-reopen-open`). Identical polls produce zero mutations (pinned).
+  - **Patching:** the region is rewritten only when `codingFingerprint()` (stage, round, `max_rounds`, coding projection, resolution state, reason, commit) changes, and never while the Reopen form is open (`data-reopen-open`). Identical polls produce zero mutations (pinned).
+  - **#55 checkpoints** apply when `status.coding.checkpoints` is present, which is declared loops only.
+    - **Counters.** `checkpointCounters(status)` builds them from the projection plus `status.max_rounds`.
+      - The **live header** replaces "Round X / Y" with a "Checkpoint" item ("Checkpoint K of N · findings round r of b", `.loop-checkpoint-counter`) and a separate "Generation" item (`.loop-generation-counter`, "none yet" before the first submission).
+      - The **outcome header** and the handoff subtitle do the same.
+      - **Sidebar cards**, active and history (`renderSidebarCard` via `sidebarCounterText`), show "Checkpoint K/N · findings r/b · gen g" from the `/loops` `checkpoint_summary`.
+      - Every other card and header keeps "Round X/Y". **A checkpoint loop never renders `Round X/Y`** (pinned, with `status.round` 3 > budget 2).
+    - **Coding region:**
+      - Checkpoint and Generation rows; the candidate row reads "Candidate (cpK · gen g)".
+      - An ordered `.loop-checkpoint-list` with one item per checkpoint: ✓ approved (tree …), ● active (weight 600), ○ not started. Each item is glyph + text + weight with `data-state`, never colour alone.
+    - **Labels.** `EVENT_LABELS.checkpoint_approved = "Checkpoint approved"`. Timeline cards and artifact toggles add "(cpK · gen g)" from event fields only (`checkpointSuffix` / `artifactSuffixes`), never by parsing artifacts.
+    - **Fingerprints.** `headerFingerprint` includes `checkpointCounters`, `artifactsFingerprint` includes `artifactSuffixes(events)`, and `codingFingerprint` includes `max_rounds`. Identical polls leave the coding region and the counter nodes untouched (pinned).
   - **Coding loops elsewhere in the view:**
     - stage labels and badges cover `implementation_drafting` / `implementation_review` / `implementation_revision` / `implementation_approved`, and `implementation_approved` is in `TERMINAL_STAGES`;
     - the artifact inspector lists `approved-plan.md`, `implementation.current.md` and `findings.current.md` first (no sketch or plan), `implementation.current.md` is mutable, and the `implementation.*` / `approved-plan.md` artifacts show summaries;

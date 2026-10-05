@@ -54,6 +54,7 @@ Builds the initial session dict including empty `decisions: []` ledger. Does not
 - **#47 attention interval:** every NEW session (planning and coding) carries `contract.attention_interval: 1`, so planning has `{context_evidence: 1, attention_interval: 1}` and coding has `{attention_interval: 1}`. Context Checked stays planning-only because its gate reads only `context_evidence`.
   - **Initial turn:** flagged sessions start with `turn_deadline: null`, `turn_started_at` (ISO UTC, the per-turn attention key) and `attention_notified_turn: null`.
   - **Interval storage:** `turn_timeout_seconds` stores the Architect attention interval (default `DEFAULT_ATTENTION_INTERVAL = 300`).
+- **#55 coding checkpoints:** NEW planning sessions also carry `contract.coding_checkpoints: CHECKPOINT_CONTRACT` (1). This flag is the draft-gate migration boundary for `## Coding Checkpoints`; coding sessions never carry it.
   - **Legacy:** unflagged sessions keep their historical hard-timeout shape.
 - Coding sessions' `coding` block gains `source_brief` (metadata or null) and `source_brief_decision` (`kept` / `dropped` / `none_available`).
 - Coding sessions (#41) carry `"mode": "coding"`, stage `implementation_drafting` (Draftor), `plan_status: "implementation"`, `current.implementation`, and the required `coding` binding `{source_loop_id, plan_sha256, base_head, base_tree, generations: [], approval: null}`.
@@ -94,6 +95,14 @@ Single validation paths for Architect-chosen loop integers, both built on `_vali
 Filesystem: none
 <- turn timeout: `submit.handle_unblock()`, `cli._turn_timeout_arg()`, dashboard `_handle_loop_start()` / `_handle_loop_unblock()`; round count: `submit.handle_extend()`
 ! CLI `start --turn-timeout` is deliberately NOT routed through this (tests and local tooling use short windows); the Dashboard start and every unblock path are. Default window stays 300s.
+
+### checkpoint_manifest(session) / active_checkpoint(session) / declared_checkpoint(session) / build_checkpoint_manifest(items, source, base_tree) (#55)
+File: `src/gator_command/scripts/loop/session.py`
+- **`checkpoint_manifest`** is the single gate for checkpoint behaviour. It returns `coding.checkpoints` only when the manifest is well-formed (`contract == CHECKPOINT_CONTRACT`, non-empty `items`, in-range int `current`); otherwise it returns None and the session keeps the pre-#55 transitions.
+- **`active_checkpoint`** returns `(index, item, count)`.
+- **`declared_checkpoint`** returns the same, but only for `source: "declared"`. The implicit manifest (`IMPLICIT_CHECKPOINT`, one `Full implementation` item for a pre-#55 plan) tracks state but keeps the legacy participant surface: `--checkpoint` is optional, and Commit State and Reviewed Candidate render byte-identically. Its base is the loop base, so its checkpoint diff is the loop diff.
+- **`checkpoint_summary`** (M3/M4) returns the compact counters `{index (1-based), count, id, title, state, findings_round, findings_budget (= max_rounds), generation (latest index or None)}` for a **declared** loop, built from validated primitives. Otherwise it returns None. Every display surface (CLI status, wait, list, and the Dashboard `/loops`) uses it **instead of** `Round X/Y`.
+- **`build_checkpoint_manifest`** produces `{contract, source, current: 0, items: [{id, title, scope, verify, state, base_tree, findings_rounds: 0, accepted: null}]}`. The first item is `active` on the given base tree; the rest are `pending` with a null base.
 
 ### load_session(loop_dir) / save_session(loop_dir, session)
 File: `src/gator_command/scripts/loop/session.py`
@@ -180,7 +189,7 @@ File: `src/gator_command/scripts/loop/state_machine.py`
 `max_rounds_exceeded` -> the mode table's `extension_resume_stage` (`plan_revision` for planning, `implementation_revision` for coding #41; next_role from `role_by_stage`, the Draftor) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, resume fields, and `architect_response_artifact`; sets `architect_message=message` and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). Returns `(previous_max_rounds, new_max_rounds)`.
 Filesystem: none (mutates session dict)
 <- `submit.handle_extend()` (#39)
-! All guards run before any mutation: source stage must be exactly `EXTENDABLE_STAGE`; `rounds` a positive int (bool rejected); `round <= max_rounds`. Violations raise ValueError. Input range policy (1..20) belongs to the caller.
+! All guards run before any mutation: source stage must be exactly `EXTENDABLE_STAGE`; `rounds` a positive int (bool rejected); `round <= max_rounds`. For checkpoint loops (#55) that guard is instead the active item's `findings_rounds <= max_rounds`, because `status.round` is informational there and may exceed `max_rounds`. Violations raise ValueError. Input range policy (1..20) belongs to the caller.
 
 ### advance_turn_timed_out(session, timed_out_role)
 File: `src/gator_command/scripts/loop/state_machine.py`
@@ -197,8 +206,12 @@ Filesystem: none (mutates session dict)
 ### advance_implementation_reviewed(session, approved, turn_timeout, approval=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
 Coding only (#41), from `implementation_review`:
-- **Approved:** goes to `implementation_approved` (terminal; resumable only via reopen) and stores `coding.approval = {tree, head, round, ts}`, which is required.
+- **Approved:** goes to `implementation_approved` (terminal; resumable only via reopen) and stores `coding.approval = {tree, head, round, generation, ts}`, which is required.
 - **Findings:** `round += 1`. At the ceiling the loop goes to `max_rounds_exceeded` (extendable, #39); otherwise to `implementation_revision` (Draftor).
+- **Checkpoint loops (#55):**
+  - **Approval of a non-final checkpoint** sets the active item's `accepted = {tree, head, generation, ts}` and `state = "approved"`, activates the next item with `base_tree = accepted.tree`, does `current += 1`, and returns to `implementation_drafting` (Draftor, fresh turn). **`coding.approval` is not touched.**
+  - **The final checkpoint's approval** records `accepted` and then takes the ordinary approved path.
+  - **Findings** also do `findings_rounds += 1` on the active item, and the ceiling is `findings_rounds >= max_rounds`, the per-checkpoint budget.
 
 A wrong mode or stage raises ValueError.
 <- `submit._coding_review()`
@@ -220,7 +233,7 @@ Pure. Places an approved candidate against live Git facts:
 
 ### advance_reopened(session, turn_timeout, message=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
-Coding only (#41): `implementation_approved` -> `implementation_revision` (Draftor) with a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). It keeps `round`, marks `coding.approval.invalidated_at`, and sets `architect_message`. A non-coding loop or any other stage raises ValueError before mutation.
+Coding only (#41): `implementation_approved` -> `implementation_revision` (Draftor) with a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). It keeps `round`, marks `coding.approval.invalidated_at`, and sets `architect_message`. The next submission is named by its generation, so it never overwrites the approved round's artifacts. The old docstring's "round + 1" claim was never true and is corrected (#55). In checkpoint loops the final item, which is always the active one at approval, is set back to `active` with `accepted.invalidated_at`; earlier checkpoints are never reopened. A non-coding loop or any other stage raises ValueError before mutation.
 Filesystem: none (mutates session dict)
 <- `submit.handle_reopen()`
 
@@ -267,11 +280,12 @@ File: `src/gator_command/scripts/loop/submit.py`
 Resolves token, validates file, acquires lock, validates action, writes the artifact to `plan.round-N.md` then `plan.current.md`, appends turn, updates `current.draft` with turn reference dict, advances to `plan_review`, emits event.
 Filesystem: source file (R, once), `.gator/loops/<loop-id>/plan.round-N.md` and `plan.current.md` (W)
 <- `cli._cmd_submit_draft()`
--> `resolve_token()`, `with_session_lock()`, `validate_action()`, `context_checked_problems()`, `append_turn()`, `advance_draft_submitted()`
+-> `resolve_token()`, `with_session_lock()`, `validate_action()`, `_plan_contract_flags()`, `_check_plan_draft()`, `append_turn()`, `advance_draft_submitted()`
 ! `current.draft` stores `{turn_id, summary, artifact_path}`, not a bare string.
 ! **Context evidence (#46).** The source file is read **once** into a captured byte buffer before the lock.
   - **Flagged sessions** (`contract.context_evidence` is an int ≥ 1, never a bool): a preflight check on the captured bytes gives an early error. A preflight session-read failure is ignored, never misreported. The **in-lock check is authoritative**: decode as UTF-8, run `context_checked_problems`, then write **those exact bytes** with `_write_artifact_bytes`. There is no second read and no path copy, so a file swapped after capture is never persisted. Rejection raises `ValueError("Plan draft rejected: …")` before any write or state change, which is atomic. This covers first drafts and revisions.
   - **Unflagged (legacy) sessions** keep `_copy_artifact` byte-for-byte, unchanged.
+  - **#55:** `_plan_contract_flags(session)` returns `(context_evidence, coding_checkpoints)`; either flag (int ≥ 1, never bool) routes through the same capture-once path. `_check_plan_draft` runs every flagged check on the same decoded text and raises one `Plan draft rejected: ...` error listing all problems; checkpoint problems are prefixed `Coding Checkpoints: ` and a missing section quotes `ONE_CHECKPOINT_EXAMPLE`. Legacy sessions are never checkpoint-checked at draft time (their plans are re-checked when a coding loop starts, M2).
   - Coding loops never call this (implementation submissions have their own headings).
 
 ### context_checked_problems(text)
@@ -283,6 +297,16 @@ Structural check of a plan's `## Context Checked` (#46). It returns a list of re
 - `None — <reason>` (any separator plus a reason) is accepted.
 - Adequacy is the Reviewer's judgment, never checked here.
 ! The shipped plan template in `loop-artifact-formats.md` must contain exactly one section that passes this check (drift-guarded in `tests/test_loop_context_evidence.py`).
+
+### parse_coding_checkpoints(text) / coding_checkpoints_problems(text, required)
+File: `src/gator_command/scripts/loop/submit.py`
+Closed grammar for a plan's `## Coding Checkpoints` (#55). `parse_coding_checkpoints` returns `(present, items, problems)`; items are `{id, title, scope, verify}` with positional ids `cp1..cpN`.
+- Exactly one level-2 heading (fence-aware `_h2_titles`); the body runs to the next unfenced `##`. HTML comments, blank lines and fenced blocks in the body are ignored.
+- Items: `N. **Title** — scope. Verify: verification.` at column 0, numbered 1..N with no gaps; `—`, `-` or `:` after the title; continuation lines indented two spaces. Any other text is a problem.
+- 1–`CHECKPOINT_MAX_ITEMS` (12) items. Titles are 1–80 chars of plain text (no backticks/markup) and never path-shaped (`[/\\]` or a trailing `.ext`). Scope and verification are whitespace-collapsed, non-placeholder, and capped at `CHECKPOINT_TEXT_MAX` (400) chars.
+- `coding_checkpoints_problems(text, required)`: an absent section is a problem only when `required`.
+- Whether checkpoints are responsibility-based is the Reviewer's judgment, never checked here.
+! The shipped plan template's checkpoint section must parse valid (drift-guarded in `tests/test_loop_checkpoints.py`).
 
 ### handle_submit_review(token, file_path, approve)
 File: `src/gator_command/scripts/loop/submit.py`
@@ -309,7 +333,7 @@ Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when fi
 -> `resolve_token()`, `validate_turn_timeout()`, `with_session_lock()`, `validate_unblock()`, `advance_unblocked()`, `append_turn()`, `_copy_artifact()` (when file_path provided)
 ! All validation that can fail runs before `advance_unblocked()`/`_copy_artifact()`; a raise inside the lock skips the save, so a rejected unblock leaves session.json, events, and the stored timeout untouched.
 
-### handle_submit_implementation(token, file_path, loop_dir=None)
+### handle_submit_implementation(token, file_path, loop_dir=None, checkpoint=None)
 File: `src/gator_command/scripts/loop/submit.py`
 Coding Draftor submission (#41). Returns `(loop_id, role, loop_dir, generation)`.
 
@@ -317,15 +341,21 @@ Coding Draftor submission (#41). Returns `(loop_id, role, loop_dir, generation)`
 
 **Under the session lock:**
 1. `validate_action(..., "submit_implementation")`.
-2. `gitsnap.snapshot(repo_root, coding.base_head)`, which must be `ok` (otherwise ValueError naming the error code).
-3. `staged_tree != base_tree`, so something must be staged (otherwise "Nothing is staged…").
-4. The artifact's Commit State section is replaced by `render_commit_state(snap)` (`replace_commit_state`) and written as `implementation.round-<round>.md` plus `implementation.current.md` (read-only, LF).
-5. Bookkeeping:
+2. **Checkpoint binding (#55).**
+   - A manifest loop requires `checkpoint == active.id`; the error names the active checkpoint. The only exception is an implicit manifest, which may omit the flag.
+   - A session without a manifest rejects `checkpoint` outright.
+3. `gitsnap.snapshot(repo_root, coding.base_head)`, which must be `ok` (otherwise ValueError naming the error code).
+4. Something must be staged (otherwise "Nothing is staged…"):
+   - pre-#55 and implicit loops require `staged_tree != base_tree`;
+   - declared loops require `staged_tree != active.base_tree`.
+   For declared loops, `gitsnap.diff_trees(active.base_tree, staged)` gives the checkpoint diff. For k > 1, the paths that `diff_trees(coding.base_tree, active.base_tree)` also touched are marked as revisited (information, not a prohibition).
+5. **Generation `g = len(coding.generations)`** names the artifacts. The Commit State section is replaced by `render_commit_state(snap, checkpoint=…)` (`replace_commit_state`) and written as `implementation.round-<g>.md` plus `implementation.current.md` (read-only, LF).
+6. Bookkeeping:
    - mark the Draftor joined;
    - append an `implementation` turn and set `current.implementation`;
-   - append the generation `{round, submitted_at, artifact_path, snapshot}`, where the snapshot is RAW and persisted unchanged.
-6. `advance_implementation_submitted()`.
-7. Emit `implementation_submitted` with `staged_tree`, `current_head`, `changed_count`, `unstaged_count` (raw), `residue_other_count` and `residue_loop_count`.
+   - append the generation `{round, generation, submitted_at, artifact_path, snapshot[, checkpoint: {id, index, base_tree, changed_count, revisited_count}]}`, where the snapshot is RAW and persisted unchanged.
+7. `advance_implementation_submitted()`.
+8. Emit `implementation_submitted` with `staged_tree`, `current_head`, `changed_count`, `unstaged_count` (raw), `residue_other_count`, `residue_loop_count` and `generation`. Declared loops add `checkpoint_id`, `checkpoint_index`, `checkpoint_count` and `checkpoint_base_tree`.
 
 Filesystem: `implementation.round-N.md` / `implementation.current.md` (W), `session.json` / `events.jsonl` (W via lock), Git (R; `write-tree` objects via gitsnap)
 <- `cli._cmd_submit_implementation()`
@@ -339,6 +369,12 @@ File: `src/gator_command/scripts/loop/submit.py`
   - a facts table: base HEAD and tree, current HEAD with branch or detached, the staged tree, changed-path counts by status, and the residue split;
   - the exact-candidate review command `git diff <base_tree> <staged_tree>`, which still shows the submitted tree after the index changes;
   - path lists inside `text` fences, with newlines in filenames escaped so no filename can inject a section.
+- **`render_commit_state(snap, checkpoint=None)` (#55):** with a declared checkpoint view, `_render_checkpoint_commit_state` adds:
+  - Checkpoint, checkpoint base tree and Generation rows;
+  - the review command `git diff <checkpoint base> <staged>`;
+  - the checkpoint path list with `[revisits an earlier checkpoint]` markers;
+  - the loop-base facts and the cumulative diff command as context.
+  Titles go through `_cell` (pipe-escaped). Without a checkpoint view the output is **byte-identical** to the pre-#55 rendering.
 - **`replace_commit_state`:** swaps the Commit State section up to the next unfenced level-2 heading. It also refuses more than one Commit State heading, as a second layer behind the handler's check.
 - **`split_residue`:** a **display-only** classification of raw residue into loop residue (`.gator/loops/`, the loop's own always-untracked audit files) and other residue. Only other residue triggers the CLI warning. The persisted snapshot keeps the raw list.
 - **`coding_status_view`:** the slim, allowlisted projection of `session["coding"]` that the Dashboard status poll serves: source/plan/base ids, per-generation tree / HEAD / branch, changed counts by status, residue counts, review verdicts, and the approval binding. Never raw path lists.
@@ -351,8 +387,14 @@ Planning reviews are unchanged. For coding loops (#41), inside the same session 
   - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** If the live snapshot fails, approval is also rejected ("Cannot verify…").
   - **Findings are always accepted**, flagged `candidate_changed` / `live_snapshot_ok`, so the loop can never deadlock in review.
 - **Artifact:** it must be UTF-8 and must not author `## Reviewed Candidate`. The CLI appends that section (verdict, reviewed tree / HEAD, round, live-unchanged) to `findings.round-N.md` / `findings.current.md`.
-- **Records:** the review is stored on the generation (`generation.review`), and the approval as `{tree, head, round, ts}` via `advance_implementation_reviewed()`.
-- **Events:** `implementation_approved` (terminal), `max_rounds_exceeded`, or `revision_requested` (notes a changed candidate).
+- **Records:** the review is stored on the generation (`generation.review`, with `generation` and, for declared loops, `checkpoint: {id, index, count, title, base_tree}`). The approval is stored as `{tree, head, round, generation, ts}` via `advance_implementation_reviewed()`.
+- **Naming (#55, all coding loops):** the review writes `findings.round-<g>.md`, where `g = len(generations) - 1` is the generation it reviews (always the latest), never `status.round`.
+- **Reviewed Candidate (declared loops only):** gains Checkpoint, checkpoint base tree and Generation rows. Legacy output is unchanged.
+- **Events** carry `generation`. Declared loops add `checkpoint_id`, and `findings_round` on findings:
+  - `implementation_approved` (terminal);
+  - `checkpoint_approved` (#55, **non-terminal**: non-final approval, with `accepted_tree` and `next_checkpoint_id`);
+  - `max_rounds_exceeded`;
+  - `revision_requested` (notes a changed candidate).
 ! Deliberate refinement of the approved plan's "a mismatch rejects the review": only APPROVE is blocked. Findings about the submitted (immutable) tree stay valid, and blocking them would leave no legal actor in `implementation_review`.
 
 ### handle_extend(token, rounds, message, loop_dir=None)
@@ -398,9 +440,17 @@ File: `src/gator_command/scripts/loop/host.py`
 The guarded coding successor (#41). Steps, in order:
 1. Validate the canonical shape of `from_loop`: `_SOURCE_LOOP_ID_RE` starts AND ends alphanumeric, so a Windows trailing-dot alias is rejected; no `..` / separators. The source must be a real directory with `session.json`.
 2. Under the source's `with_session_lock` read-only callback, require **`session["loop_id"] == from_loop` exactly**, which rejects Windows trailing-dot and case-variant aliases that resolve to the same directory, so only the canonical id is persisted as `coding.source_loop_id`. Also require `loop_mode == "planning"` (legacy values accepted), stage `plan_approved`, and a non-empty regular `plan.current.md`.
-3. Take `gitsnap.snapshot(repo_root)`, which must be ok; this rejects unborn, conflicted, bare and missing-Git cases.
-4. Create the loop dir, write `approved-plan.md` (read-only), and re-read it to compare SHA-256 against the source bytes.
-5. Only then write tokens, `session.json`, and a `loop_started` event (with `mode`, `source_loop_id`).
+3. **#55 checkpoints (`_plan_checkpoints`).** `_read_approved_source` also returns the source session's `contract.coding_checkpoints` flag, read under the same lock. The approved-plan bytes are parsed once:
+
+   | Source | Section absent | Present, valid | Present, invalid |
+   |---|---|---|---|
+   | flagged | **refused** (a flagged plan must have been gated) | `declared` | refused with the problems |
+   | legacy | `implicit` (`IMPLICIT_CHECKPOINT`) | `declared` | refused with the problems |
+
+   The manifest is frozen into `coding.checkpoints` (cp1 based on the snapshot's `head_tree`) and never re-parsed.
+4. Take `gitsnap.snapshot(repo_root)`, which must be ok; this rejects unborn, conflicted, bare and missing-Git cases.
+5. Create the loop dir, write `approved-plan.md` (read-only), and re-read it to compare SHA-256 against the source bytes.
+6. Only then write tokens, `session.json`, and a `loop_started` event (with `mode`, `source_loop_id`).
 
 Any failure removes the partial directory (`_remove_partial_loop`, read-only tolerant; `onexc` on 3.12+, `onerror` below) and raises one clear error.
 **Brief carry-forward (#43 D1; the Architect chooses):** inside the same source-lock read:
@@ -532,6 +582,11 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
   - Unblock, extend and reopen output use `_print_window_line`.
   - The host-attach wording comes from `_host_duty(loop_dir)`: "records attention notices" for flagged loops, legacy wording unchanged.
   - `start --attention-interval` (preferred) and `--turn-timeout` share `dest=turn_timeout` (default 300). The host banner prints "Attention interval: … (Architect notice only)".
+! **#55 counters (`_print_counters`, `_checkpoints_json`).**
+  - **Text:** for a declared checkpoint loop, status (model and Architect) and wait print `Checkpoint: K of N -- <title> (findings round r of b)` and `Generation: g` (or `none yet`) **instead of** `Round: X/Y`. Implicit and pre-#55 loops keep `Round: X/Y`.
+  - **JSON:** gains additive `checkpoint`, `checkpoints` (`id/index/title/state`, never scope or verify) and `generation`. `round` and `max_rounds` stay for compatibility and are informational.
+  - **`list`:** the text Round column shows `cp K/N findings r/b`; JSON items gain `checkpoint_summary`.
+  - **Terminal reason:** a checkpoint loop at `max_rounds_exceeded` shows "Findings budget exceeded for checkpoint cpK (r of b)".
 ! Legacy turn window: model and architect JSON (and wait JSON) carry additive `turn_timeout_seconds` + `turn_deadline`; the acting model's text view prints `Turn window: Ns (deadline ...)` via `_print_turn_window()`. The paused architect view prints the current window and, when a decision is pending, states that a response is required (with the exceptional `--no-response` form); an ordinary pause shows the optional-message form.
 
 ### _approval_resolution(session, loop_dir) / _print_approval_resolution(res, token=None)
@@ -546,10 +601,16 @@ The Architect view adds the `gator loop reopen` hint for stale or unknown. JSON 
 
 ### _cmd_submit_implementation(args)
 File: `src/gator_command/scripts/loop/cli.py`
-`gator loop submit-implementation --token <draftor> --file <implementation.md>` (#41).
+`gator loop submit-implementation --token <draftor> [--checkpoint <id>] --file <implementation.md>` (#41; `--checkpoint` #55, passed to the handler).
+- For a declared checkpoint loop, success prints "Checkpoint cpK submitted (generation g)", the checkpoint changed-path count (plus the revisited count) and the cumulative count. Otherwise:
 - On success it prints the round, the full candidate staged-tree OID, the changed-path count, a WARNING line only for residue outside `.gator/loops/`, a loop-residue count line, and the artifact path.
 - `PermissionError` prints `Rejected:` and exits 1; `ValueError` / `FileNotFoundError` print `Error:` and exit 1.
 - The Reviewer's coding status prints the latest generation's candidate tree and `git diff <base_tree> <staged_tree>`.
+- **Declared checkpoint loops (`_print_checkpoint_action_prompt`, #55):**
+  - The **Draftor** sees "Implement checkpoint K of N -- title", the Scope, Verify and checkpoint base tree, the "stage only this checkpoint" rule, and the submit command with `--checkpoint <id>`.
+  - The **Reviewer** sees "Review real code changed for checkpoint K of N -- title (generation g)", `git diff <checkpoint base> <staged>`, and either "does NOT authorize a commit" (non-final) or the final-checkpoint commit note.
+  - **`submit-review`** prints "Checkpoint cpK approved; the Draftor continues with cpK+1. No commit yet." on a non-final approval, and the checkpoint findings round on findings.
+  - CLI error and guidance text stays ASCII (`--`), because Windows pipes are cp1252.
 
 ### _cmd_reopen(args) / _attach_foreground_watcher(loop_host, loop_dir, what)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -682,6 +743,12 @@ Path lists are capped at `MAX_PATHS` (1000), with truncation counts; the staged-
 Filesystem: Git object database (W — tree objects written by `write-tree`, unreferenced until a commit; reclaimed by `git gc`). Refs, index, and worktree are never modified (pinned).
 ! Facts are RAW. Never filter or normalize paths (for example hook-managed `.gator/` files) out of the binding. The approved #41 plan keeps the raw staged tree authoritative everywhere.
 
+### diff_trees(worktree_root, from_tree, to_tree) (#55)
+File: `src/gator_command/scripts/loop/gitsnap.py`
+`git diff-tree -r -z -M --name-status <from> <to>`. It returns `{"ok": True, changed_paths, changed_truncated}` (the same record shape and `MAX_PATHS` cap as `snapshot`) or `{"ok": False, error, detail}`, and never raises for Git conditions.
+Filesystem: Git object database (R only). It takes no index lock and never touches refs, the index or the worktree (pinned).
+<- `submit.handle_submit_implementation()` (the checkpoint diff and revisit disclosure)
+
 ---
 
 ## TRIPWIRE: Architect Brief Is Immutable Residue, Not a Channel (#43)
@@ -692,9 +759,9 @@ Violation: trusting `session.brief.artifact` as a path enables traversal or swap
 
 ## TRIPWIRE: Validated Bytes Are Persisted Bytes (#46)
 
-For context-evidence sessions, `handle_submit_draft` persists exactly the buffer it validated inside the session lock. Never re-read the source path or `copy2` it after validation, and never make the preflight authoritative. Only `contract.context_evidence` gates enforcement. Never infer it from dates, mode strings, or the presence of a brief: legacy sessions must keep accepting old plans.
+For context-evidence and coding-checkpoint sessions, `handle_submit_draft` persists exactly the buffer it validated inside the session lock. Never re-read the source path or `copy2` it after validation, and never make the preflight authoritative. Only `contract.context_evidence` / `contract.coding_checkpoints` gate enforcement. Never infer it from dates, mode strings, or the presence of a brief: legacy sessions must keep accepting old plans.
 
-Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`.
+Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`; for checkpoints, `test_in_lock_gate_is_authoritative` pins the same rule.
 
 ## TRIPWIRE: Attention Is Architect Awareness, Never Participant Pressure or State (#47)
 
@@ -711,6 +778,31 @@ Violation: adding a deadline, a participant-visible window, or a state transitio
 In coding-mode loops the reviewed and approved candidate is the raw `git write-tree` OID captured by `gitsnap.snapshot()` — never artifact prose and never a filtered or normalized tree. Implementation artifacts describe the candidate; the CLI writes their `## Commit State` facts from the snapshot.
 
 Violation: approving from prose, or from a filtered tree, lets a commit land that differs from what the Reviewer inspected.
+
+## TRIPWIRE: Checkpoint Approval Never Commits (#55)
+
+Only the **final** checkpoint's approval writes `coding.approval`, the one-commit authority read by `resolve_approval`, which is unchanged. A non-final approval records `accepted` on the item and opens the next one. A checkpoint's base comes **only** from the previous item's `accepted.tree`, set in the same locked transition; findings never change it. There is no commit, reset, stash, or index or worktree write per checkpoint.
+
+Violation: writing `coding.approval` on a non-final approval authorizes a partial commit. That is pinned by the transition table (`coding.approval` null, and Git HEAD, index and refs unchanged after `checkpoint_approved`).
+
+## TRIPWIRE: Coding Artifacts Are Named by Generation (#55)
+
+`implementation.round-<g>.md` and `findings.round-<g>.md` use the generation `g`, the index in the append-only `coding.generations`, for **all** coding loops. Never use `status.round`: it does not advance on approval, reopen or checkpoint approval, so it collides and `_write_artifact_text` silently overwrites evidence. Before any reopen, `g` equals `status.round` in legacy loops, so the names are unchanged there.
+
+Violation: the post-reopen resubmission or a later checkpoint overwrites an earlier round's evidence. That is pinned by the transition table's uniqueness and no-overwrite checks, and by `test_legacy_reopen_never_overwrites`.
+
+**D3 transition table (checkpoint loops).** `A` is the active item, `g` the latest generation.
+
+| Transition | Stage → role | Artifacts | `status.round` | `A.findings_rounds` | Manifest | `coding.approval` | Event |
+|---|---|---|---|---|---|---|---|
+| Submit (`--checkpoint A.id`) | review → Reviewer | `implementation.round-g` | — | — | — | — | `implementation_submitted` |
+| Findings | revision → Draftor, or `max_rounds_exceeded` at budget | `findings.round-g` | +1 | +1 | — | — | `revision_requested` / `max_rounds_exceeded` |
+| Non-final approve | drafting → Draftor | `findings.round-g` | — | — | `A.accepted`; next active on `A.accepted.tree`; `current += 1` | stays null | `checkpoint_approved` |
+| Final approve | `implementation_approved` | `findings.round-g` | — | — | `A.accepted` | set (+`generation`) | `implementation_approved` |
+| Extend (guard `A.findings_rounds <= max_rounds`) | revision → Draftor | — | — | — | — | — | `loop_extended` |
+| Reopen | revision → Draftor | — (next submit is g+1) | — | kept | last item reactivated, `accepted.invalidated_at` | `invalidated_at` | `loop_reopened` |
+
+Pause, unblock, escalate and end keep `current`, the stage and the role.
 
 ## TRIPWIRE: Liveness Store Is a Leaf Lock and Never Authority
 

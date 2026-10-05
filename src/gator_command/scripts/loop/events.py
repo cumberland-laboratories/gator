@@ -145,6 +145,7 @@ _EVENT_FORMATS = {
     "plan_approved": ("plan APPROVED", "round {round}"),
     "implementation_approved": ("implementation APPROVED", "{detail}"),  # #41
     "revision_requested": ("revision requested", "round {round}"),
+    "checkpoint_approved": ("checkpoint approved", "{detail}"),  # #55, not terminal
     "escalated": ("ESCALATED", "{detail}"),
     "max_rounds_exceeded": ("MAX ROUNDS", "limit reached at round {round}"),
     "turn_timed_out": ("TIMED OUT", "{role} did not submit in time"),

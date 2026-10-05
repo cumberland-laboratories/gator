@@ -60,7 +60,8 @@ def _iso(v):
 class TestContract:
     def test_planning_contract(self):
         s = planning()
-        assert s["contract"] == {"attention_interval": 1, "context_evidence": 1}
+        assert s["contract"] == {"attention_interval": 1, "context_evidence": 1,
+                                 "coding_checkpoints": 1}
         assert loop_session.attention_mode(s) is True
 
     def test_coding_contract(self):

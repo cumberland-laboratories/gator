@@ -35,6 +35,11 @@ import session as loop_session  # noqa: E402
 
 from test_loop_coding_mode import PLAN_TEXT, _tokens, git  # noqa: E402
 
+# #55: flagged planning sources must declare checkpoints.
+CHECKPOINTED_PLAN = PLAN_TEXT + (
+    "\n## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
+    "Verify: the focused test.\n").encode("utf-8")
+
 GATOR_LOOP = SCRIPTS_DIR / "gator-loop.py"
 BRIEF = "# Brief\n\nSECRET-CONTENT-MARKER: prioritize Windows paths.\n"
 MAX = loop_session.MAX_BRIEF_BYTES
@@ -225,7 +230,7 @@ def approved_planning_with_brief(env):
     s = loop_session.load_session(d)
     s["status"].update(stage="plan_approved", next_role=None)
     loop_session.save_session(d, s)
-    (d / "plan.current.md").write_bytes(PLAN_TEXT)
+    (d / "plan.current.md").write_bytes(CHECKPOINTED_PLAN)
     with dashboard._LOOP_HOSTS_LOCK:
         dashboard._LOOP_HOSTS.clear()
     return loop_id, d
@@ -374,7 +379,7 @@ def approved_planning(env, with_brief=True, feature="feat"):
     s = loop_session.load_session(d)
     s["status"].update(stage="plan_approved", next_role=None)
     loop_session.save_session(d, s)
-    (d / "plan.current.md").write_bytes(PLAN_TEXT)
+    (d / "plan.current.md").write_bytes(CHECKPOINTED_PLAN)
     with dashboard._LOOP_HOSTS_LOCK:
         dashboard._LOOP_HOSTS.clear()
     return loop_id, d

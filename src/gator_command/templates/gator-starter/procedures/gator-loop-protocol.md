@@ -115,8 +115,11 @@ Write your output to a markdown file. The file must:
 - Risks or open questions
 - Charter impact
 - `## Context Checked`: **required** on every draft and revision (see below)
+- `## Coding Checkpoints`: **required** on every draft and revision (see below; one checkpoint for a small fix)
 
 **Context Checked (draftor, planning loops).** Every plan includes exactly one `## Context Checked` section listing what you actually consulted: the Architect brief (`architect-brief.md`) when status lists one, the charters you read, and the code or prior artifacts you inspected. When nothing applies, write `None — <short reason>` (e.g. `None — greenfield script, no existing charter or code`). The CLI rejects the submission when the section is missing, duplicated, empty (comments do not count), or a bare placeholder (`None`, `N/A`, `-`, `TBD`). It checks structure only. Listing files you did not read is a protocol violation. This applies to planning loops created since the requirement shipped; older loops are not checked.
+
+**Coding Checkpoints (draftor, planning loops).** Every plan includes exactly one `## Coding Checkpoints` section: the ordered, **responsibility-based** increments the coding loop will review one at a time. Each item is `N. **Title** — scope. Verify: verification.`, numbered 1, 2, 3… (at most 12; continuation lines indented two spaces). A title names a responsibility, never a file. A single-responsibility change declares one checkpoint: `1. **Fix** — <the change>. Verify: <the focused test>.` The CLI rejects a missing, duplicate, empty or malformed section. This applies to planning loops created since the requirement shipped.
 
 **Reviewer output** — findings OR approval:
 - `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
@@ -124,6 +127,7 @@ Write your output to a markdown file. The file must:
 - Numbered findings with severity, location, issue, and suggestion
 - Scope check against the sketch
 - Context check: is the plan's `## Context Checked` credible? It should cover the Architect brief (when one exists) and the charters and code the plan changes. Missing or implausible context is a finding, not a nit.
+- Checkpoint check: are the `## Coding Checkpoints` responsibility-based and independently reviewable, each a working, verifiable increment on top of the previous ones? A multi-responsibility plan whose checkpoints are file-shaped, or are styling-, docs- or tests-only pseudo-modules, is a finding. One checkpoint is correct for a single-responsibility change.
 - If approving: still submit a real document, not a stub
 
 **Format reference**: read `.gator/reference-notes/loop-artifact-formats.md` for the full template for sketches, plans, and findings. Follow the structure shown there.
@@ -231,14 +235,21 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 
 **The staged tree is the candidate.** The reviewed and approved thing is the exact `git write-tree` of the staged index, captured by the CLI. Your artifact describes it; prose never substitutes for it. Unstaged and untracked files are shown to the Reviewer but are NOT part of the candidate. The loop directory's own files under `.gator/loops/` are expected residue.
 
+**Checkpoints.** When the approved plan declares `## Coding Checkpoints`, the loop works through them in order, and `gator loop status` names the active one: `Checkpoint: 2 of 3 -- <title> (findings round 1 of 3)`. Rules:
+- The Draftor stages only the active checkpoint's change on top of the approved earlier checkpoints, and submits with `--checkpoint <id>` (status prints the exact command). Submitting any other checkpoint is rejected.
+- The Reviewer reviews exactly that checkpoint: `git diff <checkpoint base> <staged tree>`, which status prints. Paths that an approved earlier checkpoint also changed are marked as revisited; that is information, not a prohibition.
+- Approving a checkpoint that is not the last opens the next one. It does **not** authorize a commit, and nothing is committed between checkpoints. Only the final checkpoint's approval leads to the one normal commit of the cumulative staged tree.
+- **Two counters.** The *findings round* is per checkpoint and is compared with the round budget (`max_rounds`). The *generation* counts every submission in the loop and names its artifacts (`implementation.round-<generation>.md`, `findings.round-<generation>.md`), so no evidence is ever overwritten. For checkpoint loops, status shows these two instead of `Round: X/Y`.
+- Plans from older planning loops without the section get one implicit checkpoint, and status keeps `Round: X/Y`.
+
 **Draftor (`implementation_drafting` / `implementation_revision`):**
 1. Read `approved-plan.md` (and `findings.current.md` when revising) and the charters for the files you will touch. Read any Architect brief status lists: a coding loop can show two, `source-architect-brief.md` (the planning brief carried forward) and `architect-brief.md` (a new brief for the coding loop). Read both; where they conflict, the coding brief is newer and wins, and a conflict that matters is an escalation. If status says "Planning brief: not carried forward", the Architect dropped it at coding start; do not go looking for it.
 2. Implement the change, update the affected charters and `commit_draft` material, and run the relevant checks.
 3. Stage everything that belongs in the commit, including the charter and `commit_draft` files you changed: `git add ...`. Do not commit. Do not create one commit per round.
-4. Submit with `gator loop submit-implementation --token <your-token> --file <implementation.md>`. The artifact needs exactly these level-2 sections: `## Executive Summary`, `## Implementation Summary`, `## Charter Updates`, `## Verification`, and **exactly one** `## Commit State`, which the CLI fills with the captured facts, replacing your text there. A submission with nothing staged is rejected.
+4. Submit with `gator loop submit-implementation --token <your-token> [--checkpoint <id>] --file <implementation.md>` (`--checkpoint` is required when status shows a `Checkpoint:` line). The artifact needs exactly these level-2 sections: `## Executive Summary`, `## Implementation Summary`, `## Charter Updates`, `## Verification`, and **exactly one** `## Commit State`, which the CLI fills with the captured facts, replacing your text there. A submission with nothing staged is rejected.
 
 **Reviewer (`implementation_review`):**
-1. `gator loop status` prints the candidate's staged-tree ID and the exact review command, `git diff <base_tree> <staged_tree>`. That diff is fixed: it shows exactly the submitted candidate even if the index changes later.
+1. `gator loop status` prints the candidate's staged-tree ID and the exact review command: `git diff <base_tree> <staged_tree>`, or for checkpoint loops `git diff <checkpoint base> <staged_tree>`. That diff is fixed: it shows exactly the submitted candidate even if the index changes later.
 2. Read `implementation.current.md`, run the review command, and check the affected charters.
 3. Submit findings (`gator loop submit-review --token <your-token> --file <findings.md>`) or approve (`... --approve`). Do not write a `## Reviewed Candidate` section; the CLI appends it. **Approval is refused if the staged tree or HEAD changed after submission.** Submit findings instead, so the Draftor resubmits the current tree.
 
@@ -378,7 +389,8 @@ gator loop status --token <token>
 3. `wait` exit 0: act. Exit 3: reissue the same `wait`. Exit 2: stop.
    (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
 4. Read the Architect brief(s) status lists, then the relevant files (sketch, plan, or findings) and the charters they touch
-   (plans need a `## Context Checked` section: what you consulted, or `None — <reason>`)
+   (plans need a `## Context Checked` section: what you consulted, or `None — <reason>`;
+   and a `## Coding Checkpoints` section: one checkpoint for a small fix)
 5. Write your artifact to a file
 6. Submit: `gator loop submit-draft` or `gator loop submit-review` (coding loops: `gator loop submit-implementation` with the change staged — see Coding Loops)
 7. If stuck at any time: `gator loop escalate --token <token> --reason "..."`

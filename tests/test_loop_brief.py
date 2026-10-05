@@ -24,6 +24,11 @@ import session as loop_session  # noqa: E402
 from test_loop_coding_mode import (  # noqa: E402,F401
     PLAN_TEXT, git, repo, start_coding)
 
+# #55: flagged planning sources must declare checkpoints.
+CHECKPOINTED_PLAN = PLAN_TEXT + (
+    "\n## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
+    "Verify: the focused test.\n").encode("utf-8")
+
 GATOR_LOOP = SCRIPTS_DIR / "gator-loop.py"
 BRIEF = "# Brief\n\nPrioritize Windows paths. Read scripts-loop.md.\n".encode()
 MAX = loop_session.MAX_BRIEF_BYTES
@@ -60,7 +65,7 @@ def planning(repo, brief=None, brief_text=None, approved=True,
         s = loop_session.load_session(loop_dir)
         s["status"].update(stage="plan_approved", next_role=None)
         loop_session.save_session(loop_dir, s)
-        (loop_dir / "plan.current.md").write_bytes(PLAN_TEXT)
+        (loop_dir / "plan.current.md").write_bytes(CHECKPOINTED_PLAN)
     return loop_id, loop_dir
 
 
@@ -272,7 +277,8 @@ class TestPlanningStart:
         _, loop_dir = planning(repo, approved=False)
         s = loop_session.load_session(loop_dir)
         assert "brief" not in s
-        assert s["contract"] == {"context_evidence": 1, "attention_interval": 1}
+        assert s["contract"] == {"context_evidence": 1, "attention_interval": 1,
+                                 "coding_checkpoints": 1}
         assert not (loop_dir / loop_session.BRIEF_FILENAME).exists()
         ev = first_event(loop_dir)
         assert "brief_sha256" not in ev

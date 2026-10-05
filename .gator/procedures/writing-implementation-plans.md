@@ -34,6 +34,11 @@ needs.
    File count is not the criterion. A one-file security change can need a full
    planning loop; a three-file localized UI change can be direct to coding.
 
+   Whatever the path, a plan that will drive a coding loop declares
+   `## Coding Checkpoints`: the ordered, responsibility-based increments the
+   coding Reviewer approves one at a time. A single-responsibility change
+   declares one checkpoint.
+
 3. **Define modules by responsibility, not by file.** Reuse an existing module
    whenever the change belongs to an established seam. Introduce a module only
    when it owns a stable responsibility, such as parsing, validation, a
@@ -107,6 +112,11 @@ needs.
   yes, the reviewer requests that reduction before approving the plan.
 - Is the chosen path—direct coding, one plan review, or a full planning
   loop—proportionate to the actual risk?
+- Are the `## Coding Checkpoints` responsibility-based and independently
+  reviewable as working, verifiable increments? Reject a multi-responsibility
+  plan whose checkpoints are file-shaped or are styling-, docs-, or
+  tests-only pseudo-modules; one checkpoint is correct for a
+  single-responsibility change.
 
 ## Notes
 

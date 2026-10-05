@@ -73,6 +73,12 @@ Machine-readable CLI output has a top-level `schema` identifier. Additive fields
 
 Loop turn windows (legacy) and Architect attention intervals (#47; same stored field) have one validation authority: `loop/session.validate_turn_timeout()` (30..3600 s, integral). The loop CLI (`unblock --timeout`, legacy loops only; attention-mode loops refuse it) and the Dashboard HTTP endpoints (loop start `attention_interval` / alias `turn_timeout`, unblock `timeout` for legacy loops only, via `_validate_http_turn_timeout()`) must both route through it; the browser mirrors the bounds only for early feedback. Do not re-implement the range at a call site. The per-extension round increment follows the same rule via `validate_round_count()` (1..20) — CLI `extend --rounds` and Dashboard `/extend` (`_validate_http_round_count()`).
 
+**#55 checkpoints.**
+- `gator-loop-status-v1` gains additive `checkpoint`, `checkpoints` and `generation` for declared checkpoint coding loops. `round` and `max_rounds` remain, and are informational for those loops.
+- `gator-loop-list-v1` items gain additive `checkpoint_summary`.
+- `checkpoint_approved` is an additive, **non-terminal** `events.jsonl` event type, emitted on a non-final checkpoint approval with `generation`, `checkpoint_id`, `accepted_tree` and `next_checkpoint_id`. Other coding events gain additive `generation` and, for checkpoint loops, `checkpoint_*` / `findings_round` fields.
+- Doc pairs touched (protocol, `loop-artifact-formats.md`, `/loop-join`) stay byte-identical under the existing drift guards. `tests/test_loop_checkpoints.py` also pins that the shipped plan template's `## Coding Checkpoints` parses valid.
+
 `loop_extended` (#39) is an additive `events.jsonl` event type and is NOT terminal; timeline, tail, and audit consumers must tolerate it. The loop session schema is unchanged by extension — the audit record is the `loop_extended` event plus the Architect `extend` turn.
 
 Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.

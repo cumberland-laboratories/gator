@@ -415,6 +415,10 @@ def _read_approved_source(source_dir, from_loop, source_brief="keep"):
         if not data.strip():
             raise ValueError("Source loop's plan.current.md is empty")
         captured["plan"] = data
+        # #55: the source session's checkpoint flag decides whether a plan
+        # without '## Coding Checkpoints' may get the implicit checkpoint.
+        from submit import _coding_checkpoints_required
+        captured["checkpoints_required"] = _coding_checkpoints_required(session)
 
         # #43 D1: carry the planning brief forward only when asked. "drop"
         # never opens or verifies it, so a corrupt source brief cannot block
@@ -439,7 +443,32 @@ def _read_approved_source(source_dir, from_loop, source_brief="keep"):
         return None  # read-only: never write the source session
 
     with_session_lock(source_dir, _check)
-    return captured["plan"], captured["brief_decision"], captured["brief"]
+    return (captured["plan"], captured["brief_decision"], captured["brief"],
+            captured["checkpoints_required"])
+
+
+def _plan_checkpoints(plan_bytes, required):
+    """#55 D1 coding-start table: ``(source, items)`` from the frozen plan
+    bytes, or ValueError. A flagged source must declare valid checkpoints;
+    a legacy source without the section gets one implicit checkpoint; a
+    present-but-invalid section is refused for either."""
+    from submit import parse_coding_checkpoints, ONE_CHECKPOINT_EXAMPLE
+    from session import IMPLICIT_CHECKPOINT
+
+    text = plan_bytes.decode("utf-8", errors="replace")
+    present, items, problems = parse_coding_checkpoints(text)
+    if present and problems:
+        raise ValueError(
+            "The approved plan's '## Coding Checkpoints' section is invalid: "
+            + "; ".join(problems))
+    if present:
+        return "declared", items
+    if required:
+        raise ValueError(
+            "The approved plan has no '## Coding Checkpoints' section, but "
+            "its planning loop requires one; revise the plan in a planning "
+            f"loop (a small fix declares one: {ONE_CHECKPOINT_EXAMPLE})")
+    return "implicit", [dict(IMPLICIT_CHECKPOINT)]
 
 
 def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
@@ -455,13 +484,15 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
          the source is planning-mode, ``plan_approved``, with a non-empty
          ``plan.current.md``;
       3. the Git base is snapshotted (must be ok: not unborn/conflicted);
+      2b. (#55) the approved plan's ``## Coding Checkpoints`` decides the
+         manifest: declared, implicit (legacy sources only), or refused;
       4. new loop dir; ``approved-plan.md`` written, then re-read and its
          SHA-256 compared with the source bytes' digest;
       5. only then tokens, ``session.json``, and events.
     """
     import hashlib
     import gitsnap
-    from session import MODE_CODING
+    from session import MODE_CODING, build_checkpoint_manifest
 
     if (not isinstance(from_loop, str) or not from_loop
             or not _SOURCE_LOOP_ID_RE.match(from_loop) or ".." in from_loop):
@@ -474,9 +505,12 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
     if not (source_dir / "session.json").is_file():
         raise ValueError(f"Source loop has no session: {from_loop}")
 
-    plan_bytes, source_brief_decision, source_brief_bytes = \
-        _read_approved_source(source_dir, from_loop, source_brief)
+    (plan_bytes, source_brief_decision, source_brief_bytes,
+     checkpoints_required) = _read_approved_source(
+        source_dir, from_loop, source_brief)
     plan_sha = hashlib.sha256(plan_bytes).hexdigest()
+    checkpoint_source, checkpoint_items = _plan_checkpoints(
+        plan_bytes, checkpoints_required)
 
     snap = gitsnap.snapshot(repo_root)
     if not snap.get("ok"):
@@ -515,6 +549,10 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
             "approval": None,
             "source_brief": source_brief_meta,
             "source_brief_decision": source_brief_decision,
+            # #55 D2: frozen once from the approved-plan bytes; never
+            # re-parsed after creation.
+            "checkpoints": build_checkpoint_manifest(
+                checkpoint_items, checkpoint_source, snap["head_tree"]),
         }
 
         tok_d, nonce_d = make_token(loop_id, "draftor")

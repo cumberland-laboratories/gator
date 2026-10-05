@@ -69,7 +69,12 @@ def _tokens(loop_dir):
 
 
 def make_planning_source(repo, stage="plan_approved", plan=PLAN_TEXT,
-                         mode="planning-only", feature="source-feature"):
+                         mode="planning-only", feature="source-feature",
+                         legacy=True):
+    # legacy=True models a pre-#55 planning loop (no coding_checkpoints
+    # flag): its plan needs no '## Coding Checkpoints' and the coding loop
+    # gets the implicit single checkpoint (no manifest-driven --checkpoint
+    # binding is exercised by these #41 suites). #55 tests pass False.
     # Outside the repo, so it never shows up as untracked residue.
     sketch = repo.parent / "sketch.md"
     sketch.write_text("# Sketch\n", encoding="utf-8")
@@ -78,6 +83,8 @@ def make_planning_source(repo, stage="plan_approved", plan=PLAN_TEXT,
     s = loop_session.load_session(loop_dir)
     s["status"]["stage"] = stage
     s["status"]["next_role"] = None
+    if legacy:
+        s.get("contract", {}).pop("coding_checkpoints", None)
     if mode is None:
         s.pop("mode", None)
     else:

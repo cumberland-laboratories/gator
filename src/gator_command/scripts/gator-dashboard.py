@@ -2374,6 +2374,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     and status.get("attention_notified_turn")
                     == status.get("turn_started_at")),
             })
+            # #55: checkpoint coding loops only; the sidebar shows this
+            # instead of Round X/Y (round/max_rounds stay, informational).
+            try:
+                from loop.session import checkpoint_summary
+                cps = checkpoint_summary(session)
+            except (AttributeError, KeyError, TypeError, ValueError):
+                cps = None
+            if cps is not None:
+                loops[-1]["checkpoint_summary"] = {
+                    k: cps[k] for k in ("index", "count", "findings_round",
+                                        "findings_budget", "generation")}
 
         self._send_json({"loops": loops})
 

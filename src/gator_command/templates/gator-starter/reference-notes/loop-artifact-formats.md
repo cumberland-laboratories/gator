@@ -119,6 +119,11 @@ what to check manually, what existing tests might break.>
 
 <Which charters will need updating after implementation.
 New modules that need new charters.>
+
+## Coding Checkpoints
+
+1. **<Responsibility one>** — <what this checkpoint implements, as one independently reviewable increment>. Verify: <the focused tests or checks for it>.
+2. **<Responsibility two>** — <the next increment, building on the approved previous one>. Verify: <its focused tests>.
 ```
 
 **Guidelines for the draftor:**
@@ -127,6 +132,7 @@ New modules that need new charters.>
 - Be concrete. "Refactor the module" is not a plan. "Split `render()` into `render_html()` and `render_markdown()` in `dashboard/helpers.py`" is a plan.
 - When the repository provides `.gator/procedures/writing-implementation-plans.md`, use it to choose a proportionate planning path and make the module, simplicity, and test boundaries explicit. Reviewers use the same procedure when judging the plan.
 - If the reviewer sent findings on a previous round, address every finding explicitly — don't silently drop any
+- **Coding Checkpoints is required** on every draft and revision of planning loops created since #55: exactly one `## Coding Checkpoints` section listing the ordered, **responsibility-based** checkpoints the coding loop will review one at a time. Each item is `N. **Title** — scope. Verify: verification.` (numbered 1, 2, 3...; continuation lines indented two spaces; at most 12). Titles name a responsibility, never a file. A single-responsibility change declares one checkpoint, for example `1. **Fix** — <the change>. Verify: <the focused test>.` Submission rejects a missing, duplicate, empty, or malformed section. Whether the checkpoints are *meaningful* is the reviewer's call.
 - **Context Checked is required** on every draft and revision of planning loops created since #46: exactly one `## Context Checked` section listing the Architect brief (when present), charters, and code or artifacts you actually consulted — or `None — <reason>`. Submission rejects a missing, duplicate, empty, or bare-placeholder section. Whether the list is *adequate* is the reviewer's call.
 
 ---
@@ -167,7 +173,11 @@ self-contained.>
 Does it miss anything the sketch requires?
 Does it add anything the sketch excludes?
 Is Context Checked credible — did the draftor read the Architect brief and
-the charters/code this plan touches? Missing context is a finding.>
+the charters/code this plan touches? Missing context is a finding.
+Are the Coding Checkpoints responsibility-based and independently reviewable?
+A multi-responsibility plan whose checkpoints are file-shaped, or are
+styling-, docs-, or tests-only pseudo-modules, is a finding. One checkpoint
+is correct for a single-responsibility change.>
 
 ## What Looks Good
 
@@ -243,12 +253,15 @@ them against the code.>
 
 <Leave a placeholder. The CLI replaces this section with the captured
 base and current HEAD, the staged-tree ID, the changed paths, the residue,
-and the exact review command `git diff <base_tree> <staged_tree>`.>
+and the exact review command `git diff <base_tree> <staged_tree>`. In a
+checkpoint loop it also writes the checkpoint and generation, and the
+review command becomes `git diff <checkpoint base> <staged_tree>`.>
 ```
 
 **Rules:**
 - Exactly one level-2 `## Commit State` section (a fenced example does not count). A duplicate is rejected.
 - Stage the change, including charter and `commit_draft` updates, before submitting. Nothing staged means the submission is rejected.
+- Checkpoint loops: stage only the active checkpoint's change on top of the approved earlier checkpoints, and submit with `--checkpoint <id>`. The CLI writes the checkpoint, its base tree and the generation into Commit State; you do not.
 - The Reviewer's findings or approval use the Findings format above. The CLI appends a `## Reviewed Candidate` section recording the exact reviewed tree, so do not write one yourself. Approval is refused if the staged tree or HEAD changed after submission.
 
 ---

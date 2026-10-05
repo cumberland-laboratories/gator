@@ -233,3 +233,27 @@ def _snapshot(start, base_head):
         "unstaged_paths": unstaged_list,
         "unstaged_truncated": unstaged_trunc,
     }
+
+
+def diff_trees(worktree_root, from_tree, to_tree):
+    """Changed paths between two tree OIDs (#55 checkpoint diff).
+
+    ``git diff-tree -r -z -M --name-status`` is a pure object-database
+    read: it takes no index lock and never touches refs, the index or the
+    worktree. Returns ``{"ok": True, "changed_paths", "changed_truncated"}``
+    (the same record shape and cap as ``snapshot``) or
+    ``{"ok": False, "error", "detail"}`` — never raises for Git conditions.
+    """
+    try:
+        root = Path(worktree_root)
+        if not root.is_dir():
+            raise _GitError("not_a_repo", f"not a directory: {root}")
+        r = _git(["diff-tree", "-r", "-z", "-M", "--name-status",
+                  str(from_tree), str(to_tree)], root)
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r))
+        changed, trunc = _cap(_parse_name_status_z(r.stdout))
+        return {"ok": True, "changed_paths": changed,
+                "changed_truncated": trunc}
+    except _GitError as exc:
+        return {"ok": False, "error": exc.code, "detail": exc.detail[:500]}
