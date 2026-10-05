@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.22.0 — modular checkpoints in coding loops (#55)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "loop",
+    "coding-loop",
+    "dashboard"
+  ],
+  "commit": "9e3a5b0988e69f6059716975924cf81801c6f303",
+  "short_commit": "9e3a5b0",
+  "snippet_id": "snippet-9e3a5b0988e69",
+  "session_group_key": "anthropic:fded9894-9292-430b-8888-6b18faee28ce",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "0be14d82254a22e38bb71e566c936d86685da857",
+  "started_at": "2026-10-05T15:34:30Z",
+  "ended_at": "2026-10-05T17:57:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-05-gator-0be14d82254a2.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump to 2.22.0: `pyproject.toml` and `VERSION` (kept byte-consistent), the CHANGELOG `[Unreleased]` section becomes `[2.22.0] — 2026-10-05` with a release summary (#55 modular checkpoints, the reopen evidence-overwrite fix, and link-only timeline cards), and the `scripts-core-library.md` version note."
+  ],
+  "transcript_session_id": "fded9894-9292-430b-8888-6b18faee28ce",
+  "transcript_ref": null
+}
