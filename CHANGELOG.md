@@ -2,7 +2,9 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.22.0] — 2026-10-05
+
+Feature release for the governed loop. Coding loops now review real code one responsibility at a time: plans declare `## Coding Checkpoints`, and the Reviewer approves each checkpoint's exact diff before the next one starts. Only the final approval leads to the single normal commit ([#55](https://github.com/cumberland-laboratories/gator/issues/55)). Also included: reopened coding loops no longer overwrite earlier evidence, and Loop timeline cards are link-only.
 
 ### Added
 
