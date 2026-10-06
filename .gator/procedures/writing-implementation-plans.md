@@ -72,16 +72,31 @@ needs.
      it is disproportionate or unsafe. Escalate instead when that choice is
      Architect-owned.
 
-5. **Scale verification to the new risk.** Add one focused test for each new
-   behavior or invariant. For every proposed test or test group, state the
-   behavior, invariant, or regression risk it proves; remove or consolidate
-   anything that has no distinct answer. Use integration, stale-response,
-   race, mutation, adversarial-path, or compatibility tests only when the
-   change creates that kind of risk. Reuse existing broad coverage rather than
-   duplicating it in every module. Parameterize equivalent rejection cases
-   instead of turning a validation matrix into many near-identical tests. End
-   with the smallest relevant regression suite, then the required full suite
-   once for the completed change.
+5. **Scale verification to the new risk and checkpoint.** Add one focused
+   test for each new behavior or invariant. For every proposed test or test
+   group, state the behavior, invariant, or regression risk it proves; remove
+   or consolidate anything that has no distinct answer. Use integration,
+   stale-response, race, mutation, adversarial-path, or compatibility tests
+   only when the change creates that kind of risk.
+
+   A coding-loop plan uses a verification ladder:
+
+   - At each coding checkpoint, run the direct unit, contract, and nearest
+     integration or UI tests for the responsibility just completed. These
+     checks should normally finish in a few minutes, not rerun a broad browser
+     or repository suite by default.
+   - At final coding-loop approval, run the smallest relevant broad regression
+     suite once across the completed change. A longer Dashboard or browser
+     suite is appropriate here when the change reaches that surface.
+   - Reserve the full repository or release matrix for CI/deployment, unless
+     the checkpoint itself changes a cross-cutting contract that genuinely
+     requires it.
+
+   Reuse existing broad coverage rather than duplicating it in every module.
+   Parameterize equivalent rejection cases instead of turning a validation
+   matrix into many near-identical tests. State the focused checks for each
+   checkpoint and the broad suite deferred to final approval, including why an
+   exception requires broad coverage earlier.
 
 6. **Write or review the plan.** Use the Loop implementation-plan format. In
    `## Approach`, state the selected planning path, the module map, the key
@@ -110,6 +125,9 @@ needs.
 - Could any listed tests be consolidated through an existing suite or a
   parameterized case without losing distinct risk coverage? If the answer is
   yes, the reviewer requests that reduction before approving the plan.
+- Does each coding checkpoint name only its focused verification, while the
+  broad Dashboard or regression suite is deferred to final approval? If not,
+  is there a stated cross-cutting reason for running it early?
 - Is the chosen path—direct coding, one plan review, or a full planning
   loop—proportionate to the actual risk?
 - Are the `## Coding Checkpoints` responsibility-based and independently

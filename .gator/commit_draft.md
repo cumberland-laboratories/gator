@@ -1,13 +1,14 @@
 ---
-message: "Housekeeping: #53 coding-loop residue and session snippets"
+message: "Housekeeping: verification-ladder procedure update and #51 planning-loop residue"
 change-type: maintenance
 significance: routine
-decision-tags: [housekeeping, governance, loop]
+decision-tags: [housekeeping, governance, procedure, loop]
 agent: claude-opus-5-5
 architect: Alan Gillette
 ---
 
 # Session Change Log
 
-- **Loop residue** `.gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/` (#53 coding loop, three checkpoints, approved and committed as `75c772e`): `approved-plan.md`, implementation and findings artifacts for generations 0–4 plus current, `session.json`, `events.jsonl`. Tokens, locks and temp files are excluded by `.gator/loops/.gitignore`; a scan of the committable files found no `glp_` strings.
-- **Session snippets:** `2026-10-05-gator-7b5ae7a4415e9.json` (housekeeping commit `7b5ae7a`, held out of the coding-loop candidate) and `2026-10-06-gator-75c772e0b3b74.json` (the #53 feature commit).
+- **Procedure** `.gator/procedures/writing-implementation-plans.md` (Architect's edit): step 5 adds a coding-loop verification ladder. Each checkpoint runs only its focused unit/contract/nearest-integration checks; the smallest relevant broad suite runs once at final coding-loop approval; the full repository or release matrix is left to CI unless a checkpoint changes a cross-cutting contract. A matching reviewer question is added.
+- **Loop residue** `.gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/` (#51 planning loop, approved in round 1): sketch, plan rounds 0–1 and current, findings rounds 0–1 and current, `session.json`, `events.jsonl`. Tokens and locks are excluded by `.gator/loops/.gitignore`; a scan of the committable files found no `glp_` strings.
+- **Session snippet:** `2026-10-06-gator-76eac62e78af7.json` (housekeeping commit `76eac62`).
