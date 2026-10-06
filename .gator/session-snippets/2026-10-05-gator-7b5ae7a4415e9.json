@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Housekeeping: Gator 2.22.0 runtime residue and #53 planning-loop residue",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "housekeeping",
+    "governance",
+    "loop"
+  ],
+  "commit": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+  "short_commit": "7b5ae7a",
+  "snippet_id": "snippet-7b5ae7a4415e9",
+  "session_group_key": "anthropic:430182f1-7254-4674-a816-97c8538c24bd",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "9e3a5b0988e69f6059716975924cf81801c6f303",
+  "started_at": "2026-10-05T19:30:13Z",
+  "ended_at": "2026-10-05T19:42:25Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/commit_draft.md",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/events.jsonl",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/findings.current.md",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/findings.round-0.md",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/plan.current.md",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/plan.round-0.md",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/session.json",
+    ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/sketch.md",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-05-gator-9e3a5b0988e69.json"
+  ],
+  "notes": [
+    "**Gator runtime update residue** (`gator update` to 2.22.0): `.gator/.gator-version` (cli-version 2.22.0) and `.gator/runtime-pin.json` (runtime 2.22.0, re-pinned 2026-10-05).",
+    "**Loop residue** `.gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z/` (#53 planning loop, approved in round 1): sketch, plan and findings (round 0 and current), `session.json`, `events.jsonl`. Tokens and locks are excluded by `.gator/loops/.gitignore`; a scan found `glp_` strings only in the ignored `.tokens.json`.",
+    "**Session snippet:** `2026-10-05-gator-9e3a5b0988e69.json`."
+  ],
+  "transcript_session_id": "430182f1-7254-4674-a816-97c8538c24bd",
+  "transcript_ref": null
+}

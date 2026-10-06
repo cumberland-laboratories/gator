@@ -1,0 +1,893 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z",
+  "feature": "loop-nonterminal-suspension-liveness",
+  "mode": "coding",
+  "created_at": "2026-10-05T19:44:25.063115+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 2,
+    "max_rounds": 6,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-06T00:22:22.262989+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-06T00:17:16.109863+00:00",
+    "architect_message": null,
+    "architect_response_artifact": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-005",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-005",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-05T22:16:38.547846+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-05T22:21:48.796923+00:00",
+      "round": 0,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-05T22:30:44.797733+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-05T22:33:41.421183+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-05T22:47:14.158150+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-05T23:42:53.307428+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-2.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-06T00:00:38.019062+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-3.md"
+    },
+    {
+      "turn_id": "reviewer-004",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-06T00:01:57.288792+00:00",
+      "round": 1,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-3.md"
+    },
+    {
+      "turn_id": "draftor-005",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-06T00:17:16.109808+00:00",
+      "round": 2,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-4.md"
+    },
+    {
+      "turn_id": "reviewer-005",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-06T00:22:22.262966+00:00",
+      "round": 2,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-4.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "loop-nonterminal-suspension-liveness-2026-10-05T19-32-46Z",
+    "plan_sha256": "568bc6c8b3d2ec1866c1764f46fb62a30ed38d23724ad4513254794f1320b70c",
+    "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+    "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-05T22:16:38.547884+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "head_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "2b23f68308f7fcea4d0490dcf23ca94148239707",
+          "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-05-gator-7b5ae7a4415e9.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/submit.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_suspension.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/approved-plan.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/events.jsonl",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_count": 9,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "2b23f68308f7fcea4d0490dcf23ca94148239707",
+          "reviewed_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "candidate_changed": true,
+          "live_snapshot_ok": false,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-05T22:21:48.794937+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 3,
+            "title": "Suspension state and resume integrity",
+            "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 1,
+        "submitted_at": "2026-10-05T22:30:44.797775+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "head_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b",
+          "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/submit.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_suspension.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/approved-plan.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/events.jsonl",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/session.json",
+            ".gator/session-snippets/2026-10-05-gator-7b5ae7a4415e9.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_count": 8,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 1,
+          "reviewed_tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b",
+          "reviewed_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-05T22:33:41.418810+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 3,
+            "title": "Suspension state and resume integrity",
+            "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 2,
+        "submitted_at": "2026-10-05T22:47:14.158210+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "head_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+          "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".claude/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "AGENTS.md"
+            },
+            {
+              "status": "M",
+              "path": "CLAUDE.md"
+            },
+            {
+              "status": "M",
+              "path": "GEMINI.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/liveness.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/submit.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_cli.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_lifecycle.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_projection.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_suspension.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/approved-plan.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/events.jsonl",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/session.json",
+            ".gator/session-snippets/2026-10-05-gator-7b5ae7a4415e9.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b",
+          "changed_count": 21,
+          "revisited_count": 6
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 2,
+          "reviewed_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+          "reviewed_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-05T23:42:53.304857+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 3,
+            "title": "Participant liveness across suspension",
+            "base_tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 3,
+        "submitted_at": "2026-10-06T00:00:38.019094+00:00",
+        "artifact_path": "implementation.round-3.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "head_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "e0bd8ff7e78858ec9b0a0d77c113054fad71d429",
+          "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".claude/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "AGENTS.md"
+            },
+            {
+              "status": "M",
+              "path": "CLAUDE.md"
+            },
+            {
+              "status": "M",
+              "path": "GEMINI.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/liveness.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/submit.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_cli.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_lifecycle.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_projection.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_suspension.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/approved-plan.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/events.jsonl",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-2.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-2.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/session.json",
+            ".gator/session-snippets/2026-10-05-gator-7b5ae7a4415e9.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+          "changed_count": 6,
+          "revisited_count": 1
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 1,
+          "generation": 3,
+          "reviewed_tree": "e0bd8ff7e78858ec9b0a0d77c113054fad71d429",
+          "reviewed_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-3.md",
+          "reviewed_at": "2026-10-06T00:01:57.286371+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 3,
+            "title": "Architect workspace for suspension",
+            "base_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36"
+          }
+        }
+      },
+      {
+        "round": 2,
+        "generation": 4,
+        "submitted_at": "2026-10-06T00:17:16.109845+00:00",
+        "artifact_path": "implementation.round-4.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "head_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "63e77c49b67b4c8e54e07266ae34b849057ca60d",
+          "base_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".claude/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "AGENTS.md"
+            },
+            {
+              "status": "M",
+              "path": "CLAUDE.md"
+            },
+            {
+              "status": "M",
+              "path": "GEMINI.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/liveness.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/submit.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/commands/loop-join.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/loop-participant-watcher.md"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_cli.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_lifecycle.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop_liveness_projection.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_suspension.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/approved-plan.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/events.jsonl",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-2.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/findings.round-3.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.current.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-0.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-1.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-2.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/implementation.round-3.md",
+            ".gator/loops/loop-nonterminal-suspension-liveness-2026-10-05T19-44-25Z/session.json",
+            ".gator/session-snippets/2026-10-05-gator-7b5ae7a4415e9.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+          "changed_count": 6,
+          "revisited_count": 1
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 2,
+          "generation": 4,
+          "reviewed_tree": "63e77c49b67b4c8e54e07266ae34b849057ca60d",
+          "reviewed_head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-4.md",
+          "reviewed_at": "2026-10-06T00:22:22.260806+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 3,
+            "title": "Architect workspace for suspension",
+            "base_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "63e77c49b67b4c8e54e07266ae34b849057ca60d",
+      "head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+      "round": 2,
+      "generation": 4,
+      "ts": "2026-10-06T00:22:22.260806+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 2,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Suspension state and resume integrity",
+          "scope": "single validated suspend/restore path (`_suspend` / `_clear_suspension`), pause reason and suspension timestamp fields, recipient-scoped Architect messages that pauses, unrelated unblocks and the other role's submission never erase, end resolves a pending decision as `cancelled_by_end`, and recipient-aware message display in model status/wait.",
+          "verify": "`tests/test_loop_suspension.py` transition table, mixed sequence, end-while-suspended and legacy-pause tests, plus the existing escalate/unblock/extend/reopen suites.",
+          "state": "approved",
+          "base_tree": "38b2c495d8c06205e7967ed312278e32ec9b7d45",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b",
+            "head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+            "generation": 1,
+            "ts": "2026-10-05T22:33:41.418810+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Participant liveness across suspension",
+          "scope": "status exits 1 and wait keeps waiting through pause/block (exit 2 terminal only) with additive `suspension` JSON, the watcher acks `architect-block` and stays registered until turn-ready/terminal/deadline, and the drift-pinned protocol, watcher note, `/loop-join` and entry points describe the new contract.",
+          "verify": "wait/status suspension tests, watcher lifecycle and restart-idempotency tests, and the updated `TestWaitHandoffAlignment` / `TestParticipantDocs` / `TestDriftGuards` guards.",
+          "state": "approved",
+          "base_tree": "67e99a2b3d59ab7a1a2f647908ca55ff2a54d20b",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+            "head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+            "generation": 2,
+            "ts": "2026-10-05T23:42:53.304857+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "Architect workspace for suspension",
+          "scope": "distinct blocked and paused cards from real session fields, multiline response textarea that survives polling, decisions and pause history, post-unblock notice that claims no model work, and the connected-through-hold liveness wording.",
+          "verify": "Playwright loop-workspace tests for card content, textarea preservation with mutation-free polls, decision history and notice text.",
+          "state": "approved",
+          "base_tree": "85d1b25b5b155c1ab17bb72160f176c4b85cee36",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "63e77c49b67b4c8e54e07266ae34b849057ca60d",
+            "head": "7b5ae7a4415e9f303f4705513a58cf0d14dbe863",
+            "generation": 4,
+            "ts": "2026-10-06T00:22:22.260806+00:00"
+          }
+        }
+      ]
+    }
+  }
+}
