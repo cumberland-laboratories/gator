@@ -33,6 +33,9 @@ from session import (
     _make_readonly, _make_writable, attention_mode,
     BRIEF_FILENAME, SOURCE_BRIEF_FILENAME, brief_meta, read_brief_file,
     brief_bytes_from_text, read_verified_brief, verify_brief,
+    append_turn, read_governed_input, verify_fixed_artifact,
+    ARCHITECT_PLAN_FILENAME, MAX_PLAN_BYTES, MAX_BASELINE_BYTES,
+    REVISION_BASELINE_PLAN, REVISION_BASELINE_APPROVAL, _is_reparse_point,
 )
 from events import (
     emit_event, create_events_file, format_event, format_next_prompt,
@@ -224,7 +227,8 @@ def write_host_metadata(fd, nonce):
 
 def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
               repo_root=None, mode="planning", from_loop=None,
-              brief_path=None, brief_text=None, source_brief=None):
+              brief_path=None, brief_text=None, source_brief=None,
+              plan_path=None, revise_from=None):
     """Create a new loop session on disk.
 
     When ``repo_root`` is provided (dashboard path), it is used directly.
@@ -241,8 +245,25 @@ def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
     any directory is created and stored immutably as architect-brief.md.
     ``source_brief`` ("keep" default / "drop") applies to coding starts only.
 
+    ``plan_path`` (#51) starts a planning loop from an Architect-originated
+    draft plan at Reviewer ``plan_review``; see ``_init_architect_plan_loop``.
+    The sketch is optional then. ``revise_from`` (#51) starts an ordinary
+    planning loop that revises an approved planning loop, from verified
+    baseline copies; see ``_init_revision_loop``. The two are mutually
+    exclusive and planning-only; ``revise_from`` requires a sketch.
+
     Returns ``(loop_id, loop_dir)`` without entering the watch loop.
     """
+    if plan_path is not None and revise_from is not None:
+        raise ValueError("Use --plan-file or --revise-from, not both")
+    if plan_path is not None and mode != "planning":
+        raise ValueError("--plan-file starts a planning loop; it is not valid "
+                         "with --mode coding")
+    if revise_from is not None and mode != "planning":
+        raise ValueError("--revise-from starts a planning loop; it is not "
+                         "valid with --mode coding")
+    if revise_from is not None and sketch_path is None:
+        raise ValueError("--revise-from requires --sketch (the revision sketch)")
     brief_bytes = _resolve_brief_input(brief_path, brief_text)
     if mode == "coding":
         if sketch_path is not None:
@@ -263,6 +284,18 @@ def init_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
     if source_brief is not None:
         raise ValueError(
             "--source-brief is only valid when starting a coding loop")
+    if plan_path is not None:
+        if repo_root is None:
+            repo_root = find_gator_root()
+        return _init_architect_plan_loop(
+            feature, plan_path, sketch_path, max_rounds, turn_timeout,
+            Path(repo_root), brief_bytes=brief_bytes)
+    if revise_from is not None:
+        if repo_root is None:
+            repo_root = find_gator_root()
+        return _init_revision_loop(
+            feature, sketch_path, revise_from, max_rounds, turn_timeout,
+            Path(repo_root), brief_bytes=brief_bytes)
     if sketch_path is None:
         raise ValueError("A planning loop requires --sketch")
 
@@ -344,6 +377,321 @@ def _write_brief(loop_dir, name, data):
     if verify_brief(loop_dir, meta, name) != "ok":
         raise ValueError(f"Architect brief copy failed its digest check ({name})")
     return meta
+
+
+def _write_fixed_artifact(loop_dir, name, data):
+    """Write immutable fixed-artifact bytes and verify the copy (#51).
+    Returns the {artifact, sha256, bytes} metadata."""
+    meta = brief_meta(data, name)
+    dest = Path(loop_dir) / name
+    with open(dest, "wb") as f:
+        f.write(data)
+    _make_readonly(dest)
+    if verify_fixed_artifact(loop_dir, meta, name) != "ok":
+        raise ValueError(f"{name} copy failed its digest check")
+    return meta
+
+
+def _write_checked_bytes(loop_dir, name, data, sha):
+    """Write bytes, re-read them and compare the SHA-256 with ``sha``."""
+    import hashlib
+    from submit import _write_artifact_bytes
+    _write_artifact_bytes(loop_dir, name, data)
+    if hashlib.sha256((Path(loop_dir) / name).read_bytes()).hexdigest() != sha:
+        raise ValueError(f"{name} copy failed its digest check")
+
+
+ARCHITECT_PLAN_TURN_SUMMARY = (
+    "Architect-originated draft plan submitted for Reviewer approval")
+ARCHITECT_PLAN_EVENT_DETAIL = (
+    "Architect-originated draft plan -- awaiting Reviewer approval")
+
+
+def _init_architect_plan_loop(feature, plan_path, sketch_path, max_rounds,
+                              turn_timeout, repo_root, brief_bytes=None):
+    """#51: a planning loop whose first plan is Architect-originated.
+
+    Order (atomic -- any failure after the directory exists removes it):
+      1. the plan is read ONCE through ``read_governed_input`` (repository
+         containment, no links/aliases, regular, stable, UTF-8, bounded);
+      2. the captured bytes pass the SAME check as a Draftor draft
+         (``_check_plan_draft`` with both new-session contract flags);
+      3. the optional sketch is checked the ordinary way;
+      4. only then the loop directory; ``architect-plan.md`` (immutable,
+         verified), ``plan.round-0.md`` and ``plan.current.md`` (the exact
+         validated bytes, digest-checked); the optional sketch and brief;
+      5. tokens, the session (plan_source block, one Architect
+         ``initial_plan`` turn, ``plan_review`` entry), then the events
+         ``loop_started`` and ``architect_plan_submitted``.
+    The plan is never approved by being written: the Reviewer owns the
+    first turn, and no Draftor turn is fabricated.
+    """
+    import hashlib
+    from submit import _check_plan_draft
+    from state_machine import enter_architect_plan_review
+
+    plan_bytes = read_governed_input(plan_path, repo_root, MAX_PLAN_BYTES,
+                                     "Architect plan")
+    _check_plan_draft(plan_bytes, True, True)
+    plan_sha = hashlib.sha256(plan_bytes).hexdigest()
+
+    sketch = None
+    if sketch_path is not None:
+        sketch = Path(sketch_path)
+        if not sketch.exists():
+            raise FileNotFoundError(f"Sketch file not found: {sketch_path}")
+        if sketch.stat().st_size == 0:
+            raise ValueError(f"Sketch file is empty: {sketch_path}")
+
+    loop_id = make_loop_id(feature)
+    loops_base = repo_root / ".gator" / "loops"
+    loops_base.mkdir(parents=True, exist_ok=True)
+    ensure_loops_gitignore(loops_base)
+    loop_dir = loops_base / loop_id
+    loop_dir.mkdir()
+    try:
+        plan_meta = _write_fixed_artifact(loop_dir, ARCHITECT_PLAN_FILENAME,
+                                          plan_bytes)
+        _write_checked_bytes(loop_dir, "plan.round-0.md", plan_bytes, plan_sha)
+        _write_checked_bytes(loop_dir, "plan.current.md", plan_bytes, plan_sha)
+        if sketch is not None:
+            sketch_dest = loop_dir / "sketch.md"
+            shutil.copy2(str(sketch), str(sketch_dest))
+            _make_readonly(sketch_dest)
+        brief = None
+        if brief_bytes is not None:
+            brief = _write_brief(loop_dir, BRIEF_FILENAME, brief_bytes)
+
+        tok_d, nonce_d = make_token(loop_id, "draftor")
+        tok_r, nonce_r = make_token(loop_id, "reviewer")
+        tok_a, nonce_a = make_token(loop_id, "architect")
+        save_tokens(loop_dir, {
+            "draftor": {"nonce": nonce_d, "token": tok_d},
+            "reviewer": {"nonce": nonce_r, "token": tok_r},
+            "architect": {"nonce": nonce_a, "token": tok_a},
+        })
+
+        plan_source = dict(plan_meta, kind="architect")
+        session = create_session(feature, loop_id, max_rounds, turn_timeout,
+                                 brief=brief, plan_source=plan_source)
+        turn = append_turn(session, "architect", "initial_plan",
+                           ARCHITECT_PLAN_TURN_SUMMARY, "plan.round-0.md")
+        session["current"]["draft"] = {
+            "turn_id": turn["turn_id"],
+            "summary": turn["summary"],
+            "artifact_path": "plan.current.md",
+        }
+        enter_architect_plan_review(session, turn_timeout)
+        save_session(loop_dir, session)
+
+        create_events_file(loop_dir)
+        start_event = {
+            "event": "loop_started",
+            "detail": "Loop initialized from an Architect-originated draft plan",
+            "plan_source_kind": "architect",
+            "plan_sha256": plan_sha,
+            "plan_bytes": len(plan_bytes),
+        }
+        if brief is not None:
+            start_event["brief_sha256"] = brief["sha256"]
+            start_event["brief_bytes"] = brief["bytes"]
+        emit_event(loop_dir, start_event)
+        emit_event(loop_dir, {
+            "event": "architect_plan_submitted",
+            "role": "architect",
+            "round": 0,
+            "artifact_path": "plan.round-0.md",
+            "detail": ARCHITECT_PLAN_EVENT_DETAIL,
+        })
+    except BaseException:
+        _remove_partial_loop(loop_dir)
+        raise
+    return loop_id, loop_dir
+
+
+_PLAN_ROUND_RE = __import__("re").compile(r"^plan\.round-\d+\.md$")
+_FINDINGS_ROUND_RE = __import__("re").compile(r"^findings\.round-\d+\.md$")
+APPROVING_REVIEW_SUMMARY = "Plan approved"
+
+
+def _read_source_file(source_dir, name, what):
+    """Bytes of one source-loop artifact: a regular, non-link, non-empty
+    file of at most MAX_BASELINE_BYTES. ValueError names the problem."""
+    path = Path(source_dir) / name
+    if path.is_symlink() or _is_reparse_point(path):
+        raise ValueError(f"Source loop's {what} ({name}) is a link")
+    if not path.is_file():
+        raise ValueError(f"Source loop's {what} ({name}) is missing")
+    with open(path, "rb") as f:
+        data = f.read(MAX_BASELINE_BYTES + 1)
+    if not data.strip():
+        raise ValueError(f"Source loop's {what} ({name}) is empty")
+    if len(data) > MAX_BASELINE_BYTES:
+        raise ValueError(
+            f"Source loop's {what} ({name}) is larger than "
+            f"{MAX_BASELINE_BYTES} bytes; it cannot be a revision baseline")
+    return data
+
+
+def _read_revision_source(source_dir, revise_from):
+    """#51: the approved plan and its approving review, read under the
+    source's session lock (read-only callback: the source is never written).
+
+    Identification (no guessing; any mismatch fails with a named reason):
+      - canonical id (session.loop_id == requested id), planning mode,
+        stage plan_approved;
+      - approval: the LAST turn is the Reviewer's ``plan_review`` turn with
+        summary "Plan approved" and a ``findings.round-N.md`` artifact that
+        is byte-equal to ``findings.current.md``;
+      - plan: ``plan.current.md`` is byte-equal to the artifact of the latest
+        plan-producing turn (a Draftor ``plan_draft`` or the Architect
+        ``initial_plan``).
+    Returns ``(plan_bytes, approval_bytes, approval_source_name)``.
+    """
+    from session import with_session_lock, loop_mode
+
+    captured = {}
+
+    def _check(session):
+        if session.get("loop_id") != revise_from:
+            raise ValueError(
+                f"Source loop id {revise_from!r} is not canonical "
+                "(it does not match the source session's loop_id)")
+        try:
+            mode = loop_mode(session)
+        except ValueError as exc:
+            raise ValueError(f"Source loop has an unknown mode: {exc}")
+        if mode != "planning":
+            raise ValueError(
+                "Only an approved planning loop can be revised (got a coding loop)")
+        stage = session.get("status", {}).get("stage")
+        if stage != "plan_approved":
+            raise ValueError(
+                f"Source loop's plan is not approved (stage: {stage})")
+        turns = session.get("turns") or []
+        last = turns[-1] if turns else {}
+        approval_name = last.get("artifact_path")
+        if not (last.get("role") == "reviewer"
+                and last.get("type") == "plan_review"
+                and last.get("summary") == APPROVING_REVIEW_SUMMARY
+                and isinstance(approval_name, str)
+                and _FINDINGS_ROUND_RE.match(approval_name)):
+            raise ValueError(
+                "Source loop's approving review cannot be identified (the last "
+                "turn is not the Reviewer's approval)")
+        approval = _read_source_file(source_dir, approval_name, "approving review")
+        current = _read_source_file(source_dir, "findings.current.md",
+                                    "current review")
+        if approval != current:
+            raise ValueError(
+                f"Source loop's approving review is inconsistent "
+                f"({approval_name} differs from findings.current.md)")
+        plan_turns = [t for t in turns
+                      if (t.get("role") == "draftor" and t.get("type") == "plan_draft")
+                      or (t.get("role") == "architect"
+                          and t.get("type") == "initial_plan")]
+        plan_name = plan_turns[-1].get("artifact_path") if plan_turns else None
+        if not (isinstance(plan_name, str) and _PLAN_ROUND_RE.match(plan_name)):
+            raise ValueError("Source loop's approved plan cannot be identified "
+                             "(no plan submission turn)")
+        plan = _read_source_file(source_dir, "plan.current.md", "approved plan")
+        latest = _read_source_file(source_dir, plan_name, "latest plan round")
+        if plan != latest:
+            raise ValueError(
+                f"Source loop's approved plan is inconsistent "
+                f"(plan.current.md differs from {plan_name})")
+        captured.update(plan=plan, approval=approval, approval_name=approval_name)
+        return None  # read-only: never write the source session
+
+    with_session_lock(source_dir, _check)
+    return captured["plan"], captured["approval"], captured["approval_name"]
+
+
+def _init_revision_loop(feature, sketch_path, revise_from, max_rounds,
+                        turn_timeout, repo_root, brief_bytes=None):
+    """#51: an ordinary Draftor-led planning loop that revises an approved
+    planning loop, from immutable verified baseline copies.
+
+    Order (atomic -- any failure after the directory exists removes it):
+      1. canonical source id shape; source dir/session present;
+      2. the revision sketch through ``read_governed_input``;
+      3. ``_read_revision_source`` under the source lock (read-only);
+      4. only then the loop dir: ``sketch.md`` (the exact sketch bytes),
+         ``revision-baseline-plan.md`` and ``revision-baseline-approval.md``
+         (immutable, verified), the optional brief;
+      5. tokens, the session (``revision`` block, ordinary plan_drafting),
+         ``loop_started`` with the source id and both digests.
+    The source loop is only read; the copies, not live paths, are the
+    authority if the source later changes or is removed.
+    """
+    import hashlib
+
+    if (not isinstance(revise_from, str) or not revise_from
+            or not _SOURCE_LOOP_ID_RE.match(revise_from) or ".." in revise_from):
+        raise ValueError(f"Invalid source loop id: {revise_from!r}")
+    loops_base = repo_root / ".gator" / "loops"
+    source_dir = loops_base / revise_from
+    if source_dir.is_symlink() or not source_dir.is_dir():
+        raise ValueError(f"Source loop not found: {revise_from}")
+    if not (source_dir / "session.json").is_file():
+        raise ValueError(f"Source loop has no session: {revise_from}")
+
+    sketch_bytes = read_governed_input(sketch_path, repo_root, MAX_PLAN_BYTES,
+                                       "Revision sketch")
+    plan_bytes, approval_bytes, approval_name = _read_revision_source(
+        source_dir, revise_from)
+
+    loops_base.mkdir(parents=True, exist_ok=True)
+    ensure_loops_gitignore(loops_base)
+    loop_id = make_loop_id(feature)
+    loop_dir = loops_base / loop_id
+    loop_dir.mkdir()
+    try:
+        _write_checked_bytes(loop_dir, "sketch.md", sketch_bytes,
+                             hashlib.sha256(sketch_bytes).hexdigest())
+        baseline = _write_fixed_artifact(loop_dir, REVISION_BASELINE_PLAN,
+                                         plan_bytes)
+        approval = _write_fixed_artifact(loop_dir, REVISION_BASELINE_APPROVAL,
+                                         approval_bytes)
+        brief = None
+        if brief_bytes is not None:
+            brief = _write_brief(loop_dir, BRIEF_FILENAME, brief_bytes)
+
+        tok_d, nonce_d = make_token(loop_id, "draftor")
+        tok_r, nonce_r = make_token(loop_id, "reviewer")
+        tok_a, nonce_a = make_token(loop_id, "architect")
+        save_tokens(loop_dir, {
+            "draftor": {"nonce": nonce_d, "token": tok_d},
+            "reviewer": {"nonce": nonce_r, "token": tok_r},
+            "architect": {"nonce": nonce_a, "token": tok_a},
+        })
+
+        revision = {
+            "source_loop_id": revise_from,
+            "baseline": baseline,
+            "approval": dict(approval, source_artifact=approval_name),
+        }
+        session = create_session(feature, loop_id, max_rounds, turn_timeout,
+                                 brief=brief, revision=revision)
+        save_session(loop_dir, session)
+
+        create_events_file(loop_dir)
+        start_event = {
+            "event": "loop_started",
+            "detail": f"Revision planning loop initialized from {revise_from}",
+            "revision_source_loop_id": revise_from,
+            "baseline_sha256": baseline["sha256"],
+            "approval_sha256": approval["sha256"],
+            "approval_source_artifact": approval_name,
+        }
+        if brief is not None:
+            start_event["brief_sha256"] = brief["sha256"]
+            start_event["brief_bytes"] = brief["bytes"]
+        emit_event(loop_dir, start_event)
+    except BaseException:
+        _remove_partial_loop(loop_dir)
+        raise
+    return loop_id, loop_dir
 
 
 def find_active_loop(loops_base):
@@ -679,7 +1027,7 @@ def extend_loop(token, rounds, message, loop_dir=None):
 
 def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
                mode="planning", from_loop=None, brief_path=None,
-               source_brief=None):
+               source_brief=None, plan_path=None, revise_from=None):
     """Initialize a new loop session and enter the watch loop.
 
     Acquires ``start.lock`` to enforce one-active-loop-per-repo, then
@@ -705,7 +1053,8 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
         loop_id, loop_dir = init_loop(
             feature, sketch_path, max_rounds, turn_timeout,
             repo_root=repo_root, mode=mode, from_loop=from_loop,
-            brief_path=brief_path, source_brief=source_brief)
+            brief_path=brief_path, source_brief=source_brief,
+            plan_path=plan_path, revise_from=revise_from)
 
         host_fd = acquire_host_lock(loop_dir)
         if host_fd is None:
@@ -721,7 +1070,10 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
         tokens["draftor"]["token"],
         tokens["reviewer"]["token"],
         tokens["architect"]["token"],
-    )
+        source_note=(("Architect-originated draft plan -- awaiting Reviewer "
+                      "approval (the Reviewer acts first)") if plan_path else
+                     (f"Revision of {revise_from} (baseline plan and approving "
+                      "review copied)") if revise_from else None))
 
     try:
         watch_loop(loop_dir, host_lock_fd=host_fd)
@@ -735,14 +1087,16 @@ def start_loop(feature, sketch_path, max_rounds=3, turn_timeout=300,
 # Startup banner
 # ---------------------------------------------------------------------------
 
-def _print_banner(loop_id, feature, max_rounds, turn_timeout, tok_d, tok_r, tok_a):
+def _print_banner(loop_id, feature, max_rounds, turn_timeout, tok_d, tok_r, tok_a,
+                  source_note=None):
     """Print the startup display with tokens and join instructions."""
     timeout_str = _format_timeout(turn_timeout)
+    source_line = f"\n  Plan source: {source_note}" if source_note else ""
     print(f"""
   gator loop
 
   Loop: {loop_id}
-  Feature: {feature}
+  Feature: {feature}{source_line}
   Max rounds: {max_rounds}
   Attention interval: {timeout_str} (Architect notice only; participants never see it)
 

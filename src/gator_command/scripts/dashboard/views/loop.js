@@ -144,6 +144,7 @@
     loop_paused:            "PAUSED",
     architect_interjection: "ARCHITECT",
     loop_ended_by_architect:"ENDED",
+    architect_plan_submitted: "Architect plan \u2014 awaiting Reviewer",  // #51
   };
 
   // ── view state ─────────────────────────────────────────────────────────────
@@ -610,8 +611,28 @@
       + '<div id="loop-source-picker"></div>'
       + '<div id="loop-source-brief"></div>'
       + '</div>'
+      + '<fieldset class="loop-create-field loop-create-plan-source" id="loop-plan-source-field">'
+      + '<legend class="loop-create-label">Plan source</legend>'
+      + '<label><input type="radio" name="loop-plan-source" value="sketch" checked> '
+      + 'From a sketch \u2014 the Draftor writes the plan</label><br>'
+      + '<label><input type="radio" name="loop-plan-source" value="revision"> '
+      + 'Revise an approved plan \u2014 baseline copied, the Draftor writes a full replacement</label><br>'
+      + '<label><input type="radio" name="loop-plan-source" value="architect_plan"> '
+      + 'Architect plan for review \u2014 the Reviewer acts first; not approved until the Reviewer approves</label>'
+      + '</fieldset>'
+      + '<div class="loop-create-field" id="loop-revise-field" hidden>'
+      + '<label class="loop-create-label" for="loop-revise-select">Approved planning loop to revise</label>'
+      + '<div id="loop-revise-picker"></div>'
+      + '</div>'
+      + '<div class="loop-create-field" id="loop-plan-field" hidden>'
+      + '<label class="loop-create-label" for="loop-plan-path">Architect plan file (repo-relative)</label>'
+      + '<input type="text" id="loop-plan-path" class="loop-create-input" '
+      + 'placeholder="e.g. .gator/artifacts/my-plan.md">'
+      + '<div class="loop-create-hint">Checked exactly like a Draftor draft '
+      + '(Context Checked, Coding Checkpoints).</div>'
+      + '</div>'
       + '<div class="loop-create-field" id="loop-sketch-field">'
-      + '<label class="loop-create-label">Sketch source</label>'
+      + '<label class="loop-create-label" id="loop-sketch-label">Sketch source</label>'
       + '<div id="loop-sketch-picker">'
       + '<div class="muted" style="padding:8px 0;">Loading sketch sources…</div>'
       + '</div>'
@@ -687,10 +708,18 @@
 
     // Loop type (#43 M2a): planning (sketch) or coding (approved plan).
     _create = { mode: "planning", overLimit: false, sourcePending: false,
-                noSources: false, sourceRev: 0, sourceBrief: null };
+                noSources: false, sourceRev: 0, sourceBrief: null,
+                planSource: "sketch", noReviseSources: false,
+                prefilledFeature: null };
     mainEl.querySelectorAll('input[name="loop-mode"]').forEach(function (r) {
       r.addEventListener("change", function () {
         setCreateMode(container, r.value);
+      });
+    });
+    // #51: planning source (sketch / revision / Architect plan).
+    mainEl.querySelectorAll('input[name="loop-plan-source"]').forEach(function (r) {
+      r.addEventListener("change", function () {
+        setPlanSource(container, r.value);
       });
     });
 
@@ -812,20 +841,80 @@
     var btn = container.querySelector("#loop-create-action");
     if (!btn || !_create) return;
     var blocked = _create.overLimit
-      || (_create.mode === "coding" && (_create.noSources || _create.sourcePending));
+      || (_create.mode === "coding" && (_create.noSources || _create.sourcePending))
+      || (_create.mode === "planning" && _create.planSource === "revision"
+          && _create.noReviseSources);
     if (btn.textContent !== "Creating…") btn.disabled = blocked;
   }
 
   async function setCreateMode(container, mode) {
     _create.mode = mode;
     var sourceField = container.querySelector("#loop-source-field");
-    var sketchField = container.querySelector("#loop-sketch-field");
     sourceField.hidden = mode !== "coding";
-    sketchField.hidden = mode === "coding";
+    container.querySelector("#loop-plan-source-field").hidden = mode === "coding";
+    applyPlanSourceFields(container);
     if (mode === "coding") {
       await loadSourcePicker(container);
     }
     updateCreateEnabled(container);
+  }
+
+  // #51: which planning-source fields are visible. The server (init_loop)
+  // validates everything; these are convenience only.
+  function applyPlanSourceFields(container) {
+    var planning = _create.mode === "planning";
+    var src = _create.planSource;
+    container.querySelector("#loop-sketch-field").hidden = !planning;
+    container.querySelector("#loop-revise-field").hidden = !(planning && src === "revision");
+    container.querySelector("#loop-plan-field").hidden = !(planning && src === "architect_plan");
+    var label = container.querySelector("#loop-sketch-label");
+    if (label) {
+      label.textContent = src === "revision" ? "Revision sketch"
+        : src === "architect_plan" ? "Sketch source (optional)" : "Sketch source";
+    }
+  }
+
+  async function setPlanSource(container, src) {
+    _create.planSource = src;
+    applyPlanSourceFields(container);
+    if (src === "revision") await loadRevisePicker(container);
+    updateCreateEnabled(container);
+  }
+
+  async function loadRevisePicker(container) {
+    var picker = container.querySelector("#loop-revise-picker");
+    var gen = _state.generation;
+    var loops = await fetchLoops();
+    if (gen !== _state.generation || !picker.isConnected) return;
+    var approved = loops.filter(function (l) {
+      return l.mode === "planning" && l.stage === "plan_approved";
+    });
+    _create.noReviseSources = approved.length === 0;
+    if (!approved.length) {
+      picker.innerHTML = '<div class="loop-create-hint">No approved planning '
+        + 'loops to revise.</div>';
+    } else {
+      var html = '<select id="loop-revise-select" class="loop-create-input">';
+      approved.forEach(function (l) {
+        html += '<option value="' + escHtml(l.loop_id) + '">'
+          + escHtml(l.feature + " \u2014 " + l.loop_id) + '</option>';
+      });
+      picker.innerHTML = html + '</select>';
+    }
+    updateCreateEnabled(container);
+  }
+
+  // #51 follow-on: a coding loop's feature name defaults to the approved
+  // source's feature -- only into an EMPTY field (or one still holding our
+  // own earlier prefill), and it stays editable.
+  function prefillFeature(container, feature) {
+    var el = container.querySelector("#loop-feature-input");
+    if (!el || !feature) return;
+    var current = el.value.trim();
+    if (current === "" || current === _create.prefilledFeature) {
+      el.value = feature;
+      _create.prefilledFeature = feature;
+    }
   }
 
   async function loadSourcePicker(container) {
@@ -852,9 +941,13 @@
     html += '</select>';
     picker.innerHTML = html;
     var sel = picker.querySelector("#loop-source-select");
+    var featureById = {};
+    approved.forEach(function (l) { featureById[l.loop_id] = l.feature; });
     sel.addEventListener("change", function () {
+      prefillFeature(container, featureById[sel.value]);
       loadSourceBrief(container, sel.value);
     });
+    prefillFeature(container, featureById[sel.value]);
     loadSourceBrief(container, sel.value);
   }
 
@@ -914,7 +1007,28 @@
     }
 
     var coding = !!(_create && _create.mode === "coding");
+    var planSource = (_create && _create.planSource) || "sketch";
     var fromLoop = "";
+    var reviseFrom = "";
+    var planPath = "";
+    if (!coding && planSource === "revision") {
+      var revSel = container.querySelector("#loop-revise-select");
+      reviseFrom = revSel ? revSel.value : "";
+      if (!reviseFrom) {
+        errorEl.textContent = "Choose an approved planning loop to revise.";
+        errorEl.style.display = "block";
+        return;
+      }
+    }
+    if (!coding && planSource === "architect_plan") {
+      var planEl = container.querySelector("#loop-plan-path");
+      planPath = planEl ? planEl.value.trim() : "";
+      if (!planPath) {
+        errorEl.textContent = "An Architect plan file is required.";
+        errorEl.style.display = "block";
+        return;
+      }
+    }
     if (coding) {
       var srcSel = container.querySelector("#loop-source-select");
       fromLoop = srcSel ? srcSel.value : "";
@@ -923,8 +1037,9 @@
         errorEl.style.display = "block";
         return;
       }
-    } else if (!sketchPath) {
-      errorEl.textContent = "A sketch source is required.";
+    } else if (!sketchPath && planSource !== "architect_plan") {
+      errorEl.textContent = planSource === "revision"
+        ? "A revision sketch is required." : "A sketch source is required.";
       errorEl.style.display = "block";
       return;
     }
@@ -969,7 +1084,10 @@
       var keepEl = container.querySelector("#loop-keep-source-brief");
       if (keepEl) body.source_brief = keepEl.checked ? "keep" : "drop";
     } else {
-      body.sketch_path = sketchPath;
+      // #51: exactly the chosen source's fields.
+      if (sketchPath) body.sketch_path = sketchPath;
+      if (planSource === "revision") body.revise_from = reviseFrom;
+      if (planSource === "architect_plan") body.plan_path = planPath;
     }
     if (briefText.trim()) body.brief = briefText;  // blank = no brief
     var result = await postStart(body);
@@ -1318,6 +1436,10 @@
       coding.source_brief || null, coding.source_brief_check || null,
       coding.source_brief_decision || null,
       artifactSuffixes(events),
+      // #51 provenance views (labels + presence)
+      status ? status.planning_source || null : null,
+      status ? status.plan_source || null : null,
+      status ? status.revision || null : null,
     ]);
   }
 
@@ -1341,6 +1463,7 @@
   function buildLoopSkeleton(mainEl) {
     mainEl.innerHTML = '<div class="loop-detail">'
       + '<div id="loop-region-header"></div>'
+      + '<div id="loop-region-source"></div>'
       + '<div id="loop-region-blocked"></div>'
       + '<div id="loop-region-decisions"></div>'
       + '<div id="loop-region-coding"></div>'
@@ -1398,6 +1521,9 @@
         terminal ? renderOutcomeHeader(status) : renderLiveHeader(status);
     });
     if (!terminal) updateTimeRemaining(root, s, status);
+    patchRegion(snap, "source", sourceFingerprint(status), function () {
+      renderSourceLine(status, root);
+    });
     setAttentionNotice(snap, status, terminal);
 
     patchRegion(snap, "blocked", blockedFingerprint(status), function () {
@@ -1424,6 +1550,93 @@
     patchRegion(snap, "artifacts", artifactsFingerprint(status, events), function () {
       renderArtifacts(status, events, root, !firstRender);
     });
+  }
+
+  // ── #51: planning-source provenance ──────────────────────────────────────
+  //
+  // From the strict server views only (planning_source, plan_source,
+  // revision). Integrity problems are shown in words, never colour alone.
+
+  var FIXED_CHECK_TEXT = {
+    ok: "verified", missing: "MISSING", mismatch: "DIGEST MISMATCH",
+    unreadable: "UNREADABLE", invalid_ref: "INVALID REFERENCE",
+    unsafe: "UNSAFE PATH",
+  };
+
+  function checkSuffix(check) {
+    return check === "ok" ? "" : " [!! " + (FIXED_CHECK_TEXT[check] || check) + "]";
+  }
+
+  function sourceFingerprint(status) {
+    var s = (status && status.status) || {};
+    return JSON.stringify([
+      status && status.planning_source || null,
+      status && status.plan_source || null,
+      status && status.revision || null,
+      s.stage || null,
+      draftorPlanSubmitted(status),
+    ]);
+  }
+
+  function draftorPlanSubmitted(status) {
+    return ((status && status.turns) || []).some(function (tn) {
+      return tn.role === "draftor" && tn.type === "plan_draft";
+    });
+  }
+
+  function sourceLineText(status) {
+    var kind = status && status.planning_source;
+    var stage = ((status && status.status) || {}).stage;
+    if (kind === "architect_plan") {
+      var ps = status.plan_source || {};
+      var text;
+      if (stage === "plan_approved") {
+        text = "Source: Architect-originated plan, approved by the Reviewer";
+      } else if (!draftorPlanSubmitted(status)) {
+        text = "Source: Architect-originated draft \u2014 awaiting Reviewer approval (not approved)";
+      } else {
+        text = "Source: Architect-originated draft, now under Draftor revision";
+      }
+      return text + checkSuffix(ps.check);
+    }
+    if (kind === "revision") {
+      var rv = status.revision || {};
+      var bad = [];
+      if (rv.baseline && rv.baseline.check !== "ok") bad.push("baseline plan" + checkSuffix(rv.baseline.check));
+      if (rv.approval && rv.approval.check !== "ok") bad.push("approval review" + checkSuffix(rv.approval.check));
+      return "Source: Revision of " + (rv.source_loop_id || "?")
+        + (bad.length ? " \u2014 " + bad.join(", ") : "");
+    }
+    if (kind === "invalid") return "Source: [!! INVALID PROVENANCE] \u2014 do not rely on it";
+    return "";
+  }
+
+  function renderSourceLine(status, root) {
+    var region = root.querySelector("#loop-region-source");
+    if (!region) return;
+    var text = sourceLineText(status);
+    region.innerHTML = text
+      ? '<div class="loop-source-line" data-source="'
+        + escHtml(status.planning_source || "") + '">' + escHtml(text) + '</div>'
+      : "";
+  }
+
+  // Provenance artifacts first (fixed names only, from the strict views).
+  function sourceArtifactEntries(status) {
+    var kind = status && status.planning_source;
+    var out = [];
+    if (kind === "architect_plan") {
+      var ps = status.plan_source || {};
+      if (ps.view) out.push({ name: "architect-plan.md",
+        label: "Architect-originated draft plan (provenance, unapproved)" + checkSuffix(ps.check) });
+    } else if (kind === "revision") {
+      var rv = status.revision || {};
+      if (rv.baseline && rv.baseline.view) out.push({ name: "revision-baseline-plan.md",
+        label: "Baseline: approved plan from " + (rv.source_loop_id || "?") + checkSuffix(rv.baseline.check) });
+      if (rv.approval && rv.approval.view) out.push({ name: "revision-baseline-approval.md",
+        label: "Baseline: approving review" + checkSuffix(rv.approval.check) });
+    }
+    return out;
   }
 
   // ── #53: suspension card (blocked vs Architect hold) ─────────────────────
@@ -2927,6 +3140,19 @@
     var artifacts = status.mode === "coding"
       ? ["approved-plan.md", "implementation.current.md", "findings.current.md"]
       : ["sketch.md", "plan.current.md", "findings.current.md"];
+    // #51: provenance before current work; an Architect-plan loop without a
+    // sketch lists none; a revision loop's sketch is the revision sketch.
+    var sourceEntries = status.mode === "coding" ? [] : sourceArtifactEntries(status);
+    var sourceLabels = {};
+    if (status.planning_source === "architect_plan"
+        && !(status.plan_source && status.plan_source.sketch_present)) {
+      artifacts.splice(artifacts.indexOf("sketch.md"), 1);
+    }
+    if (status.planning_source === "revision") sourceLabels["sketch.md"] = "Revision sketch";
+    for (var si = sourceEntries.length - 1; si >= 0; si--) {
+      artifacts.unshift(sourceEntries[si].name);
+      sourceLabels[sourceEntries[si].name] = sourceEntries[si].label;
+    }
 
     // Architect briefs first (#43): only linked (valid-view) positions get
     // an artifact entry; invalid references and the dropped decision are
@@ -2993,7 +3219,7 @@
         section = createArtifactSection(name);
         added.push(section);
       }
-      var want = (briefLabels[name] || name) + (suffixes[name] || "");
+      var want = (briefLabels[name] || sourceLabels[name] || name) + (suffixes[name] || "");
       var toggle = section.querySelector(".loop-artifact-toggle");
       if (toggle && toggle.textContent !== want) toggle.textContent = want;
       if (prev.nextSibling !== section) {

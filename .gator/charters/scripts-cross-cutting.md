@@ -88,6 +88,25 @@ Loop turn windows (legacy) and Architect attention intervals (#47; same stored f
   - `gator-loop-participant-v1` `still_waiting` gains additive `suspended` / `stage`.
   - Old participant prompts stay safe because they already wait on `1` and reissue on `3`. The protocol, watcher note, `/loop-join` pairs, `render_entry_content` and the live CLAUDE.md / AGENTS.md / GEMINI.md managed regions change together.
 
+**#51 planning sources (checkpoint 1, additive):**
+- **Session:** an optional `plan_source` block `{kind: "architect", artifact: "architect-plan.md", sha256, bytes}` (absent means an ordinary sketch loop), plus a new turn type `initial_plan` (role architect).
+- **Events:** `architect_plan_submitted` is a new **non-terminal** event that carries `artifact_path`. `loop_started` gains `plan_source_kind`, `plan_sha256` and `plan_bytes`.
+- **`gator-loop-status-v1`:** planning loops gain `planning_source`; Architect loops gain `plan_source`.
+- **CLI:** `gator loop start` gains `--plan-file`.
+- **Docs:** the protocol pair gains "Planning Sources" and an `architect-plan.md` row, under the existing drift guards.
+- **Checkpoint 2:**
+  - an optional `revision` session block;
+  - `loop_started` gains `revision_source_loop_id`, `baseline_sha256`, `approval_sha256` and `approval_source_artifact`;
+  - status JSON gains `revision`;
+  - `--revise-from`;
+  - the protocol revision paragraph and the two baseline File Locations rows.
+- **Checkpoint 3 (Dashboard):**
+  - `POST /loops/start` accepts `plan_path` / `revise_from`;
+  - `/status` gains strict `planning_source` / `plan_source` / `revision` views;
+  - `/loops` items gain `planning_source`;
+  - three fixed artifact names are served.
+- Timeline, tail and audit consumers must tolerate all of these.
+
 `loop_extended` (#39) is an additive `events.jsonl` event type and is NOT terminal; timeline, tail, and audit consumers must tolerate it. The loop session schema is unchanged by extension — the audit record is the `loop_extended` event plus the Architect `extend` turn.
 
 Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.

@@ -2100,6 +2100,15 @@ mark.search-hit {
 /* #43 M2a — create form: loop type and approved-source brief choice. */
 .loop-create-mode { border: none; padding: 0; margin: 0 0 12px; }
 .loop-create-mode label { font-size: 13px; }
+/* #51 planning source */
+.loop-create-plan-source { border: none; padding: 0; margin: 0 0 12px; }
+.loop-create-plan-source label { font-size: 13px; }
+.loop-source-line {
+  margin: 4px 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .loop-source-brief-choice { display: block; margin-top: 8px; font-size: 13px; }
 .loop-source-brief-warning {
   margin-top: 6px;

@@ -145,6 +145,20 @@ Render the governed planning loop workspace with a three-section secondary sideb
 ! **Event-driven artifact enumeration**: `collectArtifactPaths()` derives immutable artifacts from event `artifact_path` fields and `status.decisions[]`, replacing the prior numeric round loop. Naturally includes round-zero artifacts. Deduplicates by path.
 ! Polls every 3s for non-terminal loops; stops on terminal state. `pollLoop()` increments `promptEpoch` immediately after terminal status is identified, before awaiting events — this closes the race window where an in-flight `copyPrompt()` could resolve during the events fetch and write to the clipboard with the old epoch. Teardown clears interval via `window._gatorRepoTeardown`.
 ! **TRIPWIRE (#45):** expanded artifact text reaches the DOM only through `GatorLoopMarkdown` DOM construction (Rendered) and `pre.loop-artifact-pre.textContent` (Raw), both from the **same fetched string**. Raw is never reconstructed from rendered nodes, and artifact text never goes through `innerHTML`. This replaces the earlier "escaped through `escHtml()` and rendered in `<pre>`" rule.
+! **Planning sources (#51).**
+  - **Create form (planning mode):** a "Plan source" radio group (`input[name="loop-plan-source"]`) with three options:
+    - **sketch:** unchanged;
+    - **revision:** `#loop-revise-select` (approved planning loops from `/loops`) plus a "Revision sketch";
+    - **architect_plan:** `#loop-plan-path`, with the sketch labelled "(optional)".
+
+    `applyPlanSourceFields` / `setPlanSource` / `loadRevisePicker` drive it. The POST carries exactly the chosen source's fields (`sketch_path` / `revise_from` / `plan_path`). Client checks are convenience only.
+  - **Coding prefill:** `prefillFeature` writes the source's feature name only into an EMPTY field, or one still holding the earlier prefill, and it stays editable (pinned).
+  - **Inspection:**
+    - `#loop-region-source`, via `renderSourceLine` and `sourceFingerprint`, shows "Source: Architect-originated draft — awaiting Reviewer approval (not approved)" / "…approved by the Reviewer" / "…now under Draftor revision" / "Source: Revision of <id>", with `[!! …]` integrity text, never colour alone.
+    - `renderArtifacts` puts provenance first (`sourceArtifactEntries`): `architect-plan.md` ("Architect-originated draft plan (provenance, unapproved)"), or the two baselines ("Baseline: approved plan from <id>", "Baseline: approving review"). A revision loop's `sketch.md` is labelled "Revision sketch"; an Architect-plan loop without a sketch lists no `sketch.md`.
+    - `artifactsFingerprint` includes the provenance views.
+    - The timeline label `architect_plan_submitted` is "Architect plan — awaiting Reviewer".
+    - Unchanged polls are mutation-free (pinned).
 ! **Suspension card (#53)** — `#loop-region-blocked`, `renderBlockedCard()`. It is built ONLY from fields the loop writes: `stage`, `resume_stage` / `resume_next_role`, `suspended_at`, `pause_reason`, and the pending decision's `request` (`reason`, `role`, `ts`, `artifact_path`). The fictitious `status.escalation_reason` that hid the old card is gone.
   - **Blocked** (`.loop-decision-card`, `data-kind="architect_decision"`): "⚑ Blocked — awaiting your decision", then `decision-N · requested by <Role> · <time>`, the full reason (`.loop-blocked-reason`, `white-space: pre-wrap`), the "View decision request" link, and `Resumes: <Role> · <stage>`.
   - **Paused** (`.loop-hold-card`, `data-kind="architect_hold"`): "⏸ Architect hold (paused)", "No participant response is required.", `Preserved:`, `Since:` and the pause reason. It never uses escalation wording.

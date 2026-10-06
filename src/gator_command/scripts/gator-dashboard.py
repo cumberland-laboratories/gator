@@ -2374,6 +2374,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     and status.get("attention_notified_turn")
                     == status.get("turn_started_at")),
             })
+            # #51: planning source kind (for labels and the coding prefill).
+            if mode == "planning":
+                try:
+                    from loop.session import planning_source as _ps
+                    loops[-1]["planning_source"] = _ps(session)
+                except ValueError:
+                    loops[-1]["planning_source"] = "invalid"
             # #55: checkpoint coding loops only; the sidebar shows this
             # instead of Round X/Y (round/max_rounds stay, informational).
             try:
@@ -2425,6 +2432,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
         brief_ref = session.get("brief")
         safe["brief"] = brief_status_view(brief_ref, BRIEF_FILENAME)
         safe["brief_check"] = verify_brief(loop_dir, brief_ref, BRIEF_FILENAME)
+        # #51: planning provenance via strict, positionally bound views --
+        # never through the generic allowlist.
+        if not isinstance(session.get("coding"), dict):
+            from session import (planning_source, plan_source_ref,
+                                 revision_refs, fixed_artifact_view,
+                                 verify_fixed_artifact,
+                                 ARCHITECT_PLAN_FILENAME,
+                                 REVISION_BASELINE_PLAN,
+                                 REVISION_BASELINE_APPROVAL)
+            try:
+                kind = planning_source(session)
+            except ValueError:
+                kind = "invalid"
+            safe["planning_source"] = kind
+            if kind == "architect_plan":
+                ref = plan_source_ref(session)
+                safe["plan_source"] = {
+                    "view": fixed_artifact_view(ref, ARCHITECT_PLAN_FILENAME),
+                    "check": verify_fixed_artifact(loop_dir, ref,
+                                                   ARCHITECT_PLAN_FILENAME),
+                    # the sketch is optional for Architect-plan loops
+                    "sketch_present": (loop_dir / "sketch.md").is_file(),
+                }
+            elif kind == "revision":
+                src, base, appr = revision_refs(session)
+                safe["revision"] = {
+                    "source_loop_id": src,
+                    "baseline": {
+                        "view": fixed_artifact_view(base, REVISION_BASELINE_PLAN),
+                        "check": verify_fixed_artifact(loop_dir, base,
+                                                       REVISION_BASELINE_PLAN)},
+                    "approval": {
+                        "view": fixed_artifact_view(appr,
+                                                    REVISION_BASELINE_APPROVAL),
+                        "check": verify_fixed_artifact(
+                            loop_dir, appr, REVISION_BASELINE_APPROVAL)},
+                }
         # #47: Architect attention projection (explicit, field by field).
         from host import attention_status_view
         attention = attention_status_view(session, loop_dir)
@@ -2484,6 +2528,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         "architect-brief.md",          # Architect brief (#43)
         "source-architect-brief.md",   # carried-forward plan brief (#43)
         "implementation.current.md",   # coding (#41)
+        "architect-plan.md",           # Architect-originated plan (#51)
+        "revision-baseline-plan.md",   # revision baseline (#51)
+        "revision-baseline-approval.md",  # revision approval review (#51)
     })
 
     _LOOP_ARTIFACT_PATTERNS = (
@@ -2656,9 +2703,32 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     {"error": "from_loop and source_brief are only valid "
                               "for a coding loop"}, 400)
                 return
+        # #51 planning sources: an Architect-originated plan (plan_path) or
+        # a revision of an approved planning loop (revise_from). Type and
+        # conflict checks only; init_loop is the ONLY content validator
+        # (repository containment, plan format, source integrity).
+        plan_path = req.get("plan_path")
+        revise_from = req.get("revise_from")
+        for name, value in (("plan_path", plan_path),
+                            ("revise_from", revise_from)):
+            if value is not None and (not isinstance(value, str)
+                                      or not value.strip()):
+                self._send_json(
+                    {"error": f"{name} must be a non-empty string"}, 400)
+                return
+        if plan_path is not None and revise_from is not None:
+            self._send_json(
+                {"error": "send plan_path or revise_from, not both"}, 400)
+            return
+        if mode == "coding" and (plan_path is not None
+                                 or revise_from is not None):
+            self._send_json(
+                {"error": "plan_path and revise_from start a planning loop; "
+                          "they are not valid for a coding loop"}, 400)
+            return
         sketch_path = (req.get("sketch_path") or "").strip() \
             if mode == "planning" else ""
-        if mode == "planning" and not sketch_path:
+        if mode == "planning" and not sketch_path and plan_path is None:
             self._send_json({"error": "sketch_path is required"}, 400)
             return
 
@@ -2708,8 +2778,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         repo_root = Path(repo_path)
 
+        def _lexical(rel):
+            # #51: lexical absolute path, never resolve()d here, so the
+            # host's governed-input check still sees any link or alias.
+            q = Path(rel.strip())
+            return str(q if q.is_absolute() else repo_root / q)
+
         sketch = None
-        if mode == "planning":
+        if mode == "planning" and sketch_path and revise_from is not None:
+            sketch = _lexical(sketch_path)  # host validates (governed input)
+        elif mode == "planning" and sketch_path:
             sketch = Path(sketch_path)
             if not sketch.is_absolute():
                 sketch = repo_root / sketch
@@ -2756,8 +2834,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         source_brief=source_brief)
                 else:
                     loop_id, loop_dir = init_loop(
-                        feature, str(sketch), max_rounds, turn_timeout,
-                        repo_root=repo_path, brief_text=brief_text)
+                        feature, str(sketch) if sketch is not None else None,
+                        max_rounds, turn_timeout,
+                        repo_root=repo_path, brief_text=brief_text,
+                        plan_path=(_lexical(plan_path) if plan_path is not None
+                                   else None),
+                        revise_from=(revise_from.strip()
+                                     if revise_from is not None else None))
             except (ValueError, FileNotFoundError) as exc:
                 # Validation failure: init_loop is atomic (no partial dir).
                 self._send_json({"error": str(exc)}, 400)
@@ -2849,6 +2932,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if has_brief:
             prompt_text += ("\n  An Architect brief exists for this loop: read it "
                             "first (status shows the path).\n")
+        # #51: provenance pointer only (never content).
+        try:
+            from session import planning_source
+            source_kind = planning_source(session) \
+                if not isinstance(session.get("coding"), dict) else None
+        except ValueError:
+            source_kind = None
+        if source_kind == "revision":
+            prompt_text += (
+                "\n  This loop revises "
+                f"{session['revision'].get('source_loop_id')}: read "
+                "revision-baseline-plan.md and revision-baseline-approval.md "
+                "first.\n")
+        elif source_kind == "architect_plan":
+            prompt_text += (
+                "\n  The plan under review is an Architect-originated draft "
+                "awaiting Reviewer approval (not approved).\n")
 
         self._send_json({"prompt": prompt_text},
                         cache_control="no-store")

@@ -414,6 +414,29 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
     return session
 
 
+def enter_architect_plan_review(session, turn_timeout):
+    """#51: a fresh planning session whose first plan is an
+    Architect-originated draft starts at the EXISTING ``plan_review`` stage,
+    owned by the Reviewer. No new stage and no Draftor turn: approval leads
+    to ``plan_approved`` and findings to Draftor ``plan_revision`` through
+    the ordinary transitions. Valid only on a fresh planning session
+    (plan_drafting, round 0, no turns); otherwise ValueError.
+    """
+    if loop_mode(session) != MODE_PLANNING:
+        raise ValueError("Only a planning loop can start at plan review")
+    status = session["status"]
+    if (status.get("stage") != "plan_drafting" or status.get("round") != 0
+            or len(session.get("turns", [])) > 1):
+        raise ValueError("An Architect plan can only open a fresh planning loop")
+    table = stages_for(session)
+    status["stage"] = "plan_review"
+    status["next_role"] = table["role_by_stage"]["plan_review"]
+    status["plan_status"] = "in_review"
+    _begin_turn(session, turn_timeout)
+    status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+    return session
+
+
 def advance_escalated(session, reason):
     """Transition to blocked_on_architect from any active state.
 

@@ -2197,3 +2197,141 @@ class TestArchitectControlsCrossRepo:
             server.url,
             f"/api/repo-by-key/{rk_b}/loops/{lid_b}/status")
         assert sess_b["status"]["stage"] == "plan_drafting"
+
+
+# ── #51: planning sources through the Dashboard ──────────────────────────────
+
+_GOOD_PLAN_51 = (
+    "# Plan\n\n## Executive Summary\n\n- small fix\n\n"
+    "## Context Checked\n\n- scripts-loop charter\n\n"
+    "## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
+    "Verify: the focused test.\n")
+
+
+def _end_loop(repo, loop_id):
+    """End a loop through its architect token (frees the single-active slot)."""
+    import submit as _submit
+    import session as _session
+    loop_dir = repo / ".gator" / "loops" / loop_id
+    tok = _session.load_tokens(loop_dir)["architect"]["token"]
+    _submit.handle_end(tok, reason="test", loop_dir=loop_dir)
+
+
+def _approve_planning_loop(repo, loop_id):
+    import submit as _submit
+    import session as _session
+    loop_dir = repo / ".gator" / "loops" / loop_id
+    toks = _session.load_tokens(loop_dir)
+    draft = repo / "draft-51.md"
+    draft.write_text(_GOOD_PLAN_51, encoding="utf-8")
+    _submit.handle_submit_draft(toks["draftor"]["token"], str(draft))
+    review = repo / "review-51.md"
+    review.write_text("# Review\n\nAPPROVE\n", encoding="utf-8")
+    _submit.handle_submit_review(toks["reviewer"]["token"], str(review),
+                                 approve=True, loop_dir=loop_dir)
+
+
+class TestPlanSources51:
+
+    def _setup(self, server, tmp_path, name):
+        repo = tmp_path / name
+        (repo / ".gator").mkdir(parents=True)
+        rk = _repo_key(repo)
+        server.start([{"name": name, "path": str(repo), "repo_key": rk}])
+        return repo, rk
+
+    def test_architect_plan_start_status_artifacts_prompt(self, server,
+                                                          tmp_path, monkeypatch):
+        repo, rk = self._setup(server, tmp_path, "repo-ap51")
+        monkeypatch.chdir(repo)
+        (repo / "plans").mkdir()
+        (repo / "plans" / "p.md").write_text(_GOOD_PLAN_51, encoding="utf-8")
+        status, data, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/start",
+                                {"feature": "ap51", "plan_path": "plans/p.md"})
+        assert status == 201, data
+        lid = data["loop_id"]
+        st, body = _get(server.url, f"/api/repo-by-key/{rk}/loops/{lid}/status")
+        assert st == 200
+        assert body["status"]["stage"] == "plan_review"
+        assert body["planning_source"] == "architect_plan"
+        assert body["plan_source"]["check"] == "ok"
+        assert body["plan_source"]["sketch_present"] is False
+        assert set(body["plan_source"]["view"]) == {"artifact", "sha256", "bytes"}
+        assert "plan_source" not in body.get("status", {})
+        st, raw, _ = _get_raw(
+            server.url, f"/api/repo-by-key/{rk}/loops/{lid}/artifact/architect-plan.md")
+        assert st == 200 and raw.decode("utf-8") == _GOOD_PLAN_51
+        st, pr, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/{lid}/prompt",
+                          {"role": "reviewer"})
+        assert st == 200
+        assert "Architect-originated draft awaiting Reviewer approval" in pr["prompt"]
+        st, lst = _get(server.url, f"/api/repo-by-key/{rk}/loops")
+        item = [i for i in lst["loops"] if i["loop_id"] == lid][0]
+        assert item["planning_source"] == "architect_plan"
+
+    def test_revision_start_and_status(self, server, tmp_path, monkeypatch):
+        repo, rk = self._setup(server, tmp_path, "repo-rev51")
+        monkeypatch.chdir(repo)
+        (repo / "s.md").write_text("# Sketch\n", encoding="utf-8")
+        status, data, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/start",
+                                {"feature": "src51", "sketch_path": "s.md"})
+        assert status == 201
+        src = data["loop_id"]
+        _approve_planning_loop(repo, src)
+        (repo / "rev.md").write_text("# Revision\n\nAdd X.\n", encoding="utf-8")
+        status, data, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/start",
+                                {"feature": "rev51", "sketch_path": "rev.md",
+                                 "revise_from": src})
+        assert status == 201, data
+        lid = data["loop_id"]
+        st, body = _get(server.url, f"/api/repo-by-key/{rk}/loops/{lid}/status")
+        assert body["planning_source"] == "revision"
+        assert body["revision"]["source_loop_id"] == src
+        assert body["revision"]["baseline"]["check"] == "ok"
+        assert body["revision"]["approval"]["check"] == "ok"
+        for name in ("revision-baseline-plan.md", "revision-baseline-approval.md"):
+            st, raw, _ = _get_raw(
+                server.url, f"/api/repo-by-key/{rk}/loops/{lid}/artifact/{name}")
+            assert st == 200 and raw
+        st, pr, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/{lid}/prompt",
+                          {"role": "draftor"})
+        assert f"This loop revises {src}" in pr["prompt"]
+
+    @pytest.mark.parametrize("body,needle", [
+        ({"plan_path": 5}, "plan_path must be a non-empty string"),
+        ({"revise_from": ""}, "revise_from must be a non-empty string"),
+        ({"plan_path": "p.md", "revise_from": "x"}, "not both"),
+        ({"mode": "coding", "from_loop": "x", "plan_path": "p.md"},
+         "not valid for a coding loop"),
+        ({"revise_from": "x"}, "sketch_path is required"),
+        ({"plan_path": "../outside.md"}, "inside the repository"),
+        ({"plan_path": "bad.md"}, "Plan draft rejected"),
+    ])
+    def test_start_rejections_create_nothing(self, server, tmp_path, monkeypatch,
+                                             body, needle):
+        repo, rk = self._setup(server, tmp_path, "repo-rej51")
+        monkeypatch.chdir(repo)
+        (tmp_path / "outside.md").write_text(_GOOD_PLAN_51, encoding="utf-8")
+        (repo / "p.md").write_text(_GOOD_PLAN_51, encoding="utf-8")
+        (repo / "bad.md").write_text("# no sections\n", encoding="utf-8")
+        status, data, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/start",
+                                dict({"feature": "rej51"}, **body))
+        assert status == 400, data
+        assert needle in data["error"]
+        loops = repo / ".gator" / "loops"
+        assert not loops.is_dir() or not [p for p in loops.iterdir() if p.is_dir()]
+
+    def test_traversal_and_unknown_artifacts_still_refused(self, server, tmp_path):
+        repo, rk = self._setup(server, tmp_path, "repo-art51")
+        (repo / "s.md").write_text("# Sketch\n", encoding="utf-8")
+        status, data, _ = _post(server.url, f"/api/repo-by-key/{rk}/loops/start",
+                                {"feature": "art51", "sketch_path": str(repo / "s.md")})
+        lid = data["loop_id"]
+        for name in ("architect-plan.md.bak", "..%2Fsession.json",
+                     "revision-baseline-plan.md.tmp"):
+            st, _, _ = _get_raw(
+                server.url, f"/api/repo-by-key/{rk}/loops/{lid}/artifact/{name}")
+            assert st in (400, 403, 404)  # refused, never served
+        st, body = _get(server.url, f"/api/repo-by-key/{rk}/loops/{lid}/status")
+        assert body["planning_source"] == "sketch"
+        assert "plan_source" not in body and "revision" not in body

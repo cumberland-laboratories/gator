@@ -2596,3 +2596,199 @@ def test_multiline_pause_history_readable_after_unblock(page, dashboard_fleet):
     assert compact and all(d["ws"] == "nowrap" for d in compact)
     page.unroute("**/loops/*/status")
     page.unroute("**/loops/*/events")
+
+
+# ── #51: planning sources in the Dashboard ───────────────────────────────────
+
+
+_APPROVED_LIST_51 = {"loops": [{
+    "loop_id": "src-loop-2026-09-01T10-00-00Z", "feature": "parser-rework",
+    "mode": "planning", "planning_source": "sketch", "stage": "plan_approved",
+    "round": 1, "max_rounds": 3, "blocked": False,
+    "created_at": "2026-09-01T10:00:00+00:00", "attention_notified": False,
+}]}
+
+
+def _open_create_51(page, dashboard_fleet, posts, approved=False):
+    """Open the create form on the loop-less repo; capture start POSTs
+    (answered 400 so nothing is created)."""
+    import json as _json
+    if approved:
+        page.route("**/loops", lambda route: route.fulfill(
+            status=200, content_type="application/json",
+            body=_json.dumps(_APPROVED_LIST_51)))
+    page.route("**/loops/start", lambda route: (
+        posts.append(_json.loads(route.request.post_data)),
+        route.fulfill(status=400, content_type="application/json",
+                      body='{"error": "captured"}')))
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()")
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+
+
+def _pick(page, value):
+    page.evaluate("""(v) => {
+        var r = document.querySelector('input[name="loop-plan-source"][value="' + v + '"]');
+        r.checked = true; r.dispatchEvent(new Event('change'));
+    }""", value)
+
+
+def test_create_architect_plan_posts_only_its_fields(page, dashboard_fleet):
+    posts = []
+    _open_create_51(page, dashboard_fleet, posts)
+    _pick(page, "architect_plan")
+    assert page.locator("#loop-plan-field").is_visible()
+    assert page.evaluate(
+        "() => document.querySelector('#loop-sketch-label').textContent") == \
+        "Sketch source (optional)"
+    page.fill("#loop-feature-input", "arch-51")
+    page.fill("#loop-plan-path", ".gator/artifacts/plan.md")
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+    page.wait_for_function("() => document.querySelector('#loop-create-error')"
+                           ".textContent.includes('captured')", timeout=5000)
+    assert len(posts) == 1
+    body = posts[0]
+    assert body["plan_path"] == ".gator/artifacts/plan.md"
+    assert "revise_from" not in body and "sketch_path" not in body
+    assert "mode" not in body
+
+
+def test_create_revision_posts_only_its_fields(page, dashboard_fleet):
+    posts = []
+    _open_create_51(page, dashboard_fleet, posts, approved=True)
+    _pick(page, "revision")
+    page.wait_for_selector("#loop-revise-select", timeout=5000)
+    assert page.evaluate(
+        "() => document.querySelector('#loop-sketch-label').textContent") == \
+        "Revision sketch"
+    page.fill("#loop-feature-input", "rev-51")
+    page.evaluate("""() => {
+        var m = document.querySelector('#loop-sketch-manual');
+        var s = document.querySelector('#loop-sketch-select');
+        if (s) s.style.display = 'none';
+        m.style.display = ''; m.value = '.gator/artifacts/rev.md';
+    }""")
+    page.evaluate("() => document.querySelector('#loop-create-action').click()")
+    page.wait_for_function("() => document.querySelector('#loop-create-error')"
+                           ".textContent.includes('captured')", timeout=5000)
+    body = posts[0]
+    assert body["revise_from"] == "src-loop-2026-09-01T10-00-00Z"
+    assert body["sketch_path"] == ".gator/artifacts/rev.md"
+    assert "plan_path" not in body
+
+
+def test_coding_feature_prefill_is_editable(page, dashboard_fleet):
+    posts = []
+    _open_create_51(page, dashboard_fleet, posts, approved=True)
+    page.route("**/loops/*/status", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body='{"brief_check": "absent", "status": {"stage": "plan_approved"}}'))
+    page.evaluate("""() => {
+        var r = document.querySelector('input[name="loop-mode"][value="coding"]');
+        r.checked = true; r.dispatchEvent(new Event('change'));
+    }""")
+    page.wait_for_selector("#loop-source-select", timeout=5000)
+    assert page.input_value("#loop-feature-input") == "parser-rework"
+    assert page.locator("#loop-plan-source-field").is_hidden()
+    page.fill("#loop-feature-input", "my-own-name")
+    page.evaluate("""() => {
+        var s = document.querySelector('#loop-source-select');
+        s.dispatchEvent(new Event('change'));
+    }""")
+    assert page.input_value("#loop-feature-input") == "my-own-name"
+
+
+def _route_source_status(page, extra, stage="plan_review", turns=None):
+    import json as _json
+    body = dict({
+        "loop_id": "active-loop-2026-09-22T10-00-00Z",
+        "feature": "widget-refactor",
+        "status": {"stage": stage, "next_role": "reviewer", "round": 0,
+                   "max_rounds": 3, "blocked": False},
+        "roles": {"draftor": {"role": "draftor", "joined": False},
+                  "reviewer": {"role": "reviewer", "joined": True}},
+        "turns": turns or [],
+        "decisions": [],
+    }, **extra)
+    page.route("**/loops/*/status", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=_json.dumps(body)))
+
+
+_VIEW = {"artifact": "architect-plan.md", "sha256": "0" * 64, "bytes": 10}
+
+
+def test_architect_plan_inspection_labels_order_timeline(page, dashboard_fleet):
+    import json as _json
+    _route_source_status(page, {
+        "planning_source": "architect_plan",
+        "plan_source": {"view": _VIEW, "check": "ok", "sketch_present": False},
+    }, turns=[{"role": "architect", "type": "initial_plan"}])
+    page.route("**/loops/*/events", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=_json.dumps({"events": [
+            {"event": "loop_started", "ts": "2026-09-22T10:00:00Z"},
+            {"event": "architect_plan_submitted", "ts": "2026-09-22T10:00:01Z",
+             "round": 0, "role": "architect", "artifact_path": "plan.round-0.md",
+             "detail": "Architect-originated draft plan -- awaiting Reviewer approval"},
+        ]})))
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-source-line", timeout=10000)
+    line = page.evaluate("() => document.querySelector('.loop-source-line').textContent")
+    assert line == ("Source: Architect-originated draft \u2014 awaiting Reviewer "
+                    "approval (not approved)")
+    page.wait_for_selector(".loop-artifact-section", timeout=10000)
+    order = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#loop-artifacts > .loop-artifact-section')).map(s => [s.dataset.artifact,
+        s.querySelector('.loop-artifact-toggle').textContent])""")
+    names = [n for n, _ in order]
+    assert names[0] == "architect-plan.md"
+    assert order[0][1] == "Architect-originated draft plan (provenance, unapproved)"
+    assert "sketch.md" not in names  # no sketch for this loop
+    labels = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#loop-timeline .loop-event-label')).map(e => e.textContent)""")
+    assert "Architect plan \u2014 awaiting Reviewer" in labels
+    # Unchanged polls make zero mutations in the source line and artifacts.
+    page.evaluate("""() => {
+        window._m51 = 0;
+        var obs = new MutationObserver(function (m) { window._m51 += m.length; });
+        ['#loop-region-source', '#loop-artifacts'].forEach(function (sel) {
+          obs.observe(document.querySelector(sel), {subtree: true,
+            childList: true, characterData: true, attributes: true});
+        });
+    }""")
+    page.wait_for_timeout(7000)
+    assert page.evaluate("() => window._m51") == 0
+    page.unroute("**/loops/*/status")
+    page.unroute("**/loops/*/events")
+
+
+def test_revision_inspection_labels_and_integrity(page, dashboard_fleet):
+    base = dict(_VIEW, artifact="revision-baseline-plan.md")
+    appr = dict(_VIEW, artifact="revision-baseline-approval.md")
+    _route_source_status(page, {
+        "planning_source": "revision",
+        "revision": {"source_loop_id": "src-loop-2026-09-01T10-00-00Z",
+                     "baseline": {"view": base, "check": "ok"},
+                     "approval": {"view": appr, "check": "mismatch"}},
+    }, stage="plan_drafting")
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-source-line", timeout=10000)
+    line = page.evaluate("() => document.querySelector('.loop-source-line').textContent")
+    assert line.startswith("Source: Revision of src-loop-2026-09-01T10-00-00Z")
+    assert "approval review [!! DIGEST MISMATCH]" in line
+    page.wait_for_selector(".loop-artifact-section", timeout=10000)
+    order = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#loop-artifacts > .loop-artifact-section')).map(s => [s.dataset.artifact,
+        s.querySelector('.loop-artifact-toggle').textContent])""")
+    assert order[0] == ["revision-baseline-plan.md",
+                        "Baseline: approved plan from src-loop-2026-09-01T10-00-00Z"]
+    assert order[1] == ["revision-baseline-approval.md",
+                        "Baseline: approving review [!! DIGEST MISMATCH]"]
+    assert order[2] == ["sketch.md", "Revision sketch"]
+    page.unroute("**/loops/*/status")

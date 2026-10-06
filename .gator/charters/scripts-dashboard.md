@@ -157,6 +157,17 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
   - **The guarded successor is the ONLY source validator:** canonical id, planning mode, `plan_approved`, plan present, Git base, and brief keep/drop integrity, all atomic. Its `ValueError` returns 400 with the message, including the corrupt-source "--source-brief drop" hint.
   - **Other 400s:** an unknown `mode`, a missing or non-string `from_loop`, a bad `source_brief`, or `from_loop` / `source_brief` on a planning start.
   - **The `/loops` list** gains an additive normalized `mode` (`planning` / `coding` / `unknown`) so the UI can offer only approved planning loops.
+! **#51 planning sources.**
+  - **Start:** `POST /loops/start` (planning mode) accepts `plan_path` (Architect-originated draft plan) or `revise_from` (approved planning loop id).
+    - Each must be a non-empty string. Both together, either with `mode: coding`, or `revise_from` without `sketch_path` gives 400 with nothing written. `sketch_path` is optional with `plan_path`.
+    - `plan_path`, and the sketch of a revision start, are passed as **lexical** absolute paths (`_lexical`, never `resolve()`d), so `init_loop`'s `read_governed_input` still sees any link or alias. `init_loop` is the ONLY content validator, and its `ValueError` / `FileNotFoundError` returns 400 (atomic).
+  - **Status (`_handle_loop_status`, planning loops):** explicit `planning_source`, plus `plan_source: {view, check, sketch_present}` or `revision: {source_loop_id, baseline: {view, check}, approval: {view, check}}`.
+    - They are built with `session.fixed_artifact_view` / `verify_fixed_artifact` against FIXED names, and are never added via `_LOOP_STATUS_ALLOWED_KEYS`.
+    - Coding sessions get none of these keys.
+  - **Artifact allowlist:** gains `architect-plan.md`, `revision-baseline-plan.md` and `revision-baseline-approval.md`. Lookalike names are still refused.
+  - **`/prompt`:** one pointer line, never content: "This loop revises <id>: read revision-baseline-plan.md and revision-baseline-approval.md first." or "The plan under review is an Architect-originated draft awaiting Reviewer approval (not approved)."
+  - **`/loops`:** planning items gain `planning_source` (`invalid` when malformed).
+  - **Pinned by:** `tests/test_dashboard_loops.py::TestPlanSources51`.
 ! **Known pre-existing edge case:** loop ids are the feature plus a second-resolution timestamp, so two starts of the same feature within one second collide (`FileExistsError` in `init_loop`'s `mkdir`, which this route does not catch). Seen in testing; not changed by #43.
 ! Events endpoint validates `events.jsonl` against symlink/reparse before reading — `is_symlink()` pre-existence, `_is_reparse_point()` post-existence — then returns the raw event timeline via the existing `read_all_events()` reader; missing events file returns an empty array.
 ! Artifact endpoint uses `_LOOP_ARTIFACT_ALLOWLIST` plus `_LOOP_ARTIFACT_PATTERNS` — only known markdown artifacts are served (sketch, plan, findings, decision docs). Decision artifact patterns are tightened to match production filenames exactly: `decision-request.decision-<N>.round-<R>.md` and `decision-response.decision-<N>.md` (integer-only IDs, no arbitrary segments). `.tokens.json`, `session.json`, `session.lock`, and `events.jsonl` are never served. Served as `text/plain; charset=utf-8`. Reparse/symlink check on the artifact file itself.

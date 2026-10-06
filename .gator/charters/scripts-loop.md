@@ -6,7 +6,7 @@
 
 The governed planning loop — a CLI-mediated debate between two AI models (draftor, reviewer) with role tokens, turn-taking, bounded iteration, Architect oversight of long turns (attention notices for attention-mode loops, #47; hard turn timeouts for legacy loops only), and durable session residue.
 
-- `session.py` owns session CRUD, token generation/resolution (with secret nonce), platform-aware file locking, atomic writes, turn tracking, and loop ID generation
+- `session.py` owns the fixed-artifact verifier, governed input reading and planning provenance (#51), session CRUD, token generation/resolution (with secret nonce), platform-aware file locking, atomic writes, turn tracking, and loop ID generation
 - `state_machine.py` owns state categorization (active/paused/terminal), action validation, and all state transitions, indexed by loop mode through the single `STAGES` table (planning; coding #41)
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
 - `submit.py` owns the ten submit handlers: submit-draft, submit-implementation (coding, #41), submit-review, escalate, unblock, extend, reopen (#41), pause, interject, end; plus the coding implementation-artifact helpers (required headings, the CLI-owned Commit State section)
@@ -83,6 +83,44 @@ An optional, immutable Markdown brief supplied at loop creation. It is stored as
 - **`read_verified_brief`** returns the exact verified bytes (used for carry-forward).
 - **`brief_status_view(ref, expected_name)`** is the strict, positionally bound status view: `{artifact, sha256, bytes}` or None. Unknown keys such as `content` or `path` are always dropped.
 
+### Fixed immutable artifacts (#51): FIXED_ARTIFACT_LIMITS / _valid_fixed_ref / verify_fixed_artifact / read_verified_fixed_artifact / fixed_artifact_view
+File: `src/gator_command/scripts/loop/session.py`
+One generic verifier owns the closed allowlist of fixed artifact names, each name's byte limit, the fixed-path safety checks and the result codes.
+- **Allowlist (`FIXED_ARTIFACT_LIMITS`):**
+
+  | Name | Limit |
+  |---|---|
+  | `architect-brief.md`, `source-architect-brief.md` | `MAX_BRIEF_BYTES` 32 KiB |
+  | `architect-plan.md` | `MAX_PLAN_BYTES` 256 KiB |
+  | `revision-baseline-plan.md`, `revision-baseline-approval.md` | `MAX_BASELINE_BYTES` 1 MiB |
+
+- **`_valid_fixed_ref`** accepts an allowlisted name, `artifact == expected_name` (positional binding), a 64-hex sha256, and int `bytes` within the name's limit.
+- **`verify_fixed_artifact`** returns the same results as `verify_brief` (absent / invalid_ref / unsafe / missing / unreadable / mismatch / ok; neutral `FIXED_*` aliases with identical values). It reads at most `limit + 1` bytes.
+- **Other helpers:** `read_verified_fixed_artifact` returns the exact verified bytes; `fixed_artifact_view` is the strict `{artifact, sha256, bytes}` status view.
+- **Brief wrappers:** `verify_brief` / `read_verified_brief` / `brief_status_view` are now brief-scoped wrappers. Results for the two brief names are unchanged, and any other name gives `invalid_ref` / `(invalid_ref, None)` / None.
+<- `host._write_brief` (via `verify_brief`), `host._write_fixed_artifact`, `cli._plan_source_view`
+! Callers pass FIXED name constants only, never a path from session data.
+
+### read_governed_input(path, repo_root, max_bytes, label) (#51)
+File: `src/gator_command/scripts/loop/session.py`
+The trust boundary for Architect-supplied input files (an Architect plan; the revision sketch in checkpoint 2). Rules:
+- the file is inside `repo_root`;
+- the lexical absolute path equals `resolve(strict=True)` (case-normalized), which refuses symlinked or junction components and short-name aliases;
+- the file is not a link or reparse point, and is a regular file of `1..max_bytes` bytes;
+- it is read ONCE, and a size or mtime change across the read is refused;
+- the content is UTF-8, has no NUL and is not blank.
+
+It returns the exact bytes and raises `ValueError` / `FileNotFoundError`. The ordinary `--sketch` path does not use it (unchanged).
+
+### planning_source(session) / plan_source_ref(session) (#51)
+File: `src/gator_command/scripts/loop/session.py`
+The ONLY way a planning loop's source kind may be read:
+- `sketch`: neither block present (ordinary and legacy loops);
+- `architect_plan`: a valid `plan_source` block `{kind: "architect", artifact: "architect-plan.md", sha256, bytes}`;
+- `revision`: a valid `revision` block `{source_loop_id, baseline: {artifact: "revision-baseline-plan.md", sha256, bytes}, approval: {artifact: "revision-baseline-approval.md", sha256, bytes, source_artifact: "findings.round-N.md"}}`. `revision_refs(session)` returns `(source_loop_id, baseline_ref, approval_ref)`.
+
+Both blocks, or a malformed block, raise `ValueError` (fail closed). The source is never inferred from filenames or the stage. `create_session(..., plan_source=None, revision=None)` stores the blocks, refuses both together, and refuses either on a coding session.
+
 ### loop_mode(session)
 File: `src/gator_command/scripts/loop/session.py`
 The ONLY way loop mode may be read (#41). It returns `"planning"` for a missing `mode` or the legacy `"planning-only"` / `"planning"` values, and `"coding"` for `"coding"`; any other value raises ValueError (fail closed).
@@ -157,6 +195,11 @@ The single place every transition starts or ends an active turn.
 - Interject touches neither.
 - A new turn always gets a new `turn_started_at`, so each turn has an independent attention key.
 ! Never set `turn_deadline` for a flagged session: the legacy enforcement path keys on it (#47 defense in depth).
+
+### enter_architect_plan_review(session, turn_timeout) (#51)
+File: `src/gator_command/scripts/loop/state_machine.py`
+A fresh planning session (`plan_drafting`, round 0, at most the one Architect turn) enters the EXISTING `plan_review` stage, with the owner from `role_by_stage` (the Reviewer), `plan_status = in_review` and `_begin_turn()`. There is no new stage. Approval leads to `plan_approved` and findings to Draftor `plan_revision` through the ordinary transitions. Anything else raises `ValueError`.
+<- `host._init_architect_plan_loop()`
 
 ### advance_draft_submitted(session, turn_timeout)
 File: `src/gator_command/scripts/loop/state_machine.py`
@@ -456,6 +499,33 @@ Filesystem: `.gator/loops/<loop-id>/` (W, creates), sketch file (R)
 <- `start_loop()`, dashboard `_handle_loop_start()`
 -> `create_session()`, `save_session()`, `make_token()`, `save_tokens()`, `emit_event()`, `ensure_loops_gitignore()`
 
+### _init_architect_plan_loop(feature, plan_path, sketch_path, max_rounds, turn_timeout, repo_root, brief_bytes=None) / _write_fixed_artifact(loop_dir, name, data) / _write_checked_bytes(loop_dir, name, data, sha) (#51)
+File: `src/gator_command/scripts/loop/host.py`
+`init_loop(..., plan_path=…)` and `start_loop(..., plan_path=…)` route here. `plan_path` with `mode="coding"` is refused before anything is written. The sketch is optional. Atomic order:
+1. `read_governed_input` (`MAX_PLAN_BYTES`);
+2. `submit._check_plan_draft(bytes, True, True)`: the SAME check as a Draftor draft, on the bytes that are persisted;
+3. the optional sketch is checked;
+4. the loop dir is created; `architect-plan.md` is written by `_write_fixed_artifact` (read-only, then `verify_fixed_artifact` must return ok); `plan.round-0.md` and `plan.current.md` are written by `_write_checked_bytes` (re-read and SHA-compared); then the optional `sketch.md` and brief;
+5. tokens; then `create_session(plan_source=…)`, one Architect turn `{type: "initial_plan", artifact_path: "plan.round-0.md"}`, `current.draft`, `enter_architect_plan_review`, save;
+6. events `loop_started` (with `plan_source_kind`, `plan_sha256`, `plan_bytes`) then `architect_plan_submitted` `{role: architect, round: 0, artifact_path: "plan.round-0.md"}`.
+
+Any failure removes the directory. No Draftor turn is fabricated, and the Draftor stays unjoined. The start banner adds a `Plan source:` line.
+
+### _init_revision_loop(feature, sketch_path, revise_from, max_rounds, turn_timeout, repo_root, brief_bytes=None) / _read_revision_source(source_dir, revise_from) / _read_source_file(source_dir, name, what) (#51)
+File: `src/gator_command/scripts/loop/host.py`
+`init_loop(..., revise_from=…)` and `start_loop(..., revise_from=…)` route here. `--plan-file` together with `--revise-from`, `revise_from` with coding mode, and `revise_from` without a sketch are all refused before anything is written. Atomic order:
+1. the canonical source id shape (`_SOURCE_LOOP_ID_RE`, no `..`), and the source dir and session must be present;
+2. the revision sketch through `read_governed_input` (`MAX_PLAN_BYTES`);
+3. `_read_revision_source` under the source's `with_session_lock` (a **read-only** callback):
+   - `loop_id` equals the requested id, the mode is planning and the stage is `plan_approved`;
+   - **approval:** the LAST turn is the Reviewer's `plan_review` turn with summary `"Plan approved"` and a `findings.round-N.md` artifact that is byte-equal to `findings.current.md`;
+   - **plan:** `plan.current.md` is byte-equal to the artifact of the latest `plan_draft` (Draftor) or `initial_plan` (Architect) turn;
+   - each file must be regular, non-link, non-empty and at most `MAX_BASELINE_BYTES` (`_read_source_file`);
+4. the dir is created: `sketch.md` (the exact sketch bytes, SHA-checked), then `revision-baseline-plan.md` and `revision-baseline-approval.md` via `_write_fixed_artifact`, then the optional brief;
+5. tokens; then `create_session(revision=…)` at ordinary `plan_drafting`; `loop_started` with `revision_source_loop_id`, `baseline_sha256`, `approval_sha256` and `approval_source_artifact`.
+
+The source brief is not carried forward. The source loop is never written, and the copies stay authoritative if it is later changed or removed.
+
 ### _init_coding_loop(feature, from_loop, max_rounds, turn_timeout, repo_root, brief_bytes=None, source_brief="keep") / _read_approved_source(source_dir, from_loop, source_brief="keep") / _remove_partial_loop(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
 The guarded coding successor (#41). Steps, in order:
@@ -652,6 +722,18 @@ File: `src/gator_command/scripts/loop/cli.py`
 
 ### _cmd_start(args) / _mode_of(session) / _print_coding_action_prompt(...)
 File: `src/gator_command/scripts/loop/cli.py`
+- **#51 `start --plan-file PATH`** (`dest=plan_path`): planning only; `--sketch` becomes optional with it.
+- **#51 `start --revise-from LOOP_ID`** (`dest=revise_from`): planning only; requires `--sketch` and cannot be combined with `--plan-file`.
+  - `_revision_view` / `_print_revision` (status): `Revision of: <id>`, then `Baseline plan:` and `Baseline approval review:` paths with integrity markers. JSON gains `revision: {source_loop_id, baseline: {path, check}, approval: {path, check}}`.
+  - The Draftor's first turn says "Draft a full replacement plan…" and lists the baseline, approval and revision sketch paths; earlier source rounds are optional.
+- **`_plan_source_view` / `_print_plan_source` / `_plan_source_json`:**
+  - **Status (model and Architect):** `Plan source: Architect-originated draft plan -- <architect-plan.md> [OK]` (or an `[!!]` marker), then either `Current plan: Architect-originated draft -- awaiting Reviewer approval (not approved)` while no Draftor `plan_draft` turn exists, or `Plan approved by the Reviewer (originated by the Architect)`.
+  - **JSON:** planning loops gain additive `planning_source`; Architect loops gain `plan_source: {path, check, architect_draft_current, approved}`. An invalid block shows `[!!] INVALID PROVENANCE`.
+- **`_print_action_prompt`:**
+  - the Reviewer is told to "Review the Architect-originated draft plan (unapproved)";
+  - the Draftor in `plan_revision` also gets the `Plan:` path and "Submit a full replacement plan";
+  - with no `sketch.md`, a "No sketch: … escalate" line.
+  - Ordinary loops print exactly as before.
 - `start --mode planning|coding [--from-loop ID] [--sketch PATH] [--brief FILE] [--source-brief keep|drop]`: planning requires `--sketch`; coding requires `--from-loop`. `--brief` (#43) is optional in both modes. `--source-brief` is coding-only (exit 1 on planning) and defaults to keep. Argument errors and `RuntimeError` exit 1 with `Error:`.
 - Status JSON gains additive `mode` (normalized). Coding text status prints `Mode: coding` and a coding action prompt (approved plan path, `submit-implementation`, review the STAGED tree).
 - **Architect brief lines (#43):** `_brief_entries` / `_print_briefs` / `_briefs_json` cover the model and Architect views.
@@ -792,9 +874,37 @@ Filesystem: Git object database (R only). It takes no index lock and never touch
 
 ## TRIPWIRE: Architect Brief Is Immutable Residue, Not a Channel (#43)
 
-The Architect brief is written once at loop creation and never edited. Later direction goes through interject, escalate or unblock. Every read of a brief goes through `verify_brief` with the FIXED expected name for its position (`architect-brief.md` / `source-architect-brief.md`), never a path from session data. Status surfaces use only `brief_status_view` (metadata, positionally bound); brief content never appears in session, events, `/status`, or the liveness sidecar. A missing brief is `absent` and neutral, never an alarm.
+The Architect brief is written once at loop creation and never edited. (#51: verification goes through `verify_fixed_artifact`'s closed allowlist; the brief wrappers refuse every non-brief name.) Later direction goes through interject, escalate or unblock. Every read of a brief goes through `verify_brief` with the FIXED expected name for its position (`architect-brief.md` / `source-architect-brief.md`), never a path from session data. Status surfaces use only `brief_status_view` (metadata, positionally bound); brief content never appears in session, events, `/status`, or the liveness sidecar. A missing brief is `absent` and neutral, never an alarm.
 
 Violation: trusting `session.brief.artifact` as a path enables traversal or swapped-label reads; passing raw `session.brief` through a generic status allowlist can leak injected content.
+
+## TRIPWIRE: Architect-Originated Plans Are Unapproved Input (#51)
+
+An Architect plan enters a loop ONLY:
+- through `read_governed_input` and `_check_plan_draft` on the exact bytes persisted;
+- at the existing Reviewer `plan_review` stage;
+- recorded as an Architect `initial_plan` turn, never as a Draftor turn.
+
+Writing it never approves it. A coding loop can start only from `plan_approved`, which only the Reviewer reaches. `architect-plan.md` is immutable provenance; `plan.current.md` stays the ordinary mutable current plan.
+
+Violations:
+- a privileged or auto-approved Architect plan;
+- a direct Architect-plan-to-coding route;
+- a fabricated Draftor turn;
+- a weaker validator.
+
+## TRIPWIRE: Revision Baselines Are Copies (#51)
+
+A revision loop's authority is its two copied, verified baseline files (`revision-baseline-plan.md`, `revision-baseline-approval.md`), never a live path into the source loop.
+- The copies are captured ONLY under the source's session lock in a read-only callback; the source loop is never written, reopened or extended.
+- The approving review is identified ONLY from the session's last turn plus the cross-copy equality checks. If they don't hold, the start fails atomically; the evidence is never guessed or quietly omitted.
+
+Violations:
+- reading the source loop live after creation;
+- writing the source session;
+- treating a missing approval as optional.
+
+Pinned by `test_revision_lifecycle` (source byte-immutability, deleted-source integrity) and `test_revision_rejection_is_atomic`.
 
 ## TRIPWIRE: Validated Bytes Are Persisted Bytes (#46)
 

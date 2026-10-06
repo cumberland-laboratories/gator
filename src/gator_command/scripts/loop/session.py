@@ -255,6 +255,40 @@ BRIEF_UNREADABLE = "unreadable"
 BRIEF_INVALID_REF = "invalid_ref"
 BRIEF_UNSAFE = "unsafe"
 
+# ---------------------------------------------------------------------------
+# Fixed immutable loop artifacts (#51)
+# ---------------------------------------------------------------------------
+# One generic verifier (verify_fixed_artifact) owns the closed allowlist of
+# fixed artifact names, each name's byte limit, the fixed-path safety checks
+# and the result codes. The brief functions are brief-scoped wrappers over
+# it. Every caller passes a FIXED name constant, never a session value.
+
+ARCHITECT_PLAN_FILENAME = "architect-plan.md"
+REVISION_BASELINE_PLAN = "revision-baseline-plan.md"
+REVISION_BASELINE_APPROVAL = "revision-baseline-approval.md"
+MAX_PLAN_BYTES = 256 * 1024       # Architect plan / revision sketch input
+MAX_BASELINE_BYTES = 1024 * 1024  # revision baseline copies
+FIXED_ARTIFACT_LIMITS = {
+    BRIEF_FILENAME: MAX_BRIEF_BYTES,
+    SOURCE_BRIEF_FILENAME: MAX_BRIEF_BYTES,
+    ARCHITECT_PLAN_FILENAME: MAX_PLAN_BYTES,
+    REVISION_BASELINE_PLAN: MAX_BASELINE_BYTES,
+    REVISION_BASELINE_APPROVAL: MAX_BASELINE_BYTES,
+}
+# Neutral names for the shared result codes (identical values).
+FIXED_ABSENT = BRIEF_ABSENT
+FIXED_OK = BRIEF_OK
+FIXED_MISSING = BRIEF_MISSING
+FIXED_MISMATCH = BRIEF_MISMATCH
+FIXED_UNREADABLE = BRIEF_UNREADABLE
+FIXED_INVALID_REF = BRIEF_INVALID_REF
+FIXED_UNSAFE = BRIEF_UNSAFE
+
+# Planning sources (#51): read ONLY through planning_source().
+PLANNING_SOURCE_SKETCH = "sketch"
+PLANNING_SOURCE_ARCHITECT = "architect_plan"
+PLANNING_SOURCE_REVISION = "revision"
+
 # Contract flags recorded on NEW sessions (#46 migration boundary).
 CONTEXT_EVIDENCE_CONTRACT = 1
 # #47: new planning AND coding sessions use an Architect attention
@@ -350,15 +384,24 @@ def brief_meta(data, artifact):
             "bytes": len(data)}
 
 
-def _valid_brief_ref(ref, expected_name):
+def _valid_fixed_ref(ref, expected_name):
+    """A well-formed ref for an allowlisted fixed name: ``artifact`` equals
+    ``expected_name`` (positional binding), a 64-hex lowercase sha256, and
+    an int (never bool) ``bytes`` within that name's limit."""
     import re as _re
-    return (isinstance(ref, dict)
+    limit = FIXED_ARTIFACT_LIMITS.get(expected_name)
+    return (limit is not None
+            and isinstance(ref, dict)
             and ref.get("artifact") == expected_name
             and isinstance(ref.get("sha256"), str)
             and _re.fullmatch(r"[0-9a-f]{64}", ref["sha256"]) is not None
             and isinstance(ref.get("bytes"), int)
             and not isinstance(ref.get("bytes"), bool)
-            and ref["bytes"] >= 0)
+            and 0 <= ref["bytes"] <= limit)
+
+
+def _valid_brief_ref(ref, expected_name):
+    return expected_name in BRIEF_NAMES and _valid_fixed_ref(ref, expected_name)
 
 
 def _is_reparse_point(path):
@@ -370,12 +413,14 @@ def _is_reparse_point(path):
     return bool(attrs & 0x400)  # FILE_ATTRIBUTE_REPARSE_POINT
 
 
-def verify_brief(loop_dir, ref, expected_name):
-    """Integrity of one brief position. Returns a result string; never
-    returns content and never opens a path taken from session data.
+def verify_fixed_artifact(loop_dir, ref, expected_name):
+    """Integrity of one fixed immutable artifact position (#51). Returns a
+    result string; never returns content and never opens a path taken from
+    session data.
 
-    absent       ref is None (the optional brief was never supplied)
-    invalid_ref  ref present but malformed, wrong-typed, or names a file
+    absent       ref is None (the optional artifact was never supplied)
+    invalid_ref  ``expected_name`` is not allowlisted, or ref is malformed,
+                 wrong-typed, over the name's byte limit, or names a file
                  other than ``expected_name`` (positional binding)
     unsafe       the fixed path is a symlink/reparse point or escapes the
                  loop directory
@@ -386,64 +431,208 @@ def verify_brief(loop_dir, ref, expected_name):
     """
     import hashlib
     if ref is None:
-        return BRIEF_ABSENT
-    if expected_name not in BRIEF_NAMES or not _valid_brief_ref(ref, expected_name):
-        return BRIEF_INVALID_REF
+        return FIXED_ABSENT
+    if not _valid_fixed_ref(ref, expected_name):
+        return FIXED_INVALID_REF
+    limit = FIXED_ARTIFACT_LIMITS[expected_name]
     loop_dir = Path(loop_dir)
     path = loop_dir / expected_name
     if path.is_symlink() or _is_reparse_point(path):
-        return BRIEF_UNSAFE
+        return FIXED_UNSAFE
     try:
         if path.resolve().parent != loop_dir.resolve():
-            return BRIEF_UNSAFE
+            return FIXED_UNSAFE
     except OSError:
-        return BRIEF_UNSAFE
+        return FIXED_UNSAFE
     if not path.is_file():
-        return BRIEF_MISSING
+        return FIXED_MISSING
     try:
         with open(path, "rb") as f:
-            data = f.read(MAX_BRIEF_BYTES + 1)
+            data = f.read(limit + 1)
     except OSError:
-        return BRIEF_UNREADABLE
+        return FIXED_UNREADABLE
     if len(data) != ref["bytes"] or \
             hashlib.sha256(data).hexdigest() != ref["sha256"]:
-        return BRIEF_MISMATCH
-    return BRIEF_OK
+        return FIXED_MISMATCH
+    return FIXED_OK
 
 
-def read_verified_brief(loop_dir, ref, expected_name):
-    """(result, bytes_or_None): the verified brief bytes when result is ok.
-
-    Used only to carry a source brief forward; reads once and returns the
-    exact bytes that passed verification.
-    """
+def read_verified_fixed_artifact(loop_dir, ref, expected_name):
+    """(result, bytes_or_None): the exact verified bytes when result is ok.
+    Reads once more, capped at the name's limit, and re-checks the digest."""
     import hashlib
-    state = verify_brief(loop_dir, ref, expected_name)
-    if state != BRIEF_OK:
+    state = verify_fixed_artifact(loop_dir, ref, expected_name)
+    if state != FIXED_OK:
         return state, None
+    limit = FIXED_ARTIFACT_LIMITS[expected_name]
     with open(Path(loop_dir) / expected_name, "rb") as f:
-        data = f.read(MAX_BRIEF_BYTES + 1)
+        data = f.read(limit + 1)
     if len(data) != ref["bytes"] or \
             hashlib.sha256(data).hexdigest() != ref["sha256"]:
-        return BRIEF_MISMATCH, None
-    return BRIEF_OK, data
+        return FIXED_MISMATCH, None
+    return FIXED_OK, data
 
 
-def brief_status_view(ref, expected_name):
-    """Strict, positionally bound metadata view for status surfaces.
-
-    Returns {artifact, sha256, bytes} only when ``ref`` is well-formed AND
-    names exactly ``expected_name``; otherwise None. Unknown keys are always
-    dropped — brief content can never pass through status.
-    """
-    if not _valid_brief_ref(ref, expected_name):
+def fixed_artifact_view(ref, expected_name):
+    """Strict, positionally bound metadata view for status surfaces:
+    {artifact, sha256, bytes} for an allowlisted name with a valid ref,
+    otherwise None. Unknown keys are always dropped."""
+    if not _valid_fixed_ref(ref, expected_name):
         return None
     return {"artifact": ref["artifact"], "sha256": ref["sha256"],
             "bytes": ref["bytes"]}
 
 
+# Brief-scoped wrappers (#43 names and results unchanged; #51 makes them
+# refuse every non-brief name, so a plan artifact is never read through a
+# brief position).
+
+def verify_brief(loop_dir, ref, expected_name):
+    """verify_fixed_artifact() restricted to the two brief positions."""
+    if ref is None:
+        return BRIEF_ABSENT
+    if expected_name not in BRIEF_NAMES:
+        return BRIEF_INVALID_REF
+    return verify_fixed_artifact(loop_dir, ref, expected_name)
+
+
+def read_verified_brief(loop_dir, ref, expected_name):
+    """read_verified_fixed_artifact() restricted to the brief positions.
+    Used only to carry a source brief forward."""
+    if expected_name not in BRIEF_NAMES:
+        return (BRIEF_ABSENT if ref is None else BRIEF_INVALID_REF), None
+    return read_verified_fixed_artifact(loop_dir, ref, expected_name)
+
+
+def brief_status_view(ref, expected_name):
+    """fixed_artifact_view() restricted to the brief positions."""
+    if expected_name not in BRIEF_NAMES:
+        return None
+    return fixed_artifact_view(ref, expected_name)
+
+
+# ---------------------------------------------------------------------------
+# Governed input files and planning provenance (#51)
+# ---------------------------------------------------------------------------
+
+def read_governed_input(path, repo_root, max_bytes, label):
+    """Read an Architect-supplied input file (plan or revision sketch).
+
+    The file must lie inside ``repo_root`` with no alias: the lexical
+    absolute path must equal its strict resolution (case-normalized), which
+    refuses symlinked/junction components and short-name aliases. The file
+    itself must not be a link or reparse point and must be a regular file
+    of 1..max_bytes bytes. It is read ONCE; a size/mtime change during the
+    read is refused. The content must be UTF-8, NUL-free and not blank.
+    Returns the exact bytes; raises ValueError / FileNotFoundError.
+    """
+    root = Path(repo_root).resolve()
+    p = Path(path)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    lexical = Path(os.path.abspath(str(p)))
+    if lexical.is_symlink() or _is_reparse_point(lexical):
+        raise ValueError(f"{label} must not be a symlink or reparse point: {path}")
+    if not lexical.exists():
+        raise FileNotFoundError(f"{label} not found: {path}")
+    try:
+        resolved = lexical.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"{label} cannot be resolved: {path} ({exc})")
+    if os.path.normcase(str(resolved)) != os.path.normcase(str(lexical)):
+        raise ValueError(
+            f"{label} path contains a link or alias; give the real path: {path}")
+    if root != resolved and root not in resolved.parents:
+        raise ValueError(f"{label} must be inside the repository: {path}")
+    if not resolved.is_file():
+        raise ValueError(f"{label} is not a regular file: {path}")
+    with open(resolved, "rb") as f:
+        before = os.fstat(f.fileno())
+        if before.st_size == 0:
+            raise ValueError(f"{label} is empty: {path}")
+        if before.st_size > max_bytes:
+            raise ValueError(
+                f"{label} is {before.st_size} bytes; the limit is {max_bytes} bytes")
+        data = f.read(max_bytes + 1)
+        after = os.fstat(f.fileno())
+    if (len(data) != before.st_size or after.st_size != before.st_size
+            or after.st_mtime_ns != before.st_mtime_ns):
+        raise ValueError(f"{label} changed while it was being read: {path}")
+    if b"\x00" in data:
+        raise ValueError(f"{label} must not contain NUL bytes")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError(f"{label} must be UTF-8 text")
+    if not text.strip():
+        raise ValueError(f"{label} is empty")
+    return data
+
+
+def planning_source(session):
+    """The ONLY way a planning loop's source kind may be read (#51).
+
+    ``sketch`` (ordinary and legacy loops: neither block present),
+    ``architect_plan`` (``plan_source`` block) or ``revision``
+    (``revision`` block). Both blocks, or a malformed block, raise
+    ValueError (fail closed). Never inferred from filenames or the stage.
+    """
+    if not isinstance(session, dict):
+        raise ValueError("planning_source needs a session dict")
+    has_plan = "plan_source" in session
+    has_rev = "revision" in session
+    if has_plan and has_rev:
+        raise ValueError("A planning loop cannot have both plan_source and revision")
+    if has_plan:
+        ps = session["plan_source"]
+        if not (isinstance(ps, dict) and ps.get("kind") == "architect"
+                and _valid_fixed_ref(
+                    {k: ps.get(k) for k in ("artifact", "sha256", "bytes")},
+                    ARCHITECT_PLAN_FILENAME)):
+            raise ValueError("Malformed plan_source block")
+        return PLANNING_SOURCE_ARCHITECT
+    if has_rev:
+        rev = session["revision"]
+        if not (isinstance(rev, dict)
+                and isinstance(rev.get("source_loop_id"), str)
+                and rev["source_loop_id"]
+                and _valid_fixed_ref(_ref_only(rev.get("baseline")),
+                                     REVISION_BASELINE_PLAN)
+                and _valid_fixed_ref(_ref_only(rev.get("approval")),
+                                     REVISION_BASELINE_APPROVAL)):
+            raise ValueError("Malformed revision block")
+        return PLANNING_SOURCE_REVISION
+    return PLANNING_SOURCE_SKETCH
+
+
+def _ref_only(block):
+    """{artifact, sha256, bytes} of a provenance block (extra keys such as
+    ``source_artifact`` dropped) for _valid_fixed_ref."""
+    if not isinstance(block, dict):
+        return None
+    return {k: block.get(k) for k in ("artifact", "sha256", "bytes")}
+
+
+def revision_refs(session):
+    """(source_loop_id, baseline_ref, approval_ref) of a revision loop, or
+    (None, None, None). Refs are {artifact, sha256, bytes} only."""
+    rev = session.get("revision") if isinstance(session, dict) else None
+    if not isinstance(rev, dict):
+        return None, None, None
+    return (rev.get("source_loop_id") if isinstance(rev.get("source_loop_id"), str)
+            else None,
+            _ref_only(rev.get("baseline")), _ref_only(rev.get("approval")))
+
+
+def plan_source_ref(session):
+    """The architect-plan ref ({artifact, sha256, bytes}) or None."""
+    ps = session.get("plan_source") if isinstance(session, dict) else None
+    return _ref_only(ps)
+
+
 def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
-                   mode=MODE_PLANNING, coding=None, brief=None):
+                   mode=MODE_PLANNING, coding=None, brief=None,
+                   plan_source=None, revision=None):
     """Build the initial session dict.
 
     Does not write to disk — caller is responsible for saving.
@@ -455,12 +644,18 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     the ``coding`` binding block (source loop, plan digest, base commit).
     ``brief`` (#43) is the Architect-brief metadata
     ``{artifact, sha256, bytes}`` when one was supplied; the key is absent
-    otherwise.
+    otherwise. ``plan_source`` / ``revision`` (#51) are the mutually
+    exclusive planning-provenance blocks; both keys are absent for ordinary
+    sketch loops, so legacy and ordinary sessions are unchanged.
     """
     if mode not in (MODE_PLANNING, MODE_CODING):
         raise ValueError(f"Unknown loop mode: {mode!r}")
     if mode == MODE_CODING and not coding:
         raise ValueError("A coding session requires its coding binding")
+    if plan_source is not None and revision is not None:
+        raise ValueError("A planning loop cannot have both plan_source and revision")
+    if mode == MODE_CODING and (plan_source is not None or revision is not None):
+        raise ValueError("Planning provenance is not valid on a coding session")
     now = datetime.now(tz=timezone.utc).isoformat()
     # #47: new sessions record when the turn started instead of a deadline.
     deadline = None
@@ -500,6 +695,10 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     }
     if brief is not None:
         session["brief"] = dict(brief)  # metadata only: artifact/sha256/bytes
+    if plan_source is not None:
+        session["plan_source"] = dict(plan_source)
+    if revision is not None:
+        session["revision"] = dict(revision)
     # #47 migration boundary: every new session (both modes) uses an
     # Architect attention interval; turn_timeout_seconds stores it.
     session["contract"] = {"attention_interval": ATTENTION_INTERVAL_CONTRACT}

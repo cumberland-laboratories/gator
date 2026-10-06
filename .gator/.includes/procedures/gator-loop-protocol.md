@@ -224,6 +224,24 @@ A loop can be suspended without ending: `paused_by_architect` (an Architect hold
 
 ---
 
+## Planning Sources
+
+A planning loop starts from one of these sources. `gator loop status` names it on a `Plan source:` line; no line means an ordinary sketch.
+
+**Architect-originated draft plan.** The Architect supplied a complete plan. It was checked exactly like a Draftor draft, and the loop starts at `plan_review`, so the **Reviewer acts first**.
+- The plan is **not approved**. Review it as you would any draft. Writing it did not approve it, and no Draftor turn exists for it.
+- If the Reviewer submits findings, the Draftor owns `plan_revision` and submits a **full replacement plan** (`plan.current.md` shows the plan under revision).
+- The Architect's original stays in `architect-plan.md` (read-only, digest-checked). Only Reviewer approval makes the plan eligible for a coding loop.
+- With no `sketch.md`, the plan's stated scope and any Architect brief govern. A scope change is Architect-owned: escalate.
+
+**Revision of an approved plan.** Status shows `Revision of: <loop id>`. The loop starts from an approved planning loop and a revision sketch, with ordinary Draftor-first turns.
+- Read `revision-baseline-plan.md` (the approved plan) and `revision-baseline-approval.md` (its approving review) first, then `sketch.md` (the revision sketch). These copies are the baseline: read-only and digest-checked. The source loop is never changed and may later be changed or removed.
+- The Draftor writes a **full replacement plan**, not a diff. Earlier rounds of the source loop are optional unless the sketch requires them.
+- `## Context Checked` records only what you actually consulted; it does not claim the whole source history was read.
+- A baseline marked `[!!]` in status must not be relied on: escalate.
+
+---
+
 ## State Machine (What You Can See)
 
 | Stage | What's happening | Who acts |
@@ -324,6 +342,9 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 |------|-----------|
 | `sketch.md` | The Architect's approved scope (read-only, do not modify) |
 | `architect-brief.md` | Optional Architect brief: required reading when status lists it (read-only, digest-checked) |
+| `architect-plan.md` | Architect-originated draft plan, when the loop started from one: provenance only, never approval (read-only, digest-checked) |
+| `revision-baseline-plan.md` | Revision loops: the approved plan being revised (read-only, digest-checked copy) |
+| `revision-baseline-approval.md` | Revision loops: the review that approved the baseline plan (read-only, digest-checked copy) |
 | `source-architect-brief.md` | Coding loops only: the planning loop's brief, when carried forward (read-only) |
 | `plan.current.md` | The latest draftor submission |
 | `findings.current.md` | The latest reviewer submission |

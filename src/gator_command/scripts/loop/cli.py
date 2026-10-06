@@ -34,8 +34,26 @@ def _cmd_start(args):
     from host import start_loop
     mode = getattr(args, "mode", "planning") or "planning"
     from_loop = getattr(args, "from_loop", None)
-    if mode == "planning" and not args.sketch:
-        print("  Error: a planning loop requires --sketch", file=sys.stderr)
+    plan_path = getattr(args, "plan_path", None)
+    revise_from = getattr(args, "revise_from", None)
+    if plan_path is not None and revise_from is not None:
+        print("  Error: use --plan-file or --revise-from, not both", file=sys.stderr)
+        sys.exit(1)
+    if revise_from is not None and mode != "planning":
+        print("  Error: --revise-from starts a planning loop; it is not valid with "
+              "--mode coding", file=sys.stderr)
+        sys.exit(1)
+    if revise_from is not None and not args.sketch:
+        print("  Error: --revise-from requires --sketch (the revision sketch)",
+              file=sys.stderr)
+        sys.exit(1)
+    if plan_path is not None and mode != "planning":
+        print("  Error: --plan-file starts a planning loop; it is not valid with "
+              "--mode coding", file=sys.stderr)
+        sys.exit(1)
+    if mode == "planning" and not args.sketch and plan_path is None:
+        print("  Error: a planning loop requires --sketch (or --plan-file)",
+              file=sys.stderr)
         sys.exit(1)
     if mode == "coding" and not from_loop:
         print("  Error: a coding loop requires --from-loop <approved planning loop id>",
@@ -56,6 +74,8 @@ def _cmd_start(args):
             from_loop=from_loop,
             brief_path=getattr(args, "brief", None),
             source_brief=source_brief,
+            plan_path=plan_path,
+            revise_from=revise_from,
         )
     except FileNotFoundError as e:
         print(f"  Error: {e}", file=sys.stderr)
@@ -116,6 +136,7 @@ def _cmd_status(args):
             "mode": _mode_of(session),
             "suspension": _suspension_view(session),
         }
+        _plan_source_json(session, loop_dir, out)
         _strip_participant_time(session, out)
         out.update(_briefs_json(session, loop_dir))
         out.update(_checkpoints_json(session))
@@ -132,6 +153,9 @@ def _cmd_status(args):
         if _mode_of(session) == "coding":
             print("  Mode: coding")
         _print_briefs(session, loop_dir)
+        if _mode_of(session) == "planning":
+            _print_plan_source(session, loop_dir)
+            _print_revision(session, loop_dir)
 
         if is_terminal(session):
             _print_terminal_reason(session, role)
@@ -195,6 +219,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "mode": _mode_of(session),
             "suspension": _suspension_view(session),
         }
+        _plan_source_json(session, loop_dir, out)
         attention = _attention_view(session)
         if attention is not None:
             out["attention"] = attention
@@ -210,6 +235,9 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
         print(f"  Role: architect (supervisor)")
         print(f"  Stage: {stage}")
         _print_briefs(session, loop_dir, architect=True)
+        if _mode_of(session) == "planning":
+            _print_plan_source(session, loop_dir)
+            _print_revision(session, loop_dir)
 
         if is_active(session):
             print(f"  Active role: {status.get('next_role', '?')}")
@@ -300,6 +328,112 @@ def _strip_participant_time(session, out):
         out.pop("turn_deadline", None)
 
 
+_FIXED_MARKERS = {
+    "ok": "[OK]",
+    "missing": "[!!] MISSING",
+    "mismatch": "[!!] DIGEST MISMATCH",
+    "unreadable": "[!!] UNREADABLE",
+    "invalid_ref": "[!!] INVALID REFERENCE",
+    "unsafe": "[!!] UNSAFE PATH",
+}
+
+
+def _plan_source_view(session, loop_dir):
+    """#51: provenance of the plan, or None for ordinary sketch loops.
+
+    ``kind`` comes only from ``session.planning_source``. For an
+    Architect-originated plan: the fixed ``architect-plan.md`` path and its
+    integrity check, whether the current plan is still the Architect's
+    draft (no Draftor plan has replaced it), and whether the Reviewer has
+    approved the loop's plan.
+    """
+    from session import (planning_source, plan_source_ref,
+                         verify_fixed_artifact, ARCHITECT_PLAN_FILENAME,
+                         PLANNING_SOURCE_ARCHITECT)
+    try:
+        kind = planning_source(session)
+    except ValueError:
+        return {"kind": "invalid", "path": None, "check": "invalid_ref",
+                "architect_draft_current": False, "approved": False}
+    if kind != PLANNING_SOURCE_ARCHITECT:
+        return None
+    check = verify_fixed_artifact(loop_dir, plan_source_ref(session),
+                                  ARCHITECT_PLAN_FILENAME)
+    draftor_plan = any(t.get("role") == "draftor" and t.get("type") == "plan_draft"
+                       for t in session.get("turns", []))
+    return {
+        "kind": kind,
+        "path": str(Path(loop_dir) / ARCHITECT_PLAN_FILENAME),
+        "check": check,
+        "architect_draft_current": not draftor_plan,
+        "approved": session["status"].get("stage") == "plan_approved",
+    }
+
+
+def _revision_view(session, loop_dir):
+    """#51: a revision loop's source id and the integrity of its two
+    baseline copies, or None for other loops."""
+    from session import (planning_source, revision_refs, verify_fixed_artifact,
+                         REVISION_BASELINE_PLAN, REVISION_BASELINE_APPROVAL,
+                         PLANNING_SOURCE_REVISION)
+    try:
+        if planning_source(session) != PLANNING_SOURCE_REVISION:
+            return None
+    except ValueError:
+        return None
+    source_id, base_ref, appr_ref = revision_refs(session)
+    return {
+        "source_loop_id": source_id,
+        "baseline": {"path": str(Path(loop_dir) / REVISION_BASELINE_PLAN),
+                     "check": verify_fixed_artifact(loop_dir, base_ref,
+                                                    REVISION_BASELINE_PLAN)},
+        "approval": {"path": str(Path(loop_dir) / REVISION_BASELINE_APPROVAL),
+                     "check": verify_fixed_artifact(loop_dir, appr_ref,
+                                                    REVISION_BASELINE_APPROVAL)},
+    }
+
+
+def _print_revision(session, loop_dir):
+    view = _revision_view(session, loop_dir)
+    if view is None:
+        return
+    print(f"  Revision of: {view['source_loop_id']}")
+    for label, key in (("Baseline plan", "baseline"),
+                       ("Baseline approval review", "approval")):
+        item = view[key]
+        marker = _FIXED_MARKERS.get(item["check"], "[??] " + str(item["check"]))
+        print(f"  {label}: {item['path']} {marker}")
+    if any(view[k]["check"] != "ok" for k in ("baseline", "approval")):
+        print("  A revision baseline failed its integrity check; do not rely on "
+              "it -- escalate to the Architect.")
+
+
+def _print_plan_source(session, loop_dir):
+    """Plain-words provenance lines (ASCII) for status and wait."""
+    view = _plan_source_view(session, loop_dir)
+    if view is None:
+        return
+    if view["kind"] == "invalid":
+        print("  Plan source: [!!] INVALID PROVENANCE -- do not rely on it; "
+              "escalate to the Architect")
+        return
+    marker = _FIXED_MARKERS.get(view["check"], "[??] " + str(view["check"]))
+    print(f"  Plan source: Architect-originated draft plan -- "
+          f"{view['path']} {marker}")
+    if view["approved"]:
+        print("  Plan approved by the Reviewer (originated by the Architect).")
+    elif view["architect_draft_current"]:
+        print("  Current plan: Architect-originated draft -- awaiting Reviewer "
+              "approval (not approved)")
+    if view["check"] != "ok":
+        print("  The Architect-plan provenance failed its integrity check; "
+              "do not rely on it.")
+
+
+def _no_sketch(loop_dir):
+    return not (Path(loop_dir) / "sketch.md").is_file()
+
+
 def _message_for_role(session, role):
     """#53: the Architect message (and response artifact) addressed to
     ``role``, as ``(message, artifact, decision_id)``.
@@ -338,6 +472,27 @@ def _print_architect_message(session, role, loop_dir):
             print(f"    {line}")
     if artifact:
         print(f"  Architect response artifact: {loop_dir / artifact}")
+
+
+def _plan_source_json(session, loop_dir, out):
+    """#51 additive status JSON: ``planning_source`` (planning loops) and,
+    for an Architect-originated plan, ``plan_source: {path, check,
+    architect_draft_current, approved}``."""
+    if _mode_of(session) != "planning":
+        return
+    from session import planning_source
+    try:
+        out["planning_source"] = planning_source(session)
+    except ValueError:
+        out["planning_source"] = "invalid"
+    view = _plan_source_view(session, loop_dir)
+    if view is not None:
+        out["plan_source"] = {k: view[k] for k in
+                              ("path", "check", "architect_draft_current",
+                               "approved")}
+    rev = _revision_view(session, loop_dir)
+    if rev is not None:
+        out["revision"] = rev
 
 
 def _suspension_view(session):
@@ -560,19 +715,46 @@ def _print_action_prompt(session, role, loop_dir, token):
         _print_coding_action_prompt(session, role, loop_dir, token)
         return
 
+    source = _plan_source_view(session, loop_dir)
+    architect_plan = source is not None and source["kind"] != "invalid"
+    revision = _revision_view(session, loop_dir)
     if role == "draftor":
-        if stage == "plan_drafting":
+        if stage == "plan_drafting" and revision is not None:
+            # #51: a revision loop -- a full replacement plan from the
+            # copied baseline, its approving review, then the sketch.
+            print("  Action: Draft a full replacement plan. Read the baseline "
+                  "plan and its approval review, then the revision sketch.")
+            print(f"  Baseline plan: {revision['baseline']['path']}")
+            print(f"  Baseline approval review: {revision['approval']['path']}")
+            print(f"  Revision sketch: {loop_dir / 'sketch.md'}")
+            print("  Earlier rounds of the source loop are optional unless the "
+                  "sketch requires them.")
+        elif stage == "plan_drafting":
             print("  Action: Draft the implementation plan based on the sketch.")
             print(f"  Sketch: {loop_dir / 'sketch.md'}")
         else:
             print("  Action: Revise the plan based on reviewer findings.")
             print(f"  Findings: {loop_dir / 'findings.current.md'}")
+            if architect_plan:
+                # #51: the plan under revision may be the Architect's draft.
+                print(f"  Plan: {loop_dir / 'plan.current.md'}")
+                print("  Submit a full replacement plan.")
+        if architect_plan and _no_sketch(loop_dir):
+            print("  No sketch: the plan's stated scope and any Architect brief "
+                  "govern; scope changes are Architect-owned (escalate).")
         print()
         print("  Next step:")
         print(f"    gator loop submit-draft --token {token} --file <your-plan.md>")
     elif role == "reviewer":
-        print("  Action: Review the plan and submit findings or approve.")
+        if architect_plan and source["architect_draft_current"]:
+            print("  Action: Review the Architect-originated draft plan "
+                  "(unapproved) and submit findings or approve.")
+        else:
+            print("  Action: Review the plan and submit findings or approve.")
         print(f"  Plan: {loop_dir / 'plan.current.md'}")
+        if architect_plan and _no_sketch(loop_dir):
+            print("  No sketch: the plan's stated scope and any Architect brief "
+                  "govern; scope changes are Architect-owned (escalate).")
         print()
         print("  Next step:")
         print(f"    gator loop submit-review --token {token} --file <findings.md>")
@@ -1458,6 +1640,16 @@ def main(argv=None):
                               "guarded successor of an approved planning loop")
     p_start.add_argument("--from-loop", dest="from_loop", default=None,
                          help="Approved planning loop id to implement (coding loops; required)")
+    p_start.add_argument("--plan-file", dest="plan_path", default=None,
+                         help="Planning loops: start from an Architect-originated draft "
+                              "plan (repository file, validated like a Draftor draft). "
+                              "The Reviewer acts first; the plan is NOT approved until the "
+                              "Reviewer approves it. --sketch is optional (#51)")
+    p_start.add_argument("--revise-from", dest="revise_from", default=None,
+                         help="Planning loops: revise an approved planning loop. Its "
+                              "approved plan and approving review are copied as "
+                              "immutable baselines; --sketch is the revision sketch "
+                              "(required). The source loop is never changed (#51)")
     p_start.add_argument("--brief", default=None,
                          help="Optional Architect brief (Markdown, UTF-8, <= 32 KiB); "
                               "stored immutably as architect-brief.md (#43)")
