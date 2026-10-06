@@ -26,13 +26,13 @@ gator loop status --token $ARGUMENTS
      - **Coding loop** (status shows `Mode: coding`): the Draftor reads `approved-plan.md`, implements the change, stages it (no commit), and submits with `gator loop submit-implementation`. If status shows a `Checkpoint:` line, implement and stage only that active checkpoint and submit with `--checkpoint <id>`. The Reviewer reads `implementation.current.md` and reviews exactly the `git diff` that status prints (for a checkpoint: `git diff <checkpoint base> <staged_tree>`). After approval, the Draftor makes ONE normal commit. See "Coding Loops" in the protocol.
    - Then proceed with your work as the protocol directs
 
-6. If it is NOT your turn (exit code 1):
+6. If it is NOT your turn (exit code 1, which includes a loop paused or blocked on the Architect — you are still a participant):
    - If you have a genuine Architect-owned blocker, escalate first: `gator loop escalate --token $ARGUMENTS --reason "..."`
    - Otherwise, run `gator loop wait --token $ARGUMENTS --max-seconds 45` to wait until the loop becomes actionable
    - `wait` exit 0: it is your turn — re-read the status output and proceed with your work
    - `wait` exit 3: still not your turn — reissue the same `wait` command immediately; a returned `wait` does not end your participation
-   - `wait` exit 2: the loop is paused or ended — stop and report the status
-   - **Claude Code option (preferred while this session stays open):** instead of repeated `wait` calls, run `gator loop participant watch --token $ARGUMENTS --max-seconds 600 --json` with the Bash tool's `run_in_background: true`, then end your turn. You will be re-invoked when it exits: read the last JSON line of its output file. `turn_ready` (exit 0) → act; `architect_block` or `still_waiting` → relaunch the watcher; `terminal` or `superseded` → stop; `error` → fall back to bounded `wait`. The watcher never submits for you, and it cannot wake a session that has already been closed.
+   - `wait` exit 2: the loop ended — stop and report the status (a pause or block never ends a `wait`; it keeps waiting)
+   - **Claude Code option (preferred while this session stays open):** instead of repeated `wait` calls, run `gator loop participant watch --token $ARGUMENTS --max-seconds 600 --json` with the Bash tool's `run_in_background: true`, then end your turn. You will be re-invoked when it exits: read the last JSON line of its output file. `turn_ready` (exit 0) → act; `still_waiting` (also during a pause or block) or a legacy `architect_block` → relaunch the watcher; `terminal` or `superseded` → stop; `error` → fall back to bounded `wait`. The watcher never submits for you, and it cannot wake a session that has already been closed.
 
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.
 

@@ -275,7 +275,6 @@ class _Clock:
 class TestRunWatch:
     @pytest.mark.parametrize("kind,code,wake,reg_state", [
         ("turn-ready", 0, "turn_ready", "released"),
-        ("architect-block", 2, "architect_block", "released"),
         ("terminal", 2, "terminal", "closed"),
     ])
     def test_delivery_outcomes(self, env, kind, code, wake, reg_state):
@@ -289,6 +288,29 @@ class TestRunWatch:
         reg = _reg_state(env, "reviewer")
         assert reg["state"] == reg_state
         assert reg["released_reason"] == "delivered"
+        note = env["store"].read()["roles"]["reviewer"]["notifications"][0]
+        assert note["acked_at"] is not None
+
+    def test_architect_block_is_acked_and_watch_continues(self, env):
+        """#53: a suspension is acked, never an exit; the registration stays
+        active through it and the watch ends only at its own deadline."""
+        import submit as loop_submit
+        loop_submit.handle_pause(env["tok"]["architect"], message="hold")
+        _seed(env["store"], "reviewer", kind="architect-block",
+              stage="paused_by_architect")
+        clk = _Clock()
+        seen = []
+
+        def sleep(s):
+            seen.append(_reg_state(env, "reviewer")["state"])
+            clk.sleep(s)
+        code, payload = lv.run_watch(env["tok"]["reviewer"], 30,
+                                     clock=clk, sleep=sleep)
+        assert code == lv.WATCH_EXIT_STILL_WAITING
+        assert payload["wake_reason"] == "still_waiting"
+        assert payload["suspended"] is True
+        assert payload["stage"] == "paused_by_architect"
+        assert seen and set(seen) == {"active"}  # never released mid-hold
         note = env["store"].read()["roles"]["reviewer"]["notifications"][0]
         assert note["acked_at"] is not None
 

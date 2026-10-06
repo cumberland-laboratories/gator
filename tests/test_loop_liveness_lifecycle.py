@@ -215,3 +215,44 @@ def test_killed_watcher_goes_stale(env):
     assert lv.renotify_eligibility(state, session, "reviewer", later) == \
         (True, None)
     assert _last_json(out) is None  # killed: never reported anything
+
+
+def test_watcher_stays_connected_through_suspension(env):
+    """#53: one registration survives a pause and an escalation; the watcher
+    wakes only for the turn after the unblock, then for the terminal."""
+    arch = env["tok"]["architect"]
+
+    # (a) Pause -> unblock -> the other role submits: one generation, exit 0.
+    out1, _ = _launch(env, "reviewer", "susp1")
+    reg = _wait_for(lambda: _reg(env, "reviewer"), what="registration")
+    generation = reg["generation"]
+    loop_submit.handle_pause(arch, message="hold")
+    _wait_for(lambda: any(
+        n["kind"] == "architect-block" and n["acked_at"]
+        for n in env["store"].read()["roles"]["reviewer"]["notifications"]),
+        what="architect-block acked")
+    reg = _reg(env, "reviewer")
+    assert reg["state"] == "active" and reg["generation"] == generation
+    assert _last_json(out1) is None  # still watching through the hold
+    loop_submit.handle_unblock(arch)
+    loop_submit.handle_submit_draft(env["tok"]["draftor"], env["draft"])
+    payload = _wait_for(lambda: _last_json(out1), what="turn_ready")
+    assert payload["wake_reason"] == "turn_ready"
+    assert _reg(env, "reviewer")["generation"] == generation
+
+    # (b) Relaunch; escalate -> still watching; end -> exit 2 terminal.
+    out2, _ = _launch(env, "reviewer", "susp2")
+    _wait_for(lambda: (_reg(env, "reviewer") or {}).get("generation")
+              == generation + 1, what="relaunch registration")
+    loop_submit.handle_escalate(env["tok"]["reviewer"], "Need a decision")
+    _wait_for(lambda: any(
+        n["kind"] == "architect-block" and n["acked_at"]
+        and n["acked_generation"] == generation + 1
+        for n in env["store"].read()["roles"]["reviewer"]["notifications"]),
+        what="escalation block acked")
+    assert _reg(env, "reviewer")["state"] == "active"
+    assert _last_json(out2) is None
+    loop_submit.handle_end(arch, "done")
+    payload = _wait_for(lambda: _last_json(out2), what="terminal")
+    assert payload["wake_reason"] == "terminal"
+    assert _reg(env, "reviewer")["state"] == "closed"

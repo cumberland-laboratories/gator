@@ -623,11 +623,13 @@ WATCH_EXIT_STILL_WAITING = 3
 WATCH_EXIT_SUPERSEDED = 4
 WATCH_EXIT_INTERRUPTED = 130
 
-# kind -> (exit code, wake_reason, registration state after delivery)
+# kind -> (exit code, wake_reason, registration state after delivery).
+# #53: ``architect-block`` is deliberately absent: a paused or blocked loop
+# is not a reason to stop. The watcher acks it and keeps watching, staying
+# registered, until turn-ready, terminal, or its own deadline. (Older
+# watchers exited ``2 architect_block``; the protocol says relaunch.)
 _DELIVERY_OUTCOME = {
     "turn-ready": (WATCH_EXIT_ACT, "turn_ready", "released"),
-    "architect-block": (WATCH_EXIT_PAUSED_OR_ENDED, "architect_block",
-                        "released"),
     "terminal": (WATCH_EXIT_PAUSED_OR_ENDED, "terminal", "closed"),
 }
 
@@ -1196,15 +1198,31 @@ def own_status(token, loop_dir=None, store_dir=None, now=None):
 # Watcher (D2a receiver contract)
 # ---------------------------------------------------------------------------
 
+def _suspension_fields(loop_dir):
+    """Additive ``still_waiting`` fields (#53): ``suspended: True`` and the
+    paused ``stage`` when the loop is suspended. One unlocked session read;
+    any failure (torn read, missing file) omits the fields."""
+    try:
+        from session import load_session
+        from state_machine import is_paused
+        session = load_session(Path(loop_dir))
+        if is_paused(session):
+            return {"suspended": True, "stage": session["status"]["stage"]}
+    except Exception:
+        pass
+    return {}
+
+
 def run_watch(token, max_seconds, poll_seconds=5.0, adapter_label=None,
               loop_dir=None, store_dir=None, clock=None, sleep=None):
     """Register, poll, ack; return (exit_code, payload) for one delivery.
 
-    Delivers the newest deliverable record (state is linear, so it reflects
+    Delivers the newest actionable record (state is linear, so it reflects
     the current loop state) and acks every record received in that poll.
-    Registration state afterwards follows D2a: released on turn-ready /
-    architect-block / still-waiting, closed on terminal, untouched when
-    superseded. KeyboardInterrupt releases best-effort ("interrupted").
+    #53: an ``architect-block`` (paused or blocked loop) is acked and the
+    watch continues with the registration still active -- suspension is not
+    departure. Registration state afterwards: released on turn-ready /
+    still-waiting, closed on terminal, untouched when superseded. KeyboardInterrupt releases best-effort ("interrupted").
     Never loops forever and never relaunches itself.
     """
     clock = clock or time.monotonic
@@ -1230,20 +1248,26 @@ def run_watch(token, max_seconds, poll_seconds=5.0, adapter_label=None,
             if notes:
                 for n in notes:
                     ack(token, rid, n["seq"], **kw)
-                chosen = max(notes, key=lambda n: n["seq"])
-                code, wake, reg_state = _DELIVERY_OUTCOME[chosen["kind"]]
-                release(token, rid, "delivered",
-                        closed=(reg_state == "closed"), **kw)
-                return code, dict(base, wake_reason=wake, acked=True,
-                                  kind=chosen["kind"], seq=chosen["seq"],
-                                  stage=chosen["stage"],
-                                  round=chosen["round"])
+                actionable = [n for n in notes
+                              if n["kind"] in _DELIVERY_OUTCOME]
+                if actionable:
+                    chosen = max(actionable, key=lambda n: n["seq"])
+                    code, wake, reg_state = _DELIVERY_OUTCOME[chosen["kind"]]
+                    release(token, rid, "delivered",
+                            closed=(reg_state == "closed"), **kw)
+                    return code, dict(base, wake_reason=wake, acked=True,
+                                      kind=chosen["kind"], seq=chosen["seq"],
+                                      stage=chosen["stage"],
+                                      round=chosen["round"])
+                # Only architect-block records: received (acked) and the
+                # watch continues; the registration stays active (#53).
             remaining = deadline - clock()
             if remaining <= 0:
                 release(token, rid, "still_waiting", **kw)
                 return WATCH_EXIT_STILL_WAITING, dict(
                     base, wake_reason="still_waiting",
-                    max_seconds=max_seconds)
+                    max_seconds=max_seconds,
+                    **_suspension_fields(reg["loop_dir"]))
             sleep(min(poll_seconds, remaining))
     except SupersededError:
         return WATCH_EXIT_SUPERSEDED, dict(base, wake_reason="superseded")

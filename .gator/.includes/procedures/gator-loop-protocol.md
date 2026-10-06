@@ -47,12 +47,15 @@ Read the output. It tells you:
 **Exit codes matter:**
 - `0` — it IS your turn. Proceed with your submission.
 - `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45` to wait until the loop becomes actionable.
-- `2` — the loop is blocked or ended. Stop.
+- `1` also applies while the loop is **paused or blocked on the Architect**: nobody's turn, so wait. Suspension is not the end of the loop (see "Suspension Is Not Departure" below).
+- `2` — the loop ended. Stop.
 
 **Waiting is bounded and resumable.** `gator loop wait --max-seconds 45` returns within about 45 seconds so that it fits inside agent tool-call limits. Its exit codes:
 - `0` — it is now your turn. Act immediately.
 - `3` — still not your turn. **Reissue the same `wait` command right away.** A completed `wait` call does not end your participation in the loop.
-- `2` — the loop is paused or ended. Stop and report the status.
+- `2` — the loop ended. Stop and report the status.
+
+A paused or blocked loop never ends a `wait`: it keeps waiting, and a bounded `wait` exits `3` at its limit. Reissue it.
 
 Keep reissuing the bounded `wait` until it returns `0` or `2`. Do not tight-poll `status` instead of `wait`. A human can cancel a `wait` command at any time with the normal interrupt.
 
@@ -64,9 +67,9 @@ gator loop participant watch --token <your-token> --max-seconds 600 --json
 
 Launch it in the background. It registers you with the Architect's Dashboard (which shows you as connected, then released), heartbeats, and exits with exactly one JSON line as soon as something happens. When you are re-invoked, read the **last JSON line** of the watcher's output and act on `wake_reason`:
 - `0` / `turn_ready` — it is your turn. Run `gator loop status` and act.
-- `2` / `architect_block` — paused or blocked on the Architect. Relaunch the watcher to wait for the unblock.
 - `2` / `terminal` — the loop ended. Stop; do not relaunch.
-- `3` / `still_waiting` — nothing yet. Relaunch the same watcher command.
+- `3` / `still_waiting` — nothing yet. Relaunch the same watcher command. The watcher keeps watching through a pause or block (it stays registered); its JSON adds `"suspended": true` when the loop is suspended.
+- `2` / `architect_block` — printed only by older watchers. Relaunch the watcher to wait for the unblock.
 - `4` / `superseded` — a newer watcher owns your role. Stop.
 - `1` / `error` — read the error; fall back to bounded `wait`.
 
@@ -157,7 +160,7 @@ After you submit, your turn is over. The other model's turn begins.
 
 ### Rule 1: Only submit on your turn (but you can always escalate)
 
-Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45`, and reissue it each time it exits `3`, until the loop becomes actionable. If exit code is `2`, the loop is over or blocked — stop.
+Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45`, and reissue it each time it exits `3`, until the loop becomes actionable. A paused or blocked loop also exits `1`: keep waiting. If exit code is `2`, the loop is over — stop.
 
 ### Rule 2: Submit through the CLI only
 
@@ -209,6 +212,18 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 
 ---
 
+## Suspension Is Not Departure
+
+A loop can be suspended without ending: `paused_by_architect` (an Architect hold, no response required from you) or `blocked_on_architect` (an escalation waiting for an Architect decision).
+
+- Stay in the bounded `wait` or the watcher. `status` exits `1` and shows the hold or the pending decision; `wait` keeps waiting. Exit `2` always means the loop ended.
+- Resume from `gator loop status`, not from a pasted prompt or a rejoin. When the Architect unblocks, the preserved role and stage come back and the turn owner's `wait` or watcher wakes.
+- If your submission is rejected because the loop is blocked, keep your file. Wait, then submit it after the unblock.
+- When status shows `Architect response to your escalation: decision-N`, the `Architect message:` line below it is the Architect's answer to your request. It stays visible to you until your next submission, even if it is not your turn.
+- Escalate only for a genuine Architect-owned decision (Rule 6).
+
+---
+
 ## State Machine (What You Can See)
 
 | Stage | What's happening | Who acts |
@@ -224,7 +239,7 @@ When the loop reaches a terminal state (`plan_approved`, `max_rounds_exceeded`, 
 | `ended_by_architect` | Architect ended the loop | Nobody (done, final) |
 
 **Active (3):** `plan_drafting`, `plan_review`, `plan_revision`. One of you should be working.
-**Paused (2):** `blocked_on_architect`, `paused_by_architect`. Nobody acts, and the loop resumes only when the Architect unblocks it. `status` and `wait` exit `2`.
+**Paused (2):** `blocked_on_architect`, `paused_by_architect`. Nobody acts, and the loop resumes only when the Architect unblocks it. `status` exits `1` and `wait` keeps waiting: you are still a participant.
 **Terminal (4):** `plan_approved`, `max_rounds_exceeded`, `turn_timed_out`, `ended_by_architect`. The loop is over for you, and `status` and `wait` exit `2`. All four are final, except that the Architect alone may extend `max_rounds_exceeded` (Rule 10).
 
 ---
@@ -347,7 +362,7 @@ The `--file` attaches a durable artifact to the decision ledger. The Architect's
 
 ### What happens after you escalate
 
-1. The loop enters `blocked_on_architect`. Your status will show exit code `2`.
+1. The loop enters `blocked_on_architect`. Your status will show exit code `1` ("Awaiting Architect decision"). You are still a participant: stay in the bounded `wait` (or the watcher).
 2. Wait. Do not poll aggressively. The Architect may take minutes or hours.
 3. When the Architect unblocks, they may include a **message** and optionally a **response artifact** — a structured document with the decision, rationale, and next action.
 4. On your next `gator loop status` check, you will see:
@@ -385,8 +400,8 @@ gator loop status --token <token>
 ## Summary For Quick Reference
 
 1. `gator loop status --token <token>` — am I up?
-2. Exit 0: proceed. Exit 1: escalate first if blocked, otherwise `gator loop wait --token <token> --max-seconds 45`. Exit 2: stop.
-3. `wait` exit 0: act. Exit 3: reissue the same `wait`. Exit 2: stop.
+2. Exit 0: proceed. Exit 1 (including paused or blocked): escalate first if blocked on an Architect-owned decision, otherwise `gator loop wait --token <token> --max-seconds 45`. Exit 2: the loop ended; stop.
+3. `wait` exit 0: act. Exit 3: reissue the same `wait` (also through a pause or block). Exit 2: the loop ended; stop.
    (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
 4. Read the Architect brief(s) status lists, then the relevant files (sketch, plan, or findings) and the charters they touch
    (plans need a `## Context Checked` section: what you consulted, or `None — <reason>`;

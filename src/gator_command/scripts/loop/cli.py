@@ -110,14 +110,11 @@ def _cmd_status(args):
             "max_rounds": max_rnd,
             "blocked": status.get("blocked", False),
             "next_role": next_role,
-            "architect_message": status.get("architect_message"),
-            "architect_response_artifact": (
-                str(loop_dir / status["architect_response_artifact"])
-                if status.get("architect_response_artifact") else None
-            ),
+            **_message_json(session, role, loop_dir),
             "turn_timeout_seconds": status.get("turn_timeout_seconds"),
             "turn_deadline": status.get("turn_deadline"),
             "mode": _mode_of(session),
+            "suspension": _suspension_view(session),
         }
         _strip_participant_time(session, out)
         out.update(_briefs_json(session, loop_dir))
@@ -141,23 +138,21 @@ def _cmd_status(args):
             _print_approval_resolution(_approval_resolution(session, loop_dir))
             print("  Loop ended.")
         elif is_paused(session):
-            print("  Blocked -- waiting for Architect")
+            _print_suspension(session, token=args.token)
+            _print_architect_message(session, role, loop_dir)
         elif my_turn:
-            architect_msg = status.get("architect_message")
-            if architect_msg:
-                print(f"  Architect message: {architect_msg}")
-            response_artifact = status.get("architect_response_artifact")
-            if response_artifact:
-                print(f"  Architect response artifact: {loop_dir / response_artifact}")
+            _print_architect_message(session, role, loop_dir)
             _print_turn_window(session)
             _print_action_prompt(session, role, loop_dir, args.token)
         else:
+            _print_architect_message(session, role, loop_dir)
             print(f"  Waiting for: {next_role}")
 
         _print_counters(session)
 
-    # Exit codes: 0 = your turn, 1 = not your turn, 2 = blocked/terminal
-    if is_terminal(session) or is_paused(session):
+    # Exit codes (#53): 0 = your turn, 1 = not your turn (including a paused
+    # or blocked loop: keep waiting), 2 = the loop ended (terminal only).
+    if is_terminal(session):
         sys.exit(2)
     elif not my_turn:
         sys.exit(1)
@@ -198,6 +193,7 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             "decisions": decisions,
             "pending_decisions": pending,
             "mode": _mode_of(session),
+            "suspension": _suspension_view(session),
         }
         attention = _attention_view(session)
         if attention is not None:
@@ -220,6 +216,14 @@ def _cmd_status_architect(args, session, loop_id, loop_dir):
             _print_attention_lines(session)
         elif is_paused(session):
             print(f"  Paused: {stage}")
+            view = _suspension_view(session)
+            if view["resume_role"] and view["resume_stage"]:
+                print(f"  Preserved: {view['resume_role']} "
+                      f"({view['resume_stage']})")
+            if view["since"]:
+                print(f"  Since: {view['since']}")
+            if view["reason"]:
+                print(f"  Hold reason: {view['reason']}")
         elif is_terminal(session):
             _print_terminal_reason(session, "architect")
             _print_approval_resolution(_approval_resolution(session, loop_dir),
@@ -294,6 +298,109 @@ def _strip_participant_time(session, out):
     if _attention_on(session):
         out.pop("turn_timeout_seconds", None)
         out.pop("turn_deadline", None)
+
+
+def _message_for_role(session, role):
+    """#53: the Architect message (and response artifact) addressed to
+    ``role``, as ``(message, artifact, decision_id)``.
+
+    A message with a recipient is shown only to that role, whether or not it
+    owns the turn (an escalator that is not the resumed turn owner still sees
+    its response). An unscoped (legacy) message keeps the old rule: the turn
+    owner sees it. ``decision_id`` comes only from the stored message itself
+    (``architect_message_decision``), set when that message is the response
+    resolving this role's request — never inferred from turns or decisions.
+    """
+    status = session["status"]
+    recipient = status.get("architect_message_for")
+    if recipient is None:
+        visible = status.get("next_role") == role
+    else:
+        visible = recipient == role
+    message = status.get("architect_message")
+    artifact = status.get("architect_response_artifact")
+    if not visible or (message is None and artifact is None):
+        return None, None, None
+    return message, artifact, status.get("architect_message_decision")
+
+
+def _print_architect_message(session, role, loop_dir):
+    """Text rendering of ``_message_for_role``; continuation lines of a
+    multi-line message are indented so the block stays readable."""
+    message, artifact, decision_id = _message_for_role(session, role)
+    if decision_id and (message or artifact):
+        print(f"  Architect response to your escalation: {decision_id}")
+    if message:
+        # The "Architect message:" line is the protocol-documented surface.
+        lines = str(message).splitlines() or [""]
+        print(f"  Architect message: {lines[0]}")
+        for line in lines[1:]:
+            print(f"    {line}")
+    if artifact:
+        print(f"  Architect response artifact: {loop_dir / artifact}")
+
+
+def _suspension_view(session):
+    """#53: the non-terminal suspension, or None when the loop is not paused.
+
+    ``kind`` is ``architect_hold`` (paused_by_architect) or
+    ``architect_decision`` (blocked_on_architect). Built field by field from
+    validated session values; ``reason`` only for a hold, ``decision_id``
+    only for a decision.
+    """
+    from state_machine import is_paused
+    if not is_paused(session):
+        return None
+    status = session["status"]
+    hold = status.get("stage") == "paused_by_architect"
+    pending = [d for d in session.get("decisions", [])
+               if d.get("response") is None]
+    req = (pending[-1].get("request") or {}) if pending and not hold else {}
+    return {
+        "kind": "architect_hold" if hold else "architect_decision",
+        "resume_stage": status.get("resume_stage"),
+        "resume_role": status.get("resume_next_role"),
+        "since": status.get("suspended_at"),
+        "reason": status.get("pause_reason") if hold else None,
+        "decision_id": pending[-1].get("id") if pending and not hold else None,
+        "requested_by": req.get("role"),
+    }
+
+
+def _print_suspension(session, token=None):
+    """Participant text for a suspended loop: it is a hold, not the end."""
+    view = _suspension_view(session)
+    if view is None:
+        return
+    if view["kind"] == "architect_hold":
+        print("  Architect hold -- the Architect paused the loop")
+        if view["reason"]:
+            lines = str(view["reason"]).splitlines() or [""]
+            print(f"  Reason: {lines[0]}")
+            for line in lines[1:]:
+                print(f"    {line}")
+    else:
+        text = "  Awaiting Architect decision"
+        if view["decision_id"]:
+            text += f" {view['decision_id']}"
+        if view["requested_by"]:
+            text += f" (requested by {view['requested_by']})"
+        print(text)
+    if view["resume_role"] and view["resume_stage"]:
+        print(f"  Resumes with: {view['resume_role']} ({view['resume_stage']})")
+    print("  This is not the end of the loop. You are still a loop participant.")
+    if token:
+        print("  Keep waiting with:")
+        print(f"    gator loop wait --token {token} --max-seconds 45")
+
+
+def _message_json(session, role, loop_dir):
+    message, artifact, _ = _message_for_role(session, role)
+    return {
+        "architect_message": message,
+        "architect_response_artifact": (str(loop_dir / artifact)
+                                        if artifact else None),
+    }
 
 
 def _attention_view(session, now=None):
@@ -1050,17 +1157,14 @@ def _cmd_wait(args):
             "max_rounds": max_rnd,
             "blocked": status.get("blocked", False),
             "next_role": next_role,
-            "architect_message": status.get("architect_message"),
-            "architect_response_artifact": (
-                str(loop_dir / status["architect_response_artifact"])
-                if status.get("architect_response_artifact") else None
-            ),
+            **_message_json(session, role, loop_dir),
             "turn_timeout_seconds": status.get("turn_timeout_seconds"),
             "turn_deadline": status.get("turn_deadline"),
             "wake_reason": wake_reason,
             "max_seconds": max_seconds,
             "waited_seconds": waited_seconds,
             "reissue_command": reissue_cmd if still_waiting else None,
+            "suspension": _suspension_view(session),
         }
         _strip_participant_time(session, out)
         out.update(_checkpoints_json(session))
@@ -1077,17 +1181,20 @@ def _cmd_wait(args):
             _print_approval_resolution(_approval_resolution(session, loop_dir))
             print("  Loop ended.")
         elif is_paused(session):
-            print("  Blocked -- waiting for Architect")
+            # Only reachable at a bounded deadline (still_waiting).
+            _print_suspension(session)
+            _print_architect_message(session, role, loop_dir)
+            if still_waiting:
+                print(f"  Still waiting through the suspension "
+                      f"(waited {waited_seconds:g}s of {max_seconds:g}s). "
+                      "Reissue the same command now:")
+                print(f"    {reissue_cmd}")
         elif my_turn:
-            architect_msg = status.get("architect_message")
-            if architect_msg:
-                print(f"  Architect message: {architect_msg}")
-            response_artifact = status.get("architect_response_artifact")
-            if response_artifact:
-                print(f"  Architect response artifact: {loop_dir / response_artifact}")
+            _print_architect_message(session, role, loop_dir)
             _print_turn_window(session)
             _print_action_prompt(session, role, loop_dir, args.token)
         elif still_waiting:
+            _print_architect_message(session, role, loop_dir)
             print(f"  Still waiting -- another role owns the turn "
                   f"(waited {waited_seconds:g}s of {max_seconds:g}s).")
             print("  You are still a loop participant. Reissue the same command now:")
@@ -1095,8 +1202,9 @@ def _cmd_wait(args):
 
         _print_counters(session)
 
-    # Exit codes: 0 = your turn, 2 = paused/terminal, 3 = still waiting (bounded)
-    if is_terminal(session) or is_paused(session):
+    # Exit codes (#53): 0 = your turn, 2 = the loop ended (terminal only),
+    # 3 = still waiting (bounded), including through a pause or block.
+    if is_terminal(session):
         sys.exit(2)
     elif still_waiting:
         sys.exit(WAIT_EXIT_STILL_WAITING)
@@ -1109,6 +1217,10 @@ def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_termina
     """Poll session.json until the loop becomes actionable for this role.
 
     Returns (session, wake_reason). Read-only — never writes any file.
+    #53: wake reasons are terminal / already_your_turn / became_your_turn /
+    still_waiting; a paused or blocked loop keeps the wait going (bounded
+    waits return still_waiting at the deadline). ``is_paused`` is kept for
+    call-site compatibility and is not a wake condition.
     With max_seconds, returns (session, "still_waiting") once the monotonic
     deadline passes; each sleep is capped at the remaining time so the call
     never overruns its limit by a full poll interval. clock/sleep are test
@@ -1119,12 +1231,12 @@ def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_termina
     sleep = sleep or _time.sleep
     deadline = clock() + max_seconds if max_seconds is not None else None
 
-    # Check immediately first
+    # Check immediately first. #53: a paused or blocked loop is NOT a wake
+    # condition -- the participant stays in the wait through the suspension
+    # (next_role is None while suspended, so it never matches a role).
     session = load_session(loop_dir)
     if is_terminal(session):
         return session, "terminal"
-    if is_paused(session):
-        return session, "paused"
     if session["status"].get("next_role") == role:
         return session, "already_your_turn"
 
@@ -1143,8 +1255,6 @@ def _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_termina
             continue
         if is_terminal(session):
             return session, "terminal"
-        if is_paused(session):
-            return session, "paused"
         if session["status"].get("next_role") == role:
             return session, "became_your_turn"
 
@@ -1256,9 +1366,12 @@ def _render_participant(payload, as_json):
     print(f"  Role: {payload.get('role')}")
     messages = {
         "turn_ready": "Turn ready -- it is your turn now. Run: gator loop status --token <your-token>",
+        # Legacy wake reason from pre-#53 watchers only.
         "architect_block": "Loop paused or blocked on the Architect. Relaunch the watcher to wait for the unblock.",
         "terminal": "Loop ended. Stop; do not relaunch the watcher.",
-        "still_waiting": "Still waiting -- another role owns the turn. Relaunch the same watch command.",
+        "still_waiting": ("Still waiting through an Architect hold or decision -- you are still a participant. Relaunch the same watch command."
+                          if payload.get("suspended") else
+                          "Still waiting -- another role owns the turn. Relaunch the same watch command."),
         "superseded": "Superseded -- a newer watcher owns this role. Stop.",
         "interrupted": "Watcher interrupted.",
     }
@@ -1271,8 +1384,8 @@ def _render_participant(payload, as_json):
 def _cmd_participant_watch(args):
     """D2a receiver: register, heartbeat, deliver + ack one notification, exit.
 
-    Exit: 0 turn_ready, 2 architect_block/terminal, 3 still_waiting,
-    4 superseded, 1 error, 130 interrupted (SIGINT/SIGTERM).
+    Exit: 0 turn_ready, 2 terminal, 3 still_waiting (also through a pause
+    or block, #53), 4 superseded, 1 error, 130 interrupted (SIGINT/SIGTERM).
     """
     import signal
     import liveness

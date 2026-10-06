@@ -50,6 +50,77 @@ def _end_turn(session):
 
 
 # ---------------------------------------------------------------------------
+# Architect messages are recipient-scoped (#53)
+# ---------------------------------------------------------------------------
+
+def _set_architect_message(status, message, recipient, artifact=None,
+                           decision_id=None):
+    """Store a model-facing Architect message for ONE recipient role.
+
+    ``recipient`` None keeps the pre-#53 meaning: the turn owner reads it and
+    any model submission clears it. ``decision_id`` is set only when this
+    message is the response that resolves that decision, so a later pause or
+    interjection message can never inherit an old decision label.
+    """
+    status["architect_message"] = message
+    status["architect_message_for"] = recipient
+    status["architect_response_artifact"] = artifact
+    status["architect_message_decision"] = decision_id
+
+
+def _clear_architect_message(status):
+    _set_architect_message(status, None, None)
+
+
+def _consume_architect_message(status, role):
+    """A model submission by ``role`` consumes only a message addressed to it
+    (or an unscoped legacy message). A message for the other role survives,
+    so one role's submission never erases the other role's response."""
+    if status.get("architect_message_for") in (None, role):
+        _clear_architect_message(status)
+
+
+# ---------------------------------------------------------------------------
+# Suspension: one validated suspend path and one clear path (#53)
+# ---------------------------------------------------------------------------
+
+def _suspend(session, stage, pause_reason=None):
+    """Active -> ``stage`` (a paused stage), preserving the exact resume pair.
+
+    Invariant: ``resume_stage`` / ``resume_next_role`` / ``suspended_at`` are
+    set if and only if the stage is paused. Never touches the Architect
+    message: a pause or escalation must not erase an unread message.
+    """
+    if stage not in PAUSED_STAGES:
+        raise ValueError(f"Not a suspension stage: {stage}")
+    if not is_active(session):
+        raise ValueError(
+            f"Only an active loop can be suspended (stage: "
+            f"{session['status'].get('stage')})")
+    status = session["status"]
+    # Keep the message fields present (session shape) without changing them.
+    status.setdefault("architect_message", None)
+    status.setdefault("architect_response_artifact", None)
+    status["resume_stage"] = status["stage"]
+    status["resume_next_role"] = status["next_role"]
+    status["suspended_at"] = datetime.now(tz=timezone.utc).isoformat()
+    status["pause_reason"] = pause_reason
+    status["stage"] = stage
+    status["next_role"] = None
+    status["blocked"] = True
+    _end_turn(session)
+    status["last_updated"] = status["suspended_at"]
+
+
+def _clear_suspension(status):
+    """Leaving a suspension (resume, extend, reopen, end): no stale target."""
+    status["resume_stage"] = None
+    status["resume_next_role"] = None
+    status["suspended_at"] = None
+    status["pause_reason"] = None
+
+
+# ---------------------------------------------------------------------------
 # State sets
 # ---------------------------------------------------------------------------
 
@@ -291,8 +362,7 @@ def advance_draft_submitted(session, turn_timeout):
     status["stage"] = "plan_review"
     status["next_role"] = "reviewer"
     status["plan_status"] = "in_review"
-    status["architect_message"] = None  # clear after model acts on it
-    status["architect_response_artifact"] = None
+    _consume_architect_message(status, "draftor")
     _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
@@ -314,8 +384,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["next_role"] = None
         status["plan_status"] = "approved"
         status["unresolved_findings"] = 0
-        status["architect_message"] = None
-        status["architect_response_artifact"] = None
+        _clear_architect_message(status)
         _end_turn(session)
         status["blocked"] = False
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -329,8 +398,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
         status["stage"] = "max_rounds_exceeded"
         status["next_role"] = None
         status["plan_status"] = "max_rounds"
-        status["architect_message"] = None
-        status["architect_response_artifact"] = None
+        _clear_architect_message(status)
         _end_turn(session)
         status["blocked"] = True
         status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
@@ -340,8 +408,7 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
     status["stage"] = "plan_revision"
     status["next_role"] = "draftor"
     status["plan_status"] = "revision"
-    status["architect_message"] = None
-    status["architect_response_artifact"] = None
+    _consume_architect_message(status, "reviewer")
     _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
@@ -350,28 +417,33 @@ def advance_review_submitted(session, approved, findings_count, turn_timeout):
 def advance_escalated(session, reason):
     """Transition to blocked_on_architect from any active state.
 
-    Saves resume_stage and resume_next_role so unblock can restore.
+    Saves resume_stage and resume_next_role so unblock can restore (#53:
+    through the single ``_suspend`` path). The request itself is recorded by
+    the caller in the ``decisions[]`` ledger.
     """
-    status = session["status"]
-    status["resume_stage"] = status["stage"]
-    status["resume_next_role"] = status["next_role"]
-    status["stage"] = "blocked_on_architect"
-    status["next_role"] = None
-    status["architect_action_required"] = True
-    status["blocked"] = True
-    _end_turn(session)
-    status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+    _suspend(session, "blocked_on_architect")
+    session["status"]["architect_action_required"] = True
     return session
 
 
-def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, message=None):
-    """Transition from blocked_on_architect back to an active state.
+def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300,
+                      message=None, recipient=None, artifact=None,
+                      decision_id=None):
+    """Transition from a paused stage back to an active state.
 
-    Defaults to resume_stage/resume_next_role saved at escalation time.
+    Defaults to resume_stage/resume_next_role saved at suspension time.
     Architect can override with explicit stage/next_role arguments.
-    Optional message is stored for the resuming model to read via status.
+
+    #53: an optional message (and response artifact) is stored for ONE
+    recipient role — the escalator when resolving a decision, otherwise the
+    resumed role. Without a message, any unread Architect message is kept,
+    never erased. A legacy session paused before #53 (no ``suspended_at``
+    key) keeps the old behaviour of replacing the message, so its old pause
+    reason is never shown later as a message.
     """
     status = session["status"]
+    legacy_pause = (status.get("stage") == "paused_by_architect"
+                    and "suspended_at" not in status)
 
     target_stage = stage or status.get("resume_stage")
     target_role = next_role or status.get("resume_next_role")
@@ -398,9 +470,13 @@ def advance_unblocked(session, stage=None, next_role=None, turn_timeout=300, mes
     status["next_role"] = target_role
     status["architect_action_required"] = False
     status["blocked"] = False
-    status["architect_message"] = message
-    status["resume_stage"] = None
-    status["resume_next_role"] = None
+    if message is not None or artifact is not None:
+        _set_architect_message(status, message,
+                               recipient or status["next_role"], artifact,
+                               decision_id=decision_id)
+    elif legacy_pause:
+        _clear_architect_message(status)
+    _clear_suspension(status)
     _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
@@ -454,10 +530,8 @@ def advance_extended(session, rounds, turn_timeout, message=None):
     status["plan_status"] = "revision"
     status["blocked"] = False
     status["architect_action_required"] = False
-    status["architect_message"] = message
-    status["architect_response_artifact"] = None
-    status["resume_stage"] = None
-    status["resume_next_role"] = None
+    _set_architect_message(status, message, status["next_role"])
+    _clear_suspension(status)
     _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return previous, status["max_rounds"]
@@ -482,8 +556,7 @@ def advance_implementation_submitted(session, turn_timeout):
     status["stage"] = "implementation_review"
     status["next_role"] = table["role_by_stage"]["implementation_review"]
     status["plan_status"] = "in_review"
-    status["architect_message"] = None  # clear after the model acts on it
-    status["architect_response_artifact"] = None
+    _consume_architect_message(status, "draftor")
     _begin_turn(session, turn_timeout)
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
@@ -539,8 +612,7 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
                     "implementation_drafting"]
                 status["plan_status"] = "implementation"
                 status["unresolved_findings"] = 0
-                status["architect_message"] = None
-                status["architect_response_artifact"] = None
+                _consume_architect_message(status, "reviewer")
                 _begin_turn(session, turn_timeout)
                 status["last_updated"] = now
                 return session
@@ -549,8 +621,7 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
         status["next_role"] = None
         status["plan_status"] = "approved"
         status["unresolved_findings"] = 0
-        status["architect_message"] = None
-        status["architect_response_artifact"] = None
+        _clear_architect_message(status)
         _end_turn(session)
         status["blocked"] = False
         status["last_updated"] = now
@@ -558,8 +629,6 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
 
     status["round"] += 1
     status["unresolved_findings"] = 1
-    status["architect_message"] = None
-    status["architect_response_artifact"] = None
     status["last_updated"] = now
     if active is not None:
         active["findings_rounds"] = active.get("findings_rounds", 0) + 1
@@ -570,12 +639,14 @@ def advance_implementation_reviewed(session, approved, turn_timeout,
         status["stage"] = "max_rounds_exceeded"
         status["next_role"] = None
         status["plan_status"] = "max_rounds"
+        _clear_architect_message(status)
         _end_turn(session)
         status["blocked"] = True
         return session
     status["stage"] = "implementation_revision"
     status["next_role"] = table["role_by_stage"]["implementation_revision"]
     status["plan_status"] = "revision"
+    _consume_architect_message(status, "reviewer")
     _begin_turn(session, turn_timeout)
     return session
 
@@ -668,10 +739,8 @@ def advance_reopened(session, turn_timeout, message=None):
     status["plan_status"] = "revision"
     status["blocked"] = False
     status["architect_action_required"] = False
-    status["architect_message"] = message
-    status["architect_response_artifact"] = None
-    status["resume_stage"] = None
-    status["resume_next_role"] = None
+    _set_architect_message(status, message, status["next_role"])
+    _clear_suspension(status)
     _begin_turn(session, turn_timeout)
     status["last_updated"] = now
     return session
@@ -695,28 +764,23 @@ def advance_turn_timed_out(session, timed_out_role):
 def advance_paused_by_architect(session, message=None):
     """Transition to paused_by_architect from any active state.
 
-    Architect-initiated pause. Saves resume state like escalation.
+    Architect-initiated pause. Saves resume state like escalation through the
+    single ``_suspend`` path. #53: the reason is stored as ``pause_reason``,
+    never as ``architect_message``, so a pause cannot overwrite or erase an
+    unread interjection or decision response.
     """
-    status = session["status"]
-    status["resume_stage"] = status["stage"]
-    status["resume_next_role"] = status["next_role"]
-    status["stage"] = "paused_by_architect"
-    status["next_role"] = None
-    status["blocked"] = True
-    status["architect_message"] = message
-    _end_turn(session)
-    status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
+    _suspend(session, "paused_by_architect", pause_reason=message)
     return session
 
 
 def advance_interjected(session, message):
     """Store an Architect interjection without changing state.
 
-    The message appears in the active model's next status check.
-    No stage change, no deadline change.
+    The message is addressed to the current turn owner (#53) and appears in
+    its next status check. No stage change, no deadline change.
     """
     status = session["status"]
-    status["architect_message"] = message
+    _set_architect_message(status, message, status.get("next_role"))
     status["last_updated"] = datetime.now(tz=timezone.utc).isoformat()
     return session
 
@@ -725,11 +789,15 @@ def advance_ended_by_architect(session, reason=None):
     """Transition to ended_by_architect terminal state.
 
     Architect terminates the loop prematurely from any non-terminal state.
+    #53: ending a suspended loop clears its resume target (no stale target);
+    the caller resolves any pending decision as ``cancelled_by_end``.
     """
     status = session["status"]
     status["stage"] = "ended_by_architect"
     status["next_role"] = None
     status["blocked"] = True
+    if any(k in status for k in ("resume_stage", "suspended_at")):
+        _clear_suspension(status)
     _end_turn(session)
     if reason:
         status["end_reason"] = reason

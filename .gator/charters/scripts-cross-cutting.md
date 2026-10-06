@@ -79,6 +79,15 @@ Loop turn windows (legacy) and Architect attention intervals (#47; same stored f
 - `checkpoint_approved` is an additive, **non-terminal** `events.jsonl` event type, emitted on a non-final checkpoint approval with `generation`, `checkpoint_id`, `accepted_tree` and `next_checkpoint_id`. Other coding events gain additive `generation` and, for checkpoint loops, `checkpoint_*` / `findings_round` fields.
 - Doc pairs touched (protocol, `loop-artifact-formats.md`, `/loop-join`) stay byte-identical under the existing drift guards. `tests/test_loop_checkpoints.py` also pins that the shipped plan template's `## Coding Checkpoints` parses valid.
 
+**#53 suspension state (additive).**
+- **Session `status`** gains `suspended_at`, `pause_reason`, `architect_message_for` and `architect_message_decision`. An absent key keeps legacy behaviour.
+- **Decision responses:** `decisions[].response.kind` gains `cancelled_by_end`, and the `loop_ended_by_architect` event gains `decision_id`.
+- **Participant status/wait JSON:** `architect_message` / `architect_response_artifact` keep their keys but are populated only for their recipient role. Readers must tolerate all of these.
+- **Participant exit contract (meaning change, deliberate):** exit `2` from model `status` / `wait` / `participant watch` means **terminal only**. A paused or blocked loop gives `status` `1` and `wait` `3` (bounded), and the watcher acks `architect-block` and keeps watching.
+  - `gator-loop-status-v1` gains additive `suspension` (model, Architect and wait JSON).
+  - `gator-loop-participant-v1` `still_waiting` gains additive `suspended` / `stage`.
+  - Old participant prompts stay safe because they already wait on `1` and reissue on `3`. The protocol, watcher note, `/loop-join` pairs, `render_entry_content` and the live CLAUDE.md / AGENTS.md / GEMINI.md managed regions change together.
+
 `loop_extended` (#39) is an additive `events.jsonl` event type and is NOT terminal; timeline, tail, and audit consumers must tolerate it. The loop session schema is unchanged by extension — the audit record is the `loop_extended` event plus the Architect `extend` turn.
 
 Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.

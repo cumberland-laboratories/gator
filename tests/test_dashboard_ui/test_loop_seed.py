@@ -151,8 +151,15 @@ def seed_loop_fixtures(repo):
     blocked_session = _make_session(
         _BLOCKED_LOOP_ID, "blocked-feature", "blocked_on_architect",
         round_num=1, max_rounds=3,
-        blocked=True, escalation_reason="Needs Architect input on scope",
+        blocked=True,
     )
+    # #53: the real session shape -- the request text lives on the pending
+    # decision; the status carries the preserved resume pair (the product
+    # never writes an ``escalation_reason`` status field).
+    blocked_session["status"].update(
+        next_role=None, resume_stage="plan_review",
+        resume_next_role="reviewer",
+        suspended_at="2026-09-23T10:02:00+00:00")
     blocked_session["decisions"] = [
         {
             "id": "decision-1",
@@ -169,7 +176,11 @@ def seed_loop_fixtures(repo):
             "id": "decision-2",
             "request": {
                 "artifact_path": "decision-request.decision-2.round-1.md",
-                "reason": "Resource allocation",
+                "reason": "Needs Architect input on scope:\n"
+                          "resource allocation for the parser work.",
+                "role": "reviewer",
+                "round": 1,
+                "ts": "2026-09-23T10:02:00+00:00",
             },
             "response": None,
         },

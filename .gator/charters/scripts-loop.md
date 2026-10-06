@@ -171,22 +171,40 @@ Filesystem: none (mutates session dict)
 <- `submit.handle_submit_review()`
 ! Approval clears `unresolved_findings` to 0. Max rounds triggers `max_rounds_exceeded` terminal state.
 
+### _suspend(session, stage, pause_reason=None) / _clear_suspension(status) (#53)
+File: `src/gator_command/scripts/loop/state_machine.py`
+The single suspend path and the single clear path.
+- **`_suspend`** requires an active loop and a paused target stage (otherwise `ValueError`, before mutation). It saves `resume_stage` / `resume_next_role`, sets `suspended_at` (ISO UTC) and `pause_reason` (a pause only, else None), sets `next_role = None` and `blocked = True`, and ends the turn. It never changes `architect_message` (it only ensures the key exists).
+- **`_clear_suspension`** nulls `resume_*`, `suspended_at` and `pause_reason`. It is used by unblock, extend, reopen and end.
+<- `advance_escalated()`, `advance_paused_by_architect()`; clear <- `advance_unblocked()`, `advance_extended()`, `advance_reopened()`, `advance_ended_by_architect()`
+
+### _set_architect_message(status, message, recipient, artifact=None, decision_id=None) / _clear_architect_message(status) / _consume_architect_message(status, role) (#53)
+File: `src/gator_command/scripts/loop/state_machine.py`
+The model-facing Architect message is recipient-scoped: `architect_message`, `architect_response_artifact`, `architect_message_for` (`draftor` / `reviewer` / None) and `architect_message_decision` always move together. `architect_message_decision` is set only by the unblock that resolves that decision (`advance_unblocked(..., decision_id=)`); every other message write resets it, so a later pause or interjection message never inherits an old decision label.
+- **Recipients:** interject goes to the turn owner; an unblock that resolves a decision goes to `request.role`; any other unblock message goes to the resumed role; extend and reopen go to the resumed Draftor.
+- **`_consume_architect_message(status, role)`** runs on every non-terminal model submission. It clears the message only when it is addressed to `role`, or is unscoped (None: the pre-#53 rule).
+- **Terminal transitions** (approve, max rounds) clear the message unconditionally.
+- A newer Architect message (interject or unblock with a message) replaces an older one; there is one slot.
+
 ### advance_escalated(session, reason)
 File: `src/gator_command/scripts/loop/state_machine.py`
-Any active -> `blocked_on_architect`. Saves `resume_stage` and `resume_next_role`.
+Any active -> `blocked_on_architect` via `_suspend()`; sets `architect_action_required`.
 Filesystem: none (mutates session dict)
 <- `submit.handle_escalate()`
 
-### advance_unblocked(session, stage, next_role, turn_timeout)
+### advance_unblocked(session, stage, next_role, turn_timeout, message=None, recipient=None, artifact=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
-`blocked_on_architect` -> restored active state. Validates stage-role consistency. Receives the already-selected interval/timeout (the caller owns CLI/HTTP policy and persisting any changed legacy window; attention-mode loops refuse a change, #47) and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy).
+Paused -> restored active state. Validates stage-role consistency. Receives the already-selected interval/timeout (the caller owns CLI/HTTP policy and persisting any changed legacy window; attention-mode loops refuse a change, #47) and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy).
+- **#53 messages:** with a message or artifact, it stores them for `recipient`, or the resumed role when `recipient` is None. Without either, it **keeps** any unread message.
+- **Legacy pause:** a session paused before #53 has no `suspended_at` key. It keeps the old behaviour (the message is cleared), so its old pause reason, which was stored in `architect_message`, is never re-shown.
+- It always calls `_clear_suspension()`.
 Filesystem: none (mutates session dict)
 <- `submit.handle_unblock()`
 ! Stage-role validation comes from the session's mode table (`stages_for(session)`): the target must be an active stage of THIS mode, owned by `role_by_stage` (planning: `plan_drafting` / `plan_revision` → draftor, `plan_review` → reviewer; coding: `implementation_drafting` / `implementation_revision` → draftor, `implementation_review` → reviewer). A cross-mode target or a mismatched role raises ValueError.
 
 ### advance_extended(session, rounds, turn_timeout, message=None)
 File: `src/gator_command/scripts/loop/state_machine.py`
-`max_rounds_exceeded` -> the mode table's `extension_resume_stage` (`plan_revision` for planning, `implementation_revision` for coding #41; next_role from `role_by_stage`, the Draftor) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, resume fields, and `architect_response_artifact`; sets `architect_message=message` and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). Returns `(previous_max_rounds, new_max_rounds)`.
+`max_rounds_exceeded` -> the mode table's `extension_resume_stage` (`plan_revision` for planning, `implementation_revision` for coding #41; next_role from `role_by_stage`, the Draftor) with `max_rounds += rounds`. Preserves `round`, `current`, `turns`, `decisions`, `unresolved_findings`. Resets `plan_status="revision"`, `blocked=False`, `architect_action_required=False`, the suspension fields (`_clear_suspension`), and `architect_response_artifact`; sets `architect_message=message` for the Draftor (`_set_architect_message`, #53) and starts a fresh active turn via `_begin_turn()`: a fresh `turn_started_at` (attention-mode, #47: no deadline) or a fresh deadline (legacy). Returns `(previous_max_rounds, new_max_rounds)`.
 Filesystem: none (mutates session dict)
 <- `submit.handle_extend()` (#39)
 ! All guards run before any mutation: source stage must be exactly `EXTENDABLE_STAGE`; `rounds` a positive int (bool rejected); `round <= max_rounds`. For checkpoint loops (#55) that guard is instead the active item's `findings_rounds <= max_rounds`, because `status.round` is informational there and may exceed `max_rounds`. Violations raise ValueError. Input range policy (1..20) belongs to the caller.
@@ -326,6 +344,7 @@ Filesystem: source file (R, optional), `.gator/loops/<loop-id>/decision-request.
 ### handle_unblock(token, next_role, stage, message, file_path=None, loop_dir=None, turn_timeout=None, no_response=False)
 File: `src/gator_command/scripts/loop/submit.py`
 Architect command (requires architect token). Restores from `resume_stage`/`resume_next_role` or accepts overrides. Works for both `blocked_on_architect` and `paused_by_architect`. Optional `message` shown in the resuming model's status output; cleared when the model submits. Resolves the most recent pending decision entry (if any): sets `response.message`, `response.artifact_path`, `response.kind`, and `response.ts` so that `pending_decisions` in status accurately reflects only unresolved requests. Optional `file_path` attaches a durable response artifact copied to `decision-response.{decision-id}.md` in the loop directory. File validation (must exist, must be non-empty) runs before lock acquisition; `FileNotFoundError`/`ValueError` on failure. `--file` is rejected with `ValueError` inside the lock (before state advancement) when no pending decision exists — prevents silent discard of a response artifact after an Architect pause.
+**#53 recipient:** a decision response (message and artifact) is addressed to the escalating role (`request.role`), which may not be the resumed turn owner. Another unblock message is addressed to the resumed role. Without a message or file, an unread Architect message is kept. The response artifact name is computed before `advance_unblocked()`, and the file is copied after it.
 Response contract: a whitespace-only message is treated as absent. When a pending decision exists (escalation), one of message / file / `no_response=True` is required, else `ValueError` before any mutation. `no_response` is mutually exclusive with message/file and rejected when nothing is pending. `response.kind` ∈ `message`, `artifact`, `message_and_artifact`, `deliberate_empty`. Model-facing `architect_message` is the message, or `ARTIFACT_ONLY_RESPONSE_SUMMARY` for file-only, or `DELIBERATE_EMPTY_RESPONSE_SUMMARY` for the explicit empty choice — never silently blank for a resolved decision. An ordinary pause (no pending decision) still unblocks with no response.
 **#47:** for `attention_mode` sessions, a non-None `turn_timeout` raises `ValueError(ATTENTION_TIMEOUT_REFUSAL)` inside the lock before any mutation, because no participant window exists to change. Legacy turn window: optional `turn_timeout` is validated via `validate_turn_timeout()` before the lock; inside the lock it is written to `status.turn_timeout_seconds` BEFORE `advance_unblocked()` computes the fresh deadline, so both this turn and all later transitions use it. Omitted keeps the stored window. The `loop_unblocked` event carries `turn_timeout_seconds` always, plus `previous_turn_timeout_seconds` and a detail suffix when changed, and `response_kind` alongside `decision_id` when a decision was resolved.
 Filesystem: `.gator/loops/<loop-id>/decision-response.decision-*.md` (W, when file_path provided), session mutation
@@ -407,21 +426,23 @@ Filesystem: session mutation + one event (inside the session lock)
 
 ### handle_pause(token, message)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command. Pauses a running loop from any active state. Saves resume state. Distinct from model escalation (`paused_by_architect` vs `blocked_on_architect`).
+Architect command. Pauses a running loop from any active state. Saves resume state. Distinct from model escalation (`paused_by_architect` vs `blocked_on_architect`). #53: the message is stored as `status.pause_reason`, never as `architect_message`.
 Filesystem: none (session mutation only)
 <- `cli._cmd_pause()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `advance_paused_by_architect()`, `append_turn()`
 
 ### handle_interject(token, message)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command. Injects guidance without pausing — stores message in `architect_message`, no state change, no deadline change. Message cleared on next model submission.
+Architect command. Injects guidance without pausing. It stores the message in `architect_message`, addressed to the current turn owner (#53), with no state change and no deadline change. The recipient's next submission clears it.
 Filesystem: none (session mutation only)
 <- `cli._cmd_interject()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `advance_interjected()`, `append_turn()`
 
 ### handle_end(token, reason)
 File: `src/gator_command/scripts/loop/submit.py`
-Architect command. Terminates loop prematurely from any non-terminal state. Sets `ended_by_architect` terminal state.
+Architect command. Terminates the loop prematurely from any non-terminal state and sets the `ended_by_architect` terminal state.
+- **#53, pending request:** a request still pending at end is resolved as `response = {message: reason, artifact_path: null, kind: CANCELLED_BY_END ("cancelled_by_end"), ts}`, and the event gains additive `decision_id`.
+- **#53, suspended loop:** ending a suspended loop clears its suspension fields.
 Filesystem: none (session mutation only)
 <- `cli._cmd_end()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `advance_ended_by_architect()`, `append_turn()`
@@ -569,10 +590,20 @@ Filesystem: none (delegates to handlers)
 
 ### _cmd_status(args)
 File: `src/gator_command/scripts/loop/cli.py`
-Read-only status display. Role-aware: model view (exit codes 0/1/2, shows `architect_message` and `architect_response_artifact` when set) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands + pending decisions). Both text and JSON output include `architect_response_artifact` (absolute loop path or null).
+Read-only status display. Role-aware: model view (exit codes 0/1/2, shows `architect_message` and `architect_response_artifact` when set) vs architect supervisor view (exit codes 0/2, shows active role + join states + available commands + pending decisions).
+
+**#53 participant exit contract.**
+- **Exit codes:** model `status` exits `2` **only when terminal**. A paused or blocked loop exits `1` (nobody's turn: keep waiting).
+- **Text:** `_print_suspension` prints either "Architect hold -- the Architect paused the loop" plus `Reason:`, or "Awaiting Architect decision decision-N (requested by <role>)". It then prints `Resumes with: <role> (<stage>)`, "This is not the end of the loop. You are still a loop participant." and the bounded `wait` command.
+- **JSON:** model and Architect JSON gain additive `suspension` (`_suspension_view`): `{kind: architect_hold|architect_decision, resume_stage, resume_role, since, reason (hold only), decision_id / requested_by (decision only)}`, or null when not suspended.
+- **Architect view:** the paused text adds `Preserved:`, `Since:` and `Hold reason:`. Architect exit codes are unchanged. Both text and JSON output include `architect_response_artifact` (absolute loop path or null).
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `load_session()`
+! **#53 recipient-scoped message (`_message_for_role` / `_print_architect_message` / `_message_json`):**
+  - **Who sees it:** model status and wait show `architect_message` / `architect_response_artifact` only to their recipient, **whether or not it is that role's turn**. An unscoped legacy message keeps the old rule (turn owner only). JSON keys are unchanged; their value is null for a non-recipient.
+  - **Text:** the protocol-documented `Architect message:` line is kept. Continuation lines of a multi-line message are indented four spaces.
+  - **Decision label:** a line `Architect response to your escalation: decision-N` comes first only when the stored message carries `architect_message_decision`. It is never inferred from turns or `decisions[-1]`.
 ! JSON output includes `"schema": "gator-loop-status-v1"`. Architect JSON includes `turns`, join states, `decisions`, and `pending_decisions` (entries where `response` is null). Architect text status shows pending decision ID, reason, and artifact path when blocked. Architect never gets exit code 1 (always authorized to act on active loops).
 ! **#47 participant time silence:** for `attention_mode` loops the model status JSON and wait JSON omit `turn_timeout_seconds` / `turn_deadline` (`_strip_participant_time`), and `_print_turn_window(session)` prints nothing, so participants see no interval, deadline or countdown.
 ! **#47 Architect view:**
@@ -646,7 +677,7 @@ Architect unblock. Forwards `--message`, `--file`, `--timeout` (argparse type `_
 
 ### _cmd_wait(args)
 File: `src/gator_command/scripts/loop/cli.py`
-Model-role wait. Resolves the token, then calls `_wait_for_actionable()` and renders status-shaped output. Exit codes: `0` actionable, `2` paused/terminal (and invalid token or invalid `--max-seconds`), `3` (`WAIT_EXIT_STILL_WAITING`) bounded deadline passed while another role owns the turn. Architect token exits 1.
+Model-role wait. Resolves the token, then calls `_wait_for_actionable()` and renders status-shaped output. Exit codes: `0` actionable, `2` terminal (and invalid token or invalid `--max-seconds`), `3` (`WAIT_EXIT_STILL_WAITING`) bounded deadline passed while another role owns the turn **or the loop is paused/blocked (#53: a suspension never ends a wait)**. Architect token exits 1. JSON gains additive `suspension`; suspended still-waiting text prints the hold/decision and the reissue command.
 Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 <- `main()`
 -> `resolve_token()`, `_wait_for_actionable()`, `_print_action_prompt()`, `_positive_seconds()`
@@ -654,7 +685,7 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 
 ### _wait_for_actionable(loop_dir, role, poll_interval, load_session, is_terminal, is_paused, max_seconds=None, clock=None, sleep=None)
 File: `src/gator_command/scripts/loop/cli.py`
-Polls until terminal / paused / this role's turn. Returns `(session, wake_reason)` with wake_reason `terminal`, `paused`, `already_your_turn`, `became_your_turn`, or `still_waiting` (bounded only).
+Polls until terminal / this role's turn. Returns `(session, wake_reason)` with wake_reason `terminal`, `already_your_turn`, `became_your_turn`, or `still_waiting` (bounded only). #53: `paused` is no longer a wake reason; a suspended loop keeps the wait going (unbounded waits wait through it). The `is_paused` parameter is kept for call-site compatibility only.
 Filesystem: `session.json` (R)
 <- `_cmd_wait()`
 ! Read-only — never writes session or events. Bounded mode uses a monotonic deadline and caps each sleep at the remaining time, so it cannot overrun by a full poll interval; the session is re-read after the final sleep, so a turn change at the deadline still wins over `still_waiting`. `clock`/`sleep` are injectable test seams.
@@ -708,7 +739,15 @@ Read-only own-role summary (`gator-loop-participant-v1`): classification, genera
 
 ### run_watch(token, max_seconds, poll_seconds=5.0, adapter_label=None, loop_dir=None, store_dir=None, clock=None, sleep=None)
 File: `src/gator_command/scripts/loop/liveness.py`
-The D2a receiver. Registers (heartbeat advertised as `max(15, ceil(poll_seconds))`), polls until a delivery or the deadline, acks every record received in that poll, reports the newest, sets the registration state, and returns `(exit_code, payload)`: `0 turn_ready` (released), `2 architect_block` (released) / `2 terminal` (closed), `3 still_waiting` (released), `4 superseded` (no write), `1 error` (redacted), `130 interrupted` (best-effort release). A `RegistrationClosedError` mid-watch (closed by the terminal path) returns `2 terminal` with no write. Never loops forever or relaunches itself. `clock`/`sleep` are test seams.
+The D2a receiver. It registers (heartbeat advertised as `max(15, ceil(poll_seconds))`), polls until a delivery or the deadline, acks every record received in that poll, reports the newest **actionable** one, sets the registration state, and returns `(exit_code, payload)`:
+- `0 turn_ready` (released);
+- `2 terminal` (closed);
+- `3 still_waiting` (released);
+- `4 superseded` (no write);
+- `1 error` (redacted);
+- `130 interrupted` (best-effort release).
+
+**#53:** `architect-block` is not in `_DELIVERY_OUTCOME`. It is acked and the watch continues with the registration still `active` (poll heartbeats it), so a pause or block never releases or ends the watcher. `still_waiting` adds `suspended: true` and the paused `stage` (`_suspension_fields`, one unlocked session read; a failure omits them). `architect_block` remains only as a legacy wake reason in `_render_participant`. A `RegistrationClosedError` mid-watch (closed by the terminal path) returns `2 terminal` with no write. Never loops forever or relaunches itself. `clock`/`sleep` are test seams.
 
 ### _cmd_participant_watch(args) / _cmd_participant_status(args) / _render_participant(payload, as_json)
 File: `src/gator_command/scripts/loop/cli.py`
@@ -804,6 +843,21 @@ Violation: the post-reopen resubmission or a later checkpoint overwrites an earl
 
 Pause, unblock, escalate and end keep `current`, the stage and the role.
 
+## TRIPWIRE: Suspension Preserves the Resume Target and Never Erases Messages (#53)
+
+`resume_stage` / `resume_next_role` / `suspended_at` are non-null **if and only if** the stage is paused. They are set only by `_suspend()` and cleared only by `_clear_suspension()` (unblock, extend, reopen, end).
+
+A pause stores its reason in `pause_reason` and never writes `architect_message`. An unblock without a message keeps an unread message. A model submission consumes only a message addressed to that role (`architect_message_for`). Every decision request ends resolved, by a response or by `cancelled_by_end` at end.
+
+Violations:
+- Writing resume fields outside `_suspend` revives a stale target.
+- A pause that writes `architect_message` erases an unread interjection or response.
+- An unconditional clear on submission lets one role consume the other role's escalation response.
+
+Pinned by `tests/test_loop_suspension.py`.
+
+**Participant side (#53 cp2): suspension is not departure.** Exit `2` means terminal only. Model `status` exits `1` while suspended, `wait` keeps waiting (exit `3` at a bounded deadline), and the watcher acks `architect-block` and stays registered. Making a paused stage a stop signal again (exit `2`, a `paused` wake reason, or a release on `architect-block`) reintroduces the disconnect #53 fixed. Pinned by `test_status_and_wait_keep_participant_in_loop`, `TestRunWatch.test_architect_block_is_acked_and_watch_continues`, `test_watcher_stays_connected_through_suspension` and `test_suspension_cycles_idempotent_across_restarts`.
+
 ## TRIPWIRE: Liveness Store Is a Leaf Lock and Never Authority
 
 The liveness lock is a leaf: never acquire the session lock while holding it, and never touch the liveness store inside a `with_session_lock` callback. Snapshot session state unlocked first, then take the liveness lock. The store never holds tokens, nonces, prompts, artifacts, model/provider identity, or session-authoritative fields, and nothing in it may change loop state, deadlines, or `next_role`. It is never written to `events.jsonl`.
@@ -852,7 +906,7 @@ Loop modules use `sys.path.insert(0, LOOP_DIR)` and absolute imports (`from sess
 
 ## Cross-Vendor Orientation
 
-Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`. Artifact format templates are at `reference-notes/loop-artifact-formats.md`. Both files exist as byte-identical pairs between `.gator/.includes/` and `src/.../templates/gator-starter/`; change both copies in the same commit. The participant watcher receiver contract (#36) is at `reference-notes/loop-participant-watcher.md` (same byte-identical pair rule; listed in both `gator_layout.py` shipped-defaults copies). The protocol's Step 1 documents the watcher as optional and only for runtimes that re-invoke the agent when a background command exits (Claude Code background Bash, open session, per the M0 spike); `/loop-join` (`.claude/commands/` and the template copy, byte-identical) gives the Claude Code launch line. Coding loops (#41) are documented in the protocol's "Coding Loops (Implementation Review)" section, which has its own state table pinned to `CODING_ALL_STAGES` by `test_protocol_coding_state_table_matches_state_machine`. The planning "State Machine" table stays pinned to `ALL_STAGES`. The implementation template in `loop-artifact-formats.md` is pinned to `submit.IMPLEMENTATION_HEADINGS` by `test_implementation_template_matches_cli_headings`, and `/loop-join` carries the coding steps (both copies byte-identical). The vendor-neutral entry paragraph from `render_entry_content()` deliberately stays on bounded `wait` — it is shared by CLAUDE.md / AGENTS.md / GEMINI.md, and the watcher is not supported for every vendor.
+Models join a loop via the "gator loop join" instruction in their vendor entry point (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`). The source of truth for this instruction is `render_entry_content()` in `gatorize/entry_points.py` — see [Installer charter](scripts-installer.md). Claude Code also has a `/loop-join` slash command (`templates/gator-starter/commands/loop-join.md`) as a convenience layer. The behavioral protocol is at `procedures/gator-loop-protocol.md`. Artifact format templates are at `reference-notes/loop-artifact-formats.md`. Both files exist as byte-identical pairs between `.gator/.includes/` and `src/.../templates/gator-starter/`; change both copies in the same commit. The participant watcher receiver contract (#36) is at `reference-notes/loop-participant-watcher.md` (same byte-identical pair rule; listed in both `gator_layout.py` shipped-defaults copies). The protocol's `## Suspension Is Not Departure` section (#53) and its Step 1 / Rule 1 / State Machine / Escalation / Quick Reference text state that exit `2` means the loop ended and that a pause or block keeps participants in `wait` or the watcher; the entry renderer, `/loop-join` and the watcher note say the same. The protocol's Step 1 documents the watcher as optional and only for runtimes that re-invoke the agent when a background command exits (Claude Code background Bash, open session, per the M0 spike); `/loop-join` (`.claude/commands/` and the template copy, byte-identical) gives the Claude Code launch line. Coding loops (#41) are documented in the protocol's "Coding Loops (Implementation Review)" section, which has its own state table pinned to `CODING_ALL_STAGES` by `test_protocol_coding_state_table_matches_state_machine`. The planning "State Machine" table stays pinned to `ALL_STAGES`. The implementation template in `loop-artifact-formats.md` is pinned to `submit.IMPLEMENTATION_HEADINGS` by `test_implementation_template_matches_cli_headings`, and `/loop-join` carries the coding steps (both copies byte-identical). The vendor-neutral entry paragraph from `render_entry_content()` deliberately stays on bounded `wait` — it is shared by CLAUDE.md / AGENTS.md / GEMINI.md, and the watcher is not supported for every vendor.
 
 The protocol's escalation section classifies uncertainty into non-blocking (state an assumption, proceed) and blocking (Architect-owned, escalate with `--file`). The artifact format's plan template uses "Assumptions, Risks, and Required Architect Decisions" (not "Risks and Open Questions") to reinforce this classification. The findings template documents that an ESCALATE verdict must be accompanied by `gator loop escalate` — `submit-review` alone enters revision, not blocked state.
 

@@ -641,10 +641,11 @@ def test_pause_then_shows_unblock_controls(page, dashboard_fleet):
     page.unroute("**/loops/*/status")
 
 
-def _route_paused_status(page, stage, pending_decision, turn_timeout=480):
+def _route_paused_status(page, stage, pending_decision, turn_timeout=480,
+                         pause_reason=None, extra_decisions=()):
     """Serve a paused/blocked status for the selected loop (#40 controls)."""
     import json as _json
-    decisions = []
+    decisions = list(extra_decisions)
     if pending_decision:
         decisions.append({
             "id": "decision-1",
@@ -664,7 +665,8 @@ def _route_paused_status(page, stage, pending_decision, turn_timeout=480):
             "turn_timeout_seconds": turn_timeout,
             "resume_stage": "plan_drafting",
             "resume_next_role": "draftor",
-            "escalation_reason": "Need scope decision" if pending_decision else None,
+            "suspended_at": "2026-09-22T10:01:00+00:00",
+            "pause_reason": pause_reason,
         },
         "roles": {
             "draftor": {"role": "draftor", "joined": True},
@@ -698,7 +700,8 @@ def test_unblock_escalation_requires_response(page, dashboard_fleet):
     _open_unblock(page, dashboard_fleet)
 
     label = page.evaluate("() => document.querySelector('.loop-ctrl-label').textContent")
-    assert label == "Response to participant (required)"
+    # #53: the label names the role that escalated.
+    assert label == "Response to Draftor (required)"
     assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm').disabled") is True
 
     # Whitespace does not enable Confirm; a forced click is refused client-side.
@@ -2419,3 +2422,177 @@ def test_continue_server_error_keeps_dialog_for_retry(page, dashboard_fleet):
     assert page.locator(".loop-badge-outcome").count() == 1
     page.unroute("**/" + _ACTIVE_ID + "/extend")
     _unserve_mutable_loop(page)
+
+
+# ── #53: Architect workspace for suspension ──────────────────────────────────
+
+
+def test_blocked_card_shows_request_from_real_fields(page, dashboard_fleet):
+    """The blocked card renders from the pending decision (role, time, full
+    multi-line reason, request link) and the preserved resume pair."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "blocked-feature")
+    page.wait_for_selector(".loop-decision-card", timeout=10000)
+    card = page.evaluate("""() => {
+        var c = document.querySelector('.loop-decision-card');
+        var r = c.querySelector('.loop-blocked-reason');
+        return {kind: c.dataset.kind,
+                title: c.querySelector('.loop-blocked-title').textContent,
+                text: c.textContent,
+                reason: r.textContent,
+                ws: getComputedStyle(r).whiteSpace};
+    }""")
+    assert card["kind"] == "architect_decision"
+    assert "Blocked" in card["title"]
+    assert "awaiting your decision" in card["title"]
+    assert "decision-2" in card["text"]
+    assert "requested by Reviewer" in card["text"]
+    assert card["reason"] == ("Needs Architect input on scope:\n"
+                              "resource allocation for the parser work.")
+    assert card["ws"] == "pre-wrap"
+    assert "Resumes: Reviewer \u00b7 plan_review" in card["text"]
+    assert "Architect hold" not in card["text"]
+    assert page.locator(".loop-hold-card").count() == 0
+
+
+def test_paused_card_is_an_architect_hold(page, dashboard_fleet):
+    """A pause renders as an Architect hold, never as an escalation."""
+    _route_paused_status(page, "paused_by_architect", pending_decision=False,
+                         pause_reason="Lunch break.\nBack at 14:00.")
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-hold-card", timeout=10000)
+    text = page.evaluate(
+        "() => document.querySelector('.loop-hold-card').textContent")
+    assert "Architect hold (paused)" in text
+    assert "No participant response is required." in text
+    assert "Preserved: Draftor \u00b7 plan_drafting" in text
+    assert "Lunch break.\nBack at 14:00." in text
+    assert "awaiting your decision" not in text
+    assert page.locator(".loop-decision-card").count() == 0
+    style = page.evaluate(
+        "() => getComputedStyle(document.querySelector('.loop-hold-card'))"
+        ".borderTopStyle")
+    assert style == "dashed"  # distinct by border style, not colour alone
+    page.unroute("**/loops/*/status")
+
+
+def test_textarea_draft_survives_mutation_free_polls(page, dashboard_fleet):
+    """The response box is a labelled multiline textarea; a typed draft
+    survives unchanged polls, which make zero DOM mutations."""
+    _route_paused_status(page, "blocked_on_architect", pending_decision=True)
+    _open_unblock(page, dashboard_fleet)
+    info = page.evaluate("""() => {
+        var el = document.querySelector('.loop-ctrl-input');
+        var lab = document.querySelector('label[for="' + el.id + '"]');
+        return {tag: el.tagName, label: lab ? lab.textContent : null};
+    }""")
+    assert info["tag"] == "TEXTAREA"
+    assert info["label"] == "Response to Draftor (required)"
+    draft = "First paragraph.\n\nSecond paragraph with detail."
+    page.fill(".loop-ctrl-input", draft)
+    page.evaluate("""() => {
+        window._muts = 0;
+        var obs = new MutationObserver(function (m) { window._muts += m.length; });
+        ['#loop-controls', '#loop-region-blocked', '#loop-region-decisions']
+          .forEach(function (sel) {
+            obs.observe(document.querySelector(sel), {subtree: true,
+              childList: true, characterData: true, attributes: true});
+          });
+    }""")
+    page.wait_for_timeout(7000)  # more than two POLL_INTERVAL_MS polls
+    assert page.evaluate("() => window._muts") == 0
+    assert page.evaluate(
+        "() => document.querySelector('.loop-ctrl-input').value") == draft
+    page.unroute("**/loops/*/status")
+
+
+def test_decision_history_and_unblock_notice(page, dashboard_fleet):
+    """Resolved and cancelled requests stay readable; the unblock notice
+    says who resumes and claims no model work."""
+    import json as _json
+    cancelled = {
+        "id": "decision-0",
+        "request": {"reason": "Old question", "artifact_path": None,
+                    "round": 0, "role": "reviewer",
+                    "ts": "2026-09-22T09:00:00+00:00"},
+        "response": {"message": "Superseded", "artifact_path": None,
+                     "kind": "cancelled_by_end",
+                     "ts": "2026-09-22T09:30:00+00:00"},
+    }
+    _route_paused_status(page, "paused_by_architect", pending_decision=False,
+                         extra_decisions=[cancelled])
+    posts = []
+    page.route("**/loops/*/unblock",
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json",
+                   body='{"ok": true}')))
+    _open_unblock(page, dashboard_fleet)
+    page.wait_for_selector(".loop-decision-item", timeout=10000)
+    text = page.evaluate(
+        "() => document.querySelector('#loop-region-decisions').textContent")
+    assert "decision-0" in text and "requested by Reviewer" in text
+    assert "Cancelled \u2014 loop ended" in text and "Superseded" in text
+
+    page.fill(".loop-ctrl-input", "Resume.\nFocus on the parser.")
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_selector(".loop-unblock-notice", timeout=5000)
+    notice = page.evaluate(
+        "() => document.querySelector('.loop-unblock-notice').textContent")
+    assert "Draftor resumes at plan_drafting" in notice
+    assert "does not run model work" in notice
+    assert _json.loads(posts[0])["message"] == "Resume.\nFocus on the parser."
+    page.unroute("**/loops/*/unblock")
+    page.unroute("**/loops/*/status")
+
+
+def test_multiline_pause_history_readable_after_unblock(page, dashboard_fleet):
+    """After a hold ends, the full multi-line pause reason and unblock
+    response stay readable in the timeline (no single-line truncation);
+    unrelated events keep the compact detail."""
+    import json as _json
+    reason = "Lunch break.\nBack at 14:00 \u2014 then review the parser."
+    response = "Resume.\nFocus on the parser tests first."
+    status = {
+        "loop_id": "active-loop-2026-09-22T10-00-00Z",
+        "feature": "widget-refactor",
+        "status": {"stage": "plan_drafting", "next_role": "draftor",
+                   "round": 1, "max_rounds": 3, "blocked": False},
+        "roles": {"draftor": {"role": "draftor", "joined": True},
+                  "reviewer": {"role": "reviewer", "joined": True}},
+        "decisions": [],
+    }
+    events = {"events": [
+        {"event": "loop_started", "ts": "2026-09-22T10:00:00Z", "round": 0},
+        {"event": "draft_submitted", "ts": "2026-09-22T10:01:00Z", "round": 1,
+         "role": "draftor", "detail": "a long single-line detail " * 8},
+        {"event": "loop_paused", "ts": "2026-09-22T10:02:00Z", "round": 1,
+         "role": "architect", "detail": "Loop paused by Architect -- " + reason},
+        {"event": "loop_unblocked", "ts": "2026-09-22T10:30:00Z", "round": 1,
+         "role": "architect",
+         "detail": "Resumed to plan_drafting (next: draftor) -- Architect: "
+                   + response},
+    ]}
+    page.route("**/loops/*/status", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=_json.dumps(status)))
+    page.route("**/loops/*/events", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=_json.dumps(events)))
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-event-detail-full", timeout=10000)
+    details = page.evaluate("""() => Array.from(
+        document.querySelectorAll('#loop-timeline .loop-event-detail')).map(
+        el => ({text: el.textContent, full: el.classList.contains(
+            'loop-event-detail-full'), ws: getComputedStyle(el).whiteSpace,
+            clipped: el.scrollWidth > el.clientWidth + 1}))""")
+    full = [d for d in details if d["full"]]
+    assert len(full) == 2
+    assert full[0]["text"].endswith(reason) and full[1]["text"].endswith(response)
+    assert all(d["ws"] == "pre-wrap" and not d["clipped"] for d in full)
+    compact = [d for d in details if not d["full"]]
+    assert compact and all(d["ws"] == "nowrap" for d in compact)
+    page.unroute("**/loops/*/status")
+    page.unroute("**/loops/*/events")

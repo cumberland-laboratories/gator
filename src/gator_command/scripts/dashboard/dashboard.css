@@ -1830,6 +1830,47 @@ mark.search-hit {
 .loop-blocked-reason {
   font-size: 13px;
   color: var(--color-text);
+  white-space: pre-wrap;        /* #53: keep multi-line reasons readable */
+  overflow-wrap: anywhere;
+}
+
+/* #53: blocked vs Architect hold -- told apart by title text, glyph and
+   border style (solid vs dashed), never by colour alone. */
+.loop-hold-card {
+  background: var(--color-bg);
+  border-style: dashed;
+  border-width: 2px;
+}
+.loop-suspension-meta,
+.loop-suspension-note {
+  font-size: 12px;
+  margin: 2px 0;
+}
+.loop-suspension-meta { color: var(--color-muted); }
+
+.loop-decision-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+}
+.loop-decision-item { margin-bottom: 8px; }
+.loop-decision-item[data-state="pending"] .loop-decision-resolution { font-weight: 700; }
+.loop-decision-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 2px 0;
+}
+.loop-decision-resolution { margin-top: 2px; }
+.loop-decision-artifact-link { margin-right: 10px; }
+
+.loop-unblock-notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .loop-event {
@@ -1867,6 +1908,16 @@ mark.search-hit {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* #53: pause / unblock / escalation / interjection / end detail is shown in
+   full so suspension history stays readable after the hold ends. */
+.loop-event-detail.loop-event-detail-full {
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  flex: 1;
 }
 
 .loop-artifact-section {
@@ -2147,9 +2198,17 @@ mark.search-hit {
 
 .loop-ctrl-input-area {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  align-items: center;
+  align-items: flex-start;
   padding: 8px 0;
+}
+textarea.loop-ctrl-input {
+  min-width: 16em;
+  min-height: 5em;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
 }
 .loop-ctrl-input {
   flex: 1;

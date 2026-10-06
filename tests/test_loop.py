@@ -643,15 +643,15 @@ class TestStatusExitCodes:
             _cmd_status(args)
         assert exc.value.code == 1
 
-    def test_blocked_exit_2(self, loop_env):
-        """Exit 2 when blocked."""
+    def test_blocked_exit_1(self, loop_env):
+        """#53: a blocked loop exits 1 (keep waiting), never 2 (ended)."""
         loop_submit.handle_escalate(loop_env["draftor_token"], "test")
         from cli import _cmd_status
         import argparse
         args = argparse.Namespace(token=loop_env["draftor_token"], json=False)
         with pytest.raises(SystemExit) as exc:
             _cmd_status(args)
-        assert exc.value.code == 2
+        assert exc.value.code == 1
 
 
 class TestEventsEmitted:
@@ -2519,7 +2519,10 @@ class TestArchitectPause:
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["stage"] == "paused_by_architect"
         assert loop_sm.is_paused(s)
-        assert s["status"]["architect_message"] == "Hold on"
+        # #53: the hold reason is pause_reason; a pause never writes (and so
+        # never overwrites) the model-facing Architect message.
+        assert s["status"]["pause_reason"] == "Hold on"
+        assert s["status"]["architect_message"] is None
         assert s["status"]["resume_stage"] == "plan_drafting"
 
     def test_pause_emits_event(self, loop_env):
@@ -2648,18 +2651,21 @@ class TestWaitCommand:
         )
         assert reason == "terminal"
 
-    def test_wait_returns_on_pause(self, loop_env):
-        """Loop paused -> returns with paused."""
+    def test_wait_keeps_waiting_through_pause(self, loop_env):
+        """#53: a paused loop does not end a wait; bounded -> still_waiting."""
         from cli import _wait_for_actionable
         from state_machine import is_terminal, is_paused
 
         loop_submit.handle_pause(loop_env["architect_token"])
 
+        fc = _FakeClock()
         session, reason = _wait_for_actionable(
             loop_env["loop_dir"], "draftor", 0.1,
-            loop_session.load_session, is_terminal, is_paused
+            loop_session.load_session, is_terminal, is_paused,
+            max_seconds=1, clock=fc.clock, sleep=fc.sleep,
         )
-        assert reason == "paused"
+        assert reason == "still_waiting"
+        assert is_paused(session)
 
     def test_wait_blocks_then_wakes(self, loop_env):
         """Not your turn, then becomes your turn -> wakes with became_your_turn."""
@@ -2821,7 +2827,8 @@ class TestBoundedWait:
         assert (e["loop_dir"] / "session.json").read_bytes() == session_before
         assert (e["loop_dir"] / "events.jsonl").read_bytes() == events_before
 
-    def test_pause_preempts_deadline(self, loop_env):
+    def test_pause_does_not_end_wait(self, loop_env):
+        """#53: a pause mid-wait keeps the wait going to its deadline."""
         e = loop_env
         loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
 
@@ -2831,8 +2838,8 @@ class TestBoundedWait:
 
         fc = _FakeClock(on_sleep=architect_pauses)
         _, reason = self._wait(e, "draftor", fc, max_seconds=45)
-        assert reason == "paused"
-        assert fc.sleeps == [2.0]
+        assert reason == "still_waiting"
+        assert sum(fc.sleeps) == 45
 
     def test_terminal_preempts_deadline(self, loop_env):
         e = loop_env

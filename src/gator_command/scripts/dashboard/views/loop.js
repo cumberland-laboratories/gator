@@ -1280,12 +1280,16 @@
   }
 
   function blockedFingerprint(status) {
+    // #53: every input renderBlockedCard() reads, so an unchanged poll
+    // leaves the suspension card untouched.
     var s = status.status || {};
     var pd = pendingDecision(status);
+    var req = (pd && pd.request) || {};
     return JSON.stringify([
-      !!s.blocked, s.escalation_reason || null,
-      pd ? pd.id : null,
-      pd && pd.request ? pd.request.artifact_path || null : null,
+      s.stage || null, s.suspended_at || null, s.pause_reason || null,
+      s.resume_stage || null, s.resume_next_role || null,
+      pd ? pd.id : null, req.reason || null, req.role || null,
+      req.ts || null, req.artifact_path || null,
     ]);
   }
 
@@ -1338,6 +1342,7 @@
     mainEl.innerHTML = '<div class="loop-detail">'
       + '<div id="loop-region-header"></div>'
       + '<div id="loop-region-blocked"></div>'
+      + '<div id="loop-region-decisions"></div>'
       + '<div id="loop-region-coding"></div>'
       + '<div id="loop-region-prompts"></div>'
       + '<div id="loop-region-notice">'
@@ -1398,6 +1403,11 @@
     patchRegion(snap, "blocked", blockedFingerprint(status), function () {
       renderBlockedCard(status, root, container);
     });
+    patchRegion(snap, "decisions", decisionsFingerprint(status), function () {
+      renderDecisionHistory(status, root, container);
+    });
+    // #53: the liveness panel words a connected watcher during a hold.
+    snap.suspended = !!PAUSED_STAGES[s.stage || ""];
 
     patchCodingRegion(snap, status);
 
@@ -1416,36 +1426,170 @@
     });
   }
 
+  // ── #53: suspension card (blocked vs Architect hold) ─────────────────────
+  //
+  // Built only from fields the loop actually writes: the stage, the
+  // preserved resume pair, suspended_at / pause_reason, and the pending
+  // decision's request. Blocked and paused are told apart by title text,
+  // glyph and border style -- never by colour alone. All text goes through
+  // escHtml(); multi-line reasons keep their line breaks via CSS pre-wrap.
+
+  var ROLE_NAMES = { draftor: "Draftor", reviewer: "Reviewer" };
+
+  function roleName(role) {
+    return ROLE_NAMES[role] || (role ? String(role) : "");
+  }
+
+  function formatStamp(isoStr) {
+    if (!isoStr) return "";
+    var d = formatDate(isoStr), t = formatTime(isoStr);
+    return (d && t) ? d + " " + t : (d || t);
+  }
+
+  function preservedText(s) {
+    if (!s.resume_next_role || !s.resume_stage) return "";
+    return roleName(s.resume_next_role) + " · " + s.resume_stage;
+  }
+
+  function wireArtifactJump(link, container) {
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      var target = container.querySelector(
+        '.loop-artifact-section[data-artifact="' + link.dataset.artifact
+        + '"] .loop-artifact-toggle');
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.click();
+      }
+    });
+  }
+
   function renderBlockedCard(status, root, container) {
     var region = root.querySelector("#loop-region-blocked");
     var s = status.status || {};
-    if (!(s.blocked && s.escalation_reason)) {
+    var stage = s.stage || "";
+    if (!PAUSED_STAGES[stage]) {
       region.innerHTML = "";
       return;
     }
-    var pd = pendingDecision(status);
-    var html = '<div class="loop-blocked-card">'
-      + '<div class="loop-blocked-title">Blocked on Architect</div>'
-      + '<div class="loop-blocked-reason">' + escHtml(s.escalation_reason) + '</div>';
-    if (pd && pd.request && pd.request.artifact_path) {
-      html += '<a class="loop-blocked-artifact-link" data-artifact="'
-        + escHtml(pd.request.artifact_path) + '" href="#">View decision request</a>';
+    var hold = stage === "paused_by_architect";
+    var pd = hold ? null : pendingDecision(status);
+    var req = (pd && pd.request) || {};
+    var preserved = preservedText(s);
+    var html;
+    if (hold) {
+      html = '<div class="loop-blocked-card loop-suspension-card loop-hold-card"'
+        + ' data-kind="architect_hold" role="region" aria-label="Architect hold">'
+        + '<div class="loop-blocked-title">⏸ Architect hold (paused)</div>'
+        + '<div class="loop-suspension-note">You paused this loop. '
+        + 'No participant response is required.</div>';
+      if (preserved) {
+        html += '<div class="loop-suspension-meta">Preserved: '
+          + escHtml(preserved) + '</div>';
+      }
+      if (s.suspended_at) {
+        html += '<div class="loop-suspension-meta">Since: '
+          + escHtml(formatStamp(s.suspended_at)) + '</div>';
+      }
+      if (s.pause_reason) {
+        html += '<div class="loop-suspension-meta">Reason:</div>'
+          + '<div class="loop-blocked-reason">' + escHtml(s.pause_reason) + '</div>';
+      }
+    } else {
+      html = '<div class="loop-blocked-card loop-suspension-card loop-decision-card"'
+        + ' data-kind="architect_decision" role="region"'
+        + ' aria-label="Blocked on Architect decision">'
+        + '<div class="loop-blocked-title">⚑ Blocked — awaiting your decision</div>';
+      var who = [];
+      if (pd) who.push(escHtml(pd.id));
+      if (req.role) who.push("requested by " + escHtml(roleName(req.role)));
+      if (req.ts) who.push(escHtml(formatStamp(req.ts)));
+      if (who.length) {
+        html += '<div class="loop-suspension-meta">' + who.join(" · ") + '</div>';
+      }
+      html += '<div class="loop-blocked-reason">'
+        + (req.reason ? escHtml(req.reason) : "No request text on record.")
+        + '</div>';
+      if (req.artifact_path) {
+        html += '<a class="loop-blocked-artifact-link" data-artifact="'
+          + escHtml(req.artifact_path) + '" href="#">View decision request</a>';
+      }
+      if (preserved) {
+        html += '<div class="loop-suspension-meta">Resumes: '
+          + escHtml(preserved) + '</div>';
+      }
     }
     html += '</div>';
     region.innerHTML = html;
+    var link = region.querySelector(".loop-blocked-artifact-link");
+    if (link) wireArtifactJump(link, container);
+  }
 
-    var blockedLink = region.querySelector(".loop-blocked-artifact-link");
-    if (blockedLink) {
-      blockedLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        var target = container.querySelector(
-          '.loop-artifact-section[data-artifact="' + blockedLink.dataset.artifact + '"] .loop-artifact-toggle');
-        if (target) {
-          target.scrollIntoView({ behavior: "smooth", block: "center" });
-          target.click();
-        }
-      });
+  // ── #53: decision history (requests and their resolution) ──────────────
+
+  var RESPONSE_KIND_LABELS = {
+    message: "Answered",
+    artifact: "Answered with a response document",
+    message_and_artifact: "Answered (message and response document)",
+    deliberate_empty: "Resolved without a written response",
+    cancelled_by_end: "Cancelled — loop ended",
+  };
+
+  function decisionsFingerprint(status) {
+    return JSON.stringify(((status && status.decisions) || []).map(function (d) {
+      var r = d.response;
+      return [d.id, r ? [r.kind || null, r.ts || null] : null];
+    }));
+  }
+
+  function renderDecisionHistory(status, root, container) {
+    var region = root.querySelector("#loop-region-decisions");
+    if (!region) return;
+    var decisions = (status && status.decisions) || [];
+    if (!decisions.length) {
+      region.innerHTML = "";
+      return;
     }
+    var html = '<div class="section-title" style="margin-top:16px;">Architect decisions</div>'
+      + '<ol class="loop-decision-list">';
+    decisions.forEach(function (d) {
+      var req = d.request || {}, resp = d.response;
+      html += '<li class="loop-decision-item" data-decision="' + escHtml(d.id || "") + '"'
+        + ' data-state="' + (resp ? "resolved" : "pending") + '">'
+        + '<div class="loop-decision-head"><strong>' + escHtml(d.id || "decision") + '</strong>';
+      var meta = [];
+      if (req.role) meta.push("requested by " + escHtml(roleName(req.role)));
+      if (req.ts) meta.push(escHtml(formatStamp(req.ts)));
+      if (meta.length) html += ' · ' + meta.join(" · ");
+      html += '</div>';
+      if (req.reason) {
+        html += '<div class="loop-decision-text">' + escHtml(req.reason) + '</div>';
+      }
+      if (req.artifact_path) {
+        html += '<a class="loop-decision-artifact-link" href="#" data-artifact="'
+          + escHtml(req.artifact_path) + '">View request</a>';
+      }
+      if (!resp) {
+        html += '<div class="loop-decision-resolution">○ Pending — awaiting your response</div>';
+      } else {
+        var label = RESPONSE_KIND_LABELS[resp.kind] || "Resolved";
+        html += '<div class="loop-decision-resolution">✓ ' + escHtml(label)
+          + (resp.ts ? ' · ' + escHtml(formatStamp(resp.ts)) : '') + '</div>';
+        if (resp.message) {
+          html += '<div class="loop-decision-text">' + escHtml(resp.message) + '</div>';
+        }
+        if (resp.artifact_path) {
+          html += '<a class="loop-decision-artifact-link" href="#" data-artifact="'
+            + escHtml(resp.artifact_path) + '">View response</a>';
+        }
+      }
+      html += '</li>';
+    });
+    html += '</ol>';
+    region.innerHTML = html;
+    region.querySelectorAll(".loop-decision-artifact-link").forEach(function (a) {
+      wireArtifactJump(a, container);
+    });
   }
 
   function renderPromptSection(terminal, root) {
@@ -1707,9 +1851,13 @@
     if (el && el.hidden !== hidden) el.hidden = hidden;
   }
 
-  function livenessStateText(role) {
+  function livenessStateText(role, suspended) {
     var st = LIVENESS_STATES[role.state] || { glyph: "?", label: role.state };
     var text = st.glyph + " " + st.label;
+    if (role.state === "connected" && suspended) {
+      // #53: a watcher stays registered through a pause or block.
+      text += " — waiting through the hold";
+    }
     if (role.state === "stale" && role.last_seen_at) {
       text += " — last seen " + formatTime(role.last_seen_at);
     } else if (role.state === "connected" && role.last_seen_at) {
@@ -1863,7 +2011,7 @@
       var row = region.querySelector('.loop-liveness-row[data-role="' + r + '"]');
       if (!role || !row) return;
       var stateEl = row.querySelector(".loop-liveness-state");
-      setText(stateEl, livenessStateText(role));
+      setText(stateEl, livenessStateText(role, !!snap.suspended));
       if (stateEl.dataset.state !== role.state) stateEl.dataset.state = role.state;
       setText(row.querySelector(".loop-liveness-note"), livenessNoteText(role));
       var action = row.querySelector(".loop-liveness-action");
@@ -2180,6 +2328,19 @@
     if (ws) ws.dataset.polling = "1";
   }
 
+  // #53: after an unblock, say what happens next without claiming that the
+  // Dashboard resumed any model work.
+  function showUnblockNotice(root, s) {
+    var region = noticeSlot(root, "action");
+    if (!region) return;
+    var who = s.resume_next_role ? roleName(s.resume_next_role) : "The participant";
+    var where = s.resume_stage ? " at " + s.resume_stage : "";
+    region.innerHTML = '<div class="loop-unblock-notice" role="status">'
+      + '<strong>Unblocked.</strong> ' + escHtml(who + " resumes" + where)
+      + ' when its watcher or wait sees the change. '
+      + 'The Dashboard does not run model work.</div>';
+  }
+
   function showExtendNotice(root, data) {
     // Lives in #loop-region-notice (action slot), which incremental
     // rendering never patches, so it survives the terminal-to-live updates.
@@ -2336,9 +2497,12 @@
     var legacyWindow = !status.attention;  // #47: no participant window to change
 
     html += '</div>';
+    // #53: a multiline textarea so the Architect can write a considered
+    // response; its <label> is programmatically associated.
     html += '<div class="loop-ctrl-input-area" style="display:none;">'
-      + '<label class="loop-ctrl-label"></label>'
-      + '<input type="text" class="loop-ctrl-input" placeholder="Message (optional)">'
+      + '<label class="loop-ctrl-label" for="loop-ctrl-message"></label>'
+      + '<textarea id="loop-ctrl-message" class="loop-ctrl-input" rows="4"'
+      + ' placeholder="Message (optional)"></textarea>'
       + '<label class="loop-ctrl-timeout-label" style="display:none;">Turn window (s) '
       + '<input type="number" class="loop-ctrl-timeout" min="' + TURN_TIMEOUT_MIN
       + '" max="' + TURN_TIMEOUT_MAX + '" step="1" value="' + escHtml(String(currentTimeout)) + '">'
@@ -2366,6 +2530,7 @@
       responseRequired = required;
       label.textContent = labelText;
       input.placeholder = placeholder;
+      input.setAttribute("aria-label", labelText || placeholder);
       input.value = "";
       input.classList.remove("loop-ctrl-input-error");
       timeoutLabel.style.display = action === "unblock" && legacyWindow ? "" : "none";
@@ -2400,7 +2565,9 @@
           showInput(action, "", "Message (optional)", false);
         } else if (action === "unblock") {
           if (pd) {
-            showInput(action, "Response to participant (required)",
+            var asker = pd.request && pd.request.role;
+            showInput(action, "Response to "
+              + (asker ? roleName(asker) : "participant") + " (required)",
               "Answer the escalation (" + pd.id + ")", true);
           } else {
             showInput(action, "Message (optional)", "Message (optional)", false);
@@ -2458,6 +2625,7 @@
         inputArea.style.display = "none";
         pendingAction = null;
         responseRequired = false;
+        if (action === "unblock") showUnblockNotice(parentEl, s);
         loadSelectedLoop();
       });
     });
@@ -2472,6 +2640,19 @@
   }
 
   // ── rendering: event timeline ──────────────────────────────────────────────
+
+  // #53: Architect and suspension events carry free text (a pause reason,
+  // an unblock response, an escalation request, an interjection, an end
+  // reason). Their detail is shown in full, pre-wrapped, so pause/resume
+  // history stays readable after the hold ends. Other events keep the
+  // compact single-line detail.
+  var FULL_DETAIL_EVENTS = {
+    loop_paused: true,
+    loop_unblocked: true,
+    escalated: true,
+    architect_interjection: true,
+    loop_ended_by_architect: true,
+  };
 
   function eventCardHtml(ev) {
     var eventType = ev.event || ev.type || "unknown";
@@ -2491,7 +2672,9 @@
       + '<span class="loop-event-time">' + escHtml(formatTime(ev.ts)) + '</span>'
       + '<span class="loop-event-label">' + escHtml(label) + '</span>';
     if (detail) {
-      html += '<span class="loop-event-detail">' + escHtml(detail) + '</span>';
+      html += '<span class="loop-event-detail'
+        + (FULL_DETAIL_EVENTS[eventType] ? ' loop-event-detail-full' : '')
+        + '">' + escHtml(detail) + '</span>';
     }
     if (artifact) {
       // Link-only: rendered synchronously from event metadata. The card

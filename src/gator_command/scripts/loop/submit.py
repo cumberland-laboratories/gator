@@ -1161,6 +1161,10 @@ def handle_escalate(token, reason, file_path=None):
 ARTIFACT_ONLY_RESPONSE_SUMMARY = "See decision-response artifact."
 DELIBERATE_EMPTY_RESPONSE_SUMMARY = (
     "Architect resolved the escalation deliberately without a written response.")
+# #53: response.kind recorded when the Architect ends a loop with a request
+# still pending (additive to message/artifact/message_and_artifact/
+# deliberate_empty).
+CANCELLED_BY_END = "cancelled_by_end"
 
 
 ATTENTION_TIMEOUT_REFUSAL = (
@@ -1256,17 +1260,28 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
         if turn_timeout is not None:
             session["status"]["turn_timeout_seconds"] = turn_timeout
         timeout = session["status"]["turn_timeout_seconds"]
-        advance_unblocked(session, stage=stage, next_role=next_role,
-                          turn_timeout=timeout, message=status_message)
 
-        # Resolve the most recent pending decision, if any
+        # #53: a decision response is addressed to the role that escalated
+        # (which may not be the resumed turn owner); a pause message goes to
+        # the resumed role. The response artifact is surfaced to the same
+        # recipient (relative name; cli resolves it against loop_dir).
         resolved_id = None
         artifact_name = None
+        recipient = None
         if pending:
-            decision = pending[-1]
-            resolved_id = decision["id"]
+            resolved_id = pending[-1]["id"]
+            recipient = (pending[-1].get("request") or {}).get("role")
             if file_path is not None:
                 artifact_name = f"decision-response.{resolved_id}.md"
+        advance_unblocked(session, stage=stage, next_role=next_role,
+                          turn_timeout=timeout, message=status_message,
+                          recipient=recipient, artifact=artifact_name,
+                          decision_id=resolved_id)
+
+        # Resolve the most recent pending decision, if any
+        if pending:
+            decision = pending[-1]
+            if artifact_name is not None:
                 _copy_artifact(file_path, loop_dir, artifact_name)
             decision["response"] = {
                 "message": message,
@@ -1274,10 +1289,6 @@ def handle_unblock(token, next_role=None, stage=None, message=None,
                 "kind": response_kind,
                 "ts": datetime.now(tz=timezone.utc).isoformat(),
             }
-
-        # Surface response artifact in model-facing status (cleared on next submit)
-        # Store relative name only — cli resolves against loop_dir at render time
-        session["status"]["architect_response_artifact"] = artifact_name
 
         # Record architect turn
         append_turn(session, "architect", "unblock",
@@ -1706,6 +1717,21 @@ def handle_end(token, reason=None, loop_dir=None):
 
         advance_ended_by_architect(session, reason=reason)
 
+        # #53: a request pending at end is resolved as cancelled, so no
+        # decision is left dangling in the evidence.
+        from datetime import datetime, timezone
+        cancelled_id = None
+        pending = [d for d in session.get("decisions", [])
+                   if d.get("response") is None]
+        if pending:
+            cancelled_id = pending[-1]["id"]
+            pending[-1]["response"] = {
+                "message": reason,
+                "artifact_path": None,
+                "kind": CANCELLED_BY_END,
+                "ts": datetime.now(tz=timezone.utc).isoformat(),
+            }
+
         append_turn(session, "architect", "end",
                     reason or "Loop ended by Architect")
 
@@ -1718,6 +1744,8 @@ def handle_end(token, reason=None, loop_dir=None):
             "round": session["status"]["round"],
             "detail": detail,
         }
+        if cancelled_id:
+            event["decision_id"] = cancelled_id
         return session, event
 
     with_session_lock(loop_dir, _end)

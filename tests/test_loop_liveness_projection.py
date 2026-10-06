@@ -329,6 +329,31 @@ class TestRobustness:
         got = lv.poll(env["tok"]["draftor"], reg["registration_id"])
         assert [n["kind"] for n in got] == ["turn-ready"]
 
+    def test_suspension_cycles_idempotent_across_restarts(self, env):
+        """#53: pause -> unblock -> pause, with repeated projections and
+        fresh store instances (Dashboard restart / sidecar reload): one
+        architect-block per suspension and one turn-ready per resume."""
+        arch = env["tok"]["architect"]
+        lv.register(env["tok"]["draftor"])
+
+        def project_twice_with_restart():
+            _project(env)
+            fresh = lv.open_store(env["loop_dir"])
+            assert lv.project(env["loop_dir"], fresh) == lv.PROJECT_UNCHANGED
+            lv.sweep(env["root"])
+
+        project_twice_with_restart()                 # initial turn
+        loop_submit.handle_pause(arch, "first hold")
+        project_twice_with_restart()
+        loop_submit.handle_unblock(arch)
+        project_twice_with_restart()
+        loop_submit.handle_pause(arch, "second hold")
+        project_twice_with_restart()
+        kinds = _kinds(env, "draftor")
+        assert kinds == ["turn-ready", "architect-block", "turn-ready",
+                         "architect-block"]
+        assert _kinds(env, "draftor", pending_only=True) == ["architect-block"]
+
     def test_vanished_loop_deletes_sidecar(self, env):
         import shutil
         _project(env)

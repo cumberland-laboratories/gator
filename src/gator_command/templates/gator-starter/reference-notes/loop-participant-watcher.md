@@ -35,14 +35,15 @@ gator loop participant status --token <token> [--json]
 | Exit | `wake_reason` | Meaning | Agent action | Registration afterwards |
 |---|---|---|---|---|
 | 0 | `turn_ready` | It is your turn | `gator loop status`, then act | released |
-| 2 | `architect_block` | Paused or blocked on the Architect | Relaunch the watcher | released |
 | 2 | `terminal` | The loop ended | Stop; do not relaunch | closed (one-way) |
-| 3 | `still_waiting` | `--max-seconds` elapsed | Relaunch the same command | released |
+| 3 | `still_waiting` | `--max-seconds` elapsed, including during a pause or block | Relaunch the same command | released |
 | 4 | `superseded` | A newer watcher owns this role | Stop | untouched |
 | 1 | `error` | Bad token, Architect token, or storage unavailable | Fall back to bounded `wait` | — |
 | 130 | `interrupted` | Ctrl+C / SIGTERM | — | released (best effort) |
 
-JSON keys: `schema` (`gator-loop-participant-v1`), `wake_reason`, `loop_id`, `role`, and on delivery `kind`, `seq`, `stage`, `round`, `acked`. They also include `max_seconds` on `still_waiting` and `error` on errors.
+JSON keys: `schema` (`gator-loop-participant-v1`), `wake_reason`, `loop_id`, `role`, and on delivery `kind`, `seq`, `stage`, `round`, `acked`. They also include `max_seconds` on `still_waiting` (plus `suspended: true` and the paused `stage` when the loop is suspended) and `error` on errors.
+
+**Suspension is not departure.** When the Architect pauses the loop or a participant escalates, the watcher acknowledges the `architect-block` notification and keeps watching. Its registration stays active, so the Dashboard keeps showing it as connected. It exits on `turn_ready` after the unblock, on `terminal`, or at `--max-seconds`. Older watchers exited `2` / `architect_block` instead; if you see that wake reason, relaunch the watcher.
 
 ## Semantics
 
