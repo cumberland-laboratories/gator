@@ -514,6 +514,22 @@ _FINDINGS_ROUND_RE = __import__("re").compile(r"^findings\.round-\d+\.md$")
 APPROVING_REVIEW_SUMMARY = "Plan approved"
 
 
+def _require_source_dir(source_dir, loop_id):
+    """Containment guard for a source loop directory (#51 follow-up).
+
+    A Windows directory junction is a reparse point but not a symlink, so
+    ``is_symlink()`` alone would let one under ``.gator/loops/`` redirect
+    source reads outside the governed loops directory. Reject either form
+    before ``session.json`` or any source artifact is opened; the error
+    names only the requested id, never the redirected target.
+    """
+    if source_dir.is_symlink() or _is_reparse_point(source_dir):
+        raise ValueError(
+            f"Source loop must not be a symlink or reparse point: {loop_id}")
+    if not source_dir.is_dir():
+        raise ValueError(f"Source loop not found: {loop_id}")
+
+
 def _read_source_file(source_dir, name, what):
     """Bytes of one source-loop artifact: a regular, non-link, non-empty
     file of at most MAX_BASELINE_BYTES. ValueError names the problem."""
@@ -631,8 +647,7 @@ def _init_revision_loop(feature, sketch_path, revise_from, max_rounds,
         raise ValueError(f"Invalid source loop id: {revise_from!r}")
     loops_base = repo_root / ".gator" / "loops"
     source_dir = loops_base / revise_from
-    if source_dir.is_symlink() or not source_dir.is_dir():
-        raise ValueError(f"Source loop not found: {revise_from}")
+    _require_source_dir(source_dir, revise_from)
     if not (source_dir / "session.json").is_file():
         raise ValueError(f"Source loop has no session: {revise_from}")
 
@@ -848,8 +863,7 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
 
     loops_base = repo_root / ".gator" / "loops"
     source_dir = loops_base / from_loop
-    if source_dir.is_symlink() or not source_dir.is_dir():
-        raise ValueError(f"Source loop not found: {from_loop}")
+    _require_source_dir(source_dir, from_loop)
     if not (source_dir / "session.json").is_file():
         raise ValueError(f"Source loop has no session: {from_loop}")
 

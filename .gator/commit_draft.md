@@ -1,33 +1,18 @@
 ---
-message: "Loop: reviewer-gated Architect plans and revision planning loops (#51)"
-change-type: feature
+message: "Loop: reject junction/reparse-point source-loop directories (#51 follow-up)"
+change-type: fix
 significance: notable
-decision-tags: [loop, planning, provenance, dashboard, governance]
+decision-tags: [loop, security, containment]
 agent: claude-opus-5-5
 architect: Alan Gillette
 ---
 
 # Session Change Log
 
-- **Checkpoint 1: Architect-originated plan entry (#51).**
-  - **Start:** `gator loop start --plan-file P [--sketch S]` starts a planning loop from an Architect-supplied plan.
-  - **Input checks:** the plan is read once through the new `read_governed_input` (repo containment, no links or aliases, regular, stable, UTF-8, at most 256 KiB) and validated by the SAME `_check_plan_draft` as a Draftor draft.
-  - **Storage:** it is stored as immutable `architect-plan.md` plus `plan.round-0.md` and `plan.current.md`. The loop starts at the existing `plan_review` stage with the Reviewer acting first, records one Architect `initial_plan` turn and no Draftor turn, and emits `architect_plan_submitted`.
-  - **Approval:** findings hand the plan to the Draftor for a full replacement; only Reviewer approval makes it a coding-loop source.
-  - **Verifier:** the new generic verifier (`verify_fixed_artifact`, a closed allowlist with per-name limits) replaces brief-only verification; the brief functions are brief-scoped wrappers with unchanged results.
-  - **Provenance:** a `planning_source()` accessor, status/JSON provenance lines, Reviewer/Draftor prompts and a protocol "Planning Sources" section.
-  - **Tests:** new `tests/test_loop_plan_sources.py`.
-  - **Charters:** `scripts-loop.md` (new entries, Architect-plan TRIPWIRE), `scripts-cross-cutting.md`.
-- **Checkpoint 2: revision planning from an approved loop (#51).**
-  - **Start:** `gator loop start --sketch S --revise-from <approved planning loop>` creates an ordinary Draftor-led planning loop.
-  - **Baseline copies:** under the source's session lock (read-only), it identifies the approving review (the last Reviewer "Plan approved" turn, byte-equal to `findings.current.md`) and the approved plan (`plan.current.md`, byte-equal to the latest plan submission). It copies both as immutable, digest-verified `revision-baseline-plan.md` / `revision-baseline-approval.md`, and records a `revision` block.
-  - **Source loop:** never written; the copies stay valid if it is removed.
-  - **Failures:** a missing or inconsistent approval, unapproved or coding sources, an outside-repo sketch, and conflicting flags all fail atomically with a named reason.
-  - **Participant wording:** status lines, the Draftor first-turn prompt and the protocol revision paragraph.
-  - **Tests:** checkpoint-2 tests in `tests/test_loop_plan_sources.py`.
-  - **Charters:** `scripts-loop.md` (Revision Baselines TRIPWIRE), `scripts-cross-cutting.md`.
-- **Checkpoint 3: Dashboard creation and inspection of plan sources (#51).**
-  - **Server:** `POST /loops/start` accepts `plan_path` or `revise_from`, with type and conflict checks, and passes lexical paths to `init_loop`, which is the only validator. Strict `planning_source` / `plan_source` / `revision` status views; three fixed artifact names in the allowlist; provenance pointer lines in `/prompt`; `planning_source` on `/loops` items.
-  - **UI:** a "Plan source" choice in the create form (sketch, revise an approved plan, Architect plan for review); the provenance source line; provenance-first artifact order with plain-word labels and integrity text; the Architect-plan timeline label; the coding-loop feature prefill (empty fields only, editable).
-  - **Tests:** Dashboard API (`TestPlanSources51`) and focused Playwright tests.
-  - **Charters:** `scripts-dashboard.md`, `scripts-dashboard-ui.md`, `scripts-cross-cutting.md`.
+- #51 follow-up, source-loop containment hardening (whiteboard finding):
+  - **The gap.** A Windows directory junction under `.gator/loops/` is a reparse point but not a symlink, so the `is_symlink()`-only check let it redirect source reads outside the governed loops directory. Per-file checks could not catch it, because the files behind it are ordinary.
+  - **The fix.** New `loop/host.py::_require_source_dir(source_dir, loop_id)` rejects a symlinked **or** reparse-point source dir with "Source loop must not be a symlink or reparse point: <id>". It runs before `session.json` or any artifact is opened, and the error never names the redirected target.
+  - **Where it applies.** Both `_init_revision_loop` (`--revise-from`) and `_init_coding_loop` (`--from-loop`) call it.
+  - **Unchanged:** the canonical-ID, mode, approval, session-lock and atomic-rollback behaviour, and "Source loop not found" for a missing directory.
+  - **Tests.** `tests/test_loop_plan_sources.py` adds `test_reparse_point_source_dir_is_refused` (both paths; `_is_reparse_point` mocked for the source dir only). It asserts the exact error, no new loop dir, tokens, session or events, an unmodified source, and that the source session lock is never taken. It also adds `test_symlinked_source_dir_is_refused` (both paths; it skips where directory symlinks cannot be created). A mutation check that restores the `is_symlink()`-only guard fails both reparse tests.
+  - **Charter.** In `scripts-loop.md`: the `_init_revision_loop` and `_init_coding_loop` entries, plus the new TRIPWIRE "Source Loop Directories Are Contained".

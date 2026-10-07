@@ -542,3 +542,52 @@ def test_revision_rejection_is_atomic(repo, tmp_path, case):
         _revise(repo, target, sketch=sketch, **kw)
     assert _loops_snapshot(repo) == before
     assert _dir_bytes(src_dir) == src_before
+
+
+# ---------------------------------------------------------------------------
+# #51 follow-up: a source loop directory that is a junction / reparse point
+# (or symlink) is refused before session.json or any artifact is opened.
+# ---------------------------------------------------------------------------
+
+def _start_from(repo, path, source_id):
+    if path == "revision":
+        return _revise(repo, source_id)
+    return loop_host.init_loop("code", None, repo_root=repo, mode="coding",
+                               from_loop=source_id)
+
+
+@pytest.mark.parametrize("path", ["revision", "coding"])
+def test_reparse_point_source_dir_is_refused(repo, monkeypatch, path):
+    src_id, src_dir = _approved_loop(repo, "ordinary")
+    real = loop_host._is_reparse_point
+    monkeypatch.setattr(
+        loop_host, "_is_reparse_point",
+        lambda p: Path(p) == src_dir or real(p))
+
+    def _no_source_access(*a, **k):
+        raise AssertionError("source session must not be opened")
+    monkeypatch.setattr(loop_session, "with_session_lock", _no_source_access)
+
+    src_before = _dir_bytes(src_dir)
+    before = _loops_snapshot(repo)
+    with pytest.raises(ValueError) as exc:
+        _start_from(repo, path, src_id)
+    assert str(exc.value) == (
+        f"Source loop must not be a symlink or reparse point: {src_id}")
+    assert _loops_snapshot(repo) == before   # no loop dir, tokens, session, events
+    assert _dir_bytes(src_dir) == src_before
+
+
+@pytest.mark.parametrize("path", ["revision", "coding"])
+def test_symlinked_source_dir_is_refused(repo, tmp_path, path):
+    src_id, src_dir = _approved_loop(repo, "ordinary")
+    alias = "alias-feature-2026-01-01T00-00-00Z"
+    try:
+        os.symlink(str(src_dir), str(src_dir.parent / alias),
+                   target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("cannot create directory symlinks on this platform")
+    before = _loops_snapshot(repo)
+    with pytest.raises(ValueError, match="symlink or reparse point: " + alias):
+        _start_from(repo, path, alias)
+    assert _loops_snapshot(repo) == before

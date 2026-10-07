@@ -67,6 +67,8 @@ Machine-local JSON readers return discriminated states such as `absent`, `malfor
 
 Paths persisted by Windows, MSYS, or POSIX callers are normalized through `normalize_path()` before filesystem checks. Registry writers must use the canonical helper rather than writing JSON directly.
 
+Directory containment checks must test **both** `is_symlink()` and the reparse-point attribute (`_is_reparse_point`). On Windows a directory junction is a reparse point that `is_symlink()` does not report, so a symlink-only check lets a junction redirect reads outside a governed tree; per-file checks behind it cannot catch that. Domain instance: loop source directories (`scripts-loop.md`, TRIPWIRE "Source Loop Directories Are Contained").
+
 ## TRIPWIRE: CLI and Git Compatibility
 
 Machine-readable CLI output has a top-level `schema` identifier. Additive fields may remain within a version; removing, renaming, or changing meaning requires a schema bump and consumer migration. Example: `gator-loop-status-v1` gained `turn_timeout_seconds` / `turn_deadline` (status and wait) and bounded-wait fields additively; the Dashboard and agents must tolerate their absence in older output.

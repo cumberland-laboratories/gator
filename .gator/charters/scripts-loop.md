@@ -511,10 +511,10 @@ File: `src/gator_command/scripts/loop/host.py`
 
 Any failure removes the directory. No Draftor turn is fabricated, and the Draftor stays unjoined. The start banner adds a `Plan source:` line.
 
-### _init_revision_loop(feature, sketch_path, revise_from, max_rounds, turn_timeout, repo_root, brief_bytes=None) / _read_revision_source(source_dir, revise_from) / _read_source_file(source_dir, name, what) (#51)
+### _init_revision_loop(feature, sketch_path, revise_from, max_rounds, turn_timeout, repo_root, brief_bytes=None) / _read_revision_source(source_dir, revise_from) / _read_source_file(source_dir, name, what) / _require_source_dir(source_dir, loop_id) (#51)
 File: `src/gator_command/scripts/loop/host.py`
 `init_loop(..., revise_from=…)` and `start_loop(..., revise_from=…)` route here. `--plan-file` together with `--revise-from`, `revise_from` with coding mode, and `revise_from` without a sketch are all refused before anything is written. Atomic order:
-1. the canonical source id shape (`_SOURCE_LOOP_ID_RE`, no `..`), and the source dir and session must be present;
+1. the canonical source id shape (`_SOURCE_LOOP_ID_RE`, no `..`), and the source dir and session must be present. `_require_source_dir` first refuses a source dir that is a symlink **or a reparse point** (a Windows junction is not a symlink), with "Source loop must not be a symlink or reparse point: <id>". It runs before `session.json` or any artifact is opened, and the error never names the redirected target;
 2. the revision sketch through `read_governed_input` (`MAX_PLAN_BYTES`);
 3. `_read_revision_source` under the source's `with_session_lock` (a **read-only** callback):
    - `loop_id` equals the requested id, the mode is planning and the stage is `plan_approved`;
@@ -529,7 +529,7 @@ The source brief is not carried forward. The source loop is never written, and t
 ### _init_coding_loop(feature, from_loop, max_rounds, turn_timeout, repo_root, brief_bytes=None, source_brief="keep") / _read_approved_source(source_dir, from_loop, source_brief="keep") / _remove_partial_loop(loop_dir)
 File: `src/gator_command/scripts/loop/host.py`
 The guarded coding successor (#41). Steps, in order:
-1. Validate the canonical shape of `from_loop`: `_SOURCE_LOOP_ID_RE` starts AND ends alphanumeric, so a Windows trailing-dot alias is rejected; no `..` / separators. The source must be a real directory with `session.json`.
+1. Validate the canonical shape of `from_loop`: `_SOURCE_LOOP_ID_RE` starts AND ends alphanumeric, so a Windows trailing-dot alias is rejected; no `..` / separators. The source must be a real directory with `session.json`: the shared `_require_source_dir` guard refuses a symlinked or reparse-point (junction) source dir before anything in it is opened.
 2. Under the source's `with_session_lock` read-only callback, require **`session["loop_id"] == from_loop` exactly**, which rejects Windows trailing-dot and case-variant aliases that resolve to the same directory, so only the canonical id is persisted as `coding.source_loop_id`. Also require `loop_mode == "planning"` (legacy values accepted), stage `plan_approved`, and a non-empty regular `plan.current.md`.
 3. **#55 checkpoints (`_plan_checkpoints`).** `_read_approved_source` also returns the source session's `contract.coding_checkpoints` flag, read under the same lock. The approved-plan bytes are parsed once:
 
@@ -921,6 +921,12 @@ For `attention_mode` loops (`contract.attention_interval`, set on every new sess
 - **Legacy loops are unchanged.** Unflagged sessions keep their recorded hard-timeout semantics byte-for-byte, and `turn_timed_out` residue is never reinterpreted.
 
 Violation: adding a deadline, a participant-visible window, or a state transition for flagged loops reintroduces the pressure #47 removed. Gating on anything other than `attention_mode` (dates, versions, field presence) breaks legacy loops.
+
+## TRIPWIRE: Source Loop Directories Are Contained (#51 follow-up)
+
+Every path that reads another loop as a source (`_init_coding_loop` for `--from-loop`, and `_init_revision_loop` for `--revise-from`) calls `_require_source_dir` first. It rejects the directory when it is a symlink **or** `_is_reparse_point`, before `session.json` or any artifact is opened. `is_symlink()` alone is not enough on Windows, where a directory junction is a reparse point that `is_symlink()` does not report. The per-file checks in `_read_source_file` cannot catch a redirected directory, because the files behind it are ordinary.
+
+Violation: a junction under `.gator/loops/` redirects source reads outside the governed loops directory. That is pinned by `test_reparse_point_source_dir_is_refused` (both paths, atomic, source session never locked) and `test_symlinked_source_dir_is_refused`.
 
 ## TRIPWIRE: Raw Staged Tree Is Review Authority (coding mode, #41)
 
