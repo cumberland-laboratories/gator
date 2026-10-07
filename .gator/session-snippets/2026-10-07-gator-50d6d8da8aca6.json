@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Constitution: session snippets are expected residue, never chased",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "governance",
+    "constitution",
+    "agent-guidance"
+  ],
+  "commit": "50d6d8da8aca65fd40eaa067de4399598a54a95e",
+  "short_commit": "50d6d8d",
+  "snippet_id": "snippet-50d6d8da8aca6",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "8037b5302c89af75e9c0194be3df9c042c384034",
+  "started_at": "2026-10-07T09:57:56Z",
+  "ended_at": "2026-10-07T09:57:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/constitution.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-07-gator-8037b5302c89a.json",
+    "CHANGELOG.md",
+    "src/gator_command/templates/gator-starter/constitution.md"
+  ],
+  "notes": [
+    "**Constitution, \"Expected governance residue\" note.** It now says that every commit emits one new `.gator/session-snippets/*.json`, that a leftover snippet is swept up by the next real commit, and that agents must never stage, commit or report one on its own. It links to `procedures/committing-gator-files.md` §2d, which already held the rule but was one link deeper than agents read.",
+    "**Copies:** both are byte-identical, `.gator/.includes/constitution.md` and the shipped `src/gator_command/templates/gator-starter/constitution.md`.",
+    "**Why:** agents kept proposing housekeeping commits just to collect snippets, an endless loop, because each commit emits the next snippet.",
+    "**CHANGELOG `[Unreleased]`:** a Changed entry for this, plus catch-up entries for work committed since 2.22.0 without one:",
+    "Added: #51 Architect plans and revision planning loops;",
+    "Added: #53 durable pauses and escalations;",
+    "Security: the #51 follow-up junction/reparse source-dir containment (`8037b53`).",
+    "**Verification:** template sync, drift and shipped-template audit pass (25), and every test file that references the constitution passes (530)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

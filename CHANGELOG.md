@@ -4,6 +4,10 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.23.0] — 2026-10-07
+
+Feature release for the governed loop. Plans can now enter a planning loop from the Architect for Reviewer approval, or revise an already approved plan with digest-verified provenance ([#51](https://github.com/cumberland-laboratories/gator/issues/51)). A paused or blocked loop is now a durable hold: participants stay connected, and escalation responses reach the role that asked ([#53](https://github.com/cumberland-laboratories/gator/issues/53)). Also included: source-loop directories that are Windows junctions or other reparse points are refused, and the constitution now treats session snippets as expected residue.
+
 ### Added
 
 - **Architect plans and revision planning loops ([#51](https://github.com/cumberland-laboratories/gator/issues/51)).** Plans can now enter the governed loop from an Architect, or revise an approved plan.
