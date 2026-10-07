@@ -2,6 +2,27 @@
 
 All notable changes to Gator are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/). Gator uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Architect plans and revision planning loops ([#51](https://github.com/cumberland-laboratories/gator/issues/51)).** Plans can now enter the governed loop from an Architect, or revise an approved plan.
+  - **Architect plan for review:** `gator loop start --plan-file P [--sketch S]` starts a planning loop from an Architect-supplied plan. The plan passes the same checks as a Draftor draft and is stored as immutable `architect-plan.md`. The Reviewer acts first, and the plan can drive a coding loop only after Reviewer approval. On findings, the Draftor writes a full replacement.
+  - **Revise an approved plan:** `gator loop start --sketch S --revise-from <approved planning loop>` starts an ordinary Draftor-led planning loop with digest-verified copies of the approved plan and its approving review (`revision-baseline-plan.md`, `revision-baseline-approval.md`). The source loop is never written. An unapproved, inconsistent or coding source is refused atomically, with the reason named.
+  - **Dashboard:** the create form gains a **Plan source** choice (sketch, revise an approved plan, Architect plan for review), and loops show where their plan came from, with integrity text. The CLI status, the participant prompts and the protocol ("Planning Sources") describe the provenance.
+- **Durable pauses and escalations ([#53](https://github.com/cumberland-laboratories/gator/issues/53)).** A paused or blocked loop is now a hold, not an ending.
+  - **Participants stay connected:** `status` exits `1` with "Architect hold" or "Awaiting Architect decision", and `wait` and `participant watch` keep waiting through the hold. Exit `2` now means only that the loop ended. Status JSON gains additive `suspension`, and the protocol adds "Suspension Is Not Departure".
+  - **Messages reach the right role:** Architect messages are addressed to their recipient. An escalation response reaches the role that escalated, even when another role resumes. An unblock without a message never discards an unread one, and ending a loop records any pending decision as cancelled.
+  - **Dashboard:** blocked and paused loops show a real suspension card (decision, requester, reason, resume target; a distinct "Architect hold" for pauses). The response box keeps its text across refreshes, decision history is shown, and timeline entries keep multi-line details. The blocked card was previously never rendered.
+
+### Security
+
+- **Source-loop directories are contained ([#51](https://github.com/cumberland-laboratories/gator/issues/51) follow-up).** `--from-loop` (coding) and `--revise-from` (revision) now refuse a source loop directory that is a symlink **or a Windows junction or other reparse point**, before any of its files are opened. Before, a junction under `.gator/loops/` could redirect source reads outside the governed loops directory, because a junction is not a symlink. The error names only the requested loop id.
+
+### Changed
+
+- **Constitution: session snippets are expected residue.** The "Expected governance residue" note now says that every commit emits one new `.gator/session-snippets/*.json`, and that a leftover snippet is swept up by the next real commit. Agents should never stage, commit or report one on its own (`procedures/committing-gator-files.md` §2d). This stops agents from proposing endless housekeeping commits just to collect snippets.
+
 ## [2.22.0] — 2026-10-05
 
 Feature release for the governed loop. Coding loops now review real code one responsibility at a time: plans declare `## Coding Checkpoints`, and the Reviewer approves each checkpoint's exact diff before the next one starts. Only the final approval leads to the single normal commit ([#55](https://github.com/cumberland-laboratories/gator/issues/55)). Also included: reopened coding loops no longer overwrite earlier evidence, and Loop timeline cards are link-only.

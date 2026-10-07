@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop: reject junction/reparse-point source-loop directories (#51 follow-up)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop",
+    "security",
+    "containment"
+  ],
+  "commit": "8037b5302c89af75e9c0194be3df9c042c384034",
+  "short_commit": "8037b53",
+  "snippet_id": "snippet-8037b5302c89a",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-07T09:35:54Z",
+  "ended_at": "2026-10-07T09:35:54Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-06-gator-b752ad7c36f91.json",
+    "src/gator_command/scripts/loop/host.py",
+    "tests/test_loop_plan_sources.py"
+  ],
+  "notes": [
+    "#51 follow-up, source-loop containment hardening (whiteboard finding):",
+    "**The gap.** A Windows directory junction under `.gator/loops/` is a reparse point but not a symlink, so the `is_symlink()`-only check let it redirect source reads outside the governed loops directory. Per-file checks could not catch it, because the files behind it are ordinary.",
+    "**The fix.** New `loop/host.py::_require_source_dir(source_dir, loop_id)` rejects a symlinked **or** reparse-point source dir with \"Source loop must not be a symlink or reparse point: <id>\". It runs before `session.json` or any artifact is opened, and the error never names the redirected target.",
+    "**Where it applies.** Both `_init_revision_loop` (`--revise-from`) and `_init_coding_loop` (`--from-loop`) call it.",
+    "**Unchanged:** the canonical-ID, mode, approval, session-lock and atomic-rollback behaviour, and \"Source loop not found\" for a missing directory.",
+    "**Tests.** `tests/test_loop_plan_sources.py` adds `test_reparse_point_source_dir_is_refused` (both paths; `_is_reparse_point` mocked for the source dir only). It asserts the exact error, no new loop dir, tokens, session or events, an unmodified source, and that the source session lock is never taken. It also adds `test_symlinked_source_dir_is_refused` (both paths; it skips where directory symlinks cannot be created). A mutation check that restores the `is_symlink()`-only guard fails both reparse tests.",
+    "**Charter.** In `scripts-loop.md`: the `_init_revision_loop` and `_init_coding_loop` entries, plus the new TRIPWIRE \"Source Loop Directories Are Contained\"."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
