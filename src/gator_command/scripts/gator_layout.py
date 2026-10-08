@@ -81,6 +81,8 @@ MIXED_DIRECTORY_SHIPPED_DEFAULTS = {
     # sync with templates/gator-starter/reference-notes/ (scaffolding
     # README.md/_template.md excluded; USER_VISIBLE_SCAFFOLDING covers those).
     "reference-notes": frozenset({
+        "codex-loop-participant.md",
+        "codex-routine-participant-profile.md",
         "concierge-responses.md",
         "cumberland-html-document-template.html",
         "dangerous-patterns.md",

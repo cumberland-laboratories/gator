@@ -1319,11 +1319,32 @@ class TestArtifactFormatAlignment:
                 repo / ".gator/.includes/procedures/gator-loop-protocol.md",
                 repo / "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
             ),
+            (
+                repo / ".gator/.includes/reference-notes/codex-loop-participant.md",
+                repo / "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md",
+            ),
         ]
         for live, shipped in pairs:
             assert live.read_bytes() == shipped.read_bytes(), (
                 f"{live.name}: live and shipped copies differ"
             )
+
+    def test_codex_routine_profile_copies_both_absent_or_identical(self):
+        """#37 Phase 1: the opt-in Codex profile note ships only on a verified
+        result, so the guard holds for both outcomes: neither copy exists, or
+        both exist byte-identical. A one-sided copy fails."""
+        from pathlib import Path
+        repo = Path(__file__).resolve().parent.parent
+        name = "reference-notes/codex-routine-participant-profile.md"
+        live = repo / ".gator/.includes" / name
+        shipped = repo / "src/gator_command/templates/gator-starter" / name
+        if not live.exists() and not shipped.exists():
+            return
+        assert live.exists(), f"{name}: shipped copy exists but live .includes copy is missing"
+        assert shipped.exists(), f"{name}: live .includes copy exists but shipped copy is missing"
+        assert live.read_bytes() == shipped.read_bytes(), (
+            f"{live.name}: live and shipped copies differ"
+        )
 
 
 class TestEscalateVerdictWarning:
