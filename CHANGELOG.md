@@ -4,6 +4,24 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.23.1] — 2026-10-08
+
+Patch release for Codex loop participants ([#37](https://github.com/cumberland-laboratories/gator/issues/37) Phase 1). It ships an opt-in Codex rule profile that removes routine host approval prompts for `gator loop` commands, with an explicit trust cost. It also ships the Goal-mode participant note, now covered by the copy guards and the layout fallback. No CLI or loop behavior changed.
+
+### Added
+
+- **Codex routine participant profile (opt-in), `reference-notes/codex-routine-participant-profile.md`.** In Codex's `workspace-write` sandbox, `.git` is read-only. Gator's candidate check (`git write-tree`) therefore failed with `git_busy (… .git/index.lock: Permission denied)`, so a Codex Reviewer could not approve and a Codex Draftor could not submit without a host prompt.
+  - **The profile:** one Codex `prefix_rule` allowing exactly `gator loop status | wait | submit-draft | submit-review | submit-implementation`. It lives in a dedicated, pre-trusted `CODEX_HOME`, never the normal `~/.codex`.
+  - **Trust cost, stated first:** Codex runs `allow`-ed commands outside its sandbox, so these `gator loop` commands and the Git they start run with full user rights. Gator still enforces the token, role, turn and staged-tree freshness, stale approvals are still refused, and all other commands stay sandboxed.
+  - **Participant guidance:** read Gator's text, not exit codes, because Windows PowerShell's `-Command` wrapper turns exits `2` and `3` into `1`. Treat `git_busy … Permission denied` as a host denial, not an escalation or finding.
+  - **Verification:** done on Codex CLI 0.144.1 / Windows 10 with `codex exec`. The interactive TUI was not observed. Evidence: `.gator/artifacts/2026-10-08-codex-routine-profile-spike.md`, from a governed planning loop and a 4-checkpoint coding loop.
+- **Codex Goal-mode participant note, `reference-notes/codex-loop-participant.md`.** Interactive Codex participants can use Goal mode to keep the ordinary bounded-wait workflow running until the loop ends. The Loop protocol's runtime paragraph links both Codex notes.
+
+### Fixed
+
+- **Layout fallback lists the Codex notes.** Both `gator_layout.py` copies now include `codex-loop-participant.md` and `codex-routine-participant-profile.md` in `MIXED_DIRECTORY_SHIPPED_DEFAULTS["reference-notes"]`, per the `scripts-layout.md` tripwire for shipped notes.
+- **Copy guards.** `TestArtifactFormatAlignment.test_starter_copies_match` now pins `codex-loop-participant.md` live/shipped byte-identity. New `test_codex_routine_profile_copies_both_absent_or_identical` fails on a one-sided or drifted copy of the profile note.
+
 ## [2.23.0] — 2026-10-07
 
 Feature release for the governed loop. Plans can now enter a planning loop from the Architect for Reviewer approval, or revise an already approved plan with digest-verified provenance ([#51](https://github.com/cumberland-laboratories/gator/issues/51)). A paused or blocked loop is now a durable hold: participants stay connected, and escalation responses reach the role that asked ([#53](https://github.com/cumberland-laboratories/gator/issues/53)). Also included: source-loop directories that are Windows junctions or other reparse points are refused, and the constitution now treats session snippets as expected residue.
