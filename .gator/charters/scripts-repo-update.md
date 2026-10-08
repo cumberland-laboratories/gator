@@ -4,7 +4,7 @@
 
 ## Owns
 
-- Read-only update planning followed by explicit template, entry-point, and hook execution.
+- Read-only update planning followed by explicit template and hook execution.
 - v1/v2 layout-aware routing and explicit migration.
 - Managed Git-hook wrappers and `core.hooksPath` convergence.
 - Optional organization-policy source, sync state, cache, and status output.
@@ -26,15 +26,11 @@ Filesystem: template source and `.gator/` layout (R)
 -> layout resolver, template routing tables
 ! Planning is side-effect free. Dry-run output must describe the same actions execution would take.
 ! User-visible scaffolding is routed from `gator_layout.USER_VISIBLE_SCAFFOLDING`; do not duplicate the filename set locally.
+! `TEMPLATE_FILES` (both copies) includes `GATOR_INIT.md`, so an ordinary update adds the bootstrap document to a repo that predates it and refreshes it idempotently.
 
-### plan_entry_point_updates() / execute_entry_point_updates()
-File: src/gator_command/scripts/gator-update.py
-Refresh only Gator-managed sentinel blocks in agent entry files and preserve surrounding user content.
-Filesystem: root agent entry files (RW), recoverable backup on refresh (W)
-<- update `main()`
--> gatorize entry-point helpers
-! Never touch `*.local.md`. Corrupted and foreign files are left for explicit repair/gatorize flows.
-! Re-check the sentinel region at execution time to avoid overwriting a file changed after planning.
+## TRIPWIRE: Native Agent Files Are Repository-Owned
+
+`gator update` (both copies) never reads, creates, refreshes, backs up, or edits `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `*.local.md` (gator-native entry point, 2026-10-08). Historical `GATOR:BEGIN`/`GATOR:END` blocks keep their exact bytes, and no `.pre-gator-update` sibling is written. The Gator entry document is `GATOR_INIT.md`, delivered through `TEMPLATE_FILES`. The retired Stage 4b entry-point plan/execute pair and the template copy's inlined managed-block helpers are gone. Do not reintroduce native-file writes here; an opt-in adapter would be a separate, explicit command. Pins: `TestUpdateLeavesNativeFilesUntouched` in `tests/test_template_sync.py`.
 
 ### merge_hooks_into_settings() / install_vendor_hooks()
 File: src/gator_command/scripts/gator-update.py
@@ -73,6 +69,7 @@ File: src/gator_command/scripts/gator-update.py
 Emit the versioned machine-readable update plan.
 <- update `--json`
 ! Preserve `gator-update-v1` compatibility; removing or renaming fields requires a schema bump.
+! `entry_point_actions` and `summary.entry_point_actions` remain for v1 compatibility and are always `[]` / `0`.
 
 ### main()
 File: src/gator_command/scripts/gator-update.py
@@ -107,12 +104,12 @@ Initialize or replace policy-source metadata under explicit force rules.
 - Keep plan and execute phases behaviorally aligned.
 - Test both layout generations, mixed-layout refusal, and user-visible scaffolding routing.
 - Check package/template mirror parity for shipped update code.
-- Run update, layout, hooks, entry-point, policy, and packaging tests relevant to the change.
+- Run update, layout, hooks, policy, and packaging tests relevant to the change.
 
 ## Connections
 
 -> [Session Boot](scripts-repo-lifecycle.md) - health checks and hook dispatch
--> [Installer](scripts-installer.md) - fresh-install helpers and entry-point blocks
+-> [Installer](scripts-installer.md) - fresh-install helpers and shipped root files
 -> [Layout Resolver](scripts-layout.md) - path classification and routing constants
--> [Managed State](scripts-managed-state.md) - entry-point repair semantics
+-> [Managed State](scripts-managed-state.md) - native-file status reporting
 -> [Cross-Cutting](scripts-cross-cutting.md) - copy sync and machine-local preferences

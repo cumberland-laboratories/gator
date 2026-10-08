@@ -2985,20 +2985,17 @@ class TestWaitHandoffAlignment:
             assert "`gator loop wait --token <token> --max-seconds 45`" in text
 
     def _participant_surfaces(self):
-        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
-        if gatorize_dir not in sys.path:
-            sys.path.insert(0, gatorize_dir)
-        from entry_points import render_entry_content
+        # Native agent files and the retired entry-point renderer are no
+        # longer participant surfaces (gator-native entry point, 2026-10-08):
+        # GATOR_INIT.md points to the protocol and restates none of it
+        # (pinned by TestGatorInitDocument in tests/test_init.py).
         repo_root = Path(__file__).parent.parent
         surfaces = {
-            "render_entry_content": render_entry_content(has_command_post=False),
             "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
             "loop-join live": (repo_root / ".claude" / "commands" / "loop-join.md").read_text(encoding="utf-8"),
             "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
             "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
         }
-        for name in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]:
-            surfaces[name] = (repo_root / name).read_text(encoding="utf-8")
         return surfaces
 
     def test_all_surfaces_teach_bounded_wait_and_reissue(self):
@@ -3019,15 +3016,6 @@ class TestWaitHandoffAlignment:
         live = (repo_root / ".claude" / "commands" / "loop-join.md").read_bytes()
         template = (TEMPLATES_DIR / "commands" / "loop-join.md").read_bytes()
         assert live == template
-
-    def test_entry_point_rendering_references_wait(self):
-        """render_entry_content() output includes wait instruction."""
-        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
-        if gatorize_dir not in sys.path:
-            sys.path.insert(0, gatorize_dir)
-        from entry_points import render_entry_content
-        content = render_entry_content(has_command_post=False)
-        assert "gator loop wait" in content
 
     def test_protocol_copies_are_identical(self):
         """Shipped template and .includes/ protocol are byte-identical."""
@@ -3110,13 +3098,7 @@ class TestWaitHandoffAlignment:
 
     def test_escalate_before_wait_ordering(self):
         """All surfaces teach escalate-first, then wait — not the reverse."""
-        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
-        if gatorize_dir not in sys.path:
-            sys.path.insert(0, gatorize_dir)
-        from entry_points import render_entry_content
-
         surfaces = {
-            "render_entry_content": render_entry_content(has_command_post=False),
             "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
             "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
             "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
@@ -3129,27 +3111,8 @@ class TestWaitHandoffAlignment:
                 f"{name}: escalate must appear before wait in the exit-1 guidance"
             )
 
-    def test_live_entry_points_reference_wait(self):
-        """CLAUDE.md, AGENTS.md, GEMINI.md managed blocks include wait."""
-        repo_root = Path(__file__).parent.parent
-        for name in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"]:
-            text = (repo_root / name).read_text(encoding="utf-8")
-            assert "gator loop wait" in text, f"{name} missing wait instruction"
-            assert "escalate first" in text, f"{name} missing escalate-first ordering"
-
-
 class TestExecutiveSummaryProducerPaths:
     """All participant-facing surfaces must teach the Executive Summary requirement."""
-
-    def test_entry_point_rendering_mentions_executive_summary(self):
-        """render_entry_content() output includes executive summary requirement."""
-        gatorize_dir = str(Path(__file__).parent.parent / "src" / "gator_command" / "scripts" / "gatorize")
-        if gatorize_dir not in sys.path:
-            sys.path.insert(0, gatorize_dir)
-        from entry_points import render_entry_content
-        content = render_entry_content(has_command_post=False)
-        assert "Executive Summary" in content
-        assert "four bullets" in content
 
     def test_loop_join_template_mentions_executive_summary(self):
         """Slash-command template tells participants about the executive summary requirement."""

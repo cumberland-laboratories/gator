@@ -52,6 +52,6 @@ Put it in `.gator/`. A redundant note in `inbox.md` costs nothing. Knowledge tra
 
 **Saving project context to memory instead of `mission.md` or `roadmap.md`.** This creates drift — different models and users develop different understandings of what the project is and where it's going.
 
-## For Model-Specific Entry Points
+## For Model-Specific Vendor Files
 
-If you maintain a model-specific entry point file (e.g., `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`), it should point the model to the constitution and `.gator/` as the primary knowledge source. Model-specific instructions in these files should be limited to behavioral configuration (how to invoke tools, formatting preferences), not project knowledge.
+If your repo keeps vendor files (e.g., `CLAUDE.md`, `GEMINI.md`, `AGENTS.md`), a one-line pointer to `gator init` is enough; its output names `GATOR_INIT.md` and the constitution. Gator never edits these files. Keep project knowledge in `.gator/`; model-specific instructions in vendor files should be limited to behavioral configuration (how to invoke tools, formatting preferences).

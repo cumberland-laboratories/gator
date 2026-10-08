@@ -398,29 +398,80 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     print()
 
 
+def _rel(path, repo_root, fallback):
+    """Repo-relative POSIX path for display, or `fallback` on failure."""
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except Exception:
+        return fallback
+
+
+def session_opening_reads(repo_root, paths):
+    """Return `(bootstrap_rel_or_None, reads)` for session opening.
+
+    Single source for the text directive and the JSON `session_opening`
+    block. `reads` is the ordered list of repo-relative paths a session
+    must read: GATOR_INIT.md first when the repo has it, then the
+    constitution, then the mission/roadmap/inbox context. Read-only:
+    a repo that predates GATOR_INIT.md gets `None` and the legacy list;
+    session opening never creates the file.
+    """
+    bootstrap = getattr(paths, "bootstrap", None)
+    try:
+        has_bootstrap = bootstrap is not None and bootstrap.is_file()
+    except Exception:
+        has_bootstrap = False
+    bootstrap_rel = (_rel(bootstrap, repo_root, ".gator/.includes/GATOR_INIT.md")
+                     if has_bootstrap else None)
+    const_rel = _rel(paths.constitution, repo_root, ".gator/.includes/constitution.md")
+    root_rel = _rel(paths.gator_root, repo_root, ".gator")
+    reads = [const_rel] + [f"{root_rel}/{name}" for name in ("mission.md", "roadmap.md", "inbox.md")]
+    if bootstrap_rel:
+        reads.insert(0, bootstrap_rel)
+    return bootstrap_rel, reads
+
+
 def session_opening_directive(repo_root, paths):
     """Return the banner's next-action lines (session-opening reads).
 
     The check ticks above only verify files EXIST -- they do not mean
     the agent has read them. These lines convert the banner from a
-    completion signal into a handoff: name the constitution by its one
-    resolved path, then the three context reads the constitution's
-    Session Opening block would otherwise have to relay.
+    completion signal into a handoff: name GATOR_INIT.md (Gator's
+    entry document) first when present, then the constitution by its
+    one resolved path, then the three context reads. A repo without
+    GATOR_INIT.md keeps the legacy two-step handoff plus an upgrade
+    hint; nothing is written.
     """
-    try:
-        const_rel = paths.constitution.relative_to(repo_root).as_posix()
-    except Exception:
-        const_rel = ".gator/.includes/constitution.md"
-    try:
-        root_rel = paths.gator_root.relative_to(repo_root).as_posix()
-    except Exception:
-        root_rel = ".gator"
-    return [
-        "",
-        "  session opening is not finished. Read, in order:",
-        f"    1. {const_rel}  \u2014 the rules; read before your first response",
-        f"    2. {root_rel}/mission.md \u00b7 roadmap.md \u00b7 inbox.md  \u2014 what \u00b7 where \u00b7 open work",
-    ]
+    bootstrap_rel, reads = session_opening_reads(repo_root, paths)
+    const_rel = reads[1] if bootstrap_rel else reads[0]
+    root_rel = _rel(paths.gator_root, repo_root, ".gator")
+    context = (f"{root_rel}/mission.md \u00b7 roadmap.md \u00b7 inbox.md  "
+               "\u2014 what \u00b7 where \u00b7 open work")
+    lines = ["", "  session opening is not finished. Read, in order:"]
+    if bootstrap_rel:
+        lines += [
+            f"    1. {bootstrap_rel}  \u2014 Gator's entry point for this session",
+            f"    2. {const_rel}  \u2014 the rules; read before your first response",
+            f"    3. {context}",
+        ]
+    else:
+        lines += [
+            f"    1. {const_rel}  \u2014 the rules; read before your first response",
+            f"    2. {context}",
+            "  note: this repo predates .gator's GATOR_INIT.md "
+            "\u2014 `gator update` adds it",
+        ]
+    return lines
+
+
+def _session_opening_json(repo_root, paths):
+    """Additive `session_opening` block for `gator init --json`."""
+    bootstrap_rel, reads = session_opening_reads(repo_root, paths)
+    return {
+        "bootstrap": bootstrap_rel,
+        "bootstrap_present": bootstrap_rel is not None,
+        "reads": reads,
+    }
 
 
 def print_json(repo_root, paths, hook_status, registry_status):
@@ -454,6 +505,7 @@ def print_json(repo_root, paths, hook_status, registry_status):
         "hooks": hook_status,
         "dashboard_registry": registry_status,
         "gator_version": version_info,
+        "session_opening": _session_opening_json(repo_root, paths),
     }
 
     print(json.dumps(data, indent=2))

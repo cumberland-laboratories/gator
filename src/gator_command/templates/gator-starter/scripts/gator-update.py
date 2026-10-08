@@ -46,171 +46,13 @@ try:
 except Exception:
     ensure_repo_gitignore = lambda repo_root: None
 
-# Entry-point block refresh — Stage 4b. Template copy inlines the
-# managed_block parsing helpers (plan Stage 4b option 2) so this file
-# runs standalone on fleet repos without a gatorize/ sub-package. The
-# helpers' bodies must byte-match src/gator_command/scripts/gatorize/managed_block.py
-# — enforced by TestTemplateSync's AST-equivalence assertion.
-
-from dataclasses import dataclass as _dataclass
-from enum import Enum as _Enum
-
-# Marker/fingerprint constants inlined from gatorize/helpers.py
-GATOR_MARKER = "# --- Gator Navigation Coding ---"
-COMMAND_POST_MARKER = "# --- Gator Command Post ---"
-
-# Sentinel bytes are the ownership contract with every gatorized repo.
-# Do NOT mutate — whitespace, casing, or attributes. See Invariant #1 of
-# the Stage plan.
-GATOR_BEGIN = "<!-- GATOR:BEGIN -->"
-GATOR_END = "<!-- GATOR:END -->"
-
-# Legacy fingerprints — recognizable Gator content in files that predate
-# the sentinel format. Keep in sync with `action_install_entry_points()`
-# case-2 detection.
-_LEGACY_FINGERPRINTS = (
-    GATOR_MARKER,
-    COMMAND_POST_MARKER,
-    "gator-init.py",
-    ".gator/constitution.md",
-)
-
-
-class BlockState(_Enum):
-    """Canonical six-state vocabulary for entry-point files.
-
-    Defined once here; all API constants, JSON schema values, human output,
-    and test fixtures must use these exact lowercase spellings (via `.value`).
-    See "Canonical State Vocabulary" in the Stage plan.
-    """
-    CLEAN = "clean"
-    MODIFIED = "modified"
-    LEGACY = "legacy"
-    CORRUPTED = "corrupted"
-    ABSENT = "absent"
-    FOREIGN = "foreign"
-
-
-@_dataclass(frozen=True)
-class ManagedBlockLocation:
-    """Slices and byte offsets of a well-formed managed block in a file's text."""
-    before: str
-    block_content: str
-    after: str
-    begin_index: int
-    end_index: int
-
-
-def render_managed_region(baseline_content: str) -> str:
-    """Exact bytes that should appear between GATOR_BEGIN and GATOR_END.
-
-    Centralizes the newline wrapping so installer, `gator update` block-refresh
-    (Stage 4b), and `gator state repair` (Stage 4) all produce byte-identical
-    managed regions given the same baseline content.
-    """
-    return f"\n{baseline_content}\n"
-
-
-def find_managed_block(text):
-    """Return a ManagedBlockLocation for a well-formed sentinel pair, else None.
-
-    "Well-formed" means exactly one GATOR_BEGIN and one GATOR_END, in that order.
-    Returns None for any deviation (no sentinels, dangling, reversed, duplicated).
-    Callers that need to distinguish "corrupted" from "no sentinels" should use
-    `classify_managed_block()` instead.
-    """
-    if text.count(GATOR_BEGIN) != 1 or text.count(GATOR_END) != 1:
-        return None
-    begin = text.index(GATOR_BEGIN)
-    end = text.index(GATOR_END)
-    if end < begin:
-        return None
-    block_content = text[begin + len(GATOR_BEGIN):end]
-    return ManagedBlockLocation(
-        before=text[:begin],
-        block_content=block_content,
-        after=text[end + len(GATOR_END):],
-        begin_index=begin,
-        end_index=end,
-    )
-
-
-def _has_sentinel_bytes(text):
-    """True if either sentinel appears at all in the text."""
-    return GATOR_BEGIN in text or GATOR_END in text
-
-
-def _sentinels_are_malformed(text):
-    """True if sentinel bytes appear but do not form exactly one valid pair.
-
-    Malformed = dangling BEGIN, dangling END, reversed order, duplicated BEGIN,
-    or duplicated END. Returns False when there are no sentinels at all (that
-    is LEGACY or FOREIGN, not CORRUPTED) and False when there is a valid pair.
-    """
-    if not _has_sentinel_bytes(text):
-        return False
-    n_begin = text.count(GATOR_BEGIN)
-    n_end = text.count(GATOR_END)
-    if n_begin != 1 or n_end != 1:
-        return True
-    return text.index(GATOR_END) < text.index(GATOR_BEGIN)
-
-
-def detect_legacy_gator_content(text):
-    """True if the file has no sentinel pair but matches recognizable Gator content.
-
-    Mirrors the fingerprint checks previously inline in `action_install_entry_points()`
-    (pre-Stage-3 entry_points.py:114-120). Sentinels alone do not count as legacy —
-    only the fingerprint strings do.
-    """
-    return any(fp in text for fp in _LEGACY_FINGERPRINTS)
-
-
-def classify_managed_block(text, baseline_content, *, file_exists):
-    """Classify the state of an entry-point file relative to a baseline.
-
-    Dispatch order:
-      1. `file_exists=False` → ABSENT
-      2. valid sentinel pair → CLEAN or MODIFIED (byte-compare against baseline)
-      3. malformed sentinel bytes → CORRUPTED
-      4. no sentinels + legacy fingerprint → LEGACY
-      5. no sentinels + no fingerprint → FOREIGN
-
-    `baseline_content` is the raw content that should appear between the
-    sentinels (i.e., the return value of `render_entry_content()`). The
-    function internally wraps it via `render_managed_region()` for the
-    byte-compare so callers do not need to know the newline contract.
-    """
-    if not file_exists:
-        return BlockState.ABSENT
-    location = find_managed_block(text)
-    if location is not None:
-        expected = render_managed_region(baseline_content)
-        return BlockState.CLEAN if location.block_content == expected else BlockState.MODIFIED
-    if _sentinels_are_malformed(text):
-        return BlockState.CORRUPTED
-    if detect_legacy_gator_content(text):
-        return BlockState.LEGACY
-    return BlockState.FOREIGN
-
-
-# Baseline content generators — only available when the gatorize sub-package
-# is reachable (package copy always; template copy on fleet repos only if
-# the sub-package has been shipped, which is a Stage 6+ decision).
-try:
-    from gatorize.entry_points import render_entry_content, upgrade_legacy_entry_point
-    _ENTRY_POINT_REFRESH_AVAILABLE = True
-except Exception:
-    _ENTRY_POINT_REFRESH_AVAILABLE = False
-
-
-
 
 # Files that are template-derived (safe to overwrite)
 # These are shipped files — on v2 they go to .includes/
 TEMPLATE_FILES = [
     "constitution.md",
     "gator-start-up.md",
+    "GATOR_INIT.md",
 ]
 
 # Dotfiles that need renaming from template (stored without dot to avoid git issues)
@@ -583,139 +425,6 @@ def execute_updates(plan):
     return added, updated, unchanged
 
 
-# --- Entry-point managed-block refresh (Stage 4b) ---
-
-_ENTRY_POINT_META = [
-    {"filename": "CLAUDE.md", "agent_type": "claude", "header": "# Claude Code Entry Point"},
-    {"filename": "AGENTS.md", "agent_type": "agents", "header": "# Codex Entry Point"},
-    {"filename": "GEMINI.md", "agent_type": "gemini", "header": "# Gemini Entry Point"},
-]
-
-
-def plan_entry_point_updates(repo_root):
-    """Plan managed-block refresh actions for entry-point files.
-
-    Returns a list of dicts: {filename, agent_type, state, action}. Empty
-    list when the entry-point refresh API is unavailable (template copy on
-    fleet repos without the gatorize sub-package) — graceful degradation.
-
-    Read-only: consistent with the plan/execute separation TRIPWIRE.
-
-    Dispatch per plan Stage 4b:
-      clean → skip (no plan entry)
-      modified → refresh-block (executor writes .pre-gator-update backup first)
-      legacy → upgrade-legacy (delegates to upgrade_legacy_entry_point)
-      absent → create-fresh (deterministic, non-destructive)
-      corrupted → skip (ambiguous; belongs to gator state repair)
-      foreign → skip (belongs to gatorize interactive prompt)
-    """
-    if not _ENTRY_POINT_REFRESH_AVAILABLE:
-        return []
-
-    actions = []
-    for meta in _ENTRY_POINT_META:
-        filepath = repo_root / meta["filename"]
-        baseline = render_entry_content(has_command_post=False, agent_type=meta["agent_type"])
-        if filepath.exists():
-            text = filepath.read_text(encoding="utf-8", errors="replace")
-            state = classify_managed_block(text, baseline, file_exists=True)
-        else:
-            state = classify_managed_block("", baseline, file_exists=False)
-
-        if state is BlockState.CLEAN:
-            continue  # no plan entry
-        if state is BlockState.MODIFIED:
-            action = "refresh-block"
-        elif state is BlockState.LEGACY:
-            action = "upgrade-legacy"
-        elif state is BlockState.ABSENT:
-            action = "create-fresh"
-        else:
-            # CORRUPTED and FOREIGN carry ambiguity — skip in gator update
-            continue
-
-        actions.append({
-            "filename": meta["filename"],
-            "agent_type": meta["agent_type"],
-            "state": state.value,
-            "action": action,
-        })
-    return actions
-
-
-def execute_entry_point_updates(repo_root, actions):
-    """Execute planned entry-point refresh actions.
-
-    Annotates each action with an 'outcome' field. Returns
-    `(refreshed, upgraded, created, skipped)` — the counts feed into
-    `print_result()` completion accounting and the `.gator-version` stamp
-    gate in `main()`. Any non-zero count means repo state changed.
-
-    - refresh-block on modified → write <VENDOR>.md.pre-gator-update backup
-      next to the file, then replace the sentinel region with the baseline.
-      Content outside sentinels preserved byte-for-byte.
-    - upgrade-legacy → delegate to upgrade_legacy_entry_point.
-    - create-fresh → write a new file with sentinel-wrapped baseline block.
-      No backup written (nothing existed).
-    """
-    refreshed = 0
-    upgraded = 0
-    created = 0
-    skipped = 0
-
-    if not _ENTRY_POINT_REFRESH_AVAILABLE:
-        for entry in actions:
-            entry["outcome"] = "skipped-unavailable"
-            skipped += 1
-        return refreshed, upgraded, created, skipped
-
-    for entry in actions:
-        filename = entry["filename"]
-        agent_type = entry["agent_type"]
-        action = entry["action"]
-        filepath = repo_root / filename
-        meta = next(m for m in _ENTRY_POINT_META if m["filename"] == filename)
-
-        if action == "refresh-block":
-            existing = filepath.read_text(encoding="utf-8", errors="replace")
-            location = find_managed_block(existing)
-            if location is None:
-                entry["outcome"] = "skipped-race"
-                skipped += 1
-                continue
-            # Backup before overwrite — .pre-gator-update sibling
-            backup_path = filepath.with_name(f"{filename}.pre-gator-update")
-            backup_path.write_text(existing, encoding="utf-8")
-            baseline = render_entry_content(has_command_post=False, agent_type=agent_type)
-            expected_region = render_managed_region(baseline)
-            new_text = f"{location.before}{GATOR_BEGIN}{expected_region}{GATOR_END}{location.after}"
-            filepath.write_text(new_text, encoding="utf-8")
-            entry["outcome"] = "refreshed-with-backup"
-            refreshed += 1
-            continue
-
-        if action == "upgrade-legacy":
-            upgrade_legacy_entry_point(repo_root, filename, has_command_post=False, agent_type=agent_type)
-            entry["outcome"] = "upgraded"
-            upgraded += 1
-            continue
-
-        if action == "create-fresh":
-            baseline = render_entry_content(has_command_post=False, agent_type=agent_type)
-            managed_block = f"{GATOR_BEGIN}{render_managed_region(baseline)}{GATOR_END}"
-            filepath.write_text(
-                f"{meta['header']}\n\nYou are the primary agent for this project.\n\n{managed_block}\n",
-                encoding="utf-8",
-            )
-            entry["outcome"] = "created"
-            created += 1
-            continue
-
-        entry["outcome"] = "skipped-unknown"
-        skipped += 1
-    return refreshed, upgraded, created, skipped
-
-
 def plan_hook_updates(gator_dir, repo_root):
     """Plan git hook installations. Returns list of (hook_name, action).
 
@@ -1042,7 +751,7 @@ def install_git_hooks(gator_dir, repo_root):
 
 # --- Output ---
 
-def print_plan(plan, dry_run=False, hooks=None, entry_point_actions=None):
+def print_plan(plan, dry_run=False, hooks=None):
     """Print the update plan."""
     adds = [(a, s, d) for a, s, d in plan if a == "add"]
     updates = [(a, s, d) for a, s, d in plan if a == "update"]
@@ -1050,8 +759,6 @@ def print_plan(plan, dry_run=False, hooks=None, entry_point_actions=None):
 
     hook_adds = [h for h in (hooks or []) if h[1] == "add"]
     hook_updates = [h for h in (hooks or []) if h[1] == "update"]
-
-    entry_actions = entry_point_actions or []
 
     mode = " (dry run)" if dry_run else ""
     print()
@@ -1080,51 +787,30 @@ def print_plan(plan, dry_run=False, hooks=None, entry_point_actions=None):
                 print(f"    ~ {hook_dir}/{name}")
         print()
 
-    if entry_actions:
-        print(f"  Entry-point blocks ({len(entry_actions)}):")
-        for entry in entry_actions:
-            print(f"    ~ {entry['filename']:<12} {entry['state']:<11} → {entry['action']}")
-        print()
-
-    if not adds and not updates and not hook_adds and not hook_updates and not entry_actions:
+    if not adds and not updates and not hook_adds and not hook_updates:
         print(f"  Everything is current. No updates needed.")
         print()
         return
 
     print(f"  Unchanged: {len(unchanged)} files")
-    print(f"  Total: {len(adds)} new, {len(updates)} updated, {len(unchanged)} unchanged, {len(entry_actions)} entry-point actions")
+    print(f"  Total: {len(adds)} new, {len(updates)} updated, {len(unchanged)} unchanged")
     print()
 
 
-def print_result(added, updated, unchanged, entry_point_counts=None):
-    """Print the result after executing updates.
-
-    Stage 4b: `entry_point_counts` is `(refreshed, upgraded, created, skipped)`
-    from `execute_entry_point_updates()`. When any of refreshed/upgraded/created
-    is non-zero, an additional "Entry-point blocks:" line prints so users see
-    that repo state changed even on updates where file-overlay counts are all zero.
-    """
+def print_result(added, updated, unchanged):
+    """Print the result after executing updates."""
     print(f"  Done: {added} added, {updated} updated, {unchanged} unchanged")
-    if entry_point_counts:
-        refreshed, upgraded, created, _ = entry_point_counts
-        if refreshed or upgraded or created:
-            parts = []
-            if refreshed:
-                parts.append(f"{refreshed} refreshed")
-            if upgraded:
-                parts.append(f"{upgraded} upgraded")
-            if created:
-                parts.append(f"{created} created")
-            print(f"  Entry-point blocks: {', '.join(parts)}")
     print()
 
 
-def print_json_plan(plan, templates_dir, hooks=None, entry_point_actions=None):
+def print_json_plan(plan, templates_dir, hooks=None):
     """Output the plan as JSON.
 
     Top-level schema field is "gator-update-v1" — declared here so downstream
-    consumers can detect the shape. New fields inside v1 are additive
-    (entry_point_actions was added in Stage 4b).
+    consumers can detect the shape. New fields inside v1 are additive.
+    `entry_point_actions` (and its summary count) is kept for v1
+    compatibility and is always empty: Gator no longer manages
+    CLAUDE.md / AGENTS.md / GEMINI.md (gator-native entry point, 2026-10-08).
     """
     items = []
     for action, src, dest in plan:
@@ -1144,22 +830,20 @@ def print_json_plan(plan, templates_dir, hooks=None, entry_point_actions=None):
             "destination": f"{hook_dir}/{name}",
         })
 
-    entry_items = list(entry_point_actions or [])
-
     output = {
         "schema": "gator-update-v1",
         "version": VERSION,
         "templates": str(templates_dir),
         "plan": items,
         "hooks": hook_items,
-        "entry_point_actions": entry_items,
+        "entry_point_actions": [],
         "summary": {
             "add": sum(1 for i in items if i["action"] == "add"),
             "update": sum(1 for i in items if i["action"] == "update"),
             "unchanged": sum(1 for i in items if i["action"] == "unchanged"),
             "hooks_add": sum(1 for h in hook_items if h["action"] == "add"),
             "hooks_update": sum(1 for h in hook_items if h["action"] == "update"),
-            "entry_point_actions": len(entry_items),
+            "entry_point_actions": 0,
         }
     }
     print(json.dumps(output, indent=2))
@@ -1704,32 +1388,22 @@ def main():
     # Plan git hook installation
     hooks_to_install = plan_hook_updates(gator_dir, repo_root)
 
-    # Plan entry-point block refresh (Stage 4b) — empty list when the
-    # gatorize sub-package is not reachable (template copy on fleet repos).
-    entry_point_actions = plan_entry_point_updates(repo_root)
-
     # JSON mode
     if args.json:
-        print_json_plan(plan, templates_dir, hooks_to_install, entry_point_actions)
+        print_json_plan(plan, templates_dir, hooks_to_install)
         return
 
     # Dry run
     if args.dry_run:
-        print_plan(plan, dry_run=True, hooks=hooks_to_install, entry_point_actions=entry_point_actions)
+        print_plan(plan, dry_run=True, hooks=hooks_to_install)
         return
 
     # Converge gitignore rules (same as gatorize.py install/upgrade path)
     ensure_repo_gitignore(repo_root)
 
     # Execute
-    print_plan(plan, hooks=hooks_to_install, entry_point_actions=entry_point_actions)
+    print_plan(plan, hooks=hooks_to_install)
     added, updated, unchanged = execute_updates(plan)
-
-    # Execute entry-point block refresh — Stage 4b. Counts feed into
-    # print_result() and the .gator-version stamp gate below.
-    entry_point_counts = (0, 0, 0, 0)
-    if entry_point_actions:
-        entry_point_counts = execute_entry_point_updates(repo_root, entry_point_actions)
 
     # Install/refresh git hooks
     hooks_installed = install_git_hooks(gator_dir, repo_root)
@@ -1756,11 +1430,9 @@ def main():
     #   Dashboard Fleet Version column shows stale CLI forever, keeping its
     #   Update button falsely enabled.
     # - `updated:` still gates on file changes — preserves "last modification"
-    #   timestamp semantics (Stage 4b: fires when file-overlay OR entry-point
-    #   actions changed state).
-    ep_refreshed, ep_upgraded, ep_created, _ = entry_point_counts
-    ep_changed = ep_refreshed + ep_upgraded + ep_created > 0
-    made_changes = added > 0 or updated > 0 or ep_changed
+    #   timestamp semantics. Native agent files (CLAUDE.md / AGENTS.md /
+    #   GEMINI.md) are repository-owned and never touched by update.
+    made_changes = added > 0 or updated > 0
     version_file = gator_dir / ".gator-version"
     from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
@@ -1823,7 +1495,7 @@ def main():
     except Exception as e:  # noqa: BLE001
         print(f"  Runtime scripts: removal skipped ({type(e).__name__}: {e})")
 
-    print_result(added, updated, unchanged, entry_point_counts=entry_point_counts)
+    print_result(added, updated, unchanged)
 
 
 if __name__ == "__main__":

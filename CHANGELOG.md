@@ -4,6 +4,39 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+Gator-native entry point. `.gator/` is now the only repository surface Gator owns. A governed session starts with `gator init`, which hands the participant to a new Gator-owned entry document, `GATOR_INIT.md`. Gator no longer creates, refreshes, backs up, or repairs `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`, so those files stop causing Gator-made merge conflicts.
+
+### Added
+
+- **`GATOR_INIT.md`**, a short, tool-neutral entry document shipped next to the constitution (`.gator/.includes/` on the current layout, `.gator/` on v1).
+  - It names the session-opening reads and the loop protocol (only when given a loop token), and states that native agent files are repository-owned. It restates no constitution or protocol rules.
+  - `gatorize` installs it. `gator update` adds it to existing repos and refreshes it.
+- **`gator init` handoff:** the "session opening is not finished" directive now names `GATOR_INIT.md` first, then the constitution, then mission/roadmap/inbox.
+  - A repo without the file keeps the previous handoff plus a `gator update` hint. `gator init` never writes the file.
+  - `gator init --json` gains an additive `session_opening` object (`bootstrap`, `bootstrap_present`, `reads`).
+- **Dashboard loop-join prompt:** a pointer line names `gator init` and `GATOR_INIT.md`, so a repo without native agent files still teaches participants where to start.
+
+### Changed
+
+- **`gatorize`** never creates, prompts about, backs up, or edits `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. The backup/append/overwrite prompt and `*_ROLLBACK.md` files are gone, and the pre-action summary says these files are left untouched.
+- **`gator update`** (package and template copies) no longer refreshes Gator blocks in those files and no longer writes `.pre-gator-update` backups. `gator-update-v1` JSON keeps `entry_point_actions`, now always `[]` (summary count `0`).
+- **`gator state` → schema `gator-state-v2`** (breaking for JSON readers of v1):
+  - `status` drops `entry_points` / `entry_point_baseline_kind` and adds informational `native_files` (`present`, `managed: false`, `historical_gator_block`, `local_companion`). Native files are never reported as drift, missing, or in need of repair.
+  - `gator state repair` is now a no-write compatibility stub that explains the change and exits 0.
+- **Docs and shipped guidance** (README, How to Use Gator, Architecture, Custom Skills and Team Workflow, enforcer procedure and configuration, concierge responses, local agent skills, model requirements, version drift, knowledge capture) describe `gator init` → `GATOR_INIT.md` as the only required entry. A regression test rejects the retired ownership claims in maintained guidance.
+
+### Removed
+
+- `gatorize/entry_points.py` (the vendor entry-point renderer, installer, and legacy upgrader), and the Stage 4b entry-point refresh in `gator update`, including the managed-block helpers that the template copy carried inline.
+
+### Migration notes
+
+- **Nothing is deleted or rewritten in your repository.** Existing `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` files keep their exact bytes, including any `<!-- GATOR:BEGIN -->` … `<!-- GATOR:END -->` block an older Gator wrote.
+- That block is **no longer refreshed** and will go out of date. Where it disagrees with `GATOR_INIT.md` or the constitution, those win. `gator state status` labels it "historical Gator block (not refreshed)". Keep it, trim it to a one-line pointer ("At session start, run `gator init` and follow its output."), or delete it in a normal commit.
+- Run `gator update` once per repo to add `GATOR_INIT.md`.
+- Leftover `*_ROLLBACK.md` or `*.pre-gator-update` files from earlier installs are yours to keep or delete; Gator no longer creates or reads them.
+- Optional vendor adapters (a command that writes a pointer into a vendor file on request) are not part of this release.
+
 ## [2.23.1] — 2026-10-08
 
 Patch release for Codex loop participants ([#37](https://github.com/cumberland-laboratories/gator/issues/37) Phase 1). It ships an opt-in Codex rule profile that removes routine host approval prompts for `gator loop` commands, with an explicit trust cost. It also ships the Goal-mode participant note, now covered by the copy guards and the layout fallback. No CLI or loop behavior changed.

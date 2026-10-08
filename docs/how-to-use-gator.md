@@ -49,9 +49,9 @@ Here's the shape after a first install. Some directories exist to receive shippe
 
 ```
 your-project/
-  CLAUDE.md              <- entry-point instructions for Claude Code (tracked)
+  CLAUDE.md, AGENTS.md,  <- optional, yours: Gator never creates or edits them
+    GEMINI.md
   CLAUDE.local.md        <- your personal notes, per-machine (gitignored)
-  AGENTS.md, GEMINI.md   <- parallel entry points for Codex / Gemini CLI
   .gator/
     constitution.md      <- the rules your AI agent follows
     mission.md           <- what this project is and why it exists
@@ -70,6 +70,7 @@ your-project/
     sessions/            <- committed session summaries (audit trail)
     vault/               <- sensitive files (gitignored, never committed)
     .includes/           <- shipped Gator content (updated on `gator update`)
+      GATOR_INIT.md      <- Gator's entry document; `gator init` names it first
     runtime-pin.json     <- minimum machine-side runtime version (2.9+)
     commit_draft.md      <- per-commit change log (gitignored, session state)
     whiteboard.md        <- ephemeral surface for review findings (gitignored)
@@ -268,15 +269,15 @@ gator dashboard
 
 Gator distinguishes three surfaces so team decisions travel through Git and personal notes stay on your machine:
 
-- **The Gator-managed block** in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` (between `<!-- GATOR:BEGIN -->` and `<!-- GATOR:END -->` sentinels) — governance instructions Gator refreshes on update. You don't edit this.
-- **The rest of the entry-point file** (outside the sentinels, tracked in Git) — repo-shared instructions to the agent. Team-visible.
+- **Gator governance in `.gator/`** — the constitution, charters, procedures, and `GATOR_INIT.md`. A session starts with `gator init`, which names `GATOR_INIT.md` and the files to read next.
+- **Your vendor files** — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`, if you keep them, are repo-shared instructions owned by your team. Gator never creates, edits, or refreshes them. A one-line pointer to `gator init` is enough if you want your AI tool to start Gator automatically. If an older Gator version wrote a `<!-- GATOR:BEGIN -->` block into one of them, that block is no longer refreshed; keep or remove it as you prefer.
 - **`CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md`** at the repo root — personal per-machine notes. Gitignored automatically. Gator never reads, writes, or overwrites them.
 
 For the full team-workflow perspective — what Gator manages in the vendor `.claude/` (or `.codex/`, `.gemini/`) directories, the four Gator-owned slash commands, how team-shared skills travel through PRs, and the decision guide for personal vs team-shared content — see [Custom Skills and Team Workflow](custom-skills-and-team-workflow.md).
 
 ## Upgrading
 
-**From the Dashboard.** Open the sidebar's **Updates** section — the Dashboard checks PyPI and shows the currently-installed version alongside the latest. If a new version is out, click **Upgrade**: the Dashboard runs `pipx upgrade gator-command` in a detached helper, restarts itself, and reloads the browser page when it's back. After the CLI upgrade, the Fleet view's per-row **Update** button refreshes each governed repo's templates, hooks, and managed entry-point blocks in place — click it as needed. The Version column tells you which repos are behind.
+**From the Dashboard.** Open the sidebar's **Updates** section — the Dashboard checks PyPI and shows the currently-installed version alongside the latest. If a new version is out, click **Upgrade**: the Dashboard runs `pipx upgrade gator-command` in a detached helper, restarts itself, and reloads the browser page when it's back. After the CLI upgrade, the Fleet view's per-row **Update** button refreshes each governed repo's templates and hooks in place — click it as needed. The Version column tells you which repos are behind.
 
 > **📷 Screenshot (TODO — `docs/images/dashboard-upgrade-flow.png`):** Split image or two-panel — top: Updates view with the version comparison and Upgrade button; bottom: Fleet view with an Update button highlighted on a repo that needs the refresh.
 
@@ -292,7 +293,7 @@ Then refresh each governed repo (from inside the repo, or via `--path`):
 gator update
 ```
 
-`gator update` operates on the current branch, in place. Your content is always preserved — only Gator templates, the runtime pin, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
+`gator update` operates on the current branch, in place. Your content is always preserved — only Gator templates (including `GATOR_INIT.md`), hooks, and the runtime pin refresh. `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` are never touched; an older Gator block inside them stays exactly as it is.
 
 ## Key Concepts
 

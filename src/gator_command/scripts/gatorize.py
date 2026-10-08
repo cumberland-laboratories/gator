@@ -16,7 +16,7 @@ Handles five scenarios:
   5. Git repo, has both              → warn, let user choose
 
 @reads: templates in gator-starter/
-@writes: target .gator/, entry points, hooks, registry
+@writes: target .gator/, hooks, registry (never CLAUDE.md / AGENTS.md / GEMINI.md)
 """
 
 import argparse
@@ -45,10 +45,6 @@ from gatorize.helpers import (  # noqa: E402
 from gatorize.vendor_hooks import (  # noqa: E402
     merge_hooks_into_settings, install_vendor_hooks,
     _extract_hook_commands, VENDOR_HOOK_CONFIGS,
-)
-from gatorize.entry_points import (  # noqa: E402
-    render_entry_content, action_install_entry_points,
-    GATOR_BEGIN, GATOR_END,
 )
 from gatorize.post_install import (  # noqa: E402
     action_install_outbox,
@@ -186,7 +182,7 @@ def action_install_gator(target):
     includes.mkdir(parents=True, exist_ok=True)
 
     # Shipped root files → .includes/
-    for name in ("constitution.md", "gator-start-up.md"):
+    for name in ("constitution.md", "gator-start-up.md", "GATOR_INIT.md"):
         src = TEMPLATES / name
         if src.exists():
             shutil.copy2(src, includes / name)
@@ -482,7 +478,6 @@ def write_gator_version(gator_dir, action):
     )
 
 
-# ── entry points: see gatorize/entry_points.py
 # ── post-install: see gatorize/post_install.py
 # ── memex morph: see gatorize/morph.py
 
@@ -516,7 +511,7 @@ def print_pre_action_summary(target, scenario):
         print("    - Initialize git and create the default branch "
               "(from git's init.defaultBranch config, or 'main')")
         print("    - Add .gator/")
-        print("    - Install entry-point files (CLAUDE.md, AGENTS.md, GEMINI.md)")
+        print("    - Leave CLAUDE.md / AGENTS.md / GEMINI.md untouched (repository-owned)")
         print("    - Install git hooks")
         print("    - Install vendor SessionStart hook configs (.claude, .codex, .gemini)")
         print("    - Add gitignore entries")
@@ -528,7 +523,7 @@ def print_pre_action_summary(target, scenario):
         print(f"  Scenario: {scenario} ({description})")
         print("  This will:")
         print("    - Add or refresh .gator/")
-        print("    - Install/refresh entry-point files (CLAUDE.md, AGENTS.md, GEMINI.md)")
+        print("    - Leave CLAUDE.md / AGENTS.md / GEMINI.md untouched (repository-owned)")
         print("    - Install git hooks")
         print("    - Install vendor SessionStart hook configs (.claude, .codex, .gemini)")
         print("    - Add gitignore entries")
@@ -632,8 +627,6 @@ def main():
         print("  Aborted.")
         sys.exit(0)
 
-    has_command_post = False  # Command-post architecture retired
-
     # Dispatch — no branch-dance. Every scenario operates on the current
     # branch in place (Scenario 1 initializes on git's default branch).
     if scenario == 1:
@@ -664,7 +657,7 @@ def main():
             print("  ================================================================")
             print()
             sys.exit(result.returncode)
-        # Fall through to common tail — refreshes entry points, outbox, product-source
+        # Fall through to common tail — refreshes outbox, product-source
     elif scenario == 4:
         print()
         print("  Scenario 4: Legacy memex structure detected")
@@ -730,7 +723,6 @@ def main():
     # gator-update found no template changes to apply.
     write_gator_version(target / ".gator", "update" if scenario == 3 else "install")
     ensure_repo_gitignore(target)
-    action_install_entry_points(target, has_command_post)
     action_install_outbox(target)
     action_install_product_source(target, SCRIPTS_DIR, TODAY)
     action_register(target, TODAY)

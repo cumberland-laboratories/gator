@@ -223,171 +223,6 @@ class TestEnsureRepoGitignore:
         assert "# Old rules" in gi_text
 
 
-class TestRenderEntryContentLocalCompanion:
-    """Tests for the local-companion block in render_entry_content()."""
-
-    def test_claude_references_claude_local_md(self):
-        content = gatorize.render_entry_content(has_command_post=False, agent_type="claude")
-        assert "**Personal skills**" in content
-        assert "`CLAUDE.local.md`" in content
-        assert "`AGENTS.local.md`" not in content
-        assert "`GEMINI.local.md`" not in content
-
-    def test_agents_references_agents_local_md(self):
-        content = gatorize.render_entry_content(has_command_post=False, agent_type="agents")
-        assert "**Personal skills**" in content
-        assert "`AGENTS.local.md`" in content
-        assert "`CLAUDE.local.md`" not in content
-        assert "`GEMINI.local.md`" not in content
-
-    def test_gemini_references_gemini_local_md(self):
-        content = gatorize.render_entry_content(has_command_post=False, agent_type="gemini")
-        assert "**Personal skills**" in content
-        assert "`GEMINI.local.md`" in content
-        assert "`CLAUDE.local.md`" not in content
-        assert "`AGENTS.local.md`" not in content
-
-    def test_team_shared_skills_wording_present(self):
-        """All three vendors carry identical team-shared skills teaching."""
-        for agent_type in ("claude", "agents", "gemini"):
-            content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
-            assert "**Team-shared skills**" in content
-            assert ".gator/procedures/" in content
-            assert ".gator/charters/" in content
-
-    def test_precedence_contract_wording_present(self):
-        """The MUST NOT override precedence contract appears verbatim (Invariant #9)."""
-        for agent_type in ("claude", "agents", "gemini"):
-            content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
-            assert "gitignored" in content
-            assert "never touched by Gator" in content
-            assert "MUST NOT override" in content
-
-    def test_reference_note_pointer_present(self):
-        """The layout-defensive pointer to local-agent-skills.md is included."""
-        for agent_type in ("claude", "agents", "gemini"):
-            content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
-            assert "local-agent-skills.md" in content
-            assert ".gator/reference-notes/" in content
-            assert ".gator/.includes/reference-notes/" in content
-
-    def test_executive_summary_requirement_present(self):
-        """All three vendors carry the executive summary requirement for loop submissions."""
-        for agent_type in ("claude", "agents", "gemini"):
-            content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
-            assert "Executive Summary" in content
-            assert "four bullets" in content
-
-    def test_agents_still_carries_enforcer_note(self):
-        """Adding the local-companion block did not displace the AGENTS-only enforcer note."""
-        content = gatorize.render_entry_content(has_command_post=False, agent_type="agents")
-        assert "enforcer review" in content
-        assert "enforcer-prompt.md" in content
-
-
-class TestUpgradeLegacyEntryPoint:
-    """Byte-format snapshot tests for upgrade_legacy_entry_point() — pins the
-    contract Stage 4's `gator state repair` will rely on. Any refactor that
-    changes these byte-formats must be a plan-level decision."""
-
-    def _managed_block(self, agent_type):
-        from gatorize.managed_block import GATOR_BEGIN, GATOR_END, render_managed_region
-        content = gatorize.render_entry_content(has_command_post=False, agent_type=agent_type)
-        return f"{GATOR_BEGIN}{render_managed_region(content)}{GATOR_END}"
-
-    def test_legacy_with_gator_marker_and_pre_gator_section(self, tmp_path):
-        """Legacy file with prose before GATOR_MARKER + a Pre-Gator section
-        preserves the section, drops the prose before the marker, and rewraps
-        in sentinels."""
-        from gatorize.entry_points import upgrade_legacy_entry_point
-        target = tmp_path
-        (target / "CLAUDE.md").write_text(
-            "# Custom Header\n\n"
-            "Old prose that predates Gator.\n\n"
-            "# --- Gator Navigation Coding ---\n"
-            "old legacy governance text\n\n"
-            "## Pre-Gator Instructions\n\n"
-            "Custom instructions that must survive.\n",
-            encoding="utf-8",
-        )
-        upgrade_legacy_entry_point(target, "CLAUDE.md", has_command_post=False, agent_type="claude")
-        result = (target / "CLAUDE.md").read_text(encoding="utf-8")
-        block = self._managed_block("claude")
-        expected = (
-            "# Custom Header\n\n"
-            "Old prose that predates Gator.\n\n"
-            f"{block}\n\n"
-            "## Pre-Gator Instructions\n\n"
-            "Custom instructions that must survive.\n\n"
-        )
-        assert result == expected
-
-    def test_legacy_with_no_marker_but_fingerprint_and_no_pre_gator(self, tmp_path):
-        """Fingerprint-only legacy (e.g. mentions gator-init.py but no marker)
-        with no Pre-Gator section: gets fresh header + placeholder + sentinels,
-        original file content is dropped."""
-        from gatorize.entry_points import upgrade_legacy_entry_point
-        target = tmp_path
-        (target / "AGENTS.md").write_text(
-            "loose prose that mentions gator-init.py somewhere\n",
-            encoding="utf-8",
-        )
-        upgrade_legacy_entry_point(target, "AGENTS.md", has_command_post=False, agent_type="agents")
-        result = (target / "AGENTS.md").read_text(encoding="utf-8")
-        block = self._managed_block("agents")
-        expected = (
-            "# Codex Entry Point\n\n"
-            "You are the primary agent for this project.\n\n"
-            f"{block}\n"
-        )
-        assert result == expected
-
-    def test_legacy_with_marker_but_no_pre_gator_section(self, tmp_path):
-        """Marker present, prose before it, no Pre-Gator section: prose before
-        the marker is preserved as pre_gator, no post_gator appended."""
-        from gatorize.entry_points import upgrade_legacy_entry_point
-        target = tmp_path
-        (target / "GEMINI.md").write_text(
-            "# Gemini Notes\n\n"
-            "Some prose before.\n\n"
-            "# --- Gator Command Post ---\n"
-            "old thin-link text\n",
-            encoding="utf-8",
-        )
-        upgrade_legacy_entry_point(target, "GEMINI.md", has_command_post=False, agent_type="gemini")
-        result = (target / "GEMINI.md").read_text(encoding="utf-8")
-        block = self._managed_block("gemini")
-        expected = (
-            "# Gemini Notes\n\n"
-            "Some prose before.\n\n"
-            f"{block}\n"
-        )
-        assert result == expected
-
-    def test_legacy_fingerprint_with_pre_gator_section(self, tmp_path):
-        """Fingerprint but no marker, with Pre-Gator section: no pre_gator
-        prose (marker not found), fresh header used, Pre-Gator section preserved."""
-        from gatorize.entry_points import upgrade_legacy_entry_point
-        target = tmp_path
-        (target / "CLAUDE.md").write_text(
-            "loose prose mentions .gator/constitution.md\n\n"
-            "## Pre-Gator Instructions\n\n"
-            "Kept content.\n",
-            encoding="utf-8",
-        )
-        upgrade_legacy_entry_point(target, "CLAUDE.md", has_command_post=False, agent_type="claude")
-        result = (target / "CLAUDE.md").read_text(encoding="utf-8")
-        block = self._managed_block("claude")
-        expected = (
-            "# Claude Code Entry Point\n\n"
-            "You are the primary agent for this project.\n\n"
-            f"{block}\n\n"
-            "## Pre-Gator Instructions\n\n"
-            "Kept content.\n\n"
-        )
-        assert result == expected
-
-
 # ── Stage 2 of retire-gator-install plan (2026-07-30) ─────────────────────────
 # --yes flag scaffold + explicit-opt-in contract in helpers.prompt / helpers.confirm.
 # Behavior is byte-identical to today for every existing call site.
@@ -669,14 +504,6 @@ class TestYesFlagPerSiteBehavior:
     source-string inspection because full end-to-end gatorize runs are heavy.
     """
 
-    def test_entry_points_prompt_declares_auto_yes_1(self):
-        """entry_points.py:215 prompt call passes auto_yes='1' (Backup & replace)."""
-        source = (SCRIPTS_DIR / "gatorize" / "entry_points.py").read_text()
-        assert 'auto_yes="1"' in source, (
-            "entry_points.py must pass auto_yes='1' at the foreign-entry-point "
-            "prompt (see Stage 3 plan)."
-        )
-
     def test_gatorize_scenario_5_prompt_declares_auto_yes_x(self):
         """Scenario 5 morph/upgrade/cancel prompt passes auto_yes='x' (Cancel)."""
         source = (SCRIPTS_DIR / "gatorize.py").read_text()
@@ -716,12 +543,12 @@ class TestYesFlagPerSiteBehavior:
 
 # ── Stage 5 of retire-gator-install plan (2026-07-30) ─────────────────────────
 # print_summary() signature rewrite (gator_branch → current_branch), scenario-
-# aware recovery messaging, honest entry_points cancellation hint.
+# aware recovery messaging. (The installer cancellation hint retired with
+# native-file management, 2026-10-08.)
 
 # post_install is a sub-module of gatorize. Load via importlib to keep parity
 # with how gatorize itself is loaded (hyphenless top-level).
 from gatorize import post_install as gatorize_post_install
-from gatorize import entry_points as gatorize_entry_points
 
 
 class TestPrintSummary:
@@ -802,77 +629,6 @@ class TestPrintSummary:
         assert "git branch -d gator-install" not in out
 
 
-class TestEntryPointsCancelHint:
-    """action_install_entry_points' [x] Cancel branch prints an honest
-    partial-cleanup hint. Stage 5 remediation.
-    """
-
-    def test_cancel_hint_source_has_no_gator_install_reference(self):
-        """The Cancel branch source must not name the retired gator-install branch.
-
-        Comments in the same function may reference the plan by name (that's
-        fine — we look only at the print() literals via a targeted check).
-        """
-        source = (SCRIPTS_DIR / "gatorize" / "entry_points.py").read_text()
-        # Locate the Cancel branch block by its distinctive intro.
-        idx = source.index('"  Installation cancelled. Cleanup:"')
-        # Walk forward until the next `elif`/`sys.exit(0)` — check the
-        # bounded region for the old hint text.
-        region_end = source.index("sys.exit(0)", idx)
-        region = source[idx:region_end]
-        assert "gator-install" not in region, (
-            "Cancel-branch print() text still references the retired gator-install branch."
-        )
-        assert "git branch -D gator-install" not in region, (
-            "Cancel-branch print() text still uses the obsolete branch-delete recovery."
-        )
-
-    def test_cancel_hint_source_names_entry_point_files(self):
-        """The Cancel hint enumerates the entry-point files that may be on disk."""
-        source = (SCRIPTS_DIR / "gatorize" / "entry_points.py").read_text()
-        idx = source.index('"  Installation cancelled. Cleanup:"')
-        region_end = source.index("sys.exit(0)", idx)
-        region = source[idx:region_end]
-        for fname in ("CLAUDE.md", "AGENTS.md", "GEMINI.md"):
-            assert fname in region, (
-                f"Cancel hint must name {fname} so the user knows what to remove."
-            )
-
-    def test_cancel_hint_source_mentions_experiment_branch_discard(self):
-        """The Cancel hint tells users about discarding a self-created experiment branch."""
-        source = (SCRIPTS_DIR / "gatorize" / "entry_points.py").read_text()
-        idx = source.index('"  Installation cancelled. Cleanup:"')
-        region_end = source.index("sys.exit(0)", idx)
-        region = source[idx:region_end]
-        assert "experiment branch" in region
-        assert "git checkout <original-branch>" in region
-
-    def test_cancel_hint_source_has_windows_recipe(self):
-        """Codex Stage-5 finding: the cleanup recipe must work on Windows too.
-
-        gatorize is cross-platform (Windows CMD/PowerShell, Git Bash, macOS,
-        Linux); a bare `rm -f` recipe is unusable on Windows CMD and needs
-        different flags in PowerShell. The Cancel branch now branches on
-        `sys.platform` and prints a PowerShell recipe on Windows plus the
-        bash recipe as an alternative.
-        """
-        source = (SCRIPTS_DIR / "gatorize" / "entry_points.py").read_text()
-        idx = source.index('"  Installation cancelled. Cleanup:"')
-        region_end = source.index("sys.exit(0)", idx)
-        region = source[idx:region_end]
-        # Windows branch
-        assert 'sys.platform == "win32"' in region, (
-            "Cancel hint must branch on sys.platform for cross-platform recipes."
-        )
-        assert "Remove-Item" in region, (
-            "Windows branch must use PowerShell's Remove-Item, not `rm -f`."
-        )
-        # Unix branch still present
-        assert "rm -f CLAUDE.md AGENTS.md GEMINI.md" in region, (
-            "Non-Windows branch must retain the rm -f recipe."
-        )
-
-
 class TestNoUserFacingGatorInstallReferences:
     """Belt-and-suspenders sweep: no user-facing STRING in the installer path
     contains the retired 'gator-install' identifier. Comments and docstrings
@@ -890,3 +646,125 @@ class TestNoUserFacingGatorInstallReferences:
         gatorize.print_pre_action_summary(tmp_path, 1)
         out = capsys.readouterr().out
         assert "gator-install" not in out
+
+
+class TestFreshInstallBootstrap:
+    """Fresh install ships GATOR_INIT.md beside the constitution (v2)."""
+
+    def test_action_install_gator_places_bootstrap_in_includes(self, tmp_path):
+        gatorize.action_install_gator(tmp_path)
+        includes = tmp_path / ".gator" / ".includes"
+        assert (includes / "GATOR_INIT.md").read_bytes() == \
+            (gatorize.TEMPLATES / "GATOR_INIT.md").read_bytes()
+        assert not (tmp_path / ".gator" / "GATOR_INIT.md").exists()
+
+
+# ── Gator-native entry point (2026-10-08): native agent files are repo-owned ──
+
+NATIVE_FILES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
+
+# Byte fixtures for native files in every state the retired installer
+# used to act on. Bytes must survive gatorize exactly (CRLF, non-ASCII and
+# no trailing newline included).
+NATIVE_FIXTURES = {
+    "foreign": (
+        "# Team instructions\r\n\r\nUse ruff. Ünïcode stays.\r\n"
+        + "".join(f"- rule {i}\r\n" for i in range(150))
+        + "No trailing newline"
+    ).encode("utf-8"),
+    "sentinel": (
+        "# Claude Code Entry Point\n\n<!-- GATOR:BEGIN -->\nold Gator block\n"
+        "<!-- GATOR:END -->\n\n## Team notes\nkeep me\n"
+    ).encode("utf-8"),
+    "legacy": (
+        "# Codex Entry Point\n\n# --- Gator Navigation Coding ---\n"
+        "Read .gator/constitution.md first.\n\n## Pre-Gator Instructions\nold\n"
+    ).encode("utf-8"),
+    "corrupted": (
+        "<!-- GATOR:BEGIN -->\nA\n<!-- GATOR:BEGIN -->\nB\n<!-- GATOR:END -->\n"
+    ).encode("utf-8"),
+}
+
+
+def gatorize_in_process(repo, monkeypatch, tmp_path):
+    """Run the real gatorize.main() on `repo` under --yes.
+
+    Machine-local side effects are fenced off: HOME/USERPROFILE point at a
+    temp dir, dashboard registration is stubbed, and stdin is empty so any
+    interactive prompt fails the test instead of blocking.
+    """
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setattr(gatorize, "action_register", lambda *a, **k: None)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    monkeypatch.setattr(sys, "argv", ["gatorize.py", str(repo), "--yes"])
+    prior = gatorize_helpers.get_auto_yes()
+    try:
+        gatorize.main()
+    finally:
+        gatorize_helpers.set_auto_yes(prior)
+
+
+class TestGatorizeLeavesNativeFilesUntouched:
+    """gatorize never creates, prompts about, backs up, or edits
+    CLAUDE.md / AGENTS.md / GEMINI.md."""
+
+    @pytest.mark.parametrize("states", [
+        {"CLAUDE.md": "foreign", "AGENTS.md": "sentinel", "GEMINI.md": "legacy"},
+        {"CLAUDE.md": "sentinel", "AGENTS.md": "corrupted", "GEMINI.md": "foreign"},
+    ], ids=["foreign-sentinel-legacy", "sentinel-corrupted-foreign"])
+    def test_existing_native_files_keep_exact_bytes(self, tmp_path, monkeypatch, states):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+        for name, state in states.items():
+            (repo / name).write_bytes(NATIVE_FIXTURES[state])
+        subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, timeout=10)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "native"],
+                       check=True, timeout=10)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        assert (repo / ".gator" / ".includes" / "GATOR_INIT.md").is_file()
+        for name, state in states.items():
+            assert (repo / name).read_bytes() == NATIVE_FIXTURES[state], name
+        leftovers = sorted(p.name for p in repo.iterdir()
+                           if p.name.endswith(("_ROLLBACK.md", ".pre-gator-update")))
+        assert leftovers == []
+
+    def test_repo_without_native_files_gets_none(self, tmp_path, monkeypatch):
+        """Session-opening smoke test: a repo with no native agent files is
+        gatorized, gets none, and `gator init` hands off to GATOR_INIT.md."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        assert (repo / ".gator" / ".includes" / "GATOR_INIT.md").is_file()
+        for name in NATIVE_FILES:
+            assert not (repo / name).exists(), name
+
+        import os
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        boot = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "gator-init.py"), "--path", str(repo)],
+            cwd=str(repo), env=env, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60,
+        )
+        assert boot.returncode == 0, boot.stdout + boot.stderr
+        assert "1. .gator/.includes/GATOR_INIT.md" in boot.stdout
+        assert "2. .gator/.includes/constitution.md" in boot.stdout
+        for name in NATIVE_FILES:
+            assert not (repo / name).exists(), name
+
+    @pytest.mark.parametrize("scenario", [1, 2])
+    def test_pre_action_summary_says_native_files_untouched(self, tmp_path, capsys, scenario):
+        if scenario == 2:
+            _init_git_repo(tmp_path)
+        gatorize.print_pre_action_summary(tmp_path, scenario)
+        out = capsys.readouterr().out
+        assert "CLAUDE.md / AGENTS.md / GEMINI.md untouched" in out
+        assert "entry-point files" not in out

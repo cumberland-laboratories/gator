@@ -184,6 +184,7 @@ Route `/api/repo-by-key/<repo_key>/loops/...` POST requests. Start a new loop (w
 ! `sketch_path` must resolve inside the registered repo root — rejects traversal to external files.
 ! Prompt endpoint returns only `draftor` or `reviewer` prompts — never `architect`. Response carries `Cache-Control: no-store` on all paths (success and error).
 ! Terminal loops reject prompt requests with 410.
+! Every participant prompt ends its fixed block with the explicit-start pointer "New to Gator in this repo? Run `gator init` first; its handoff names GATOR_INIT.md and the loop protocol." (gator-native entry point, 2026-10-08). Native agent files no longer teach "gator loop join", so the prompt must not rely on them. Pinned by `test_prompt_names_explicit_gator_init_start` in `tests/test_dashboard_loop_brief.py`.
 
 ### _resolve_architect_token(repo_key, loop_id, cache_control=None) / _handle_loop_pause() / _handle_loop_interject() / _handle_loop_unblock() / _handle_loop_end()
 File: src/gator_command/scripts/gator-dashboard.py

@@ -23,15 +23,15 @@ Local-first. Git-native. Works with Claude Code, Codex, Gemini CLI. Apache 2.0 l
 Gator adds a `.gator/` folder to your repo — this is the governance and intelligence layer. It contains the constitution, charters, and policy that govern AI-assisted development. The enforcement runtime itself executes from the installed CLI on each machine (2.9+): the repo commits a `runtime-pin.json` recording the minimum runtime version it requires, git's own `repositoryformatversion` pattern.
 
 **What it does:**
-- Creates `.gator/` with governance scaffolding (constitution, templates, runtime pin)
-- Adds or updates `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` — Gator manages the region between `<!-- GATOR:BEGIN -->` and `<!-- GATOR:END -->` sentinels; anything outside the sentinels is your content and is preserved on every update. On a first install into a non-Gator file, `gatorize` prompts: backup & replace (recommended), append, or overwrite
+- Creates `.gator/` with governance scaffolding (constitution, templates, runtime pin) and `GATOR_INIT.md`, Gator's entry document. A session starts when you run `gator init`; its output names `GATOR_INIT.md` and the files to read next
 - Installs four Gator slash commands into your vendor `commands/` directory (`.claude/commands/init.md`, `update.md`, `commit.md`, `loop-join.md`; parallel for `.codex/` and `.gemini/`). Any existing non-Gator command file at the same name is backed up with a `.pre-gator` suffix before overwrite
 - Merges Gator entries into `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json` non-destructively — your permissions, environment variables, and non-Gator hooks are never touched
 - Installs git hooks (`pre-commit`, `commit-msg`, `post-commit`) for governance enforcement
-- Supports personal `CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md` companion files — gitignored, never touched by Gator, for per-machine skills
+- Adds `.gitignore` entries for personal `CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md` files, so per-machine notes stay out of Git
 
 **What it does not do:**
 - Does not modify your source code
+- Does not create, edit, back up, or repair `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`. These files belong to your repository. They are optional; you can add a one-line pointer to `gator init` if you want your AI tool to start Gator automatically
 - Does not overwrite user-authored slash commands (only the four Gator-owned ones are refreshed on update)
 - Does not connect to any outside API or platform
 - Does not send data anywhere — Gator is entirely markdown and Python files in Git
@@ -113,7 +113,7 @@ The easiest way is through the **Gator Dashboard**. Open the sidebar's **Updates
 
 ![Fleet view — a repo one version behind shows the highlighted Update button; up-to-date repos have their Update button disabled](docs/images/dashboard-fleet-update-button.png)
 
-Your content is always preserved — only Gator templates, the runtime pin, and the managed region inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` refresh. If the managed region gets modified, `.pre-gator-update` sibling backups are written before overwrite.
+Your content is always preserved — only Gator templates (including `GATOR_INIT.md`), hooks, and the runtime pin refresh. `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` are never touched. If an older Gator version wrote a `<!-- GATOR:BEGIN -->` block into them, that block stays exactly as it is and is no longer refreshed; keep it or remove it as you prefer.
 
 ---
 

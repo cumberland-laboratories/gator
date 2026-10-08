@@ -1,10 +1,11 @@
 """Reusable managed-block inspection helpers.
 
-Owns the sentinel-delimited managed region inside entry-point files
-(CLAUDE.md, AGENTS.md, GEMINI.md). Extracted from entry_points.py so
-`gator state status` / `gator state repair` / `gator update`'s block
-refresh (Stages 4, 4b of the local-agent-overrides + managed-state plan)
-can share the same parser and byte-format contract.
+Parses the sentinel-delimited region that older Gator versions wrote into
+native agent files (CLAUDE.md, AGENTS.md, GEMINI.md). Since the gator-native
+entry point (2026-10-08) Gator never writes those files; `gator state status`
+uses `GATOR_BEGIN` / `GATOR_END` / `detect_legacy_gator_content()` read-only to
+report a historical block. The classifier and renderer remain as a tested
+parsing library.
 
 Stage 3 of `gator-command/artifacts/2026-07-28-local-agent-overrides-and-managed-state-plan.md`.
 """
@@ -22,8 +23,8 @@ GATOR_BEGIN = "<!-- GATOR:BEGIN -->"
 GATOR_END = "<!-- GATOR:END -->"
 
 # Legacy fingerprints — recognizable Gator content in files that predate
-# the sentinel format. Keep in sync with `action_install_entry_points()`
-# case-2 detection.
+# the sentinel format. Read-only detection; Gator no longer writes these
+# files (gator-native entry point, 2026-10-08).
 _LEGACY_FINGERPRINTS = (
     GATOR_MARKER,
     COMMAND_POST_MARKER,
@@ -115,9 +116,7 @@ def _sentinels_are_malformed(text):
 def detect_legacy_gator_content(text):
     """True if the file has no sentinel pair but matches recognizable Gator content.
 
-    Mirrors the fingerprint checks previously inline in `action_install_entry_points()`
-    (pre-Stage-3 entry_points.py:114-120). Sentinels alone do not count as legacy —
-    only the fingerprint strings do.
+    Sentinels alone do not count as legacy — only the fingerprint strings do.
     """
     return any(fp in text for fp in _LEGACY_FINGERPRINTS)
 

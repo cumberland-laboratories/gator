@@ -1,24 +1,26 @@
-# Local Agent Skills — Personal Notes Alongside a Governed Entry Point
+# Local Agent Skills — Personal Notes Alongside Gator Governance
 
 ## The Pattern
 
-Every Gator-governed repo has one or more agent entry-point files at the root — `CLAUDE.md`, `AGENTS.md` (for Codex), `GEMINI.md`. Gator manages a block inside each of these files (the `<!-- GATOR:BEGIN -->` … `<!-- GATOR:END -->` region) and refreshes it on `gator update`. Anything outside that block is your repo's shared instructions to the agent.
+Gator's governance lives in `.gator/`. A session starts with `gator init`, which names `GATOR_INIT.md` and then the constitution and context files. Vendor instruction files at the repo root — `CLAUDE.md`, `AGENTS.md` (for Codex), `GEMINI.md` — are optional and belong to your repository. Gator never creates, edits, or refreshes them. What a team writes there is the repo's shared instructions to the agent.
 
-But sometimes you want personal notes, skills, or workflows that are just for **you on this machine** — not for teammates and not for review. That's what the `*.local.md` companion pattern is for. Create `CLAUDE.local.md` (or `AGENTS.local.md` / `GEMINI.local.md`) next to the tracked entry-point file. `gatorize` and `gator update` add these filenames to your `.gitignore` automatically, so they stay on your machine and never enter Git.
+But sometimes you want personal notes, skills, or workflows that are just for **you on this machine** — not for teammates and not for review. That's what the `*.local.md` companion pattern is for. Create `CLAUDE.local.md` (or `AGENTS.local.md` / `GEMINI.local.md`) at the repo root. `gatorize` and `gator update` add these filenames to your `.gitignore` automatically, so they stay on your machine and never enter Git. Gator never reads or writes them.
 
 ## What Belongs Where
 
 Three surfaces exist. Pick the one that matches how the content should travel:
 
-- **The Gator-managed block** (inside `<!-- GATOR:BEGIN/END -->`): governance instructions Gator ships and refreshes. You do not edit this.
-- **The rest of the entry-point file** (outside the managed block, but tracked in Git): repo-shared instructions to the agent. Team-visible, reviewable, part of every clone.
+- **Gator governance in `.gator/`**: `GATOR_INIT.md`, the constitution, charters, procedures. Shipped parts refresh on `gator update`; your charters and procedures travel through PRs.
+- **Your vendor files** (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`, tracked in Git): repo-shared, tool-specific instructions to the agent. Team-visible, reviewable, part of every clone. A one-line pointer to `gator init` is enough to make the tool start Gator on its own.
 - **The `*.local.md` companion** (gitignored, machine-local): personal notes, private skills, one-off workflows, personal debugging aides. Yours alone.
 
 Precedence, when the agent reads all three:
 
-1. **Managed block** — Gator governance. Non-negotiable.
-2. **Repo-shared tracked content** — team policy in the entry-point file, `.gator/procedures/`, `.gator/charters/`. Reviewable by the team.
+1. **Gator governance** — `GATOR_INIT.md`, the constitution, charters. Non-negotiable.
+2. **Repo-shared tracked content** — team policy in your vendor files and `.gator/procedures/`. Reviewable by the team. May extend Gator governance; must not override it.
 3. **Local companion** — personal guidance. May extend behavior; **must not override** the layers above.
+
+Repositories gatorized by an older Gator version may still have a `<!-- GATOR:BEGIN -->` … `<!-- GATOR:END -->` block in a vendor file. Gator no longer refreshes it; where it disagrees with `GATOR_INIT.md` or the constitution, those win. Keep it, trim it to a pointer, or remove it.
 
 ## Format Example
 
@@ -67,10 +69,10 @@ Personal skills travel by staying local. Team-shared skills travel through your 
 
 ## Why It Matters
 
-The alternative is that every developer adds personal notes to the tracked entry-point file itself. That creates merge conflicts on every branch that touches it, and it leaks one person's workflow to everyone else who clones the repo. The `*.local.md` companion pattern gives you a private surface without polluting the shared one.
+The alternative is that every developer adds personal notes to the tracked vendor file itself. That creates merge conflicts on every branch that touches it, and it leaks one person's workflow to everyone else who clones the repo. The `*.local.md` companion pattern gives you a private surface without polluting the shared one.
 
 ## See Also
 
-- The `<!-- GATOR:BEGIN/END -->` block in your entry-point file — canonical instructions that reference this note.
+- `GATOR_INIT.md` (named by `gator init`) — Gator's entry document and the start of every governed session.
 - `.gator/charters/` — team-shared knowledge about module invariants.
 - `.gator/procedures/` — team-shared workflows and recipes.

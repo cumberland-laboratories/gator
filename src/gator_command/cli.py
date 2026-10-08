@@ -76,7 +76,7 @@ COMMANDS = {
     "hook":       ("gator-hook.py",          "Dispatch a governance hook via the runtime resolver"),
     "loop":       ("gator-loop.py",          "Run a governed planning loop"),
     "enterprise": ("gator-enterprise.py",    "Manage Enterprise capability (setup, status, sync, ...)"),
-    "state":      ("gator-state.py",         "Report or repair managed state"),
+    "state":      ("gator-state.py",         "Report repo state (constitution drift, native agent files)"),
 }
 
 

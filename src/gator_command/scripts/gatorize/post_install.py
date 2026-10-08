@@ -117,7 +117,7 @@ def print_summary(target, scenario, current_branch):
     print("      (e.g., git checkout -b my-gator-experiment), switch back and delete it:")
     print(f"        git checkout <original-branch> && git branch -D <experiment-branch>")
     print("    - If you ran gatorize directly on your working branch, undo depends on what happened:")
-    print("        * uncommitted new files (.gator/, entry-point files): git clean -fd <specific paths>")
+    print("        * uncommitted new files (.gator/): git clean -fd <specific paths>")
     print("          Review with `git clean -nd` first — clean also removes any OTHER untracked files.")
     print("        * uncommitted edits inside existing tracked files: git checkout -- <path>")
     print("        * committed changes: git reset --hard HEAD~<N>, but only if HEAD~<N> is safe.")

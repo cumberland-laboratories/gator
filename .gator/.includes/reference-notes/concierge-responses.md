@@ -244,29 +244,19 @@ Don't migrate silently. Show the Architect what you found, suggest the mapping, 
 
 ### "My CLAUDE.md is really long" / "Will Gator work with a big instruction file?"
 
-**Frame as**: Be honest. Gator is designed and tested with short entry points — 5-10 lines that point to the constitution. The installer appends a Gator section to existing files, but if the file is very long (100+ lines of custom instructions, skills, personas), there is a real risk that the model's attention to the Gator pointer degrades. We have not tested Gator's efficacy when the entry point is buried deep in a large instruction file.
+**Frame as**: Yes. Gator does not depend on that file. Gator never creates, edits, or appends to `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md` — they belong to the repository. A Gator session starts when someone runs `gator init`; its output names `.gator/.includes/GATOR_INIT.md` (or `.gator/GATOR_INIT.md` on older layouts), then the constitution and context files. A long vendor file only competes for the model's attention; it does not replace Gator's start.
 
 **What to suggest**:
 
-1. **Best option**: Move the Gator pointer to the top of the file. The constitution reference should be one of the first things the model reads, not something it encounters after 200 lines of other instructions.
+1. **Best option**: Start every governed session with `gator init` (or the `/init` slash command), whatever the vendor file contains.
+2. **Optional convenience**: If the team wants the AI tool to start Gator on its own, put a one-line pointer near the top of the vendor file:
    ```markdown
-   # Project Entry Point
-
-   Read [`.gator/constitution.md`](.gator/constitution.md) before your first response. It governs how you work here.
-
-   If this is a **fresh project** (charters/ is empty or contains only templates), follow the bootstrap procedure in [`.gator/gator-start-up.md`](.gator/gator-start-up.md).
-
-   ---
-
-   [... rest of existing instructions below ...]
+   At session start, run `gator init` and follow its output.
    ```
+   Keep it a pointer. Copying Gator rules into the vendor file creates a second copy that drifts.
+3. **Older repos**: A block between `<!-- GATOR:BEGIN -->` and `<!-- GATOR:END -->` was written by an older Gator version. It is no longer refreshed. Keep it, trim it to the pointer above, or remove it.
 
-2. **Acceptable option**: Keep the Gator section clearly demarcated (the installer uses a `# --- Gator Navigation Coding ---` marker) and ensure the model reads it. Test by asking "what does the constitution say?" early in a session — if the model doesn't know, the pointer isn't landing.
-
-3. **What to avoid**: Leaving the Gator pointer at the very bottom of a long file and hoping for the best. Models handle the beginning and end of long prompts better than the middle, but "better" is not "reliably."
-
-**The honest caveat**: Gator's progressive-disclosure architecture (short entry point → constitution → charters on demand) depends on the entry point actually being read. If the entry point is competing with 500 lines of other instructions, the whole governance layer may not activate. When in doubt, keep the entry point short and at the top.
-
+**The honest caveat**: Gator's progressive-disclosure architecture (`gator init` → `GATOR_INIT.md` → constitution → charters on demand) depends on the session actually starting with `gator init`. If nobody runs it and the vendor file has no pointer, the governance layer may not activate. Test by asking "what does the constitution say?" early in a session.
 ---
 
 ## Enforcer and Review
@@ -369,7 +359,7 @@ gemini < .gator/.includes/reference-notes/enforcer-prompt.md
 
 When running a CLI enforcer in a separate terminal, the agent picks up its instructions from:
 1. **`.gator/.includes/reference-notes/enforcer-prompt.md`** -- the full enforcer prompt: what to read, what to check, output format
-2. **`AGENTS.md`** -- the primary-agent entrypoint for Codex; useful project context, but not the enforcer role definition
+2. **`AGENTS.md`** -- the repository's own vendor file for Codex (optional, not managed by Gator); useful project context, but not the enforcer role definition
 
 For a custom audit (not just diff review), the Architect can prompt the enforcer directly:
 
@@ -383,7 +373,7 @@ Report findings with severity levels (CRITICAL/HIGH/MEDIUM/LOW).
 
 **The key point for the Architect**: the enforcer in a separate terminal has no memory of what the primary agent did or said. It reads the repo fresh. That's the independence guarantee -- different model, different session, different perspective.
 
-**Frame as**: "You can always run the enforcer yourself in another terminal. It reads AGENTS.md or the enforcer prompt, checks the code against the charters, and gives you findings directly. No intermediary. Want me to show you the command for your setup?"
+**Frame as**: "You can always run the enforcer yourself in another terminal. It reads the enforcer prompt (and the repository's AGENTS.md, if present), checks the code against the charters, and gives you findings directly. No intermediary. Want me to show you the command for your setup?"
 
 ---
 
@@ -397,7 +387,7 @@ Report findings with severity levels (CRITICAL/HIGH/MEDIUM/LOW).
 
 ### "How do I gatorize a repo?" / "What's gatorize?" / "Install gator"
 
-**Frame as**: "Gatorize" means install or upgrade Gator in a repo. Run `gator gatorize <target-directory>` (or `gator gatorize .` from inside the repo). This is the canonical cross-platform installer — Windows, macOS, and Linux. The installer creates `.gator/`, installs hooks, writes entry points, and registers the repo. It's safe to run on an already-gatorized repo (upgrade mode).
+**Frame as**: "Gatorize" means install or upgrade Gator in a repo. Run `gator gatorize <target-directory>` (or `gator gatorize .` from inside the repo). This is the canonical cross-platform installer — Windows, macOS, and Linux. The installer creates `.gator/` (including `GATOR_INIT.md`), installs hooks, and registers the repo. It never touches `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`. It's safe to run on an already-gatorized repo (upgrade mode).
 
 ### "How do I add an existing repo to the Dashboard?" / "I pulled a gatorized repo but it's not in my Dashboard"
 
@@ -463,7 +453,7 @@ Don't assume. Ask. Some Architects are here to use the tool; others are here to 
 
 **Draw from**: `reference-notes/enforcer-configuration.md`, `procedures/enforcer-review.md`
 
-**Frame as**: Distinguish between "works" and "cleanest." For example: if Codex is primary and the Architect wants Anthropic as enforcer, the cleanest path is `enforcer-review.py` with `provider: anthropic`, because Claude Code CLI in the same repo also sees `CLAUDE.md` as a primary-agent entrypoint. If the Architect wants a separate Claude terminal anyway, say that it works, but explain the role-overlap trade-off.
+**Frame as**: Distinguish between "works" and "cleanest." For example: if Codex is primary and the Architect wants Anthropic as enforcer, the cleanest path is `enforcer-review.py` with `provider: anthropic`, because Claude Code CLI in the same repo also reads the repository's `CLAUDE.md`, which may frame Claude as the primary agent. If the Architect wants a separate Claude terminal anyway, say that it works, but explain the role-overlap trade-off.
 
 ---
 

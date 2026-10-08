@@ -2924,6 +2924,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             f"  Feature: {feature}\n"
             f"  Role: {role}\n\n"
             f"  gator loop status --token {token}\n"
+            # Gator-native entry point (2026-10-08): native agent files no
+            # longer teach "gator loop join", so the prompt names the start.
+            "\n  New to Gator in this repo? Run `gator init` first; its "
+            "handoff names GATOR_INIT.md and the loop protocol.\n"
         )
         # #43: pointer only (never brief content).
         has_brief = session.get("brief") is not None or (

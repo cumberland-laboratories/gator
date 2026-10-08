@@ -305,6 +305,18 @@ class TestArtifactsAndPrompt:
                          {"role": "draftor"})
         assert "Architect brief" not in json.loads(text)["prompt"]
 
+    def test_prompt_names_explicit_gator_init_start(self, env):
+        """Gator-native entry point: the join prompt does not rely on native
+        agent files; it names `gator init` and GATOR_INIT.md (pointer only)."""
+        code, text = start(env, feature="feat-init-pointer")
+        loop_id = json.loads(text)["loop_id"]
+        code, text = req(env["base"] + f"/{loop_id}/prompt", "POST",
+                         {"role": "reviewer"})
+        prompt = json.loads(text)["prompt"]
+        assert prompt.startswith("gator loop join\n")
+        assert "Run `gator init` first" in prompt and "GATOR_INIT.md" in prompt
+        assert prompt.index("gator loop status --token") < prompt.index("gator init")
+
 
 # ---------------------------------------------------------------------------
 # CLI status

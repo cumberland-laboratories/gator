@@ -32,18 +32,27 @@ Probe managed and legacy hook locations and request repair when configuration is
 -> repo updater hook helpers
 ! Session opening remains nonblocking. An unresolvable hook launcher is reported as degraded, not falsely healthy.
 
+### session_opening_reads(repo_root, paths)
+File: src/gator_command/scripts/gator-init.py (and starter copy)
+Return `(bootstrap_rel_or_None, reads)`: the ordered repo-relative session-opening reads. `GATOR_INIT.md` (`paths.bootstrap`) comes first when it is a file, then the resolved constitution, then root `mission.md` / `roadmap.md` / `inbox.md`.
+Filesystem: `paths.bootstrap` (existence check only)
+<- `session_opening_directive()`, `_session_opening_json()`
+! Single source for the text and JSON handoff; do not compute the read order anywhere else.
+! Read-only. Session opening never creates `GATOR_INIT.md`; a repo that predates it gets `None` and the legacy list.
+
 ### session_opening_directive(repo_root, paths)
-File: src/gator_command/scripts/gator-init.py
-Return the exact resolved constitution path plus mission/roadmap/inbox next actions.
+File: src/gator_command/scripts/gator-init.py (and starter copy)
+Return the banner's "session opening is not finished" lines from `session_opening_reads()`: `GATOR_INIT.md` → constitution → context when the bootstrap exists. Otherwise it returns the legacy constitution → context lines plus a one-line `gator update` upgrade hint.
 <- `print_boot_sequence()`
 ! The directive follows the tagline and precedes the final marker so models do not interpret the banner as completion.
 
 ### print_boot_sequence() / print_json()
 File: src/gator_command/scripts/gator-init.py
-Render equivalent human and machine status for governance, hooks, and registry membership.
+Render equivalent human and machine status for governance, hooks, and registry membership. JSON carries an additive `session_opening` object (`bootstrap`, `bootstrap_present`, `reads`) built by `_session_opening_json()`.
 <- `main()`
--> counters, hook status, constitution drift
+-> counters, hook status, constitution drift, `session_opening_reads()`
 ! Constitution drift is warning-only and best-effort; failure to compare templates never blocks session opening.
+! `session_opening` is additive; JSON readers must tolerate its absence in output from older CLIs.
 
 ### main()
 File: src/gator_command/scripts/gator-init.py

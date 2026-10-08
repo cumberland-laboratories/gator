@@ -94,7 +94,7 @@ export OPENAI_API_KEY=sk-...
 
 **Cost**: Depends on model (configured in `~/.codex/config.toml`)
 
-**No config file changes needed** — but give Codex the dedicated enforcer prompt explicitly, because `AGENTS.md` is the primary-agent entrypoint.
+**No config file changes needed** — but give Codex the dedicated enforcer prompt explicitly, because the repository's own `AGENTS.md` (if present) may frame Codex as the primary agent. Gator sessions themselves start from `gator init`, not from that file.
 
 **Setup steps**:
 ```bash

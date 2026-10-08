@@ -75,7 +75,7 @@ gator hook enforcer-review
 codex review "Read .gator/.includes/reference-notes/enforcer-prompt.md for full instructions. Review the uncommitted changes against the charters."
 ```
 
-Setup for the Codex CLI: Install [Codex CLI](https://github.com/openai/codex), run `codex login`. `AGENTS.md` is the primary-agent entrypoint, so Codex should be given the dedicated enforcer prompt explicitly for review work. Review mode runs in a read-only sandbox. The primary agent never invokes the Codex CLI directly — cross-vendor GPT review from the agent goes through `enforcer-review.py` with `provider: openai`.
+Setup for the Codex CLI: Install [Codex CLI](https://github.com/openai/codex), run `codex login`. Codex reads the repository's own `AGENTS.md` (if present) automatically, and that file may frame Codex as the primary agent, so give Codex the dedicated enforcer prompt explicitly for review work. Review mode runs in a read-only sandbox. The primary agent never invokes the Codex CLI directly — cross-vendor GPT review from the agent goes through `enforcer-review.py` with `provider: openai`.
 
 ### Gemini as enforcer
 
@@ -113,7 +113,7 @@ gator hook enforcer-review   # enforcer-config.json → provider: anthropic
 claude --print "$(cat .gator/.includes/reference-notes/enforcer-prompt.md)"
 ```
 
-**Why the CLI is a bit awkward**: `CLAUDE.md` is the repo entrypoint for the primary-agent role, while `.gator/.includes/reference-notes/enforcer-prompt.md` defines the read-only enforcer role. In practice the explicit enforcer prompt should dominate, but the role separation is cleaner through `enforcer-review.py` with Anthropic configured directly.
+**Why the CLI is a bit awkward**: Claude Code reads the repository's own `CLAUDE.md` (if present), which may frame Claude as the primary agent, while `.gator/.includes/reference-notes/enforcer-prompt.md` defines the read-only enforcer role. In practice the explicit enforcer prompt should dominate, but the role separation is cleaner through `enforcer-review.py` with Anthropic configured directly.
 
 **Recommendation**: if the primary agent is Codex and the Architect wants Anthropic as enforcer, use `gator hook enforcer-review` with `provider: anthropic`. Use the Claude Code CLI only when the Architect specifically wants a separate Claude terminal/session as the reviewer — run independently by the Architect, never from the primary agent session.
 
@@ -189,7 +189,7 @@ codex review --commit HEAD
 
 **Setup**: Install [Codex CLI](https://github.com/openai/codex), run `codex login`. That's it.
 
-Codex reads `AGENTS.md` automatically for its role instructions. Review mode runs in a read-only sandbox by default — the "no edits" rule is enforced at the system level.
+Codex reads the repository's `AGENTS.md` (if present) automatically, and the enforcer prompt sets the review role. Review mode runs in a read-only sandbox by default — the "no edits" rule is enforced at the system level.
 
 ### Option C: Claude Code (Anthropic)
 

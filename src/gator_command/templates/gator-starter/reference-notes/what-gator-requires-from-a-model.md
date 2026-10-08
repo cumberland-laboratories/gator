@@ -22,7 +22,7 @@ For Gator to work at all, the model does not need to be perfect. It does need a 
 
 ### 1. Instruction-following
 
-The model must reliably honor the entry point and the constitution. If it ignores `AGENTS.md`, skips `constitution.md`, or treats the loop as optional, the governance layer collapses into passive documentation.
+The model must reliably run `gator init`, follow `GATOR_INIT.md`, and honor the constitution. If it skips the handoff, skips `constitution.md`, or treats the loop as optional, the governance layer collapses into passive documentation.
 
 ### 2. Willingness to read structured context
 
@@ -72,7 +72,7 @@ Gator assumes that shorter top-level instructions plus structured repo artifacts
 
 Why:
 
-- A short entry point is easier for the model to obey consistently
+- A short entry document (`GATOR_INIT.md`) is easier for the model to obey consistently
 - The constitution separates global rules from local code knowledge
 - Charters localize understanding to the module being changed
 - Reference notes answer recurring process questions without bloating the main instruction surface
@@ -80,7 +80,7 @@ Why:
 
 This is why Gator uses a layered structure:
 
-- `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` -- entry point
+- `gator init` → `GATOR_INIT.md` -- entry point (vendor files such as `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` are optional and repository-owned)
 - `constitution.md` -- global workflow and governance
 - `charters/` -- code-local map
 - `reference-notes/` -- cognitive aids and repeated explanations

@@ -34,6 +34,7 @@ SHIPPED_ROOT_FILES = frozenset({
     "constitution.md",
     "gator-start-up.md",
     ".charterignore",
+    "GATOR_INIT.md",
 })
 
 # reference-notes moved to MIXED_DIRECTORY_SHIPPED_DEFAULTS 2026-08-23:
@@ -305,6 +306,7 @@ class GatorPaths:
     # Shipped content (location depends on layout)
     constitution: Path
     startup_guide: Path
+    bootstrap: Path  # GATOR_INIT.md — the `gator init` handoff document
     charterignore: Path
     scripts_dir: Path
     procedures_dir_shipped: Path
@@ -413,6 +415,7 @@ def get_gator_paths(repo_root):
         # Shipped content (layout-dependent, per-path fallback on mixed)
         constitution=_shipped_file("constitution.md"),
         startup_guide=_shipped_file("gator-start-up.md"),
+        bootstrap=_shipped_file("GATOR_INIT.md"),
         charterignore=_shipped_file(".charterignore"),
         scripts_dir=_shipped_dir("scripts"),
         procedures_dir_shipped=_shipped_dir("procedures"),

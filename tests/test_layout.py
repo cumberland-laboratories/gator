@@ -1217,3 +1217,64 @@ class TestMigrateDryRunGate:
         _json.loads(out)
         assert "gator migrate-layout (dry run)" not in out
         assert "currently resolves as:" not in out
+
+
+class TestBootstrapResolution:
+    """GATOR_INIT.md (gator-native entry point, 2026-10-08) is a shipped
+    root file: it resolves like constitution.md in every layout, a v2 repo
+    that predates it stays v2, and a flat-root copy on v2 is mixed."""
+
+    TEMPLATES_DIR = (
+        Path(__file__).parent.parent / "src" / "gator_command" / "templates"
+        / "gator-starter"
+    )
+
+    @pytest.mark.parametrize("layout_fixture,shipped_rel", [
+        ("v1_repo", ".gator/GATOR_INIT.md"),
+        ("v2_repo", ".gator/.includes/GATOR_INIT.md"),
+    ])
+    def test_bootstrap_resolves_beside_constitution(
+            self, request, layout_fixture, shipped_rel):
+        repo = request.getfixturevalue(layout_fixture)
+        (repo / shipped_rel).write_text("# Gator Init\n")
+        paths = gator_layout.get_gator_paths(repo)
+        assert paths.bootstrap == repo / shipped_rel
+        assert paths.bootstrap.parent == paths.constitution.parent
+        assert paths.layout == layout_fixture.split("_")[0]
+
+    def test_v2_without_bootstrap_stays_v2(self, v2_repo):
+        paths = gator_layout.get_gator_paths(v2_repo)
+        assert paths.layout == "v2"
+        assert not paths.bootstrap.exists()
+
+    def test_flat_root_bootstrap_on_v2_is_mixed(self, v2_repo):
+        (v2_repo / ".gator" / "GATOR_INIT.md").write_text("# misplaced\n")
+        assert gator_layout.resolve_gator_layout(v2_repo) == "mixed"
+
+    def test_both_layout_copies_classify_bootstrap_as_shipped(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "template_gator_layout", self.TEMPLATES_DIR / "scripts" / "gator_layout.py")
+        template_layout = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(template_layout)
+        assert "GATOR_INIT.md" in gator_layout.SHIPPED_ROOT_FILES
+        assert "GATOR_INIT.md" in template_layout.SHIPPED_ROOT_FILES
+
+    def test_update_adds_bootstrap_once_then_unchanged(self, v2_repo):
+        """`gator update` adds GATOR_INIT.md to a v2 repo that predates it,
+        under .includes/, and a second run plans it as unchanged."""
+        gator_dir = v2_repo / ".gator"
+        dest = gator_dir / ".includes" / "GATOR_INIT.md"
+
+        def bootstrap_action():
+            plan = _update.plan_updates(self.TEMPLATES_DIR, gator_dir, v2_repo)
+            entries = [e for e in plan if e[2] == dest]
+            assert len(entries) == 1, plan
+            return entries[0][0], plan
+
+        action, plan = bootstrap_action()
+        assert action == "add"
+        _update.execute_updates(plan)
+        assert dest.read_bytes() == (self.TEMPLATES_DIR / "GATOR_INIT.md").read_bytes()
+        assert not (gator_dir / "GATOR_INIT.md").exists()
+        assert bootstrap_action()[0] == "unchanged"

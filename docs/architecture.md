@@ -12,6 +12,7 @@ A governed project repo (after `gator gatorize .`):
 your-project/
   .gator/                      ← governance layer
     constitution.md            ← rules for AI agents
+    GATOR_INIT.md              ← entry document; `gator init` names it first
     charters/                  ← structured code maps
       INDEX.md                 ← charter routing table
       cross-cutting.md         ← multi-module invariants
@@ -26,9 +27,8 @@ your-project/
     inbox.md                   ← capture buffer
     status.json                ← machine-readable governance state
     whiteboard.md              ← hook findings
-  CLAUDE.md                    ← Claude Code entry point
-  AGENTS.md                    ← Codex entry point
-  GEMINI.md                    ← Gemini entry point
+  CLAUDE.md, AGENTS.md,        ← optional vendor files, owned by your
+    GEMINI.md                    repository; Gator never creates or edits them
 ```
 
 ## Data Flow
@@ -77,8 +77,7 @@ Templates and scripts refresh on upgrade. Your charters, knowledge base, and pro
 
 The constitutions and charters are the interface contract. Any model that can read markdown and follow instructions can operate the system:
 
-- **Claude Code** reads `CLAUDE.md` → constitution → charters
-- **Codex CLI** reads `AGENTS.md` → same constitution → same charters
-- **Gemini CLI** reads `GEMINI.md` → same constitution → same charters
+- **Any model** runs `gator init` → reads `GATOR_INIT.md` → constitution → charters
+- **Claude Code, Codex CLI, Gemini CLI** follow the same path. A repository can add a one-line pointer to `gator init` in its own `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`, but Gator does not depend on those files
 
 The governance layer is the constant. The AI model is the variable.

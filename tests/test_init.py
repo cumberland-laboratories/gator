@@ -289,3 +289,100 @@ class TestPrintBootSequenceConstitutionLine:
         (tmp_path / ".gator" / "constitution.md").write_text("could-be-anything\n", encoding="utf-8")
         out = self._run_boot_sequence(tmp_path, capsys)
         assert "modified from baseline" not in out
+
+
+# ---------------------------------------------------------------------------
+# Gator-native entry point — GATOR_INIT.md handoff (2026-10-08)
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).parent.parent
+TEMPLATE_INIT = TEMPLATES_DIR / "scripts" / "gator-init.py"
+
+
+def _load_template_init():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("template_gator_init", TEMPLATE_INIT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _v2_repo(tmp_path, with_bootstrap):
+    gator = tmp_path / ".gator"
+    includes = gator / ".includes"
+    (includes / "scripts").mkdir(parents=True)
+    (includes / "constitution.md").write_text("# c\n", encoding="utf-8")
+    (gator / "layout-version.json").write_text('{"layout": "v2"}\n', encoding="utf-8")
+    if with_bootstrap:
+        (includes / "GATOR_INIT.md").write_text("# Gator Init\n", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.fixture(params=["package", "template"])
+def init_copy(request):
+    """Both gator-init.py copies carry the same handoff."""
+    return init if request.param == "package" else _load_template_init()
+
+
+class TestSessionOpeningHandoff:
+    def test_bootstrap_is_named_first_when_present(self, tmp_path, init_copy):
+        repo = _v2_repo(tmp_path, with_bootstrap=True)
+        lines = init_copy.session_opening_directive(repo, gator_layout.get_gator_paths(repo))
+        joined = "\n".join(lines)
+        assert "session opening is not finished" in joined
+        assert "1. .gator/.includes/GATOR_INIT.md" in joined
+        assert "2. .gator/.includes/constitution.md" in joined
+        assert "3. .gator/mission.md" in joined
+        assert "gator update" not in joined
+
+    def test_legacy_repo_keeps_old_handoff_and_never_creates_bootstrap(
+            self, tmp_path, init_copy, capsys):
+        repo = _v2_repo(tmp_path, with_bootstrap=False)
+        paths = gator_layout.get_gator_paths(repo)
+        joined = "\n".join(init_copy.session_opening_directive(repo, paths))
+        assert "1. .gator/.includes/constitution.md" in joined
+        assert "2. .gator/mission.md" in joined
+        assert "GATOR_INIT.md" in joined and "`gator update` adds it" in joined
+        init_copy.print_json(repo, paths, {"status": "ok", "detail": "ok"},
+                             {"status": "ok", "detail": "ok"})
+        data = json.loads(capsys.readouterr().out)
+        assert data["session_opening"]["bootstrap"] is None
+        assert data["session_opening"]["bootstrap_present"] is False
+        assert not paths.bootstrap.exists()
+
+    def test_json_session_opening_lists_reads_in_order(self, tmp_path, init_copy, capsys):
+        repo = _v2_repo(tmp_path, with_bootstrap=True)
+        init_copy.print_json(repo, gator_layout.get_gator_paths(repo),
+                             {"status": "ok", "detail": "ok"},
+                             {"status": "ok", "detail": "ok"})
+        opening = json.loads(capsys.readouterr().out)["session_opening"]
+        assert opening == {
+            "bootstrap": ".gator/.includes/GATOR_INIT.md",
+            "bootstrap_present": True,
+            "reads": [
+                ".gator/.includes/GATOR_INIT.md",
+                ".gator/.includes/constitution.md",
+                ".gator/mission.md", ".gator/roadmap.md", ".gator/inbox.md",
+            ],
+        }
+
+
+class TestGatorInitDocument:
+    """GATOR_INIT.md is a pointer document, not a second constitution."""
+
+    TEMPLATE_DOC = TEMPLATES_DIR / "GATOR_INIT.md"
+    DOGFOOD_DOC = REPO_ROOT / ".gator" / ".includes" / "GATOR_INIT.md"
+
+    def test_dogfood_copy_is_byte_identical(self):
+        assert self.DOGFOOD_DOC.read_bytes() == self.TEMPLATE_DOC.read_bytes()
+
+    def test_points_to_canonical_sources(self):
+        text = self.TEMPLATE_DOC.read_text(encoding="utf-8")
+        for pointer in ("gator init", "constitution.md", "gator-start-up.md",
+                        "procedures/gator-loop-protocol.md", "gator loop status"):
+            assert pointer in text, pointer
+
+    @pytest.mark.parametrize("restated_rule", ["--max-seconds", "Executive Summary"])
+    def test_does_not_restate_protocol_rules(self, restated_rule):
+        """Single source: loop wait and submission rules live in the protocol."""
+        assert restated_rule not in self.TEMPLATE_DOC.read_text(encoding="utf-8")

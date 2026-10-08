@@ -5,7 +5,7 @@
 ## Owns
 
 - Cross-platform installation and upgrade of Gator governance into a target repository.
-- Scenario detection, template overlay, initial layout, managed agent-entry blocks, Git ignore rules, and dashboard registration.
+- Scenario detection, template overlay, initial layout (including the shipped `GATOR_INIT.md` entry document), Git ignore rules, and dashboard registration.
 - Explicit migration from legacy Memex content.
 - Initial vendor-hook settings merge.
 
@@ -39,6 +39,7 @@ Filesystem: target `.gator/` (W)
 <- installer `main()` and Memex morph
 -> template resolver, `copy_tree_overlay()`
 ! Shipped content lands under `.gator/.includes/` on v2; user-visible scaffolding remains at `.gator/` root.
+! Shipped root files copied here are `constitution.md`, `gator-start-up.md` and `GATOR_INIT.md` (the `gator init` handoff document). Keep this tuple aligned with `gator_layout.SHIPPED_ROOT_FILES` and `gator-update.TEMPLATE_FILES`.
 ! Overlay does not delete unknown user files.
 
 ### install_hooks(target)
@@ -69,22 +70,12 @@ Filesystem: `.gator/.gator-version` (W)
 ### find_managed_block() / classify_managed_block()
 File: src/gator_command/scripts/gatorize/managed_block.py
 Parse the single Gator sentinel region and classify absent, clean, modified, corrupted, legacy, or foreign state.
-<- installer, updater, managed-state repair
+<- `gator state status` (sentinels and legacy fingerprints, read-only); the installer and updater no longer call it
 ! Multiple/misaligned sentinels are corrupted state, never permission to replace the whole file.
 
-### render_managed_region() / render_entry_content()
-File: src/gator_command/scripts/gatorize/entry_points.py
-Render vendor-specific entry instructions from one managed baseline. Includes loop-join paragraph with bounded `gator loop wait --max-seconds 45` handoff (exit 3 = reissue, 0 = act, 2 = the loop ended; #53: a paused or blocked loop is not the end, so stay in the bounded wait), escalate-first ordering, and executive summary submission requirement (Dashboard extracts `## Executive Summary` for at-a-glance inspection).
-<- install, update, state repair
-! Preserve the `GATOR:BEGIN` / `GATOR:END` boundary and keep cross-vendor semantics equivalent. Loop-join content pinned by `TestWaitHandoffAlignment` in `tests/test_loop.py`. Executive summary requirement pinned by `TestExecutiveSummaryProducerPaths` in the same file.
+## TRIPWIRE: Native Agent Files Are Repository-Owned
 
-### action_install_entry_points() / upgrade_legacy_entry_point()
-File: src/gator_command/scripts/gatorize.py
-Create or upgrade CLAUDE.md, AGENTS.md, and GEMINI.md without overwriting content outside the managed region.
-Filesystem: root agent entry files (RW), backups for legacy/modified replacement (W)
-<- installer `main()`
-! Foreign and corrupted content is not silently replaced. Back up any user-bearing file before transformation.
-! `*.local.md` is machine-personal and never managed.
+`gatorize` never creates, prompts about, backs up, or edits `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `*.local.md` (gator-native entry point, 2026-10-08). The retired `gatorize/entry_points.py` (`render_entry_content()`, `upgrade_legacy_entry_point()`, `action_install_entry_points()` with its foreign-file backup-append-overwrite prompt and `*_ROLLBACK.md`) is gone. Loop-join and Executive Summary guidance lives only in the protocol, `/loop-join` and `GATOR_INIT.md` pointers. The pre-action summary states that these files are left untouched. The Gator entry document is `GATOR_INIT.md`, installed by `action_install_gator()`. The `.gitignore` entries for `*.local.md` remain (`ensure_repo_gitignore`) and are behavior-neutral. Pins: `TestGatorizeLeavesNativeFilesUntouched` in `tests/test_gatorize.py`.
 
 ### install_vendor_hooks()
 File: src/gator_command/scripts/gatorize/vendor_hooks.py
@@ -112,20 +103,20 @@ Filesystem: `~/.gator/dashboard-repos.json` (RW)
 File: src/gator_command/scripts/gatorize.py
 Resolve templates, show the pre-action summary, gate unsafe working trees, execute one scenario, and run the common post-install tail.
 <- `gator gatorize <target>`
--> scenario actions, hooks, entry points, registry
+-> scenario actions, hooks, registry
 ! Operate on the current branch; the retired `gator-install` branch workflow does not return.
 ! Noninteractive `--yes` changes prompting, not safety classification or corruption handling.
 
 ## Before Changing This Module
 
 - Exercise every install scenario and dirty-tree gate.
-- Verify user content, foreign entry files, and existing vendor commands survive.
+- Verify user content, native agent files (byte-for-byte), and existing vendor commands survive.
 - Check v2 layout plus user-visible scaffolding placement.
-- Run installer, layout, entry-point, hooks, registry, and install-cycle tests.
+- Run installer, layout, hooks, registry, and install-cycle tests.
 
 ## Connections
 
--> [Repo Update](scripts-repo-update.md) - shared hook and managed-block behavior
+-> [Repo Update](scripts-repo-update.md) - shared hook behavior and shipped root files
 -> [Layout Resolver](scripts-layout.md) - initial directory placement
 -> [Managed State](scripts-managed-state.md) - post-install classification and repair
 -> [Session Capture](scripts-session-capture.md) - installed vendor hook targets

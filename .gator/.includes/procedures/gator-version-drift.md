@@ -43,8 +43,8 @@ working). `git status` suddenly shows some or all of:
 2. **A new `.gator/runtime-pin.json`** (and possibly `policy-pin.json`).
 3. **Hook output that changed shape** — commits now print via
    `gator hook <name>` / the installed CLI instead of a repo script.
-4. **Modified managed blocks** in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`
-   and refreshed files under `.gator/.includes/`.
+4. **Refreshed files under `.gator/.includes/`**, including `GATOR_INIT.md`.
+   `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` are never changed by Gator.
 
 **This is `gator update` migrating the repo to the 2.9+ machine-side
 runtime. It is correct and intentional.** The one rule:
@@ -75,7 +75,7 @@ Everything below is the application of that split.
 
 ### Class A — shipped content (CLI-owned; never hand-merge)
 
-**Paths**: everything under `.gator/.includes/` (v2 layout) or the shipped files at `.gator/` root on v1 layouts (constitution, shipped procedures/reference-notes/scripts, `.charterignore`); the Gator-managed blocks in entry-point files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`); `.gator/.gator-version`.
+**Paths**: everything under `.gator/.includes/` (v2 layout) or the shipped files at `.gator/` root on v1 layouts (constitution, shipped procedures/reference-notes/scripts, `.charterignore`, `GATOR_INIT.md`); `.gator/.gator-version`. `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` are repository-owned, not Class A: resolve a conflict there like any other team file.
 
 **Rule**: on conflict, take **either side whole** (`git checkout --theirs <path>` or `--ours` — it genuinely does not matter which), complete the merge, then run `gator update` on the merged branch. The update overlays every shipped file to the canonical version for the installed CLI and re-stamps `.gator-version`. If the CLI itself is older than the newer branch's content came from, run `pipx upgrade gator-command` first, then `gator update`.
 
