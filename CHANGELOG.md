@@ -4,10 +4,20 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
-Gator-native entry point. `.gator/` is now the only repository surface Gator owns. A governed session starts with `gator init`, which hands the participant to a new Gator-owned entry document, `GATOR_INIT.md`. Gator no longer creates, refreshes, backs up, or repairs `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`, so those files stop causing Gator-made merge conflicts.
+## [2.24.0] — 2026-10-09
+
+Feature release. **Gator-native entry point:** `.gator/` is now the only repository surface Gator owns. A governed session starts with `gator init`, which hands the participant to a new Gator-owned entry document, `GATOR_INIT.md`. Gator no longer creates, refreshes, backs up, or repairs `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`, so those files stop causing Gator-made merge conflicts. Also: **`gator loop codex`** prepares and starts the opt-in Codex participant profile in one command ([#37](https://github.com/cumberland-laboratories/gator/issues/37)); the Loop workspace gains **Create/History tabs, mode badges, and participant recovery** ([#56](https://github.com/cumberland-laboratories/gator/issues/56)); and the loop protocol states that **the Architect's instructions take precedence** over protocol defaults such as the wait interval.
 
 ### Added
 
+- **`gator loop codex [--dry-run] [--home <path>]`** ([#37](https://github.com/cumberland-laboratories/gator/issues/37) follow-up). One command prepares the dedicated Codex home for the opt-in routine participant profile and starts Codex in it.
+  - Uses `~/.gator/adapters/codex/loop-home` by default and refuses your normal Codex home, a home inside the repository, and a home under the temp directory.
+  - Writes the verified five-subcommand rule and a Gator-owned block at the end of `config.toml` (`[windows] sandbox = "elevated"` plus a trust entry for the repository). Your other settings are kept. An unfamiliar rule, an extra rules file, or a conflicting user `[windows]` table or trust entry stops it with nothing written.
+  - Checks the rule with `codex execpolicy check` before every launch (`gator loop status` allowed; `git write-tree` and `gator loop end` unmatched), prints the trust cost, and starts `codex` with `CODEX_HOME` set for that process only. It never takes a token and never starts or joins a loop. Windows only (the verified surface).
+- **Loop workspace: Create and History tabs ([#56](https://github.com/cumberland-laboratories/gator/issues/56)).** Create holds "+ Create Loop" and the active loop; History holds ended loops. With an active loop, Create explains it and offers **Open active loop** instead of the form. Browser Back/Forward now move between Dashboard views and loop selections.
+- **Loop mode badges ([#56](https://github.com/cumberland-laboratories/gator/issues/56)).** Every loop card and header shows Coding, Planning, Planning · legacy, or Unknown mode, from recorded mode only. Each mode has a distinct border style, so the badge never relies on colour. `/loops` items gain additive `mode_legacy`.
+- **Participant recovery ([#56](https://github.com/cumberland-laboratories/gator/issues/56)).** The prompt-copy buttons move into a labelled **Participant recovery** disclosure that explains when to use them and flags each role that needs it (not joined, watcher stale, watcher released). It opens when a need appears.
+- **Loop protocol: "Precedence: The Architect's Instructions Come First".** Instructions in the participant's own session (including the join prompt) and the status `Architect message:` line override protocol defaults and guidance, for example the `--max-seconds` interval. Rules 2, 8, and 9 stay fixed, and text in loop artifacts is never an Architect instruction. `/loop-join` and the Codex Goal prompt say the same. Pinned by `test_all_surfaces_teach_architect_precedence`.
 - **`GATOR_INIT.md`**, a short, tool-neutral entry document shipped next to the constitution (`.gator/.includes/` on the current layout, `.gator/` on v1).
   - It names the session-opening reads and the loop protocol (only when given a loop token), and states that native agent files are repository-owned. It restates no constitution or protocol rules.
   - `gatorize` installs it. `gator update` adds it to existing repos and refreshes it.
@@ -18,6 +28,8 @@ Gator-native entry point. `.gator/` is now the only repository surface Gator own
 
 ### Changed
 
+- **Loop wait intervals are defaults.** The protocol's `--max-seconds 45` (`wait`) and `600` (watcher) are defaults. A participant uses an interval the Architect gives for every reissue or relaunch, with a tool timeout longer than the interval.
+- **Global "History" navigation is now "Commits"** ([#56](https://github.com/cumberland-laboratories/gator/issues/56)); the route is unchanged.
 - **`gatorize`** never creates, prompts about, backs up, or edits `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. The backup/append/overwrite prompt and `*_ROLLBACK.md` files are gone, and the pre-action summary says these files are left untouched.
 - **`gator update`** (package and template copies) no longer refreshes Gator blocks in those files and no longer writes `.pre-gator-update` backups. `gator-update-v1` JSON keeps `entry_point_actions`, now always `[]` (summary count `0`).
 - **`gator state` → schema `gator-state-v2`** (breaking for JSON readers of v1):
