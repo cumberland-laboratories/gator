@@ -25,21 +25,26 @@ Codex-sketches section retired; historical detail archived at
 `.gator/artifacts/2026-09-14-roadmap-shipped-history-archive.md`).
 Mechanical soft-cap check is #24.
 
-## Where we are (2026-09-20, post-v2.14.0)
+## Where we are (2026-10-09, post-v2.24.0)
 
-v2.14.0 shipped 2026-09-20 — structured decision lifecycle for
-`gator loop` (file-backed escalate/unblock, decision ledger,
-artifact format alignment, ESCALATE verdict discipline) plus
-"Delegating to Sub-Agents" constitution section. Closes issue #8.
-Seventh consecutive fully first-try green pipeline (v2.13.0 →
-v2.14.0).
+v2.24.0 shipped 2026-10-09 (Gator-native entry point, `gator loop
+codex`, Loop Create/History workspace #56, Architect precedence in
+the loop protocol). See `CHANGELOG.md` for release detail.
 
-Roadmap priorities — see `roadmap.md`:
+Next: the Codex sandboxed test temp root and profile-block
+preservation (#37 follow-up). Sketch:
+`vault/artifacts/2026-10-09-codex-sandbox-temp-and-profile-block-sketch.md`.
 
-1. Gator + Enterprise polished and ready for lots of users.
-2. Blueprints 2.0 Release B (feature-blueprint generation procedure).
-3. Gator Loop polish (#5 umbrella — #6, #7 remain open).
-4. Normalized transcript index (exploratory).
+Windows CI flakes seen during the 2.24.0 release (each passed on
+rerun; not yet filed):
+- `test_multi_session.py::TestPidWalker::test_walk_returns_at_least_one_ancestor_as_tuple`
+  (also seen in 2.23.0).
+- `test_loop_suspension.py::test_status_and_wait_keep_participant_in_loop[paused]`
+  (`JSONDecodeError` on captured status JSON).
+- `test_dashboard_ui/test_loop_workspace.py::test_inflight_copy_blocked_by_terminal_race`
+  (Playwright 15 s timeout on `.repo-file-item`).
+
+Roadmap priorities — see `roadmap.md`.
 
 ## Open backlog (GitHub Issues)
 

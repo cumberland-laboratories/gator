@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-09-20._ Current strategy, priorities, and planned work.
+_Updated 2026-10-09._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,13 +11,12 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.14.0 (2026-09-20) — **seven
-consecutive fully first-try green pipelines** (v2.13.0 → v2.14.0).
-v2.14.0 ships structured decision lifecycle for `gator loop`
-(file-backed escalate/unblock, decision ledger, artifact format
-alignment, ESCALATE verdict discipline) plus the "Delegating to
-Sub-Agents" constitution section. Closes
-[issue #8](https://github.com/cumberland-laboratories/gator/issues/8).
+**Latest released version**: v2.24.0 (2026-10-09) — Gator-native
+entry point (`GATOR_INIT.md`; Gator no longer manages
+`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), `gator loop codex` (#37
+follow-up), Loop Create/History workspace (#56), and Architect
+precedence in the loop protocol. Release detail lives in
+`CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 

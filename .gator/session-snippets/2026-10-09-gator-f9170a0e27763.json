@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop protocol: reword the wait-interval tool-limit note (no participant time language)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "loop",
+    "protocol"
+  ],
+  "commit": "f9170a0e27763867abf8920d8ff6747299bca6da",
+  "short_commit": "f9170a0",
+  "snippet_id": "snippet-f9170a0e27763",
+  "session_group_key": "anthropic:dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "7c82551d736a1b417e2418e4c92c6c683d5fdb46",
+  "started_at": "2026-10-09T00:29:22Z",
+  "ended_at": "2026-10-09T15:47:32Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/procedures/gator-loop-protocol.md",
+    ".gator/session-snippets/2026-10-09-gator-7c82551d736a1.json",
+    "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+  ],
+  "notes": [
+    "Loop protocol (both byte-identical copies): the Step 1 note on Architect wait intervals said \"set a longer tool timeout\", which broke the #47 \"participants never see time\" pin (`test_loop_attention.py::TestParticipantDocs::test_time_words_only_in_legacy_note`) on all four `source-ci` platforms. Reworded to \"raise its time limit\"; meaning unchanged (the agent's own tool-call limit, not a loop deadline). All loop/init/layout suites pass locally (1060)."
+  ],
+  "transcript_session_id": "dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "transcript_ref": null
+}
