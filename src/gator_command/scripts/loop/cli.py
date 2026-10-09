@@ -1468,6 +1468,16 @@ def _cmd_tail(args):
         print("  Tail stopped.")
 
 
+def _cmd_codex(args):
+    """`gator loop codex`: opt-in Codex participant launcher (#37 follow-up).
+
+    Never starts, joins, or authorizes a loop and takes no token; see
+    codex_launcher.py. Imported lazily so other subcommands are unaffected.
+    """
+    from codex_launcher import main as codex_main
+    sys.exit(codex_main(args))
+
+
 def _cmd_list(args):
     from session import find_gator_root, load_session, checkpoint_summary
 
@@ -1791,6 +1801,16 @@ def main(argv=None):
     p_tail = sub.add_parser("tail", help="Follow loop events in real time")
     p_tail.add_argument("--loop", required=True, help="Loop ID")
 
+    # codex (opt-in participant launcher, #37 follow-up)
+    p_codex = sub.add_parser(
+        "codex",
+        help="Launch Codex with the opt-in loop participant profile "
+             "(see codex-routine-participant-profile.md)")
+    p_codex.add_argument("--dry-run", action="store_true",
+                         help="Print the home, rule, trust entry and launch without writing or launching")
+    p_codex.add_argument("--home", default=None,
+                         help="Dedicated CODEX_HOME (default: ~/.gator/adapters/codex/loop-home)")
+
     # list
     p_list = sub.add_parser("list", help="List all loop sessions")
     p_list.add_argument("--json", action="store_true", help="JSON output")
@@ -1817,6 +1837,7 @@ def main(argv=None):
         "wait": _cmd_wait,
         "participant": _cmd_participant,
         "tail": _cmd_tail,
+        "codex": _cmd_codex,
         "list": _cmd_list,
     }
 

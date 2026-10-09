@@ -50,6 +50,47 @@ command.
 Evidence: Gator issue #37, spike artifact
 `2026-10-08-codex-routine-profile-spike.md` in the Gator source repository.
 
+## Quick Setup: `gator loop codex`
+
+From a governed repository, one command prepares the dedicated home and
+starts Codex in it:
+
+```
+gator loop codex
+```
+
+It does this on every run:
+
+1. Uses the dedicated home `~/.gator/adapters/codex/loop-home` (or
+   `--home <path>`). It refuses your normal Codex home, a home inside the
+   repository, and a home under the temp directory.
+2. Writes `rules\default.rules` with exactly the rule in Setup step 3, and a
+   Gator-owned block at the end of `config.toml` with
+   `[windows] sandbox = "elevated"` and a trust entry for this repository.
+   Your other settings in that `config.toml` are kept.
+3. Checks the rule with `codex execpolicy check`: `gator loop status` must be
+   allowed, and `git write-tree` and `gator loop end` must match nothing.
+4. Prints the trust cost, then starts `codex` with `CODEX_HOME` set for that
+   Codex process only. Your terminal's environment does not change.
+
+On the first run Codex asks you to sign in for this home. Gator does not copy
+or read your normal Codex login. Then continue as usual:
+`gator loop join` with your role prompt, and optionally `/goal` (see
+`codex-loop-participant.md`).
+
+`gator loop codex --dry-run` shows the home, the rule, the trust entry, and the
+launch without writing or starting anything.
+
+The command never starts, joins, or authorizes a loop, and it never takes a
+token. It **stops without changes** when it finds a rule file it did not
+write, another file in `rules\`, your own `[windows]` table or trust entry for
+this repository outside its block, or a failed rule check. In that case use
+the manual Setup below. It runs only on Windows, the verified surface. A Codex
+version other than the verified one prints a warning; the rule check still
+runs.
+
+To remove it, delete `~/.gator/adapters/codex/loop-home`.
+
 ## Setup
 
 Codex reads rules from the `rules/` folder of its config home. A `--profile`

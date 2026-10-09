@@ -1,6 +1,6 @@
 # Charter: Gator Loop
 
-**Covers**: `src/gator_command/scripts/loop/__init__.py`, `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/loop/liveness.py`, `src/gator_command/scripts/loop/gitsnap.py`, `src/gator_command/scripts/gator-loop.py`
+**Covers**: `src/gator_command/scripts/loop/__init__.py`, `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/loop/liveness.py`, `src/gator_command/scripts/loop/gitsnap.py`, `src/gator_command/scripts/loop/codex_launcher.py`, `src/gator_command/scripts/gator-loop.py`
 
 ## Owns
 
@@ -11,15 +11,16 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `events.py` owns event emission (append to events.jsonl), event tailing, and human-readable formatting
 - `submit.py` owns the ten submit handlers: submit-draft, submit-implementation (coding, #41), submit-review, escalate, unblock, extend, reopen (#41), pause, interject, end; plus the coding implementation-artifact helpers (required headings, the CLI-owned Commit State section)
 - `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop (attention recording for attention-mode loops, #47; legacy timeout enforcement otherwise), platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
-- `cli.py` owns argparse subcommand routing for all 16 loop subcommands (start [--mode planning|coding, --from-loop], status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant {watch,status}, tail, list)
+- `cli.py` owns argparse subcommand routing for all 17 loop subcommands (start [--mode planning|coding, --from-loop], status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant {watch,status}, tail, codex [--dry-run, --home], list)
 - `liveness.py` owns the private participant-liveness sidecar (#36): the per-worktree store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`, its strict schema allowlist, atomic persistence, the leaf lock, and the pure helpers `state_key()` / `classify()` / `prune()` / `redact()`. Operational data only; never loop authority
 - `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue) or an explicit error code. Read-only toward refs, index, and worktree
+- `codex_launcher.py` owns the opt-in Codex participant launcher (#37 follow-up). It prepares a dedicated `CODEX_HOME` with the canonical rule and the Gator-owned `config.toml` block. Read-only plan versus apply. It has no imports from the loop state modules, so it never affects loop authority
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
 ## Does Not Own
 
 - Dashboard server-side logic — the dashboard calls into this module via `init_loop()` and `watch_loop()` but host registry, route dispatch, and HTTP handling belong to the dashboard charter
-- Auto-launching of agent sessions
+- Auto-launching of agent sessions, except the explicit, opt-in `gator loop codex` launcher (`codex_launcher.py`). It prepares a dedicated Codex home and starts an interactive Codex session, but never starts, joins, or authorizes a loop, and never handles a token
 - Code implementation loop (this is planning-phase only)
 - Git commits of session residue (always human/agent-initiated)
 
@@ -654,7 +655,7 @@ Filesystem: `session.json` (RW via lock), `events.jsonl` (W via lock)
 
 ### main(argv)
 File: `src/gator_command/scripts/loop/cli.py`
-Argparse dispatcher for 16 subcommands: start, status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant, tail, list.
+Argparse dispatcher for 17 subcommands: start, status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant, tail, codex, list. `codex` routes to `_cmd_codex`, which lazily imports `codex_launcher.main` and exits with its code; it has no token argument.
 Filesystem: none (delegates to handlers)
 <- `gator-loop.py`
 
@@ -771,6 +772,40 @@ Polls until terminal / this role's turn. Returns `(session, wake_reason)` with w
 Filesystem: `session.json` (R)
 <- `_cmd_wait()`
 ! Read-only — never writes session or events. Bounded mode uses a monotonic deadline and caps each sleep at the remaining time, so it cannot overrun by a full poll interval; the session is re-read after the final sleep, so a turn change at the deadline still wins over `still_waiting`. `clock`/`sleep` are injectable test seams.
+
+### codex_launcher: default_home() / validate_home(home, repo_root, env, tempdir=None) / trust_key(repo_root, platform)
+File: `src/gator_command/scripts/loop/codex_launcher.py`
+`default_home()` is `~/.gator/adapters/codex/loop-home`. `validate_home` resolves the home and refuses: (inside) the normal Codex home (`~/.codex` or the caller's `CODEX_HOME`), inside the governed repo, and under the temp directory. `trust_key` gives the `[projects.'<key>']` key: on Windows the lowercase backslash form Codex itself writes (spike §8.8, the `\\?\` prefix stripped); otherwise the resolved POSIX path. A `'` or newline in the path is refused.
+Filesystem: none (path arithmetic only)
+! Never read anything in the normal Codex home; these checks compare paths only.
+
+### codex_launcher: render_config(existing_text, repo_key, platform) / _split_block / _outside_conflicts / _parse_check
+File: `src/gator_command/scripts/loop/codex_launcher.py`
+Pure. It keeps every byte outside the one Gator-owned block (`BLOCK_BEGIN` … `BLOCK_END`) and regenerates the block **at the end** of `config.toml` with the union of its own trusted keys and the current repo, plus `[windows] sandbox = "elevated"` on Windows. Line endings follow the existing file.
+! Fail-closed (`ProfileError`, nothing written) on: malformed or duplicate markers; a user `[windows]` table or `windows.` dotted key outside the block (Windows); a user `[projects…]` header containing the same trust key; an unquotable key. On Python >= 3.11, `tomllib` must parse the result.
+! The block stays last so its table headers cannot capture user top-level keys. Only Gator's own generated `[projects.'…']` lines are parsed. There is no TOML framework.
+
+### codex_launcher: plan_preparation(home, repo_root, platform) / apply_preparation(actions) / render_dry_run(actions, home, repo_root, platform)
+File: `src/gator_command/scripts/loop/codex_launcher.py`
+`plan_preparation` is read-only. It returns ordered `mkdir` / `write` / `keep` actions for the home, `rules/`, `rules/default.rules` (`RULE_BYTES`) and `config.toml`. `apply_preparation` executes exactly those actions (temp file + `os.replace`, UTF-8 without a BOM). `render_dry_run` previews the home, repo, trust entry, actions, rule text and launch.
+Filesystem: dedicated home (R in plan, W in apply only)
+! Rule ownership: an absent file → write; `RULE_BYTES` → keep; a `KNOWN_GENERATED_RULES` form → normalize. Anything else, or any other file in `rules/`, fails closed: Codex may load it and widen the allow-list.
+! `RULE_TEXT` must stay byte-identical to the rule in `reference-notes/codex-routine-participant-profile.md` (pinned by `tests/test_loop_codex_launcher.py`). It is the verified five-subcommand allow-list; never widen it here.
+! A BOM on an existing `config.toml` is dropped (Codex expects UTF-8 without a BOM). All other outside bytes are preserved.
+
+### codex_launcher: codex_version(codex, run) / check_policy(codex, rules_path, env, run) / child_env(env, home) / launch(codex, repo_root, env, run)
+File: `src/gator_command/scripts/loop/codex_launcher.py`
+`check_policy` runs `codex execpolicy check --rules <home>/rules/default.rules -- …` for the three `POLICY_PROBES`: `gator loop status` must report `decision == "allow"`; `git write-tree` and `gator loop end` must report `matchedRules == []`. A non-zero exit, non-JSON output or any other result raises `ProfileError` before launch. `child_env` returns a copy of the environment with `CODEX_HOME` set. `launch` runs `[codex]` (an argument list, no shell) with `cwd=repo_root` and returns the exit code. `codex_version` parses `codex --version`; None on failure.
+! The probes use literal placeholder arguments (`--token x`); no real token is ever passed, and no command line or environment carries one.
+! The probe and launch children receive the dedicated `CODEX_HOME`; the caller's `os.environ` is never mutated.
+
+### codex_launcher: main(args, *, env=None, platform=None, which=shutil.which, run=subprocess.run, cwd=None, tempdir=None)
+File: `src/gator_command/scripts/loop/codex_launcher.py`
+`gator loop codex` orchestration. Order: governed repo (`find_gator_root`) → Windows-only check → `validate_home` → `plan_preparation` → (`--dry-run`: print `render_dry_run`, return 0) → `which("codex")` → version (warns, does not refuse, when not `VERIFIED_CODEX_VERSION`) → `apply_preparation` → `check_policy` → trust summary + `TRUST_WARNING` (+ `SIGN_IN_NOTE` when `<home>/auth.json` is absent) → `launch`. It returns Codex's exit code. A non-zero exit with no `auth.json` prints the `codex login` recovery hint naming the resolved `CODEX_HOME`.
+<- `cli._cmd_codex`
+! Every refusal (`ProfileError`: not governed, non-Windows, bad home, conflict, missing Codex, failed boundary) prints the manual-note pointer and returns 1. All refusals before `apply_preparation` write nothing.
+! `auth.json` is checked for existence only, never read. Nothing in the normal Codex home is read or written.
+! The injected seams (`env`, `platform`, `which`, `run`, `cwd`, `tempdir`) exist for tests. The CLI passes none.
 
 ### LivenessStore(store_dir, loop_id) — read() / with_lock(fn) / delete()
 File: `src/gator_command/scripts/loop/liveness.py`

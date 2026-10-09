@@ -96,6 +96,7 @@ gator_command = [
     "scripts/gator-loop.py",
     "scripts/loop/__init__.py",
     "scripts/loop/cli.py",
+    "scripts/loop/codex_launcher.py",
     "scripts/loop/events.py",
     "scripts/loop/gitsnap.py",
     "scripts/loop/host.py",
