@@ -158,6 +158,7 @@
     generation: 0,
     mountId: 0,
     mode: "create",       // "create" | "handoff" | "inspect"
+    view: "create",       // #56 sidebar tab: "create" | "history"
     handoffId: null,       // loop_id during handoff
     promptEpoch: 0,        // incremented on terminal — invalidates in-flight copies
     loops: [],             // cached loop list
@@ -174,6 +175,7 @@
     _state.generation++;
     _state.mountId++;
     _state.mode = "create";
+    _state.view = "create";
     _state.handoffId = null;
     _state.loops = [];
     _state.render = null;
@@ -340,6 +342,36 @@
     return '<span class="loop-badge ' + cls + '">' + escHtml(label) + '</span>';
   }
 
+  // ── mode projection (#56) ──────────────────────────────────────────────────
+  //
+  // The ONLY place loop-mode text is decided. Accepts a /loops item (mode
+  // normalized, plus mode_legacy) or a /status body (raw mode). It reads
+  // recorded mode facts only — never feature names, filenames or artifacts.
+  var PLANNING_RAW_MODES = { planning: true, "planning-only": true };
+
+  function loopModeInfo(src) {
+    var s = src || {};
+    var mode = s.mode;
+    var legacy;
+    if (typeof s.mode_legacy === "boolean") {
+      legacy = s.mode_legacy;
+    } else {
+      legacy = mode === undefined || mode === null;
+    }
+    if (mode === "coding") return { key: "coding", label: "Coding" };
+    if (legacy) return { key: "legacy", label: "Planning · legacy" };
+    if (PLANNING_RAW_MODES[mode]) return { key: "planning", label: "Planning" };
+    return { key: "unknown", label: "Unknown mode" };
+  }
+
+  // Text plus a per-mode border style (see .loop-mode-badge), never colour
+  // alone.
+  function modeBadge(info) {
+    return '<span class="loop-mode-badge" data-mode="' + escHtml(info.key)
+      + '" aria-label="' + escHtml("Loop mode: " + info.label) + '">'
+      + escHtml(info.label) + '</span>';
+  }
+
   function isTerminal(stage) {
     return !!TERMINAL_STAGES[stage];
   }
@@ -431,30 +463,190 @@
     return { active: active, history: history };
   }
 
+  // ── #56 browser history: Loop sub-state ─────────────────────────────────
+  //
+  // The shell (dashboard.js) owns history; this view only contributes its
+  // tab/selection as sub-state. Pushes happen on user selections only;
+  // mount records its landing state with a replace; restore never pushes.
+  // The view registers no global listener.
+
+  function currentSub() {
+    var handoff = _state.mode === "handoff";
+    return {
+      view: _state.view,
+      mode: handoff ? "inspect" : _state.mode,
+      loopId: handoff ? _state.handoffId : _state.selectedLoopId,
+    };
+  }
+
+  function shellPush() {
+    var shell = window.GatorShell;
+    if (shell && typeof shell.pushSubState === "function") shell.pushSubState(currentSub());
+  }
+
+  function shellReplace() {
+    var shell = window.GatorShell;
+    if (shell && typeof shell.replaceSubState === "function") shell.replaceSubState(currentSub());
+  }
+
+  function findLoop(loops, loopId) {
+    for (var i = 0; i < loops.length; i++) {
+      if (loops[i].loop_id === loopId) return loops[i];
+    }
+    return null;
+  }
+
+  // Apply a recorded sub-state against the current loop list. Returns false
+  // (state untouched) when it cannot be applied, e.g. the loop is gone.
+  // The recorded tab is restored as recorded, in both modes: a History tab
+  // chosen while an active loop stays inspected comes back as History.
+  function applySub(sub, loops) {
+    if (!sub) return false;
+    if (sub.mode === "inspect") {
+      var loop = sub.loopId ? findLoop(loops, sub.loopId) : null;
+      if (!loop) return false;
+      _state.mode = "inspect";
+      _state.selectedLoopId = loop.loop_id;
+    } else {
+      _state.mode = "create";
+      _state.selectedLoopId = null;
+    }
+    _state.view = sub.view === "history" ? "history" : "create";
+    _state.handoffId = null;
+    return true;
+  }
+
+  function applyDefaultSelection(loops) {
+    var classified = classifyLoops(loops);
+    _state.view = "create";
+    _state.handoffId = null;
+    if (classified.active.length > 0) {
+      // Active loop exists — select it
+      _state.mode = "inspect";
+      _state.selectedLoopId = classified.active[0].loop_id;
+    } else {
+      // No active loop — default to create
+      _state.mode = "create";
+      _state.selectedLoopId = null;
+    }
+  }
+
+  // Move focus to the main region's heading (after Open active loop or a
+  // back/forward restore).
+  function focusMainHeading() {
+    var mainEl = _state.container && _state.container.querySelector("#loop-main-content");
+    var h = mainEl && mainEl.querySelector("h3");
+    if (!h) return;
+    if (h.getAttribute("tabindex") !== "-1") h.setAttribute("tabindex", "-1");
+    h.focus();
+  }
+
+  function selectLoop(loopId) {
+    var loop = findLoop(_state.loops, loopId);
+    _state.mode = "inspect";
+    _state.selectedLoopId = loopId;
+    _state.handoffId = null;
+    if (loop) _state.view = isTerminal(loop.stage) ? "history" : "create";
+    _state.generation++;
+    renderLoopSidebar(_state.loops, _state.container);
+    shellPush();
+    return loadSelectedLoop();
+  }
+
+  // ── #56 sidebar tabs: Create / History ──────────────────────────────────
+  //
+  // The tablist is built once per mount and survives polls (only the panel
+  // contents are re-rendered), so a focused tab keeps focus. Selection is
+  // shown by aria-selected plus weight and underline, never colour alone.
+
+  var LOOP_TABS = ["create", "history"];
+
+  function buildSidebarTabs(listEl) {
+    listEl.innerHTML =
+      '<div class="loop-subnav" role="tablist" aria-label="Loop workspace">'
+      + '<button type="button" class="loop-subnav-tab" role="tab" id="loop-tab-create" '
+      +   'data-tab="create" aria-controls="loop-panel-create">Create</button>'
+      + '<button type="button" class="loop-subnav-tab" role="tab" id="loop-tab-history" '
+      +   'data-tab="history" aria-controls="loop-panel-history">History</button>'
+      + '</div>'
+      + '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-create" '
+      +   'aria-labelledby="loop-tab-create"></div>'
+      + '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-history" '
+      +   'aria-labelledby="loop-tab-history"></div>';
+    var tablist = listEl.querySelector(".loop-subnav");
+    tablist.addEventListener("click", function (e) {
+      var tab = e.target.closest(".loop-subnav-tab");
+      if (tab) switchTab(tab.dataset.tab, false);
+    });
+    tablist.addEventListener("keydown", function (e) {
+      var idx = LOOP_TABS.indexOf(_state.view);
+      var next = null;
+      if (e.key === "ArrowRight") next = LOOP_TABS[(idx + 1) % LOOP_TABS.length];
+      else if (e.key === "ArrowLeft") next = LOOP_TABS[(idx - 1 + LOOP_TABS.length) % LOOP_TABS.length];
+      else if (e.key === "Home") next = LOOP_TABS[0];
+      else if (e.key === "End") next = LOOP_TABS[LOOP_TABS.length - 1];
+      if (next === null) return;
+      e.preventDefault();
+      switchTab(next, true);
+    });
+  }
+
+  // Attributes are written only when they differ (polls stay quiet).
+  function applyTabState(listEl) {
+    LOOP_TABS.forEach(function (name) {
+      var selected = name === _state.view;
+      var tab = listEl.querySelector("#loop-tab-" + name);
+      var panel = listEl.querySelector("#loop-panel-" + name);
+      var sel = selected ? "true" : "false";
+      var ti = selected ? "0" : "-1";
+      if (tab.getAttribute("aria-selected") !== sel) tab.setAttribute("aria-selected", sel);
+      if (tab.getAttribute("tabindex") !== ti) tab.setAttribute("tabindex", ti);
+      if (panel.hidden === selected) panel.hidden = !selected;
+    });
+  }
+
+  // Create shows the creation workspace (or, with an active loop, the
+  // explanation that links it). History only changes the list; the main
+  // content stays until a completed loop is chosen.
+  function switchTab(name, fromKeyboard) {
+    var container = _state.container;
+    if (!container || LOOP_TABS.indexOf(name) === -1) return;
+    var changed = name !== _state.view;
+    _state.view = name;
+    if (name === "create" && _state.mode !== "create") {
+      _state.mode = "create";
+      _state.selectedLoopId = null;
+      _state.handoffId = null;
+      _state.generation++;
+      changed = true;
+      renderLoopSidebar(_state.loops, container);
+      renderMainContent(container);
+    } else {
+      var listEl = container.querySelector("#loop-sidebar-nav");
+      if (listEl && listEl.querySelector(".loop-subnav")) applyTabState(listEl);
+    }
+    if (changed) shellPush();
+    if (fromKeyboard) {
+      var tab = container.querySelector("#loop-tab-" + name);
+      if (tab) tab.focus();
+    }
+  }
+
   function renderLoopSidebar(loops, container) {
     var listEl = container.querySelector("#loop-sidebar-nav");
     if (!listEl) return;
+    if (!listEl.querySelector(".loop-subnav")) buildSidebarTabs(listEl);
 
     var classified = classifyLoops(loops);
-    var hasActive = classified.active.length > 0;
     var html = "";
 
-    // Create Loop action
-    if (hasActive) {
-      html += '<div class="loop-sidebar-create loop-sidebar-create-disabled">'
-        + '<span class="loop-sidebar-create-label">Create Loop</span>'
-        + '<div class="loop-sidebar-create-conflict">Active loop in progress &mdash; '
-        + '<a class="loop-sidebar-open-active" href="#">Open active loop</a>'
-        + '</div></div>';
-    } else {
-      var createSelected = _state.mode === "create" || _state.mode === "handoff"
-        ? " loop-sidebar-item-selected" : "";
-      html += '<button class="loop-sidebar-create' + createSelected + '">'
-        + '<span class="loop-sidebar-create-label">+ Create Loop</span>'
-        + '</button>';
-    }
-
-    // Active section
+    // Create panel: the Create Loop action and the active loop(s). The
+    // active loop is never listed in History.
+    var createSelected = _state.mode === "create" || _state.mode === "handoff"
+      ? " loop-sidebar-item-selected" : "";
+    html += '<button type="button" class="loop-sidebar-create' + createSelected + '">'
+      + '<span class="loop-sidebar-create-label">+ Create Loop</span>'
+      + '</button>';
     html += '<div class="loop-sidebar-section">'
       + '<div class="loop-sidebar-section-header">Active</div>';
     if (classified.active.length === 0) {
@@ -465,9 +657,10 @@
       }
     }
     html += '</div>';
+    listEl.querySelector("#loop-panel-create").innerHTML = html;
 
-    // History section
-    html += '<div class="loop-sidebar-section">'
+    // History panel: terminal loops only, newest first.
+    html = '<div class="loop-sidebar-section">'
       + '<div class="loop-sidebar-section-header">History</div>';
     if (classified.history.length === 0) {
       html += '<div class="loop-sidebar-empty">No completed loops</div>';
@@ -477,45 +670,29 @@
       }
     }
     html += '</div>';
+    listEl.querySelector("#loop-panel-history").innerHTML = html;
 
-    listEl.innerHTML = html;
+    applyTabState(listEl);
 
     // Wire Create Loop click
-    var createBtn = listEl.querySelector(".loop-sidebar-create:not(.loop-sidebar-create-disabled)");
+    var createBtn = listEl.querySelector(".loop-sidebar-create");
     if (createBtn) {
       createBtn.addEventListener("click", function () {
         _state.mode = "create";
+        _state.view = "create";
         _state.selectedLoopId = null;
         _state.handoffId = null;
         _state.generation++;
         renderLoopSidebar(loops, container);
         renderMainContent(container);
-      });
-    }
-
-    // Wire "Open active loop" link in conflict state
-    var openActiveLink = listEl.querySelector(".loop-sidebar-open-active");
-    if (openActiveLink && classified.active.length > 0) {
-      openActiveLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        _state.mode = "inspect";
-        _state.selectedLoopId = classified.active[0].loop_id;
-        _state.handoffId = null;
-        _state.generation++;
-        renderLoopSidebar(loops, container);
-        loadSelectedLoop();
+        shellPush();
       });
     }
 
     // Wire loop card clicks
     listEl.querySelectorAll(".loop-sidebar-card").forEach(function (card) {
       card.addEventListener("click", function () {
-        _state.mode = "inspect";
-        _state.selectedLoopId = card.dataset.loopId;
-        _state.handoffId = null;
-        _state.generation++;
-        renderLoopSidebar(loops, container);
-        loadSelectedLoop();
+        selectLoop(card.dataset.loopId);
       });
     });
   }
@@ -573,7 +750,7 @@
     return '<div class="loop-sidebar-card loop-card' + selected + '" data-loop-id="' + escHtml(loop.loop_id) + '">'
       + '<div class="loop-card-header">'
       + '<span class="loop-card-feature">' + escHtml(loop.feature || loop.loop_id) + '</span>'
-      + stageBadge(loop.stage)
+      + '<span class="loop-card-badges">' + modeBadge(loopModeInfo(loop)) + stageBadge(loop.stage) + '</span>'
       + '</div>'
       + '<div class="loop-card-attention">' + (loop.attention_notified ? ATTENTION_MARKER_TEXT : "") + '</div>'
       + '<div class="loop-card-meta">'
@@ -585,9 +762,36 @@
 
   // ── Module 3: Creation workspace ───────────────────────────────────────────
 
+  // #56: with an active loop, Create explains and links it instead of
+  // offering a form that cannot start (one loop runs at a time).
+  function renderActiveLoopExplanation(mainEl, active) {
+    var loop = active[0];
+    var info = loopModeInfo(loop);
+    var stageLabel = STAGE_LABELS[loop.stage] || loop.stage || "";
+    mainEl.innerHTML = '<div class="loop-create-active">'
+      + '<h3 class="loop-create-title">Create Loop</h3>'
+      + '<div class="loop-create-active-card">'
+      + '<div class="loop-create-active-badges">' + modeBadge(info) + stageBadge(loop.stage) + '</div>'
+      + '<p class="loop-create-active-text">A <strong>' + escHtml(info.label) + '</strong> loop \u2018'
+      +   escHtml(loop.feature || loop.loop_id) + '\u2019 is active (' + escHtml(stageLabel)
+      +   '). Only one loop runs at a time.</p>'
+      + '<p class="loop-create-active-counter">' + escHtml(sidebarCounterText(loop)) + '</p>'
+      + '<button type="button" class="loop-sidebar-open-active">Open active loop</button>'
+      + '</div></div>';
+    mainEl.querySelector(".loop-sidebar-open-active").addEventListener("click", function () {
+      selectLoop(loop.loop_id).then(focusMainHeading);
+    });
+  }
+
   function renderCreateWorkspace(container) {
     var mainEl = container.querySelector("#loop-main-content");
     if (!mainEl) return;
+
+    var activeLoops = classifyLoops(_state.loops || []).active;
+    if (activeLoops.length > 0) {
+      renderActiveLoopExplanation(mainEl, activeLoops);
+      return;
+    }
 
     var html = '<div class="loop-create-workspace">'
       + '<h3 class="loop-create-title">Create Loop</h3>';
@@ -1107,9 +1311,11 @@
           e.preventDefault();
           var activeId = result.loop_id;
           _state.mode = "inspect";
+          _state.view = "create";
           _state.selectedLoopId = activeId;
           _state.handoffId = null;
           _state.generation++;
+          shellPush();
           refreshSidebarAndMain();
         });
       } else {
@@ -1122,9 +1328,11 @@
     // Success — transition to handoff
     var newLoopId = result.loop_id;
     _state.mode = "handoff";
+    _state.view = "create";
     _state.handoffId = newLoopId;
     _state.selectedLoopId = newLoopId;
     _state.generation++;
+    shellPush();  // recorded as inspect of the new loop
     refreshSidebarAndMain();
   }
 
@@ -1183,6 +1391,7 @@
       _state.handoffId = null;
       _state.generation++;
       renderLoopSidebar(_state.loops, container);
+      shellPush();
       loadSelectedLoop();
     });
 
@@ -1394,6 +1603,7 @@
       !!(roles.draftor && roles.draftor.joined),
       !!(roles.reviewer && roles.reviewer.joined),
       checkpointCounters(status),
+      loopModeInfo(status).key,
     ]);
   }
 
@@ -1488,6 +1698,8 @@
       lastEventKey: null,
       timelineRendered: false,
       liveness: { built: false, actionFp: {}, lastView: null, lastGood: false },
+      statusRoles: null,    // #56: status.roles of the last render (recovery need)
+      recovery: null,       // #56: {needKey} while the recovery disclosure is built
       codingLive: null,     // last /snapshot result for an approved coding loop
       attentionState: "",  // #47: derived attention notice state (write on change)
     };
@@ -1537,9 +1749,11 @@
 
     patchCodingRegion(snap, status);
 
+    snap.statusRoles = status.roles || {};
     patchRegion(snap, "prompts", terminal ? "terminal" : "live", function () {
-      renderPromptSection(terminal, root);
+      renderPromptSection(terminal, root, snap);
     });
+    applyRecovery(snap);
 
     patchRegion(snap, "controls", controlsFingerprint(status, terminal), function () {
       renderControls(status, root);
@@ -1805,21 +2019,100 @@
     });
   }
 
-  function renderPromptSection(terminal, root) {
+  // ── participant recovery (#56) ──────────────────────────────────────────
+  //
+  // Copy prompts are a recovery tool, not a routine action: they live in a
+  // labelled disclosure that opens by itself only when a role needs one.
+  // The need comes from facts the browser already has: status.roles[r].joined
+  // and the allowlisted liveness state. A joined role with no watcher
+  // (not_registered, e.g. a `gator loop wait` participant) is never flagged
+  // as absent (#52).
+
+  var RECOVERY_GUIDANCE = "Use these prompts only to start a new participant "
+    + "session or reconnect one that dropped. Do not paste a prompt into a "
+    + "session that has already joined.";
+  var RECOVERY_WARNING = "The copied prompt carries a role credential. "
+    + "Paste only into the intended participant session.";
+  var RECOVERY_OK_TEXT = "Joined \u2014 no action needed";
+
+  function recoveryNeed(role, joined, livenessState) {
+    if (!joined) return "Has not joined yet.";
+    if (livenessState === "stale") {
+      return "Watcher is stale \u2014 reconnect if the session dropped.";
+    }
+    if (livenessState === "released") {
+      return "Watcher exited after a notification \u2014 reconnect if the session closed.";
+    }
+    return null;  // connected, not_registered, closed, unknown or unavailable
+  }
+
+  function renderPromptSection(terminal, root, snap) {
     var region = root.querySelector("#loop-region-prompts");
     if (terminal) {
       region.innerHTML = "";
+      if (snap) snap.recovery = null;
       return;
     }
-    region.innerHTML = '<div class="loop-prompt-section">'
-      + '<button class="loop-prompt-copy" data-role="draftor">Copy Draftor prompt</button>'
-      + '<button class="loop-prompt-copy" data-role="reviewer">Copy Reviewer prompt</button>'
-      + '</div>';
+    var rows = ["draftor", "reviewer"].map(function (r) {
+      var name = roleName(r);
+      return '<div class="loop-recovery-row" data-role="' + r + '">'
+        + '<span class="loop-recovery-role">' + name + '</span>'
+        + '<span class="loop-recovery-need" data-need="0"></span>'
+        + '<button type="button" class="loop-prompt-copy" data-role="' + r + '">Copy '
+        + name + ' prompt</button>'
+        + '</div>';
+    }).join("");
+    region.innerHTML = '<details class="loop-recovery" id="loop-recovery">'
+      + '<summary class="loop-recovery-summary">Participant recovery</summary>'
+      + '<p class="loop-recovery-guidance"></p>'
+      + '<p class="loop-recovery-warning"></p>'
+      + rows
+      + '</details>';
+    setText(region.querySelector(".loop-recovery-guidance"), RECOVERY_GUIDANCE);
+    setText(region.querySelector(".loop-recovery-warning"), RECOVERY_WARNING);
+    var details = region.querySelector(".loop-recovery");
+    // A manual toggle holds until the need set changes (see applyRecovery).
+    details.querySelector(".loop-recovery-summary").addEventListener("click", function () {
+      details.dataset.userToggled = "1";
+    });
     region.querySelectorAll(".loop-prompt-copy").forEach(function (btn) {
       btn.addEventListener("click", function () {
         copyPrompt(_state.selectedLoopId, btn.dataset.role, btn);
       });
     });
+    if (snap) snap.recovery = { needKey: null };
+  }
+
+  // Patches only changed text, the need flag and the open state, so an
+  // identical poll makes zero mutations. Opens when the need set changes
+  // and is non-empty; closes when it becomes empty; otherwise leaves the
+  // disclosure as it is, including the Architect's own toggle.
+  function applyRecovery(snap) {
+    var R = snap && snap.recovery;
+    if (!R || !snap.root) return;
+    var details = snap.root.querySelector("#loop-recovery");
+    if (!details) return;
+    var roles = snap.statusRoles || {};
+    var view = snap.liveness && snap.liveness.lastView;
+    var needs = [];
+    ["draftor", "reviewer"].forEach(function (r) {
+      var joined = !!(roles[r] && roles[r].joined);
+      var lv = view && view.roles && view.roles[r];
+      var need = recoveryNeed(r, joined, lv ? lv.state : null);
+      var row = details.querySelector('.loop-recovery-row[data-role="' + r + '"]');
+      if (!row) return;
+      var needEl = row.querySelector(".loop-recovery-need");
+      setText(needEl, need ? "\u26a0 " + need : RECOVERY_OK_TEXT);
+      var flag = need ? "1" : "0";
+      if (needEl.dataset.need !== flag) needEl.dataset.need = flag;
+      if (need) needs.push(r + ":" + need);
+    });
+    var needKey = needs.join("|");
+    if (needKey === R.needKey) return;
+    R.needKey = needKey;
+    if (details.dataset.userToggled) delete details.dataset.userToggled;
+    var want = needs.length > 0;
+    if (details.open !== want) details.open = want;
   }
 
   function timeRemainingText(s) {
@@ -1940,6 +2233,7 @@
 
     var html = '<div class="loop-status-header">'
       + '<h3>' + escHtml(status.feature || status.loop_id || "") + '</h3>'
+      + modeBadge(loopModeInfo(status))
       + stageBadge(stage)
       + '</div>';
 
@@ -1996,6 +2290,7 @@
 
     var html = '<div class="loop-status-header">'
       + '<h3>' + escHtml(status.feature || status.loop_id || "") + '</h3>'
+      + modeBadge(loopModeInfo(status))
       + '<span class="loop-badge loop-badge-outcome">' + escHtml(outcomeLabel) + '</span>'
       + '</div>';
 
@@ -2234,6 +2529,7 @@
         L.actionFp[r] = fp;
       }
     });
+    applyRecovery(snap);  // #56: watcher state feeds the recovery need
   }
 
   async function refreshLiveness(snap) {
@@ -3371,7 +3667,7 @@
 
   // ── Module 6: Entry point + state transitions ─────────────────────────────
 
-  window.GatorViews.loop = async function (data, container, repoName, repoKey) {
+  window.GatorViews.loop = async function (data, container, repoName, repoKey, initialSub) {
     teardownLoopView();
 
     _state.repoKey = repoKey;
@@ -3395,17 +3691,12 @@
     if (myMount !== _state.mountId) return;
     _state.loops = loops;
 
-    var classified = classifyLoops(loops);
-
-    if (classified.active.length > 0) {
-      // Active loop exists — select it
-      _state.mode = "inspect";
-      _state.selectedLoopId = classified.active[0].loop_id;
-    } else {
-      // No active loop — default to create
-      _state.mode = "create";
-      _state.selectedLoopId = null;
-    }
+    // #56: a back/forward restore lands on its recorded selection when that
+    // loop still exists; otherwise today's default.
+    var restored = applySub(initialSub || null, loops);
+    if (!restored) applyDefaultSelection(loops);
+    // Record the landing state on the current entry without adding one.
+    shellReplace();
 
     renderLoopSidebar(loops, container);
 
@@ -3415,11 +3706,28 @@
     } else {
       renderMainContent(container);
     }
+    if (restored) focusMainHeading();
 
     window._gatorRepoTeardown = teardownLoopView;
     // Single interval owner: loadSelectedLoop() may already have started
     // polling; ensurePolling() never creates a second (leaked) interval.
     ensurePolling();
+  };
+
+  // #56: apply a recorded sub-state to the mounted view (same repository).
+  // Never pushes; the shell runs it under its restoring guard.
+  window.GatorViews.loop.restore = function (sub) {
+    var container = _state.container;
+    if (!container || !container.isConnected) return;
+    if (!applySub(sub, _state.loops)) applyDefaultSelection(_state.loops);
+    _state.generation++;
+    renderLoopSidebar(_state.loops, container);
+    if (_state.mode === "inspect") {
+      loadSelectedLoop().then(focusMainHeading);
+    } else {
+      renderMainContent(container);
+      focusMainHeading();
+    }
   };
 
 })();

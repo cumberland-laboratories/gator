@@ -60,9 +60,15 @@
       return;
     }
 
+    // #56: another view (e.g. after a Back) may own the container by the
+    // time the fetch resolves; a detached loading node means drop the result.
+    var loadingEl = container.firstChild;
+    function stale() { return !loadingEl || !loadingEl.isConnected; }
+
     fetch("/api/repo/" + encodeURIComponent(repoName) + "/history?limit=30")
       .then(function (r) { return r.json(); })
       .then(function (result) {
+        if (stale()) return;
         if (result.error) {
           container.innerHTML = "<p class='muted'>" + escHtml(result.error) + "</p>";
           return;
@@ -101,6 +107,7 @@
         container.innerHTML = html;
       })
       .catch(function (err) {
+        if (stale()) return;
         container.innerHTML = "<p class='muted'>Error loading history: " + escHtml(err.message) + "</p>";
       });
   };

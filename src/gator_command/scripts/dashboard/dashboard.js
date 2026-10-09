@@ -7,6 +7,8 @@
  *   - Handle ?repo=<name> query param to pre-load Repo view
  *   - Manage Refresh button (re-fetches /api/refresh then /api/data)
  *   - Update topbar title/subtitle from active view
+ *   - Own browser history for every view (#56): navigate() pushes, one
+ *     popstate handler restores; views add sub-state via window.GatorShell
  *
  * View modules register via window.GatorViews.<name> = function(data, container, ...extras)
  */
@@ -22,13 +24,17 @@
     activeRepo: null,    // name of currently loaded repo (Repo view)
     activeRepoKey: null, // path-hash key for session audit identity
     settings: null,      // dashboard settings (mode, etc.)
+    mountedLoopKey: undefined, // repo key the mounted Loop view uses (#56); undefined = no Loop mounted
   };
+
+  // #56: true while a popstate restoration runs; nothing pushes meanwhile.
+  let restoring = false;
 
   // ── view metadata ─────────────────────────────────────────────────────────
 
   const VIEW_META = {
     fleet:    { title: "Fleet",    subtitle: "" },
-    history:  { title: "History",  subtitle: "" },
+    history:  { title: "Commits",  subtitle: "" },
     repo:     { title: "Repo",     subtitle: "" },
     docs:     { title: "Docs",     subtitle: "" },
     updates:  { title: "Updates",  subtitle: "" },
@@ -89,7 +95,155 @@
 
   // ── view routing ───────────────────────────────────────────────────────────
 
-  function showView(name, extra, repoKeyOverride) {
+  // ── active repository context (#56) ───────────────────────────────────────
+
+  function fleetRepos() {
+    return (state.data && state.data.fleet && state.data.fleet.repos)
+      || (state.data && state.data.repos) || [];
+  }
+
+  function setRepoTabLabel(text) {
+    repoTab.textContent = "";
+    const icon = document.createElement("span");
+    icon.className = "sidebar-icon";
+    icon.textContent = "▸";
+    repoTab.appendChild(icon);
+    repoTab.appendChild(document.createTextNode(" " + text));
+  }
+
+  // Set the shell's repository context: name, API key, the Repo sidebar
+  // label, and the Repo/Docs/Loop tabs enabled.
+  function setActiveRepo(repoName, repoKey) {
+    state.activeRepo = repoName;
+    state.activeRepoKey = repoKey || null;
+    setRepoTabLabel(repoName);
+    repoTab.classList.remove("dimmed");
+    if (docsTab) docsTab.classList.remove("dimmed");
+    if (loopTab) loopTab.classList.remove("dimmed");
+  }
+
+  // Inverse of setActiveRepo(): the initial page state.
+  function clearActiveRepo() {
+    state.activeRepo = null;
+    state.activeRepoKey = null;
+    setRepoTabLabel("Repo");
+    repoTab.classList.add("dimmed");
+    if (docsTab) docsTab.classList.add("dimmed");
+    if (loopTab) loopTab.classList.add("dimmed");
+  }
+
+  // ── browser history (#56) ──────────────────────────────────────────────────
+  //
+  // The shell is the ONLY owner of Dashboard history entries. Entries are
+  // state-only (URL unchanged) and carry no token, prompt or artifact text:
+  // {gatorDashboard: 1, view, repo, repoKey, sub}. `sub` is Loop-only
+  // ({view, mode, loopId}); views contribute it through window.GatorShell.
+
+  function cleanSub(sub) {
+    if (!sub || typeof sub !== "object") return null;
+    return {
+      view: sub.view === "history" ? "history" : "create",
+      mode: sub.mode === "inspect" ? "inspect" : "create",
+      loopId: typeof sub.loopId === "string" ? sub.loopId : null,
+    };
+  }
+
+  function shellState(sub) {
+    return {
+      gatorDashboard: 1,
+      view: state.activeView,
+      repo: state.activeRepo,
+      repoKey: state.activeRepoKey,
+      sub: state.activeView === "loop" ? cleanSub(sub) : null,
+    };
+  }
+
+  // User navigation: render, then record one history entry.
+  function navigate(name, extra, repoKeyOverride) {
+    showView(name, extra, repoKeyOverride);
+    if (!restoring) history.pushState(shellState(null), "");
+  }
+
+  window.GatorShell = {
+    pushSubState: function (sub) {
+      if (restoring || state.activeView !== "loop") return;
+      history.pushState(shellState(sub), "");
+    },
+    replaceSubState: function (sub) {
+      if (state.activeView !== "loop") return;
+      history.replaceState(shellState(sub), "");
+    },
+    isRestoring: function () { return restoring; },
+  };
+
+  function isShellEntry(entry) {
+    return !!entry && typeof entry === "object" && entry.gatorDashboard === 1
+      && Object.prototype.hasOwnProperty.call(VIEW_META, entry.view)
+      && (entry.repo === null || typeof entry.repo === "string");
+  }
+
+  function showFleetNotice(text) {
+    const note = document.createElement("div");
+    note.className = "shell-notice";
+    note.setAttribute("role", "status");
+    note.textContent = text;
+    viewSlot.insertBefore(note, viewSlot.firstChild);
+  }
+
+  // The single restoration path: validate -> hydrate the repository
+  // context -> dispatch. showView() never restores state itself.
+  function restoreShellState(entry) {
+    if (!isShellEntry(entry)) return;
+    if (entry.repo !== null) {
+      const repos = fleetRepos();
+      // The fleet's current key is authoritative; the recorded key only
+      // disambiguates same-named repositories.
+      const info = repos.find(r => r.name === entry.repo && r.repo_key && r.repo_key === entry.repoKey)
+        || repos.find(r => r.name === entry.repo);
+      if (!info) {
+        clearActiveRepo();
+        showView("fleet");
+        showFleetNotice("That repository is no longer registered.");
+        history.replaceState(shellState(null), "");
+        return;
+      }
+      setActiveRepo(info.name, info.repo_key || null);
+    } else {
+      clearActiveRepo();
+    }
+    const views = window.GatorViews || {};
+    if (entry.view === "loop" && state.activeView === "loop"
+        && state.mountedLoopKey !== undefined
+        && state.mountedLoopKey === state.activeRepoKey
+        && views.loop && typeof views.loop.restore === "function") {
+      views.loop.restore(cleanSub(entry.sub));  // same repository: no remount
+      return;
+    }
+    showView(entry.view, entry.repo, state.activeRepoKey,
+             { initialSub: cleanSub(entry.sub) });
+  }
+
+  window.addEventListener("popstate", function (e) {
+    let entry = e.state;
+    if (!isShellEntry(entry)) {
+      // views/repo.js records its own search/file entries ({view: "repo",
+      // repo, ...}) and applies them while that repository is mounted.
+      // Elsewhere, such an entry restores that Repo view so Back never
+      // goes dead.
+      if (!entry || entry.view !== "repo" || typeof entry.repo !== "string") return;
+      if ((state.activeView === "repo" || state.activeView === "docs")
+          && state.activeRepo === entry.repo) return;
+      entry = { gatorDashboard: 1, view: "repo", repo: entry.repo, repoKey: null, sub: null };
+    }
+    restoring = true;
+    try {
+      restoreShellState(entry);
+    } finally {
+      restoring = false;
+    }
+  });
+
+  function showView(name, extra, repoKeyOverride, opts) {
     // Tear down the previous view's lifecycle resources (poll timers, global
     // listeners) before rendering the next. Only the repo view registers any;
     // the hook is null otherwise. This is what stops the auto-refresh poll
@@ -97,6 +251,7 @@
     if (typeof window._gatorRepoTeardown === "function") window._gatorRepoTeardown();
 
     state.activeView = name;
+    state.mountedLoopKey = undefined;
 
     // Plan C Slice 1 (v2.13.0): route-scoped scroll ownership. The Repo and
     // Docs routes both mount `.repo-browser` and own scroll internally via
@@ -145,7 +300,7 @@
       if (views.history) {
         views.history(state.data, viewSlot, state.activeRepo);
       } else {
-        viewSlot.innerHTML = "<p class='muted'>History view not available.</p>";
+        viewSlot.innerHTML = "<p class='muted'>Commits view not available.</p>";
       }
       return;
     }
@@ -157,31 +312,20 @@
         viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view.</p>";
         return;
       }
-      state.activeRepo = repoName;
       // Resolve repo_key: explicit override from gatorNavToRepo wins;
       // otherwise always re-resolve from fleet data so a stale key
       // from a prior repo selection never persists across name-only
       // navigation (URL query param, sidebar re-click, refresh).
+      let repoKey;
       if (repoKeyOverride) {
-        state.activeRepoKey = repoKeyOverride;
+        repoKey = repoKeyOverride;
       } else {
-        const allRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
-        const matchedRepo = allRepos.find(r => r.name === repoName);
-        state.activeRepoKey = (matchedRepo && matchedRepo.repo_key) || null;
+        const matchedRepo = fleetRepos().find(r => r.name === repoName);
+        repoKey = (matchedRepo && matchedRepo.repo_key) || null;
       }
-      // Update repo sidebar label
-      repoTab.textContent = "";
-      const icon = document.createElement("span");
-      icon.className = "sidebar-icon";
-      icon.textContent = "▸";
-      repoTab.appendChild(icon);
-      repoTab.appendChild(document.createTextNode(" " + repoName));
-      repoTab.classList.remove("dimmed");
-      if (docsTab) docsTab.classList.remove("dimmed");
-      if (loopTab) loopTab.classList.remove("dimmed");
+      setActiveRepo(repoName, repoKey);
       // Find branch from fleet data
-      const fleetRepos = (state.data && state.data.fleet && state.data.fleet.repos) || (state.data && state.data.repos) || [];
-      const repoInfo = fleetRepos.find(r => r.name === repoName);
+      const repoInfo = fleetRepos().find(r => r.name === repoName);
       const branch = repoInfo && repoInfo.branch ? repoInfo.branch : "";
       const subtitle = branch
         ? repoName + ' <span class="muted" style="font-weight:normal">' + branch + '</span>'
@@ -304,7 +448,9 @@
       }
       updateTopbar("loop", repoName);
       if (views.loop) {
-        views.loop(state.data, viewSlot, repoName, state.activeRepoKey);
+        state.mountedLoopKey = state.activeRepoKey;
+        views.loop(state.data, viewSlot, repoName, state.activeRepoKey,
+                   (opts && opts.initialSub) || null);
       } else {
         viewSlot.innerHTML = "<p class='muted'>Loop view not available.</p>";
       }
@@ -331,7 +477,7 @@
     if (!item || item.classList.contains("dimmed") || item.classList.contains("placeholder")) return;
     const view = item.dataset.view;
     if ((view === "repo" || view === "docs" || view === "loop") && !state.activeRepo) return;
-    showView(view);
+    navigate(view);
   });
 
   // ── session evidence modal ─────────────────────────────────────────────
@@ -412,7 +558,7 @@
   // ── repo navigation (called by fleet view) ─────────────────────────────────
 
   window.gatorNavToRepo = function (repoName, repoKey) {
-    showView("repo", repoName, repoKey || undefined);
+    navigate("repo", repoName, repoKey || undefined);
   };
 
   // ── refresh ────────────────────────────────────────────────────────────────
@@ -490,6 +636,8 @@
     } else {
       showView("fleet");
     }
+    // #56: the landing entry becomes a shell entry without adding one.
+    history.replaceState(shellState(null), "");
   }
 
   init();

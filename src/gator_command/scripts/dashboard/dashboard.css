@@ -1768,6 +1768,49 @@ mark.search-hit {
   color: #666;
 }
 
+/* #56 mode badge: text plus a per-mode border style, never colour alone. */
+.loop-mode-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--color-muted);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.loop-mode-badge[data-mode="coding"] {
+  border-width: 2px;
+  border-style: solid;
+}
+
+.loop-mode-badge[data-mode="planning"] {
+  border-style: solid;
+}
+
+.loop-mode-badge[data-mode="legacy"] {
+  border-style: dashed;
+  font-weight: 500;
+}
+
+.loop-mode-badge[data-mode="unknown"] {
+  border-style: dotted;
+  font-style: italic;
+}
+
+.loop-card-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.loop-card-badges .loop-mode-badge {
+  padding: 0 6px;
+  font-size: 10px;
+}
+
 .loop-status-header {
   display: flex;
   align-items: center;
@@ -2312,28 +2355,81 @@ textarea.loop-ctrl-input {
   text-align: left;
 }
 .loop-sidebar-create:hover { background: rgba(26, 95, 168, 0.06); }
-.loop-sidebar-create-disabled {
-  cursor: default;
-  border-color: var(--color-border);
-  color: var(--color-muted);
-  padding: 10px 14px;
-}
-.loop-sidebar-create-disabled:hover { background: transparent; }
 .loop-sidebar-create-label {
   display: block;
   margin-bottom: 2px;
 }
-.loop-sidebar-create-conflict {
-  font-size: 11px;
+
+/* #56 Loop sidebar tabs (Create / History). The selected tab is shown by
+   weight plus an underline, never colour alone. */
+.loop-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.loop-subnav-tab {
+  padding: 6px 12px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
   font-weight: 400;
+  cursor: pointer;
+}
+.loop-subnav-tab[aria-selected="true"] {
+  border-bottom-color: currentColor;
+  color: var(--color-text);
+  font-weight: 700;
+}
+.loop-subnav-tab:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+/* #56 Create with an active loop: explanation card, not a disabled form. */
+.loop-create-active-card {
+  max-width: 560px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.loop-create-active-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.loop-create-active-text { margin: 0 0 6px; }
+.loop-create-active-counter {
+  margin: 0 0 12px;
+  font-size: 12px;
   color: var(--color-muted);
 }
 .loop-sidebar-open-active {
+  padding: 8px 14px;
+  border: 1px solid var(--color-link);
+  border-radius: 6px;
+  background: transparent;
   color: var(--color-link);
-  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
-.loop-sidebar-open-active:hover { text-decoration: underline; }
+.loop-sidebar-open-active:hover { background: rgba(26, 95, 168, 0.06); }
+
+/* #56 shell notice (e.g. a Back to an unregistered repository). */
+.shell-notice {
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-muted);
+  border-radius: 6px;
+  font-weight: 600;
+}
 .loop-sidebar-empty {
   font-size: 12px;
   color: var(--color-muted);
@@ -2546,11 +2642,40 @@ textarea.loop-ctrl-input {
 }
 
 /* Prompt copy section (in live workspace) */
-.loop-prompt-section {
-  display: flex;
-  gap: 8px;
-  padding: 8px 0 4px;
+/* #56 Participant recovery disclosure. A need is marked by the glyph plus
+   bold text, never colour alone. */
+.loop-recovery {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
 }
+.loop-recovery-summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.loop-recovery-guidance,
+.loop-recovery-warning {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.loop-recovery-warning { color: var(--color-muted); }
+.loop-recovery-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.loop-recovery-role {
+  min-width: 70px;
+  font-weight: 600;
+}
+.loop-recovery-need {
+  flex: 1 1 200px;
+  font-size: 12px;
+}
+.loop-recovery-need[data-need="1"] { font-weight: 700; }
 .loop-prompt-copy {
   padding: 5px 12px;
   border-radius: 4px;
@@ -2604,8 +2729,8 @@ textarea.loop-ctrl-input {
   .loop-handoff {
     max-width: 100%;
   }
-  .loop-prompt-section {
-    flex-direction: column;
+  .loop-recovery-row {
+    align-items: flex-start;
   }
 }
 

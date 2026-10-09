@@ -216,6 +216,39 @@ class TestLoopList:
             assert "blocked" in loop
             assert "created_at" in loop
 
+    def test_list_mode_legacy(self, server, tmp_path):
+        """#56: `mode_legacy` is true only when the session records no mode.
+
+        The normalized `mode` hides that case (missing -> planning), so the
+        boolean is the only way the UI can show "Planning · legacy".
+        """
+        repo = tmp_path / "repo-m"
+        loops_dir = repo / ".gator" / "loops"
+        loops_dir.mkdir(parents=True)
+        cases = {"legacy": None, "planonly": "planning-only",
+                 "planning": "planning", "coding": "coding"}
+        for name, mode in cases.items():
+            loop_id = f"{name}-2026-09-20T10-00-00Z"
+            session = _make_session(loop_id, feature=name,
+                                    stage="ended_by_architect")
+            if mode is not None:
+                session["mode"] = mode
+            _write_session(loops_dir / loop_id, session)
+
+        rk = _repo_key(repo)
+        server.start([{"name": "repo-m", "path": str(repo), "repo_key": rk}])
+
+        status, data = _get(server.url, f"/api/repo-by-key/{rk}/loops")
+        assert status == 200
+        by_feature = {l["feature"]: l for l in data["loops"]}
+        assert by_feature["legacy"]["mode_legacy"] is True
+        assert by_feature["legacy"]["mode"] == "planning"
+        assert by_feature["planonly"]["mode_legacy"] is False
+        assert by_feature["planonly"]["mode"] == "planning"
+        assert by_feature["planning"]["mode_legacy"] is False
+        assert by_feature["coding"]["mode_legacy"] is False
+        assert by_feature["coding"]["mode"] == "coding"
+
     def test_list_inaccessible_repo_returns_404(self, server):
         """Non-existent repo_key returns 404."""
         server.start([])

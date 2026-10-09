@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop: gator loop codex — one-command opt-in Codex participant profile launcher (#37 follow-up)",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop",
+    "codex",
+    "cli"
+  ],
+  "commit": "34a9d0e417d431853181de99088547a9fce86698",
+  "short_commit": "34a9d0e",
+  "snippet_id": "snippet-34a9d0e417d43",
+  "session_group_key": "anthropic:bace4cd6-f412-48df-94bc-4b9d8e88ccbb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "7140baf048b0f667ceb1e24fb3ec0b01c9cb78db",
+  "started_at": "2026-10-08T22:05:28Z",
+  "ended_at": "2026-10-09T00:03:58Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/reference-notes/codex-routine-participant-profile.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-08-gator-7140baf048b0f.json",
+    "pyproject.toml",
+    "src/gator_command/scripts/loop/cli.py",
+    "src/gator_command/scripts/loop/codex_launcher.py",
+    "src/gator_command/templates/gator-starter/reference-notes/codex-routine-participant-profile.md",
+    "tests/test_loop_codex_launcher.py"
+  ],
+  "notes": [
+    "Checkpoint 1 (dedicated profile preparation): new `scripts/loop/codex_launcher.py`.",
+    "**Home:** default `~/.gator/adapters/codex/loop-home`. `validate_home` refuses the normal Codex home, the caller's `CODEX_HOME`, a home inside the repo, and the temp directory.",
+    "**Trust key:** `trust_key` uses Codex's own lowercase Windows form.",
+    "**Rule:** canonical `RULE_TEXT`, byte-identical to the reference note's rule, written UTF-8 without a BOM. An unfamiliar rule or an extra file in `rules/` fails closed.",
+    "**Config:** one Gator-owned block kept at the end of `config.toml` (`[windows] sandbox = \"elevated\"` plus trusted project keys). User bytes outside the block are preserved. A user `[windows]` table, a same-repo trust entry or a malformed block fails closed. `tomllib` validates the result on Python 3.11+.",
+    "**Plan/apply:** `plan_preparation()` is read-only and `apply_preparation()` executes only its actions. `render_dry_run()` previews everything.",
+    "**Other:** `pyproject.toml` package-data gains `codex_launcher.py`. Charters: loop (Covers/Owns, \"Does Not Own: auto-launching\" narrowed to this opt-in launcher, three new entries) and cross-cutting (package-data example).",
+    "**Tests:** `tests/test_loop_codex_launcher.py`."
+  ],
+  "transcript_session_id": "bace4cd6-f412-48df-94bc-4b9d8e88ccbb",
+  "transcript_ref": null
+}

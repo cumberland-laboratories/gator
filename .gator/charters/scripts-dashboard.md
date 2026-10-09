@@ -157,6 +157,7 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
   - **The guarded successor is the ONLY source validator:** canonical id, planning mode, `plan_approved`, plan present, Git base, and brief keep/drop integrity, all atomic. Its `ValueError` returns 400 with the message, including the corrupt-source "--source-brief drop" hint.
   - **Other 400s:** an unknown `mode`, a missing or non-string `from_loop`, a bad `source_brief`, or `from_loop` / `source_brief` on a planning start.
   - **The `/loops` list** gains an additive normalized `mode` (`planning` / `coding` / `unknown`) so the UI can offer only approved planning loops.
+  - **#56:** each `/loops` item also carries the boolean `mode_legacy` (`"mode" not in session`). Normalization hides the missing-mode case, and the mode badge needs it to show "Planning · legacy". It is computed only from the session key, never from the feature name or artifacts. `/status` is unchanged; it already carries the raw `mode`.
 ! **#51 planning sources.**
   - **Start:** `POST /loops/start` (planning mode) accepts `plan_path` (Architect-originated draft plan) or `revise_from` (approved planning loop id).
     - Each must be a non-empty string. Both together, either with `mode: coding`, or `revise_from` without `sketch_path` gives 400 with nothing written. `sketch_path` is optional with `plan_path`.

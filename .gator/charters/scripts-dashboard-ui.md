@@ -17,12 +17,23 @@
 
 ---
 
-### navigate() / renderCurrentView()
+### navigate() / showView() / restoreShellState() / setActiveRepo() / clearActiveRepo() / window.GatorShell
 File: src/gator_command/scripts/dashboard/dashboard.js
 Own browser history, selected repository/view state, and dispatch into view modules.
-<- sidebar, topbar, URL changes
+<- sidebar, topbar, `window.gatorNavToRepo` (fleet rows), popstate
 -> `views/*`
 ! URL state and visible selection stay synchronized; refresh re-renders the same repo/view rather than silently returning home.
+! **Shell-owned history (#56).** `dashboard.js` is the only owner of Dashboard history entries, for every view.
+  - **State shape:** `{gatorDashboard: 1, view, repo, repoKey, sub}`, built by `shellState(sub)`. Entries are state-only (`""` title, URL unchanged), so a reload behaves as before (`?repo=` only). `sub` is `null` except for Loop entries: `cleanSub()` keeps exactly `{view: create|history, mode: create|inspect, loopId}`. **No token, prompt text or artifact content ever enters a state object.**
+  - **`navigate()` versus `showView()`:** `navigate()` = `showView()` plus `history.pushState`. It is used by the sidebar click handler and `gatorNavToRepo`. `init()` calls `showView` and then `replaceState`. `doRefresh` calls `showView` and pushes nothing. `showView(name, extra, repoKeyOverride, opts)` is a renderer only. It passes `opts.initialSub` as the fifth argument to `views.loop`, and records `state.mountedLoopKey` (the repo key a mounted Loop view uses; `undefined` otherwise).
+  - **`window.GatorShell`:** `pushSubState(sub)` pushes only when the active view is Loop and no restoration is running. `replaceSubState(sub)` replaces the current entry (Loop only). `isRestoring()`.
+  - **Repository context:** `setActiveRepo(name, key)` (extracted from the `repo` branch) sets `activeRepo` / `activeRepoKey`, the "▸ <name>" Repo label, and un-dims Repo/Docs/Loop. `clearActiveRepo()` is its inverse (label "Repo", tabs dimmed).
+  - **Restoration:** a single `popstate` handler → `restoreShellState(entry)`, run under the `restoring` flag (cleared in `finally`):
+    1. **Validate:** `isShellEntry` (marker, a `VIEW_META` view, `repo` null or a string). Anything else is ignored.
+    2. **Hydrate the repository before any dispatch.** The fleet entry matching name and recorded key, else name only, is authoritative → `setActiveRepo`. An unregistered repo → `clearActiveRepo`, Fleet with a `.shell-notice` "That repository is no longer registered.", and `replaceState` to Fleet. A null repo → `clearActiveRepo`.
+    3. **Dispatch:** a Loop entry for the already-mounted Loop view of the *same* repo key → `views.loop.restore(sub)` (no remount). Otherwise `showView(view, repo, activeRepoKey, {initialSub})`, so a repository change always remounts.
+  - **`views/repo.js` entries:** `repo.js` still pushes its own search/file entries (`{view: "repo", repo, searchQuery|filePath}`, no marker) and applies them with its own controller-scoped `popstate` listener while mounted. The shell leaves such an entry to `repo.js` when that repo's Repo/Docs view is mounted. Otherwise it restores that Repo view, so Back never goes dead.
+  - **No re-entrancy:** pushes are suppressed while restoring, and the restore paths call no pushing function.
 
 ### apiFetch() / mutation requests
 File: src/gator_command/scripts/dashboard/dashboard.js
@@ -51,9 +62,10 @@ Confirmation dialog for removing a repo from the dashboard registry. Reuses the 
 ### renderHistory()
 File: src/gator_command/scripts/dashboard/views/history.js
 Render Git-native commit history and Gator trailer attribution.
-<- history route
+<- history route (nav label and topbar title "Commits" since #56; the route key `history`, `data-view="history"` and the endpoint are unchanged)
 -> repo history endpoint
 ! Accept both current Architect and legacy PI attribution supplied by the backend.
+! **Stale-render guard (#56):** the commits fetch writes only while the "Loading history..." node it created is still attached. If another view owns `#view-slot` by the time the fetch resolves (for example after a quick Back), the result is dropped.
 
 ### renderRepo() / loadFileList() / loadFile()
 File: src/gator_command/scripts/dashboard/views/repo.js
@@ -133,15 +145,49 @@ Render installed/latest version state and request an explicit upgrade.
 
 ### Loop workspace — renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderOutcomeHeader() / renderBlockedCard() / renderPromptSection() / renderControls() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / openReopenForm() / refreshCoding()
 File: src/gator_command/scripts/dashboard/views/loop.js
-Render the governed planning loop workspace with a three-section secondary sidebar (Create Loop, Active, History) and mode-driven main content (creation workspace, participant handoff, or selected-loop inspection).
+Render the governed planning loop workspace with a tabbed secondary sidebar (Create: Create Loop + Active; History: terminal loops) and mode-driven main content (creation workspace or active-loop explanation, participant handoff, or selected-loop inspection).
 <- loop route
 -> loop list/status/events/artifact endpoints, control endpoints (pause/interject/unblock/end/extend), start endpoint, prompt endpoint, sketch-sources endpoint (`/api/repo-by-key/<repo_key>/...`)
 ! **Mode state**: `_state.mode` ("create" | "handoff" | "inspect") drives which main content renderer is called. `_state.handoffId` tracks the loop during participant handoff.
-! **Secondary sidebar**: `renderLoopSidebar()` classifies loops into active (non-terminal, at most 1) and history (terminal, newest-first). Create Loop button is non-actionable when an active loop exists (shows "Open active loop" link). Selection sets mode to "inspect".
+! **Secondary sidebar (#56 tabs)**: `renderLoopSidebar()` classifies loops into active (non-terminal) and history (terminal, newest-first).
+  - **Tabs:** `buildSidebarTabs()` builds a `role="tablist"` with two `role="tab"` buttons, **Create** and **History** (`#loop-tab-create` / `#loop-tab-history`, `aria-controls`), plus two `role="tabpanel"` containers (`#loop-panel-create` / `#loop-panel-history`). They are built once per mount: polls re-render only the panel contents, so a focused tab keeps focus. `applyTabState()` writes `aria-selected`, roving `tabindex` (0/-1) and the inactive panel's `hidden` only when they differ.
+  - **Keyboard:** Left/Right/Home/End switch and focus the tab (automatic activation). The selected tab is shown by weight plus an underline, never colour alone.
+  - **`_state.view`** (`"create" | "history"`) selects the tab. `_state.mode` keeps its meaning.
+  - **Create panel:** the always-actionable `.loop-sidebar-create` button and the "Active" section (active cards only). The active loop is never listed in History.
+  - **History panel:** the "History" section with terminal loops only. The `.loop-sidebar-section(-header)` markup is kept inside the panels.
+  - **`switchTab()`:** Create switches the main content to the creation workspace (unless already there, so a half-filled form survives). History changes only the list; the main content stays until a card is chosen.
+  - **Selection:** `selectLoop(id)` sets inspect mode and the tab that matches the loop's terminal state.
+  - **Mount default unchanged:** an active loop opens in inspect with the Create tab selected; otherwise Create.
+! **Active-loop explanation (#56)**: with an active loop, `renderCreateWorkspace()` calls `renderActiveLoopExplanation()` instead of rendering a form. It shows: "A **<Mode>** loop ‘<feature>’ is active (<stage>). Only one loop runs at a time.", plus the mode and stage badges, the counter text, and an **Open active loop** button (`.loop-sidebar-open-active`). The button selects the loop (inspect) and focuses its heading. With no active loop the form renders exactly as before.
+! **Loop history sub-state (#56)**: the shell owns history (see `navigate()` above). This view only contributes sub-state and registers **no** global listener.
+  - **Recording:** `currentSub()` gives `{view, mode, loopId}`; a handoff is recorded as inspect of that loop. User selections call `shellPush()` → `GatorShell.pushSubState`: tab switch, card select, Create Loop, Open active loop, the 409 "Open active loop" link, create → handoff, and handoff → Open loop workspace.
+  - **Restoring the tab:** `applySub()` restores the recorded `sub.view` as recorded, in both modes. A History tab chosen while an active loop stays inspected comes back as History; it is never derived from the loop's stage (pinned).
+  - **Mount:** `views.loop(…, initialSub)` applies `initialSub` through `applySub()` when its loop still exists (else `applyDefaultSelection()`), records the landing state with `shellReplace()` (no new entry), and focuses the main heading after a restore.
+  - **`views.loop.restore(sub)`** applies a sub-state to the mounted view: it bumps `generation`, re-renders the sidebar, then `loadSelectedLoop()` or `renderMainContent()`, and moves focus to the main heading (`focusMainHeading()`). It never pushes.
 ! **Creation workspace**: `renderCreateWorkspace()` renders feature name, sketch source picker (dropdown from `/sketch-sources` + manual path toggle), advanced settings disclosure (max rounds 1–20, turn timeout 30–3600s), and Create button calling existing start endpoint. Client-side validation before POST. 409 "active loop exists" is race-recovery only (shows "Open active loop").
 ! **Participant handoff**: `renderHandoff()` shows prompt-copy cards for Draftor and Reviewer roles. `copyPrompt()` fetches from the no-store prompt endpoint, writes to clipboard, then nulls the prompt variable. Clipboard unavailable: shows read-only textarea fallback, removed on dismiss. Join state polls at 3s interval; Draftor joining does NOT remove Reviewer copy action. "Open loop workspace" navigates to inspect mode explicitly — never auto-navigates on join.
 ! **Token non-persistence**: prompt text never stored in localStorage, sessionStorage, URL state, data- attributes, or console logs. JS variable nulled after clipboard write. DOM elements removed on navigation.
-! **Live vs history**: `renderSelectedLoop()` orchestrates live or read-only workspace. Live loops show status header, suspension card (#53, below), decision history, prompt copy section, controls, timeline, artifacts. Terminal loops show outcome header with badge (Approved/Max Rounds/Timed Out/Ended), completed date, no controls, no prompts.
+! **Live vs history**: `renderSelectedLoop()` orchestrates live or read-only workspace. Live loops show status header, suspension card (#53, below), decision history, the Participant recovery disclosure (#56, below), controls, timeline, artifacts. Terminal loops show outcome header with badge (Approved/Max Rounds/Timed Out/Ended), completed date, no controls, no prompts.
+! **Mode projection (#56)** — `loopModeInfo(src)` / `modeBadge(info)` is the ONLY place loop-mode text is decided. It accepts a `/loops` item (normalized `mode` plus boolean `mode_legacy`) or a `/status` body (raw `mode`) and returns `{key, label}`:
+  - `coding` → **Coding**;
+  - no recorded mode (status `mode` absent, or list `mode_legacy === true`) → **Planning · legacy**;
+  - `planning` / `planning-only` → **Planning**;
+  - anything else → **Unknown mode**.
+
+  It never reads feature names, filenames or artifacts. `modeBadge` renders `span.loop-mode-badge[data-mode]` with `aria-label="Loop mode: <label>"`: text plus a per-mode border (2px solid coding, solid planning, dashed legacy, dotted italic unknown), never colour alone. It appears in `renderLiveHeader`, `renderOutcomeHeader` and every sidebar card (`renderSidebarCard`, inside `.loop-card-badges` next to the stage badge). `headerFingerprint` includes the mode key, so identical polls stay mutation-free (pinned).
+! **Participant recovery (#56)** — `#loop-region-prompts`, live loops only (terminal: empty, no `.loop-prompt-copy`). It replaces the bare copy buttons.
+  - **Structure:** `renderPromptSection(terminal, root, snap)` builds, once per live snapshot (prompts fingerprint `live`/`terminal`): `<details class="loop-recovery" id="loop-recovery">` with summary "Participant recovery", the fixed guidance ("Use these prompts only to start a new participant session or reconnect one that dropped. Do not paste a prompt into a session that has already joined."), the credential warning, and one `.loop-recovery-row[data-role]` per role (a `.loop-recovery-need` line plus the existing `button.loop-prompt-copy[data-role]` → `copyPrompt()`). Copying is unchanged (epoch guard, fallback, token non-persistence) and mutates no loop state.
+  - **`recoveryNeed(role, joined, livenessState)`** (pure):
+    - not joined → "Has not joined yet.";
+    - joined and `stale` → "Watcher is stale — reconnect if the session dropped.";
+    - joined and `released` → "Watcher exited after a notification — reconnect if the session closed.";
+    - otherwise (connected, `not_registered`, closed, unknown or liveness unavailable) → none, shown as "Joined — no action needed".
+
+    **TRIPWIRE (#52):** a joined role with no watcher (`not_registered`, e.g. a `gator loop wait` participant) is never flagged as absent.
+  - **`applyRecovery(snap)`** runs after each `renderSelectedLoop()` (which stores `snap.statusRoles`) and at the end of `applyLiveness()`'s main path (`snap.liveness.lastView`).
+    - It writes the need text (prefixed "⚠ "), the `data-need` flag (bold, never colour alone) and `open`, each only when it differs.
+    - It changes `open` only when the need key changes: open when non-empty, close when empty. A manual toggle (`data-user-toggled`, set by a summary click) therefore holds until the need set changes.
+    - Identical polls produce zero mutations (pinned).
 ! **Event-driven artifact enumeration**: `collectArtifactPaths()` derives immutable artifacts from event `artifact_path` fields and `status.decisions[]`, replacing the prior numeric round loop. Naturally includes round-zero artifacts. Deduplicates by path.
 ! Polls every 3s for non-terminal loops; stops on terminal state. `pollLoop()` increments `promptEpoch` immediately after terminal status is identified, before awaiting events — this closes the race window where an in-flight `copyPrompt()` could resolve during the events fetch and write to the clipboard with the old epoch. Teardown clears interval via `window._gatorRepoTeardown`.
 ! **TRIPWIRE (#45):** expanded artifact text reaches the DOM only through `GatorLoopMarkdown` DOM construction (Rendered) and `pre.loop-artifact-pre.textContent` (Raw), both from the **same fetched string**. Raw is never reconstructed from rendered nodes, and artifact text never goes through `innerHTML`. This replaces the earlier "escaped through `escHtml()` and rendered in `<pre>`" rule.

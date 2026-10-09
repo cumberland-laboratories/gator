@@ -18,6 +18,12 @@ Fixtures landed (alpha repo only):
 - `.gator/loops/xss-loop-2026-09-21T10-00-00Z/` — an active loop
   whose artifact contains HTML/script content. Exercises escaped
   artifact rendering.
+- `.gator/loops/coding-done-2026-09-18T10-00-00Z/` and
+  `.gator/loops/planning-done-2026-09-19T10-00-00Z/` (#56) — terminal
+  (`ended_by_architect`) loops with a recorded `mode` of `coding` and
+  `planning-only`. Every other seeded session has no `mode` key, so it
+  is a legacy planning loop. Ended (not approved) so neither appears as
+  an approved-plan source in the coding create form.
 """
 
 import json
@@ -30,6 +36,8 @@ _DONE_LOOP_ID = "done-loop-2026-09-20T10-00-00Z"
 _XSS_LOOP_ID = "xss-loop-2026-09-21T10-00-00Z"
 _BLOCKED_LOOP_ID = "blocked-loop-2026-09-23T10-00-00Z"
 _ROUNDZERO_LOOP_ID = "roundzero-loop-2026-09-24T10-00-00Z"
+_CODING_DONE_LOOP_ID = "coding-done-2026-09-18T10-00-00Z"
+_PLANNING_DONE_LOOP_ID = "planning-done-2026-09-19T10-00-00Z"
 
 
 def _make_session(loop_id, feature, stage, round_num, max_rounds,
@@ -242,6 +250,56 @@ def seed_loop_fixtures(repo):
         encoding="utf-8")
     (rz / "findings.current.md").write_text(
         "# Findings\n\nPending review.\n", encoding="utf-8")
+
+    # #56: terminal loops with a recorded mode (mode badges).
+    coding_done = loops / _CODING_DONE_LOOP_ID
+    coding_done.mkdir()
+    coding_session = _make_session(
+        _CODING_DONE_LOOP_ID, "coding-finished", "ended_by_architect",
+        round_num=1, max_rounds=3,
+    )
+    coding_session["mode"] = "coding"
+    coding_session["status"]["next_role"] = None
+    coding_session["current"]["implementation"] = None
+    coding_session["coding"] = {
+        "source_loop_id": _DONE_LOOP_ID,
+        "plan_sha256": "f" * 64,
+        "base_head": "b" * 40,
+        "base_tree": "c" * 40,
+        "generations": [],
+        "approval": None,
+        "source_brief": None,
+        "source_brief_decision": "none_available",
+    }
+    (coding_done / "session.json").write_text(
+        json.dumps(coding_session, indent=2), encoding="utf-8")
+    (coding_done / "events.jsonl").write_text(
+        _make_events([
+            {"event": "loop_started", "ts": "2026-09-18T10:00:00Z",
+             "round": 0, "mode": "coding"},
+            {"event": "loop_ended_by_architect",
+             "ts": "2026-09-18T10:05:00Z", "round": 1},
+        ]), encoding="utf-8")
+
+    planning_done = loops / _PLANNING_DONE_LOOP_ID
+    planning_done.mkdir()
+    planning_session = _make_session(
+        _PLANNING_DONE_LOOP_ID, "planning-finished", "ended_by_architect",
+        round_num=1, max_rounds=3,
+    )
+    planning_session["mode"] = "planning-only"
+    planning_session["status"]["next_role"] = None
+    (planning_done / "session.json").write_text(
+        json.dumps(planning_session, indent=2), encoding="utf-8")
+    (planning_done / "events.jsonl").write_text(
+        _make_events([
+            {"event": "loop_started", "ts": "2026-09-19T10:00:00Z",
+             "round": 0},
+            {"event": "loop_ended_by_architect",
+             "ts": "2026-09-19T10:05:00Z", "round": 1},
+        ]), encoding="utf-8")
+    (planning_done / "sketch.md").write_text(
+        "# Planning Finished\n\nEnded planning loop.\n", encoding="utf-8")
 
 
 _h.seed_loop_fixtures = seed_loop_fixtures  # noqa: reassign stub

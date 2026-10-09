@@ -2363,6 +2363,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "loop_id": session.get("loop_id", entry.name),
                 "feature": session.get("feature", ""),
                 "mode": mode,  # #43 M2a: normalized planning|coding
+                # #56: no recorded mode -> "Planning · legacy" badge; never
+                # inferred from the feature name or artifacts.
+                "mode_legacy": "mode" not in session,
                 "stage": status.get("stage", ""),
                 "round": status.get("round", 0),
                 "max_rounds": status.get("max_rounds", 0),

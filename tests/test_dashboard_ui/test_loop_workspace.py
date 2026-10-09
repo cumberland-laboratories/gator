@@ -23,6 +23,7 @@ Coverage:
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -1009,17 +1010,7 @@ def test_sidebar_empty_sections(page, dashboard_fleet):
     assert "No completed loops" in text
 
 
-def test_sidebar_create_disabled_when_active(page, dashboard_fleet):
-    """B4: active loop exists → Create shows conflict, Open link works."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
-    is_disabled = page.evaluate("""
-        () => document.querySelector('.loop-sidebar-create')
-            .classList.contains('loop-sidebar-create-disabled')
-    """)
-    assert is_disabled, "Create should be disabled when active loop exists"
-    has_open_link = page.locator(".loop-sidebar-open-active").count() > 0
-    assert has_open_link, "Should show 'Open active loop' link"
+# B4 is rewritten for #56 as test_sidebar_create_with_active_loop (below).
 
 
 # ── state transitions (Module 6 / B5–B7) ──────────────────────────────────
@@ -1827,7 +1818,8 @@ def test_live_workspace_inflight_copy_blocked_by_terminal(page, dashboard_fleet)
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
-    page.wait_for_selector(".loop-prompt-copy", timeout=10000)
+    # #56: the copy buttons sit inside the (closed) recovery disclosure.
+    page.wait_for_selector(".loop-prompt-copy", state="attached", timeout=10000)
 
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     page.evaluate("() => navigator.clipboard.writeText('SENTINEL')")
@@ -1905,7 +1897,8 @@ def test_live_delayed_events_does_not_leak_prompt(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "widget-refactor")
-    page.wait_for_selector(".loop-prompt-copy", timeout=10000)
+    # #56: the copy buttons sit inside the (closed) recovery disclosure.
+    page.wait_for_selector(".loop-prompt-copy", state="attached", timeout=10000)
 
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
     page.evaluate("() => navigator.clipboard.writeText('SENTINEL')")
@@ -2792,3 +2785,668 @@ def test_revision_inspection_labels_and_integrity(page, dashboard_fleet):
                         "Baseline: approving review [!! DIGEST MISMATCH]"]
     assert order[2] == ["sketch.md", "Revision sketch"]
     page.unroute("**/loops/*/status")
+
+
+# ── #56 mode badges ───────────────────────────────────────────────────────
+
+
+def _card_mode_badge(page, feature):
+    return page.evaluate("""(name) => {
+        var cards = document.querySelectorAll('.loop-sidebar-card');
+        for (var i = 0; i < cards.length; i++) {
+          if (cards[i].querySelector('.loop-card-feature').textContent === name) {
+            var b = cards[i].querySelector('.loop-mode-badge');
+            return b ? {text: b.textContent, aria: b.getAttribute('aria-label'),
+                        mode: b.dataset.mode} : null;
+          }
+        }
+        return null;
+    }""", feature)
+
+
+@pytest.mark.parametrize("feature,label,key", [
+    ("coding-finished", "Coding", "coding"),
+    ("planning-finished", "Planning", "planning"),
+    ("widget-refactor", "Planning · legacy", "legacy"),
+])
+def test_mode_badges_on_cards_and_headers(page, dashboard_fleet,
+                                          feature, label, key):
+    """Sidebar card and selected header (live or outcome) show the same
+    mode badge, as text with an accessible name, from recorded mode only."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    card = _card_mode_badge(page, feature)
+    assert card == {"text": label, "aria": "Loop mode: " + label, "mode": key}
+    _select_loop_card(page, feature)
+    header = page.evaluate("""() => {
+        var b = document.querySelector('.loop-status-header .loop-mode-badge');
+        return b ? {text: b.textContent, aria: b.getAttribute('aria-label'),
+                    mode: b.dataset.mode} : null;
+    }""")
+    assert header == {"text": label, "aria": "Loop mode: " + label, "mode": key}
+    # The stage/outcome badge is still present beside it.
+    assert page.locator(".loop-status-header .loop-badge").count() == 1
+
+
+def test_mode_badge_styles_differ_without_colour(page, dashboard_fleet):
+    """Coding, planning and legacy badges differ by border style/width,
+    not by hue alone."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card .loop-mode-badge", timeout=10000)
+    styles = page.evaluate("""() => {
+        var out = {};
+        document.querySelectorAll('.loop-mode-badge').forEach(function (b) {
+            var cs = getComputedStyle(b);
+            out[b.dataset.mode] = cs.borderTopStyle + ' ' + cs.borderTopWidth;
+        });
+        return out;
+    }""")
+    assert set(["coding", "planning", "legacy"]) <= set(styles)
+    assert len({styles["coding"], styles["planning"], styles["legacy"]}) == 3
+
+
+def test_mode_badge_poll_is_mutation_free(page, dashboard_fleet):
+    """An identical poll leaves the header region (and its mode badge)
+    untouched, apart from the text-only countdown patch."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-status-header .loop-mode-badge",
+                           timeout=10000)
+    page.wait_for_timeout(500)
+    page.evaluate("""() => {
+        window._m56 = 0;
+        window._m56badge = document.querySelector(
+            '.loop-status-header .loop-mode-badge');
+        new MutationObserver(function (records) {
+            records.forEach(function (r) {
+                var t = r.target.nodeType === 3 ? r.target.parentElement : r.target;
+                if (t && t.closest && (t.closest('.loop-time-remaining')
+                                       || t.closest('.loop-elapsed'))) return;
+                window._m56++;
+            });
+        }).observe(document.querySelector('#loop-region-header'),
+                   {childList: true, subtree: true, characterData: true,
+                    attributes: true});
+    }""")
+    page.wait_for_timeout(7000)  # more than two POLL_INTERVAL_MS polls
+    assert page.evaluate("() => window._m56") == 0
+    assert page.evaluate("() => window._m56badge.isConnected")
+
+
+# ── #56 loop navigation: tabs, Create explanation, shell history ─────────
+
+
+def _click_nav(page, view):
+    page.evaluate(
+        "(v) => document.querySelector('.sidebar-item[data-view=\"' + v + '\"]').click()",
+        view)
+
+
+def _panel_features(page, panel):
+    return page.evaluate("""(id) => Array.from(
+        document.querySelectorAll('#' + id + ' .loop-card-feature'))
+        .map(el => el.textContent)""", panel)
+
+
+def _tab_state(page):
+    return page.evaluate("""() => {
+        var out = {};
+        document.querySelectorAll('.loop-subnav [role="tab"]').forEach(function (t) {
+            var panel = document.getElementById(t.getAttribute('aria-controls'));
+            out[t.dataset.tab] = {
+                selected: t.getAttribute('aria-selected'),
+                tabindex: t.getAttribute('tabindex'),
+                panelHidden: panel ? panel.hidden : null,
+                panelRole: panel ? panel.getAttribute('role') : null,
+                text: t.textContent,
+            };
+        });
+        out.tablist = !!document.querySelector('#loop-sidebar-nav [role="tablist"]');
+        return out;
+    }""")
+
+
+def _wait_header(page, feature):
+    page.wait_for_function(
+        "(name) => { var h = document.querySelector('.loop-status-header h3');"
+        "  return h && h.textContent === name; }",
+        arg=feature, timeout=10000)
+
+
+def _history_back(page):
+    page.evaluate("() => history.back()")
+
+
+def _history_forward(page):
+    page.evaluate("() => history.forward()")
+
+
+def test_loop_subnav_tabs(page, dashboard_fleet):
+    """Create/History tabs with tab roles, roving tabindex, arrow keys;
+    History lists only terminal loops and the active loop is only in the
+    Create panel."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-subnav", timeout=10000)
+    st = _tab_state(page)
+    assert st["tablist"]
+    assert st["create"] == {"selected": "true", "tabindex": "0",
+                            "panelHidden": False, "panelRole": "tabpanel",
+                            "text": "Create"}
+    assert st["history"] == {"selected": "false", "tabindex": "-1",
+                             "panelHidden": True, "panelRole": "tabpanel",
+                             "text": "History"}
+    created = _panel_features(page, "loop-panel-create")
+    history = _panel_features(page, "loop-panel-history")
+    assert "widget-refactor" in created
+    assert "widget-refactor" not in history
+    assert set(history) == {"auth-migration", "coding-finished", "planning-finished"}
+    assert not set(history) & set(created)
+
+    # Keyboard: ArrowRight selects and focuses History; End/Home; ArrowLeft wraps.
+    page.focus("#loop-tab-create")
+    page.keyboard.press("ArrowRight")
+    st = _tab_state(page)
+    assert st["history"]["selected"] == "true" and st["history"]["panelHidden"] is False
+    assert st["create"]["tabindex"] == "-1" and st["create"]["panelHidden"] is True
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
+    page.keyboard.press("Home")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
+    page.keyboard.press("End")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
+    page.keyboard.press("ArrowRight")  # wraps
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
+    assert _tab_state(page)["create"]["selected"] == "true"
+
+
+def test_loop_tabs_survive_polls(page, dashboard_fleet):
+    """Polls re-render panel contents only: the tablist node and a focused
+    tab survive."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    page.focus("#loop-tab-create")
+    page.evaluate("() => { window._tl56 = document.querySelector('.loop-subnav'); }")
+    page.wait_for_timeout(7000)  # more than two polls
+    assert page.evaluate("() => window._tl56.isConnected")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
+
+
+def test_sidebar_create_with_active_loop(page, dashboard_fleet):
+    """B4 (rewritten for #56): with an active loop the Create action stays
+    actionable and leads to the explanation, not a disabled form."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
+    assert page.locator(".loop-sidebar-create-disabled").count() == 0
+    page.evaluate("() => document.querySelector('.loop-sidebar-create').click()")
+    page.wait_for_selector(".loop-create-active", timeout=5000)
+    assert page.locator(".loop-sidebar-open-active").count() == 1
+
+
+def test_create_with_active_loop_explains_and_opens(page, dashboard_fleet):
+    """Create with an active loop shows mode + feature + stage and no form;
+    Open active loop selects it and focuses its heading."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
+    page.wait_for_selector(".loop-create-active", timeout=5000)
+    text = page.evaluate(
+        "() => document.querySelector('.loop-create-active').textContent")
+    # The explanation names the first active card in the Create panel.
+    first = _panel_features(page, "loop-panel-create")[0]
+    assert "Planning · legacy" in text
+    assert "‘" + first + "’ is active" in text
+    assert "Only one loop runs at a time." in text
+    assert page.locator("#loop-feature-input").count() == 0
+    assert page.locator("#loop-create-action").count() == 0
+    page.evaluate("() => document.querySelector('.loop-sidebar-open-active').click()")
+    _wait_header(page, first)
+    page.wait_for_function(
+        "() => document.activeElement && document.activeElement.matches"
+        "('.loop-status-header h3')", timeout=5000)
+
+
+def test_create_without_active_loop_unchanged(page, dashboard_fleet):
+    """No active loop: the Create tab is selected and the form renders as
+    before."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    _click_nav(page, "loop")
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    assert page.locator("#loop-feature-input").count() == 1
+    assert page.locator(".loop-create-active").count() == 0
+    assert _tab_state(page)["create"]["selected"] == "true"
+
+
+def test_loop_back_forward_within_loop(page, dashboard_fleet):
+    """7a: select a history loop -> Create tab -> Back restores History and
+    that loop's header without adding entries -> Forward returns to Create."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "auth-migration")
+    assert _tab_state(page)["history"]["selected"] == "true"
+    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
+    page.wait_for_selector(".loop-create-active", timeout=5000)
+    length = page.evaluate("() => history.length")
+    _history_back(page)
+    _wait_header(page, "auth-migration")
+    assert _tab_state(page)["history"]["selected"] == "true"
+    assert page.locator(".loop-create-active").count() == 0
+    assert page.evaluate("() => history.length") == length
+    page.wait_for_function(
+        "() => document.activeElement && document.activeElement.matches"
+        "('.loop-status-header h3')", timeout=5000)
+    _history_forward(page)
+    page.wait_for_selector(".loop-create-active", timeout=5000)
+    assert _tab_state(page)["create"]["selected"] == "true"
+    assert page.evaluate("() => history.length") == length
+
+
+@pytest.mark.parametrize("away", ["history", "fleet"])
+def test_back_restores_loop_after_leaving(page, dashboard_fleet, away):
+    """7b/7c: select a history loop -> leave to Commits (or Fleet) -> Back
+    shows the Loop view with that selection -> Forward leaves again."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "coding-finished")
+    _click_nav(page, away)
+    page.wait_for_function(
+        "(v) => document.querySelector('.sidebar-item.active').dataset.view === v",
+        arg=away, timeout=5000)
+    assert page.locator(".loop-workspace").count() == 0
+    _history_back(page)
+    _wait_header(page, "coding-finished")
+    assert page.evaluate(
+        "() => document.querySelector('.sidebar-item.active').dataset.view") == "loop"
+    assert _tab_state(page)["history"]["selected"] == "true"
+    assert page.evaluate(
+        "() => document.querySelector('.loop-status-header .loop-mode-badge').textContent"
+    ) == "Coding"
+    _history_forward(page)
+    page.wait_for_function(
+        "(v) => document.querySelector('.sidebar-item.active').dataset.view === v",
+        arg=away, timeout=5000)
+    assert page.locator(".loop-workspace").count() == 0
+
+
+def test_back_past_loop_entry_restores_shell_views(page, dashboard_fleet):
+    """7c: Back past the Loop entries reaches the Repo entry, then Fleet."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin, wait_until="load")
+    page.wait_for_selector(".link-btn", timeout=10000)
+    page.evaluate("""() => {
+        var btns = document.querySelectorAll('.link-btn');
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].textContent === 'alpha') { btns[i].click(); break; }
+        }
+    }""")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    _click_nav(page, "loop")
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _history_back(page)
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert page.evaluate(
+        "() => document.querySelector('.sidebar-item.active').dataset.view") == "repo"
+    _history_back(page)
+    page.wait_for_selector(".link-btn", timeout=10000)
+    assert page.evaluate(
+        "() => document.querySelector('.sidebar-item.active').dataset.view") == "fleet"
+    # The landing Fleet entry had no repository: the shell restores that.
+    assert page.evaluate(
+        "() => document.getElementById('loop-tab').classList.contains('dimmed')")
+
+
+def test_back_restores_loop_in_its_own_repository(page, dashboard_fleet):
+    """7e: alpha history loop -> Fleet -> beta -> Back x2 restores alpha's
+    Loop (label, card, heading, API key) -> Forward x2 returns to beta."""
+    alpha_key = _repo_key(dashboard_fleet["repos"]["alpha"]["path"])
+    beta_key = _repo_key(dashboard_fleet["repos"]["beta"]["path"])
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "auth-migration")
+    _click_nav(page, "fleet")
+    page.wait_for_selector(".link-btn", timeout=10000)
+    page.evaluate("""() => {
+        var btns = document.querySelectorAll('.link-btn');
+        for (var i = 0; i < btns.length; i++) {
+            if (btns[i].textContent === 'beta') { btns[i].click(); break; }
+        }
+    }""")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert "beta" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+
+    loop_requests = []
+    page.on("request", lambda req: loop_requests.append(req.url)
+            if "/loops" in req.url else None)
+    _history_back(page)
+    page.wait_for_selector(".link-btn", timeout=10000)
+    _history_back(page)
+    _wait_header(page, "auth-migration")
+    assert "alpha" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+    assert page.evaluate(
+        "() => document.querySelector('.loop-sidebar-card.loop-sidebar-item-selected"
+        " .loop-card-feature').textContent") == "auth-migration"
+    assert loop_requests, "restoring the Loop view must fetch loop data"
+    assert all("/repo-by-key/" + alpha_key + "/" in u for u in loop_requests), loop_requests
+    assert not any(beta_key in u for u in loop_requests)
+
+    _history_forward(page)
+    page.wait_for_selector(".link-btn", timeout=10000)
+    _history_forward(page)
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert page.evaluate(
+        "() => document.querySelector('.sidebar-item.active').dataset.view") == "repo"
+    assert "beta" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+
+
+def test_back_to_unregistered_repo_falls_back_to_fleet(page, dashboard_fleet):
+    """7f: a recorded repository that is no longer in the fleet shows Fleet
+    with a notice and never issues a Loop request for it."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    page.evaluate("""() => history.replaceState({gatorDashboard: 1, view: 'loop',
+        repo: 'ghost-repo', repoKey: 'deadbeef', sub: null}, '')""")
+    _click_nav(page, "history")
+    page.wait_for_function(
+        "() => document.querySelector('.sidebar-item.active').dataset.view === 'history'",
+        timeout=5000)
+    loop_requests = []
+    page.on("request", lambda req: loop_requests.append(req.url)
+            if "/loops" in req.url else None)
+    _history_back(page)
+    page.wait_for_selector(".shell-notice", timeout=5000)
+    assert page.evaluate(
+        "() => document.querySelector('.shell-notice').textContent"
+    ) == "That repository is no longer registered."
+    assert page.evaluate(
+        "() => document.querySelector('.sidebar-item.active').dataset.view") == "fleet"
+    assert page.evaluate("() => history.state.view") == "fleet"
+    page.wait_for_timeout(500)
+    assert loop_requests == []
+
+
+def test_history_state_never_holds_tokens(page, dashboard_fleet):
+    """7d: every recorded and walked history state is a shell entry with no
+    token, prompt or artifact text, including after a prompt copy."""
+    page.add_init_script("""
+        window.__states = [];
+        ['pushState', 'replaceState'].forEach(function (fn) {
+            var orig = history[fn].bind(history);
+            history[fn] = function (st) {
+                window.__states.push(JSON.stringify(st));
+                return orig.apply(null, arguments);
+            };
+        });
+    """)
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.evaluate("() => { var b = document.querySelector('.loop-prompt-copy');"
+                  " if (b) b.click(); }")
+    page.wait_for_timeout(500)
+    _select_loop_card(page, "auth-migration")
+    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
+    _click_nav(page, "history")
+    page.wait_for_timeout(300)
+    for _ in range(4):
+        _history_back(page)
+        page.wait_for_timeout(400)
+        page.evaluate("() => window.__states.push(JSON.stringify(history.state))")
+    states = page.evaluate("() => window.__states")
+    assert len(states) >= 8
+    for raw in states:
+        assert "glp_" not in raw
+        assert "Executive Summary" not in raw and "prompt" not in raw.lower()
+        st = json.loads(raw)
+        assert st["gatorDashboard"] == 1
+        assert set(st) == {"gatorDashboard", "view", "repo", "repoKey", "sub"}
+        if st["sub"] is not None:
+            assert set(st["sub"]) == {"view", "mode", "loopId"}
+
+
+def test_commits_nav_label(page, dashboard_fleet):
+    """The global commit timeline is labelled Commits; route unchanged."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin, wait_until="load")
+    page.wait_for_selector("#view-slot", timeout=10000)
+    label = page.evaluate(
+        "() => document.querySelector('.sidebar-item[data-view=\"history\"]').textContent")
+    assert "Commits" in label and "History" not in label
+    _click_nav(page, "history")
+    page.wait_for_function(
+        "() => document.getElementById('topbar-title').textContent === 'Commits'",
+        timeout=5000)
+    assert page.evaluate("() => history.state.view") == "history"
+
+
+def test_history_tab_with_active_loop_round_trips(page, dashboard_fleet):
+    """A History tab chosen while the active loop stays inspected is
+    restored as History (not derived from the loop's stage), both within
+    the Loop view and after leaving it."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header h3", timeout=10000)
+    page.wait_for_function(
+        "() => document.querySelector('.loop-status-header h3').textContent !== ''",
+        timeout=10000)
+    active = page.evaluate(
+        "() => document.querySelector('.loop-status-header h3').textContent")
+    assert active in _panel_features(page, "loop-panel-create")
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert _tab_state(page)["history"]["selected"] == "true"
+    _wait_header(page, active)  # the main content is untouched
+
+    # Within Loop: Back shows the Create tab, Forward the History tab, and
+    # the inspected active loop stays in the main region throughout.
+    _history_back(page)
+    page.wait_for_function(
+        "() => document.querySelector('#loop-tab-create')"
+        ".getAttribute('aria-selected') === 'true'", timeout=5000)
+    _wait_header(page, active)
+    _history_forward(page)
+    page.wait_for_function(
+        "() => document.querySelector('#loop-tab-history')"
+        ".getAttribute('aria-selected') === 'true'", timeout=5000)
+    _wait_header(page, active)
+    assert _tab_state(page)["history"]["panelHidden"] is False
+
+    # Leave and come back: the remount restores the same tab and loop.
+    _click_nav(page, "history")
+    page.wait_for_function(
+        "() => document.querySelector('.sidebar-item.active').dataset.view === 'history'",
+        timeout=5000)
+    _history_back(page)
+    _wait_header(page, active)
+    page.wait_for_function(
+        "() => document.querySelector('#loop-tab-history')"
+        ".getAttribute('aria-selected') === 'true'", timeout=5000)
+    assert _tab_state(page)["create"]["panelHidden"] is True
+
+
+# ── #56 participant recovery ──────────────────────────────────────────────
+
+
+def _lv_role(state):
+    # Fixed timestamps: identical polls must render identical text.
+    return {
+        "state": state,
+        "adapter_kind": None if state == "not_registered" else "generic-watcher",
+        "last_seen_at": None if state == "not_registered" else "2026-09-22T10:00:00+00:00",
+        "pending": 0, "last_notification": None,
+        "renotify_eligible": False, "renotify_reason_code": "not_actionable",
+    }
+
+
+def _lv_view(draftor, reviewer):
+    return {"schema": "gator-loop-liveness-view-v1", "available": True,
+            "degraded": None,
+            "roles": {"draftor": _lv_role(draftor), "reviewer": _lv_role(reviewer)},
+            "audit": {"renotify_count": 0, "last_at": None, "last_actor": None}}
+
+
+def _serve_liveness(page, holder):
+    """Fulfil /liveness with holder["view"] (mutable between polls)."""
+    def handler(route):
+        route.fulfill(status=200, content_type="application/json",
+                      headers={"Cache-Control": "no-store"},
+                      body=json.dumps(holder["view"]))
+    page.route("**/loops/*/liveness", handler)
+
+
+def _serve_status_unjoined(page, role):
+    """Pass /status through with one role marked as not joined."""
+    def handler(route):
+        resp = route.fetch()
+        data = resp.json()
+        data.setdefault("roles", {}).setdefault(role, {})["joined"] = False
+        route.fulfill(status=resp.status, content_type="application/json",
+                      headers={"Cache-Control": "no-store"},
+                      body=json.dumps(data))
+    page.route("**/loops/*/status", handler)
+
+
+def _recovery(page):
+    return page.evaluate("""() => {
+        var d = document.querySelector('#loop-recovery');
+        if (!d) return null;
+        var out = {open: d.open, summary: d.querySelector('summary').textContent,
+                   text: d.textContent, rows: {}};
+        d.querySelectorAll('.loop-recovery-row').forEach(function (r) {
+            var n = r.querySelector('.loop-recovery-need');
+            out.rows[r.dataset.role] = {need: n.textContent, flag: n.dataset.need};
+        });
+        return out;
+    }""")
+
+
+def _open_recovery_loop(page, fleet):
+    _navigate_to_loop(page, fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector("#loop-recovery", state="attached", timeout=10000)
+
+
+@pytest.mark.parametrize("state", ["connected", "not_registered"])
+def test_recovery_hidden_for_healthy_joined(page, dashboard_fleet, state):
+    """Joined roles that are connected, or have no watcher at all (#52), need
+    no recovery: the disclosure stays closed and the copy buttons exist but
+    are not visible."""
+    _serve_liveness(page, {"view": _lv_view(state, state)})
+    try:
+        _open_recovery_loop(page, dashboard_fleet)
+        page.wait_for_selector(".loop-liveness-row .loop-liveness-state",
+                               timeout=10000)
+        page.wait_for_function(
+            "() => document.querySelector('.loop-recovery-need').textContent !== ''",
+            timeout=5000)
+        page.wait_for_timeout(500)
+        rec = _recovery(page)
+        assert rec["open"] is False
+        assert rec["summary"] == "Participant recovery"
+        for r in ("draftor", "reviewer"):
+            assert rec["rows"][r] == {"need": "Joined — no action needed",
+                                      "flag": "0"}
+        assert page.locator(".loop-prompt-copy").count() == 2
+        assert not page.locator('.loop-prompt-copy[data-role="draftor"]').is_visible()
+    finally:
+        page.unroute("**/loops/*/liveness")
+
+
+@pytest.mark.parametrize("case,need", [
+    ("not_joined", "Has not joined yet."),
+    ("stale", "Watcher is stale — reconnect if the session dropped."),
+    ("released", "Watcher exited after a notification — reconnect if the session closed."),
+])
+def test_recovery_opens_for_need(page, dashboard_fleet, case, need):
+    """A role that has not joined, or whose watcher is stale or released,
+    opens the disclosure with its need, the guidance and the credential
+    warning; Copy writes the clipboard and posts nothing but /prompt."""
+    draftor_state = "connected" if case == "not_joined" else case
+    _serve_liveness(page, {"view": _lv_view(draftor_state, "connected")})
+    if case == "not_joined":
+        _serve_status_unjoined(page, "draftor")
+    posts = []
+    page.on("request", lambda req: posts.append(req.url)
+            if req.method == "POST" else None)
+    page.route("**/loops/*/prompt", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        headers={"Cache-Control": "no-store"},
+        body=json.dumps({"prompt": "RECOVERY-PROMPT-TEXT"})))
+    try:
+        _open_recovery_loop(page, dashboard_fleet)
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === true",
+            timeout=10000)
+        rec = _recovery(page)
+        assert rec["rows"]["draftor"] == {"need": "⚠ " + need, "flag": "1"}
+        assert rec["rows"]["reviewer"]["need"] == "Joined — no action needed"
+        assert "Do not paste a prompt into a session that has already joined." in rec["text"]
+        assert "The copied prompt carries a role credential." in rec["text"]
+        assert page.evaluate(
+            "() => getComputedStyle(document.querySelector("
+            "'.loop-recovery-need[data-need=\"1\"]')).fontWeight") in ("700", "bold")
+
+        page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page.click('.loop-prompt-copy[data-role="draftor"]')
+        page.wait_for_function(
+            "() => navigator.clipboard.readText().then(t => t === 'RECOVERY-PROMPT-TEXT')",
+            timeout=5000)
+        assert posts and all(u.endswith("/prompt") for u in posts), posts
+    finally:
+        for r in ("**/loops/*/liveness", "**/loops/*/status", "**/loops/*/prompt"):
+            try:
+                page.unroute(r)
+            except Exception:
+                pass
+
+
+def test_recovery_user_toggle_survives_poll(page, dashboard_fleet):
+    """The Architect's own toggle holds across polls until the need set
+    changes; a change re-applies the automatic state."""
+    holder = {"view": _lv_view("stale", "connected")}
+    _serve_liveness(page, holder)
+    try:
+        _open_recovery_loop(page, dashboard_fleet)
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === true",
+            timeout=10000)
+        page.click("#loop-recovery summary")  # user closes it
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === false",
+            timeout=5000)
+        page.wait_for_timeout(7000)  # more than two polls, same need set
+        assert page.evaluate("() => document.querySelector('#loop-recovery').open") is False
+        holder["view"] = _lv_view("stale", "released")  # need set changes
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === true",
+            timeout=10000)
+        holder["view"] = _lv_view("connected", "connected")  # needs cleared
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === false",
+            timeout=10000)
+    finally:
+        page.unroute("**/loops/*/liveness")
+
+
+def test_recovery_poll_mutation_free(page, dashboard_fleet):
+    """Identical polls make zero mutations in the recovery region, whether
+    the disclosure is open or closed."""
+    _serve_liveness(page, {"view": _lv_view("stale", "connected")})
+    try:
+        _open_recovery_loop(page, dashboard_fleet)
+        page.wait_for_function(
+            "() => document.querySelector('#loop-recovery').open === true",
+            timeout=10000)
+        page.wait_for_timeout(500)
+        page.evaluate("""() => {
+            window._m56r = 0;
+            window._m56rNode = document.querySelector('#loop-recovery');
+            new MutationObserver(function (m) { window._m56r += m.length; })
+              .observe(document.querySelector('#loop-region-prompts'),
+                       {subtree: true, childList: true, characterData: true,
+                        attributes: true});
+        }""")
+        page.wait_for_timeout(7000)  # more than two polls
+        assert page.evaluate("() => window._m56r") == 0
+        assert page.evaluate("() => window._m56rNode.isConnected")
+    finally:
+        page.unroute("**/loops/*/liveness")
