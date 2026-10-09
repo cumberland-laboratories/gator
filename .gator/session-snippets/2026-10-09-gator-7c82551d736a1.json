@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.24.0 — Gator-native entry point, gator loop codex, Loop Create/History workspace, Architect precedence (#37, #56)",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release",
+    "entry-point",
+    "loop",
+    "codex",
+    "dashboard",
+    "protocol"
+  ],
+  "commit": "7c82551d736a1b417e2418e4c92c6c683d5fdb46",
+  "short_commit": "7c82551",
+  "snippet_id": "snippet-7c82551d736a1",
+  "session_group_key": "anthropic:dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "b443e809ad7e9e40d6a6b3e144fdc6596fd89a38",
+  "started_at": "2026-10-09T00:29:22Z",
+  "ended_at": "2026-10-09T15:31:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-09-gator-b443e809ad7e9.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump to 2.24.0: `pyproject.toml` and `VERSION` (kept byte-consistent), the CHANGELOG `[Unreleased]` section becomes `[2.24.0] — 2026-10-09` with a release summary and the missing entries for `gator loop codex` (#37 follow-up), the Loop Create/History tabs, mode badges and participant recovery (#56), \"History\" → \"Commits\" navigation, and the loop protocol's Architect precedence and default wait intervals; and the `scripts-core-library.md` version note."
+  ],
+  "transcript_session_id": "dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "transcript_ref": null
+}

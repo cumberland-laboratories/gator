@@ -63,7 +63,7 @@ Read the output. It tells you:
 - `1` also applies while the loop is **paused or blocked on the Architect**: nobody's turn, so wait. Suspension is not the end of the loop (see "Suspension Is Not Departure" below).
 - `2` — the loop ended. Stop.
 
-**Waiting is bounded and resumable.** `gator loop wait --max-seconds 45` returns within about 45 seconds so that it fits inside agent tool-call limits. The 45 is a default. If the Architect gives you a different interval (see "Precedence"), use that value for every `wait`, and allow your tool call to run longer than the interval (for example, set a longer tool timeout). Its exit codes:
+**Waiting is bounded and resumable.** `gator loop wait --max-seconds 45` returns within about 45 seconds so that it fits inside agent tool-call limits. The 45 is a default. If the Architect gives you a different interval (see "Precedence"), use that value for every `wait`, and allow your tool call to run longer than the interval (for example, raise its time limit). Its exit codes:
 - `0` — it is now your turn. Act immediately.
 - `3` — still not your turn. **Reissue the same `wait` command right away.** A completed `wait` call does not end your participation in the loop.
 - `2` — the loop ended. Stop and report the status.
