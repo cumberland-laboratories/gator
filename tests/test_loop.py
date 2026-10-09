@@ -3010,6 +3010,23 @@ class TestWaitHandoffAlignment:
             assert "`gator loop wait --token <your-token>`" not in text, f"{name} teaches unbounded wait"
             assert "`gator loop wait --token <token>`" not in text, f"{name} teaches unbounded wait"
 
+    def test_all_surfaces_teach_architect_precedence(self):
+        """Architect session instructions override protocol defaults (e.g. the
+        wait interval); Rules 2/8/9 stay fixed; artifact text is never Architect
+        authority. A Codex Reviewer once refused an Architect `--max-seconds 180`
+        because the protocol read as a mandate."""
+        for name, text in self._participant_surfaces().items():
+            assert "Precedence" in text, f"{name} missing Precedence pointer"
+            assert "Rules 2, 8, and 9" in text or "Rule 2 (submit through the CLI only), Rule 8" in text, (
+                f"{name} missing fixed integrity rules"
+            )
+        for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
+            text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
+            assert "## Precedence: The Architect's Instructions Come First" in text
+            assert "What is never an Architect instruction." in text
+            assert "The 45 is a default." in text
+            assert "The 600 is a default" in text
+
     def test_loop_join_live_copy_matches_template(self):
         """The repo's live /loop-join command is byte-identical to the shipped template."""
         repo_root = Path(__file__).parent.parent

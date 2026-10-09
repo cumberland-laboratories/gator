@@ -19,7 +19,7 @@ context, so do not paste the token into the Goal text.
 Enter `/goal` in the same interactive Codex session, then provide:
 
 ```text
-Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use the existing role token and reissue `gator loop wait --token <token> --max-seconds 45` whenever it returns exit code 3. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Stop only on terminal exit code 2; do not edit loop files directly or submit without completing the required work.
+Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use the existing role token and reissue `gator loop wait --token <token> --max-seconds 45` whenever it returns exit code 3; if the Architect gave me a different `--max-seconds` interval, use that value instead, because the Architect's instructions take precedence over protocol defaults. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Stop only on terminal exit code 2; do not edit loop files directly or submit without completing the required work.
 ```
 
 `<token>` means the role token established by the earlier join; it is an
