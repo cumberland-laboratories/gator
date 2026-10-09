@@ -1,0 +1,115 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "loop-create-history-workspace-2026-10-09T00-18-16Z",
+  "feature": "loop-create-history-workspace",
+  "mode": "planning-only",
+  "created_at": "2026-10-09T00:18:16.215207+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "plan_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 2,
+    "max_rounds": 6,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-09T00:28:43.473076+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": null,
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null
+  },
+  "current": {
+    "draft": {
+      "turn_id": "draftor-003",
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.current.md"
+    },
+    "findings": {
+      "turn_id": "reviewer-003",
+      "summary": "Plan approved",
+      "artifact_path": "findings.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-10-09T00:21:35.355651+00:00",
+      "round": 0,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-10-09T00:23:49.219471+00:00",
+      "round": 0,
+      "summary": "Review findings submitted",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-10-09T00:26:10.514133+00:00",
+      "round": 1,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-10-09T00:27:04.084174+00:00",
+      "round": 1,
+      "summary": "Review findings submitted",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-10-09T00:28:11.435863+00:00",
+      "round": 2,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-10-09T00:28:43.473045+00:00",
+      "round": 2,
+      "summary": "Plan approved",
+      "artifact_path": "findings.round-2.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1,
+    "context_evidence": 1,
+    "coding_checkpoints": 1
+  }
+}

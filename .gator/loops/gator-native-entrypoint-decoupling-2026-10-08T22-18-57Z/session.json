@@ -1,0 +1,1184 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z",
+  "feature": "gator-native-entrypoint-decoupling",
+  "mode": "coding",
+  "created_at": "2026-10-08T22:18:57.298109+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 0,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-08T23:21:22.994907+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-08T22:55:36.254616+00:00",
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null,
+    "suspended_at": null,
+    "pause_reason": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-005",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-004",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T22:26:27.132081+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "escalation",
+      "ts": "2026-10-08T22:28:02.722763+00:00",
+      "round": 0,
+      "summary": "Escalated: Cannot verify the fixed staged candidate: Git cannot create index.lock due to persistent permission-denied contention."
+    },
+    {
+      "turn_id": "architect-001",
+      "role": "architect",
+      "type": "unblock",
+      "ts": "2026-10-08T22:28:13.187809+00:00",
+      "round": 0,
+      "summary": "try now."
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T22:28:37.772438+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T22:35:34.442304+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T22:48:06.484973+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T22:54:50.854265+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-004",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T22:55:36.254561+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-2.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T23:20:57.294620+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-3.md"
+    },
+    {
+      "turn_id": "reviewer-005",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T23:21:22.994886+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-3.md"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-1",
+      "request": {
+        "reason": "Cannot verify the fixed staged candidate: Git cannot create index.lock due to persistent permission-denied contention.",
+        "artifact_path": "decision-request.decision-1.round-0.md",
+        "round": 0,
+        "role": "reviewer",
+        "ts": "2026-10-08T22:28:02.722828+00:00"
+      },
+      "response": {
+        "message": "try now.",
+        "artifact_path": null,
+        "kind": "message",
+        "ts": "2026-10-08T22:28:13.187798+00:00"
+      }
+    }
+  ],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z",
+    "plan_sha256": "4c3faeac31f21c967fa1de47085988a51d8531b22c806a3d0d4b79ac65a12670",
+    "base_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+    "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-08T22:26:27.132103+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "head_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "d304c066a327ae7035165778814a8f9f3f3489d9",
+          "base_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/.includes/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-lifecycle.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-update.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-08-gator-8d5fae77f21b0.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize.py"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_gatorize.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_init.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_layout.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "changed_count": 19,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "d304c066a327ae7035165778814a8f9f3f3489d9",
+          "reviewed_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-08T22:28:37.769824+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 4,
+            "title": "Bootstrap contract and handoff",
+            "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 1,
+        "submitted_at": "2026-10-08T22:35:34.442325+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "head_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba",
+          "base_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/.includes/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-lifecycle.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-update.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-08-gator-8d5fae77f21b0.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/managed_block.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/post_install.py"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_gatorize.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_init.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_template_sync.py"
+            },
+            {
+              "status": "D",
+              "path": "tests/test_update_entry_points.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "d304c066a327ae7035165778814a8f9f3f3489d9",
+          "changed_count": 12,
+          "revisited_count": 7
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 1,
+          "reviewed_tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba",
+          "reviewed_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-08T22:48:06.482377+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 4,
+            "title": "Native-neutral install and update",
+            "base_tree": "d304c066a327ae7035165778814a8f9f3f3489d9"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 2,
+        "submitted_at": "2026-10-08T22:54:50.854299+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "head_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf",
+          "base_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/.includes/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-managed-state.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-lifecycle.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-update.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-08-gator-8d5fae77f21b0.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-state.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize.py"
+            },
+            {
+              "status": "D",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/managed_block.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/post_install.py"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_gatorize.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_init.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_state.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_template_sync.py"
+            },
+            {
+              "status": "D",
+              "path": "tests/test_update_entry_points.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba",
+          "changed_count": 13,
+          "revisited_count": 7
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 2,
+          "reviewed_tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf",
+          "reviewed_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-08T22:55:36.252436+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 4,
+            "title": "State boundary and renderer retirement",
+            "base_tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 3,
+        "submitted_at": "2026-10-08T23:20:57.294641+00:00",
+        "artifact_path": "implementation.round-3.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "head_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "aa7d41181d91c6252b79abacd0da94e835d10de7",
+          "base_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/.includes/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/enforcer-review.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-version-drift.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/knowledge-capture.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/concierge-responses.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/enforcer-configuration.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/local-agent-skills.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/.includes/reference-notes/what-gator-requires-from-a-model.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-installer.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-managed-state.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-lifecycle.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-repo-update.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-08-gator-8d5fae77f21b0.json"
+            },
+            {
+              "status": "M",
+              "path": "CHANGELOG.md"
+            },
+            {
+              "status": "M",
+              "path": "README.md"
+            },
+            {
+              "status": "M",
+              "path": "docs/architecture.md"
+            },
+            {
+              "status": "M",
+              "path": "docs/custom-skills-and-team-workflow.md"
+            },
+            {
+              "status": "M",
+              "path": "docs/how-to-use-gator.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-state.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize.py"
+            },
+            {
+              "status": "D",
+              "path": "src/gator_command/scripts/gatorize/entry_points.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/managed_block.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gatorize/post_install.py"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/GATOR_INIT.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/enforcer-review.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-version-drift.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/knowledge-capture.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/concierge-responses.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/enforcer-configuration.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/local-agent-skills.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/what-gator-requires-from-a-model.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-init.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator-update.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loop_brief.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_gatorize.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_init.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_native_file_guidance.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_state.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_template_sync.py"
+            },
+            {
+              "status": "D",
+              "path": "tests/test_update_entry_points.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp4",
+          "index": 3,
+          "base_tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf",
+          "changed_count": 25,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 3,
+          "reviewed_tree": "aa7d41181d91c6252b79abacd0da94e835d10de7",
+          "reviewed_head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-3.md",
+          "reviewed_at": "2026-10-08T23:21:22.992932+00:00",
+          "checkpoint": {
+            "id": "cp4",
+            "index": 4,
+            "count": 4,
+            "title": "Explicit-start adoption",
+            "base_tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "aa7d41181d91c6252b79abacd0da94e835d10de7",
+      "head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+      "round": 0,
+      "generation": 3,
+      "ts": "2026-10-08T23:21:22.992932+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 3,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Bootstrap contract and handoff",
+          "scope": "Add `GATOR_INIT.md` (template + dogfood). Classify and resolve it in both `gator_layout.py` copies. Place it through gatorize and both `gator-update.py` `TEMPLATE_FILES`. Make both `gator-init.py` copies name it first, with the never-writing legacy fallback and the `session_opening` JSON. Update the layout, lifecycle and installer charters.",
+          "verify": "`pytest tests/test_layout.py tests/test_init.py` plus the new placement/idempotence and content-guard tests.",
+          "state": "approved",
+          "base_tree": "ea8a4db34e3e715fedbe9b385b1c8461b5cf3a86",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "d304c066a327ae7035165778814a8f9f3f3489d9",
+            "head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+            "generation": 0,
+            "ts": "2026-10-08T22:28:37.769824+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Native-neutral install and update",
+          "scope": "Remove entry-point install from the gatorize tail and summary. Remove entry-point plan/execute (and the template copy's inlined helpers) from both `gator-update.py` copies, keeping the always-empty `entry_point_actions` JSON key. Update the installer and repo-update charters.",
+          "verify": "`pytest tests/test_gatorize.py tests/test_template_sync.py` plus the new parameterized byte-preservation tests for gatorize and update.",
+          "state": "approved",
+          "base_tree": "d304c066a327ae7035165778814a8f9f3f3489d9",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba",
+            "head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+            "generation": 1,
+            "ts": "2026-10-08T22:48:06.482377+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "State boundary and renderer retirement",
+          "scope": "Move `gator state` to `gator-state-v2` with informational `native_files` and a no-write repair stub. Delete `gatorize/entry_points.py`. Retarget the loop handoff/Executive Summary alignment tests away from the renderer and live native files. Update the managed-state and cross-cutting charters.",
+          "verify": "`pytest tests/test_state.py tests/test_managed_block.py tests/test_loop.py -k \"Alignment or ExecutiveSummary or DriftGuards\" tests/test_packaging.py`.",
+          "state": "approved",
+          "base_tree": "6bd881b0d6040570f759a54384b9fd8cde70b2ba",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf",
+            "head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+            "generation": 2,
+            "ts": "2026-10-08T22:55:36.252436+00:00"
+          }
+        },
+        {
+          "id": "cp4",
+          "title": "Explicit-start adoption",
+          "scope": "Add the Dashboard loop-join `gator init` pointer line. Re-run the Change 9 inventory, and revise every \"Revise\" row (README, the three docs, the seven starter procedure/reference-note files and their dogfood copies) plus the CHANGELOG migration notes. Add the retired-claim regression guard. Update the dashboard charter.",
+          "verify": "the Dashboard join-prompt test, the no-native-files session-opening smoke test and `pytest tests/test_native_file_guidance.py`; then the final broad `python -m pytest tests -q` once.",
+          "state": "approved",
+          "base_tree": "118bc7f3fd14ff28ffbfebe6dfbd34f2fe4fdaaf",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "aa7d41181d91c6252b79abacd0da94e835d10de7",
+            "head": "8d5fae77f21b0d11f44c1e294c0dadfb1b6ff621",
+            "generation": 3,
+            "ts": "2026-10-08T23:21:22.992932+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

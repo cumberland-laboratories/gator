@@ -1,0 +1,826 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z",
+  "feature": "codex-routine-loop-command-profile-spike",
+  "mode": "coding",
+  "created_at": "2026-10-07T23:37:15.661435+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 1,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-08T00:16:52.889963+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-08T00:02:53.758075+00:00",
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null,
+    "suspended_at": null,
+    "pause_reason": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-005",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-006",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-07T23:45:44.461680+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-07T23:47:02.382821+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T00:02:12.863326+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T00:02:53.758029+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T00:08:31.066698+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T00:08:56.948685+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-2.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "escalation",
+      "ts": "2026-10-08T00:09:24.453199+00:00",
+      "round": 0,
+      "summary": "Escalated: Conditional pass: publish the Codex routine profile (allowed gator loop commands run unsandboxed) as an opt-in note, or record works-not-recommended?"
+    },
+    {
+      "turn_id": "architect-001",
+      "role": "architect",
+      "type": "unblock",
+      "ts": "2026-10-08T00:10:36.420646+00:00",
+      "round": 0,
+      "summary": "Publish as opt-in."
+    },
+    {
+      "turn_id": "draftor-005",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T00:15:25.397566+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-3.md"
+    },
+    {
+      "turn_id": "reviewer-004",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T00:16:00.299041+00:00",
+      "round": 0,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-3.md"
+    },
+    {
+      "turn_id": "draftor-006",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-08T00:16:29.034860+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-4.md"
+    },
+    {
+      "turn_id": "reviewer-005",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-08T00:16:52.889945+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-4.md"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "decision-1",
+      "request": {
+        "reason": "Conditional pass: publish the Codex routine profile (allowed gator loop commands run unsandboxed) as an opt-in note, or record works-not-recommended?",
+        "artifact_path": "decision-request.decision-1.round-0.md",
+        "round": 0,
+        "role": "draftor",
+        "ts": "2026-10-08T00:09:24.453241+00:00"
+      },
+      "response": {
+        "message": "Publish as opt-in.",
+        "artifact_path": null,
+        "kind": "message",
+        "ts": "2026-10-08T00:10:36.420616+00:00"
+      }
+    }
+  ],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z",
+    "plan_sha256": "a70942463c2c4abbe24e727a75a442e5a8bdd4d76a2d1dd3a351b0a959a75501",
+    "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+    "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-07T23:45:44.461701+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "head_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6",
+          "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/artifacts/2026-10-08-codex-routine-profile-spike.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-07-gator-660480758c2d6.json"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.includes/procedures/gator-loop-protocol.md",
+            ".gator/.includes/reference-notes/codex-loop-participant.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json",
+            "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
+            "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_count": 3,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6",
+          "reviewed_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-07T23:47:02.380464+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 4,
+            "title": "Fixture, isolation and baseline evidence",
+            "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 1,
+        "submitted_at": "2026-10-08T00:02:12.863354+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "head_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "a13ee972048798b0065647d2c8e8b9042bdbe016",
+          "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/artifacts/2026-10-08-codex-routine-profile-spike.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-07-gator-660480758c2d6.json"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.includes/procedures/gator-loop-protocol.md",
+            ".gator/.includes/reference-notes/codex-loop-participant.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json",
+            "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
+            "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6",
+          "changed_count": 2,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 1,
+          "reviewed_tree": "a13ee972048798b0065647d2c8e8b9042bdbe016",
+          "reviewed_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-08T00:02:53.755578+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 4,
+            "title": "Profile happy path",
+            "base_tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 2,
+        "submitted_at": "2026-10-08T00:08:31.066744+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "head_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "4694815498825fe3cdb261da492e077ef4089b63",
+          "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_paths": [
+            {
+              "status": "A",
+              "path": ".gator/artifacts/2026-10-08-codex-routine-profile-spike.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-07-gator-660480758c2d6.json"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.includes/procedures/gator-loop-protocol.md",
+            ".gator/.includes/reference-notes/codex-loop-participant.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json",
+            "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
+            "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "a13ee972048798b0065647d2c8e8b9042bdbe016",
+          "changed_count": 2,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 2,
+          "reviewed_tree": "4694815498825fe3cdb261da492e077ef4089b63",
+          "reviewed_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-08T00:08:56.946490+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 4,
+            "title": "Safety, rejection and teardown",
+            "base_tree": "a13ee972048798b0065647d2c8e8b9042bdbe016"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 3,
+        "submitted_at": "2026-10-08T00:15:25.397588+00:00",
+        "artifact_path": "implementation.round-3.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "head_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "7a57123a3211e4c10de0b3e932fe6912c9565d22",
+          "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/.includes/reference-notes/codex-loop-participant.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/.includes/reference-notes/codex-routine-participant-profile.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/artifacts/2026-10-08-codex-routine-profile-spike.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-07-gator-660480758c2d6.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/codex-routine-participant-profile.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp4",
+          "index": 3,
+          "base_tree": "4694815498825fe3cdb261da492e077ef4089b63",
+          "changed_count": 12,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 0,
+          "generation": 3,
+          "reviewed_tree": "7a57123a3211e4c10de0b3e932fe6912c9565d22",
+          "reviewed_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "candidate_changed": true,
+          "live_snapshot_ok": false,
+          "artifact_path": "findings.round-3.md",
+          "reviewed_at": "2026-10-08T00:16:00.296652+00:00",
+          "checkpoint": {
+            "id": "cp4",
+            "index": 4,
+            "count": 4,
+            "title": "Result packaging",
+            "base_tree": "4694815498825fe3cdb261da492e077ef4089b63"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 4,
+        "submitted_at": "2026-10-08T00:16:29.034880+00:00",
+        "artifact_path": "implementation.round-4.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "head_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "dc2a58a007d936d83ca5db9e7a88a86642521b95",
+          "base_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/.includes/reference-notes/codex-loop-participant.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/.includes/reference-notes/codex-routine-participant-profile.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/artifacts/2026-10-08-codex-routine-profile-spike.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-layout.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-07-gator-660480758c2d6.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md"
+            },
+            {
+              "status": "A",
+              "path": "src/gator_command/templates/gator-starter/reference-notes/codex-routine-participant-profile.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/scripts/gator_layout.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_loop.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp4",
+          "index": 3,
+          "base_tree": "4694815498825fe3cdb261da492e077ef4089b63",
+          "changed_count": 12,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 4,
+          "reviewed_tree": "dc2a58a007d936d83ca5db9e7a88a86642521b95",
+          "reviewed_head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-4.md",
+          "reviewed_at": "2026-10-08T00:16:52.888227+00:00",
+          "checkpoint": {
+            "id": "cp4",
+            "index": 4,
+            "count": 4,
+            "title": "Result packaging",
+            "base_tree": "4694815498825fe3cdb261da492e077ef4089b63"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "dc2a58a007d936d83ca5db9e7a88a86642521b95",
+      "head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+      "round": 1,
+      "generation": 4,
+      "ts": "2026-10-08T00:16:52.888227+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 3,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Fixture, isolation and baseline evidence",
+          "scope": "record the pinned environment and the cited Codex documentation (Q1\u2013Q3, including the isolation discovery), take the normal-home preflight manifest and `execpolicy check` baseline, build the disposable governed fixture with a coding loop in review, and reproduce and record the approval denial without a profile, including the `write-tree` control probe and the unchanged loop state.",
+          "verify": "the artifact holds the environment table, citations, isolation discovery verdict, preflight manifest, verbatim baseline error, and before/after stage, generation and `events.jsonl` counts; no fixture file is inside this repository.",
+          "state": "approved",
+          "base_tree": "101a914d85b07ffd2a1c8fbc6c40748f5862cda8",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6",
+            "head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+            "generation": 0,
+            "ts": "2026-10-07T23:47:02.380464+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Profile happy path",
+          "scope": "configure the smallest documented mechanism, only in the isolated spike config home, for the five `gator loop` subcommands, and prove status, wait and each submission complete without a host prompt in a fresh session while Gator's live snapshot still runs.",
+          "verify": "the per-mechanism evidence row is complete (match decisions for positives and negatives, approval behavior across repeated invocations, sandbox/write boundary from probe P-write, child-Git inheritance from probe P-child); an approval advances to `implementation_approved` with a matching Reviewed Candidate; the token is in no file.",
+          "state": "approved",
+          "base_tree": "9cc960dffbe6dcdba87ace4d1e674716b65a66b6",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "a13ee972048798b0065647d2c8e8b9042bdbe016",
+            "head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+            "generation": 1,
+            "ts": "2026-10-08T00:02:53.755578+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "Safety, rejection and teardown",
+          "scope": "prove stale-candidate refusal, normal policy for unrelated commands, clean behavior when the profile is removed or unavailable, and no residue at terminal, then tear down the spike config home.",
+          "verify": "each of those four matrix rows has a recorded probe with the expected outcome, and post-teardown checks pass (normal-home manifest identical to preflight, `execpolicy check` unchanged, no persistent environment variable, a fresh default session reproduces the baseline).",
+          "state": "approved",
+          "base_tree": "a13ee972048798b0065647d2c8e8b9042bdbe016",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "4694815498825fe3cdb261da492e077ef4089b63",
+            "head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+            "generation": 2,
+            "ts": "2026-10-08T00:08:56.946490+00:00"
+          }
+        },
+        {
+          "id": "cp4",
+          "title": "Result packaging",
+          "scope": "publish the verified outcome: on a pass, the routine-profile reference note (both copies) and protocol and Goal-note links; on a negative or conditional result, only the status line in the Goal note, plus an escalation for a conditional pass. In both cases, add the unconditional `codex-loop-participant.md` pair to `test_starter_copies_match` and add `test_codex_routine_profile_copies_both_absent_\u2026",
+          "verify": "the new test fails when only one profile-note copy exists (checked once by hand, then reverted), and `pytest tests/test_loop.py::TestArtifactFormatAlignment tests/test_loop.py::TestWaitHandoffAlignment tests/test_loop_context_evidence.py` passes, and every setup step in the note matches the verified configuration in the evidence artifact.",
+          "state": "approved",
+          "base_tree": "4694815498825fe3cdb261da492e077ef4089b63",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "dc2a58a007d936d83ca5db9e7a88a86642521b95",
+            "head": "660480758c2d6a1b41157109f9f5625b3c89cc33",
+            "generation": 4,
+            "ts": "2026-10-08T00:16:52.888227+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

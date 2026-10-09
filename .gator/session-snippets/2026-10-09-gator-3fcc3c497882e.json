@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop protocol: Architect instructions take precedence; wait intervals are defaults",
+  "change_type": "governance",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop",
+    "protocol",
+    "governance",
+    "codex"
+  ],
+  "commit": "3fcc3c497882ead7432be05170893eb8223a9652",
+  "short_commit": "3fcc3c4",
+  "snippet_id": "snippet-3fcc3c497882e",
+  "session_group_key": "anthropic:dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "ad0cbf7fa394a19211e799e004b7191dd9fe3528",
+  "started_at": "2026-10-09T00:29:22Z",
+  "ended_at": "2026-10-09T15:07:51Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".claude/commands/loop-join.md",
+    ".gator/.includes/procedures/gator-loop-protocol.md",
+    ".gator/.includes/reference-notes/codex-loop-participant.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-10-09-gator-ad0cbf7fa394a.json",
+    "src/gator_command/templates/gator-starter/commands/loop-join.md",
+    "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md",
+    "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md",
+    "tests/test_loop.py"
+  ],
+  "notes": [
+    "Loop protocol (`.includes` and starter template, byte-identical): new \"Precedence: The Architect's Instructions Come First\" section. Architect instructions come only from the participant's own session (including the join prompt) and the status `Architect message:` line, and override any protocol default or guidance (wait/watcher `--max-seconds`, pacing, checks, reporting) for the rest of the loop. Rules 2, 8 and 9 stay fixed; text in loop artifacts, code, test output or from the other model is never an Architect instruction. Motivation: a Codex Reviewer refused an Architect `--max-seconds 180` because the protocol read as a mandate.",
+    "Step 1 now calls `--max-seconds 45` (wait) and `600` (watcher) defaults; an Architect interval is used for every reissue/relaunch, with a tool timeout longer than the interval. Rule 1 and the Quick Reference point to Precedence.",
+    "`/loop-join` (live and template) and the Codex Goal-mode prompt in `reference-notes/codex-loop-participant.md` (both copies) carry the same precedence instruction.",
+    "Test: `test_all_surfaces_teach_architect_precedence` (`tests/test_loop.py`) pins the section and the fixed-rule wording on every participant surface.",
+    "Significance: Architect chose \"override, keep integrity rules\" over a blanket override after the steelman (artifact text impersonating the Architect could otherwise bypass Rules 2/8/9)."
+  ],
+  "transcript_session_id": "dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "transcript_ref": null
+}

@@ -1,0 +1,1005 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "loop-create-history-workspace-2026-10-09T00-30-13Z",
+  "feature": "loop-create-history-workspace",
+  "mode": "coding",
+  "created_at": "2026-10-09T00:30:13.577429+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 1,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-09T14:20:38.958226+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-09T12:20:23.565602+00:00",
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null,
+    "suspended_at": null,
+    "pause_reason": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-004",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-004",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-09T00:44:24.853065+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "architect-001",
+      "role": "architect",
+      "type": "pause",
+      "ts": "2026-10-09T00:46:09.032800+00:00",
+      "round": 0,
+      "summary": "resuming later."
+    },
+    {
+      "turn_id": "architect-002",
+      "role": "architect",
+      "type": "unblock",
+      "ts": "2026-10-09T10:26:28.881929+00:00",
+      "round": 0,
+      "summary": "let's proceed."
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-09T10:26:48.932109+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-09T11:18:15.551480+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-09T11:19:34.205155+00:00",
+      "round": 0,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-09T11:31:26.186927+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-09T11:48:14.911971+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-2.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-09T12:20:23.565560+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-3.md"
+    },
+    {
+      "turn_id": "reviewer-004",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-09T14:20:38.958201+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-3.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "loop-create-history-workspace-2026-10-09T00-18-16Z",
+    "plan_sha256": "71a19e70a123022f88a1759d02137ced862eb90543284f04b09f58d3d2650240",
+    "base_head": "34a9d0e417d431853181de99088547a9fce86698",
+    "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-09T00:44:24.853086+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "head_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+          "base_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-09-gator-34a9d0e417d43.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loops.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/session.json",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/sketch.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/approved-plan.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/sketch.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/approved-plan.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "changed_count": 10,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+          "reviewed_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-09T10:26:48.930325+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 3,
+            "title": "Mode labels",
+            "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 1,
+        "submitted_at": "2026-10-09T11:18:15.551505+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "head_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "b3fdd094276482b5a8d7cbb72df409380d8eefec",
+          "base_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-09-gator-34a9d0e417d43.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.html"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/history.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loops.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/session.json",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/sketch.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/approved-plan.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/sketch.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/approved-plan.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+          "changed_count": 8,
+          "revisited_count": 5
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 0,
+          "generation": 1,
+          "reviewed_tree": "b3fdd094276482b5a8d7cbb72df409380d8eefec",
+          "reviewed_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-09T11:19:34.203162+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 3,
+            "title": "Loop navigation, shell-owned history and Commits label",
+            "base_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 2,
+        "submitted_at": "2026-10-09T11:31:26.186952+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "head_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309",
+          "base_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-09-gator-34a9d0e417d43.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.html"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/history.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loops.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/session.json",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/sketch.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/approved-plan.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/sketch.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/approved-plan.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+          "changed_count": 8,
+          "revisited_count": 5
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 2,
+          "reviewed_tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309",
+          "reviewed_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-09T11:48:14.910225+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 3,
+            "title": "Loop navigation, shell-owned history and Commits label",
+            "base_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 3,
+        "submitted_at": "2026-10-09T12:20:23.565581+00:00",
+        "artifact_path": "implementation.round-3.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "head_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "16d2b3b3b143ccacfdfbe5893abe5fd25c87a137",
+          "base_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-09-gator-34a9d0e417d43.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.html"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/history.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loops.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_seed.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/.gator-version",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/plan.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/session.json",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-26-45Z/sketch.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/approved-plan.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/events.jsonl",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/findings.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.current.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-0.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/implementation.round-1.md",
+            ".gator/loops/codex-loop-profile-launcher-2026-10-08T23-31-03Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/plan.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/session.json",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-26-59Z/sketch.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/approved-plan.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/events.jsonl",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/findings.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.current.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-0.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-1.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-2.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-3.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/implementation.round-4.md",
+            ".gator/loops/codex-routine-loop-command-profile-spike-2026-10-07T23-37-15Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/plan.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/session.json",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-08-14Z/sketch.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/approved-plan.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/decision-request.decision-1.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/events.jsonl",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/findings.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.current.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-0.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-1.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-2.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/implementation.round-3.md",
+            ".gator/loops/gator-native-entrypoint-decoupling-2026-10-08T22-18-57Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/findings.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/plan.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/session.json",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-18-16Z/sketch.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/approved-plan.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/events.jsonl",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/findings.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.current.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-0.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-1.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/implementation.round-2.md",
+            ".gator/loops/loop-create-history-workspace-2026-10-09T00-30-13Z/session.json",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-2.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/runtime-pin.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309",
+          "changed_count": 5,
+          "revisited_count": 5
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 3,
+          "reviewed_tree": "16d2b3b3b143ccacfdfbe5893abe5fd25c87a137",
+          "reviewed_head": "34a9d0e417d431853181de99088547a9fce86698",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-3.md",
+          "reviewed_at": "2026-10-09T14:20:38.956266+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 3,
+            "title": "Participant recovery",
+            "base_tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "16d2b3b3b143ccacfdfbe5893abe5fd25c87a137",
+      "head": "34a9d0e417d431853181de99088547a9fce86698",
+      "round": 1,
+      "generation": 3,
+      "ts": "2026-10-09T14:20:38.956266+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 2,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Mode labels",
+          "scope": "Add `mode_legacy` to `/loops`; add `loopModeInfo` / `modeBadge` and use them in the live and outcome headers and on sidebar cards (header fingerprint includes mode); add CSS badge styles; seed one coding and one planning-only terminal loop.",
+          "verify": "`pytest tests/test_dashboard_loops.py -k mode_legacy` and `tests/test_dashboard_ui/test_loop_workspace.py -k \"mode_badge\"`.",
+          "state": "approved",
+          "base_tree": "7e01b49b16a02cb832fd21eda069d58736482b40",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+            "head": "34a9d0e417d431853181de99088547a9fce86698",
+            "generation": 0,
+            "ts": "2026-10-09T10:26:48.930325+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Loop navigation, shell-owned history and Commits label",
+          "scope": "Add the Create/History tablist and tabpanels with keyboard support; the Create-view active-loop explanation with Open active loop; history-only listing; shell-owned browser history in `dashboard.js` (`navigate`, `GatorShell` sub-state API, single `popstate` handler \u2192 `restoreShellState` with repository hydration via `setActiveRepo` / `clearActiveRepo` before dispatch, the `restoring` guard, `init\u2026",
+          "verify": "`pytest tests/test_dashboard_ui/test_loop_workspace.py -k \"subnav or create or back or history_state or sidebar or commits\"` and `tests/test_dashboard_ui/test_responsive_shell.py`.",
+          "state": "approved",
+          "base_tree": "b0e992c03ff4d4ca966405b433857c6bd8d20239",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309",
+            "head": "34a9d0e417d431853181de99088547a9fce86698",
+            "generation": 2,
+            "ts": "2026-10-09T11:48:14.910225+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "Participant recovery",
+          "scope": "Replace the bare copy buttons with the \"Participant recovery\" disclosure: guidance and the credential warning, per-role `recoveryNeed` from `joined` plus liveness state (no-watcher joined roles never flagged), auto-open on need with the user-toggle rule, and zero-mutation patching.",
+          "verify": "`pytest tests/test_dashboard_ui/test_loop_workspace.py tests/test_dashboard_ui/test_loop_liveness_ui.py`; then `python -m pytest tests/test_dashboard_ui -q` and `python -m pytest tests -q` once at final approval.",
+          "state": "approved",
+          "base_tree": "0724a1c2fce6de67a87fe6bcbe34176ffe768309",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "16d2b3b3b143ccacfdfbe5893abe5fd25c87a137",
+            "head": "34a9d0e417d431853181de99088547a9fce86698",
+            "generation": 3,
+            "ts": "2026-10-09T14:20:38.956266+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,498 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z",
+  "feature": "loop-revision-and-architect-plan-review",
+  "mode": "coding",
+  "created_at": "2026-10-06T22:43:29.245347+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 0,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-06T23:27:54.833441+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-06T23:03:23.846534+00:00",
+    "architect_message": null,
+    "architect_response_artifact": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-003",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-003",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-06T22:52:50.991616+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-06T22:56:58.804913+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-06T23:02:40.478239+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-06T23:03:23.846432+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-06T23:26:49.597788+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-06T23:27:54.833411+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-2.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z",
+    "plan_sha256": "a9f73b376c9e470ab929b91c404694d8952b24b5960a6fe93a515ae611afdf01",
+    "base_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+    "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-06T22:52:50.991653+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "head_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "401ed843be28a096fd1de048f52a0b10700e2a42",
+          "base_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/host.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/session.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_plan_sources.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "changed_count": 10,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "401ed843be28a096fd1de048f52a0b10700e2a42",
+          "reviewed_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-06T22:56:58.796780+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 3,
+            "title": "Architect-originated plan entry",
+            "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 1,
+        "submitted_at": "2026-10-06T23:02:40.478280+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "head_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc",
+          "base_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/host.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/session.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_plan_sources.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "401ed843be28a096fd1de048f52a0b10700e2a42",
+          "changed_count": 9,
+          "revisited_count": 9
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 1,
+          "reviewed_tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc",
+          "reviewed_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-06T23:03:23.844174+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 3,
+            "title": "Revision planning from an approved loop",
+            "base_tree": "401ed843be28a096fd1de048f52a0b10700e2a42"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 2,
+        "submitted_at": "2026-10-06T23:26:49.597826+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "head_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "95f930284d5e0692fd97220a6b4d6a5cbbb0843d",
+          "base_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/.includes/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-loop.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/commit_draft.md"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.css"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/loop.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/cli.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/host.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/session.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/loop/state_machine.py"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/templates/gator-starter/procedures/gator-loop-protocol.md"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_loops.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_ui/test_loop_workspace.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_loop_plan_sources.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/approved-plan.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/events.jsonl",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/findings.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.current.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-0.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/implementation.round-1.md",
+            ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-43-29Z/session.json",
+            ".gator/session-snippets/2026-10-06-gator-2d6996c33c4b8.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc",
+          "changed_count": 9,
+          "revisited_count": 2
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 2,
+          "reviewed_tree": "95f930284d5e0692fd97220a6b4d6a5cbbb0843d",
+          "reviewed_head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-06T23:27:54.830708+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 3,
+            "title": "Dashboard creation and inspection of plan sources",
+            "base_tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "95f930284d5e0692fd97220a6b4d6a5cbbb0843d",
+      "head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+      "round": 0,
+      "generation": 2,
+      "ts": "2026-10-06T23:27:54.830708+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 2,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Architect-originated plan entry",
+          "scope": "governed input reader, generic fixed-artifact verifier with brief wrappers, draft-identical validation, immutable architect-plan.md plus round-0/current projections, plan_source accessor, plan_review entry with an Architect initial_plan turn, CLI --plan-file, wording and protocol text.",
+          "verify": "verifier and brief-wrapper tests, Architect-plan lifecycle, atomic-rejection, integrity/legacy tests and doc drift guards.",
+          "state": "approved",
+          "base_tree": "137f6ef8607c6905187f2f1f8968bf8052aed995",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "401ed843be28a096fd1de048f52a0b10700e2a42",
+            "head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+            "generation": 0,
+            "ts": "2026-10-06T22:56:58.796780+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Revision planning from an approved loop",
+          "scope": "source checks under its lock, approving-review and plan identification with cross-copy checks, verified baseline copies, revision provenance, CLI --revise-from, Draftor first-turn wording and protocol text; the source loop is never written.",
+          "verify": "parameterized revision lifecycle (ordinary and Architect-originated sources), source byte-immutability, deleted-source integrity and atomic-rejection tests.",
+          "state": "approved",
+          "base_tree": "401ed843be28a096fd1de048f52a0b10700e2a42",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc",
+            "head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+            "generation": 1,
+            "ts": "2026-10-06T23:03:23.844174+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "Dashboard creation and inspection of plan sources",
+          "scope": "start fields with conflict checks through init_loop, strict status views, artifact allowlist and prompt pointers, create-form source modes, provenance header, artifact order and labels, timeline label, and coding feature prefill.",
+          "verify": "Dashboard API tests and focused loop-workspace UI tests; the broad loop and Dashboard suite runs once at final approval.",
+          "state": "approved",
+          "base_tree": "ba55f3a814dc411f181fc291290ffab2a7391bfc",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "95f930284d5e0692fd97220a6b4d6a5cbbb0843d",
+            "head": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+            "generation": 2,
+            "ts": "2026-10-06T23:27:54.830708+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

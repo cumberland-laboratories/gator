@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Housekeeping: verification-ladder procedure update and #51 planning-loop residue",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "housekeeping",
+    "governance",
+    "procedure",
+    "loop"
+  ],
+  "commit": "2d6996c33c4b84c29cf172ec38f591a674ce2933",
+  "short_commit": "2d6996c",
+  "snippet_id": "snippet-2d6996c33c4b8",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "76eac62e78af73aebdfa10bed2224379d776fdbc",
+  "started_at": "2026-10-06T22:42:20Z",
+  "ended_at": "2026-10-06T22:42:20Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/commit_draft.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/events.jsonl",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/findings.current.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/findings.round-0.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/findings.round-1.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/plan.current.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/plan.round-0.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/plan.round-1.md",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/session.json",
+    ".gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/sketch.md",
+    ".gator/procedures/writing-implementation-plans.md",
+    ".gator/session-snippets/2026-10-06-gator-76eac62e78af7.json"
+  ],
+  "notes": [
+    "**Procedure** `.gator/procedures/writing-implementation-plans.md` (Architect's edit): step 5 adds a coding-loop verification ladder. Each checkpoint runs only its focused unit/contract/nearest-integration checks; the smallest relevant broad suite runs once at final coding-loop approval; the full repository or release matrix is left to CI unless a checkpoint changes a cross-cutting contract. A matching reviewer question is added.",
+    "**Loop residue** `.gator/loops/loop-revision-and-architect-plan-review-2026-10-06T22-32-32Z/` (#51 planning loop, approved in round 1): sketch, plan rounds 0–1 and current, findings rounds 0–1 and current, `session.json`, `events.jsonl`. Tokens and locks are excluded by `.gator/loops/.gitignore`; a scan of the committable files found no `glp_` strings.",
+    "**Session snippet:** `2026-10-06-gator-76eac62e78af7.json` (housekeeping commit `76eac62`)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

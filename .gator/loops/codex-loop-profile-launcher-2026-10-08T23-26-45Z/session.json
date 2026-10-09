@@ -1,0 +1,79 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "codex-loop-profile-launcher-2026-10-08T23-26-45Z",
+  "feature": "codex-loop-profile-launcher",
+  "mode": "planning-only",
+  "created_at": "2026-10-08T23:26:45.639549+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "plan_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 0,
+    "max_rounds": 5,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-08T23:30:25.380405+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": null,
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null
+  },
+  "current": {
+    "draft": {
+      "turn_id": "draftor-001",
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.current.md"
+    },
+    "findings": {
+      "turn_id": "reviewer-001",
+      "summary": "Plan approved",
+      "artifact_path": "findings.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "plan_draft",
+      "ts": "2026-10-08T23:29:54.756322+00:00",
+      "round": 0,
+      "summary": "Plan draft submitted",
+      "artifact_path": "plan.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "plan_review",
+      "ts": "2026-10-08T23:30:25.380355+00:00",
+      "round": 0,
+      "summary": "Plan approved",
+      "artifact_path": "findings.round-0.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1,
+    "context_evidence": 1,
+    "coding_checkpoints": 1
+  }
+}

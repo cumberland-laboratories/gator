@@ -1,0 +1,3 @@
+{"event":"loop_started","detail":"Loop initialized","ts":"2026-10-08T23:26:45.644714+00:00","loop_id":"codex-loop-profile-launcher-2026-10-08T23-26-45Z"}
+{"event":"draft_submitted","role":"draftor","round":0,"artifact_path":"plan.round-0.md","detail":"Plan draft submitted, advancing to plan_review","ts":"2026-10-08T23:29:54.758787+00:00","loop_id":"codex-loop-profile-launcher-2026-10-08T23-26-45Z"}
+{"event":"plan_approved","role":"reviewer","round":0,"artifact_path":"findings.round-0.md","detail":"Reviewer approved the plan","ts":"2026-10-08T23:30:25.383168+00:00","loop_id":"codex-loop-profile-launcher-2026-10-08T23-26-45Z"}
