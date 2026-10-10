@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Housekeeping: roadmap and inbox current to v2.24.0; record release-time Windows CI flakes",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "housekeeping",
+    "release"
+  ],
+  "commit": "595ffa770553ede92bed09c51c153da9a23e3a57",
+  "short_commit": "595ffa7",
+  "snippet_id": "snippet-595ffa770553e",
+  "session_group_key": "anthropic:dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "f9170a0e27763867abf8920d8ff6747299bca6da",
+  "started_at": "2026-10-09T00:29:22Z",
+  "ended_at": "2026-10-09T17:00:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-10-09-gator-f9170a0e27763.json"
+  ],
+  "notes": [
+    "`roadmap.md`: header date and \"Latest released version\" now v2.24.0 (was v2.14.0).",
+    "`inbox.md`: \"Where we are\" now post-v2.24.0, points at the Codex sandbox-temp sketch as next work, and records three Windows CI flakes seen during the 2.24.0 release (each passed on rerun; not yet filed as issues)."
+  ],
+  "transcript_session_id": "dea9b3b8-dfa6-4446-8b3c-a57bc9b2c5eb",
+  "transcript_ref": null
+}

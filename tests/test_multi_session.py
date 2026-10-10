@@ -414,6 +414,13 @@ class TestPidWalker:
         assert isinstance(first[0], int)
         assert first[1] is None or isinstance(first[1], str)
 
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only path")
+    def test_first_hop_is_the_real_parent_on_windows(self):
+        """The walk must start at os.getppid(); before the native path, a
+        slow PowerShell cold start made this return [] on CI runners."""
+        ancestors = precommit_session._walk_parent_pids(max_depth=1)
+        assert ancestors and ancestors[0][0] == os.getppid()
+
     def test_walk_respects_max_depth(self):
         ancestors = precommit_session._walk_parent_pids(max_depth=1)
         assert len(ancestors) <= 1
@@ -624,6 +631,68 @@ class TestRenderSnippetVendorFallback:
         assert snippet["vendor_inferred"] == "openai"
         assert snippet["model_inferred"] == "gpt-5"
         assert snippet["session_group_key"] == "openai:s-x"
+
+
+class TestWindowsNativeProcessInfo:
+    """Native kernel32 process info (Windows CI flake fix, 2026-10-09).
+    Start-time strings must match what gator-session-start.py records via
+    PowerShell `CreationDate.ToUniversalTime().ToString('o')`."""
+
+    def test_filetime_format_matches_cim(self):
+        # Live pair observed 2026-10-09: GetProcessTimes ...42.8595327 (100 ns)
+        # vs CIM "2026-10-10T00:34:42.8595320Z" (whole microseconds).
+        from datetime import datetime, timezone
+        epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2026, 10, 10, 0, 34, 42, 859532, tzinfo=timezone.utc)
+        filetime = int((dt - epoch).total_seconds()) * 10_000_000 + 859532 * 10 + 7
+        assert (precommit_session._filetime_to_cim_iso(filetime)
+                == "2026-10-10T00:34:42.8595320Z")
+
+    def test_filetime_format_whole_second(self):
+        from datetime import datetime, timezone
+        epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2026, 9, 20, 19, 25, 49, tzinfo=timezone.utc)
+        filetime = int((dt - epoch).total_seconds()) * 10_000_000
+        assert (precommit_session._filetime_to_cim_iso(filetime)
+                == "2026-09-20T19:25:49.0000000Z")
+
+    def _patch(self, monkeypatch, native, powershell):
+        calls = []
+        monkeypatch.setattr(precommit_session, "_get_process_info_windows_native",
+                            lambda pid: native)
+        def ps(pid):
+            calls.append(pid)
+            return powershell
+        monkeypatch.setattr(precommit_session, "_get_process_info_windows_powershell", ps)
+        return calls
+
+    def test_native_complete_skips_powershell(self, monkeypatch):
+        calls = self._patch(monkeypatch, (10, "t"), (99, "x"))
+        assert precommit_session._get_process_info_windows(5) == (10, "t")
+        assert calls == []
+
+    def test_native_missing_falls_back_to_powershell(self, monkeypatch):
+        self._patch(monkeypatch, (None, None), (10, "x"))
+        assert precommit_session._get_process_info_windows(5) == (10, "x")
+
+    def test_native_without_start_time_borrows_matching_powershell(self, monkeypatch):
+        self._patch(monkeypatch, (10, None), (10, "x"))
+        assert precommit_session._get_process_info_windows(5) == (10, "x")
+
+    def test_disagreeing_powershell_start_time_is_not_borrowed(self, monkeypatch):
+        self._patch(monkeypatch, (10, None), (11, "x"))
+        assert precommit_session._get_process_info_windows(5) == (10, None)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only API")
+    def test_native_live_current_process(self):
+        ppid, started = precommit_session._get_process_info_windows_native(os.getpid())
+        assert ppid == os.getppid()
+        assert started is not None and started.endswith("0Z") and len(started) == 28
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only API")
+    def test_native_unknown_pid_is_none(self):
+        # PIDs are multiples of 4 on Windows; an odd PID never exists.
+        assert precommit_session._get_process_info_windows_native(4_000_001) == (None, None)
 
 
 class TestByteIdentityAcrossThreeCopies:

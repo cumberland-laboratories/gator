@@ -13,7 +13,7 @@
 - Enterprise command bodies, credentials, activation, or transcript discovery; see [`scripts-enterprise-cli.md`](scripts-enterprise-cli.md).
 - Enterprise API, models, workers, or migrations; see [`scripts-enterprise-server.md`](scripts-enterprise-server.md).
 - General CLI routing and packaging; see [`scripts-cross-cutting.md`](scripts-cross-cutting.md).
-- The bundled repo runtime that `gator enterprise repo init` installs into `.gator/scripts/` — including, since #34/#35, the override state module `precommit_override.py` and the Architect CLI `gator-approve.py`. The dispatcher only delegates; bundle contents, sync pins, and the `evidence_only` override envelope are owned by [`scripts-enterprise-cli.md`](scripts-enterprise-cli.md) and [`scripts-precommit.md`](scripts-precommit.md).
+- The bundled repo runtime that `gator enterprise repo init` installs into `.gator/scripts/` — including, since #34/#35, the override state module `precommit_override.py` and the Architect CLI `gator-approve.py`. The dispatcher only delegates; bundle contents, sync pins, and the `evidence_only` override envelope are owned by [`scripts-enterprise-cli.md`](scripts-enterprise-cli.md) and [`scripts-precommit.md`](scripts-precommit.md). Bundled-only changes need no dispatcher change (example: the 2026-10-09 native Windows PID walk in bundled `precommit_session.py`).
 
 ---
 

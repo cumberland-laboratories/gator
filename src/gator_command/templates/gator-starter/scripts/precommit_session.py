@@ -276,7 +276,96 @@ def _get_process_info_unix(pid):
         return (None, None)
 
 
+def _filetime_to_cim_iso(filetime):
+    """Format a Windows FILETIME (100 ns ticks since 1601-01-01 UTC) exactly
+    like PowerShell `CreationDate.ToUniversalTime().ToString('o')`, which
+    `gator-session-start.py` records: CIM carries whole microseconds, so the
+    7th fractional digit is always 0 (e.g. `2026-10-10T00:34:42.8595320Z`)."""
+    from datetime import timedelta
+    micros = filetime // 10
+    dt = datetime(1601, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=micros)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{(micros % 1_000_000) * 10:07d}Z"
+
+
+def _get_process_info_windows_native(pid):
+    """Return (parent_pid, started_at_str) via kernel32 (Toolhelp snapshot +
+    GetProcessTimes): milliseconds, no child process. Returns (None, None)
+    when `pid` is not in the snapshot or the API is unavailable; (int, None)
+    when the start time cannot be read (for example, access denied)."""
+    try:
+        import ctypes
+        from ctypes import wintypes as w
+
+        class _ProcessEntry32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", w.DWORD), ("cntUsage", w.DWORD),
+                ("th32ProcessID", w.DWORD), ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", w.DWORD), ("cntThreads", w.DWORD),
+                ("th32ParentProcessID", w.DWORD), ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", w.DWORD), ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.CreateToolhelp32Snapshot.restype = w.HANDLE
+        k32.CreateToolhelp32Snapshot.argtypes = [w.DWORD, w.DWORD]
+        k32.Process32FirstW.argtypes = [w.HANDLE, ctypes.POINTER(_ProcessEntry32W)]
+        k32.Process32NextW.argtypes = [w.HANDLE, ctypes.POINTER(_ProcessEntry32W)]
+        k32.OpenProcess.restype = w.HANDLE
+        k32.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]
+        k32.GetProcessTimes.argtypes = [w.HANDLE] + [ctypes.POINTER(w.FILETIME)] * 4
+        k32.CloseHandle.argtypes = [w.HANDLE]
+
+        snap = k32.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+        if not snap or snap == w.HANDLE(-1).value:
+            return (None, None)
+        ppid = None
+        try:
+            entry = _ProcessEntry32W()
+            entry.dwSize = ctypes.sizeof(_ProcessEntry32W)
+            ok = k32.Process32FirstW(snap, ctypes.byref(entry))
+            while ok:
+                if entry.th32ProcessID == pid:
+                    ppid = int(entry.th32ParentProcessID)
+                    break
+                ok = k32.Process32NextW(snap, ctypes.byref(entry))
+        finally:
+            k32.CloseHandle(snap)
+        if ppid is None:
+            return (None, None)
+
+        handle = k32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return (ppid, None)
+        try:
+            times = [w.FILETIME() for _ in range(4)]
+            if not k32.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
+                return (ppid, None)
+        finally:
+            k32.CloseHandle(handle)
+        created = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+        return (ppid, _filetime_to_cim_iso(created) if created else None)
+    except (OSError, AttributeError, ValueError, OverflowError):
+        return (None, None)
+
+
 def _get_process_info_windows(pid):
+    """Return (parent_pid, started_at_str) for `pid` on Windows.
+
+    Native kernel32 first. PowerShell (below) is used only when the native
+    path cannot find the process or cannot read its start time, so a hop is
+    never worse than before. The PowerShell path used to be the only path;
+    its cold start could exceed the 10 s limit on a busy machine, which made
+    the walk return [] (Windows CI flake in TestPidWalker)."""
+    ppid, started_at = _get_process_info_windows_native(pid)
+    if ppid is not None and started_at is not None:
+        return (ppid, started_at)
+    ps_ppid, ps_started = _get_process_info_windows_powershell(pid)
+    if ppid is None:
+        return (ps_ppid, ps_started)
+    return (ppid, ps_started if ps_ppid == ppid else None)
+
+
+def _get_process_info_windows_powershell(pid):
     """Return (parent_pid, started_at_str) via PowerShell Get-CimInstance.
     Both fields captured in ONE PowerShell call to keep hop cost at
     ~150ms (startup dominates). Returns (None, None) on any failure;

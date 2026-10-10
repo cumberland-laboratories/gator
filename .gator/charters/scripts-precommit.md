@@ -153,6 +153,17 @@ File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
 Shared status text: block id, age, expiry, whether the current tree still matches, each failure with its resolution, files, and any approval.
 <- `gator-approve.py`
 
+### _walk_parent_pids(start_pid=None, max_depth=10) / _get_process_info(pid) / _get_process_info_windows(pid) / _get_process_info_windows_native(pid) / _get_process_info_windows_powershell(pid) / _filetime_to_cim_iso(filetime)
+File: `src/gator_command/templates/gator-starter/scripts/precommit_session.py`
+Commit-time session attribution: walk this process's parent chain as `(pid, started_at)` pairs and match them against registry `owner_pid` / `owner_pid_started_at` (`_pid_start_times_match`). Returns `[]` when the first hop fails; attribution then degrades to the single-session / no-session paths.
+- **Windows:** `_get_process_info_windows` tries `_get_process_info_windows_native` first (kernel32 `CreateToolhelp32Snapshot` for the parent PID, `GetProcessTimes` for the start time; milliseconds, no child process). It falls back to `_get_process_info_windows_powershell` (`Get-CimInstance`, 10 s limit) only when the native path cannot find the process or read its start time, so a hop is never worse than the PowerShell-only behaviour. A PowerShell start time is used with a native parent PID only when both agree on the parent.
+- **Unix:** `ps -o ppid=,lstart=` (5 s limit).
+<- `_pick_session_for_commit()` attribution path
+-> `_get_process_info()` per hop
+! **Start-time strings are compared exactly** against what `gator-session-start.py` `_get_owner_pid_started_at()` recorded with PowerShell `CreationDate.ToUniversalTime().ToString('o')`. `_filetime_to_cim_iso` reproduces that byte-for-byte: CIM carries whole microseconds, so FILETIME is truncated to microseconds and printed with 7 fractional digits ending in 0 (verified against CIM on 7 live processes, 2026-10-09; pinned by `TestWindowsNativeProcessInfo`). Printing full 100 ns precision would silently break attribution. Changing either side's format requires changing both.
+! Why native: the PowerShell cold start could exceed its 10 s limit on a busy Windows machine, so the walk returned `[]` (the recurring Windows CI flake in `TestPidWalker`, and silent attribution loss for users on slow machines).
+! Byte-identical with the Enterprise bundled copy (`TestByteIdentityAcrossThreeCopies`).
+
 ## Testing Notes
 
 `tests/test_precommit_override.py` drives REAL git commits in throwaway temp repos whose `pre-commit` / `commit-msg` / `post-commit` hooks are generated `sh` scripts calling the template (or Enterprise bundled) `gator-pre-commit.py`. Two constraints:
