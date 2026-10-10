@@ -70,6 +70,29 @@ Why: v2.5.2 shipped from a commit that silently dropped ~10 intended files durin
 
 The fix: pause between `git add` and `git commit`. Look at what's staged. Confirm the list. **Only then commit.**
 
+## Verify before you push (the 2.24.0 lesson)
+
+Of the CI failures between 2026-09-15 and 2026-10-09, four commits were real bugs that a local run would have caught: a protocol wording change that broke a doc pin in a test file nobody ran (2.24.0), snapshot, Python 3.9-only override, and Linux-only failures. Every one was pushed after a partial local run. The rest were Windows flakes (see "Flakes" below).
+
+Before **every** push to `dev` that changes code, tests, shipped templates, or shipped docs:
+
+1. **Find every test that reads what you changed.** For each changed file, search the tests for its name (and for shipped docs, its distinctive headings): `grep -rlE "<filename>|<symbol>" tests/ enterprise/tests/`. Run all of those files. A doc or template can be pinned by a test file that has nothing to do with the feature (`test_loop_attention.py` pins wording in `gator-loop-protocol.md`).
+2. **Run the same fast suite CI runs** before the push that a release will ship from:
+   ```
+   python -m pytest tests contracts/compatibility --ignore=tests/test_packaging.py --ignore=tests/test_dashboard_ui -q
+   ```
+   It skips the slow packaging and Playwright suites, which CI still runs. If the machine is short on memory, close other heavy processes rather than skipping it.
+3. **Never edit files while a test run is in progress.** A run that reads half-edited files reports failures that are not real (2.23.0: `test_version_flag` failed because `pyproject.toml` was bumped before `VERSION`).
+4. A green CI is the gate, but it is not the test plan. Do not push to find out.
+
+## Flakes: rerun once, then record
+
+Some Windows-only failures are flaky: Playwright timeouts in `dashboard-ui` ([#70](https://github.com/cumberland-laboratories/gator/issues/70)) and `test_loop_suspension` `[paused]` ([#71](https://github.com/cumberland-laboratories/gator/issues/71)). `TestPidWalker` was fixed on 2026-10-09 (native Windows process lookup); if it fails again, treat it as a real failure. When a job fails on **one platform only** with a test that is unrelated to the change:
+
+- Rerun the failed job **once** (`gh run rerun <id> --failed`). If it passes, continue the release.
+- Record the test name in its tracking issue (add a comment with the run link), or file one. A rerun is a recorded event, not a habit.
+- If the same commit fails on **two or more platforms**, or the rerun fails too, it is a real failure. Stop and fix it.
+
 ## Checklist (do these in order for every release)
 
 ### 1. Prep on `dev`
@@ -78,7 +101,7 @@ The fix: pause between `git add` and `git commit`. Look at what's staged. Confir
 - [ ] All tests added/updated for new code
 - [ ] All charter updates staged for touched code files (INDEX.md rows tell you which charters are required for which paths)
 - [ ] `source-ci.yml` green on `dev` (check https://github.com/cumberland-laboratories/gator/actions?query=branch%3Adev)
-- [ ] Local test run: `python -m pytest tests/ contracts/compatibility/ -q` passes
+- [ ] Local test run passed before each push (see "Verify before you push"): every test file that reads a changed file, plus the CI fast suite
 
 ### 2. Version bump commit
 

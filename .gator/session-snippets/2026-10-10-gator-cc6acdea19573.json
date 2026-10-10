@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Session attribution: native Windows PID walk (fixes the recurring TestPidWalker CI flake)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "hooks",
+    "session-attribution",
+    "windows",
+    "ci"
+  ],
+  "commit": "cc6acdea19573f0e2f937c5da6dedcc104f92d45",
+  "short_commit": "cc6acde",
+  "snippet_id": "snippet-cc6acdea19573",
+  "session_group_key": "anthropic:dfff1201-980c-4aeb-835c-90855e1f84c3",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-10T00:34:13Z",
+  "ended_at": "2026-10-10T00:49:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-enterprise-cli.md",
+    ".gator/charters/scripts-enterprise.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-10-09-gator-595ffa770553e.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/precommit_session.py",
+    "src/gator_command/templates/gator-starter/scripts/precommit_session.py",
+    "tests/test_multi_session.py"
+  ],
+  "notes": [
+    "`precommit_session.py` (wheel template and Enterprise bundled copy, byte-identical): the Windows parent-PID walk now uses kernel32 (`CreateToolhelp32Snapshot` for the parent PID, `GetProcessTimes` for the start time) via `_get_process_info_windows_native`. It falls back to the previous PowerShell `Get-CimInstance` path (`_get_process_info_windows_powershell`) only when the native path cannot find the process or read its start time; a PowerShell start time is used with a native parent PID only when both agree. Cause: the PowerShell cold start could exceed its 10 s limit on a busy machine, so the walk returned `[]` — 4 Windows CI failures of `TestPidWalker` since 2026-09-21, and silent loss of commit-to-session attribution on slow user machines.",
+    "`_filetime_to_cim_iso` formats FILETIME exactly like the recorder (`gator-session-start.py` PowerShell `CreationDate.ToUniversalTime().ToString('o')`): whole microseconds, 7 fractional digits ending in 0. Verified byte-identical to CIM on 7 live processes before the change.",
+    "Tests (`tests/test_multi_session.py`): `TestWindowsNativeProcessInfo` (known-answer format vectors, native/PowerShell fallback rules, live native lookup and unknown PID on Windows) and `test_first_hop_is_the_real_parent_on_windows`.",
+    "Charters: new `_walk_parent_pids` / process-info entry with the exact-format TRIPWIRE in `scripts-precommit.md`; bundled-copy note in `scripts-enterprise-cli.md`.",
+    "Significance check (cross-module invariant: recorder ↔ walker start-time strings). Steelman against: a native start time that differs by even one digit from the recorded CIM string silently breaks attribution, which is worse than the flake. Mitigations: exact-format verification against CIM on live processes, a pinned known-answer test, and the PowerShell fallback whenever the native start time is unavailable. Verification: every test file referencing the changed modules (170 passed) and the full CI fast suite locally (2266 passed)."
+  ],
+  "transcript_session_id": "dfff1201-980c-4aeb-835c-90855e1f84c3",
+  "transcript_ref": null
+}

@@ -35,14 +35,12 @@ Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
 `vault/artifacts/2026-10-09-codex-sandbox-temp-and-profile-block-sketch.md`.
 
-Windows CI flakes seen during the 2.24.0 release (each passed on
-rerun; not yet filed):
-- `test_multi_session.py::TestPidWalker::test_walk_returns_at_least_one_ancestor_as_tuple`
-  (also seen in 2.23.0).
-- `test_loop_suspension.py::test_status_and_wait_keep_participant_in_loop[paused]`
-  (`JSONDecodeError` on captured status JSON).
-- `test_dashboard_ui/test_loop_workspace.py::test_inflight_copy_blocked_by_terminal_race`
-  (Playwright 15 s timeout on `.repo-file-item`).
+Windows CI flakes (2026-10-09 review): Playwright `dashboard-ui` →
+[#70](https://github.com/cumberland-laboratories/gator/issues/70);
+`test_loop_suspension` `[paused]` →
+[#71](https://github.com/cumberland-laboratories/gator/issues/71);
+`TestPidWalker` fixed (native Windows process lookup). Rerun policy:
+`procedures/release-and-deploy.md` "Flakes".
 
 Roadmap priorities — see `roadmap.md`.
 
