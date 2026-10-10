@@ -52,6 +52,7 @@ from gator_core import get_version, import_sibling, git  # noqa: E402
 # ── extracted modules ─────────────────────────────────────────────────────────
 from dashboard.helpers import (  # noqa: E402
     run_json, run_text, git_run as _git_run,
+    read_welcome_doc as _read_welcome_doc,
 )
 from dashboard.updates import (  # noqa: E402
     check_for_updates, upgrade_and_restart,
@@ -2002,6 +2003,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # Tier 1 data
         if path == "/api/data":
             self._send_json(self.__class__.fast_data)
+            return
+
+        # Welcome "How Gator works" (#72 follow-up): the shipped starter
+        # copy of how-gator-works.md. Fixed file, no request input,
+        # repository-independent; text is rendered client-side by the
+        # closed GatorLoopMarkdown formatter.
+        if path == "/api/welcome/how-gator-works":
+            text = _read_welcome_doc()
+            if text is None:
+                self._send_json_error(404, "how-gator-works.md is not available")
+                return
+            self._send_json({"text": text})
             return
 
         # Refresh Tier 1 (async — starts background collection, returns immediately)

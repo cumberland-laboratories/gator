@@ -16,6 +16,8 @@ Each test proves a distinct risk:
 - shell-owned Back/Forward, and the default topic on a fresh load.
 """
 
+from pathlib import Path
+
 import pytest
 
 
@@ -27,7 +29,11 @@ SESSION_PROMPT = (
     "those reads are complete."
 )
 
-TOPICS = ["what", "can", "gatorize", "session"]
+TOPICS = ["how", "can", "gatorize", "session"]
+
+DOC_API = "/api/welcome/how-gator-works"
+SHIPPED_DOC = (Path(__file__).resolve().parents[2] / "src" / "gator_command"
+               / "templates" / "gator-starter" / "docs" / "how-gator-works.md")
 
 
 def _origin(fleet):
@@ -78,7 +84,8 @@ def _repo_context(page):
 @pytest.mark.parametrize("start", ["fleet", "repo", "loop"])
 def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     """Verification 1, 2 (default topic) and 5: the logo opens Welcome from
-    any view; repository context is untouched and nothing is requested."""
+    any view; repository context is untouched, and the only request is
+    the one fixed How-Gator-works document fetch."""
     origin = _origin(dashboard_fleet)
     if start == "fleet":
         _goto_fleet(page, dashboard_fleet)
@@ -97,7 +104,7 @@ def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     _open_welcome(page)
     assert page.text_content("#topbar-title") == "Welcome to Gator!"
     assert page.get_attribute("#brand-home", "aria-current") == "page"
-    assert _selected(page) == ["what"]
+    assert _selected(page) == ["how"]
 
     for topic in TOPICS:
         page.click("#welcome-tab-" + topic)
@@ -106,7 +113,9 @@ def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     page.wait_for_selector(".welcome-copy-status:has-text('copied')", timeout=5000)
 
     assert _repo_context(page) == before
-    assert [r for r in requests if "/api/" in r[1]] == []
+    # The only request is the one fixed document fetch (first open).
+    api = [u for _, u in requests if "/api/" in u]
+    assert len(api) == 1 and api[0].endswith(DOC_API)
     assert all(m == "GET" for m, _ in requests)
 
 
@@ -121,7 +130,7 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     for key, t in tabs.items():
         assert t["panelRole"] == "tabpanel"
         assert t["panelLabelledBy"] == t["id"]
-        selected = key == "what"
+        selected = key == "how"
         assert t["selected"] == ("true" if selected else "false")
         assert t["tabindex"] == ("0" if selected else "-1")
         assert t["panelHidden"] is (not selected)
@@ -132,11 +141,11 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     assert _selected(page) == ["session"]
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
     page.keyboard.press("ArrowRight")  # wraps
-    assert _selected(page) == ["what"]
+    assert _selected(page) == ["how"]
     page.keyboard.press("ArrowLeft")  # wraps back
     assert _selected(page) == ["session"]
     page.keyboard.press("Home")
-    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-what"
+    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-how"
     page.keyboard.press("End")
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
     tabs = _tabs(page)
@@ -155,8 +164,8 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
             baseline: cs('.welcome-tabbar').borderBottomWidth,
             selWeight: parseInt(cs('#welcome-tab-session').fontWeight, 10),
             selBorder: cs('#welcome-tab-session').borderBottomWidth,
-            unWeight: parseInt(cs('#welcome-tab-what').fontWeight, 10),
-            unBorderColor: cs('#welcome-tab-what').borderBottomColor,
+            unWeight: parseInt(cs('#welcome-tab-how').fontWeight, 10),
+            unBorderColor: cs('#welcome-tab-how').borderBottomColor,
         };
     }""")
     assert abs(geo["barLeft"] - geo["contentLeft"]) <= 1
@@ -261,7 +270,7 @@ def test_welcome_narrow_width(page, dashboard_fleet):
 
 def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     """Back/Forward stay shell-owned and keep the topic while the page is
-    loaded; a fresh load starts on What is Gator?."""
+    loaded; a fresh load starts on How Gator works."""
     _goto_fleet(page, dashboard_fleet)
     length = page.evaluate("() => history.length")
     _open_welcome(page)
@@ -283,4 +292,67 @@ def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     page.reload(wait_until="load")
     page.wait_for_selector("#view-slot table", timeout=15000)
     _open_welcome(page)
-    assert _selected(page) == ["what"]
+    assert _selected(page) == ["how"]
+
+
+def _doc_ready(page):
+    page.wait_for_function(
+        "() => { const d = document.querySelector('.welcome-doc');"
+        "  return d && !d.querySelector('.welcome-doc-status'); }", timeout=10000)
+
+
+def test_how_gator_works_renders_shipped_doc_once(page, dashboard_fleet):
+    """The first topic renders the shipped how-gator-works.md through the
+    closed Markdown formatter, and the document is fetched once per page
+    load (reopening Welcome uses the cache)."""
+    shipped = SHIPPED_DOC.read_text(encoding="utf-8")
+    requests = []
+    page.on("request", lambda r: requests.append(r.url))
+    _goto_fleet(page, dashboard_fleet)
+    _open_welcome(page)
+    _doc_ready(page)
+    out = page.evaluate("""() => {
+        const d = document.querySelector('.welcome-doc');
+        return {
+            h3: d.querySelector('h3') && d.querySelector('h3').textContent,
+            h4: Array.from(d.querySelectorAll('h4')).map(h => h.textContent),
+            text: d.textContent,
+            scripts: d.querySelectorAll('script, img, iframe').length,
+        };
+    }""")
+    assert out["h3"] == "How Gator Works"
+    assert "The Short Version" in out["h4"] and "The Charters" in out["h4"]
+    last = [l for l in shipped.splitlines() if l.strip()][-1]
+    assert last[:60] in out["text"]
+    assert out["scripts"] == 0
+
+    page.evaluate("() => document.querySelector('.sidebar-item[data-view=\"fleet\"]').click()")
+    _open_welcome(page)
+    _doc_ready(page)
+    assert sum(1 for u in requests if u.endswith(DOC_API)) == 1
+
+
+def test_how_gator_works_unavailable_is_explained(page, dashboard_fleet):
+    """A failed document fetch shows a text notice naming the in-repo copy,
+    never an empty panel."""
+    page.route("**" + DOC_API, lambda route: route.fulfill(
+        status=404, content_type="application/json",
+        body='{"error": "x", "code": 404}'))
+    _goto_fleet(page, dashboard_fleet)
+    _open_welcome(page)
+    page.wait_for_selector(".welcome-doc .welcome-doc-status:has-text('Could not load')",
+                           timeout=10000)
+    assert ".gator/docs/how-gator-works.md" in page.text_content(".welcome-doc")
+
+
+def test_how_gator_works_endpoint_is_fixed(page, dashboard_fleet):
+    """The endpoint serves exactly the shipped file and ignores any request
+    input; nothing else is reachable through it."""
+    base = _origin(dashboard_fleet).rstrip("/")
+    shipped = SHIPPED_DOC.read_text(encoding="utf-8")
+    for suffix in ["", "?path=../../README.md", "?repo=alpha"]:
+        r = page.request.get(base + DOC_API + suffix)
+        assert r.status == 200
+        assert r.json() == {"text": shipped}
+    assert page.request.get(base + DOC_API + "/../README.md").status == 404
+

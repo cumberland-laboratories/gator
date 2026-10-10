@@ -17,6 +17,20 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent  # scripts/ (one up from da
 DASHBOARD_DIR = Path(__file__).resolve().parent       # dashboard/
 COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root
 
+# The Welcome "How Gator works" topic shows the shipped starter-template copy
+# of how-gator-works.md (the same file gatorize installs as
+# .gator/docs/how-gator-works.md). Fixed path: no request input selects it.
+WELCOME_DOC_PATH = (SCRIPTS_DIR.parent / "templates" / "gator-starter"
+                    / "docs" / "how-gator-works.md")
+
+
+def read_welcome_doc():
+    """Return the shipped how-gator-works.md text, or None if unavailable."""
+    try:
+        return WELCOME_DOC_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
 
 # ── script runners ────────────────────────────────────────────────────────────
 

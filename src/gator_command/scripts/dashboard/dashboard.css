@@ -2865,3 +2865,20 @@ textarea.loop-ctrl-input {
   font-size: 11px;
   cursor: pointer;
 }
+
+/* Welcome "How Gator works": the shipped document, rendered by the
+   closed Loop Markdown formatter (.loop-md supplies element styles). */
+.welcome-doc.loop-md {
+  padding: 0;
+  font-size: 14px;
+}
+.welcome-doc.loop-md h3:first-child { margin-top: 0; font-size: 20px; }
+.welcome-doc-status {
+  color: var(--color-muted);
+  font-style: italic;
+}
+.welcome-doc-raw {
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+}

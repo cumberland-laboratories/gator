@@ -25,6 +25,15 @@ Run sibling scripts and Git with bounded timeouts and normalized results.
 -> subprocess
 ! Dashboard failures become structured unavailable/error payloads; never substitute another repository's data.
 
+### read_welcome_doc() / WELCOME_DOC_PATH / GET /api/welcome/how-gator-works (#72 follow-up)
+File: src/gator_command/scripts/dashboard/helpers.py
+File: src/gator_command/scripts/gator-dashboard.py
+Serve the Welcome "How Gator works" topic: the shipped starter-template copy of `how-gator-works.md` (`templates/gator-starter/docs/`, the file gatorize installs as `.gator/docs/how-gator-works.md`).
+Filesystem: `WELCOME_DOC_PATH` (R)
+<- `DashboardHandler.do_GET()` (`/api/welcome/how-gator-works` → `{"text": …}`, default `no-cache`), `build_snapshot()` (inlined as `window.GATOR_WELCOME_DOC`)
+! TRIPWIRE: one fixed, package-relative file. No request input (query, path segment, repo key) selects or extends the path, and the route is repository-independent. An unreadable file gives a JSON 404 (`_send_json_error`) / `null` in a snapshot, never another file.
+! The text is untrusted-format input for the browser: it is rendered only by the closed `GatorLoopMarkdown` formatter (see `scripts-dashboard-ui.md`).
+
 ### resolve_discovery_roots() / load_registry_repos() / resolve_repo_path()
 File: src/gator_command/scripts/dashboard/data.py
 Load the machine registry, retain missing paths for cleanup visibility, and resolve a requested repository by its registry identity.
@@ -276,6 +285,7 @@ File: src/gator_command/scripts/dashboard/snapshot.py
 Inline dashboard assets and Tier-1 data into a self-contained offline HTML document.
 <- `--snapshot`
 ! Use callable regex replacement for JavaScript/CSS bytes so backslashes are not interpreted as replacement escapes.
+! The data block also inlines `window.GATOR_WELCOME_DOC` via `_json_script()`, which escapes `</` so document text can never close the inline script.
 ! The script-tag regex must match every `<script src="views/*.js">` tag in `dashboard.html`. Adding a new view JS file requires updating both the regex pattern and the inlined scripts block. Current order: fleet, history, syntax, repo, updates, **loop-markdown (#45)**, loop, settings, **welcome (#72)**, then `dashboard.js`, pinned by `tests/test_snapshot.py` (including that `window.GatorLoopMarkdown` and `GatorViews.welcome` are inlined).
 
 ### check_for_updates() / upgrade_and_restart() / restart_server()

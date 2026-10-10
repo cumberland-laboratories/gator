@@ -50,6 +50,19 @@ class TestBuildSnapshot:
         assert 'src="views/welcome.js"' not in html
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
         assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
+
+    def test_welcome_doc_inlined_and_script_safe(self):
+        """The Welcome document is inlined as a JSON string, and `</` is
+        escaped so its text can never close the inline script."""
+        from dashboard.helpers import read_welcome_doc
+        from dashboard.snapshot import _json_script
+        html = build_snapshot(SAMPLE_DATA)
+        marker = "window.GATOR_WELCOME_DOC = "
+        start = html.index(marker) + len(marker)
+        end = html.index(";\n", start)
+        assert json.loads(html[start:end]) == read_welcome_doc()
+        assert "</" not in _json_script("a</script><b>")
+        assert json.loads(_json_script("a</script>")) == "a</script>"
         assert 'src="dashboard.js"' not in html
 
     def test_data_embedded(self):

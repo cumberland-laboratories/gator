@@ -7,12 +7,18 @@ No server required to view the result.
 import json
 import re
 
-from dashboard.helpers import DASHBOARD_DIR
+from dashboard.helpers import DASHBOARD_DIR, read_welcome_doc
 
 
 def _read_asset(rel_path):
     """Read a frontend asset file from the dashboard/ directory."""
     return (DASHBOARD_DIR / rel_path).read_text(encoding="utf-8")
+
+
+def _json_script(value):
+    """JSON for an inline <script>: `</` is escaped so document text can
+    never close the script element."""
+    return json.dumps(value).replace("</", "<\\/")
 
 
 def build_snapshot(fast_data):
@@ -50,6 +56,9 @@ def build_snapshot(fast_data):
         "<script>\n"
         "window.GATOR_SNAPSHOT = true;\n"
         f"window.DASHBOARD_DATA = {json.dumps(fast_data, default=str)};\n"
+        # Welcome "How Gator works": a snapshot has no server, so the
+        # document is inlined (a JSON string; null if unavailable).
+        f"window.GATOR_WELCOME_DOC = {_json_script(read_welcome_doc())};\n"
         "</script>"
     )
 

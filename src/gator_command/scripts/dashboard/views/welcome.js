@@ -1,14 +1,18 @@
 /**
  * views/welcome.js — Welcome workspace (#72), opened from the sidebar logo.
  *
- * Four fixed topics in the shared main-pane tab bar (.gator-tabbar), plus
- * one transient copy of the vendor-neutral session-opening prompt.
+ * Four topics in the shared main-pane tab bar (.gator-tabbar), plus one
+ * transient copy of the vendor-neutral session-opening prompt.
  *
  * Contract:
- *   - No fetch, no storage, no console output, no history calls. The shell
- *     owns routing; this view never touches repository context.
- *   - All markup comes from constants in this file. The prompt reaches the
- *     DOM only through textContent / textarea.value.
+ *   - One request only: GET /api/welcome/how-gator-works, at most once per
+ *     page load (a snapshot inlines window.GATOR_WELCOME_DOC instead). No
+ *     storage, no console output, no history calls. The shell owns
+ *     routing; this view never touches repository context.
+ *   - The shipped how-gator-works.md is rendered only by the closed
+ *     GatorLoopMarkdown formatter (DOM construction, never innerHTML).
+ *     Every other piece of markup comes from constants in this file. The
+ *     prompt reaches the DOM only through textContent / textarea.value.
  *   - The selected topic is module-local: it survives reopening Welcome
  *     while the page stays loaded and resets on a fresh page load.
  */
@@ -19,7 +23,7 @@
   window.GatorViews = window.GatorViews || {};
 
   var TOPICS = [
-    { key: "what",     label: "What is Gator?" },
+    { key: "how",      label: "How Gator works" },
     { key: "can",      label: "What Gator can do" },
     { key: "gatorize", label: "Gatorize a repo" },
     { key: "session",  label: "Start a session with Gator" },
@@ -42,7 +46,11 @@
 
   var COPY_LABEL = "Copy session-opening prompt";
 
-  var selectedTopic = "what";
+  var selectedTopic = "how";
+  // The shipped how-gator-works.md: undefined = not loaded yet, null = not
+  // available, string = loaded. Cached for the page's lifetime.
+  var howDoc;
+  var howDocRequest = null;
   var root = null;
 
   function docLink(key) {
@@ -57,19 +65,14 @@
   }
 
   var PANELS = {
-    what:
-      '<h3 class="welcome-heading">What is Gator?</h3>'
-      + '<p>Gator is the Git-native governance layer for AI-assisted engineering. '
-      + 'It is not an AI coding framework, and it is not a hosted audit tool. '
-      + 'It works with the coding agent you already use.</p>'
-      + '<p>Gator is charter-first. As agents work, they keep a compact map of each '
-      + 'module, called a charter. Each governed commit records that understanding '
-      + 'as evidence in Git, next to the code it describes.</p>'
+    how:
+      '<div class="welcome-doc loop-md" aria-live="polite">'
+      +   '<p class="welcome-doc-status">Loading “How Gator works”…</p>'
+      + '</div>'
       + '<div class="welcome-next-row">'
       +   nextButton("can", "What Gator can do")
       +   nextButton("gatorize", "Gatorize a repo")
-      + '</div>'
-      + '<p class="welcome-more">Read more: ' + docLink("readme") + '</p>',
+      + '</div>',
     can:
       '<h3 class="welcome-heading">What Gator can do</h3>'
       + '<ul class="welcome-list">'
@@ -114,6 +117,52 @@
       +   '<div class="welcome-copy-status" role="status" aria-live="polite"></div>'
       + '</div>',
   };
+
+  // ── How Gator works: the shipped document ──────────────────────────────
+
+  function fetchHowDoc() {
+    if (typeof window.GATOR_WELCOME_DOC !== "undefined") {  // snapshot
+      return Promise.resolve(typeof window.GATOR_WELCOME_DOC === "string"
+        ? window.GATOR_WELCOME_DOC : null);
+    }
+    return fetch("/api/welcome/how-gator-works")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { return d && typeof d.text === "string" ? d.text : null; })
+      .catch(function () { return null; });
+  }
+
+  function renderHowDoc(target) {
+    target.textContent = "";
+    if (typeof howDoc !== "string") {
+      var fail = document.createElement("p");
+      fail.className = "welcome-doc-status";
+      fail.textContent = "Could not load “How Gator works”. In a gatorized "
+        + "repository, read .gator/docs/how-gator-works.md.";
+      target.appendChild(fail);
+      return;
+    }
+    try {
+      target.appendChild(window.GatorLoopMarkdown.render(howDoc));
+    } catch (e) {
+      var pre = document.createElement("pre");  // formatter missing or too large
+      pre.className = "welcome-doc-raw";
+      pre.textContent = howDoc;
+      target.textContent = "";
+      target.appendChild(pre);
+    }
+  }
+
+  // Loads once per page load; a mount that is gone when the text arrives
+  // is left alone (the next mount renders from the cache).
+  function loadHowDoc(target) {
+    if (typeof howDoc !== "undefined") { renderHowDoc(target); return; }
+    if (!howDocRequest) {
+      howDocRequest = fetchHowDoc().then(function (text) { howDoc = text; });
+    }
+    howDocRequest.then(function () {
+      if (target.isConnected) renderHowDoc(target);
+    });
+  }
 
   function keyIndex(key) {
     for (var i = 0; i < TOPICS.length; i++) if (TOPICS[i].key === key) return i;
@@ -249,6 +298,7 @@
     var copyBtn = root.querySelector(".welcome-copy");
     copyBtn.addEventListener("click", function () { copySessionPrompt(copyBtn); });
 
+    loadHowDoc(root.querySelector(".welcome-doc"));
     applyTopic();
   };
 })();
