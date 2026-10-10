@@ -5,7 +5,7 @@
 ## Owns
 
 - The framework-free dashboard shell, navigation, responsive layout, and browser-side routing.
-- Fleet, history, repo, audit, loop, updates, and settings views.
+- Fleet, history, repo, audit, loop, updates, settings, and welcome views.
 - Document browsing, syntax highlighting, cross-document search, and sandboxed HTML preview controls.
 - Browser requests to the local dashboard server.
 
@@ -27,6 +27,7 @@ Own browser history, selected repository/view state, and dispatch into view modu
   - **State shape:** `{gatorDashboard: 1, view, repo, repoKey, sub}`, built by `shellState(sub)`. Entries are state-only (`""` title, URL unchanged), so a reload behaves as before (`?repo=` only). `sub` is `null` except for Loop entries: `cleanSub()` keeps exactly `{view: create|history, mode: create|inspect, loopId}`. **No token, prompt text or artifact content ever enters a state object.**
   - **`navigate()` versus `showView()`:** `navigate()` = `showView()` plus `history.pushState`. It is used by the sidebar click handler and `gatorNavToRepo`. `init()` calls `showView` and then `replaceState`. `doRefresh` calls `showView` and pushes nothing. `showView(name, extra, repoKeyOverride, opts)` is a renderer only. It passes `opts.initialSub` as the fifth argument to `views.loop`, and records `state.mountedLoopKey` (the repo key a mounted Loop view uses; `undefined` otherwise).
   - **`window.GatorShell`:** `pushSubState(sub)` pushes only when the active view is Loop and no restoration is running. `replaceSubState(sub)` replaces the current entry (Loop only). `isRestoring()`.
+  - **Welcome (#72):** `welcome` is a `VIEW_META` view ("Welcome to Gator!") reached only from the `#brand-home` logo button (`aria-label="Open Welcome"`; `navigate("welcome")`; `aria-current="page"` while it is shown) and from Back/Forward. Its `showView` branch never calls `setActiveRepo` / `clearActiveRepo`, and its entries carry `sub: null` (`cleanSub` stays Loop-only).
   - **Repository context:** `setActiveRepo(name, key)` (extracted from the `repo` branch) sets `activeRepo` / `activeRepoKey`, the "▸ <name>" Repo label, and un-dims Repo/Docs/Loop. `clearActiveRepo()` is its inverse (label "Repo", tabs dimmed).
   - **Restoration:** a single `popstate` handler → `restoreShellState(entry)`, run under the `restoring` flag (cleared in `finally`):
     1. **Validate:** `isShellEntry` (marker, a `VIEW_META` view, `repo` null or a string). Anything else is ignored.
@@ -143,14 +144,19 @@ Render installed/latest version state and request an explicit upgrade.
 -> check and upgrade endpoints
 ! Checking and upgrading are visibly separate actions; failure output remains visible after restart attempts.
 
-### Loop workspace — renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderOutcomeHeader() / renderBlockedCard() / renderPromptSection() / renderControls() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / openReopenForm() / refreshCoding()
+### Loop workspace — buildLoopTabs() / ensureLoopPanels() / applyTabState() / switchTab() / renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderOutcomeHeader() / renderBlockedCard() / renderPromptSection() / renderControls() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / openReopenForm() / refreshCoding()
 File: src/gator_command/scripts/dashboard/views/loop.js
-Render the governed planning loop workspace with a tabbed secondary sidebar (Create: Create Loop + Active; History: terminal loops) and mode-driven main content (creation workspace or active-loop explanation, participant handoff, or selected-loop inspection).
+Render the governed planning loop workspace: a full-width Create / History tab bar across the top of the main pane (#72), a secondary list sidebar (Create: Create Loop + Active; History: terminal loops) and mode-driven main content (creation workspace or active-loop explanation, participant handoff, or selected-loop inspection).
 <- loop route
 -> loop list/status/events/artifact endpoints, control endpoints (pause/interject/unblock/end/extend), start endpoint, prompt endpoint, sketch-sources endpoint (`/api/repo-by-key/<repo_key>/...`)
 ! **Mode state**: `_state.mode` ("create" | "handoff" | "inspect") drives which main content renderer is called. `_state.handoffId` tracks the loop during participant handoff.
-! **Secondary sidebar (#56 tabs)**: `renderLoopSidebar()` classifies loops into active (non-terminal) and history (terminal, newest-first).
-  - **Tabs:** `buildSidebarTabs()` builds a `role="tablist"` with two `role="tab"` buttons, **Create** and **History** (`#loop-tab-create` / `#loop-tab-history`, `aria-controls`), plus two `role="tabpanel"` containers (`#loop-panel-create` / `#loop-panel-history`). They are built once per mount: polls re-render only the panel contents, so a focused tab keeps focus. `applyTabState()` writes `aria-selected`, roving `tabindex` (0/-1) and the inactive panel's `hidden` only when they differ.
+! **Create / History tabs (#56; main-pane bar since #72)**: `renderLoopSidebar()` classifies loops into active (non-terminal) and history (terminal, newest-first).
+  - **Layout:** the mount skeleton is `.loop-workspace` (column) → `#loop-tabbar.gator-tabbar.loop-tabbar` (full width, owns the baseline) + `.loop-workspace-body` (row: `#loop-sidebar-nav` + `#loop-main-content`; stacks at ≤768px). `.loop-workspace` keeps `dataset.polling`.
+  - **Tabs:** `buildLoopTabs(container)` writes a `role="tablist"` (`.loop-subnav`, the JS/test hook) with two `button.gator-tab.loop-subnav-tab[role=tab]`, **Create** and **History** (`#loop-tab-create` / `#loop-tab-history`, `aria-controls`), into `#loop-tabbar`, **once per mount**, right after the skeleton. `renderLoopSidebar()` never builds or rewrites it, so a focused tab keeps focus across polls.
+  - **Panels:** the two `role="tabpanel"` containers (`#loop-panel-create` / `#loop-panel-history`, `aria-labelledby`) stay in `#loop-sidebar-nav`: they are the lists the tab chooses. `ensureLoopPanels(listEl)` replaces the sidebar's "Loading…" placeholder with them once; polls re-render only their contents.
+  - **State:** `applyTabState(container)` looks tabs and panels up from the view container and writes `aria-selected`, roving `tabindex` (0/-1) and the inactive panel's `hidden` only when they differ (it skips silently until the panels exist).
+  - **Inert until loaded (#72):** the bar exists from mount, but `switchTab()` returns early until `#loop-panel-create` exists (the first `/loops` response). Before that, `_state` still holds the previous mount's mode/loops, and a push would land ahead of the mount's landing `shellReplace()`. ARIA relationships cross containers (tablist in the bar, panels in the sidebar); DOM order keeps the tablist before its panels.
+  - **Pinned by** `test_loop_subnav_tabs` (roles, roving tabindex, keys; `_tab_state` asserts the tablist is in `#loop-tabbar` and not in `#loop-sidebar-nav`), `test_loop_tabs_survive_polls` (tablist node and focus survive polls), `test_loop_tabs_inert_until_loops_load` (a pre-load click adds no history entry and the mount lands on its default; mutation-checked), and `test_loop_tabbar_spans_main_pane` (bar from the sidebar's left edge to the pane's content edge, above both columns; weight + underline; a half-filled form survives History → Create).
   - **Keyboard:** Left/Right/Home/End switch and focus the tab (automatic activation). The selected tab is shown by weight plus an underline, never colour alone.
   - **`_state.view`** (`"create" | "history"`) selects the tab. `_state.mode` keeps its meaning.
   - **Create panel:** the always-actionable `.loop-sidebar-create` button and the "Active" section (active cards only). The active loop is never listed in History.
@@ -325,6 +331,19 @@ Render the governed planning loop workspace with a tabbed secondary sidebar (Cre
   - **Removed:** `extractSummary()`, `SUMMARY_MAX_CHARS` / `SUMMARY_RE`, `window.GatorViews._extractSummary`, the `.loop-event-summary` / `.loop-timeline-summary-*` nodes and styles, and the "No executive summary supplied" fallback. The `## Executive Summary` artifact requirement is unchanged: it remains part of the full rendered document.
   - **Pinned by** `tests/test_dashboard_ui/test_loop_workspace.py`: link-only cards (exactly one link, `href="#"`, no excerpt, no `_extractSummary`); no link on an event without an artifact; a link without an Executive Summary; **zero `/artifact/` requests** on initial render and on appended events until a link is followed, then exactly one; an open section stays open with no refetch; keyboard Enter activation; and the existing navigation and round-zero link tests. Mutation-checked: a restored timeline fetch, an unconditional toggle, a missing link, and a missing `href` each fail it.
 
+### GatorViews.welcome / applyTopic() / selectTopic() / copySessionPrompt() / showCopyFallback() (#72)
+File: src/gator_command/scripts/dashboard/views/welcome.js
+The Welcome workspace: four fixed topics (What is Gator? · What Gator can do · Gatorize a repo · Start a session with Gator) in the shared main-pane tab bar, plus one copy control for the session-opening prompt.
+<- `showView("welcome")` (only from the `#brand-home` logo button and Back/Forward)
+-> nothing: no fetch, no storage, no console output, no history calls
+- **Tabs:** `div.gator-tabbar.welcome-tabbar` > `[role=tablist][aria-label="Welcome topics"]` > four `button.gator-tab.welcome-tab[role=tab]` (`#welcome-tab-<key>`, `aria-controls`), and four `section[role=tabpanel][tabindex=0]` (`#welcome-panel-<key>`, `aria-labelledby`) in `.welcome-body`. `applyTopic()` writes `aria-selected`, roving `tabindex` and `hidden` only when they differ. Click selects; Left/Right (wrapping), Home and End select and focus. A switch never re-renders, fetches or calls the shell.
+- **Topic state:** module-local `selectedTopic` (default `what`). It survives reopening Welcome (logo, Back/Forward, Refresh) while the page stays loaded and resets on a fresh page load. It is never put in shell history (`sub` stays null).
+- **Content:** fixed constants only, linking outward to the public README and `docs/` on GitHub (`target=_blank`, `rel="noopener noreferrer"`). The gatorize command is a code sample, not a second copy control.
+- **Copy:** `copySessionPrompt()` writes `SESSION_PROMPT` with `navigator.clipboard.writeText`, then shows "Copied" plus a polite `role=status` announcement, restored after 2 s if still connected. If the Clipboard API is missing or rejects, `showCopyFallback()` mirrors the Loop handoff fallback (selected read-only textarea, "Select all and copy manually.", Dismiss) and announces "Clipboard unavailable — copy the prompt manually."
+! TRIPWIRE: `SESSION_PROMPT` is the exact vendor-neutral text from #72, as **one line** (Architect direction 2026-10-10: a pasted newline can submit early in terminal agent UIs). It names no vendor and no layout-dependent path (never `.gator/.includes/GATOR_INIT.md`): `gator init` reports the canonical path itself. The prompt reaches the DOM only through `textContent` / `textarea.value`, and it is never logged, stored, put in `data-*`, or put into history state.
+! Welcome never calls `setActiveRepo` / `clearActiveRepo` and works without a registered repository or an active Loop.
+- **Pinned by** `tests/test_dashboard_ui/test_welcome_ui.py`.
+
 ### renderSettings()
 File: src/gator_command/scripts/dashboard/views/settings.js
 Render and update machine-local dashboard preferences exposed by the server.
@@ -336,6 +355,9 @@ File: src/gator_command/scripts/dashboard/dashboard.css
 Maintain the sidebar/topbar/content flex chain and usable narrow-screen layout.
 <- all views
 ! Repository content and iframe containers need `min-width: 0`; HTML preview retains a visible minimum height and scrollable overflow.
+! **Shared main-pane tab bar (#72):** `.gator-tabbar` is a full-width block that owns the 1px baseline (it reaches the main pane's right edge); `.gator-tabbar [role="tablist"]` wraps when narrow; `.gator-tab` keeps a fixed 13px label. Selected = `aria-selected="true"` → weight 700 plus a 3px `currentColor` underline; unselected = weight 400, transparent underline; `:focus-visible` outline. Never colour alone. Loop's Create / History uses it; the old `.loop-subnav*` styles were removed (the class names remain as hooks).
+! **Logo button (#72):** `.brand-home` resets button chrome around the unchanged `#brand-logo` sizing and adds a `:focus-visible` outline. Welcome content uses `.welcome-body` (max 760px) under the default `#view-slot` scrolling.
+! Loop height chain: `.loop-workspace` (column, `height:100%`) → `.loop-workspace-body` (`flex:1; min-height:0`) keeps `.loop-sidebar` / `.loop-main` as the scroll owners.
 
 ## Before Changing This Module
 

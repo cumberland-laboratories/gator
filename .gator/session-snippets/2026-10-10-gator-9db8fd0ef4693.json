@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Release procedure: verify before you push; flake rerun policy (#70, #71)",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "ci",
+    "procedure"
+  ],
+  "commit": "9db8fd0ef4693bcc124e75de8776929c28793f23",
+  "short_commit": "9db8fd0",
+  "snippet_id": "snippet-9db8fd0ef4693",
+  "session_group_key": "anthropic:dfff1201-980c-4aeb-835c-90855e1f84c3",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "cc6acdea19573f0e2f937c5da6dedcc104f92d45",
+  "started_at": "2026-10-10T00:34:13Z",
+  "ended_at": "2026-10-10T00:50:02Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/procedures/release-and-deploy.md",
+    ".gator/session-snippets/2026-10-10-gator-cc6acdea19573.json"
+  ],
+  "notes": [
+    "`procedures/release-and-deploy.md`: new \"Verify before you push (the 2.24.0 lesson)\" section. Before every push to `dev`, run every test file that references a changed file (search tests for the filename/symbols; docs and templates can be pinned by unrelated test files), run the same fast suite CI runs, and never edit files during a test run. Checklist step 1 points to it. Evidence: CI history 2026-09-15..2026-10-09 (53 runs, 10 reruns, 8 red); four real-bug commits were all pushed after partial local runs.",
+    "New \"Flakes: rerun once, then record\" section: rerun a one-platform failure in an unrelated test once, record it on its tracking issue, and treat a two-platform or repeat failure as real. Tracking issues filed: #70 (Windows `dashboard-ui` Playwright flakes, 9 failures in 8 tests) and #71 (`test_loop_suspension` `[paused]` JSONDecodeError on Windows). `TestPidWalker` is fixed (cc6acde) and no longer a known flake.",
+    "`inbox.md`: the flake note now points to #70 / #71 and the rerun policy."
+  ],
+  "transcript_session_id": "dfff1201-980c-4aeb-835c-90855e1f84c3",
+  "transcript_ref": null
+}

@@ -111,6 +111,20 @@ html, body {
   object-fit: contain;
 }
 
+/* #72: the logo is a real button that opens Welcome. */
+.brand-home {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.brand-home:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 4px;
+}
+
 #sidebar-nav {
   flex: 1;
   padding: 0 12px;
@@ -1676,8 +1690,16 @@ mark.search-hit {
 
 .loop-workspace {
   display: flex;
-  gap: 0;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+}
+
+/* #72: the Loop list and detail columns sit below the main-pane tab bar. */
+.loop-workspace-body {
+  display: flex;
+  gap: 0;
+  flex: 1;
   min-height: 0;
 }
 
@@ -2360,17 +2382,22 @@ textarea.loop-ctrl-input {
   margin-bottom: 2px;
 }
 
-/* #56 Loop sidebar tabs (Create / History). The selected tab is shown by
-   weight plus an underline, never colour alone. */
-.loop-subnav {
+/* #72 Shared main-pane tab bar (Welcome topics, Loop Create / History).
+   The bar spans the main pane and owns the full-width baseline; the
+   selected tab is shown by weight plus its own underline, never colour
+   alone. */
+.gator-tabbar {
+  flex-shrink: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.gator-tabbar [role="tablist"] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
 }
-.loop-subnav-tab {
-  padding: 6px 12px;
+.gator-tab {
+  padding: 8px 12px;
   border: none;
   border-bottom: 3px solid transparent;
   margin-bottom: -1px;
@@ -2380,12 +2407,12 @@ textarea.loop-ctrl-input {
   font-weight: 400;
   cursor: pointer;
 }
-.loop-subnav-tab[aria-selected="true"] {
+.gator-tab[aria-selected="true"] {
   border-bottom-color: currentColor;
   color: var(--color-text);
   font-weight: 700;
 }
-.loop-subnav-tab:focus-visible {
+.gator-tab:focus-visible {
   outline: 2px solid var(--color-link);
   outline-offset: 2px;
 }
@@ -2716,7 +2743,7 @@ textarea.loop-ctrl-input {
 .loop-blocked-artifact-link:hover { text-decoration: underline; }
 
 @media (max-width: 768px) {
-  .loop-workspace {
+  .loop-workspace-body {
     flex-direction: column;
   }
   .loop-sidebar {
@@ -2734,3 +2761,107 @@ textarea.loop-ctrl-input {
   }
 }
 
+/* ── welcome workspace (#72) ─────────────────────────────────────────── */
+/* Tabs use the shared .gator-tabbar / .gator-tab treatment. */
+
+.welcome-body {
+  padding: 20px 24px;
+  max-width: 760px;
+  line-height: 1.55;
+}
+.welcome-panel:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 4px;
+}
+.welcome-heading {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.welcome-list,
+.welcome-steps {
+  padding-left: 22px;
+}
+.welcome-list li,
+.welcome-steps li {
+  margin-bottom: 8px;
+}
+.welcome-next-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.welcome-next,
+.welcome-copy {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--color-link);
+  background: transparent;
+  color: var(--color-link);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.welcome-next:hover,
+.welcome-copy:hover { background: rgba(26, 95, 168, 0.06); }
+.welcome-next:focus-visible,
+.welcome-copy:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+.welcome-more {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.welcome-code,
+.welcome-prompt {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.welcome-copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.welcome-copy-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+.welcome-copy-fallback {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+.welcome-copy-fallback-text {
+  width: 100%;
+  padding: 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.welcome-copy-fallback-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin: 4px 0;
+}
+.welcome-copy-fallback-dismiss {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 11px;
+  cursor: pointer;
+}

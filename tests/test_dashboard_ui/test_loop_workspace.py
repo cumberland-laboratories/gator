@@ -2902,7 +2902,9 @@ def _tab_state(page):
                 text: t.textContent,
             };
         });
-        out.tablist = !!document.querySelector('#loop-sidebar-nav [role="tablist"]');
+        // #72: the tablist sits in the main-pane bar, not in the sidebar.
+        out.tablist = !!document.querySelector('#loop-tabbar [role="tablist"]')
+            && !document.querySelector('#loop-sidebar-nav [role="tablist"]');
         return out;
     }""")
 
@@ -2969,6 +2971,80 @@ def test_loop_tabs_survive_polls(page, dashboard_fleet):
     page.wait_for_timeout(7000)  # more than two polls
     assert page.evaluate("() => window._tl56.isConnected")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
+
+
+def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
+    """#72: Create / History sit in a full-width bar across the top of the
+    Loop main pane (baseline to the pane's right edge, above both columns);
+    selection is weight plus underline. A half-filled creation form
+    survives a History -> Create round trip."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    geo = page.evaluate("""() => {
+        const r = s => document.querySelector(s).getBoundingClientRect();
+        const style = s => getComputedStyle(document.querySelector(s));
+        const bar = r('#loop-tabbar'), slot = r('#view-slot');
+        const side = r('#loop-sidebar-nav'), main = r('#loop-main-content');
+        const sel = style('#loop-tab-create'), un = style('#loop-tab-history');
+        return {
+            barLeft: bar.left, barRight: bar.right, barBottom: bar.bottom,
+            sideLeft: side.left,
+            // the pane's content edge: #view-slot minus its right padding
+            slotRight: slot.right - parseFloat(style('#view-slot').paddingRight),
+            sideTop: side.top, mainTop: main.top,
+            baseline: style('#loop-tabbar').borderBottomWidth,
+            selWeight: parseInt(sel.fontWeight, 10), selBorder: sel.borderBottomWidth,
+            unWeight: parseInt(un.fontWeight, 10),
+            unBorderColor: un.borderBottomColor,
+        };
+    }""")
+    assert abs(geo["barLeft"] - geo["sideLeft"]) <= 1
+    assert abs(geo["barRight"] - geo["slotRight"]) <= 1
+    assert geo["barBottom"] <= geo["sideTop"] + 1
+    assert geo["barBottom"] <= geo["mainTop"] + 1
+    assert geo["baseline"] == "1px"
+    assert geo["selWeight"] >= 700 and geo["selBorder"] == "3px"
+    assert geo["unWeight"] == 400
+    assert geo["unBorderColor"] in ("rgba(0, 0, 0, 0)", "transparent")
+
+    # Half-filled form survives History -> Create (beta has no loops).
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    _click_nav(page, "loop")
+    page.wait_for_selector("#loop-feature-input", timeout=10000)
+    page.fill("#loop-feature-input", "half-filled-feature")
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert _tab_state(page)["history"]["selected"] == "true"
+    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
+    assert _tab_state(page)["create"]["selected"] == "true"
+    assert page.input_value("#loop-feature-input") == "half-filled-feature"
+
+
+def test_loop_tabs_inert_until_loops_load(page, dashboard_fleet):
+    """#72: the main-pane tablist exists before /loops resolves; a tab
+    click in that window changes nothing (no history entry, no stale
+    render) and the mount still lands on its default selection."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    held = []
+    page.route("**/api/repo-by-key/*/loops", lambda route: held.append(route))
+    _click_nav(page, "loop")
+    page.wait_for_selector("#loop-tab-history", timeout=10000)
+    assert held, "the /loops request should be in flight"
+    length = page.evaluate("() => history.length")
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert page.evaluate("() => history.length") == length
+    assert page.locator("#loop-panel-create").count() == 0
+    for route in held:
+        route.continue_()
+    page.unroute("**/api/repo-by-key/*/loops")
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    st = _tab_state(page)
+    assert st["create"]["selected"] == "true"
+    assert st["history"]["selected"] == "false"
+    assert page.evaluate("() => history.length") == length
 
 
 def test_sidebar_create_with_active_loop(page, dashboard_fleet):

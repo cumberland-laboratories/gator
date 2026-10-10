@@ -553,27 +553,28 @@
     return loadSelectedLoop();
   }
 
-  // ── #56 sidebar tabs: Create / History ──────────────────────────────────
+  // ── #56 tabs: Create / History (main-pane bar since #72) ────────────────
   //
-  // The tablist is built once per mount and survives polls (only the panel
-  // contents are re-rendered), so a focused tab keeps focus. Selection is
-  // shown by aria-selected plus weight and underline, never colour alone.
+  // The tablist lives in the full-width #loop-tabbar above the workspace
+  // body and is built once per mount; polls never touch it, so a focused
+  // tab keeps focus. The two tabpanels stay in the Loop sidebar (they are
+  // the lists the tab chooses) and polls re-render only their contents.
+  // Selection is shown by aria-selected plus weight and underline, never
+  // colour alone.
 
   var LOOP_TABS = ["create", "history"];
 
-  function buildSidebarTabs(listEl) {
-    listEl.innerHTML =
+  function buildLoopTabs(container) {
+    var bar = container.querySelector("#loop-tabbar");
+    if (!bar) return;
+    bar.innerHTML =
       '<div class="loop-subnav" role="tablist" aria-label="Loop workspace">'
-      + '<button type="button" class="loop-subnav-tab" role="tab" id="loop-tab-create" '
+      + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-create" '
       +   'data-tab="create" aria-controls="loop-panel-create">Create</button>'
-      + '<button type="button" class="loop-subnav-tab" role="tab" id="loop-tab-history" '
+      + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-history" '
       +   'data-tab="history" aria-controls="loop-panel-history">History</button>'
-      + '</div>'
-      + '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-create" '
-      +   'aria-labelledby="loop-tab-create"></div>'
-      + '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-history" '
-      +   'aria-labelledby="loop-tab-history"></div>';
-    var tablist = listEl.querySelector(".loop-subnav");
+      + '</div>';
+    var tablist = bar.querySelector(".loop-subnav");
     tablist.addEventListener("click", function (e) {
       var tab = e.target.closest(".loop-subnav-tab");
       if (tab) switchTab(tab.dataset.tab, false);
@@ -591,12 +592,24 @@
     });
   }
 
+  // Replaces the sidebar's "Loading…" placeholder with the two tabpanels,
+  // once per mount; afterwards it is a no-op.
+  function ensureLoopPanels(listEl) {
+    if (listEl.querySelector("#loop-panel-create")) return;
+    listEl.innerHTML =
+      '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-create" '
+      +   'aria-labelledby="loop-tab-create"></div>'
+      + '<div class="loop-subnav-panel" role="tabpanel" id="loop-panel-history" '
+      +   'aria-labelledby="loop-tab-history"></div>';
+  }
+
   // Attributes are written only when they differ (polls stay quiet).
-  function applyTabState(listEl) {
+  function applyTabState(root) {
     LOOP_TABS.forEach(function (name) {
       var selected = name === _state.view;
-      var tab = listEl.querySelector("#loop-tab-" + name);
-      var panel = listEl.querySelector("#loop-panel-" + name);
+      var tab = root.querySelector("#loop-tab-" + name);
+      var panel = root.querySelector("#loop-panel-" + name);
+      if (!tab || !panel) return;
       var sel = selected ? "true" : "false";
       var ti = selected ? "0" : "-1";
       if (tab.getAttribute("aria-selected") !== sel) tab.setAttribute("aria-selected", sel);
@@ -611,6 +624,11 @@
   function switchTab(name, fromKeyboard) {
     var container = _state.container;
     if (!container || LOOP_TABS.indexOf(name) === -1) return;
+    // #72: the bar exists from mount, but the tabs stay inert until the
+    // first /loops response has built the panels; before that, _state
+    // still holds the previous mount's mode/loops and a push would land
+    // ahead of the mount's landing shellReplace().
+    if (!container.querySelector("#loop-panel-create")) return;
     var changed = name !== _state.view;
     _state.view = name;
     if (name === "create" && _state.mode !== "create") {
@@ -622,8 +640,7 @@
       renderLoopSidebar(_state.loops, container);
       renderMainContent(container);
     } else {
-      var listEl = container.querySelector("#loop-sidebar-nav");
-      if (listEl && listEl.querySelector(".loop-subnav")) applyTabState(listEl);
+      applyTabState(container);
     }
     if (changed) shellPush();
     if (fromKeyboard) {
@@ -635,7 +652,7 @@
   function renderLoopSidebar(loops, container) {
     var listEl = container.querySelector("#loop-sidebar-nav");
     if (!listEl) return;
-    if (!listEl.querySelector(".loop-subnav")) buildSidebarTabs(listEl);
+    ensureLoopPanels(listEl);
 
     var classified = classifyLoops(loops);
     var html = "";
@@ -672,7 +689,7 @@
     html += '</div>';
     listEl.querySelector("#loop-panel-history").innerHTML = html;
 
-    applyTabState(listEl);
+    applyTabState(container);
 
     // Wire Create Loop click
     var createBtn = listEl.querySelector(".loop-sidebar-create");
@@ -3679,13 +3696,17 @@
 
     container.innerHTML =
       '<div class="loop-workspace">'
+      + '<div class="gator-tabbar loop-tabbar" id="loop-tabbar"></div>'
+      + '<div class="loop-workspace-body">'
       + '<div class="loop-sidebar" id="loop-sidebar-nav">'
       +   '<div class="muted" style="padding:24px;text-align:center;">Loading…</div>'
       + '</div>'
       + '<div class="loop-main" id="loop-main-content">'
       +   '<div class="muted" style="padding:24px;text-align:center;">Select a loop to view details.</div>'
       + '</div>'
+      + '</div>'
       + '</div>';
+    buildLoopTabs(container);
 
     var loops = await fetchLoops();
     if (myMount !== _state.mountId) return;

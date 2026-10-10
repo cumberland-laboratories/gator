@@ -276,7 +276,7 @@ File: src/gator_command/scripts/dashboard/snapshot.py
 Inline dashboard assets and Tier-1 data into a self-contained offline HTML document.
 <- `--snapshot`
 ! Use callable regex replacement for JavaScript/CSS bytes so backslashes are not interpreted as replacement escapes.
-! The script-tag regex must match every `<script src="views/*.js">` tag in `dashboard.html`. Adding a new view JS file requires updating both the regex pattern and the inlined scripts block. Current order: fleet, history, syntax, repo, updates, **loop-markdown (#45)**, loop, settings, then `dashboard.js`, pinned by `tests/test_snapshot.py` (including that `window.GatorLoopMarkdown` is inlined).
+! The script-tag regex must match every `<script src="views/*.js">` tag in `dashboard.html`. Adding a new view JS file requires updating both the regex pattern and the inlined scripts block. Current order: fleet, history, syntax, repo, updates, **loop-markdown (#45)**, loop, settings, **welcome (#72)**, then `dashboard.js`, pinned by `tests/test_snapshot.py` (including that `window.GatorLoopMarkdown` and `GatorViews.welcome` are inlined).
 
 ### check_for_updates() / upgrade_and_restart() / restart_server()
 File: src/gator_command/scripts/dashboard/updates.py

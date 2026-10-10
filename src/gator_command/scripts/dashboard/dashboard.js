@@ -40,6 +40,7 @@
     updates:  { title: "Updates",  subtitle: "" },
     loop:     { title: "Loop",     subtitle: "" },
     settings: { title: "Settings", subtitle: "" },
+    welcome:  { title: "Welcome to Gator!", subtitle: "" },
   };
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@
   const docsTab        = document.getElementById("docs-tab");
   const loopTab        = document.getElementById("loop-tab");
   const topbarTitle    = document.getElementById("topbar-title");
+  const brandHome      = document.getElementById("brand-home");
 
   // ── sidebar toggle ────────────────────────────────────────────────────────
 
@@ -269,6 +271,11 @@
     document.querySelectorAll(".sidebar-item").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === name);
     });
+    // #72: the logo is the Welcome entry point.
+    if (brandHome) {
+      if (name === "welcome") brandHome.setAttribute("aria-current", "page");
+      else brandHome.removeAttribute("aria-current");
+    }
 
     // Show/hide repo search input
     const repoSearchInput = document.getElementById("repo-search-input");
@@ -457,6 +464,18 @@
       return;
     }
 
+    // #72: Welcome is repository-independent. It never reads or changes
+    // activeRepo / activeRepoKey, so Repo/Docs/Loop dimming is untouched.
+    if (name === "welcome") {
+      updateTopbar("welcome", "");
+      if (views.welcome) {
+        views.welcome(state.data, viewSlot);
+      } else {
+        viewSlot.innerHTML = "<p class='muted'>Welcome view not available.</p>";
+      }
+      return;
+    }
+
     if (name === "settings") {
       updateTopbar("settings", "Fleet settings");
       if (views.settings) {
@@ -479,6 +498,11 @@
     if ((view === "repo" || view === "docs" || view === "loop") && !state.activeRepo) return;
     navigate(view);
   });
+
+  // #72: the logo opens Welcome (an ordinary shell history entry).
+  if (brandHome) {
+    brandHome.addEventListener("click", function () { navigate("welcome"); });
+  }
 
   // ── session evidence modal ─────────────────────────────────────────────
 

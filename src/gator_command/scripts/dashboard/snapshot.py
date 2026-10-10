@@ -43,6 +43,7 @@ def build_snapshot(fast_data):
     loop_markdown_js = _read_asset("views/loop-markdown.js")  # #45
     loop_js = _read_asset("views/loop.js")
     settings_js = _read_asset("views/settings.js")
+    welcome_js = _read_asset("views/welcome.js")  # #72
     shell_js = _read_asset("dashboard.js")
 
     data_block = (
@@ -71,6 +72,7 @@ def build_snapshot(fast_data):
         f"<script>\n{loop_markdown_js}\n</script>\n"
         f"<script>\n{loop_js}\n</script>\n"
         f"<script>\n{settings_js}\n</script>\n"
+        f"<script>\n{welcome_js}\n</script>\n"
         f"{data_block}\n"
         f"<script>\n{shell_js}\n</script>"
     )
@@ -83,6 +85,7 @@ def build_snapshot(fast_data):
         r'<script src="views/loop-markdown\.js"></script>\s*'
         r'<script src="views/loop\.js"></script>\s*'
         r'<script src="views/settings\.js"></script>\s*'
+        r'<script src="views/welcome\.js"></script>\s*'
         r'<script src="dashboard\.js"></script>',
         lambda m: scripts_block,
         html,

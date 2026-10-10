@@ -47,7 +47,9 @@ class TestBuildSnapshot:
         assert 'src="views/loop-markdown.js"' not in html
         assert 'src="views/loop.js"' not in html
         assert 'src="views/settings.js"' not in html
+        assert 'src="views/welcome.js"' not in html
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
+        assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
         assert 'src="dashboard.js"' not in html
 
     def test_data_embedded(self):
@@ -95,6 +97,7 @@ class TestBuildSnapshot:
             'src="views/loop-markdown.js"',
             'src="views/loop.js"',
             'src="views/settings.js"',
+            'src="views/welcome.js"',
             'src="dashboard.js"',
         ]:
             assert ref not in html, f"External reference not inlined: {ref}"
