@@ -95,7 +95,7 @@ Gator is built around a repeatable working loop.
 
 ### 1. Session start
 
-The AI reads the constitution and the current knowledge layer: mission, roadmap, inbox, active threads, prior commit draft, and relevant charters.
+The AI reads the constitution and the current knowledge layer: mission, roadmap, inbox, active threads, and relevant charters. A commit draft is pending-message plumbing, not session history; read it only when uncommitted work may remain.
 
 This means the session does not begin from a blank prompt. It begins from repo state.
 
@@ -119,7 +119,7 @@ This is a core Gator idea: code and understanding should evolve together.
 
 ### 6. Write the commit draft
 
-The AI records what changed and why in `commit_draft.md`. This creates a rich, structured change log before the commit is made.
+The AI authors the final commit message in `commit_draft.md`: a short outcome-first summary and concise reader-facing body. Detailed implementation evidence belongs in charters or artifacts.
 
 ### 7. Commit-time enforcement
 

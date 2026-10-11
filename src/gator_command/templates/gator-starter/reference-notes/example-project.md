@@ -266,12 +266,20 @@ current scope. Revisit only if mission changes to multi-user.
 ## Example: commit_draft.md
 
 ```markdown
+---
+message: "Add task priorities to planning workflow"
+change-type: feature
+significance: routine
+decision-tags: [tasks, priorities]
+agent: agent
+architect: architect
+---
+
 # Session Change Log
 
-- Added priority field to Task model and store schema [#feature] [#models] -agent
-- Updated store charter: add_task now accepts priority param [#charter-update] -agent
-- Architect decision: priority is 1-5 integer, not string label [#decision] [#models] -architect
-- Updated cross-cutting: added note about priority sort direction [#charter-update] -agent
+- Adds a 1-5 priority to tasks so planning can order work consistently.
+- Records the Architect's numeric-priority decision and updates the affected charter.
+- Verifies that existing tasks retain their prior default priority.
 ```
 
 ---
@@ -286,4 +294,4 @@ current scope. Revisit only if mission changes to multi-user.
 
 4. **Threads are tiny.** The SQLite-vs-Postgres thread is 8 lines. It exists so the decision doesn't have to be re-explained every session.
 
-5. **The loop is visible in commit_draft.** Charter updates appear alongside code changes. They're the same operation.
+5. **The draft is a readable commit message.** It records the outcome and material decision, while the charter carries the function-level detail.

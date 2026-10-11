@@ -1,5 +1,9 @@
 # Expected Governance Residue
 
+Current Gator installs ignore these hook-state files, so they normally do not
+appear in `git status`. This note also covers legacy repositories that still
+track them; there the hook reset appears as a post-commit modification.
+
 After a successful `git commit` in a Gator-governed repo, `git status` may still show changes in:
 
 - `.gator/commit_draft.md`

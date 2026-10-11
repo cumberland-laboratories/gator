@@ -66,7 +66,16 @@ When you see `.gator/` changes in `git status`, walk this ladder:
 4. **Are the changes a mix of `.gator/` content + code files you edited this session?** → normal commit flow. The `.gator/` charter updates + `commit_draft.md` population + code changes all ride together per the constitution's Loop steps 5-8.
 5. **Do you see changes you don't recognize?** → do NOT auto-stage or auto-commit. Ask the Architect to explain what produced them.
 
-## 4. Common failure modes without this procedure
+## 4. Commit-draft handling
+
+`commit_draft.md` supplies the final commit message, but it is normally
+gitignored runtime state. Stage the tracked code, charter, and documentation
+changes. Do not force-add the draft: the hook reads it from the working tree.
+Write its summary and body for a future reader, then invoke Git with
+`git commit -F .gator/commit_draft.md`. See
+[`authoring-commit-messages.md`](authoring-commit-messages.md).
+
+## 5. Common failure modes without this procedure
 
 Absent this guidance, models frequently:
 

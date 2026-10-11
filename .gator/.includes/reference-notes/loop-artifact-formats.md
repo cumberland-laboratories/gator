@@ -260,7 +260,7 @@ review command becomes `git diff <checkpoint base> <staged_tree>`.>
 
 **Rules:**
 - Exactly one level-2 `## Commit State` section (a fenced example does not count). A duplicate is rejected.
-- Stage the change, including charter and `commit_draft` updates, before submitting. Nothing staged means the submission is rejected.
+- Stage the tracked change and charter updates before submitting. Keep the current `commit_draft.md` in the working tree for the eventual hook, but do not force-stage its normally ignored runtime state. Nothing staged means the submission is rejected.
 - Checkpoint loops: stage only the active checkpoint's change on top of the approved earlier checkpoints, and submit with `--checkpoint <id>`. The CLI writes the checkpoint, its base tree and the generation into Commit State; you do not.
 - The Reviewer's findings or approval use the Findings format above. The CLI appends a `## Reviewed Candidate` section recording the exact reviewed tree, so do not write one yourself. Approval is refused if the staged tree or HEAD changed after submission.
 

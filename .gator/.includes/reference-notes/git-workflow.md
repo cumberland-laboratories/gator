@@ -50,7 +50,7 @@ No feature branches needed. Dev is your working surface, main is your "known goo
 
 - **Charters update on the working branch**, not on main. They travel with the code.
 - **Enforcer reviews happen before PR or before merge** — the Architect decides when and at what level.
-- **commit_draft.md accumulates on the working branch until commit time** — use it to draft the next commit message or PR context, then clear it immediately after the commit so the next session starts fresh.
+- **`commit_draft.md` is the pending commit message, not branch history or PR context.** Before committing, give it a concise reader-facing summary and body. The post-commit hook clears it; do not clear or stage its normally ignored runtime state yourself. See [`../procedures/authoring-commit-messages.md`](../procedures/authoring-commit-messages.md).
 - **Don't branch .gator/ separately from code.** The knowledge layer and the code must stay in sync. If you branch the code, the charters go with it.
 
 ## What to Avoid

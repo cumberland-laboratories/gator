@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Inbox: next steps after the Welcome HTML documents (content pass; Docs view to HTML)",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "welcome",
+    "docs"
+  ],
+  "commit": "1316bf4683a3a46b0714df5e5064d27f64bd2f84",
+  "short_commit": "1316bf4",
+  "snippet_id": "snippet-1316bf4683a3a",
+  "session_group_key": "anthropic:c00c1fbd-fa81-45e9-9a62-adead0374909",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "97f07ed87ec8c393d508b29b95db0bdbc226eb4c",
+  "started_at": "2026-10-11T00:14:25Z",
+  "ended_at": "2026-10-11T01:17:21Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/commit_draft.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-11-gator-97f07ed87ec8c.json"
+  ],
+  "notes": [
+    "`inbox.md`: records the Architect's next steps after reviewing Welcome in the source Dashboard. (1) The Welcome content pass: the copy is stale, and HTML with Cumberland style and inline SVG allows a richer explanation of what Gator can do. The release hold stays until this is done. (2) Move the Docs view to the same model: user-facing HTML documents in sandboxed frames. It also notes that the full-width frames and the copy prompt were checked by the Architect."
+  ],
+  "transcript_session_id": "c00c1fbd-fa81-45e9-9a62-adead0374909",
+  "transcript_ref": null
+}

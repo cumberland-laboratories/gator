@@ -26,15 +26,15 @@ When the Architect asks a question that matches a pattern below, read the refere
 
 ### "What should I do first?" / "Where do I start?"
 
-**Draw from**: `roadmap.md`, `inbox.md`, `commit_draft.md`
+**Draw from**: `roadmap.md`, `inbox.md`, and recent Git history
 
-**Frame as**: Check roadmap for current priorities, inbox for anything captured since last session, and commit draft for what happened last time. Then suggest the highest-priority item and ask the Architect if that's where they want to start.
+**Frame as**: Check roadmap for current priorities, inbox for anything captured since last session, and recent commits for completed work. Read `commit_draft.md` only when there is reason to think the prior session left uncommitted work. Then suggest the highest-priority item and ask the Architect if that's where they want to start.
 
 ### "What happened last session?" / "Catch me up"
 
-**Draw from**: `commit_draft.md`, `inbox.md`, `whiteboard.md`
+**Draw from**: recent Git history, `inbox.md`, `whiteboard.md`, and `commit_draft.md` only when it is non-stub
 
-**Frame as**: Summarize the commit draft entries if present (what changed, who decided what), any inbox items that arrived, and any unresolved whiteboard findings. If `commit_draft.md` is empty, assume the prior commit was rolled over cleanly and use git history plus inbox/whiteboard to reconstruct the latest context. The goal: make the Architect feel like the conversation never ended.
+**Frame as**: Start with the most recent commit messages, then summarize inbox items and unresolved whiteboard findings. A non-stub `commit_draft.md` describes pending, uncommitted work; otherwise do not treat it as prior-session history. The goal: make the Architect feel like the conversation never ended.
 
 ### "Why is git status still dirty?" / "Did the commit fail?" / "Why are commit_draft and whiteboard modified?"
 
@@ -116,7 +116,7 @@ When the Architect asks a question that matches a pattern below, read the refere
 
 ### "What changed recently in this area?" / "Why is this shaped like this?"
 
-**Draw from**: `commit_draft.md`, relevant threads/artifacts, relevant charters
+**Draw from**: recent Git history, relevant threads/artifacts, and relevant charters
 
 **Frame as**: Start with recent recorded changes or decisions, then tie them to the current code shape. If the answer is not documented, say so and distinguish "the code does X" from "the rationale is not yet captured."
 
@@ -517,7 +517,7 @@ Organize by subdirectory if needed (e.g., `.gator/vault/certs/`, `.gator/vault/d
 
 ### "Is the knowledge layer stale?" / "What should we clean up in .gator/?"
 
-**Draw from**: `commit_draft.md`, relevant charters, `whiteboard.md`, `reference-notes/workflow-profiles.md`
+**Draw from**: relevant charters, `whiteboard.md`, recent Git history, and `reference-notes/workflow-profiles.md`
 
 **Frame as**: Be specific about the kind of staleness: missing charter updates, outdated roadmap priorities, uncaptured decisions, oversized threads, unresolved whiteboard findings. Suggest the smallest cleanup that restores trust in the map.
 

@@ -23,7 +23,7 @@ This is a closed-loop system. The agent's workflow on every code change:
 3. *(optional)* **Pre-code enforcer review**: the Architect may request an enforcer check of the plan against charters before any code is written
 4. **Make the change**: write code grounded in what the charters say about invariants, access patterns, and neighbors
 5. **Immediately after editing each code file, update the affected charter** — before editing the next file, before running tests, before moving on. This is part of the edit, not part of the commit. Update: new functions, changed access patterns, new cross-references, removed entries. If you touched code and haven't touched a charter, you are not done with the edit.
-6. **Log the change**: append a bullet to the body of `commit_draft.md` and update the YAML frontmatter (`message`, `change-type`, `significance`, `decision-tags`, `agent`, `architect`)
+6. **Author the commit message**: update `commit_draft.md` frontmatter (`message`, `change-type`, `significance`, `decision-tags`, `agent`, `architect`) and its short reader-facing body. It is the sole source for the pending commit's summary, body, and Gator trailers. Explain the outcome and why it matters; keep implementation inventories, raw test output, and full significance steelmen in charters or artifacts.
 7. **Significance check**: if the change touches public API, cross-module invariants, TRIPWIREs, or security-relevant code, generate a steelman argument against the change and flag compatibility implications. Surface to the Architect before committing. See [`procedures/significance-check.md`](procedures/significance-check.md). Skip for routine edits.
 8. **Commit**: stage files and run `git commit`. Two deterministic hooks fire automatically:
    - **Pre-commit** (`gator-pre-commit.py --phase validate`): validates charter-alongside-code (blocks if code changed but no charter updated), checks commit_draft is populated, writes `.gator/status.json`. Findings go to `whiteboard.md`.
@@ -65,7 +65,7 @@ Make the human feel like the conversation never ended. For common Architect ques
 | `.gator/mission.md` | What we're building and why | When the project direction changes |
 | `.gator/roadmap.md` | Priority-ordered feature list | When priorities shift |
 | `.gator/inbox.md` | Zero-friction idea capture | Anytime — append freely |
-| `.gator/commit_draft.md` | Source of truth for commit messages: `message` field becomes the summary line, session change log becomes the body. Also drives Gator-* trailers. | Every code change, every decision; cleared to stub after commit |
+| `.gator/commit_draft.md` | Source of truth for the pending commit message: `message` becomes the summary line, its concise reader-facing body becomes the commit body, and its metadata drives Gator-* trailers. | Before each commit; cleared to stub after commit |
 | `.gator/patterns.md` | Recurring rhythms, obligations, schedules | When patterns emerge |
 | `.gator/charters/` | The intelligent map of the codebase (3–6% by line count) | Every code change (mandatory) |
 | `.gator/blueprints/` | Per-feature flow maps — how features work, referencing charters and modules | When the Architect wants system-level comprehension |

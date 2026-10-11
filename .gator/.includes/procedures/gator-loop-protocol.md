@@ -291,7 +291,7 @@ A **coding loop** reviews real code instead of a plan. The Architect starts it f
 **Draftor (`implementation_drafting` / `implementation_revision`):**
 1. Read `approved-plan.md` (and `findings.current.md` when revising) and the charters for the files you will touch. Read any Architect brief status lists: a coding loop can show two, `source-architect-brief.md` (the planning brief carried forward) and `architect-brief.md` (a new brief for the coding loop). Read both; where they conflict, the coding brief is newer and wins, and a conflict that matters is an escalation. If status says "Planning brief: not carried forward", the Architect dropped it at coding start; do not go looking for it.
 2. Implement the change, update the affected charters and `commit_draft` material, and run the relevant checks.
-3. Stage everything that belongs in the commit, including the charter and `commit_draft` files you changed: `git add ...`. Do not commit. Do not create one commit per round.
+3. Stage the tracked code and charter changes that belong in the commit. Update `commit_draft.md`, but do not force-stage its normally ignored runtime state: the hook reads it from the working tree. Do not commit. Do not create one commit per round.
 4. Submit with `gator loop submit-implementation --token <your-token> [--checkpoint <id>] --file <implementation.md>` (`--checkpoint` is required when status shows a `Checkpoint:` line). The artifact needs exactly these level-2 sections: `## Executive Summary`, `## Implementation Summary`, `## Charter Updates`, `## Verification`, and **exactly one** `## Commit State`, which the CLI fills with the captured facts, replacing your text there. A submission with nothing staged is rejected.
 
 **Reviewer (`implementation_review`):**

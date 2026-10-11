@@ -87,7 +87,7 @@ You don't need to do this manually. Just start a session and the model handles i
 
 After bootstrap, every coding session follows the same loop. You don't need to ask for this — the model does it because the constitution tells it to.
 
-**Session opening.** The model reads the constitution, mission, roadmap, inbox, and last commit draft. It picks up where the last session left off.
+**Session opening.** The model reads the constitution, mission, roadmap, and inbox. It uses Git history for completed work and reads `commit_draft.md` only when uncommitted work may remain.
 
 **Before changing code.** The model reads the relevant charters (found via `INDEX.md`) to understand the module it's about to touch — what functions exist, what they read and write, what depends on them, and what's dangerous.
 
@@ -95,7 +95,7 @@ After bootstrap, every coding session follows the same loop. You don't need to a
 
 **Updating charters.** Immediately after editing each code file, the model updates the affected charter. New functions get entries. Changed access patterns get updated. Removed functions get deleted. This is part of the edit, not an afterthought.
 
-**Logging the change.** The model appends what happened to `commit_draft.md` — what changed, why, and what type of change it was.
+**Authoring the commit message.** The model writes the pending commit's outcome-first summary, concise reader-facing body, and structured metadata in `commit_draft.md`.
 
 **Committing.** When you authorize the commit, a pre-commit hook fires automatically. It checks that charters were updated alongside code, that the commit draft is populated, and writes a status snapshot. If something is missing, the commit is blocked and the model tells you why.
 
