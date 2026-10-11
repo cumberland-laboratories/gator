@@ -63,22 +63,24 @@ class TestDetectEnforcer:
         assert init.detect_enforcer(paths) == "not configured"
 
 
-class TestCountCharters:
-    def test_counts_charters_and_functions(self, mock_gator_repo):
-        """Counts charter files and ### function() entries."""
+class TestNeedsCharterBootstrap:
+    def test_real_charter_present(self, mock_gator_repo):
+        """core.md is a real charter, so no bootstrap is needed."""
         repo_root, _ = mock_gator_repo
         paths = gator_layout.get_gator_paths(repo_root)
-        charter_count, func_count, coverage = init.count_charters(paths)
-        assert charter_count == 1  # core.md only (README.md and _template.md excluded)
-        assert func_count == 3     # parse_config, validate_input, process_data
+        assert init.needs_charter_bootstrap(paths) is False
+
+    def test_templates_only(self, mock_gator_repo):
+        """README.md and _template.md alone still need a bootstrap."""
+        repo_root, gator_dir = mock_gator_repo
+        (gator_dir / "charters" / "core.md").unlink()
+        paths = gator_layout.get_gator_paths(repo_root)
+        assert init.needs_charter_bootstrap(paths) is True
 
     def test_no_charters_dir(self, tmp_path):
-        """Returns zeros when charters/ doesn't exist."""
         (tmp_path / ".gator").mkdir()
         paths = gator_layout.get_gator_paths(tmp_path)
-        count, funcs, coverage = init.count_charters(paths)
-        assert count == 0
-        assert funcs == 0
+        assert init.needs_charter_bootstrap(paths) is True
 
 
 class TestPrintJson:
@@ -94,14 +96,12 @@ class TestPrintJson:
         assert "version" in data
         assert "repo" in data
         assert "constitution_rules" in data
-        assert "charters" in data
+        assert "charters" not in data  # charter health is a Dashboard concern
         assert "working_set" in data
         assert "enforcer" in data
         assert "hooks" in data
         assert "dashboard_registry" in data
         assert data["constitution_rules"] == 5
-        assert data["charters"]["modules"] == 1
-        assert data["charters"]["functions_mapped"] == 3
         assert data["enforcer"] == "ready"
         assert data["hooks"]["status"] == "ok"
         assert data["dashboard_registry"]["status"] == "already_registered"
@@ -365,6 +365,27 @@ class TestSessionOpeningHandoff:
                 ".gator/mission.md", ".gator/roadmap.md", ".gator/inbox.md",
             ],
         }
+
+    def test_no_charters_adds_startup_guide_step(self, tmp_path, init_copy, capsys):
+        repo = _v2_repo(tmp_path, with_bootstrap=True)
+        (repo / ".gator" / ".includes" / "gator-start-up.md").write_text("# s\n", encoding="utf-8")
+        paths = gator_layout.get_gator_paths(repo)
+        joined = "\n".join(init_copy.session_opening_directive(repo, paths))
+        assert "4. .gator/.includes/gator-start-up.md" in joined
+        init_copy.print_json(repo, paths, {"status": "ok", "detail": "ok"},
+                             {"status": "ok", "detail": "ok"})
+        reads = json.loads(capsys.readouterr().out)["session_opening"]["reads"]
+        assert reads[-1] == ".gator/.includes/gator-start-up.md"
+
+    def test_real_charter_suppresses_startup_guide_step(self, tmp_path, init_copy):
+        repo = _v2_repo(tmp_path, with_bootstrap=False)
+        (repo / ".gator" / ".includes" / "gator-start-up.md").write_text("# s\n", encoding="utf-8")
+        (repo / ".gator" / "charters").mkdir()
+        (repo / ".gator" / "charters" / "core.md").write_text("# core\n", encoding="utf-8")
+        joined = "\n".join(init_copy.session_opening_directive(
+            repo, gator_layout.get_gator_paths(repo)))
+        assert "gator-start-up.md" not in joined
+        assert "`gator update` adds it" in joined
 
 
 class TestGatorInitDocument:

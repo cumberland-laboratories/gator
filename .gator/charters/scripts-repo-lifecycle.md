@@ -17,13 +17,20 @@
 
 ---
 
-### count_constitution_rules() / count_charters() / count_working_set() / count_field_guides()
+### count_constitution_rules() / count_working_set() / count_field_guides()
 File: src/gator_command/scripts/gator-init.py
 Compute compact boot-status counts from the resolved Gator layout.
 Filesystem: `.gator/` governance surfaces (R)
 <- text and JSON boot output
 -> layout resolver
 ! Counts are status hints, not proof that content was read or semantically valid.
+
+### needs_charter_bootstrap(paths) / _charter_startup_rel(repo_root, paths)
+File: src/gator_command/scripts/gator-init.py (and starter copy)
+`needs_charter_bootstrap` is True when `charters/` is missing or holds only `_template.md` / `README.md` / `INDEX.md`. `_charter_startup_rel` returns the repo-relative `paths.startup_guide` in that case (and when the guide exists), else `None`.
+Filesystem: `charters/` (one directory listing), `paths.startup_guide` (existence check)
+<- `session_opening_reads()`, `session_opening_directive()`
+! Architect decision 2026-10-11: init shows no charter counts or coverage. The old `count_charters()` walked the whole working tree (ignoring `.gitignore`) for a coverage figure the banner discarded, about 20 s per run on this repo. Charter health belongs to a Dashboard view that can run in the background; do not reintroduce repo-wide scans into session opening.
 
 ### ensure_git_hooks(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py
@@ -34,7 +41,7 @@ Probe managed and legacy hook locations and request repair when configuration is
 
 ### session_opening_reads(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)
-Return `(bootstrap_rel_or_None, reads)`: the ordered repo-relative session-opening reads. `GATOR_INIT.md` (`paths.bootstrap`) comes first when it is a file, then the resolved constitution, then root `mission.md` / `roadmap.md` / `inbox.md`.
+Return `(bootstrap_rel_or_None, reads)`: the ordered repo-relative session-opening reads. `GATOR_INIT.md` (`paths.bootstrap`) comes first when it is a file, then the resolved constitution, then root `mission.md` / `roadmap.md` / `inbox.md`, then `gator-start-up.md` last only when `_charter_startup_rel()` returns it (no real charters yet).
 Filesystem: `paths.bootstrap` (existence check only)
 <- `session_opening_directive()`, `_session_opening_json()`
 ! Single source for the text and JSON handoff; do not compute the read order anywhere else.
@@ -42,13 +49,13 @@ Filesystem: `paths.bootstrap` (existence check only)
 
 ### session_opening_directive(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)
-Return the banner's "session opening is not finished" lines from `session_opening_reads()`: `GATOR_INIT.md` → constitution → context when the bootstrap exists. Otherwise it returns the legacy constitution → context lines plus a one-line `gator update` upgrade hint.
+Return the banner's "session opening is not finished" lines from `session_opening_reads()`: `GATOR_INIT.md` → constitution → context when the bootstrap exists. Otherwise it returns the legacy constitution → context lines plus a one-line `gator update` upgrade hint. A numbered `gator-start-up.md` step follows the context step when the repo has no charters.
 <- `print_boot_sequence()`
 ! The directive follows the tagline and precedes the final marker so models do not interpret the banner as completion.
 
 ### print_boot_sequence() / print_json()
 File: src/gator_command/scripts/gator-init.py
-Render equivalent human and machine status for governance, hooks, and registry membership. JSON carries an additive `session_opening` object (`bootstrap`, `bootstrap_present`, `reads`) built by `_session_opening_json()`.
+Render equivalent human and machine status for governance, hooks, and registry membership. JSON carries an additive `session_opening` object (`bootstrap`, `bootstrap_present`, `reads`) built by `_session_opening_json()`. Neither output has a charters line or `charters` block (removed 2026-10-11; no in-repo reader).
 <- `main()`
 -> counters, hook status, constitution drift, `session_opening_reads()`
 ! Constitution drift is warning-only and best-effort; failure to compare templates never blocks session opening.

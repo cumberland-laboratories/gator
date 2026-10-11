@@ -64,53 +64,23 @@ def count_constitution_rules(paths):
     return count
 
 
-def count_charters(paths):
-    """Count charter files and estimate mapping coverage.
+def needs_charter_bootstrap(paths):
+    """True when charters/ holds no real charter (only templates or nothing).
 
-    @reads: charters/ (resolved by layout)
+    Session opening only needs this yes/no signal to point a new repo at
+    the bootstrap guide. Charter health and coverage belong to the
+    Dashboard, not to init: init must stay fast.
+
+    @reads: charters/ (resolved by layout; one directory listing)
     """
     charters_dir = paths.charters_dir
     if not charters_dir.is_dir():
-        return 0, 0, 0.0
-
+        return True
     skip = {"_template.md", "README.md", "INDEX.md"}
-    charter_files = [
-        f for f in charters_dir.iterdir()
-        if f.suffix == ".md" and f.name not in skip
-    ]
-
-    # Count function entries across all charters (lines starting with ### )
-    function_count = 0
-    for cf in charter_files:
-        text = cf.read_text(encoding="utf-8", errors="replace")
-        for line in text.splitlines():
-            if line.strip().startswith("### ") and "(" in line:
-                function_count += 1
-
-    # Estimate total functions in the repo (count def/func/function declarations)
-    repo_root = paths.gator_root.parent
-    total_functions = 0
-    for ext in ("*.py", "*.gd", "*.js", "*.ts", "*.go", "*.rs", "*.java"):
-        for code_file in repo_root.rglob(ext):
-            # Skip .gator/ itself
-            if ".gator" in str(code_file):
-                continue
-            try:
-                text = code_file.read_text(encoding="utf-8", errors="replace")
-                for line in text.splitlines():
-                    stripped = line.strip()
-                    if (stripped.startswith("def ") or
-                        stripped.startswith("func ") or
-                        stripped.startswith("function ") or
-                        re.match(r'^(pub\s+)?(fn|func)\s+', stripped) or
-                        re.match(r'^(export\s+)?(async\s+)?function\s+', stripped)):
-                        total_functions += 1
-            except (OSError, UnicodeDecodeError):
-                continue
-
-    coverage = (function_count / total_functions * 100) if total_functions > 0 else 0.0
-
-    return len(charter_files), function_count, coverage
+    return not any(
+        f.suffix == ".md" and f.name not in skip
+        for f in charters_dir.iterdir()
+    )
 
 
 def count_working_set(paths):
@@ -311,14 +281,6 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     rule_count = count_constitution_rules(paths)
     print(format_check("constitution", f"{rule_count} rules in force"))
 
-    # Charters
-    charter_count, func_count, coverage = count_charters(paths)
-    if charter_count > 0:
-        detail = f"{charter_count} modules \u00b7 {func_count} functions documented"
-        print(format_check("charters", detail))
-    else:
-        print(format_check("charters", "empty \u00b7 ready for bootstrap"))
-
     # Working set
     thread_count, line_count = count_working_set(paths)
     if thread_count > 0:
@@ -406,7 +368,21 @@ def session_opening_reads(repo_root, paths):
     reads = [const_rel] + [f"{root_rel}/{name}" for name in ("mission.md", "roadmap.md", "inbox.md")]
     if bootstrap_rel:
         reads.insert(0, bootstrap_rel)
+    startup_rel = _charter_startup_rel(repo_root, paths)
+    if startup_rel:
+        reads.append(startup_rel)
     return bootstrap_rel, reads
+
+
+def _charter_startup_rel(repo_root, paths):
+    """Repo-relative bootstrap guide when the repo has no charters, else None."""
+    guide = getattr(paths, "startup_guide", None)
+    try:
+        if guide is None or not guide.is_file() or not needs_charter_bootstrap(paths):
+            return None
+    except Exception:
+        return None
+    return _rel(guide, repo_root, ".gator/.includes/gator-start-up.md")
 
 
 def session_opening_directive(repo_root, paths):
@@ -425,20 +401,20 @@ def session_opening_directive(repo_root, paths):
     root_rel = _rel(paths.gator_root, repo_root, ".gator")
     context = (f"{root_rel}/mission.md \u00b7 roadmap.md \u00b7 inbox.md  "
                "\u2014 what \u00b7 where \u00b7 open work")
-    lines = ["", "  session opening is not finished. Read, in order:"]
+    steps = []
     if bootstrap_rel:
-        lines += [
-            f"    1. {bootstrap_rel}  \u2014 Gator's entry point for this session",
-            f"    2. {const_rel}  \u2014 the rules; read before your first response",
-            f"    3. {context}",
-        ]
-    else:
-        lines += [
-            f"    1. {const_rel}  \u2014 the rules; read before your first response",
-            f"    2. {context}",
-            "  note: this repo predates .gator's GATOR_INIT.md "
-            "\u2014 `gator update` adds it",
-        ]
+        steps.append(f"{bootstrap_rel}  \u2014 Gator's entry point for this session")
+    steps.append(f"{const_rel}  \u2014 the rules; read before your first response")
+    steps.append(context)
+    startup_rel = _charter_startup_rel(repo_root, paths)
+    if startup_rel:
+        steps.append(f"{startup_rel}  \u2014 no charters yet; "
+                     "bootstrap before substantial coding")
+    lines = ["", "  session opening is not finished. Read, in order:"]
+    lines += [f"    {n}. {step}" for n, step in enumerate(steps, 1)]
+    if not bootstrap_rel:
+        lines.append("  note: this repo predates .gator's GATOR_INIT.md "
+                     "\u2014 `gator update` adds it")
     return lines
 
 
@@ -455,7 +431,6 @@ def _session_opening_json(repo_root, paths):
 def print_json(repo_root, paths, hook_status, registry_status):
     """Print status as JSON for programmatic consumption."""
     rule_count = count_constitution_rules(paths)
-    charter_count, func_count, coverage = count_charters(paths)
     thread_count, line_count = count_working_set(paths)
     guide_count, guide_langs = count_field_guides(paths)
     enforcer_status = detect_enforcer(paths)
@@ -466,11 +441,6 @@ def print_json(repo_root, paths, hook_status, registry_status):
         "repo": repo_root.name,
         "repo_path": str(repo_root),
         "constitution_rules": rule_count,
-        "charters": {
-            "modules": charter_count,
-            "functions_mapped": func_count,
-            "coverage_pct": round(coverage, 1),
-        },
         "working_set": {
             "threads": thread_count,
             "lines": line_count,

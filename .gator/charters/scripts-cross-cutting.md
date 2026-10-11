@@ -113,6 +113,8 @@ Loop turn windows (legacy) and Architect attention intervals (#47; same stored f
 
 **`gator-state-v2` (2026-10-08, gator-native entry point).** `gator state` JSON drops `entry_points` / `entry_point_baseline_kind` and adds informational `native_files`; this meaning change required the bump. `gator-update-v1` keeps `entry_point_actions` (always `[]`) and `gator init --json` gains an additive `session_opening`, so neither bumps. Gator never writes `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`; see `scripts-installer.md`, `scripts-repo-update.md` and `scripts-managed-state.md`.
 
+**`gator init --json` drops `charters` (2026-10-11, Architect decision).** The `charters` block (`modules`, `functions_mapped`, `coverage_pct`) is removed from the output, and `session_opening.reads` may end with `gator-start-up.md` when a repo has no real charters. The output is unversioned and has no in-repo reader, so nothing bumps. Charter coverage for the Dashboard comes from `gator-repo-status.py` (`charter_coverage_pct`), not from init; see `scripts-repo-lifecycle.md`.
+
 Commit readers accept both `Gator-Architect` and legacy `Gator-PI`. New commits emit `Gator-Architect`; historical trailers remain valid input.
 
 Override audit trailers (#34, #35) are additive: `Gator-Override-Approved-By` and `Gator-Override-Block` (pre-existing), plus `Gator-Override-Reason` and `Gator-Override-Rules` (comma-separated rule names). All values are single-line and bounded by `precommit_override.sanitize_trailer_value()` so Architect input cannot inject trailers. Readers must tolerate their presence or absence. `Gator-Charter-Changed: override-skip` now appears only when a charter rule was overridden (a lint-only override keeps `yes`/`no`).
