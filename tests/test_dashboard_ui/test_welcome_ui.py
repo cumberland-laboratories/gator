@@ -311,6 +311,15 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
         .querySelectorAll('.doc-head, .meta-grid, #session-prompt').length""")
     assert leaked == 0
 
+    # The selected frame spans the full main-pane width, like the tab bar.
+    geo = page.evaluate("""() => {
+        const bar = document.querySelector('.welcome-tabbar').getBoundingClientRect();
+        const f = document.querySelector('#welcome-panel-how iframe').getBoundingClientRect();
+        return {barLeft: bar.left, barRight: bar.right, left: f.left, right: f.right};
+    }""")
+    assert abs(geo["left"] - geo["barLeft"]) <= 1
+    assert abs(geo["right"] - geo["barRight"]) <= 1
+
 
 @pytest.mark.parametrize("key", TOPICS)
 def test_welcome_route_serves_the_four(page, dashboard_fleet, key):

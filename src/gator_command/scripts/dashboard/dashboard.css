@@ -2764,10 +2764,10 @@ textarea.loop-ctrl-input {
 /* ── welcome workspace (#72) ─────────────────────────────────────────── */
 /* Tabs use the shared .gator-tabbar / .gator-tab treatment. */
 
+/* Full main-pane width, aligned with the tab bar: each topic document
+   sets its own reading width inside its frame. */
 .welcome-body {
-  padding: 20px 24px;
-  max-width: 760px;
-  line-height: 1.55;
+  padding: 16px 0 0;
 }
 .welcome-panel:focus-visible {
   outline: 2px solid var(--color-link);
