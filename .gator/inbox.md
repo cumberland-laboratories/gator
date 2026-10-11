@@ -36,6 +36,13 @@ HTML documents (`templates/gator-starter/docs/*.html`) on `dev`. Hold
 any fleet release until the content pass replaces them (sketch
 `artifacts/2026-10-10-welcome-html-documents-sketch.md`).
 
+**Next (Architect, 2026-10-10):** (1) Welcome content pass. The current
+copy is stale, and HTML (Cumberland style, inline SVG diagrams) allows
+a much richer explanation of what Gator can do. (2) The Docs view should
+move to the same model: user-facing HTML documents in sandboxed frames,
+like Welcome (`4b91390`, `97f07ed`). The Architect checked Welcome in the
+source Dashboard: full-width frames look right, and the copy prompt works.
+
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
 `vault/artifacts/2026-10-09-codex-sandbox-temp-and-profile-block-sketch.md`.

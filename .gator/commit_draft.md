@@ -1,14 +1,12 @@
 ---
-message: "Welcome: topic frames span the full main-pane width"
-change-type: fix
+message: "Inbox: next steps after the Welcome HTML documents (content pass; Docs view to HTML)"
+change-type: docs
 significance: routine
-decision-tags: [dashboard, welcome]
+decision-tags: [inbox, welcome, docs]
 agent: claude-opus-5-5
 architect: Alan Gillette
 ---
 
 # Session Change Log
 
-- `dashboard.css`: `.welcome-body` drops the #72 `max-width: 760px` and its side padding (now `padding: 16px 0 0`), so each Welcome topic iframe spans the full main-pane content width, aligned with the tab bar. The documents set their own reading width inside the frame (Architect direction after reviewing `4b91390` in the source Dashboard; this resolves the approved plan's assumption 4).
-- `test_welcome_ui.py`: `test_welcome_frames_lazy_persistent_sandboxed` now asserts the selected frame's left and right edges match the tab bar's (±1px).
-- Charter `scripts-dashboard-ui.md`: the Welcome layout note describes the full-width body.
+- `inbox.md`: records the Architect's next steps after reviewing Welcome in the source Dashboard. (1) The Welcome content pass: the copy is stale, and HTML with Cumberland style and inline SVG allows a richer explanation of what Gator can do. The release hold stays until this is done. (2) Move the Docs view to the same model: user-facing HTML documents in sandboxed frames. It also notes that the full-width frames and the copy prompt were checked by the Architect.

@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: topic frames span the full main-pane width",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "dashboard",
+    "welcome"
+  ],
+  "commit": "97f07ed87ec8c393d508b29b95db0bdbc226eb4c",
+  "short_commit": "97f07ed",
+  "snippet_id": "snippet-97f07ed87ec8c",
+  "session_group_key": "anthropic:c00c1fbd-fa81-45e9-9a62-adead0374909",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "4b913903878017aba81038ba177fb6f1bb0b92d9",
+  "started_at": "2026-10-11T00:14:25Z",
+  "ended_at": "2026-10-11T01:06:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/commit_draft.md",
+    ".gator/session-snippets/2026-10-11-gator-4b91390387801.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "tests/test_dashboard_ui/test_welcome_ui.py"
+  ],
+  "notes": [
+    "`dashboard.css`: `.welcome-body` drops the #72 `max-width: 760px` and its side padding (now `padding: 16px 0 0`), so each Welcome topic iframe spans the full main-pane content width, aligned with the tab bar. The documents set their own reading width inside the frame (Architect direction after reviewing `4b91390` in the source Dashboard; this resolves the approved plan's assumption 4).",
+    "`test_welcome_ui.py`: `test_welcome_frames_lazy_persistent_sandboxed` now asserts the selected frame's left and right edges match the tab bar's (±1px).",
+    "Charter `scripts-dashboard-ui.md`: the Welcome layout note describes the full-width body."
+  ],
+  "transcript_session_id": "c00c1fbd-fa81-45e9-9a62-adead0374909",
+  "transcript_ref": null
+}
