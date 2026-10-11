@@ -173,6 +173,39 @@ def _text_exts_for(namespace_root):
     return _ALLOWED_TEXT_EXTS_SOURCE
 
 
+# ── HTML CSP directives (B2 §4.1) ─────────────────────────────────
+
+# The directive set every Dashboard-served HTML document runs under.
+# `gator-dashboard.py` derives its embedded / external header policies
+# from this string (`_B2_CSP_DIRECTIVES`), and the offline snapshot
+# derives the Welcome documents' <meta> policy from it, so the two
+# cannot drift. No `'unsafe-eval'`: only `'unsafe-inline'` for the
+# inline scripts and styles that shipped HTML documents require.
+HTML_CSP_DIRECTIVES = (
+    "default-src 'none'; "
+    "script-src 'unsafe-inline'; "
+    "style-src 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self' data:; "
+    "media-src 'self' data:; "
+    "form-action 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'; "
+    "frame-ancestors 'self'"
+)
+
+
+def html_csp_meta_policy():
+    """`HTML_CSP_DIRECTIVES` for a `<meta http-equiv>` policy.
+
+    Browsers ignore `frame-ancestors` (and `sandbox`) in a meta policy,
+    so it is dropped; every other directive is kept verbatim.
+    """
+    return "; ".join(
+        d for d in HTML_CSP_DIRECTIVES.split("; ")
+        if not d.startswith("frame-ancestors"))
+
+
 # ── E1 canonical `/files` wire-schema serializer ─────────────────
 
 def _serialize_listing_entry(namespace_root, disk_rel, name, size,

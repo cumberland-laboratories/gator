@@ -2773,112 +2773,17 @@ textarea.loop-ctrl-input {
   outline: 2px solid var(--color-link);
   outline-offset: 4px;
 }
-.welcome-heading {
-  margin: 0 0 12px;
-  font-size: 18px;
-}
-.welcome-list,
-.welcome-steps {
-  padding-left: 22px;
-}
-.welcome-list li,
-.welcome-steps li {
-  margin-bottom: 8px;
-}
-.welcome-next-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 16px 0;
-}
-.welcome-next,
-.welcome-copy {
-  padding: 6px 14px;
-  border-radius: 4px;
-  border: 1px solid var(--color-link);
-  background: transparent;
-  color: var(--color-link);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.welcome-next:hover,
-.welcome-copy:hover { background: rgba(26, 95, 168, 0.06); }
-.welcome-next:focus-visible,
-.welcome-copy:focus-visible {
-  outline: 2px solid var(--color-link);
-  outline-offset: 2px;
-}
-.welcome-more {
-  font-size: 13px;
-  color: var(--color-muted);
-}
-.welcome-code,
-.welcome-prompt {
-  margin: 8px 0 12px;
-  padding: 10px 12px;
-  font-family: var(--mono);
-  font-size: 12px;
-  white-space: pre-wrap;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-.welcome-copy-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-.welcome-copy-status {
-  font-size: 13px;
-  font-weight: 600;
-}
-.welcome-copy-fallback {
-  flex-basis: 100%;
-  margin-top: 4px;
-}
-.welcome-copy-fallback-text {
+.welcome-frame {
+  display: block;
   width: 100%;
-  padding: 8px;
-  font-size: 11px;
-  font-family: var(--mono);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  resize: vertical;
-  box-sizing: border-box;
+  height: max(480px, calc(100vh - 220px));
+  border: 0;
+  background: #fff;
 }
-.welcome-copy-fallback-hint {
-  font-size: 11px;
-  color: var(--color-muted);
-  margin: 4px 0;
-}
-.welcome-copy-fallback-dismiss {
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-/* Welcome "How Gator works": the shipped document, rendered by the
-   closed Loop Markdown formatter (.loop-md supplies element styles). */
-.welcome-doc.loop-md {
-  padding: 0;
-  font-size: 14px;
-}
-.welcome-doc.loop-md h3:first-child { margin-top: 0; font-size: 20px; }
 .welcome-doc-status {
   color: var(--color-muted);
   font-style: italic;
 }
-.welcome-doc-raw {
-  white-space: pre-wrap;
-  font-family: var(--mono);
-  font-size: 12px;
+@media (max-width: 600px) {
+  .welcome-frame { height: max(420px, calc(100vh - 260px)); }
 }

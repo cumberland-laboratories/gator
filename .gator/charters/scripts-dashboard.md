@@ -25,14 +25,15 @@ Run sibling scripts and Git with bounded timeouts and normalized results.
 -> subprocess
 ! Dashboard failures become structured unavailable/error payloads; never substitute another repository's data.
 
-### read_welcome_doc() / WELCOME_DOC_PATH / GET /api/welcome/how-gator-works (#72 follow-up)
+### read_welcome_html(name) / WELCOME_DOC_NAMES / WELCOME_DOCS_DIR / _send_welcome_doc(name) / GET /api/welcome/docs/<name>
 File: src/gator_command/scripts/dashboard/helpers.py
 File: src/gator_command/scripts/gator-dashboard.py
-Serve the Welcome "How Gator works" topic: the shipped starter-template copy of `how-gator-works.md` (`templates/gator-starter/docs/`, the file gatorize installs as `.gator/docs/how-gator-works.md`).
-Filesystem: `WELCOME_DOC_PATH` (R)
-<- `DashboardHandler.do_GET()` (`/api/welcome/how-gator-works` → `{"text": …}`, default `no-cache`), `build_snapshot()` (inlined as `window.GATOR_WELCOME_DOC`)
-! TRIPWIRE: one fixed, package-relative file. No request input (query, path segment, repo key) selects or extends the path, and the route is repository-independent. An unreadable file gives a JSON 404 (`_send_json_error`) / `null` in a snapshot, never another file.
-! The text is untrusted-format input for the browser: it is rendered only by the closed `GatorLoopMarkdown` formatter (see `scripts-dashboard-ui.md`).
+Serve the four Welcome topics: the shipped starter-template HTML documents `how-gator-works.html`, `what-gator-can-do.html`, `gatorize-a-repo.html`, `start-a-session.html` (`templates/gator-starter/docs/`, which gatorize/update also install into `.gator/docs/`). Each is shown in a Welcome iframe sandboxed exactly `allow-scripts` (see `scripts-dashboard-ui.md`).
+Filesystem: `WELCOME_DOCS_DIR / <name>` (R)
+<- `DashboardHandler.do_GET()` (`path.startswith(_WELCOME_DOCS_PREFIX)` → `_send_welcome_doc()`), `build_snapshot()` (`_welcome_docs_for_snapshot()`)
+-> `apply_response_headers()` (`text/html; charset=utf-8`, `nosniff`, `Cache-Control: no-cache`) plus `Content-Security-Policy: _B2_CSP_EXTERNAL`
+! TRIPWIRE: `WELCOME_DOC_NAMES` is a closed four-name `frozenset`. Request input (the path remainder after `/api/welcome/docs/`) is only tested for membership; it never joins onto a filesystem path. Encoded, cased, traversal, extra-segment, `.md`, and unknown names are not members, and the query string is stripped by `do_GET` (an encoded `/` or `\` is already refused with 400 by `_parse_request`). The branch never falls through: a non-member or unreadable file gets a plain-text 404 ("This Welcome document is not available.", `nosniff`), because an iframe shows the body. The route is repository-independent. The old `/api/welcome/how-gator-works` JSON route is gone (default 404).
+! The served policy is always `_B2_CSP_EXTERNAL`, not the `/raw` Sec-Fetch-Dest split: the `sandbox allow-scripts` token is a no-op inside the sandboxed iframe and keeps a top-level open opaque-origin. One fixed policy means no `Vary`. `apply_html_csp_headers()` stays `/raw`-only. Each document also carries the Cumberland master's own meta CSP; the two policies intersect.
 
 ### resolve_discovery_roots() / load_registry_repos() / resolve_repo_path()
 File: src/gator_command/scripts/dashboard/data.py
@@ -98,6 +99,7 @@ File: src/gator_command/scripts/dashboard/content_policy.py
 Apply one extension/path policy to live and historical listings and canonicalize wire entries.
 <- list, search, file, and raw endpoints
 ! Listing and serving use the same predicate. Adding a file type requires coordinated allowlist and MIME-map changes.
+- **`HTML_CSP_DIRECTIVES` / `html_csp_meta_policy()` (Welcome HTML documents):** `content_policy.py` holds the one HTML CSP directive string (moved verbatim from `gator-dashboard.py`). `_B2_CSP_DIRECTIVES` aliases it, and `html_csp_meta_policy()` returns it without `frame-ancestors` (ignored in `<meta>`) for the snapshot's Welcome documents. Change the directives here only.
 ! `_DENIED_EXACT_BASENAMES` covers override internals by their REAL names (#34): `override-request.json` and `override-approved.json` (the v1 hook wrote these undotted), plus the historical dotted aliases `.override-request.json` / `.override-approved.json` / `.override-meta.json` and the retired `.override` bypass. v2 override state lives under `.git/gator-override/`, outside the working tree, so it is never scanned. Pinned by `test_files_never_lists_override_internal` and `test_override_internals_never_served` (both `/file` and `/raw`, 404 — no oracle) in `tests/test_dashboard_ui/test_content_transport_slice2.py`.
 
 ### resolve_version_ref() / git_show_at_ref()
@@ -112,6 +114,7 @@ File: src/gator_command/scripts/gator-dashboard.py
 Emit no-store/security headers and the embedded-versus-external CSP for HTML raw responses.
 <- response writers
 ! HTML CSP forbids dynamic-code evaluation. `Vary: Sec-Fetch-Dest` remains present because iframe and external navigation receive different policies.
+! The directives come from `content_policy.HTML_CSP_DIRECTIVES` (`_B2_CSP_DIRECTIVES` is an alias); `_B2_CSP_EMBEDDED` / `_B2_CSP_EXTERNAL` header bytes are unchanged and pinned by `tests/test_dashboard_ui/test_html_preview.py`. In-document scripts in shipped HTML (the Welcome Start-a-session copy action) depend on `script-src 'unsafe-inline'`: tightening it breaks them.
 
 ### _handle_repo_remove()
 File: src/gator_command/scripts/gator-dashboard.py
@@ -285,7 +288,7 @@ File: src/gator_command/scripts/dashboard/snapshot.py
 Inline dashboard assets and Tier-1 data into a self-contained offline HTML document.
 <- `--snapshot`
 ! Use callable regex replacement for JavaScript/CSS bytes so backslashes are not interpreted as replacement escapes.
-! The data block also inlines `window.GATOR_WELCOME_DOC` via `_json_script()`, which escapes `</` so document text can never close the inline script.
+! The data block also inlines `window.GATOR_WELCOME_DOCS` (`_welcome_docs_for_snapshot()`: the four Welcome document names → text or `null`). `_with_csp_meta()` inserts one `<meta http-equiv="Content-Security-Policy">` with `content_policy.html_csp_meta_policy()` immediately after the first `<head…>` tag. A document without `<head>` becomes `null`, never an unprotected document. `_json_script()` escapes every `<`, `>`, `&` as `<` / `>` / `&` (`json.dumps` already escapes non-ASCII), so neither `</script>` nor `<!--` can appear in the inline script. `welcome.js` assigns each text through the `iframe.srcdoc` property, never through an HTML attribute string.
 ! The script-tag regex must match every `<script src="views/*.js">` tag in `dashboard.html`. Adding a new view JS file requires updating both the regex pattern and the inlined scripts block. Current order: fleet, history, syntax, repo, updates, **loop-markdown (#45)**, loop, settings, **welcome (#72)**, then `dashboard.js`, pinned by `tests/test_snapshot.py` (including that `window.GatorLoopMarkdown` and `GatorViews.welcome` are inlined).
 
 ### check_for_updates() / upgrade_and_restart() / restart_server()

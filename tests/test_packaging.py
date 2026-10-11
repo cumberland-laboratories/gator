@@ -150,6 +150,13 @@ class TestWheelBuildAndContents:
             names = {Path(n).name for n in template_files}
             assert "constitution.md" in names
             assert "gator-pre-commit.py" in names
+            # The Dashboard reads the four Welcome documents from the
+            # installed package at runtime (dashboard/helpers.WELCOME_DOCS_DIR).
+            members = set(template_files)
+            for doc in ("how-gator-works.html", "what-gator-can-do.html",
+                        "gatorize-a-repo.html", "start-a-session.html"):
+                assert ("gator_command/templates/gator-starter/docs/" + doc
+                        in members), doc
 
     def test_wheel_contains_cumberland_master(self, built_wheel):
         """Cumberland HTML style master (Codex Sketch 2 Slice 1, 2026-09-12;

@@ -7,7 +7,10 @@ No server required to view the result.
 import json
 import re
 
-from dashboard.helpers import DASHBOARD_DIR, read_welcome_doc
+from dashboard.content_policy import html_csp_meta_policy
+from dashboard.helpers import (
+    DASHBOARD_DIR, WELCOME_DOC_NAMES, read_welcome_html,
+)
 
 
 def _read_asset(rel_path):
@@ -16,9 +19,41 @@ def _read_asset(rel_path):
 
 
 def _json_script(value):
-    """JSON for an inline <script>: `</` is escaped so document text can
-    never close the script element."""
-    return json.dumps(value).replace("</", "<\\/")
+    """JSON for an inline <script>. Every `<`, `>` and `&` becomes a
+    `\\uXXXX` escape (non-ASCII, including U+2028/2029, is already
+    escaped by `json.dumps`), so neither `</script>` nor `<!--` can
+    appear and document text can never leave the script element."""
+    return (json.dumps(value)
+            .replace("<", "\\u003c")
+            .replace(">", "\\u003e")
+            .replace("&", "\\u0026"))
+
+
+_HEAD_OPEN_RE = re.compile(r"<head(?:\s[^>]*)?>", re.IGNORECASE)
+
+
+def _with_csp_meta(html):
+    """Insert the Dashboard HTML CSP as a <meta> right after `<head>`.
+
+    Returns None for None or a document without a `<head>` tag: a
+    snapshot never embeds a Welcome document without the policy.
+    """
+    if html is None:
+        return None
+    m = _HEAD_OPEN_RE.search(html)
+    if m is None:
+        return None
+    meta = ('<meta http-equiv="Content-Security-Policy" content="'
+            + html_csp_meta_policy() + '">')
+    return html[:m.end()] + meta + html[m.end():]
+
+
+def _welcome_docs_for_snapshot():
+    """The four Welcome documents for `window.GATOR_WELCOME_DOCS`:
+    name -> text with the CSP meta, or None (unavailable / no `<head>`).
+    `welcome.js` assigns each through the `iframe.srcdoc` property."""
+    return {name: _with_csp_meta(read_welcome_html(name))
+            for name in sorted(WELCOME_DOC_NAMES)}
 
 
 def build_snapshot(fast_data):
@@ -56,9 +91,9 @@ def build_snapshot(fast_data):
         "<script>\n"
         "window.GATOR_SNAPSHOT = true;\n"
         f"window.DASHBOARD_DATA = {json.dumps(fast_data, default=str)};\n"
-        # Welcome "How Gator works": a snapshot has no server, so the
-        # document is inlined (a JSON string; null if unavailable).
-        f"window.GATOR_WELCOME_DOC = {_json_script(read_welcome_doc())};\n"
+        # Welcome topics: a snapshot has no server, so the four documents
+        # are inlined (script-safe JSON; null if unavailable).
+        f"window.GATOR_WELCOME_DOCS = {_json_script(_welcome_docs_for_snapshot())};\n"
         "</script>"
     )
 

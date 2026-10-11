@@ -31,6 +31,11 @@ v2.24.0 shipped 2026-10-09 (Gator-native entry point, `gator loop
 codex`, Loop Create/History workspace #56, Architect precedence in
 the loop protocol). See `CHANGELOG.md` for release detail.
 
+**Release hold (2026-10-10):** the Welcome topics are now placeholder
+HTML documents (`templates/gator-starter/docs/*.html`) on `dev`. Hold
+any fleet release until the content pass replaces them (sketch
+`artifacts/2026-10-10-welcome-html-documents-sketch.md`).
+
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
 `vault/artifacts/2026-10-09-codex-sandbox-temp-and-profile-block-sketch.md`.

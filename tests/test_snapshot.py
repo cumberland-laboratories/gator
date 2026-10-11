@@ -14,6 +14,13 @@ sys.path.insert(0, str(_scripts_dir))
 from dashboard.snapshot import build_snapshot, _read_asset
 
 
+def _welcome_docs_block(html):
+    """Parse the inlined `window.GATOR_WELCOME_DOCS` JSON object."""
+    marker = "window.GATOR_WELCOME_DOCS = "
+    start = html.index(marker) + len(marker)
+    return json.loads(html[start:html.index(";\n", start)])
+
+
 SAMPLE_DATA = {
     "generated_at": "2026-06-25T12:00:00Z",
     "fleet": {"summary": {"total": 2, "accessible": 2}},
@@ -51,19 +58,41 @@ class TestBuildSnapshot:
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
         assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
 
-    def test_welcome_doc_inlined_and_script_safe(self):
-        """The Welcome document is inlined as a JSON string, and `</` is
-        escaped so its text can never close the inline script."""
-        from dashboard.helpers import read_welcome_doc
-        from dashboard.snapshot import _json_script
+    def test_welcome_docs_inlined_with_csp_meta(self):
+        """The four Welcome documents are inlined, each with exactly one
+        injected Dashboard CSP meta right after <head>; the rest of the
+        document (including its own Cumberland meta CSP) is unchanged."""
+        from dashboard.content_policy import html_csp_meta_policy
+        from dashboard.helpers import WELCOME_DOC_NAMES, read_welcome_html
         html = build_snapshot(SAMPLE_DATA)
-        marker = "window.GATOR_WELCOME_DOC = "
-        start = html.index(marker) + len(marker)
-        end = html.index(";\n", start)
-        assert json.loads(html[start:end]) == read_welcome_doc()
-        assert "</" not in _json_script("a</script><b>")
-        assert json.loads(_json_script("a</script>")) == "a</script>"
+        docs = _welcome_docs_block(html)
+        assert set(docs) == set(WELCOME_DOC_NAMES) and len(docs) == 4
+        meta = ('<meta http-equiv="Content-Security-Policy" content="'
+                + html_csp_meta_policy() + '">')
+        assert "frame-ancestors" not in meta
+        for name, text in docs.items():
+            shipped = read_welcome_html(name)
+            assert shipped.count("<head>") == 1
+            assert text == shipped.replace("<head>", "<head>" + meta, 1), name
         assert 'src="dashboard.js"' not in html
+
+    def test_welcome_docs_script_safe_and_headless_is_null(self):
+        """Document text cannot leave the inline script (no raw `<`, so no
+        `</script>` or `<!--`), round-trips exactly, and a document without
+        <head> is never embedded unprotected."""
+        from dashboard import snapshot
+        hostile = "<head></head></script><!--<script> &amp;"
+        docs = {"how-gator-works.html": hostile,
+                "what-gator-can-do.html": "<p>no head here</p>"}
+        with patch.object(snapshot, "read_welcome_html", lambda n: docs.get(n)):
+            html = build_snapshot(SAMPLE_DATA)
+        start = html.index("window.GATOR_WELCOME_DOCS = ")
+        raw = html[start:html.index(";\n", start)]
+        assert "<" not in raw and ">" not in raw and " " not in raw
+        out = _welcome_docs_block(html)
+        assert out["how-gator-works.html"].endswith(hostile[len("<head>"):])
+        assert out["what-gator-can-do.html"] is None
+        assert out["start-a-session.html"] is None
 
     def test_data_embedded(self):
         """Tier 1 data is embedded as window.DASHBOARD_DATA."""

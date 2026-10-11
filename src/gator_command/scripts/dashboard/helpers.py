@@ -17,17 +17,29 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent  # scripts/ (one up from da
 DASHBOARD_DIR = Path(__file__).resolve().parent       # dashboard/
 COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root
 
-# The Welcome "How Gator works" topic shows the shipped starter-template copy
-# of how-gator-works.md (the same file gatorize installs as
-# .gator/docs/how-gator-works.md). Fixed path: no request input selects it.
-WELCOME_DOC_PATH = (SCRIPTS_DIR.parent / "templates" / "gator-starter"
-                    / "docs" / "how-gator-works.md")
+# The four Welcome topics are shipped starter-template HTML documents (the
+# same files gatorize/update install into .gator/docs/). The name set is
+# closed: request input is only ever tested for membership, never joined
+# onto a path.
+WELCOME_DOCS_DIR = SCRIPTS_DIR.parent / "templates" / "gator-starter" / "docs"
+WELCOME_DOC_NAMES = frozenset({
+    "how-gator-works.html",
+    "what-gator-can-do.html",
+    "gatorize-a-repo.html",
+    "start-a-session.html",
+})
 
 
-def read_welcome_doc():
-    """Return the shipped how-gator-works.md text, or None if unavailable."""
+def read_welcome_html(name):
+    """Return one shipped Welcome document's text, or None.
+
+    None when `name` is not one of `WELCOME_DOC_NAMES` or the file is
+    unreadable.
+    """
+    if name not in WELCOME_DOC_NAMES:
+        return None
     try:
-        return WELCOME_DOC_PATH.read_text(encoding="utf-8")
+        return (WELCOME_DOCS_DIR / name).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
 

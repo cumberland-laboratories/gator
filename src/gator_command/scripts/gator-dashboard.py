@@ -52,7 +52,7 @@ from gator_core import get_version, import_sibling, git  # noqa: E402
 # ── extracted modules ─────────────────────────────────────────────────────────
 from dashboard.helpers import (  # noqa: E402
     run_json, run_text, git_run as _git_run,
-    read_welcome_doc as _read_welcome_doc,
+    read_welcome_html as _read_welcome_html,
 )
 from dashboard.updates import (  # noqa: E402
     check_for_updates, upgrade_and_restart,
@@ -408,6 +408,7 @@ from dashboard.content_policy import (  # noqa: E402
     _MIME_MAP,
     _text_exts_for,
     _serialize_listing_entry,
+    HTML_CSP_DIRECTIVES,
 )
 
 import functools as _functools  # noqa: E402
@@ -1416,24 +1417,20 @@ def apply_response_headers(handler, mime, body_len, *,
 # permitted; only `'unsafe-inline'` for inline scripts and styles
 # that shipped interactive blueprints require).
 
-_B2_CSP_DIRECTIVES = (
-    "default-src 'none'; "
-    "script-src 'unsafe-inline'; "
-    "style-src 'unsafe-inline'; "
-    "img-src 'self' data:; "
-    "font-src 'self' data:; "
-    "media-src 'self' data:; "
-    "form-action 'none'; "
-    "base-uri 'none'; "
-    "object-src 'none'; "
-    "frame-ancestors 'self'"
-)
+# The directive text lives in `dashboard/content_policy.py`
+# (`HTML_CSP_DIRECTIVES`, moved verbatim) so the Welcome snapshot's
+# <meta> policy derives from the same source.
+_B2_CSP_DIRECTIVES = HTML_CSP_DIRECTIVES
 
 # External-open (top-level navigation) additionally prepends
 # `sandbox allow-scripts;` so the browser applies an opaque origin
 # even at the top level, mirroring the iframe null-origin.
 _B2_CSP_EMBEDDED = _B2_CSP_DIRECTIVES
 _B2_CSP_EXTERNAL = "sandbox allow-scripts; " + _B2_CSP_DIRECTIVES
+
+# Welcome documents route (`_send_welcome_doc`). It reuses
+# `_B2_CSP_EXTERNAL` directly; `apply_html_csp_headers` stays `/raw`-only.
+_WELCOME_DOCS_PREFIX = "/api/welcome/docs/"
 
 
 def apply_html_csp_headers(handler, *, external):
@@ -1495,6 +1492,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
             pass  # Client disconnected (e.g., during restart)
 
     # ── B1 Slice 1 response helpers ──────────────────────────────
+
+    def _send_welcome_doc(self, name):
+        """Serve one shipped Welcome document, or a plain-text 404.
+
+        `name` is only tested for membership in `WELCOME_DOC_NAMES`
+        (inside `read_welcome_html`); it never builds a path. The
+        response always carries `_B2_CSP_EXTERNAL`: inside the Welcome
+        iframe its `sandbox allow-scripts` token is a no-op, and a
+        top-level open stays opaque-origin. One fixed policy, so no
+        `Vary`. The 404 is plain text because an iframe shows the body.
+        """
+        text = _read_welcome_html(name)
+        if text is None:
+            body = b"This Welcome document is not available.\n"
+            self.send_response(404)
+            apply_response_headers(self, "text/plain; charset=utf-8",
+                                   len(body))
+            self.end_headers()
+        else:
+            body = text.encode("utf-8")
+            self.send_response(200)
+            apply_response_headers(self, "text/html; charset=utf-8",
+                                   len(body), cache_control="no-cache")
+            self.send_header("Content-Security-Policy", _B2_CSP_EXTERNAL)
+            self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (ConnectionAbortedError, ConnectionResetError,
+                BrokenPipeError):
+            pass
 
     def _send_json_error(self, status, message, *,
                          cache_control=None):
@@ -2005,16 +2032,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(self.__class__.fast_data)
             return
 
-        # Welcome "How Gator works" (#72 follow-up): the shipped starter
-        # copy of how-gator-works.md. Fixed file, no request input,
-        # repository-independent; text is rendered client-side by the
-        # closed GatorLoopMarkdown formatter.
-        if path == "/api/welcome/how-gator-works":
-            text = _read_welcome_doc()
-            if text is None:
-                self._send_json_error(404, "how-gator-works.md is not available")
-                return
-            self._send_json({"text": text})
+        # Welcome topics: the four shipped HTML documents, shown in
+        # sandboxed iframes. Closed name set; never falls through.
+        if path.startswith(_WELCOME_DOCS_PREFIX):
+            self._send_welcome_doc(path[len(_WELCOME_DOCS_PREFIX):])
             return
 
         # Refresh Tier 1 (async — starts background collection, returns immediately)
