@@ -23,6 +23,8 @@ persists — the request is never actually issued against a repo.
 
 import pytest
 
+from ._harness import open_fleet
+
 
 def _wait_for_fleet_render(page):
     """Wait for the Fleet table's overflow menu to attach — proves
@@ -64,6 +66,7 @@ def test_fleet_update_click_preserves_column_geometry(
     """
     page.set_viewport_size({"width": viewport_w, "height": 900})
     page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
     _wait_for_fleet_render(page)
 
     # Stub fetch so the request never resolves — sidebar stays in the
@@ -134,6 +137,7 @@ def test_every_fleet_activity_cell_contains_indicator_at_initial_render(
     """
     page.set_viewport_size({"width": 1440, "height": 900})
     page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
     _wait_for_fleet_render(page)
 
     counts = page.evaluate("""

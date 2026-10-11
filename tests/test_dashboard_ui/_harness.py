@@ -391,3 +391,12 @@ def _rev_parse_head(repo):
 def _git(repo, *args):
     subprocess.run(["git", "-C", str(repo), *args],
                    check=True, capture_output=True)
+
+
+def open_fleet(page):
+    """Open Fleet from the sidebar. A live load lands on Welcome
+    (the front door), so Fleet-dependent tests navigate there the
+    way a user does. Waits for the Fleet repo table."""
+    page.click('.sidebar-item[data-view="fleet"]')
+    page.wait_for_selector("#view-slot .fleet-table, #view-slot table",
+                           timeout=15000)

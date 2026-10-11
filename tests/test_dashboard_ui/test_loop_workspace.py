@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from ._harness import open_fleet
+
 
 def _repo_key(path):
     resolved = str(Path(path).resolve())
@@ -462,6 +464,7 @@ def test_duplicate_name_fleet_row_uses_clicked_key(page, dashboard_fleet):
     page.route("**/api/data", _inject)
 
     page.goto(origin, wait_until="load")
+    open_fleet(page)
     page.wait_for_selector(".link-btn", timeout=10000)
 
     page.evaluate("""
@@ -3149,6 +3152,7 @@ def test_back_past_loop_entry_restores_shell_views(page, dashboard_fleet):
     """7c: Back past the Loop entries reaches the Repo entry, then Fleet."""
     origin = dashboard_fleet["url"].rstrip("/") + "/"
     page.goto(origin, wait_until="load")
+    open_fleet(page)
     page.wait_for_selector(".link-btn", timeout=10000)
     page.evaluate("""() => {
         var btns = document.querySelectorAll('.link-btn');

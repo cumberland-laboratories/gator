@@ -655,10 +655,13 @@
     // Check for ?repo= query param
     const params = new URLSearchParams(window.location.search);
     const preloadRepo = params.get("repo");
+    // Welcome is the front door; a snapshot is a fleet report.
     if (preloadRepo) {
       showView("repo", preloadRepo);
-    } else {
+    } else if (window.GATOR_SNAPSHOT) {
       showView("fleet");
+    } else {
+      showView("welcome");
     }
     // #56: the landing entry becomes a shell entry without adding one.
     history.replaceState(shellState(null), "");

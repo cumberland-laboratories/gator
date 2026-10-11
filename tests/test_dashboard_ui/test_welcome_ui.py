@@ -24,6 +24,8 @@ from pathlib import Path
 
 import pytest
 
+from ._harness import open_fleet
+
 
 # One line by Architect direction (2026-10-10): a pasted newline can
 # submit early in terminal agent UIs.
@@ -75,7 +77,7 @@ def _open_welcome(page):
 
 def _goto_fleet(page, fleet):
     page.goto(_origin(fleet), wait_until="load")
-    page.wait_for_selector("#view-slot .fleet-table, #view-slot table", timeout=15000)
+    open_fleet(page)
 
 
 def _tabs(page):
@@ -249,9 +251,10 @@ def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     page.wait_for_selector(".welcome-workspace", timeout=5000)
     assert _selected(page) == ["gatorize"]
 
+    # A fresh live load lands on Welcome (the front door), topic reset.
     page.reload(wait_until="load")
-    page.wait_for_selector("#view-slot table", timeout=15000)
-    _open_welcome(page)
+    page.wait_for_selector(".welcome-workspace", timeout=15000)
+    assert page.get_attribute("#brand-home", "aria-current") == "page"
     assert _selected(page) == ["how"]
 
 
@@ -370,6 +373,10 @@ def test_welcome_snapshot_frames(page, tmp_path):
         "repos": [],
     }), encoding="utf-8")
     page.goto(out.as_uri(), wait_until="load")
+    # A snapshot is a fleet report: it lands on Fleet, not Welcome.
+    page.wait_for_function(
+        "() => document.getElementById('topbar-title').textContent === 'Fleet'",
+        timeout=10000)
     _open_welcome(page)
     page.click("#welcome-tab-session")
     page.wait_for_function(
