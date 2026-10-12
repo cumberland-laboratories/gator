@@ -417,10 +417,10 @@ def test_welcome_snapshot_frames(page, tmp_path):
     assert f["title"] == LABELS["session"]
     assert ('<meta http-equiv="Content-Security-Policy" content="'
             + html_csp_meta_policy() + '">') in f["srcdoc"]
-    frame = next(fr for fr in page.frames if fr.url == "about:srcdoc"
-                 and fr.evaluate("() => document.title") == LABELS["session"])
-    assert frame.evaluate(
-        "() => document.getElementById('session-prompt').textContent") == SESSION_PROMPT
+    # The frame locator waits for the srcdoc document to load; scanning
+    # page.frames right after the element appears raced on slow Windows CI.
+    prompt = page.frame_locator("#welcome-panel-session iframe").locator("#session-prompt")
+    assert prompt.text_content(timeout=10000) == SESSION_PROMPT
 
 
 # ── Copy action (checkpoint 2) ────────────────────────────────────────────

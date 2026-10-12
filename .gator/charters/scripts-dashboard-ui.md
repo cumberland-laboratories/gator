@@ -351,7 +351,7 @@ The Welcome workspace: four topics (Gator overview · What Gator can do · Gator
 ! TRIPWIRE (copy protocol): only this mount's Start-a-session frame is accepted. Messages from the page, an unrelated frame, another Welcome frame, a stale frame (the previous mount's iframe, even if re-attached), a non-`"null"` origin, an unknown version or action, an extra key, an array or a string cause no clipboard write, no reply, and no topic, history, focus or network change. The prompt is never received from, sent to, logged by or exposed through a message: the reply has no prompt text. Never widen the accepted shape or sources without a new review.
 ! TRIPWIRE: `SESSION_PROMPT` is the exact vendor-neutral text from #72, as **one line** (Architect direction 2026-10-10: a pasted newline can submit early in terminal agent UIs). It names no vendor and no layout-dependent path (never `.gator/.includes/GATOR_INIT.md`): `gator init` reports the canonical path itself. It is never logged, stored, put in `data-*`, or put into history state.
 ! Welcome never calls `setActiveRepo` / `clearActiveRepo` and works without a registered repository or an active Loop.
-- **Pinned by** `tests/test_dashboard_ui/test_welcome_ui.py`.
+- **Pinned by** `tests/test_dashboard_ui/test_welcome_ui.py`. Tests read frame content through `page.frame_locator(...)`, which waits for the (src or srcdoc) document to load; scanning `page.frames` right after the iframe appears races on slow runners (Windows CI run 38101334192).
 
 ### renderSettings()
 File: src/gator_command/scripts/dashboard/views/settings.js

@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.25.0",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "027f7bc647981949fab2793171a426bbe9b2ef65",
+  "short_commit": "027f7bc",
+  "snippet_id": "snippet-027f7bc647981",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 16,
+  "previous_commit_in_session": "640ed309cad6b90e14a5a579bd469b46bab45170",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T01:28:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-12-gator-640ed309cad6b.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Release 2.25.0. The Dashboard now opens on a Welcome workspace with four",
+    "shipped HTML topics (Gator overview, What Gator can do, Gatorize a repo,",
+    "Start a session). `gator init` runs in under half a second, commit-draft",
+    "guidance is clearer, and Windows session attribution no longer depends",
+    "on a slow PowerShell start. Details are in CHANGELOG.md."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
