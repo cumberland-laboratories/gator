@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: What Gator can do adds Vault and the read-only Dashboard",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "7672f95a17215dd05cc7c13b92bcec852f7b1d58",
+  "short_commit": "7672f95",
+  "snippet_id": "snippet-7672f95a17215",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "55250299eaf2a7175f1f69f0e2665daa9cca3721",
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T13:35:07Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-55250299eaf2a.json",
+    "src/gator_command/templates/gator-starter/docs/what-gator-can-do.html"
+  ],
+  "notes": [
+    "\"What Gator can do\" gains a \"Drafts and review\" section after the",
+    "capability cards, with two parts. Gator Vault (`.gator/vault/`) is a",
+    "local staging area for drafts and research: out of Git, but visible in",
+    "the Dashboard until the work is ready to become shared knowledge. The",
+    "Dashboard is a read-only, Git-backed inspection surface, including",
+    "earlier versions of files. The agent changes the repository; the",
+    "Dashboard helps the human understand and govern those changes.",
+    "A new diagram shows work moving from the agent session to the vault,"
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}
