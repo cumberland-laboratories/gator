@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: What Gator can do carries the capabilities content",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "be3b1495aa5684752d06e831486dab4b00356502",
+  "short_commit": "be3b149",
+  "snippet_id": "snippet-be3b1495aa568",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "9687e740bb45489eb72b71dd124d38d6aece230e",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:43:26Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-9687e740bb454.json",
+    "src/gator_command/templates/gator-starter/docs/what-gator-can-do.html",
+    "tests/test_welcome_docs.py"
+  ],
+  "notes": [
+    "The \"What Gator can do\" Welcome topic now carries the Architect's content.",
+    "It opens with the lead sentence \"Gator does not replace your coding",
+    "agent…\", followed by seven capabilities: vendor-agnostic agents, durable",
+    "context in `.gator/`, map-code alignment, safer CLI work, shareable",
+    "technical explanations, composing with existing setups, and growing with",
+    "the team.",
+    "It uses the new Welcome format introduced by the Gator overview: no",
+    "template title block or Summary, and a company copyright footer. The"
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}

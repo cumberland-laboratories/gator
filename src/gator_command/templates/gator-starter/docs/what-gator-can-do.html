@@ -536,6 +536,64 @@
 <section id="capabilities">
   <h2>What Gator can do</h2>
   <p>Gator helps AI agents work with the context, discipline, and continuity of an experienced engineer joining an established project.</p>
+  <div class="figure">
+    <svg viewBox="0 0 720 312" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="agents-title agents-desc">
+      <title id="agents-title">Any agent, one knowledge layer</title>
+      <desc id="agents-desc">Five boxes across the top: Codex, Claude Code, Cursor, Gemini, and other agents. A two-way arrow joins each one to a single shared box below, labelled ".gator/ — the shared knowledge layer". That box holds charters, procedures, tripwires, decisions, and reference notes. Under it is a box labelled "Source code", joined to the knowledge layer by a two-way arrow labelled "kept in step by pre-commit checks". Both the knowledge layer and the source code sit inside an outer box labelled "Your repository, in Git".</desc>
+      <!-- repository -->
+      <rect x="20" y="104" width="680" height="200" rx="10" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+      <text x="684" y="294" font-size="11" fill="#4b5563" font-weight="600" text-anchor="end">Your repository, in Git</text>
+      <rect x="20" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="80" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Codex</text>
+      <line x1="80" y1="74" x2="80" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="75,74 80,66 85,74" fill="#4b5563"/>
+      <polygon points="75,132 80,140 85,132" fill="#4b5563"/>
+      <rect x="160" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="220" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Claude Code</text>
+      <line x1="220" y1="74" x2="220" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="215,74 220,66 225,74" fill="#4b5563"/>
+      <polygon points="215,132 220,140 225,132" fill="#4b5563"/>
+      <rect x="300" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Cursor</text>
+      <line x1="360" y1="74" x2="360" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="355,74 360,66 365,74" fill="#4b5563"/>
+      <polygon points="355,132 360,140 365,132" fill="#4b5563"/>
+      <rect x="440" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="500" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Gemini</text>
+      <line x1="500" y1="74" x2="500" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="495,74 500,66 505,74" fill="#4b5563"/>
+      <polygon points="495,132 500,140 505,132" fill="#4b5563"/>
+      <rect x="580" y="16" width="120" height="48" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="640" y="45" font-size="13" fill="#4b5563" font-weight="600" text-anchor="middle">Other agents</text>
+      <line x1="640" y1="74" x2="640" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="635,74 640,66 645,74" fill="#4b5563"/>
+      <polygon points="635,132 640,140 645,132" fill="#4b5563"/>
+      <!-- knowledge layer -->
+      <rect x="40" y="140" width="640" height="76" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="360" y="162" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">.gator/ — the shared knowledge layer</text>
+      <rect x="56" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="112" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Charters</text>
+      <rect x="180" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="236" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Procedures</text>
+      <rect x="304" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="360" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Tripwires</text>
+      <rect x="428" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="484" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Decisions</text>
+      <rect x="552" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="608" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Reference notes</text>
+      <!-- kept in step -->
+      <line x1="360" y1="226" x2="360" y2="238" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="355,226 360,218 365,226" fill="#4b5563"/>
+      <polygon points="355,238 360,246 365,238" fill="#4b5563"/>
+      <text x="374" y="236" font-size="11" fill="#4b5563" font-style="italic">kept in step by pre-commit checks</text>
+      <!-- source code -->
+      <rect x="40" y="246" width="640" height="34" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.2"/>
+      <text x="360" y="268" font-size="12" fill="#374151" font-weight="600" text-anchor="middle">Source code</text>
+    </svg>
+    <div class="caption">Figure 1 — every agent reads the same <code>.gator/</code> layer before it changes code, and updates it as it works. Pre-commit checks keep the layer and the code in step.</div>
+  </div>
   <ul class="caps">
     <li><strong>Work with any capable coding agent.</strong> Gator is vendor-agnostic. Codex, Claude Code, Cursor, Gemini, and other agents can read the repository’s Gator guidance, learn the project’s conventions, and orient themselves before changing code.</li>
     <li><strong>Give agents durable project context.</strong> Charters, procedures, tripwires, decisions, and reference notes live in <code>.gator/</code> inside the repository. Agents do not need to rediscover the system from raw source files at the start of every session.</li>
