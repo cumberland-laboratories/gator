@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: Welcome snapshot test waits for the frame document",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "welcome",
+    "ci"
+  ],
+  "commit": "76848458e0a815bd2afff3b66d3640464b09582d",
+  "short_commit": "7684845",
+  "snippet_id": "snippet-76848458e0a81",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 17,
+  "previous_commit_in_session": "027f7bc647981949fab2793171a426bbe9b2ef65",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T01:30:06Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-12-gator-027f7bc647981.json",
+    "tests/test_dashboard_ui/test_welcome_ui.py"
+  ],
+  "notes": [
+    "`test_welcome_snapshot_frames` failed on Windows CI (run 38101334192)",
+    "with `StopIteration`. It scanned `page.frames` for the loaded",
+    "Start-a-session document as soon as the iframe element appeared. On a",
+    "slow runner, the srcdoc document had not loaded yet. The test now reads",
+    "the prompt through a Playwright frame locator, which waits for the frame",
+    "content. This is a test race, not a product defect."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
