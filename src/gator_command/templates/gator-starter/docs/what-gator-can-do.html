@@ -531,6 +531,7 @@
       margin-bottom: 0.2rem;
     }
     .caps > li p { margin: 0.6rem 0 0; }
+    section > h3 + .principle { margin-top: 0.5rem; }
     .principle {
       font-size: 1.15rem;
       line-height: 1.5;
@@ -621,6 +622,65 @@
   </ul>
 </section>
 
+<section id="drafts-and-review">
+  <h2>Drafts and review</h2>
+  <div class="figure">
+    <svg viewBox="0 0 720 268" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="vault-title vault-desc">
+      <title id="vault-title">From draft to durable knowledge</title>
+      <desc id="vault-desc">Three boxes from left to right, joined by arrows. First, "Agent session", where work is proposed and performed. Second, ".gator/vault/", labelled "local, out of Git": drafts, research, PDFs and datasets. Third, "Shared knowledge", labelled "committed to Git": artifacts, procedures, threads, charters and reference notes. The arrow from the vault to shared knowledge is labelled "when ready". Under all three, a wide box labelled "Gator Dashboard" says it is a read-only view of the vault, the knowledge layer and the code, including prior versions from Git history. Dashed arrows point up from the Dashboard to the vault and to shared knowledge.</desc>
+      <!-- agent session -->
+      <rect x="20" y="30" width="180" height="104" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="110" y="58" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Agent session</text>
+      <text x="110" y="82" font-size="11" fill="#374151" text-anchor="middle">proposes and performs</text>
+      <text x="110" y="98" font-size="11" fill="#374151" text-anchor="middle">the work</text>
+      <!-- vault -->
+      <rect x="270" y="30" width="180" height="104" rx="8" fill="#fffbeb" stroke="#d48b0a" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="360" y="58" font-size="13" fill="#92400e" font-weight="700" text-anchor="middle">.gator/vault/</text>
+      <text x="360" y="78" font-size="10.5" fill="#92400e" font-weight="700" text-anchor="middle" letter-spacing="0.5">LOCAL · OUT OF GIT</text>
+      <text x="360" y="98" font-size="11" fill="#374151" text-anchor="middle">drafts, research,</text>
+      <text x="360" y="114" font-size="11" fill="#374151" text-anchor="middle">PDFs, datasets</text>
+      <!-- shared knowledge -->
+      <rect x="520" y="30" width="180" height="104" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="610" y="58" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Shared knowledge</text>
+      <text x="610" y="78" font-size="10.5" fill="#148a92" font-weight="700" text-anchor="middle" letter-spacing="0.5">COMMITTED TO GIT</text>
+      <text x="610" y="98" font-size="11" fill="#374151" text-anchor="middle">artifacts, procedures,</text>
+      <text x="610" y="114" font-size="11" fill="#374151" text-anchor="middle">threads, charters, notes</text>
+      <line x1="202" y1="82" x2="260" y2="82" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="268,82 260,77 260,87" fill="#4b5563"/>
+      <line x1="452" y1="82" x2="510" y2="82" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="518,82 510,77 510,87" fill="#4b5563"/>
+      <text x="485" y="72" font-size="10.5" fill="#4b5563" font-style="italic" text-anchor="middle">when ready</text>
+      <!-- dashboard -->
+      <rect x="20" y="196" width="680" height="56" rx="8" fill="white" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="360" y="219" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">Gator Dashboard</text>
+      <text x="360" y="238" font-size="11" fill="#374151" text-anchor="middle">read-only view of the vault, the knowledge layer and the code — including prior versions from Git history</text>
+      <line x1="360" y1="194" x2="360" y2="144" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon points="360,136 355,144 365,144" fill="#4b5563"/>
+      <line x1="610" y1="194" x2="610" y2="144" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon points="610,136 605,144 615,144" fill="#4b5563"/>
+    </svg>
+    <div class="caption">Figure 2 — work moves from the agent session into the vault, and into shared knowledge only when it is ready. The Dashboard shows all of it, read-only.</div>
+  </div>
+
+  <h3>Keep drafts close without publishing them too soon</h3>
+  <p class="principle">Vault is not hidden scratch space. It is a deliberate staging area between an agent’s temporary work and the repository’s durable knowledge.</p>
+  <ul class="caps">
+    <li><strong>Give in-progress work a safe, visible home.</strong> Gator Vault (<code>.gator/vault/</code>) is a repository-local workspace for drafts, research, generated documents, working notes, PDFs, datasets, and other material that is useful but not ready to publish into the shared repository knowledge layer.
+      <p>Vault contents stay out of Git by default, so agents and humans can develop ideas without prematurely turning every draft into durable project policy or documentation. Unlike an arbitrary local folder, Vault is part of the Gator workspace: it is visible in the Dashboard, easy to inspect, and naturally connected to the repository and its knowledge layer.</p>
+      <p>When a draft becomes ready, move or rewrite it into the appropriate shared surface—an artifact, procedure, thread, charter, or reference note—and commit it deliberately.</p></li>
+  </ul>
+
+  <h3>Inspect, don’t edit</h3>
+  <p class="principle">The agent changes the repository. The Dashboard helps the human understand and govern those changes.</p>
+  <ul class="caps">
+    <li><strong>Explore the repository through a read-only Dashboard.</strong> Gator Dashboard is a local, read-only view of the codebase and its knowledge layer. It lets you inspect charters, procedures, artifacts, threads, documentation, loop records, and repository structure without mixing review with editing.
+      <p>Because the underlying repository is Git-backed, the Dashboard can show the current state as well as prior versions and history. You can ask: What did this charter say before the last change? When did this procedure appear? Which commit introduced this decision? The answer remains grounded in the repository’s own history.</p>
+      <p>The Dashboard is intentionally not an IDE or a second agent chat. It is the Architect’s inspection surface. Keep an agent session open in another window or tab to propose and make changes; use the Dashboard to understand the system, review the knowledge layer, inspect evidence, and decide what should happen next.</p></li>
+  </ul>
+</section>
+
 <section id="system-homes">
   <h2>A home for each system you operate</h2>
   <p class="principle">Gatorized repositories are not just code containers. They are durable homes for system knowledge.</p>
@@ -681,7 +741,7 @@
       <rect x="30" y="222" width="660" height="32" rx="6" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="5 4"/>
       <text x="360" y="243" font-size="11.5" fill="#4b5563" font-style="italic" text-anchor="middle">Fleet view and Enterprise add cross-repository visibility when needed</text>
     </svg>
-    <div class="caption">Figure 2 — one agent moves between Gatorized repositories. Each repository carries its own map and evidence at its boundary.</div>
+    <div class="caption">Figure 3 — one agent moves between Gatorized repositories. Each repository carries its own map and evidence at its boundary.</div>
   </div>
   <ul class="caps">
     <li><strong>Work across repositories with shared context.</strong> When related repositories are Gatorized, an agent can orient itself in each one using the same structured surfaces: charters, mission, roadmap, procedures, tripwires, and Git history. That gives it a practical system-level view for changes that cross service, application, infrastructure, data, or deployment boundaries.</li>
