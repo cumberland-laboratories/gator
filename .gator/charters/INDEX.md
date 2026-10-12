@@ -16,7 +16,8 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-pulse.py`, starter `gator-pulse.py` | [Strategic Pulse](scripts-pulse.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-dashboard.py`, `gator-kill.py`, `src/gator_command/scripts/dashboard/*.py` | [Dashboard Server](scripts-dashboard.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| Dashboard `*.html`, `*.css`, `*.js`, `views/**`, and `src/gator_command/scripts/dashboard/*.png` | [Dashboard Browser UI](scripts-dashboard-ui.md) · [Dashboard Server](scripts-dashboard.md) |
+| `src/gator_command/scripts/dashboard/*.html`, `src/gator_command/scripts/dashboard/*.css`, `src/gator_command/scripts/dashboard/*.js`, `src/gator_command/scripts/dashboard/views/**`, and `src/gator_command/scripts/dashboard/*.png` | [Dashboard Browser UI](scripts-dashboard-ui.md) · [Dashboard Server](scripts-dashboard.md) |
+| Welcome documents `src/gator_command/templates/gator-starter/docs/*.html` | [Dashboard Server](scripts-dashboard.md) |
 | `src/gator_command/scripts/loop/**`, `gator-loop.py` | [Gator Loop](scripts-loop.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator-enterprise.py` | [Enterprise Dispatcher](scripts-enterprise.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `enterprise/enterprise-cli/**` | [Enterprise CLI](scripts-enterprise-cli.md) · [Enterprise Dispatcher](scripts-enterprise.md) |
@@ -33,5 +34,6 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 
 - Prefer the narrowest matching row; do not load every charter for a local change.
 - When one file appears in two rows, read both because that file implements a boundary.
+- Path-qualify every glob. The pre-commit hook also matches a glob against the file's basename alone, so a bare `*.js` would claim every JavaScript file in the repository.
 - Add or update a row when ownership moves. Do not duplicate this map in `README.md` or another charter.
 - Retired source-repo charters remain historical material in the vault and are not active routes.

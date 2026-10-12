@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator overview opens with the Gator mark",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "welcome",
+    "docs"
+  ],
+  "commit": "8384c235bc67d103647ce823120c20a5fd129403",
+  "short_commit": "8384c23",
+  "snippet_id": "snippet-8384c235bc67d",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "8bf5c2ead3eed1567d6bb94c1f1883645167f122",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:14:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-8bf5c2ead3eed.json",
+    "src/gator_command/templates/gator-starter/docs/gator-overview.html",
+    "tests/test_welcome_docs.py"
+  ],
+  "notes": [
+    "The Gator overview now opens with a large Gator mark, left-aligned,",
+    "directly above \"About Gator\". The Cumberland title block and Summary",
+    "box are removed from this page only; the other Welcome documents keep",
+    "them. The mark is a vector trace of `sleek_profile_gator_inverted.png`,",
+    "inlined as SVG, because the Welcome content policy blocks images. It",
+    "stays sharp at any size and needs no change to that policy."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
