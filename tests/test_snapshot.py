@@ -82,7 +82,7 @@ class TestBuildSnapshot:
         <head> is never embedded unprotected."""
         from dashboard import snapshot
         hostile = "<head></head></script><!--<script> &amp;"
-        docs = {"how-gator-works.html": hostile,
+        docs = {"gator-overview.html": hostile,
                 "what-gator-can-do.html": "<p>no head here</p>"}
         with patch.object(snapshot, "read_welcome_html", lambda n: docs.get(n)):
             html = build_snapshot(SAMPLE_DATA)
@@ -90,7 +90,7 @@ class TestBuildSnapshot:
         raw = html[start:html.index(";\n", start)]
         assert "<" not in raw and ">" not in raw and " " not in raw
         out = _welcome_docs_block(html)
-        assert out["how-gator-works.html"].endswith(hostile[len("<head>"):])
+        assert out["gator-overview.html"].endswith(hostile[len("<head>"):])
         assert out["what-gator-can-do.html"] is None
         assert out["start-a-session.html"] is None
 

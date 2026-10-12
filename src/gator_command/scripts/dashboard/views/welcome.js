@@ -32,7 +32,7 @@
   window.GatorViews = window.GatorViews || {};
 
   var TOPICS = [
-    { key: "how",      label: "How Gator works",            doc: "how-gator-works.html" },
+    { key: "overview", label: "Gator overview",             doc: "gator-overview.html" },
     { key: "can",      label: "What Gator can do",          doc: "what-gator-can-do.html" },
     { key: "gatorize", label: "Gatorize a repo",            doc: "gatorize-a-repo.html" },
     { key: "session",  label: "Start a session with Gator", doc: "start-a-session.html" },
@@ -55,7 +55,7 @@
   var COPY_REQUEST = "copy-session-prompt";
   var COPY_RESULT = "copy-session-prompt-result";
 
-  var selectedTopic = "how";
+  var selectedTopic = "overview";
   var root = null;
   // The current mount's frames, by topic key. Replaced on every mount.
   var frames = {};

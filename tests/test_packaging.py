@@ -153,7 +153,7 @@ class TestWheelBuildAndContents:
             # The Dashboard reads the four Welcome documents from the
             # installed package at runtime (dashboard/helpers.WELCOME_DOCS_DIR).
             members = set(template_files)
-            for doc in ("how-gator-works.html", "what-gator-can-do.html",
+            for doc in ("gator-overview.html", "what-gator-can-do.html",
                         "gatorize-a-repo.html", "start-a-session.html"):
                 assert ("gator_command/templates/gator-starter/docs/" + doc
                         in members), doc

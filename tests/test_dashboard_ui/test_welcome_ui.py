@@ -35,15 +35,15 @@ SESSION_PROMPT = (
     "those reads are complete."
 )
 
-TOPICS = ["how", "can", "gatorize", "session"]
+TOPICS = ["overview", "can", "gatorize", "session"]
 LABELS = {
-    "how": "How Gator works",
+    "overview": "Gator overview",
     "can": "What Gator can do",
     "gatorize": "Gatorize a repo",
     "session": "Start a session with Gator",
 }
 DOC_NAMES = {
-    "how": "how-gator-works.html",
+    "overview": "gator-overview.html",
     "can": "what-gator-can-do.html",
     "gatorize": "gatorize-a-repo.html",
     "session": "start-a-session.html",
@@ -134,7 +134,7 @@ def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     _open_welcome(page)
     assert page.text_content("#topbar-title") == "Welcome to Gator!"
     assert page.get_attribute("#brand-home", "aria-current") == "page"
-    assert _selected(page) == ["how"]
+    assert _selected(page) == ["overview"]
 
     for topic in TOPICS:
         page.click("#welcome-tab-" + topic)
@@ -161,7 +161,7 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     for key, t in tabs.items():
         assert t["panelRole"] == "tabpanel"
         assert t["panelLabelledBy"] == t["id"]
-        selected = key == "how"
+        selected = key == "overview"
         assert t["selected"] == ("true" if selected else "false")
         assert t["tabindex"] == ("0" if selected else "-1")
         assert t["panelHidden"] is (not selected)
@@ -172,11 +172,11 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     assert _selected(page) == ["session"]
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
     page.keyboard.press("ArrowRight")  # wraps
-    assert _selected(page) == ["how"]
+    assert _selected(page) == ["overview"]
     page.keyboard.press("ArrowLeft")  # wraps back
     assert _selected(page) == ["session"]
     page.keyboard.press("Home")
-    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-how"
+    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-overview"
     page.keyboard.press("End")
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
     tabs = _tabs(page)
@@ -195,8 +195,8 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
             baseline: cs('.welcome-tabbar').borderBottomWidth,
             selWeight: parseInt(cs('#welcome-tab-session').fontWeight, 10),
             selBorder: cs('#welcome-tab-session').borderBottomWidth,
-            unWeight: parseInt(cs('#welcome-tab-how').fontWeight, 10),
-            unBorderColor: cs('#welcome-tab-how').borderBottomColor,
+            unWeight: parseInt(cs('#welcome-tab-overview').fontWeight, 10),
+            unBorderColor: cs('#welcome-tab-overview').borderBottomColor,
         };
     }""")
     assert abs(geo["barLeft"] - geo["contentLeft"]) <= 1
@@ -232,7 +232,7 @@ def test_welcome_narrow_width(page, dashboard_fleet):
 
 def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     """Back/Forward stay shell-owned and keep the topic while the page is
-    loaded; a fresh load starts on How Gator works."""
+    loaded; a fresh load starts on Gator overview."""
     _goto_fleet(page, dashboard_fleet)
     length = page.evaluate("() => history.length")
     _open_welcome(page)
@@ -255,7 +255,7 @@ def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     page.reload(wait_until="load")
     page.wait_for_selector(".welcome-workspace", timeout=15000)
     assert page.get_attribute("#brand-home", "aria-current") == "page"
-    assert _selected(page) == ["how"]
+    assert _selected(page) == ["overview"]
 
 
 def _frames(page):
@@ -284,9 +284,9 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
     page.on("request", lambda r: requests.append(r.url))
     _open_welcome(page)
     page.wait_for_function(
-        "() => document.querySelector('#welcome-panel-how iframe')", timeout=5000)
+        "() => document.querySelector('#welcome-panel-overview iframe')", timeout=5000)
     frames = {f["panel"]: f for f in _frames(page)}
-    assert frames["welcome-panel-how"]["count"] == 1
+    assert frames["welcome-panel-overview"]["count"] == 1
     assert all(frames["welcome-panel-" + k]["count"] == 0
                for k in ("can", "gatorize", "session"))
 
@@ -302,12 +302,12 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
         assert f["srcdoc"] is False
 
     # A marker set inside a frame survives switching away and back.
-    how = next(fr for fr in page.frames if fr.url.endswith(DOC_NAMES["how"]))
+    how = next(fr for fr in page.frames if fr.url.endswith(DOC_NAMES["overview"]))
     how.evaluate("() => { window.__welcomeMarker = 'kept'; }")
     page.click("#welcome-tab-can")
-    page.click("#welcome-tab-how")
+    page.click("#welcome-tab-overview")
     assert how.evaluate("() => window.__welcomeMarker") == "kept"
-    assert how.evaluate("() => document.title") == LABELS["how"]
+    assert how.evaluate("() => document.title") == LABELS["overview"]
     assert sorted(_doc_requests(requests)) == sorted(DOC_NAMES.values())
 
     leaked = page.evaluate("""() => document.querySelector('.welcome-workspace')
@@ -317,7 +317,7 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
     # The selected frame spans the full main-pane width, like the tab bar.
     geo = page.evaluate("""() => {
         const bar = document.querySelector('.welcome-tabbar').getBoundingClientRect();
-        const f = document.querySelector('#welcome-panel-how iframe').getBoundingClientRect();
+        const f = document.querySelector('#welcome-panel-overview iframe').getBoundingClientRect();
         return {barLeft: bar.left, barRight: bar.right, left: f.left, right: f.right};
     }""")
     assert abs(geo["left"] - geo["barLeft"]) <= 1
@@ -343,11 +343,12 @@ def test_welcome_route_serves_the_four(page, dashboard_fleet, key):
 @pytest.mark.parametrize("path", [
     DOC_ROUTE + "unknown.html",
     DOC_ROUTE + "how-gator-works.md",
-    DOC_ROUTE + "How-Gator-Works.html",
+    DOC_ROUTE + "how-gator-works.html",  # retired name
+    DOC_ROUTE + "Gator-Overview.html",
     DOC_ROUTE + "..%2fREADME.md",
     DOC_ROUTE + "%2e%2e/README.md",
-    DOC_ROUTE + "how-gator-works.html/extra",
-    DOC_ROUTE + "how-gator-works.html%00",
+    DOC_ROUTE + "gator-overview.html/extra",
+    DOC_ROUTE + "gator-overview.html%00",
     DOC_ROUTE,
     "/api/welcome/how-gator-works",
 ])
@@ -491,7 +492,7 @@ def test_welcome_copy_manual_state(page, dashboard_fleet, mode):
 _IGNORED = {
     "page": ("page", COPY_REQUEST),
     "unrelated-frame": ("unrelated", COPY_REQUEST),
-    "how-frame": ("how", COPY_REQUEST),
+    "overview-frame": ("overview", COPY_REQUEST),
     "stale-frame": ("stale", COPY_REQUEST),
     "version-2": ("session", {**COPY_REQUEST, "v": 2}),
     "unknown-action": ("session", {**COPY_REQUEST, "action": "switch-tab"}),
@@ -520,10 +521,10 @@ def test_welcome_copy_ignores_everything_else(page, dashboard_fleet, case):
     _open_session_frame(page, dashboard_fleet)
     sender, data = ("session", COPY_REQUEST) if case == "control" else _IGNORED[case]
 
-    if sender == "how":
-        page.click("#welcome-tab-how")
+    if sender == "overview":
+        page.click("#welcome-tab-overview")
         page.wait_for_function(
-            "() => document.querySelector('#welcome-panel-how iframe')", timeout=5000)
+            "() => document.querySelector('#welcome-panel-overview iframe')", timeout=5000)
         page.wait_for_load_state("load")
         page.click("#welcome-tab-session")
     elif sender == "unrelated":
@@ -566,7 +567,7 @@ def test_welcome_copy_ignores_everything_else(page, dashboard_fleet, case):
         target = None
     else:
         selector = {"session": "#welcome-panel-session iframe",
-                    "how": "#welcome-panel-how iframe",
+                    "overview": "#welcome-panel-overview iframe",
                     "unrelated": "#unrelated-frame",
                     "stale": "#stale-frame"}[sender]
         target = _frame_for(page, selector)

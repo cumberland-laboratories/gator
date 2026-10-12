@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <!--
-  How Gator works - Welcome topic shipped with Gator.
+  Gator overview - first Welcome topic shipped with Gator.
   Built from the Cumberland master template
   (reference-notes/cumberland-html-document-template.html).
-  Placeholder content: a later content pass replaces it.
 -->
 <html lang="en">
 <head>
@@ -11,7 +10,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <title>How Gator works</title>
+  <title>Gator overview</title>
 
   <style>
     /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
@@ -502,55 +501,78 @@
 <body>
 
 <header class="doc-head">
-  <h1>How Gator works</h1>
-  <div class="subtitle">Gator keeps a governed record of AI-assisted work in your repository. This page shows the basic cycle.</div>
+  <h1>Gator overview</h1>
+  <div class="subtitle">What Gator is, and what it gives the AI coding agents that work in your repository.</div>
   <div class="meta-grid">
     <div><span class="label">Doc class:</span> Welcome topic</div>
-    <div><span class="label">Audience:</span> New Gator users</div>
-    <div><span class="label">Status:</span> <span class="status-badge">Placeholder</span></div>
-    <div><span class="label">Updated:</span> 2026-10-10</div>
-    <div><span class="label">Reading time:</span> ~1 minute</div>
-    <div><span class="label">Author:</span> Gator</div>
+    <div><span class="label">Audience:</span> Engineers new to Gator</div>
+    <div><span class="label">Status:</span> <span class="status-badge exploratory">Draft</span></div>
+    <div><span class="label">Updated:</span> 2026-10-11</div>
   </div>
 </header>
 
 <section id="summary">
   <div class="callout">
     <span class="label">Summary</span>
-    <p>Before an agent changes code, it reads the charter for that code. It updates the charter with the change. The commit records both.</p>
+    <p>Gator gives coding agents a map of your repository, called charters. Agents read the map before they change code and update it as they work. Git hooks keep the map and the code in step, and Git records both.</p>
   </div>
 </section>
 
-<section id="cycle">
-  <h2>The basic cycle</h2>
-  <p>The figure shows the three steps of one governed change.</p>
-  <div class="figure">
-    <svg viewBox="0 0 600 120" xmlns="http://www.w3.org/2000/svg"
-         font-family="'Segoe UI', system-ui, sans-serif"
-         role="img" aria-labelledby="cycle-title cycle-desc">
-      <title id="cycle-title">One governed change</title>
-      <desc id="cycle-desc">Three boxes in a row, joined by arrows: 1 Read the charter, 2 Change the code and the charter, 3 Commit the evidence.</desc>
-      <rect x="10" y="30" width="170" height="60" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
-      <text x="95" y="57" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">1 · Read</text>
-      <text x="95" y="76" font-size="11" fill="#374151" text-anchor="middle">the charter</text>
-      <line x1="182" y1="60" x2="212" y2="60" stroke="#4b5563" stroke-width="1.5"/>
-      <polygon points="212,55 220,60 212,65" fill="#4b5563"/>
-      <rect x="220" y="30" width="170" height="60" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
-      <text x="305" y="57" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">2 · Change</text>
-      <text x="305" y="76" font-size="11" fill="#374151" text-anchor="middle">code and charter</text>
-      <line x1="392" y1="60" x2="422" y2="60" stroke="#4b5563" stroke-width="1.5"/>
-      <polygon points="422,55 430,60 422,65" fill="#4b5563"/>
-      <rect x="430" y="30" width="160" height="60" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
-      <text x="510" y="57" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">3 · Commit</text>
-      <text x="510" y="76" font-size="11" fill="#374151" text-anchor="middle">the evidence</text>
-    </svg>
-    <div class="caption">Figure 1 — one governed change, in three steps.</div>
+<section id="about">
+  <h2>About Gator</h2>
+  <p>Gator is a Git-native semantic layer for AI-assisted engineering.</p>
+  <p>It gives coding agents a durable, reviewable map of the repository: its modules, responsibilities, relationships, invariants, and non-obvious constraints. Gator calls these maps <strong>charters</strong>.</p>
+  <p>Before changing code, an agent reads the relevant charters to understand the part of the system it is about to touch. As it works, Gator requires the agent to update those charters alongside the code. Pre-commit Git hooks check that the knowledge layer and the implementation stay in step.</p>
+  <p>This means an agent does not need to rediscover the entire repository from raw files every session. It can begin with a structured understanding of the system and progressively inspect the details that matter for the task.</p>
+  <div class="callout data">
+    <p>The experience should feel less like prompting a stranger with a large folder of code, and more like working with a senior engineer who already knows the system: what each part owns, what depends on it, and what must not break.</p>
   </div>
-  <p>In words: (1) the agent reads the charter for the code. (2) The agent changes the code and updates the charter. (3) The commit records the change and the charter update together.</p>
+  <p>Gator also provides a repository <strong>constitution</strong>: shared instructions for how agents work in this codebase. The constitution defines the change process—read the relevant charters, propose a plan, make the change, update the map, record the decision, and commit through Git’s normal controls.</p>
+  <div class="figure">
+    <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="process-title process-desc">
+      <title id="process-title">The change process in the constitution</title>
+      <desc id="process-desc">Six numbered steps. Top row, left to right: 1 Read the charters, 2 Propose a plan, 3 Make the change. An arrow goes down to the bottom row, which runs right to left: 4 Update the map, 5 Record the decision, 6 Commit through Git. Steps 1 and 4 are the steps that use or change the charters; they have a heavier border and a MAP label. Under step 6, a note says pre-commit hooks check that the charters and the code stay in step.</desc>
+      <rect x="20" y="30" width="200" height="64" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="120" y="57" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">1 · Read the charters</text>
+      <text x="120" y="76" font-size="11" fill="#374151" text-anchor="middle">start from the map</text>
+      <line x1="222" y1="62" x2="250" y2="62" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="250,57 258,62 250,67" fill="#4b5563"/>
+      <rect x="260" y="30" width="200" height="64" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="57" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">2 · Propose a plan</text>
+      <text x="360" y="76" font-size="11" fill="#374151" text-anchor="middle">before code changes</text>
+      <line x1="462" y1="62" x2="490" y2="62" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="490,57 498,62 490,67" fill="#4b5563"/>
+      <rect x="500" y="30" width="200" height="64" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="600" y="57" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">3 · Make the change</text>
+      <text x="600" y="76" font-size="11" fill="#374151" text-anchor="middle">grounded in the charters</text>
+      <line x1="600" y1="96" x2="600" y2="140" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="595,140 600,148 605,140" fill="#4b5563"/>
+      <rect x="500" y="150" width="200" height="64" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="600" y="177" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">4 · Update the map</text>
+      <text x="600" y="196" font-size="11" fill="#374151" text-anchor="middle">charters change with code</text>
+      <line x1="498" y1="182" x2="470" y2="182" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="470,177 462,182 470,187" fill="#4b5563"/>
+      <rect x="260" y="150" width="200" height="64" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="177" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">5 · Record the decision</text>
+      <text x="360" y="196" font-size="11" fill="#374151" text-anchor="middle">in the commit message</text>
+      <line x1="258" y1="182" x2="230" y2="182" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="230,177 222,182 230,187" fill="#4b5563"/>
+      <rect x="20" y="150" width="200" height="64" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="120" y="177" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">6 · Commit through Git</text>
+      <text x="120" y="196" font-size="11" fill="#374151" text-anchor="middle">normal Git controls</text>
+      <text x="120" y="20" font-size="10" fill="#148a92" font-weight="700" text-anchor="middle" letter-spacing="1">MAP</text>
+      <text x="600" y="232" font-size="10" fill="#148a92" font-weight="700" text-anchor="middle" letter-spacing="1">MAP</text>
+      <text x="120" y="232" font-size="11" fill="#4b5563" font-style="italic" text-anchor="middle">Pre-commit hooks check map + code</text>
+    </svg>
+    <div class="caption">Figure 1 — the change process. Steps marked MAP use or update the charters.</div>
+  </div>
+  <p>The result is a living knowledge layer that travels with the repository. Git records not only what changed, but the maintained understanding that guided the change.</p>
 </section>
 
 <footer class="doc-foot">
-  Gator · Welcome topic · placeholder
+  Gator · Welcome topic · Gator overview
 </footer>
 
 </body>

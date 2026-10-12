@@ -23,7 +23,7 @@ COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root
 # onto a path.
 WELCOME_DOCS_DIR = SCRIPTS_DIR.parent / "templates" / "gator-starter" / "docs"
 WELCOME_DOC_NAMES = frozenset({
-    "how-gator-works.html",
+    "gator-overview.html",
     "what-gator-can-do.html",
     "gatorize-a-repo.html",
     "start-a-session.html",

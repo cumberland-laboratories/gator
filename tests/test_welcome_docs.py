@@ -32,7 +32,7 @@ MASTER = STARTER / "reference-notes" / "cumberland-html-document-template.html"
 WELCOME_JS = SCRIPTS_DIR / "dashboard" / "views" / "welcome.js"
 
 NAMES = [
-    "how-gator-works.html",
+    "gator-overview.html",
     "what-gator-can-do.html",
     "gatorize-a-repo.html",
     "start-a-session.html",
