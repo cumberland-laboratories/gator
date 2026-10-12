@@ -324,6 +324,32 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
     assert abs(geo["right"] - geo["barRight"]) <= 1
 
 
+@pytest.mark.parametrize("viewport", [(1440, 900), (390, 800)])
+def test_welcome_frame_fills_to_bottom_padding(page, dashboard_fleet, viewport):
+    """The frame fills the main pane: its bottom gap is exactly
+    #view-slot's bottom padding (snug, like the side margins), and a
+    short window scrolls with the frame at its minimum height."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(_origin(dashboard_fleet), wait_until="load")
+    page.wait_for_selector("#welcome-panel-overview iframe", timeout=15000)
+    geo = page.evaluate("""() => {
+        const v = document.getElementById('view-slot');
+        const s = v.getBoundingClientRect();
+        const f = document.querySelector('#welcome-panel-overview iframe').getBoundingClientRect();
+        return {gap: s.bottom - f.bottom,
+                pad: parseFloat(getComputedStyle(v).paddingBottom)};
+    }""")
+    assert abs(geo["gap"] - geo["pad"]) <= 1, geo
+    page.set_viewport_size({"width": 1100, "height": 500})
+    short = page.evaluate("""() => {
+        const v = document.getElementById('view-slot');
+        const f = document.querySelector('#welcome-panel-overview iframe');
+        return {h: f.getBoundingClientRect().height,
+                scrolls: v.scrollHeight > v.clientHeight};
+    }""")
+    assert short["h"] >= 480 and short["scrolls"], short
+
+
 @pytest.mark.parametrize("key", TOPICS)
 def test_welcome_route_serves_the_four(page, dashboard_fleet, key):
     """Each allowlisted name returns its shipped document as HTML with the

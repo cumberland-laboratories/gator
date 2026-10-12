@@ -2765,9 +2765,25 @@ textarea.loop-ctrl-input {
 /* Tabs use the shared .gator-tabbar / .gator-tab treatment. */
 
 /* Full main-pane width, aligned with the tab bar: each topic document
-   sets its own reading width inside its frame. */
+   sets its own reading width inside its frame. The column flex chain
+   (workspace → body → visible panel → frame) makes the frame fill the
+   main pane down to #view-slot's bottom padding, matching the side
+   margins; the frame's min-height lets short windows scroll instead. */
+.welcome-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
 .welcome-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   padding: 16px 0 0;
+}
+.welcome-panel:not([hidden]) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 .welcome-panel:focus-visible {
   outline: 2px solid var(--color-link);
@@ -2776,7 +2792,8 @@ textarea.loop-ctrl-input {
 .welcome-frame {
   display: block;
   width: 100%;
-  height: max(480px, calc(100vh - 220px));
+  flex: 1;
+  min-height: 480px;
   border: 0;
   background: #fff;
 }
@@ -2785,5 +2802,5 @@ textarea.loop-ctrl-input {
   font-style: italic;
 }
 @media (max-width: 600px) {
-  .welcome-frame { height: max(420px, calc(100vh - 260px)); }
+  .welcome-frame { min-height: 420px; }
 }

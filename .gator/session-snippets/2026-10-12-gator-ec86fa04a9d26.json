@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charter index: Dashboard CSS routes to the UI charter only",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "charters",
+    "hooks",
+    "dashboard"
+  ],
+  "commit": "ec86fa04a9d26418b93b12b3b672fb3c9ad82fd6",
+  "short_commit": "ec86fa0",
+  "snippet_id": "snippet-ec86fa04a9d26",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "e7b25c9185a2fba4a3b88a8d19eaf9d36a2ccc9a",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:25:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/INDEX.md",
+    ".gator/session-snippets/2026-10-12-gator-e7b25c9185a2f.json"
+  ],
+  "notes": [
+    "`dashboard.css` now maps only to the Dashboard Browser UI charter. The",
+    "Dashboard Server charter has no stake in stylesheets, so a styling change",
+    "should not require a server-charter update with nothing true to say.",
+    "Dashboard JS, HTML and images still route to both charters, because they",
+    "can cross the browser/server boundary."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
