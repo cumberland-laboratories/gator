@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gatorize a repo walks from Add Repository to the first session",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs",
+    "onboarding"
+  ],
+  "commit": "7577d3a3f6ae678244ce462c21b00586cea21211",
+  "short_commit": "7577d3a",
+  "snippet_id": "snippet-7577d3a3f6ae6",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "d70c41577aeab3e4452db5158fc8af5698972d86",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:58:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-d70c41577aeab.json",
+    "src/gator_command/templates/gator-starter/docs/gatorize-a-repo.html",
+    "tests/test_welcome_docs.py"
+  ],
+  "notes": [
+    "\"Gatorize a repo\" now describes the path a Dashboard user takes. Add the",
+    "repository to the fleet, choose Gatorize from the row's ⋮ menu, then",
+    "start the first agent session with the session-opening prompt. The page",
+    "assumes the Gator CLI is installed, since the reader is in the Dashboard.",
+    "A table shows exactly what Gatorize writes and whether each part is",
+    "committed: `.gator/`, Git hooks, agent session hooks, `.gitignore`, and",
+    "the per-machine `~/.gator/`. The page also lists what Gatorize leaves",
+    "alone, and warns that it stops on uncommitted changes when run from the"
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
