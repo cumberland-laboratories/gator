@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charter index: path-qualify Dashboard globs; route Welcome documents to the server charter",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "charters",
+    "hooks",
+    "welcome"
+  ],
+  "commit": "d3139890b0b97e08d9c7c1f64364970659934a1b",
+  "short_commit": "d313989",
+  "snippet_id": "snippet-d3139890b0b97",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "8384c235bc67d103647ce823120c20a5fd129403",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:19:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/INDEX.md",
+    ".gator/session-snippets/2026-10-12-gator-8384c235bc67d.json"
+  ],
+  "notes": [
+    "The Dashboard UI row in `INDEX.md` used bare `*.html`, `*.css` and",
+    "`*.js` globs. The pre-commit hook also matches globs against a file's",
+    "basename, so those rows claimed every HTML, CSS and JS file in the",
+    "repository. A content edit to a Welcome document then required a Dashboard",
+    "UI charter update that had nothing true to say.",
+    "The row is now path-qualified to the Dashboard folder, and a new row",
+    "routes the Welcome documents to the Dashboard Server charter, which owns",
+    "their serving and content rules. A routing rule records why globs must"
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
