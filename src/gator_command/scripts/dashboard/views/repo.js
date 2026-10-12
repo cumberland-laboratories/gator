@@ -332,6 +332,29 @@
     "loops",
   ]);
 
+  // Docs view: reader-friendly labels for the shipped Gator documents, and
+  // the Welcome documents first in Welcome-tab order (keep aligned with
+  // TOPICS in views/welcome.js). Other .gator/docs/*.html files follow
+  // alphabetically, labelled by docsLabel().
+  const DOCS_ORDER = [
+    "gator-overview.html", "what-gator-can-do.html",
+    "gatorize-a-repo.html", "start-a-session.html",
+  ];
+  const DOCS_LABELS = {
+    "gator-overview.html": "Gator overview",
+    "what-gator-can-do.html": "What Gator can do",
+    "gatorize-a-repo.html": "Gatorize a repo",
+    "start-a-session.html": "Start a session",
+    "charter-formation-process.html": "Charter formation process",
+    "charter-schema-v1.html": "Charter schema",
+  };
+  // "zeta-notes.html" → "Zeta notes".
+  function docsLabel(name) {
+    if (DOCS_LABELS[name]) return DOCS_LABELS[name];
+    const words = name.replace(/\.html$/i, "").replace(/[-_]+/g, " ").trim();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
   // Gator-shipped default files in procedures/ and reference-notes/.
   // These are template content — hide them so only user-created files
   // and the README/_template show in the dashboard.
@@ -857,16 +880,25 @@
       const filtered = filterFiles(files);
       resetTreeStateFor(repoName);
 
-      // ── Docs filter: show .gator/docs/ and repo-root docs/ files
+      // ── Docs filter: Gator narrative HTML documents only — the .html
+      // files directly in .gator/docs/. Markdown and the repo-root docs/
+      // folder stay on disk (and in the Repo tree) but are not listed here.
       if (filter === "docs") {
         const docsFiles = filtered
-          .filter(f => f.dir === "docs" || f.dir === "source/docs")
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .filter(f => f.dir === "docs" && /\.html$/i.test(f.name))
+          .sort((a, b) => {
+            const ra = DOCS_ORDER.indexOf(a.name), rb = DOCS_ORDER.indexOf(b.name);
+            if (ra !== rb) return (ra < 0 ? Infinity : ra) - (rb < 0 ? Infinity : rb);
+            return a.name.localeCompare(b.name);
+          });
         let html = `<div class="repo-sidebar-header">Docs</div>`;
         if (docsFiles.length === 0) {
-          html += '<div class="muted" style="padding:8px 12px;font-size:12px">No docs found in .gator/docs/ or docs/</div>';
+          html += '<div class="muted docs-empty" style="padding:8px 12px;font-size:12px">No Gator documents in .gator/docs/ yet. Run Update on this repository to install them.</div>';
         } else {
-          for (const f of docsFiles) html += fileItem(repoName, f, true);
+          for (const f of docsFiles) {
+            const label = docsLabel(f.name);
+            html += `<button class="repo-file-item indented" data-path="${escHtml(f.path)}">${escHtml(label)}</button>`;
+          }
         }
         renderSidebarShell(sidebar, html);
 
@@ -879,14 +911,14 @@
           });
         });
 
-        // Auto-load first non-HTML doc. HTML files open in a new tab, which
-        // browsers block when not triggered by a user gesture — never auto-load.
-        const firstAutoloadable = docsFiles.find(f => !/\.html?$/i.test(f.path));
-        if (firstAutoloadable) {
-          const firstItem = sidebar.querySelector(`.repo-file-item[data-path="${firstAutoloadable.path.replace(/"/g, '&quot;')}"]`);
+        // Open the first document. HTML renders inline in the sandboxed
+        // preview frame (loadFile), so auto-loading needs no user gesture.
+        const first = docsFiles[0];
+        if (first) {
+          const firstItem = sidebar.querySelector(`.repo-file-item[data-path="${first.path.replace(/"/g, '&quot;')}"]`);
           if (firstItem) {
             firstItem.classList.add("active");
-            loadFile(repoName, firstAutoloadable.path, content, window._gatorRepoVersion);
+            loadFile(repoName, first.path, content, window._gatorRepoVersion);
           }
         }
 

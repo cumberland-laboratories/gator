@@ -76,6 +76,7 @@ Render the repository knowledge browser, fetch canonical listings, and display s
 -> list/file/raw/search endpoints
 ! Encode file paths per segment so separators retain namespace meaning.
 ! Render untrusted text as text or through the syntax renderer; do not interpolate repository content into executable markup.
+! **Docs view (`filter === "docs"`) lists Gator narrative HTML documents only** (Architect direction 2026-10-12): `.html` files directly in `.gator/docs/` (`f.dir === "docs"`). Markdown and the repo-root `docs/` folder (`source/docs`) are not listed there; they stay on disk and in the Repo tree. Order is `DOCS_ORDER` (the four Welcome documents, in Welcome-tab order) then alphabetical; labels come from `docsLabel()`: `DOCS_LABELS` (reader-friendly names for the shipped documents, e.g. "Start a session", "Charter schema"; keep `DOCS_ORDER` aligned with `TOPICS` in `views/welcome.js`), else the humanized file name ("zeta-notes.html" → "Zeta notes"). Never a raw file name. The first document auto-loads through `loadFile()`'s inline sandboxed HTML branch (the retired "never auto-load HTML / opens in a new tab" rule predates inline preview). An empty list shows `.docs-empty`, which points to Update. Pinned by `tests/test_dashboard_ui/test_docs_view.py`.
 
 ### buildRawUrl() / bindHtmlPreviewControls()
 File: src/gator_command/scripts/dashboard/views/repo.js

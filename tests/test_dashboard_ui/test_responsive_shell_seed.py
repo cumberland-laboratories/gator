@@ -46,6 +46,22 @@ def seed_sidebar_fixtures(repo):
     (repo / ".gator" / "docs" / "long-docs.md").write_text(
         f"# Long doc\n\n{long_body}\n", encoding="utf-8")
 
+    # Docs view (test_docs_view.py): only .gator/docs/*.html are listed,
+    # Welcome documents first in Welcome order, then others A→Z. The
+    # Markdown above and the repo-root docs/ file below must NOT be listed.
+    for name, title in (("start-a-session.html", "Start"),
+                        ("gator-overview.html", "Overview"),
+                        ("zeta-notes.html", "Zeta notes"),
+                        ("alpha-guide.html", "Alpha guide")):
+        (repo / ".gator" / "docs" / name).write_text(
+            f"<!doctype html><html><head><meta charset=\"utf-8\">"
+            f"<title>{title}</title></head><body><h1 id=\"doc-title\">"
+            f"{title}</h1></body></html>\n", encoding="utf-8")
+    (repo / "docs").mkdir(exist_ok=True)
+    (repo / "docs" / "project-notes.md").write_text(
+        "# Project notes (repo-root docs/, not a Gator document)\n",
+        encoding="utf-8")
+
     # Long markdown for the Repo-view markdown-scroll pin. Lives
     # under `.gator/artifacts/` (not `docs/`) so it doesn't leak
     # into the Docs filter.

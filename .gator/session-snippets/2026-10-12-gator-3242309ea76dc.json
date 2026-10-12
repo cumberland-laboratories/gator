@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator update to 2.25.1: install the Welcome HTML documents into this repo",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "gator-update"
+  ],
+  "commit": "3242309ea76dcd8e379a37e55494cc0f6d6f5eb5",
+  "short_commit": "3242309",
+  "snippet_id": "snippet-3242309ea76dc",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-12T23:59:14Z",
+  "ended_at": "2026-10-12T23:59:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".claude/commands/commit.md",
+    ".gator/.gator-version",
+    ".gator/docs/gator-overview.html",
+    ".gator/docs/gatorize-a-repo.html",
+    ".gator/docs/start-a-session.html",
+    ".gator/docs/what-gator-can-do.html",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-12-gator-7cb27be8735c6.json"
+  ],
+  "notes": [
+    "`gator update` (2.25.1) installed the four Welcome HTML documents into",
+    "this repository's `.gator/docs/`, so its Docs view can show them. It",
+    "also refreshed the `/commit` command, the version marker and the runtime",
+    "pin."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

@@ -28,7 +28,7 @@ Run sibling scripts and Git with bounded timeouts and normalized results.
 ### read_welcome_html(name) / WELCOME_DOC_NAMES / WELCOME_DOCS_DIR / _send_welcome_doc(name) / GET /api/welcome/docs/<name>
 File: src/gator_command/scripts/dashboard/helpers.py
 File: src/gator_command/scripts/gator-dashboard.py
-Serve the four Welcome topics: the shipped starter-template HTML documents `gator-overview.html` (named `how-gator-works.html` before 2026-10-11; never released under that name), `what-gator-can-do.html`, `gatorize-a-repo.html`, `start-a-session.html` (`templates/gator-starter/docs/`, which gatorize/update also install into `.gator/docs/`). Each is shown in a Welcome iframe sandboxed exactly `allow-scripts` (see `scripts-dashboard-ui.md`).
+Serve the four Welcome topics: the shipped starter-template HTML documents `gator-overview.html` (named `how-gator-works.html` before 2026-10-11; never released under that name), `what-gator-can-do.html`, `gatorize-a-repo.html`, `start-a-session.html` (`templates/gator-starter/docs/`, which gatorize/update also install into `.gator/docs/`, where the Docs view lists them: since 2026-10-12 it lists only `.gator/docs/*.html`, served through the `/raw` route like any repository HTML, see `scripts-dashboard-ui.md` → Docs view). Each is shown in a Welcome iframe sandboxed exactly `allow-scripts` (see `scripts-dashboard-ui.md`).
 Filesystem: `WELCOME_DOCS_DIR / <name>` (R)
 <- `DashboardHandler.do_GET()` (`path.startswith(_WELCOME_DOCS_PREFIX)` → `_send_welcome_doc()`), `build_snapshot()` (`_welcome_docs_for_snapshot()`)
 -> `apply_response_headers()` (`text/html; charset=utf-8`, `nosniff`, `Cache-Control: no-cache`) plus `Content-Security-Policy: _B2_CSP_EXTERNAL`
