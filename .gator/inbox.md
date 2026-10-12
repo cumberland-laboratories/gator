@@ -69,6 +69,8 @@ quick session-open scanning; open the issue for full detail.
 - [#19](https://github.com/cumberland-laboratories/gator/issues/19) `gator update` + gatorize overlay ship `__pycache__/*.pyc` (packaging)
 - [#34](https://github.com/cumberland-laboratories/gator/issues/34) Pre-commit override approval unscoped, consumed too early, leaves stale residue (hooks)
 - [#35](https://github.com/cumberland-laboratories/gator/issues/35) Second block after approval is un-approvable — `gator hook approve` reports no pending request (hooks) — **high severity**
+- [#77](https://github.com/cumberland-laboratories/gator/issues/77) Release smoke jobs race the package-index CDN (TestPyPI and PyPI) (release)
+- [#78](https://github.com/cumberland-laboratories/gator/issues/78) `gator update` leaves pre-ignore hook files tracked: `whiteboard.md`, `status.json`, `commit_draft.md` (hooks)
 
 **Enhancements / Features:**
 

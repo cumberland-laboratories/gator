@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap and inbox: v2.25.1 released; CDN race tracked as #77",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "roadmap",
+    "inbox",
+    "release"
+  ],
+  "commit": "add4c2530fd736480bab30dfbac11ea0d9dedae5",
+  "short_commit": "add4c25",
+  "snippet_id": "snippet-add4c2530fd73",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "e088c603db95ecf4785ea501daf79a2d96edfad6",
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T14:59:03Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-10-12-gator-e088c603db95e.json"
+  ],
+  "notes": [
+    "The roadmap names v2.25.1 as the latest release. The inbox's",
+    "watch-only CDN note now points to #77: in v2.25.1 both post-publish",
+    "smoke jobs failed twice on a stale package index, so the race is now",
+    "tracked as a bug rather than watched."
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}
