@@ -38,6 +38,12 @@ NAMES = [
     "start-a-session.html",
 ]
 
+# Documents already in the Welcome format, with the element that opens each.
+WELCOME_FORMAT = {
+    "gator-overview.html": '<div class="hero">',
+    "what-gator-can-do.html": '<p class="lede">',
+}
+
 # Same delimiters as contracts/compatibility/test_cumberland_narrative_style_parity.py.
 REGION_RE = re.compile(
     r'/\*\s*CUMBERLAND-NARRATIVE-STYLE:BEGIN'
@@ -71,11 +77,12 @@ def test_document_is_a_cumberland_master_copy(name):
     master_region = REGION_RE.search(MASTER.read_text(encoding="utf-8")).group(0)
     region = REGION_RE.search(text)
     assert region is not None and region.group(0) == master_region
-    # The overview opens with the Gator hero mark instead of the master's
-    # doc-head and Summary (Architect direction 2026-10-11).
-    if name == "gator-overview.html":
-        markers = ('<div class="hero">', '<section id="about">',
-                   '<div class="callout')
+    # Welcome format (Architect direction 2026-10-11): no master doc-head
+    # or Summary; the page opens with its own lead (the overview with the
+    # Gator hero mark) and ends with the company copyright footer.
+    if name in WELCOME_FORMAT:
+        markers = (WELCOME_FORMAT[name], '<section id=',
+                   '&copy; 2026 Cumberland Laboratories, Inc.')
         for gone in ('<header class="doc-head">', '<section id="summary">'):
             assert gone not in text, gone
     else:

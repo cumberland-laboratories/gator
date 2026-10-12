@@ -3,7 +3,6 @@
   What Gator can do - Welcome topic shipped with Gator.
   Built from the Cumberland master template
   (reference-notes/cumberland-html-document-template.html).
-  Placeholder content: a later content pass replaces it.
 -->
 <html lang="en">
 <head>
@@ -497,42 +496,59 @@
       text-align: center;
     }
     /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+
+    /* Page-local: a lead sentence replaces the master's doc-head, and
+       the capabilities read as a column of cards. */
+    .lede {
+      font-size: 1.3rem;
+      line-height: 1.5;
+      font-weight: 500;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      margin: 0.5rem 0 2.25rem;
+      max-width: 52rem;
+    }
+    .caps {
+      list-style: none;
+      margin: 1.25rem 0 0;
+      padding: 0;
+    }
+    .caps > li {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.15rem;
+      margin-bottom: 0.75rem;
+    }
+    .caps > li strong {
+      display: block;
+      color: var(--gray-900);
+      margin-bottom: 0.2rem;
+    }
   </style>
 </head>
 <body>
 
-<header class="doc-head">
-  <h1>What Gator can do</h1>
-  <div class="subtitle">Gator adds governance to the coding agent that you already use. This page lists the main capabilities.</div>
-  <div class="meta-grid">
-    <div><span class="label">Doc class:</span> Welcome topic</div>
-    <div><span class="label">Audience:</span> New Gator users</div>
-    <div><span class="label">Status:</span> <span class="status-badge">Placeholder</span></div>
-    <div><span class="label">Updated:</span> 2026-10-10</div>
-    <div><span class="label">Reading time:</span> ~1 minute</div>
-    <div><span class="label">Author:</span> Gator</div>
-  </div>
-</header>
-
-<section id="summary">
-  <div class="callout">
-    <span class="label">Summary</span>
-    <p>Gator gives every session the same rules and context. It keeps charters and commit evidence in Git, and it lets you inspect your repositories from this Dashboard.</p>
-  </div>
-</section>
+<p class="lede">Gator does not replace your coding agent. It gives that agent a maintained understanding of the repository and a disciplined way to change it.</p>
 
 <section id="capabilities">
-  <h2>Capabilities</h2>
-  <ul>
-    <li><strong>Governed session opening.</strong> Every session starts from the same rules, priorities, and open work, whichever coding agent you use.</li>
-    <li><strong>Charters and commit evidence.</strong> Agents read and update the charters as they change code. Each commit carries a record of that work.</li>
-    <li><strong>Local Dashboard inspection.</strong> The Dashboard shows your repositories, commits, and documents from local Git state.</li>
-    <li><strong>Governed Loop collaboration.</strong> Two models draft and review a plan or a change in turns. You keep the final decision.</li>
+  <h2>What Gator can do</h2>
+  <p>Gator helps AI agents work with the context, discipline, and continuity of an experienced engineer joining an established project.</p>
+  <ul class="caps">
+    <li><strong>Work with any capable coding agent.</strong> Gator is vendor-agnostic. Codex, Claude Code, Cursor, Gemini, and other agents can read the repository’s Gator guidance, learn the project’s conventions, and orient themselves before changing code.</li>
+    <li><strong>Give agents durable project context.</strong> Charters, procedures, tripwires, decisions, and reference notes live in <code>.gator/</code> inside the repository. Agents do not need to rediscover the system from raw source files at the start of every session.</li>
+    <li><strong>Keep the map aligned with the code.</strong> Gator’s workflow requires agents to update the relevant charter when they change code. Pre-commit checks verify that code changes and their documented understanding stay together.</li>
+    <li><strong>Make CLI work safer and more focused.</strong> When an agent works through tools such as Databricks, Snowflake, GCP, Azure DevOps, or a project-specific CLI, it can use the repository’s known procedures, risks, and tripwires. The result is more deliberate work and fewer context-free commands.</li>
+    <li><strong>Create shareable technical explanations.</strong> Gator gives agents standard templates for HTML documents, reference notes, procedures, blueprints, and other repository-native artifacts. They can turn codebase understanding into clear material for colleagues, reviewers, and future agents.</li>
+    <li><strong>Fit alongside your existing setup.</strong> Gator keeps its knowledge layer in <code>.gator/</code>. It does not take ownership of <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, or other harness-specific files. It is designed to compose with the tools and repository conventions a team already uses.</li>
+    <li><strong>Grow with the team.</strong> Gator works well as a lightweight local workflow. When needed, its more advanced capabilities—such as Gator Loop for governed multi-agent work and Enterprise features for organization-scale evidence and oversight—are available without changing the core model.</li>
   </ul>
 </section>
 
 <footer class="doc-foot">
-  Gator · Welcome topic · placeholder
+  &copy; 2026 Cumberland Laboratories, Inc.
 </footer>
 
 </body>

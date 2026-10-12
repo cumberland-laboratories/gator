@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: topic frames fill the main pane to its bottom padding",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "welcome",
+    "layout"
+  ],
+  "commit": "9687e740bb45489eb72b71dd124d38d6aece230e",
+  "short_commit": "9687e74",
+  "snippet_id": "snippet-9687e740bb454",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "ec86fa04a9d26418b93b12b3b672fb3c9ad82fd6",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:25:19Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-12-gator-ec86fa04a9d26.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "tests/test_dashboard_ui/test_welcome_ui.py"
+  ],
+  "notes": [
+    "Welcome topic frames now end at the main pane's bottom padding, the same",
+    "snug margin as the sides. The old height was an estimate",
+    "(`100vh - 220px`) that left about 66 px unused below each document on",
+    "desktop. A flex layout now sizes the frame to the space that is really",
+    "there. A minimum height keeps short windows scrolling instead of",
+    "squeezing the document. A new UI test pins the bottom gap."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
