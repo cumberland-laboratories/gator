@@ -42,6 +42,7 @@ NAMES = [
 WELCOME_FORMAT = {
     "gator-overview.html": '<div class="hero">',
     "what-gator-can-do.html": '<p class="lede">',
+    "gatorize-a-repo.html": '<p class="lede">',
 }
 
 # Same delimiters as contracts/compatibility/test_cumberland_narrative_style_parity.py.
@@ -151,3 +152,9 @@ def test_gatorize_and_update_deliver_the_documents(tmp_path):
     planned = {Path(dest).resolve(): action for action, _src, dest in plan}
     for name in NAMES:
         assert planned.get((docs / name).resolve()) == "add", name
+
+
+def test_gatorize_page_prompt_matches_dashboard():
+    """Gatorize a repo repeats the session-opening prompt for the first
+    session; it must be the Dashboard's exact SESSION_PROMPT."""
+    assert _session_prompt_from_dashboard() in _read("gatorize-a-repo.html")

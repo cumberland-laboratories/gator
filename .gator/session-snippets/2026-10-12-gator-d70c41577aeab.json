@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: What Gator can do shows any agent sharing one knowledge layer",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "d70c41577aeab3e4452db5158fc8af5698972d86",
+  "short_commit": "d70c415",
+  "snippet_id": "snippet-d70c41577aeab",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "be3b1495aa5684752d06e831486dab4b00356502",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:46:07Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-be3b1495aa568.json",
+    "src/gator_command/templates/gator-starter/docs/what-gator-can-do.html"
+  ],
+  "notes": [
+    "\"What Gator can do\" gains a diagram after its intro line. Codex, Claude",
+    "Code, Cursor, Gemini and other agents all read and update the same",
+    "`.gator/` knowledge layer (charters, procedures, tripwires, decisions,",
+    "reference notes), and pre-commit checks keep that layer and the source",
+    "code in step. It shows the vendor-agnostic and durable-context points at",
+    "a glance before the capability list."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}

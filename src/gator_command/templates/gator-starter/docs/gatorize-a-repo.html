@@ -3,7 +3,6 @@
   Gatorize a repo - Welcome topic shipped with Gator.
   Built from the Cumberland master template
   (reference-notes/cumberland-html-document-template.html).
-  Placeholder content: a later content pass replaces it.
 -->
 <html lang="en">
 <head>
@@ -497,43 +496,146 @@
       text-align: center;
     }
     /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+
+    /* Page-local: Welcome format (lead sentence instead of doc-head). */
+    .lede {
+      font-size: 1.3rem;
+      line-height: 1.5;
+      font-weight: 500;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      margin: 0.5rem 0 2.25rem;
+      max-width: 52rem;
+    }
+    .ui {
+      font-weight: 600;
+      color: var(--gray-900);
+      white-space: nowrap;
+    }
+    .glyph {
+      display: inline-block;
+      min-width: 1.4em;
+      padding: 0 0.3em;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      background: white;
+      text-align: center;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    td code { white-space: nowrap; }
+    pre.prompt { white-space: pre-wrap; }
   </style>
 </head>
 <body>
 
-<header class="doc-head">
-  <h1>Gatorize a repo</h1>
-  <div class="subtitle">Gatorizing installs Gator into one repository. This page shows the command and what it changes.</div>
-  <div class="meta-grid">
-    <div><span class="label">Doc class:</span> Welcome topic</div>
-    <div><span class="label">Audience:</span> New Gator users</div>
-    <div><span class="label">Status:</span> <span class="status-badge">Placeholder</span></div>
-    <div><span class="label">Updated:</span> 2026-10-10</div>
-    <div><span class="label">Reading time:</span> ~1 minute</div>
-    <div><span class="label">Author:</span> Gator</div>
-  </div>
-</header>
+<p class="lede">Gatorizing adds Gator to one of your repositories. You do it here in the Dashboard, in a few clicks. Then your first agent session builds the map.</p>
 
-<section id="summary">
-  <div class="callout">
-    <span class="label">Summary</span>
-    <p>Run one command. It adds the .gator/ layer, its templates, the Git hooks, and the Dashboard registration. It does not change your code.</p>
+<section id="journey">
+  <h2>The path at a glance</h2>
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node blue">Add<span class="kind">to the fleet</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Gatorize<span class="kind">from the row menu</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Commit<span class="kind">the new .gator/</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">First session<span class="kind">paste the prompt</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node green">Map built<span class="kind">charters in Git</span></div>
+    </div>
+  </div>
+  <p>This Dashboard runs from the Gator CLI on your machine, so Gator is already installed. Each repository needs Gator added once.</p>
+</section>
+
+<section id="add">
+  <h2>1. Add the repository to your fleet</h2>
+  <ol class="steps">
+    <li>Open <span class="ui">Fleet</span> in the sidebar.</li>
+    <li>Click <span class="ui">Add Repository</span>.</li>
+    <li>Gator scans common locations for Git repositories. Find yours under <span class="ui">Repos found</span> and click <span class="ui">Add</span>. If it is not listed, type its folder path and click <span class="ui">Register</span>.</li>
+    <li class="step-done">The repository appears in the Fleet table.</li>
+  </ol>
+</section>
+
+<section id="gatorize">
+  <h2>2. Gatorize it</h2>
+  <div class="callout info">
+    <span class="label">Before you start</span>
+    <p>Commit or stash your work first. The Dashboard runs Gatorize without prompts, and Gatorize stops if the repository has uncommitted changes. For the cleanest undo, create a branch first, for example <code>git checkout -b add-gator</code>. Gatorize works on whatever branch is checked out.</p>
+  </div>
+  <ol class="steps">
+    <li>In the Fleet table, open the <span class="glyph" aria-label="actions menu">⋮</span> menu at the end of the repository’s row.</li>
+    <li>Choose <span class="ui">Gatorize</span>.</li>
+    <li>Wait for the activity indicator on that row to finish. If Gatorize fails, the Dashboard shows the reason.</li>
+    <li class="step-done">The repository is governed. The same menu now offers <span class="ui">Update</span> when a newer Gator release is available.</li>
+  </ol>
+</section>
+
+<section id="what-it-does">
+  <h2>3. What Gatorize does</h2>
+  <p>Gatorize adds files in two places: inside the repository, and in a per-machine folder in your home directory. It does not change your source code or your commit history.</p>
+  <div class="table-wrap">
+    <table class="table-teal">
+      <thead>
+        <tr><th>Where</th><th>What Gator adds</th><th>Committed?</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>.gator/</code><br>in the repository</td>
+          <td>The knowledge layer. The constitution, procedures and reference notes go in <code>.gator/.includes/</code>. Starter <code>mission.md</code>, <code>roadmap.md</code> and <code>inbox.md</code> go at the root, with an empty <code>charters/</code> folder for the first map. It also holds <code>runtime-pin.json</code>, the minimum Gator version that this repository’s governance needs.</td>
+          <td><span class="pill ok">Yes</span> you commit it</td>
+        </tr>
+        <tr>
+          <td>Git hooks<br><code>.git/hooks/</code></td>
+          <td>Three small hooks that run the installed Gator CLI. <strong>pre-commit</strong> checks that charters change with the code. <strong>commit-msg</strong> builds the message from the commit draft and adds <code>Gator-*</code> trailers. <strong>post-commit</strong> resets the draft. On Windows they go in <code>.git/gator-hooks/</code>, and Gator points Git at that folder.</td>
+          <td><span class="pill na">No</span> Git never commits <code>.git/</code></td>
+        </tr>
+        <tr>
+          <td>Agent session hooks<br><code>.claude/</code> <code>.codex/</code> <code>.gemini/</code></td>
+          <td>Gator session-hook entries in <code>settings.json</code> or <code>hooks.json</code>. Gator merges them in and keeps your existing entries.</td>
+          <td><span class="pill ok">Yes</span></td>
+        </tr>
+        <tr>
+          <td><code>.gitignore</code></td>
+          <td>Entries that keep Gator’s machine-local and sensitive files, such as <code>.gator/vault/</code>, out of Git. Your own rules stay as they are.</td>
+          <td><span class="pill ok">Yes</span></td>
+        </tr>
+        <tr>
+          <td><code>~/.gator/</code><br>in your home folder</td>
+          <td>Gator’s per-machine folder. It holds the Dashboard’s list of repositories, this machine’s identity, and local session records. Gatorize registers the repository here.</td>
+          <td><span class="pill na">No</span> not part of any repository</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout ok">
+    <span class="label">What Gatorize leaves alone</span>
+    <p>Your source code, your existing commits, and your agent instruction files: <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>. Gatorize also does not commit anything. Review the new files and commit them yourself, or ask your agent to do it in the first session.</p>
   </div>
 </section>
 
-<section id="command">
-  <h2>The command</h2>
-  <p>Run this command:</p>
-  <pre><code>gator gatorize &lt;target-directory&gt;</code></pre>
-  <p>Then open the repository in your coding agent and start a session.</p>
-  <div class="callout note">
-    <span class="label">Note</span>
-    <p>Your <code>CLAUDE.md</code>, <code>AGENTS.md</code>, and <code>GEMINI.md</code> files stay as they are. They belong to the repository.</p>
+<section id="first-session">
+  <h2>4. Your first session</h2>
+  <ol class="steps">
+    <li>Open a terminal in the repository root, the folder that contains <code>.git</code>.</li>
+    <li>Start your coding agent there: Claude Code, Codex, Gemini CLI, Cursor, or another capable agent.</li>
+    <li>Paste the session-opening prompt:
+      <pre class="prompt"><code>Run gator init in this repository. Treat its output, including the required session-opening reads, as binding. Do not provide a substantive response until those reads are complete.</code></pre>
+      The <span class="ui">Start a session with Gator</span> tab has a button that copies it for you.</li>
+    <li>The agent runs <code>gator init</code>. It then reads the Gator entry document, the constitution, and the mission, roadmap and inbox.</li>
+    <li>The <code>charters/</code> folder is empty, so the agent follows the bootstrap procedure. It asks what the project is and whether it is solo or team work. It looks for existing knowledge such as <code>ARCHITECTURE.md</code>, decision records or AI instruction files, and asks before it migrates any of it. It fills in <code>mission.md</code> and <code>roadmap.md</code>, finds the module boundaries (usually 3 to 8 charters), and writes the first charters, their index, and a cross-cutting charter for rules that span modules.</li>
+    <li class="step-done">Review the map and commit it. From now on, every session starts from the map.</li>
+  </ol>
+  <div class="callout data">
+    <p>The first session is an investment. The agent spends it reading your code so that later sessions do not have to. Read the charters it writes: they are the agent’s understanding of your system, and you can correct it before it guides any change.</p>
   </div>
 </section>
 
 <footer class="doc-foot">
-  Gator · Welcome topic · placeholder
+  &copy; 2026 Cumberland Laboratories, Inc.
 </footer>
 
 </body>
