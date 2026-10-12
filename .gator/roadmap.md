@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-09._ Current strategy, priorities, and planned work.
+_Updated 2026-10-12._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,12 +11,12 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.24.0 (2026-10-09) — Gator-native
-entry point (`GATOR_INIT.md`; Gator no longer manages
-`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), `gator loop codex` (#37
-follow-up), Loop Create/History workspace (#56), and Architect
-precedence in the loop protocol. Release detail lives in
-`CHANGELOG.md` and the GitHub Releases.
+**Latest released version**: v2.25.0 (2026-10-12) — the Dashboard
+opens on a Welcome workspace (four shipped HTML topics: Gator overview,
+What Gator can do, Gatorize a repo, Start a session), a sub-second
+`gator init`, clearer commit-draft guidance, and native Windows session
+attribution. Release detail lives in `CHANGELOG.md` and the GitHub
+Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
@@ -118,7 +118,7 @@ stamps, honest recovery messaging).
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 1 | **First-run welcome screen** | Considering | Empty fleet → welcome with "Add Repo" + "Gatorize" prominently, not empty table |
+| 1 | **First-run welcome screen** | Done (v2.25.0) | The Dashboard opens on Welcome; "Gatorize a repo" walks Add Repository → ⋮ → Gatorize → first session |
 | 2 | **Getting-started documentation** | Considering | Linear path: install → dashboard → add repo → gator init → first commit → see result. Complements shipped `docs/custom-skills-and-team-workflow.md` |
 | 3 | **In-dashboard next-step guidance** | Considering | After adding a repo, show "Open your AI CLI and type gator init" hint |
 | 4 | **Server reuse detection** | Considering | `gator dashboard` finds running instance instead of starting duplicate |

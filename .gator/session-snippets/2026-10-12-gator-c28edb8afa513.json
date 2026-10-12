@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Remove the repository's own CLAUDE.md, AGENTS.md and GEMINI.md",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "session-opening",
+    "native-agent-files"
+  ],
+  "commit": "c28edb8afa5130b42156017689ec4dc645d40c54",
+  "short_commit": "c28edb8",
+  "snippet_id": "snippet-c28edb8afa513",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T13:16:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-10-12-gator-76848458e0a81.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md"
+  ],
+  "notes": [
+    "Sessions in this repository now start from `gator init` and",
+    "`GATOR_INIT.md` alone. The three vendor files held only the frozen",
+    "`GATOR:BEGIN` block that Gator stopped refreshing in v2.24.0; it named",
+    "old paths and could contradict `GATOR_INIT.md`. A session opened with the",
+    "files removed completed normally.",
+    "The files were never part of the wheel, so installed users see no change.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}
