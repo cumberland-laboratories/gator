@@ -31,17 +31,12 @@ v2.24.0 shipped 2026-10-09 (Gator-native entry point, `gator loop
 codex`, Loop Create/History workspace #56, Architect precedence in
 the loop protocol). See `CHANGELOG.md` for release detail.
 
-**Release hold (2026-10-10):** the Welcome topics are now placeholder
-HTML documents (`templates/gator-starter/docs/*.html`) on `dev`. Hold
-any fleet release until the content pass replaces them (sketch
-`artifacts/2026-10-10-welcome-html-documents-sketch.md`).
+**Welcome shipped (2026-10-12, v2.25.0):** the Dashboard opens on Welcome,
+and all four topics carry real content in the Welcome format (no template
+title block or Summary; a company footer). The release hold is lifted.
 
-**Next (Architect, 2026-10-10):** (1) Welcome content pass. The current
-copy is stale, and HTML (Cumberland style, inline SVG diagrams) allows
-a much richer explanation of what Gator can do. (2) The Docs view should
-move to the same model: user-facing HTML documents in sandboxed frames,
-like Welcome (`4b91390`, `97f07ed`). The Architect checked Welcome in the
-source Dashboard: full-width frames look right, and the copy prompt works.
+**Next (Architect, 2026-10-10):** the Docs view should move to the same
+model as Welcome: user-facing HTML documents in sandboxed frames.
 
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:

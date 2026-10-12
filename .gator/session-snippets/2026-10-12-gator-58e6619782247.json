@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Start a session opens with the prompt and its copy button",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "58e6619782247749207d4d7b15dfd5856d64eb60",
+  "short_commit": "58e6619",
+  "snippet_id": "snippet-58e6619782247",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 14,
+  "previous_commit_in_session": "98ac04fd8c5decb58ef8b9f6fee19920c2315743",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T01:14:53Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-98ac04fd8c5de.json",
+    "src/gator_command/templates/gator-starter/docs/start-a-session.html",
+    "tests/test_welcome_docs.py"
+  ],
+  "notes": [
+    "\"Start a session with Gator\" now opens with the session-opening prompt",
+    "and its Copy button, so users see them without scrolling. The prompt",
+    "wraps, so the whole text stays visible. The short \"How a session starts\"",
+    "steps follow, with a first step to start the agent in the repository",
+    "root. This completes the Welcome format on all four topics. The copy",
+    "mechanism (element IDs, script, and Dashboard message protocol) is",
+    "unchanged, and the Welcome UI tests confirm that it still works."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
