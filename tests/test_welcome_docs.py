@@ -43,6 +43,7 @@ WELCOME_FORMAT = {
     "gator-overview.html": '<div class="hero">',
     "what-gator-can-do.html": '<p class="lede">',
     "gatorize-a-repo.html": '<p class="lede">',
+    "start-a-session.html": '<section id="prompt">',
 }
 
 # Same delimiters as contracts/compatibility/test_cumberland_narrative_style_parity.py.

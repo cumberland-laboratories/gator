@@ -3,7 +3,6 @@
   Start a session with Gator - Welcome topic shipped with Gator.
   Built from the Cumberland master template
   (reference-notes/cumberland-html-document-template.html).
-  Placeholder content: a later content pass replaces it.
 -->
 <html lang="en">
 <head>
@@ -501,44 +500,34 @@
   <style>
     /* Copy control (this document only; outside the shared region). */
     .copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0.6rem 0; }
-    .copy-row button { font: inherit; font-weight: 600; padding: 0.35rem 0.9rem; cursor: pointer; }
+    .copy-row button {
+      font: inherit;
+      font-weight: 600;
+      padding: 0.45rem 1.1rem;
+      cursor: pointer;
+      color: white;
+      background: var(--teal-dark);
+      border: 1px solid var(--teal-dark);
+      border-radius: 4px;
+    }
+    .copy-row button:hover { background: #0f6f76; }
+    .copy-row button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     #copy-status { font-weight: 600; }
+
+    /* Welcome format: the prompt opens the page; steps justified. */
+    #session-prompt { white-space: pre-wrap; font-size: 0.9rem; }
+    .steps > li {
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
   </style>
 </head>
 <body>
 
-<header class="doc-head">
-  <h1>Start a session with Gator</h1>
-  <div class="subtitle">A Gator session starts from one prompt. This page shows the prompt and what the agent does with it.</div>
-  <div class="meta-grid">
-    <div><span class="label">Doc class:</span> Welcome topic</div>
-    <div><span class="label">Audience:</span> New Gator users</div>
-    <div><span class="label">Status:</span> <span class="status-badge">Placeholder</span></div>
-    <div><span class="label">Updated:</span> 2026-10-10</div>
-    <div><span class="label">Reading time:</span> ~1 minute</div>
-    <div><span class="label">Author:</span> Gator</div>
-  </div>
-</header>
-
-<section id="summary">
-  <div class="callout">
-    <span class="label">Summary</span>
-    <p>Paste the prompt into your coding agent. The agent runs gator init and completes the required reads before it does substantive work.</p>
-  </div>
-</section>
-
-<section id="handoff">
-  <h2>How a session starts</h2>
-  <ol class="steps">
-    <li>Paste the prompt below into the coding-agent session for the repository.</li>
-    <li>The agent runs <code>gator init</code>.</li>
-    <li>The output names the Gator entry document (<code>GATOR_INIT.md</code>) and the required reads.</li>
-    <li class="step-done">The agent completes those reads before it does substantive work. Then you give the task.</li>
-  </ol>
-</section>
-
 <section id="prompt">
   <h2>The session-opening prompt</h2>
+  <p>Paste this into your coding agent at the start of every session.</p>
   <pre id="session-prompt">Run gator init in this repository. Treat its output, including the required session-opening reads, as binding. Do not provide a substantive response until those reads are complete.</pre>
   <div class="copy-row">
     <button type="button" id="copy-session-prompt">Copy session-opening prompt</button>
@@ -547,8 +536,19 @@
   <p id="copy-manual" hidden>Copy did not work here. Select the prompt above and copy it.</p>
 </section>
 
+<section id="handoff">
+  <h2>How a session starts</h2>
+  <ol class="steps">
+    <li>Open a terminal in the repository root, the folder that contains <code>.git</code>, and start your coding agent there.</li>
+    <li>Paste the prompt above into the agent session.</li>
+    <li>The agent runs <code>gator init</code>.</li>
+    <li>The output names the Gator entry document (<code>GATOR_INIT.md</code>) and the required reads: the constitution, then the mission, roadmap and inbox.</li>
+    <li class="step-done">The agent completes those reads before it does substantive work. Then you give the task.</li>
+  </ol>
+</section>
+
 <footer class="doc-foot">
-  Gator · Welcome topic · placeholder
+  &copy; 2026 Cumberland Laboratories, Inc.
 </footer>
 
 <script>
