@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.25.1",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "e088c603db95ecf4785ea501daf79a2d96edfad6",
+  "short_commit": "e088c60",
+  "snippet_id": "snippet-e088c603db95e",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "03aa47ffbcf6a1ea060c0dbd75fd4df392bce29f",
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T14:00:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-12-gator-03aa47ffbcf6a.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Release 2.25.1, a documentation patch. \"What Gator can do\" ends with a",
+    "section on the read-only Dashboard and the optional vault: the vault is",
+    "only for files that must never be committed. The Gator source repository",
+    "also drops its own CLAUDE.md, AGENTS.md and GEMINI.md, which `gator init`",
+    "and GATOR_INIT.md have replaced. Details are in CHANGELOG.md."
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}

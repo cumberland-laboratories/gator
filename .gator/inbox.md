@@ -128,15 +128,13 @@ Possible future work:
   with no charter coverage and sketches that span too many charters.
 - Keep escalation for Architect-owned decisions, not for more time.
 
-### CDN-widen — watch-only
+### CDN race — now tracked as #77
 
-Widening the TestPyPI + production PyPI post-publish poll windows
-from 120s → 240s was inboxed after v2.6.0-era CDN races. Five
-consecutive fully first-try green pipelines (v2.13.0 → v2.13.3)
-suggest the existing `Wait for TestPyPI CDN to surface the new
-version` step is handling propagation. **Keep watch-only**; if a
-future release hits a real CDN race, open a bug then rather than
-preemptively widening.
+The watch-only period ended with v2.25.1 (2026-10-12): both post-publish
+smoke jobs (TestPyPI and PyPI) failed twice on a stale package index, and
+the TestPyPI wait step passed before pip still saw a stale list. Tracked
+in [#77](https://github.com/cumberland-laboratories/gator/issues/77),
+which recommends a retrying install step rather than a wider poll.
 
 ### Post-legacy-repo cleanup — deferred, no work item
 

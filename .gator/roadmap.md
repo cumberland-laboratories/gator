@@ -11,12 +11,13 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.25.0 (2026-10-12) — the Dashboard
-opens on a Welcome workspace (four shipped HTML topics: Gator overview,
-What Gator can do, Gatorize a repo, Start a session), a sub-second
-`gator init`, clearer commit-draft guidance, and native Windows session
-attribution. Release detail lives in `CHANGELOG.md` and the GitHub
-Releases.
+**Latest released version**: v2.25.1 (2026-10-12) — *What Gator can
+do* adds "The Dashboard and the vault" (read-only inspection; the vault is
+optional, only for files that must not be committed). v2.25.0 the same
+day: the Dashboard opens on a Welcome workspace with four shipped HTML
+topics, a sub-second `gator init`, clearer commit-draft guidance, and
+native Windows session attribution. Release detail lives in
+`CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
