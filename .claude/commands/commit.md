@@ -5,31 +5,32 @@ Before committing, ensure `commit_draft.md` has structured YAML frontmatter:
 ```yaml
 ---
 message: "One-line commit message describing the change"
-change-type: feature|fix|refactor|policy|security|docs
-significance: routine|notable|high
+change-type: feature|fix|refactor|docs|test|release|maintenance|review|governance
+significance: low|minor|routine|notable|high|critical|architectural
 decision-tags: [tag1, tag2]
 agent: claude|codex|gemini
 architect: AG
 ---
 ```
 
-The body of `commit_draft.md` remains the free-form session change log.
+The body of `commit_draft.md` becomes the final commit body. Keep it concise
+and reader-facing: explain the outcome, why it matters, and material
+verification or compatibility notes. Put detailed implementation inventories,
+raw test output, and full significance steelmen in charters or artifacts.
 
 **Steps:**
-1. Verify `commit_draft.md` frontmatter is populated (write it if not — you have the context)
-2. Stage all changed files (including `.gator/` files)
-3. Read the `message` field from `commit_draft.md` frontmatter
-4. Run `git commit -m "<message>"` — the pre-commit hook handles the rest:
-   - Validates charter-alongside-code (blocks if code changed but no charter updated)
-   - Validates commit_draft is populated
-   - Assembles Gator-* trailers and appends them to the commit
-   - Writes `.gator/status.json` snapshot
-   - Writes any warnings to `.gator/whiteboard.md`
-5. If the hook blocks the commit, present the findings to the Architect (they are in the hook output and `.gator/whiteboard.md`). Each finding is tagged:
+
+1. Verify `commit_draft.md` frontmatter is populated (write it if not — you have the context).
+2. Stage the tracked code, charter, and documentation files that belong to the commit. Do not force-add the normally ignored `commit_draft.md` runtime file.
+3. Run `git commit -F .gator/commit_draft.md`. The pre-commit hook validates charter-alongside-code and a populated draft, writes `.gator/status.json`, and writes warnings to `.gator/whiteboard.md`. The commit-msg hook assembles the final draft message and appends `Gator-*` trailers.
+4. If the hook blocks the commit, present the findings to the Architect (they are in the hook output and `.gator/whiteboard.md`). Each finding is tagged:
    - `[fix-required]` — fix it and retry; it can never be approved.
    - `[approvable]` / `[lint]` — fix it, or the Architect may approve this exact staged change.
    `gator hook override status` shows the recorded block at any time (safe for anyone).
-6. Clear `commit_draft.md` after successful commit (reset to header only)
+5. Let the post-commit hook clear `commit_draft.md` after a successful commit.
+
+`git commit -m` is reserved for the explicit empty-draft compatibility fallback.
+With a populated draft, do not invent or maintain a second message.
 
 **Do not run git commit automatically.** The constitution requires Architect confirmation before committing. Present the proposed message and wait for the Architect to approve, adjust, or decline.
 

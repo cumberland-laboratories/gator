@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<!--
+  What Gator can do - Welcome topic shipped with Gator.
+  Built from the Cumberland master template
+  (reference-notes/cumberland-html-document-template.html).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>What Gator can do</title>
+
+  <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
+    :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
+
+      /* Neutral scale — 9-step Tailwind-style ramp. */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.85rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
+
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
+
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
+
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* Footer — small centered muted text with top-border. */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: center;
+    }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+
+    /* Page-local: a lead sentence replaces the master's doc-head, and
+       the capabilities read as a column of cards. */
+    .lede {
+      font-size: 1.3rem;
+      line-height: 1.5;
+      font-weight: 500;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      margin: 0.5rem 0 2.25rem;
+      max-width: 52rem;
+    }
+    .caps {
+      list-style: none;
+      margin: 1.25rem 0 0;
+      padding: 0;
+    }
+    .caps > li {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.15rem;
+      margin-bottom: 0.75rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .caps > li strong {
+      display: block;
+      color: var(--gray-900);
+      margin-bottom: 0.2rem;
+    }
+    .caps > li p { margin: 0.6rem 0 0; }
+    section > h3 + .principle { margin-top: 0.5rem; }
+    .principle {
+      font-size: 1.15rem;
+      line-height: 1.5;
+      font-weight: 600;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      border-left: 4px solid var(--teal);
+      padding: 0.15rem 0 0.15rem 1rem;
+      margin: 0.25rem 0 1.25rem;
+      max-width: 52rem;
+    }
+  </style>
+</head>
+<body>
+
+<p class="lede">Gator does not replace your coding agent. It gives that agent a maintained understanding of the repository and a disciplined way to change it.</p>
+
+<section id="capabilities">
+  <h2>What Gator can do</h2>
+  <p>Gator helps AI agents work with the context, discipline, and continuity of an experienced engineer—not only within one repository, but across a system of related repositories.</p>
+  <div class="figure">
+    <svg viewBox="0 0 720 312" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="agents-title agents-desc">
+      <title id="agents-title">Any agent, one knowledge layer</title>
+      <desc id="agents-desc">Five boxes across the top: Codex, Claude Code, Cursor, Gemini, and other agents. A two-way arrow joins each one to a single shared box below, labelled ".gator/ — the shared knowledge layer". That box holds charters, procedures, tripwires, decisions, and reference notes. Under it is a box labelled "Source code", joined to the knowledge layer by a two-way arrow labelled "kept in step by pre-commit checks". Both the knowledge layer and the source code sit inside an outer box labelled "Your repository, in Git".</desc>
+      <!-- repository -->
+      <rect x="20" y="104" width="680" height="200" rx="10" fill="none" stroke="#d1d5db" stroke-width="1.5"/>
+      <text x="684" y="294" font-size="11" fill="#4b5563" font-weight="600" text-anchor="end">Your repository, in Git</text>
+      <rect x="20" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="80" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Codex</text>
+      <line x1="80" y1="74" x2="80" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="75,74 80,66 85,74" fill="#4b5563"/>
+      <polygon points="75,132 80,140 85,132" fill="#4b5563"/>
+      <rect x="160" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="220" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Claude Code</text>
+      <line x1="220" y1="74" x2="220" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="215,74 220,66 225,74" fill="#4b5563"/>
+      <polygon points="215,132 220,140 225,132" fill="#4b5563"/>
+      <rect x="300" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Cursor</text>
+      <line x1="360" y1="74" x2="360" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="355,74 360,66 365,74" fill="#4b5563"/>
+      <polygon points="355,132 360,140 365,132" fill="#4b5563"/>
+      <rect x="440" y="16" width="120" height="48" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="500" y="45" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Gemini</text>
+      <line x1="500" y1="74" x2="500" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="495,74 500,66 505,74" fill="#4b5563"/>
+      <polygon points="495,132 500,140 505,132" fill="#4b5563"/>
+      <rect x="580" y="16" width="120" height="48" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="640" y="45" font-size="13" fill="#4b5563" font-weight="600" text-anchor="middle">Other agents</text>
+      <line x1="640" y1="74" x2="640" y2="132" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="635,74 640,66 645,74" fill="#4b5563"/>
+      <polygon points="635,132 640,140 645,132" fill="#4b5563"/>
+      <!-- knowledge layer -->
+      <rect x="40" y="140" width="640" height="76" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="360" y="162" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">.gator/ — the shared knowledge layer</text>
+      <rect x="56" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="112" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Charters</text>
+      <rect x="180" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="236" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Procedures</text>
+      <rect x="304" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="360" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Tripwires</text>
+      <rect x="428" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="484" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Decisions</text>
+      <rect x="552" y="176" width="112" height="26" rx="13" fill="white" stroke="#19aeb8" stroke-width="1.2"/>
+      <text x="608" y="193" font-size="11" fill="#148a92" font-weight="600" text-anchor="middle">Reference notes</text>
+      <!-- kept in step -->
+      <line x1="360" y1="226" x2="360" y2="238" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="355,226 360,218 365,226" fill="#4b5563"/>
+      <polygon points="355,238 360,246 365,238" fill="#4b5563"/>
+      <text x="374" y="236" font-size="11" fill="#4b5563" font-style="italic">kept in step by pre-commit checks</text>
+      <!-- source code -->
+      <rect x="40" y="246" width="640" height="34" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.2"/>
+      <text x="360" y="268" font-size="12" fill="#374151" font-weight="600" text-anchor="middle">Source code</text>
+    </svg>
+    <div class="caption">Figure 1 — every agent reads the same <code>.gator/</code> layer before it changes code, and updates it as it works. Pre-commit checks keep the layer and the code in step.</div>
+  </div>
+  <ul class="caps">
+    <li><strong>Work with any capable coding agent.</strong> Gator is vendor-agnostic. Codex, Claude Code, Cursor, Gemini, and other agents can read the repository’s Gator guidance, learn the project’s conventions, and orient themselves before changing code.</li>
+    <li><strong>Give agents durable project context.</strong> Charters, procedures, tripwires, decisions, and reference notes live in <code>.gator/</code> inside the repository. Agents do not need to rediscover the system from raw source files at the start of every session.</li>
+    <li><strong>Keep the map aligned with the code.</strong> Gator’s workflow requires agents to update the relevant charter when they change code. Pre-commit checks verify that code changes and their documented understanding stay together.</li>
+    <li><strong>Make CLI work safer and more focused.</strong> When an agent works through tools such as Databricks, Snowflake, GCP, Azure DevOps, or a project-specific CLI, it can use the repository’s known procedures, risks, and tripwires. The result is more deliberate work and fewer context-free commands.</li>
+    <li><strong>Create shareable technical explanations.</strong> Gator gives agents standard templates for HTML documents, reference notes, procedures, blueprints, and other repository-native artifacts. They can turn codebase understanding into clear material for colleagues, reviewers, and future agents.</li>
+    <li><strong>Fit alongside your existing setup.</strong> Gator keeps its knowledge layer in <code>.gator/</code>. It does not take ownership of <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, or other harness-specific files. It is designed to compose with the tools and repository conventions a team already uses.</li>
+    <li><strong>Grow with the team.</strong> Gator works well as a lightweight local workflow. When needed, its more advanced capabilities—such as Gator Loop for governed multi-agent work and Enterprise features for organization-scale evidence and oversight—are available without changing the core model.</li>
+  </ul>
+</section>
+
+<section id="system-homes">
+  <h2>A home for each system you operate</h2>
+  <p class="principle">Gatorized repositories are not just code containers. They are durable homes for system knowledge.</p>
+  <ul class="caps">
+    <li><strong>Create a home for each system you operate.</strong> A Gatorized repository does not have to be an application source tree. It can be the operating home for a technical system or domain: Databricks administration, cloud infrastructure, data-platform operations, release engineering, security controls, or an internal developer platform.
+      <p>Over time, its charters capture the parts that are usually scattered across people’s memory: how the system is structured, which CLI operations are safe, known failure modes, required approvals, environment-specific tripwires, and the procedures that work. An agent entering that repository can work from this accumulated operational understanding instead of treating every request as a fresh investigation.</p></li>
+    <li><strong>Use charters to make a domain-scale monorepo navigable.</strong> A domain repository may contain scripts, configuration, procedures, runbooks, architecture notes, links to external systems, and operational decisions. Gator does not require it to be small or uniform. Charters give the agent a progressive map: start with the domain, narrow to the relevant area, then inspect the specific implementation or procedure.</li>
+  </ul>
+  <div class="callout note">
+    <span class="label">Example: Databricks administration</span>
+    <p>A <code>databricks_administration</code> repository can become the durable operating manual for your Databricks estate. It holds the scripts, procedures, risks, conventions, and hard-won operational knowledge that normally live across terminals, tickets, and a few experienced people’s heads.</p>
+    <p>When an agent works in that repository, it does not begin as a generic Databricks assistant. It begins with your environment’s known constraints, safe procedures, and accumulated lessons.</p>
+  </div>
+  <div class="callout data">
+    <p>The goal is not to give every agent access to every secret. It is to give it the right earned context: the map, the procedures, the tripwires, and the lessons that let an experienced operator work quickly without working blindly.</p>
+  </div>
+</section>
+
+<section id="across-repositories">
+  <h2>Across a system of repositories</h2>
+  <p class="principle">A system does not always need a swarm to be understood. It needs durable context at every repository boundary.</p>
+  <div class="figure">
+    <svg viewBox="0 0 720 266" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="across-title across-desc">
+      <title id="across-title">One agent across Gatorized repositories</title>
+      <desc id="across-desc">One box at the top labelled "One capable agent", with arrows to four repository boxes below: Service, Application, Infrastructure, and Data platform. Each repository box holds its own ".gator/" boundary with its charters and procedures. Under the four repositories, a dashed bar says that the fleet view and Enterprise add cross-repository visibility when needed.</desc>
+      <rect x="270" y="14" width="180" height="46" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="42" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">One capable agent</text>
+      <line x1="360" y1="62" x2="112.9" y2="104.6" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="105.0,106.0 112.1,100.2 113.6,109.1" fill="#4b5563"/>
+      <rect x="30" y="110" width="150" height="96" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="105" y="132" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Service</text>
+      <rect x="42" y="144" width="126" height="48" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="105" y="164" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">.gator/</text>
+      <text x="105" y="181" font-size="10.5" fill="#374151" text-anchor="middle">charters · procedures</text>
+      <line x1="360" y1="62" x2="282.1" y2="102.3" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="275.0,106.0 280.0,98.3 284.2,106.3" fill="#4b5563"/>
+      <rect x="200" y="110" width="150" height="96" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="275" y="132" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Application</text>
+      <rect x="212" y="144" width="126" height="48" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="275" y="164" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">.gator/</text>
+      <text x="275" y="181" font-size="10.5" fill="#374151" text-anchor="middle">charters · procedures</text>
+      <line x1="360" y1="62" x2="437.9" y2="102.3" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="445.0,106.0 435.8,106.3 440.0,98.3" fill="#4b5563"/>
+      <rect x="370" y="110" width="150" height="96" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="445" y="132" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Infrastructure</text>
+      <rect x="382" y="144" width="126" height="48" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="445" y="164" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">.gator/</text>
+      <text x="445" y="181" font-size="10.5" fill="#374151" text-anchor="middle">charters · procedures</text>
+      <line x1="360" y1="62" x2="607.1" y2="104.6" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="615.0,106.0 606.4,109.1 607.9,100.2" fill="#4b5563"/>
+      <rect x="540" y="110" width="150" height="96" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="615" y="132" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Data platform</text>
+      <rect x="552" y="144" width="126" height="48" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="615" y="164" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">.gator/</text>
+      <text x="615" y="181" font-size="10.5" fill="#374151" text-anchor="middle">charters · procedures</text>
+      <rect x="30" y="222" width="660" height="32" rx="6" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <text x="360" y="243" font-size="11.5" fill="#4b5563" font-style="italic" text-anchor="middle">Fleet view and Enterprise add cross-repository visibility when needed</text>
+    </svg>
+    <div class="caption">Figure 2 — one agent moves between Gatorized repositories. Each repository carries its own map and evidence at its boundary.</div>
+  </div>
+  <ul class="caps">
+    <li><strong>Work across repositories with shared context.</strong> When related repositories are Gatorized, an agent can orient itself in each one using the same structured surfaces: charters, mission, roadmap, procedures, tripwires, and Git history. That gives it a practical system-level view for changes that cross service, application, infrastructure, data, or deployment boundaries.</li>
+    <li><strong>Use one capable agent across the system.</strong> Many “agentic workflow” designs reach first for a controller agent and a fleet of specialized subagents. Gator supports a simpler default: one agent can move between Gatorized repositories while retaining a structured way to understand each boundary, identify dependencies, and record decisions. Use specialized agents when the work is genuinely parallel or needs independent review—not merely because the system spans multiple repositories.</li>
+    <li><strong>Keep cross-repository decisions inspectable.</strong> The relevant understanding stays with each repository rather than being trapped in one orchestrator’s conversation or a central memory service. Each repo carries its own charters and evidence, while Gator’s fleet and Enterprise capabilities can provide broader visibility when needed.</li>
+  </ul>
+</section>
+
+<section id="dashboard-and-vault">
+  <h2>The Dashboard and the vault</h2>
+  <div class="figure">
+    <svg viewBox="0 0 720 268" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="vault-title vault-desc">
+      <title id="vault-title">The repository, the vault, and the Dashboard</title>
+      <desc id="vault-desc">Three boxes in a row. In the middle, "Agent session", where work is proposed and performed. A solid arrow labelled "commit" goes right to "Your repository", committed to Git: code, charters, procedures, artifacts and documentation. This is the normal path. A dashed arrow labelled "sensitive files only" goes left to ".gator/vault/", labelled "optional, not in Git": CSV files, personal data, private plans and unpublished diagrams. Under all three, a wide box labelled "Gator Dashboard" says it is a read-only view of the repository and the vault, including prior versions from Git history. Dashed arrows point up from the Dashboard to the vault and to the repository.</desc>
+      <!-- vault (optional side folder) -->
+      <rect x="20" y="30" width="180" height="104" rx="8" fill="#fffbeb" stroke="#d48b0a" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="110" y="58" font-size="13" fill="#92400e" font-weight="700" text-anchor="middle">.gator/vault/</text>
+      <text x="110" y="78" font-size="10.5" fill="#92400e" font-weight="700" text-anchor="middle" letter-spacing="0.5">OPTIONAL · NOT IN GIT</text>
+      <text x="110" y="98" font-size="11" fill="#374151" text-anchor="middle">CSVs, personal data,</text>
+      <text x="110" y="114" font-size="11" fill="#374151" text-anchor="middle">plans, unpublished diagrams</text>
+      <!-- agent session -->
+      <rect x="270" y="30" width="180" height="104" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="360" y="58" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Agent session</text>
+      <text x="360" y="82" font-size="11" fill="#374151" text-anchor="middle">proposes and performs</text>
+      <text x="360" y="98" font-size="11" fill="#374151" text-anchor="middle">the work</text>
+      <!-- repository (normal path) -->
+      <rect x="520" y="30" width="180" height="104" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
+      <text x="610" y="58" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Your repository</text>
+      <text x="610" y="78" font-size="10.5" fill="#148a92" font-weight="700" text-anchor="middle" letter-spacing="0.5">COMMITTED TO GIT</text>
+      <text x="610" y="98" font-size="11" fill="#374151" text-anchor="middle">code, charters, procedures,</text>
+      <text x="610" y="114" font-size="11" fill="#374151" text-anchor="middle">artifacts, documentation</text>
+      <line x1="452" y1="82" x2="510" y2="82" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="518,82 510,77 510,87" fill="#4b5563"/>
+      <text x="485" y="72" font-size="10.5" fill="#4b5563" font-weight="600" text-anchor="middle">commit</text>
+      <line x1="268" y1="82" x2="210" y2="82" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="202,82 210,77 210,87" fill="#4b5563"/>
+      <text x="235" y="62" font-size="10" fill="#4b5563" font-style="italic" text-anchor="middle">sensitive</text>
+      <text x="235" y="74" font-size="10" fill="#4b5563" font-style="italic" text-anchor="middle">files only</text>
+      <!-- dashboard -->
+      <rect x="20" y="196" width="680" height="56" rx="8" fill="white" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="360" y="219" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">Gator Dashboard</text>
+      <text x="360" y="238" font-size="11" fill="#374151" text-anchor="middle">read-only view of the repository and the vault — including prior versions from Git history</text>
+      <line x1="110" y1="194" x2="110" y2="144" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon points="110,136 105,144 115,144" fill="#4b5563"/>
+      <line x1="610" y1="194" x2="610" y2="144" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon points="610,136 605,144 615,144" fill="#4b5563"/>
+    </svg>
+    <div class="caption">Figure 3 — work goes into the repository and through Git. The vault is an optional side folder for files that must never be committed. The Dashboard shows both, read-only.</div>
+  </div>
+
+  <h3>Inspect, don’t edit</h3>
+  <p class="principle">The agent changes the repository. The Dashboard helps the human understand and govern those changes.</p>
+  <ul class="caps">
+    <li><strong>Explore the repository through a read-only Dashboard.</strong> Gator Dashboard is a local, read-only view of the codebase and its knowledge layer. It lets you inspect charters, procedures, artifacts, threads, documentation, loop records, and repository structure without mixing review with editing.
+      <p>Because the underlying repository is Git-backed, the Dashboard can show the current state as well as prior versions and history. You can ask: What did this charter say before the last change? When did this procedure appear? Which commit introduced this decision? The answer remains grounded in the repository’s own history.</p>
+      <p>The Dashboard is intentionally not an IDE or a second agent chat. It is the Architect’s inspection surface. Keep an agent session open in another window or tab to propose and make changes; use the Dashboard to understand the system, review the knowledge layer, inspect evidence, and decide what should happen next.</p></li>
+  </ul>
+
+  <h3>Keep sensitive files out of Git (optional)</h3>
+  <p class="principle">Most work belongs in the repository, reviewed through Git. The vault is for the files that never should be committed.</p>
+  <ul class="caps">
+    <li><strong>Use the vault for material that must not be committed.</strong> Gator Vault (<code>.gator/vault/</code>) is an optional, repository-local folder for files that should never enter Git: CSV extracts, personal or other sensitive data, plans that are not ready to share, diagrams and documents that are not ready for publication, and large files such as PDFs and datasets.
+      <p>Git ignores the vault, so its contents never reach a commit, a push, or the repository’s history. Unlike an arbitrary local folder, the vault sits beside the repository it belongs to and is visible in the Dashboard on your machine, so you can review it alongside the knowledge layer.</p>
+      <p>The vault is not the normal drafting path. Code, charters, procedures, and documentation are drafted and changed in the repository itself and reviewed through Git as usual. If something in the vault later becomes safe to share, rewrite it into the right shared surface—an artifact, procedure, thread, or reference note—and commit it deliberately.</p></li>
+  </ul>
+</section>
+
+<footer class="doc-foot">
+  &copy; 2026 Cumberland Laboratories, Inc.
+</footer>
+
+</body>
+</html>

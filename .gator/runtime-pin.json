@@ -1,13 +1,13 @@
 {
   "schema": "gator-runtime-pin-v1",
-  "runtime_version": "2.24.0",
-  "pinned_at": "2026-10-10T00:29:50Z",
+  "runtime_version": "2.25.1",
+  "pinned_at": "2026-10-12T23:58:24Z",
   "pinned_by_machine": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
   "manifest": {
     "enforcer-review.py": "sha256:b211130f28ea9cd92b3d3103cee1c4199b0332f0e8b891f2c810c77e2086c05e",
     "gator-approve.py": "sha256:56743e7bb864bc8726292512bf2468a694881a941d76dc83e3d8bd352aa8a6f7",
     "gator-enforce.py": "sha256:2b34254c72d26e2b154d237c612ec768c3a6cac7c14f1ad92e5b017e24d44657",
-    "gator-init.py": "sha256:0be03150e11507685437dc5d333d737dd272f5788b3baa874569a7eb65824234",
+    "gator-init.py": "sha256:0569f98850e8929929f6d0da56c8ea727e059b20d00474af020ca80cdc592a95",
     "gator-pre-commit.py": "sha256:38c280b787c8f4f6da26547649d1ed43625c486dcee15a25c9cacc32ea4dec0f",
     "gator-pulse.py": "sha256:639bf7113b9ee474b6680079dbca8e2d436087a6c29c221133938950424375ec",
     "gator-session-open.py": "sha256:dd12179218c2e68b20f8b55d4958d08d2c396894e53ee314988d327c412f727b",
@@ -20,6 +20,6 @@
     "precommit_charter.py": "sha256:0f351ae0a60618dcc26066371a4bad9774e3de5322e944abc79837c1c8491d53",
     "precommit_lint.py": "sha256:a607b468539987c89baaf6d3cd48854ee42979a4ac047029a00f24a154bbe66a",
     "precommit_override.py": "sha256:aec14131dbee05f06d3554351f92212437866e8beb05525a225c73e2e9efaed8",
-    "precommit_session.py": "sha256:ae0fa57a9117b44c9a8c4fb7ed094c68b52310712c5bc9dc98642dcb56e833f1"
+    "precommit_session.py": "sha256:d9a28725637d83b0e8a637e243fc07877b05d978bbf8cb01ed011270c135b0e0"
   }
 }

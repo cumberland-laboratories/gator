@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Inbox: index the new release and hook-file issues (#77, #78)",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox"
+  ],
+  "commit": "7cb27be8735c667bda6e67de0f563171d14ced4e",
+  "short_commit": "7cb27be",
+  "snippet_id": "snippet-7cb27be8735c6",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "add4c2530fd736480bab30dfbac11ea0d9dedae5",
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T15:12:19Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-12-gator-add4c2530fd73.json"
+  ],
+  "notes": [
+    "The inbox's open-bug index now lists #77 (release smoke jobs race the",
+    "package-index CDN) and #78 (`gator update` leaves pre-ignore hook files",
+    "tracked, which is the source of the recurring commit leftovers)."
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}
