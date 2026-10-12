@@ -4,6 +4,18 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.25.1] — 2026-10-12
+
+Documentation patch. *What Gator can do* gains a closing section on the Dashboard and the vault, and the Gator source repository no longer carries its own agent-native instruction files.
+
+### Added
+
+- **"The Dashboard and the vault"** (*What Gator can do*, the last section). **Inspect, don't edit:** the Dashboard is a local, read-only, Git-backed inspection surface, including earlier versions of each file. The agent changes the repository; the Dashboard helps the human understand and govern those changes. **The vault is optional:** `.gator/vault/` holds only files that must never be committed, such as CSV extracts, personal or other sensitive data, plans not ready to share, unpublished diagrams, and large files. It is not the normal drafting path. A new diagram (Figure 3) shows the agent session committing into the repository, the vault as an optional side folder, and the Dashboard viewing both. Gatorized repositories receive the updated document through `gator update`.
+
+### Removed
+
+- **The Gator source repository's own `CLAUDE.md`, `AGENTS.md` and `GEMINI.md`.** Since 2.24.0, sessions start from `gator init` and the Gator-owned `GATOR_INIT.md`, so these files are no longer needed here. This affects only this repository. Gator still never creates, edits or removes these files in governed repositories.
+
 ## [2.25.0] — 2026-10-12
 
 Feature release. **The Dashboard now opens on a Welcome workspace**, Gator's front door for new users. Four topics in a shared tab bar (Gator overview · What Gator can do · Gatorize a repo · Start a session with Gator) are shipped HTML documents in the Cumberland style, with inline SVG diagrams, shown in sandboxed frames. Also: **`gator init` runs in under half a second** (it no longer scans the whole tree for a charter-coverage estimate), commit-draft guidance is clearer, and Windows session attribution no longer depends on a slow PowerShell start.

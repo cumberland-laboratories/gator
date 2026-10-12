@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: the vault is optional and only for files that must not be committed",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs",
+    "vault"
+  ],
+  "commit": "03aa47ffbcf6a1ea060c0dbd75fd4df392bce29f",
+  "short_commit": "03aa47f",
+  "snippet_id": "snippet-03aa47ffbcf6a",
+  "session_group_key": "anthropic:720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "7672f95a17215dd05cc7c13b92bcec852f7b1d58",
+  "started_at": "2026-10-11T23:23:19Z",
+  "ended_at": "2026-10-12T13:42:42Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-7672f95a17215.json",
+    "src/gator_command/templates/gator-starter/docs/what-gator-can-do.html"
+  ],
+  "notes": [
+    "\"What Gator can do\" no longer presents Gator Vault as the standard",
+    "staging path for drafts. The Architect clarified that the vault is",
+    "optional, and only for files that must never be committed: CSV extracts,",
+    "personal or other sensitive data, plans that are not ready to share,",
+    "diagrams that are not ready for publication, and large files. Code,",
+    "charters and documentation are drafted in the repository and reviewed",
+    "through Git as usual. This matches the `.gator/vault/` ignore rule that",
+    "Gatorize installs (\"sensitive material and large files\")."
+  ],
+  "transcript_session_id": "720ab41d-3c80-4747-a527-7a49c5e49f9b",
+  "transcript_ref": null
+}
