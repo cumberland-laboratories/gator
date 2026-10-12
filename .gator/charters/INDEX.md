@@ -16,7 +16,8 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-pulse.py`, starter `gator-pulse.py` | [Strategic Pulse](scripts-pulse.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-dashboard.py`, `gator-kill.py`, `src/gator_command/scripts/dashboard/*.py` | [Dashboard Server](scripts-dashboard.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| `src/gator_command/scripts/dashboard/*.html`, `src/gator_command/scripts/dashboard/*.css`, `src/gator_command/scripts/dashboard/*.js`, `src/gator_command/scripts/dashboard/views/**`, and `src/gator_command/scripts/dashboard/*.png` | [Dashboard Browser UI](scripts-dashboard-ui.md) · [Dashboard Server](scripts-dashboard.md) |
+| `src/gator_command/scripts/dashboard/*.css` | [Dashboard Browser UI](scripts-dashboard-ui.md) |
+| `src/gator_command/scripts/dashboard/*.html`, `src/gator_command/scripts/dashboard/*.js`, `src/gator_command/scripts/dashboard/views/**`, and `src/gator_command/scripts/dashboard/*.png` | [Dashboard Browser UI](scripts-dashboard-ui.md) · [Dashboard Server](scripts-dashboard.md) |
 | Welcome documents `src/gator_command/templates/gator-starter/docs/*.html` | [Dashboard Server](scripts-dashboard.md) |
 | `src/gator_command/scripts/loop/**`, `gator-loop.py` | [Gator Loop](scripts-loop.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator-enterprise.py` | [Enterprise Dispatcher](scripts-enterprise.md) · [Cross-Cutting](scripts-cross-cutting.md) |

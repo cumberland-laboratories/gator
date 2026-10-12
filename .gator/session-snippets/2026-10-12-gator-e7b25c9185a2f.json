@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator overview footer carries the company copyright line",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "e7b25c9185a2fba4a3b88a8d19eaf9d36a2ccc9a",
+  "short_commit": "e7b25c9",
+  "snippet_id": "snippet-e7b25c9185a2f",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "d3139890b0b97e08d9c7c1f64364970659934a1b",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T00:19:43Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-d3139890b0b97.json",
+    "src/gator_command/templates/gator-starter/docs/gator-overview.html"
+  ],
+  "notes": [
+    "The Gator overview footer now reads \"© 2026 Cumberland Laboratories,",
+    "Inc.\" instead of the template's topic label, matching the copyright",
+    "form in the repository's legal files."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
