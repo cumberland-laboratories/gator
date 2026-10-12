@@ -4,6 +4,35 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.25.0] — 2026-10-12
+
+Feature release. **The Dashboard now opens on a Welcome workspace**, Gator's front door for new users. Four topics in a shared tab bar (Gator overview · What Gator can do · Gatorize a repo · Start a session with Gator) are shipped HTML documents in the Cumberland style, with inline SVG diagrams, shown in sandboxed frames. Also: **`gator init` runs in under half a second** (it no longer scans the whole tree for a charter-coverage estimate), commit-draft guidance is clearer, and Windows session attribution no longer depends on a slow PowerShell start.
+
+### Added
+
+- **Welcome workspace (#72).** The sidebar logo is now a button that opens Welcome (`views/welcome.js`). Four ARIA tabs use the new shared main-pane tab bar (`.gator-tabbar` / `.gator-tab`), and the Loop Create/History tabs now use it too. Each topic is a standalone HTML document from `templates/gator-starter/docs/`: `gator-overview.html`, `what-gator-can-do.html`, `gatorize-a-repo.html`, and `start-a-session.html`. They are served by an allowlisted route (`GET /api/welcome/docs/<name>`, `WELCOME_DOC_NAMES`) in `<iframe sandbox="allow-scripts">` frames, and inlined as `srcdoc` in offline snapshots. Pinned by `tests/test_dashboard_ui/test_welcome_ui.py`, `tests/test_welcome_docs.py` and `tests/test_snapshot.py`; see the Welcome TRIPWIREs in `scripts-dashboard-ui.md` and `scripts-dashboard.md`.
+- **Welcome content.** *Gator overview* (Gator mark, "About Gator", and the change-process diagram). *What Gator can do* (capabilities; repositories as homes for system knowledge, with a Databricks example; one agent across a system of Gatorized repositories; two diagrams). *Gatorize a repo* (Add Repository → ⋮ → Gatorize, a table of exactly what Gatorize writes and whether each part is committed, and the first session). *Start a session* (the prompt first, then the steps).
+- **Copy session-opening prompt.** A button inside the Start-a-session document asks the Dashboard to copy its own prompt, through one checked message (`{type: "gator-welcome", v: 1, action: "copy-session-prompt"}`). The prompt text never crosses the frame boundary. When there is no Dashboard parent, or the copy fails or is not confirmed, the document shows a manual-copy fallback.
+- **Gatorized repositories receive the HTML documents.** `docs` is a user-content template directory, so `gatorize` and `gator update` install the four documents into `.gator/docs/`, where the Docs view previews them.
+
+### Changed
+
+- **Dashboard landing view.** A live Dashboard load without `?repo=` now opens on Welcome instead of Fleet. `?repo=` links still open their repository, and offline snapshots still open on Fleet. UI tests that need Fleet open it from the sidebar (`open_fleet()` in `tests/test_dashboard_ui/_harness.py`).
+- **Welcome frames fill the main pane** down to its bottom padding, with a 480 px minimum (420 px on narrow screens). Pinned by `test_welcome_frame_fills_to_bottom_padding`.
+- **`gator init` is fast.** It repairs hooks and registration and hands off the session-opening reads. It no longer walks the working tree to estimate charter coverage, which took about 20 s on large repositories. Charter health is planned as a Dashboard view.
+- **Commit-draft guidance.** `commit_draft.md` is the single source for the pending commit message: a short, reader-facing summary and body. The constitution, `git-workflow.md`, the new `procedures/authoring-commit-messages.md` and the shipped `/commit` command now say so consistently. Hooks own draft cleanup.
+- **Charter index routing.** Dashboard globs in `INDEX.md` are path-qualified: the pre-commit hook also matches a glob against a file's basename, so bare `*.js` matched every JavaScript file in the repository. Welcome documents route to the Dashboard Server charter, and Dashboard CSS routes to the Dashboard Browser UI charter only.
+- **Release procedure.** A new "Verify before you push" section, and a rerun-once policy for known Windows flakes (#70, #71).
+
+### Fixed
+
+- **Windows session attribution.** The pre-commit parent-PID walk uses kernel32 (`CreateToolhelp32Snapshot`, `GetProcessTimes`) and falls back to PowerShell only when needed. A slow PowerShell cold start no longer drops commit-to-session attribution, and the recurring `TestPidWalker` CI flake is gone. Pinned by `TestWindowsNativeProcessInfo` in `tests/test_multi_session.py`; see the exact-format TRIPWIRE in `scripts-precommit.md`.
+
+### Removed
+
+- `gator init --json` no longer has a `charters` block, and the banner no longer prints a charters line. Nothing in Gator reads either.
+- The Markdown Welcome route `GET /api/welcome/how-gator-works` and `window.GATOR_WELCOME_DOC` are replaced by the HTML document route.
+
 ## [2.24.0] — 2026-10-09
 
 Feature release. **Gator-native entry point:** `.gator/` is now the only repository surface Gator owns. A governed session starts with `gator init`, which hands the participant to a new Gator-owned entry document, `GATOR_INIT.md`. Gator no longer creates, refreshes, backs up, or repairs `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`, so those files stop causing Gator-made merge conflicts. Also: **`gator loop codex`** prepares and starts the opt-in Codex participant profile in one command ([#37](https://github.com/cumberland-laboratories/gator/issues/37)); the Loop workspace gains **Create/History tabs, mode badges, and participant recovery** ([#56](https://github.com/cumberland-laboratories/gator/issues/56)); and the loop protocol states that **the Architect's instructions take precedence** over protocol defaults such as the wait interval.

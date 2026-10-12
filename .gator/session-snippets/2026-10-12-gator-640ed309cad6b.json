@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Inbox: Welcome content shipped; release hold lifted",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "welcome"
+  ],
+  "commit": "640ed309cad6b90e14a5a579bd469b46bab45170",
+  "short_commit": "640ed30",
+  "snippet_id": "snippet-640ed309cad6b",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 15,
+  "previous_commit_in_session": "58e6619782247749207d4d7b15dfd5856d64eb60",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T01:27:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-12-gator-58e6619782247.json"
+  ],
+  "notes": [
+    "The inbox no longer holds releases for the Welcome placeholders. All four",
+    "topics now carry real content, so the hold is lifted for v2.25.0. The",
+    "Docs-view move to HTML documents is the next Welcome-related item."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
