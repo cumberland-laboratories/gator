@@ -71,8 +71,17 @@ def test_document_is_a_cumberland_master_copy(name):
     master_region = REGION_RE.search(MASTER.read_text(encoding="utf-8")).group(0)
     region = REGION_RE.search(text)
     assert region is not None and region.group(0) == master_region
-    for marker in ('<header class="doc-head">', '<div class="meta-grid">',
-                   '<section id="summary">', '<div class="callout">'):
+    # The overview opens with the Gator hero mark instead of the master's
+    # doc-head and Summary (Architect direction 2026-10-11).
+    if name == "gator-overview.html":
+        markers = ('<div class="hero">', '<section id="about">',
+                   '<div class="callout')
+        for gone in ('<header class="doc-head">', '<section id="summary">'):
+            assert gone not in text, gone
+    else:
+        markers = ('<header class="doc-head">', '<div class="meta-grid">',
+                   '<section id="summary">', '<div class="callout">')
+    for marker in markers:
         assert marker in text, marker
     policies = META_CSP_RE.findall(text)
     assert len(policies) == 1
