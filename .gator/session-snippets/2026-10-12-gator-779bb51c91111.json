@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: What Gator can do justifies its capability cards",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "docs"
+  ],
+  "commit": "779bb51c9111112b5594bc91dc058e43fa356934",
+  "short_commit": "779bb51",
+  "snippet_id": "snippet-779bb51c91111",
+  "session_group_key": "anthropic:a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 12,
+  "previous_commit_in_session": "c836d521d9a98527350e0c52059ec22848a571ef",
+  "started_at": "2026-10-11T12:48:31Z",
+  "ended_at": "2026-10-12T01:10:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-c836d521d9a98.json",
+    "src/gator_command/templates/gator-starter/docs/what-gator-can-do.html"
+  ],
+  "notes": [
+    "The capability cards on \"What Gator can do\" now use full justification",
+    "and hyphenation, like the page's body paragraphs. The Cumberland style",
+    "justifies only paragraph elements, and the card text sat directly in",
+    "list items, so it was left-aligned. The lead sentence and the two",
+    "principle lines stay left-aligned as display text."
+  ],
+  "transcript_session_id": "a30045bd-18cf-4627-a735-1fbfeb7489b2",
+  "transcript_ref": null
+}
