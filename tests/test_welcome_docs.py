@@ -46,6 +46,7 @@ WELCOME_FORMAT = {
     "start-a-session.html": '<section id="prompt">',
     "charter-formation-process.html": '<p class="lede">',
     "charter-schema-v1.html": '<p class="lede">',
+    "code-migrations.html": '<p class="lede">',
 }
 
 # Every shipped Gator HTML document (the Welcome topics plus the Docs-only
@@ -54,6 +55,7 @@ WELCOME_FORMAT = {
 GATOR_DOCS = NAMES + [
     "charter-formation-process.html",
     "charter-schema-v1.html",
+    "code-migrations.html",
 ]
 
 # Same delimiters as contracts/compatibility/test_cumberland_narrative_style_parity.py.

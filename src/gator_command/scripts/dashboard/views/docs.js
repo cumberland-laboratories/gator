@@ -28,6 +28,7 @@
     { doc: "start-a-session.html",            label: "Start a session" },
     { doc: "charter-formation-process.html",  label: "Charter formation process" },
     { doc: "charter-schema-v1.html",          label: "Charter schema" },
+    { doc: "code-migrations.html",            label: "Code migrations" },
   ];
 
   // Module-local: survives reopening Docs while the page stays loaded.

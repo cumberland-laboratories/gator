@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<!--
+  Code migrations - Gator document shipped with Gator.
+  Built from the Cumberland master template
+  (reference-notes/cumberland-html-document-template.html).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Code migrations</title>
+
+  <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
+    :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
+
+      /* Neutral scale — 9-step Tailwind-style ramp. */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.85rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
+
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
+
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
+
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* Footer — small centered muted text with top-border. */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: center;
+    }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+
+    /* Page-local: Welcome format (lead sentence instead of doc-head). */
+    .lede {
+      font-size: 1.3rem;
+      line-height: 1.5;
+      font-weight: 500;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      margin: 0.5rem 0 2.25rem;
+      max-width: 52rem;
+    }
+    .principle {
+      font-size: 1.15rem;
+      line-height: 1.5;
+      font-weight: 600;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      border-left: 4px solid var(--teal);
+      padding: 0.15rem 0 0.15rem 1rem;
+      margin: 0.25rem 0 1.25rem;
+      max-width: 52rem;
+    }
+    /* Narrow layer cards stay left-aligned: justifying short bullets in
+       ~250px columns opens wide word gaps. */
+    .steps > li {
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .layers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0 1.25rem;
+    }
+    .layers > div {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-top: 4px solid var(--gray-400);
+      border-radius: 6px;
+      padding: 0.9rem 1.1rem;
+    }
+    .layers > div.legacy   { border-top-color: var(--blue); }
+    .layers > div.contract { border-top-color: var(--amber); }
+    .layers > div.target   { border-top-color: var(--teal); }
+    .layers h3 { font-size: 1.02rem; margin: 0 0 0.15rem; color: var(--gray-900); }
+    .layers .q { font-style: italic; color: var(--gray-600); font-size: 0.92rem; margin-bottom: 0.6rem; text-align: left; }
+    .layers h4 {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gray-600);
+      margin: 0.7rem 0 0.2rem;
+    }
+    .layers ul { margin: 0.1rem 0 0.2rem 1.1rem; font-size: 0.92rem; }
+    .layers li, .layers p { text-align: left; hyphens: manual; }
+    .layers .life { margin-top: 0.7rem; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); text-align: left; }
+    pre.skeleton { font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+
+<p class="lede">A migration has three truths: what the old system does, what the new system promises to preserve, and how the new system works. Gator keeps each in its own charter, so an agent loads only the one the change needs.</p>
+
+<section id="problem">
+  <h2>Why migrations need their own charter structure</h2>
+  <p>Without structure, migration knowledge accumulates in one chronological charter. Legacy behaviour, porting decisions, review findings, retired designs and target implementation details pile up together, and a single charter can grow to thousands of lines. Every change then loads all of it.</p>
+  <p>Reviewers must recover a small number of active invariants from that history. Relevant constraints become hard to locate, contradictions are easy to import from superseded milestones, and new findings are appended as more prose instead of sharpening a small current contract. Review rounds repeat because the governing context is too large and too historical. Some findings will always be ordinary implementation mistakes; the structural problem is that the map stopped being a map.</p>
+  <div class="callout data">
+    <p>The goal is a sharper active map, not a loss of institutional memory. History stays in Git and artifacts; charters hold what is true and binding now.</p>
+  </div>
+</section>
+
+<section id="layers">
+  <h2>Three layers of charters</h2>
+  <div class="figure">
+    <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="layers-title layers-desc">
+      <title id="layers-title">Three charter layers for a migration</title>
+      <desc id="layers-desc">At the top, a small hub box: "migration-cross-cutting", shared rules for all three layers. Below it, three boxes from left to right, joined by arrows. First, "Legacy source", files named legacy-star, answering "What does the old system do?"; lifecycle: frozen after discovery. Second, "Migration contract", files named migration-star, answering "What must stay the same, and how do we prove it?"; lifecycle: active until cutover. Third, "Target implementation", files named target-star, answering "How does the new system work now?"; lifecycle: survives the migration. Dashed lines connect the hub to each layer.</desc>
+      <rect x="250" y="12" width="220" height="44" rx="8" fill="white" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="360" y="32" font-size="12.5" fill="#6b46c1" font-weight="700" text-anchor="middle">migration-cross-cutting</text>
+      <text x="360" y="48" font-size="10.5" fill="#374151" text-anchor="middle">shared rules for all three layers</text>
+      <line x1="300" y1="56" x2="120" y2="96" stroke="#9ca3af" stroke-width="1.3" stroke-dasharray="4 3"/>
+      <rect x="20" y="96" width="200" height="150" rx="8" fill="white" stroke="#4a72b0" stroke-width="2"/>
+      <text x="120" y="122" font-size="14" fill="#385a90" font-weight="700" text-anchor="middle">Legacy source</text>
+      <text x="120" y="141" font-family="Consolas, Monaco, monospace" font-size="11.5" fill="#385a90" text-anchor="middle">legacy-*</text>
+      <text x="120" y="168" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">What does the old system</text>
+      <text x="120" y="185" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">do?</text>
+      <text x="120" y="232" font-size="10.5" fill="#385a90" font-weight="700" text-anchor="middle" letter-spacing="0.5">FROZEN AFTER DISCOVERY</text>
+      <line x1="222" y1="171" x2="250" y2="171" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="258,171 250,166 250,176" fill="#4b5563"/>
+      <line x1="360" y1="56" x2="360" y2="96" stroke="#9ca3af" stroke-width="1.3" stroke-dasharray="4 3"/>
+      <rect x="260" y="96" width="200" height="150" rx="8" fill="#fffbeb" stroke="#d48b0a" stroke-width="2"/>
+      <text x="360" y="122" font-size="14" fill="#92400e" font-weight="700" text-anchor="middle">Migration contract</text>
+      <text x="360" y="141" font-family="Consolas, Monaco, monospace" font-size="11.5" fill="#92400e" text-anchor="middle">migration-*</text>
+      <text x="360" y="168" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">What must stay the same,</text>
+      <text x="360" y="185" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">and how do we prove it?</text>
+      <text x="360" y="232" font-size="10.5" fill="#92400e" font-weight="700" text-anchor="middle" letter-spacing="0.5">ACTIVE UNTIL CUTOVER</text>
+      <line x1="462" y1="171" x2="490" y2="171" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="498,171 490,166 490,176" fill="#4b5563"/>
+      <line x1="420" y1="56" x2="600" y2="96" stroke="#9ca3af" stroke-width="1.3" stroke-dasharray="4 3"/>
+      <rect x="500" y="96" width="200" height="150" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2"/>
+      <text x="600" y="122" font-size="14" fill="#148a92" font-weight="700" text-anchor="middle">Target implementation</text>
+      <text x="600" y="141" font-family="Consolas, Monaco, monospace" font-size="11.5" fill="#148a92" text-anchor="middle">target-*</text>
+      <text x="600" y="168" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">How does the new system</text>
+      <text x="600" y="185" font-size="12" fill="#374151" font-style="italic" text-anchor="middle">work now?</text>
+      <text x="600" y="232" font-size="10.5" fill="#148a92" font-weight="700" text-anchor="middle" letter-spacing="0.5">SURVIVES THE MIGRATION</text>
+    </svg>
+    <div class="caption">Figure 1 — three families of charters, each answering one question, with a small shared hub. Arrows show the direction of authority: observed behaviour informs the contract, and the contract governs the implementation.</div>
+  </div>
+
+  <div class="layers">
+    <div class="legacy">
+      <h3>Legacy source</h3>
+      <p class="q">What does the original system actually do?</p>
+      <h4>Owns</h4>
+      <ul>
+        <li>canonical entry points and call paths</li>
+        <li>source data reads and writes</li>
+        <li>ordering, deduplication, missing-value and stateful-processing semantics</li>
+        <li>hard-coded parameters and lookup behaviour</li>
+        <li>ambiguous variants and unresolved questions about the production source</li>
+        <li>source-specific tripwires that a port must understand</li>
+      </ul>
+      <h4>Does not own</h4>
+      <ul>
+        <li>target implementation details</li>
+        <li>“ported at milestone X” chronology or deployment history</li>
+        <li>accepted divergences (it links to the contract)</li>
+      </ul>
+      <p class="life">Lifecycle: relatively frozen after the source baseline is established. It changes only when evidence corrects our understanding of the old system.</p>
+    </div>
+    <div class="contract">
+      <h3>Migration contract</h3>
+      <p class="q">What equivalence or intentional difference are we committing to, and how will we prove it?</p>
+      <h4>Owns</h4>
+      <ul>
+        <li>the source-to-target semantic mapping</li>
+        <li>invariants that must survive the migration</li>
+        <li>explicitly accepted divergences and their rationale</li>
+        <li>source precedence when references disagree</li>
+        <li>parity fixtures, acceptance gates and cutover evidence</li>
+        <li>temporary safeguards and their removal conditions</li>
+        <li>open decisions that materially affect equivalence</li>
+      </ul>
+      <h4>Does not own</h4>
+      <ul>
+        <li>complete descriptions of either codebase</li>
+        <li>a log of every review finding and fix</li>
+        <li>retired design alternatives once a decision is final</li>
+      </ul>
+      <p class="life">Lifecycle: active during the migration. At cutover it shrinks to the few permanent compatibility constraints, or moves out of active routing into an archival artifact.</p>
+    </div>
+    <div class="target">
+      <h3>Target implementation</h3>
+      <p class="q">How does the replacement work now?</p>
+      <h4>Owns</h4>
+      <ul>
+        <li>current public surfaces and module ownership</li>
+        <li>function names and dependency direction</li>
+        <li>tables, files, procedures, privileges and other external state read or written</li>
+        <li>active operational and security tripwires</li>
+        <li>negative space: what the module deliberately does not do</li>
+        <li>links to the contract where behaviour is parity-sensitive</li>
+      </ul>
+      <h4>Does not own</h4>
+      <ul>
+        <li>milestone-by-milestone landing history or superseded designs</li>
+        <li>detailed test transcripts or review IDs</li>
+        <li>repeated explanations of the old system’s behaviour</li>
+      </ul>
+      <p class="life">Lifecycle: survives the migration as an ordinary code charter, edited in place as behaviour changes, never with a new “landed in milestone N” section per increment.</p>
+    </div>
+  </div>
+  <p>A small <code>migration-cross-cutting.md</code> holds the rules that span all three layers: authority, source precedence, change routing, shared invariants and evidence tiers. It is a hub, not a fourth lifecycle layer, and it must not become another milestone history.</p>
+</section>
+
+<section id="one-owner">
+  <h2>One fact, one owner</h2>
+  <p class="principle">Every material fact has exactly one authoritative charter. Other layers link to it instead of restating it.</p>
+  <p>Take a deduplication rule: when two records match, which one wins?</p>
+  <div class="table-wrap">
+    <table class="table-teal">
+      <thead><tr><th>Fact</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>The old system keeps the first matching record in file order</td><td>Legacy source charter</td></tr>
+        <tr><td>Whether the new system must match that, and any accepted divergence</td><td>Migration contract</td></tr>
+        <tr><td>How the new code’s ordering and tie-breaker implement the current behaviour</td><td>Target implementation charter</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>This prevents three similar paragraphs from drifting apart, and it forces reviewers to keep three things distinct: observed source truth, migration policy, and implementation mechanism.</p>
+  <div class="callout warn">
+    <span class="label">Source precedence</span>
+    <p>Observed executable behaviour of the old system outranks its comments and plans. The active migration contract decides whether the target must match or intentionally diverge. The target charter describes how the approved contract is implemented; it cannot silently redefine the contract.</p>
+  </div>
+</section>
+
+<section id="routing">
+  <h2>Route each change to the smallest charter</h2>
+  <p>The value of the split comes from selective routing. Three sections in one large file would keep the same context problem. <code>INDEX.md</code> maps precise code paths to the smallest target charter, and names the legacy and contract charters as conditional context.</p>
+  <div class="table-wrap">
+    <table class="table-blue">
+      <thead><tr><th>Change</th><th>Charters to read and update</th></tr></thead>
+      <tbody>
+        <tr><td>Internal refactor, behaviour unchanged</td><td>The target charter only</td></tr>
+        <tr><td>Change to output ordering or matching semantics</td><td>Target charter + the migration contract</td></tr>
+        <tr><td>Newly discovered behaviour of the old system</td><td>Legacy charter; the contract too only if the promise changes</td></tr>
+        <tr><td>More parity fixtures, no contract change</td><td>Target test entry or a test artifact; do not rewrite the legacy charter</td></tr>
+        <tr><td>Deployment-driver change</td><td>Target deployment charter; the contract only if cutover evidence changes</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout info">
+    <span class="label">Rule</span>
+    <p>Never touch all three layers merely to satisfy a hook. A charter changes only when a fact it owns changes. Code changes normally touch one target charter.</p>
+  </div>
+</section>
+
+<section id="invariants">
+  <h2>Shared migration invariants</h2>
+  <p>These belong in the cross-cutting charter, because they apply to every step of the migration:</p>
+  <ul>
+    <li><strong>Parity claims require executable evidence,</strong> not code-shape similarity.</li>
+    <li><strong>Ordering, missing values, field widths, duplicate selection and stateful processing are business behaviour</strong> whenever the old system makes outcomes depend on them.</li>
+    <li><strong>Intentional divergences are named in the contract,</strong> with a bounded scope and a fixture or operational gate.</li>
+    <li><strong>Dynamic identifiers are validated before they are interpolated,</strong> and destructive targets fail closed.</li>
+    <li><strong>Production source data stays read-only during the migration</strong> unless an Architect-approved cutover contract says otherwise.</li>
+    <li><strong>Full-scale runs stay guarded</strong> until retained evidence establishes a safe operating envelope.</li>
+  </ul>
+
+  <h3>Evidence tiers</h3>
+  <ol class="steps">
+    <li><strong>Local unit and structural tests</strong> prove helper and construction contracts.</li>
+    <li><strong>Test-environment parity fixtures</strong> prove deployed behaviour on controlled data.</li>
+    <li><strong>Probes against real data</strong> prove shape, cost, scale and operational safety.</li>
+    <li class="step-done"><strong>Trusted outputs from the old system</strong> prove business parity, when they are available.</li>
+  </ol>
+  <div class="callout warn">
+    <span class="label">Rule</span>
+    <p>Passing a lower tier never implies that a higher tier passed.</p>
+  </div>
+</section>
+
+<section id="compression">
+  <h2>Keep every charter small</h2>
+  <p>The structure only helps if each charter stays sharp. The layers must enforce the charter guide, not reproduce the old content under more file names.</p>
+  <ul>
+    <li>Aim for 30–80 lines per charter; split at around 100.</li>
+    <li>Keep function entries to roughly 3–5 lines plus true tripwires.</li>
+    <li>Describe the current state, not the sequence by which it arrived.</li>
+    <li>Put SQL fragments, test matrices, review dispositions and performance evidence in artifacts or test files.</li>
+    <li>Link to an artifact for deep rationale; do not paste the artifact into a charter.</li>
+    <li>Replace obsolete statements instead of keeping them “for history”. Git has the history.</li>
+    <li>A tripwire must change an implementer’s behaviour. A note that does not constrain work is not a tripwire.</li>
+  </ul>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Material</th><th>Where it belongs instead</th></tr></thead>
+      <tbody>
+        <tr><td>Current priorities and completion status</td><td><code>roadmap.md</code>, pulse, or a migration status artifact</td></tr>
+        <tr><td>Proposed implementation sequence</td><td>An implementation plan artifact</td></tr>
+        <tr><td>Deep architectural reasoning</td><td>A design artifact</td></tr>
+        <tr><td>Review findings awaiting action</td><td><code>whiteboard.md</code></td></tr>
+        <tr><td>Deployment output and query profiles</td><td>Logs in <code>.gator/vault/</code></td></tr>
+        <tr><td>Historical decisions and the exact change sequence</td><td>Git commits and session snippets</td></tr>
+        <tr><td>Operator instructions</td><td>The project’s operations documentation</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="layout">
+  <h2>File layout and templates</h2>
+  <p>Keep all migration charters directly in <code>.gator/charters/</code>, with a family prefix. Do not nest them in subfolders: the pre-commit hook matches staged charters by file name, so nested paths cause false <code>charter-index-gap</code> failures. Split target charters by code domain, not by milestone.</p>
+  <pre><code>.gator/charters/
+  migration-cross-cutting.md
+
+  legacy-&lt;system&gt;-&lt;area&gt;.md
+  migration-&lt;step&gt;-contract.md
+  target-&lt;platform&gt;-&lt;domain&gt;.md</code></pre>
+  <p>Start each family from a template:</p>
+  <h3>Legacy source charter</h3>
+  <pre class="skeleton"><code># Legacy Source Charter: &lt;system/domain&gt;
+
+## Owns
+- Observed behaviour of the original executable system.
+- Entry points, reads/writes, ordering, missing-value rules, tripwires.
+
+## Does Not Own
+- Migration acceptance policy or target implementation mechanics.
+- Porting chronology.
+
+## Flow
+### `&lt;source entry point&gt;`
+File: `&lt;path&gt;`
+What it does; data read and written.
+← caller
+→ dependency
+! Non-obvious source behaviour that changes outcomes.
+
+## Open Source Ambiguities
+- Questions that need production evidence or owner confirmation.
+
+## Connections
+-&gt; Relevant migration contract (link; do not restate it).</code></pre>
+  <h3>Migration contract</h3>
+  <pre class="skeleton"><code># Migration Contract: &lt;step/domain&gt;
+
+## Scope
+Source boundary, target boundary, and current migration status.
+
+## Required Equivalence
+- Behaviours the target must preserve.
+
+## Accepted Divergences
+- Bounded difference, rationale, affected surface, proof fixture.
+
+## Acceptance Gates
+- Local, test-environment, real-scale and source-output evidence
+  required for cutover.
+
+## Open Decisions
+- Unresolved choices that materially affect equivalence.
+
+## Cutover and Retirement
+- Conditions to activate the target and retire migration-only
+  safeguards.
+
+## Connections
+-&gt; Legacy authority and target implementation charter.</code></pre>
+  <h3>Target implementation charter</h3>
+  <pre class="skeleton"><code># Target Implementation Charter: &lt;domain&gt;
+
+## Owns
+- Current landed implementation, public surfaces, state access,
+  and active tripwires.
+
+## Does Not Own
+- Original-system semantics or migration policy (link to those).
+- Milestone and review history.
+
+## Current Surface
+### `&lt;function/object&gt;`
+File: `&lt;path&gt;`
+Reads/writes and behaviour.
+← caller
+→ dependency
+! Implementation constraint that must survive changes.
+
+## Negative Space
+- Capabilities deliberately absent from this implementation.
+
+## Connections
+-&gt; Relevant migration contract and neighbouring target charters.</code></pre>
+</section>
+
+<section id="adopt">
+  <h2>Adopting the structure: start with a pilot</h2>
+  <p>Restructure one step first, the one with the most review pressure and the clearest overlap between source semantics, migration decisions and target implementation.</p>
+  <ol class="steps">
+    <li>Finish any in-flight product change first. Do not mix a governance rewrite into a product-code diff.</li>
+    <li>In a separate, governance-only commit, extract that step’s material from the oversized charters.</li>
+    <li>Build the first three-file chain: legacy charter → migration contract → target charter.</li>
+    <li>Add a narrower target charter if the remaining material would push a target charter past the size limit.</li>
+    <li>Rewrite <code>INDEX.md</code> so work on that step loads only the cross-cutting charter, its target charter, and the contract when semantics or parity change.</li>
+    <li>Run the next change under the new routing. Watch whether review findings become fewer, more local and less repetitive.</li>
+    <li class="step-done">If the pilot works, apply the structure to the other steps, each in its own governance-only commit.</li>
+  </ol>
+  <p>Do not delete information during the pilot. Material that is valuable but not charter-shaped moves to an artifact or stays recoverable in Git.</p>
+</section>
+
+<section id="success">
+  <h2>How you know it worked</h2>
+  <ul>
+    <li>A change in one area can be reviewed without loading the history of unrelated areas.</li>
+    <li>Each important invariant has a single obvious authority.</li>
+    <li>Target code changes normally touch one target charter, not three layers.</li>
+    <li>Retired milestone wording no longer competes with current contracts.</li>
+    <li>Pre-commit charter findings become specific rather than bulk noise.</li>
+    <li>Review rounds converge on implementation defects instead of rediscovering scope and source-precedence questions.</li>
+    <li>A new reviewer can explain the source behaviour, the migration promise and the target mechanism without confusing them.</li>
+  </ul>
+  <div class="table-wrap">
+    <table class="table-red">
+      <thead><tr><th>Risk</th><th>Guardrail</th></tr></thead>
+      <tbody>
+        <tr><td>The three families become three copies</td><td>Enforce one fact, one owner, and cross-link instead of restating.</td></tr>
+        <tr><td>Contracts become activity diaries</td><td>Keep status and chronology in artifacts and Git; contracts hold only active commitments.</td></tr>
+        <tr><td>Excessive fragmentation</td><td>Split by code domain, not by file or milestone; the index must make the right path obvious.</td></tr>
+        <tr><td>Charter rewrites obscure product changes</td><td>Use governance-only commits, never combined with product fixes.</td></tr>
+        <tr><td>Useful rationale disappears</td><td>Move deep rationale to artifacts, keep links, and rely on Git for removed history.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="doc-foot">
+  &copy; 2026 Cumberland Laboratories, Inc.
+</footer>
+
+</body>
+</html>

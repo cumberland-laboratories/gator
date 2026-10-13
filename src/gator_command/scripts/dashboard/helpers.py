@@ -31,6 +31,7 @@ WELCOME_DOC_NAMES = frozenset({
     "start-a-session.html",
     "charter-formation-process.html",
     "charter-schema-v1.html",
+    "code-migrations.html",
 })
 
 

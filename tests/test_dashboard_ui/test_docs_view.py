@@ -17,6 +17,7 @@ EXPECTED = [
     ("start-a-session.html", "Start a session"),
     ("charter-formation-process.html", "Charter formation process"),
     ("charter-schema-v1.html", "Charter schema"),
+    ("code-migrations.html", "Code migrations"),
 ]
 SHIPPED = (Path(__file__).resolve().parents[2] / "src" / "gator_command"
            / "templates" / "gator-starter" / "docs")
