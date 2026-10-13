@@ -44,7 +44,17 @@ WELCOME_FORMAT = {
     "what-gator-can-do.html": '<p class="lede">',
     "gatorize-a-repo.html": '<p class="lede">',
     "start-a-session.html": '<section id="prompt">',
+    "charter-formation-process.html": '<p class="lede">',
+    "charter-schema-v1.html": '<p class="lede">',
 }
+
+# Every shipped Gator HTML document (the Welcome topics plus the Docs-only
+# documents). All are Cumberland master copies in the Welcome format and
+# are delivered by gatorize and gator update.
+GATOR_DOCS = NAMES + [
+    "charter-formation-process.html",
+    "charter-schema-v1.html",
+]
 
 # Same delimiters as contracts/compatibility/test_cumberland_narrative_style_parity.py.
 REGION_RE = re.compile(
@@ -69,7 +79,7 @@ def _session_prompt_from_dashboard():
     return "".join(re.findall(r'"([^"]*)"', m.group(1)))
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", GATOR_DOCS)
 def test_document_is_a_cumberland_master_copy(name):
     """Filled and cut down from the master: no placeholder left, the shared
     style region byte-identical, the master's structure present, and the
@@ -105,7 +115,7 @@ def test_document_is_a_cumberland_master_copy(name):
         assert "<script" not in text.lower()
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", GATOR_DOCS)
 def test_document_is_standalone_and_accessible(name):
     """No external resource or request; every diagram has a text title."""
     text = _read(name)
@@ -145,13 +155,13 @@ def test_gatorize_and_update_deliver_the_documents(tmp_path):
     subprocess.run(["git", "init", "-q", str(repo)], check=True, timeout=10)
     gatorize.action_install_gator(repo)
     docs = repo / ".gator" / "docs"
-    for name in NAMES:
+    for name in GATOR_DOCS:
         assert (docs / name).read_bytes() == (DOCS / name).read_bytes(), name
         (docs / name).unlink()
 
     plan = update.plan_updates(STARTER, repo / ".gator", repo)
     planned = {Path(dest).resolve(): action for action, _src, dest in plan}
-    for name in NAMES:
+    for name in GATOR_DOCS:
         assert planned.get((docs / name).resolve()) == "add", name
 
 

@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard: the Docs view lists Gator HTML documents only, with readable labels",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "docs-view"
+  ],
+  "commit": "cd6f881aee338040bd8e05aa06afba90b89e073c",
+  "short_commit": "cd6f881",
+  "snippet_id": "snippet-cd6f881aee338",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "3242309ea76dcd8e379a37e55494cc0f6d6f5eb5",
+  "started_at": "2026-10-12T23:59:39Z",
+  "ended_at": "2026-10-12T23:59:39Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-12-gator-3242309ea76dc.json",
+    "src/gator_command/scripts/dashboard/views/repo.js",
+    "tests/test_dashboard_ui/test_docs_view.py",
+    "tests/test_dashboard_ui/test_responsive_shell_seed.py"
+  ],
+  "notes": [
+    "The Docs sidebar now lists only Gator narrative HTML documents, the",
+    "`.html` files directly in `.gator/docs/`. Markdown and the repo-root",
+    "`docs/` folder are no longer listed there; they stay on disk and in the",
+    "Repo tree. The four Welcome documents come first, in Welcome order, then",
+    "any other document alphabetically. Every entry has a reader-friendly",
+    "label (\"Start a session\", not `start-a-session.html`). The first",
+    "document opens automatically in the sandboxed inline preview, and an",
+    "empty list tells the user to run Update."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
