@@ -17,21 +17,25 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent  # scripts/ (one up from da
 DASHBOARD_DIR = Path(__file__).resolve().parent       # dashboard/
 COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root
 
-# The four Welcome topics are shipped starter-template HTML documents (the
-# same files gatorize/update install into .gator/docs/). The name set is
-# closed: request input is only ever tested for membership, never joined
-# onto a path.
+# The shipped Gator HTML documents: the four Welcome topics plus the
+# Docs-view documents (the same files gatorize/update install into
+# .gator/docs/). Welcome and the repo-independent Docs view both read them
+# from the package. The name set is closed: request input is only ever
+# tested for membership, never joined onto a path. Adding a document means
+# adding its name here (tests check every shipped .html is listed).
 WELCOME_DOCS_DIR = SCRIPTS_DIR.parent / "templates" / "gator-starter" / "docs"
 WELCOME_DOC_NAMES = frozenset({
     "gator-overview.html",
     "what-gator-can-do.html",
     "gatorize-a-repo.html",
     "start-a-session.html",
+    "charter-formation-process.html",
+    "charter-schema-v1.html",
 })
 
 
 def read_welcome_html(name):
-    """Return one shipped Welcome document's text, or None.
+    """Return one shipped Gator document's text (Welcome or Docs), or None.
 
     None when `name` is not one of `WELCOME_DOC_NAMES` or the file is
     unreadable.

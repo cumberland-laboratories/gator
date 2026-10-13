@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charter formation process and Charter schema as Gator HTML documents",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "docs-view",
+    "docs",
+    "charters"
+  ],
+  "commit": "d1c14bde9c82f162d75092fefedb51753eb5e017",
+  "short_commit": "d1c14bd",
+  "snippet_id": "snippet-d1c14bde9c82f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "cd6f881aee338040bd8e05aa06afba90b89e073c",
+  "started_at": "2026-10-13T00:02:04Z",
+  "ended_at": "2026-10-13T00:02:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/docs/charter-formation-process.html",
+    ".gator/docs/charter-schema-v1.html",
+    ".gator/session-snippets/2026-10-12-gator-cd6f881aee338.json",
+    "src/gator_command/templates/gator-starter/docs/charter-formation-process.html",
+    "src/gator_command/templates/gator-starter/docs/charter-schema-v1.html",
+    "tests/test_welcome_docs.py"
+  ],
+  "notes": [
+    "The first two Docs-view documents beyond Welcome now ship as Cumberland",
+    "narrative HTML. *Charter formation process* sets the \"not supposed to /",
+    "supposed to\" contrast, a three-phase diagram of the nine steps, and the",
+    "steps themselves, with \"Do not invent. Extract from the code.\" as a",
+    "callout. *Charter schema* shows an annotated charter file marked Error,",
+    "Warn or Optional line by line, then the rule tables for charters,",
+    "function entries, INDEX.md, the cross-cutting charter and the severity",
+    "model."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

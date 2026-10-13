@@ -165,6 +165,20 @@ def test_gatorize_and_update_deliver_the_documents(tmp_path):
         assert planned.get((docs / name).resolve()) == "add", name
 
 
+def test_every_shipped_document_is_served_and_listed():
+    """Each .html in templates/gator-starter/docs/ is in the closed route
+    allowlist (WELCOME_DOC_NAMES) and in the Docs view's DOCS list, and
+    neither lists a document that is not shipped."""
+    from dashboard.helpers import WELCOME_DOC_NAMES
+    shipped = {p.name for p in DOCS.glob("*.html")}
+    assert set(GATOR_DOCS) == shipped
+    assert set(WELCOME_DOC_NAMES) == shipped
+    docs_js = (SCRIPTS_DIR / "dashboard" / "views" / "docs.js").read_text(encoding="utf-8")
+    listed = re.findall(r'\{ doc: "([^"]+)",', docs_js)
+    assert set(listed) == shipped and len(listed) == len(shipped), listed
+    assert listed[:len(NAMES)] == NAMES  # Welcome topics first, in Welcome order
+
+
 def test_gatorize_page_prompt_matches_dashboard():
     """Gatorize a repo repeats the session-opening prompt for the first
     session; it must be the Dashboard's exact SESSION_PROMPT."""

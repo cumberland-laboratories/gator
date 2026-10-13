@@ -35,8 +35,19 @@ the loop protocol). See `CHANGELOG.md` for release detail.
 and all four topics carry real content in the Welcome format (no template
 title block or Summary; a company footer). The release hold is lifted.
 
-**Next (Architect, 2026-10-10):** the Docs view should move to the same
-model as Welcome: user-facing HTML documents in sandboxed frames.
+**Docs view (2026-10-13, on `dev`):** Docs is now Gator's documentation
+library, like docs.python.org: always enabled, repository-independent,
+the shipped HTML documents read from the package (Welcome topics, Charter
+formation process, Charter schema). Repo-specific material belongs in
+`.gator/blueprints/` and the charters. Next: convert more documents one
+by one. Rough edges to tidy (small, unfiled):
+- The shared document route is still named `/api/welcome/docs/`; rename
+  to a neutral name (touches tests and the snapshot).
+- `gator update` still copies the HTML documents into each repo's
+  `.gator/docs/`, which the Dashboard no longer reads; decide whether to
+  keep them for agents and offline reading.
+- In Docs, "Start a session"'s Copy button has no Dashboard channel, so it
+  falls back to manual copy; give the Docs frame Welcome's copy channel.
 
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:

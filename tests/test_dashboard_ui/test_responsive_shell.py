@@ -47,7 +47,6 @@ Live coverage:
   isolate the pre-fetch first-paint render),
   `test_click_collapse_shrinks_sidebar_to_32px`,
   `test_resize_then_collapse_actually_collapses_to_32px`,
-  `test_collapse_in_docs_mode_preserves_button` (docs-filter path),
   `test_resize_handle_hidden_while_collapsed`,
   `test_sidebar_collapse_state_persists_per_repo`.
 - §7.6 Sidebar overflow (80-file expanded tree scrolls):
@@ -544,20 +543,6 @@ def test_resize_then_collapse_actually_collapses_to_32px(
         f"got {collapsed_width} (expected ~32px)")
 
 
-def test_collapse_in_docs_mode_preserves_button(page, dashboard_fleet):
-    """Docs filter re-renders the sidebar innerHTML — collapse
-    button must survive because the docs render path routes through
-    `renderSidebarShell` (Slice 2 F1).
-    """
-    _navigate_to_docs(page, dashboard_fleet, "alpha")
-    btn = page.locator(".repo-sidebar-collapse-btn")
-    assert btn.is_visible(), (
-        "Collapse button clobbered by Docs render path")
-    # And it's clickable.
-    btn.click()
-    assert page.locator(".repo-sidebar.collapsed").count() == 1
-
-
 def test_resize_handle_hidden_while_collapsed(page, dashboard_fleet):
     """Adjacent-sibling CSS rule `.repo-sidebar.collapsed +
     #repo-resize-handle { display: none }` hides the sibling resize
@@ -920,7 +905,6 @@ def test_no_sidebar_innerHTML_writes_outside_renderSidebarShell():
     live re-render pins:
     - `test_sidebar_collapse_button_present_before_files_fetch_completes`
       (initial mount path)
-    - `test_collapse_in_docs_mode_preserves_button` (Docs render path)
     A future PR that introduces a new sidebar-write alias AND
     bypasses `renderSidebarShell` would remove the collapse button
     from its render path; the corresponding live pin fails

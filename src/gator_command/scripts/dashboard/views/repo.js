@@ -332,29 +332,6 @@
     "loops",
   ]);
 
-  // Docs view: reader-friendly labels for the shipped Gator documents, and
-  // the Welcome documents first in Welcome-tab order (keep aligned with
-  // TOPICS in views/welcome.js). Other .gator/docs/*.html files follow
-  // alphabetically, labelled by docsLabel().
-  const DOCS_ORDER = [
-    "gator-overview.html", "what-gator-can-do.html",
-    "gatorize-a-repo.html", "start-a-session.html",
-  ];
-  const DOCS_LABELS = {
-    "gator-overview.html": "Gator overview",
-    "what-gator-can-do.html": "What Gator can do",
-    "gatorize-a-repo.html": "Gatorize a repo",
-    "start-a-session.html": "Start a session",
-    "charter-formation-process.html": "Charter formation process",
-    "charter-schema-v1.html": "Charter schema",
-  };
-  // "zeta-notes.html" → "Zeta notes".
-  function docsLabel(name) {
-    if (DOCS_LABELS[name]) return DOCS_LABELS[name];
-    const words = name.replace(/\.html$/i, "").replace(/[-_]+/g, " ").trim();
-    return words.charAt(0).toUpperCase() + words.slice(1);
-  }
-
   // Gator-shipped default files in procedures/ and reference-notes/.
   // These are template content — hide them so only user-created files
   // and the README/_template show in the dashboard.
@@ -460,7 +437,7 @@
   // teardown() clears lifecycle resources ONLY — never _treeState (that
   // persistence is what restores the user's place when they return).
   const _repoView = {
-    repoName: null, container: null, version: null, filter: null,
+    repoName: null, container: null, version: null,
     timerId: null, popHandler: null, lastFp: null, pinnedFile: null,
   };
   const POLL_INTERVAL_MS = 5000;
@@ -524,7 +501,6 @@
   async function pollRepoFiles() {
     if (document.hidden) return;        // pause when the tab is not visible
     if (isPinnedView()) return;         // never reseat under a pinned history view
-    if (_repoView.filter === "docs") return;
     try {
       const files = await _fetchRepoFiles();
       if (!files) return;
@@ -807,14 +783,13 @@
 
   // ── main render ───────────────────────────────────────────────────────────
 
-  window.GatorViews.repo = function (data, container, repoName, version, filter) {
+  window.GatorViews.repo = function (data, container, repoName, version) {
     // Clear any prior view's timer/listeners (idempotent) even if the shell
     // teardown hook is absent, then set up this mount.
     teardownRepoView();
     _repoView.repoName = repoName;
     _repoView.container = container;
     _repoView.version = version || null;
-    _repoView.filter = filter || null;
     _repoView.pinnedFile = null;
     _repoView.lastFp = null;
 
@@ -844,20 +819,20 @@
       );
     }
 
-    loadFileList(repoName, container, version, filter);
+    loadFileList(repoName, container, version);
 
     // Expose the teardown hook to the shell (dashboard.js) so it stops the
     // poll timer + listeners when the user navigates away from the repo view.
     window._gatorRepoTeardown = teardownRepoView;
 
-    // Auto-refresh polling — live views only (skip docs filter and pinned
-    // branch-version history, which is immutable).
-    if (filter !== "docs" && !version) {
+    // Auto-refresh polling — live views only (skip pinned branch-version
+    // history, which is immutable).
+    if (!version) {
       _repoView.timerId = setInterval(pollRepoFiles, POLL_INTERVAL_MS);
     }
   };
 
-  async function loadFileList(repoName, container, version, filter) {
+  async function loadFileList(repoName, container, version) {
     const sidebar = container.querySelector("#repo-file-list");
     const content = container.querySelector("#repo-file-content");
 
@@ -879,53 +854,6 @@
       const files = data.files || [];
       const filtered = filterFiles(files);
       resetTreeStateFor(repoName);
-
-      // ── Docs filter: Gator narrative HTML documents only — the .html
-      // files directly in .gator/docs/. Markdown and the repo-root docs/
-      // folder stay on disk (and in the Repo tree) but are not listed here.
-      if (filter === "docs") {
-        const docsFiles = filtered
-          .filter(f => f.dir === "docs" && /\.html$/i.test(f.name))
-          .sort((a, b) => {
-            const ra = DOCS_ORDER.indexOf(a.name), rb = DOCS_ORDER.indexOf(b.name);
-            if (ra !== rb) return (ra < 0 ? Infinity : ra) - (rb < 0 ? Infinity : rb);
-            return a.name.localeCompare(b.name);
-          });
-        let html = `<div class="repo-sidebar-header">Docs</div>`;
-        if (docsFiles.length === 0) {
-          html += '<div class="muted docs-empty" style="padding:8px 12px;font-size:12px">No Gator documents in .gator/docs/ yet. Run Update on this repository to install them.</div>';
-        } else {
-          for (const f of docsFiles) {
-            const label = docsLabel(f.name);
-            html += `<button class="repo-file-item indented" data-path="${escHtml(f.path)}">${escHtml(label)}</button>`;
-          }
-        }
-        renderSidebarShell(sidebar, html);
-
-        // File click handlers
-        sidebar.querySelectorAll(".repo-file-item").forEach(item => {
-          item.addEventListener("click", function () {
-            sidebar.querySelectorAll(".repo-file-item").forEach(i => i.classList.remove("active"));
-            this.classList.add("active");
-            loadFile(repoName, this.dataset.path, content, window._gatorRepoVersion);
-          });
-        });
-
-        // Open the first document. HTML renders inline in the sandboxed
-        // preview frame (loadFile), so auto-loading needs no user gesture.
-        const first = docsFiles[0];
-        if (first) {
-          const firstItem = sidebar.querySelector(`.repo-file-item[data-path="${first.path.replace(/"/g, '&quot;')}"]`);
-          if (firstItem) {
-            firstItem.classList.add("active");
-            loadFile(repoName, first.path, content, window._gatorRepoVersion);
-          }
-        }
-
-        // Resize handle
-        initResizeHandle(sidebar);
-        return;
-      }
 
       // Choose the file to display: restore the prior selection if it still
       // exists, else the default document. Expand its ancestors before render

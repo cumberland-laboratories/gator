@@ -49,7 +49,6 @@
   const generatedAt    = document.getElementById("generated-at");
   const refreshBtn     = document.getElementById("refresh-btn");
   const repoTab        = document.getElementById("repo-tab");
-  const docsTab        = document.getElementById("docs-tab");
   const loopTab        = document.getElementById("loop-tab");
   const topbarTitle    = document.getElementById("topbar-title");
   const brandHome      = document.getElementById("brand-home");
@@ -114,13 +113,13 @@
   }
 
   // Set the shell's repository context: name, API key, the Repo sidebar
-  // label, and the Repo/Docs/Loop tabs enabled.
+  // label, and the Repo/Loop tabs enabled. Docs is repository-independent
+  // and always enabled.
   function setActiveRepo(repoName, repoKey) {
     state.activeRepo = repoName;
     state.activeRepoKey = repoKey || null;
     setRepoTabLabel(repoName);
     repoTab.classList.remove("dimmed");
-    if (docsTab) docsTab.classList.remove("dimmed");
     if (loopTab) loopTab.classList.remove("dimmed");
   }
 
@@ -130,7 +129,6 @@
     state.activeRepoKey = null;
     setRepoTabLabel("Repo");
     repoTab.classList.add("dimmed");
-    if (docsTab) docsTab.classList.add("dimmed");
     if (loopTab) loopTab.classList.add("dimmed");
   }
 
@@ -233,8 +231,7 @@
       // Elsewhere, such an entry restores that Repo view so Back never
       // goes dead.
       if (!entry || entry.view !== "repo" || typeof entry.repo !== "string") return;
-      if ((state.activeView === "repo" || state.activeView === "docs")
-          && state.activeRepo === entry.repo) return;
+      if (state.activeView === "repo" && state.activeRepo === entry.repo) return;
       entry = { gatorDashboard: 1, view: "repo", repo: entry.repo, repoKey: null, sub: null };
     }
     restoring = true;
@@ -280,7 +277,7 @@
     // Show/hide repo search input
     const repoSearchInput = document.getElementById("repo-search-input");
     if (repoSearchInput) {
-      repoSearchInput.style.display = (name === "repo" || name === "docs") ? "" : "none";
+      repoSearchInput.style.display = name === "repo" ? "" : "none";
       if (name !== "repo") repoSearchInput.value = "";
     }
 
@@ -420,16 +417,11 @@
       return;
     }
 
+    // Docs: the shipped Gator documents, repository-independent (views/docs.js).
     if (name === "docs") {
-      const repoName = state.activeRepo;
-      if (!repoName) {
-        updateTopbar("docs", "Select a repo from Fleet");
-        viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view first.</p>";
-        return;
-      }
-      updateTopbar("docs", repoName);
-      if (views.repo) {
-        views.repo(state.data, viewSlot, repoName, null, "docs");
+      updateTopbar("docs", "");
+      if (views.docs) {
+        views.docs(state.data, viewSlot);
       } else {
         viewSlot.innerHTML = "<p class='muted'>Docs view not available.</p>";
       }
@@ -495,7 +487,7 @@
     const item = e.target.closest(".sidebar-item");
     if (!item || item.classList.contains("dimmed") || item.classList.contains("placeholder")) return;
     const view = item.dataset.view;
-    if ((view === "repo" || view === "docs" || view === "loop") && !state.activeRepo) return;
+    if ((view === "repo" || view === "loop") && !state.activeRepo) return;
     navigate(view);
   });
 

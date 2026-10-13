@@ -55,18 +55,20 @@ class TestBuildSnapshot:
         assert 'src="views/loop.js"' not in html
         assert 'src="views/settings.js"' not in html
         assert 'src="views/welcome.js"' not in html
+        assert 'src="views/docs.js"' not in html
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
         assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
+        assert "window.GatorViews.docs" in html  # repo-independent Docs inlined
 
     def test_welcome_docs_inlined_with_csp_meta(self):
-        """The four Welcome documents are inlined, each with exactly one
+        """Every shipped Gator document (Welcome and Docs) is inlined, each with exactly one
         injected Dashboard CSP meta right after <head>; the rest of the
         document (including its own Cumberland meta CSP) is unchanged."""
         from dashboard.content_policy import html_csp_meta_policy
         from dashboard.helpers import WELCOME_DOC_NAMES, read_welcome_html
         html = build_snapshot(SAMPLE_DATA)
         docs = _welcome_docs_block(html)
-        assert set(docs) == set(WELCOME_DOC_NAMES) and len(docs) == 4
+        assert set(docs) == set(WELCOME_DOC_NAMES) and len(docs) == len(WELCOME_DOC_NAMES)
         meta = ('<meta http-equiv="Content-Security-Policy" content="'
                 + html_csp_meta_policy() + '">')
         assert "frame-ancestors" not in meta
@@ -140,6 +142,7 @@ class TestBuildSnapshot:
             'src="views/loop.js"',
             'src="views/settings.js"',
             'src="views/welcome.js"',
+            'src="views/docs.js"',
             'src="dashboard.js"',
         ]:
             assert ref not in html, f"External reference not inlined: {ref}"

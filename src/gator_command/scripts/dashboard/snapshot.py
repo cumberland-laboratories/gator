@@ -49,9 +49,9 @@ def _with_csp_meta(html):
 
 
 def _welcome_docs_for_snapshot():
-    """The four Welcome documents for `window.GATOR_WELCOME_DOCS`:
+    """The shipped Gator documents (Welcome and Docs) for `window.GATOR_WELCOME_DOCS`:
     name -> text with the CSP meta, or None (unavailable / no `<head>`).
-    `welcome.js` assigns each through the `iframe.srcdoc` property."""
+    `welcome.js` and `docs.js` assign each through the `iframe.srcdoc` property."""
     return {name: _with_csp_meta(read_welcome_html(name))
             for name in sorted(WELCOME_DOC_NAMES)}
 
@@ -85,14 +85,15 @@ def build_snapshot(fast_data):
     loop_js = _read_asset("views/loop.js")
     settings_js = _read_asset("views/settings.js")
     welcome_js = _read_asset("views/welcome.js")  # #72
+    docs_js = _read_asset("views/docs.js")  # repo-independent Docs view
     shell_js = _read_asset("dashboard.js")
 
     data_block = (
         "<script>\n"
         "window.GATOR_SNAPSHOT = true;\n"
         f"window.DASHBOARD_DATA = {json.dumps(fast_data, default=str)};\n"
-        # Welcome topics: a snapshot has no server, so the four documents
-        # are inlined (script-safe JSON; null if unavailable).
+        # Welcome and Docs documents: a snapshot has no server, so the
+        # shipped documents are inlined (script-safe JSON; null if unavailable).
         f"window.GATOR_WELCOME_DOCS = {_json_script(_welcome_docs_for_snapshot())};\n"
         "</script>"
     )
@@ -117,6 +118,7 @@ def build_snapshot(fast_data):
         f"<script>\n{loop_js}\n</script>\n"
         f"<script>\n{settings_js}\n</script>\n"
         f"<script>\n{welcome_js}\n</script>\n"
+        f"<script>\n{docs_js}\n</script>\n"
         f"{data_block}\n"
         f"<script>\n{shell_js}\n</script>"
     )
@@ -130,6 +132,7 @@ def build_snapshot(fast_data):
         r'<script src="views/loop\.js"></script>\s*'
         r'<script src="views/settings\.js"></script>\s*'
         r'<script src="views/welcome\.js"></script>\s*'
+        r'<script src="views/docs\.js"></script>\s*'
         r'<script src="dashboard\.js"></script>',
         lambda m: scripts_block,
         html,

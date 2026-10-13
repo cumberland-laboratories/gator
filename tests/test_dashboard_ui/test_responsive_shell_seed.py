@@ -13,12 +13,10 @@ Fixtures landed:
   Only `section:gator` is default-expanded per `views/repo.js`, so
   `artifacts/` and `many/` are collapsed at mount; the pin
   explicitly expands both to render the 80 rows.
-- `.gator/docs/long-docs.md` — a Markdown file long enough to
-  overflow `.repo-markdown`'s clientHeight. Exercises the Docs-
-  view scroll-ownership pin.
-- `.gator/artifacts/long.md` — same long-body payload but at
-  `.gator/artifacts/long.md` for the Repo-view markdown-scroll pin
-  (not under `docs/`, so the Docs-view filter doesn't pick it up).
+- `.gator/artifacts/long.md` — a Markdown file long enough to
+  overflow `.repo-markdown`'s clientHeight, for the Repo-view
+  markdown-scroll pin. (The Docs view no longer reads repositories,
+  2026-10-13, so the former `.gator/docs/long-docs.md` is gone.)
 """
 
 from . import _harness as _h
@@ -36,35 +34,11 @@ def seed_sidebar_fixtures(repo):
         (repo / ".gator" / "artifacts" / "many" / f"f{i:02d}.md"
          ).write_text(f"# entry {i:02d}\n", encoding="utf-8")
 
-    # Long doc for Docs-view scroll-ownership pin. Docs filter
-    # matches `f.dir === "docs" || f.dir === "source/docs"` per
-    # views/repo.js — file must live under `.gator/docs/`.
-    (repo / ".gator" / "docs").mkdir()
     long_body = "\n\n".join(
         f"## Heading {i}\n\nBody paragraph {i} — repeated for length."
         for i in range(1, 201))
-    (repo / ".gator" / "docs" / "long-docs.md").write_text(
-        f"# Long doc\n\n{long_body}\n", encoding="utf-8")
 
-    # Docs view (test_docs_view.py): only .gator/docs/*.html are listed,
-    # Welcome documents first in Welcome order, then others A→Z. The
-    # Markdown above and the repo-root docs/ file below must NOT be listed.
-    for name, title in (("start-a-session.html", "Start"),
-                        ("gator-overview.html", "Overview"),
-                        ("zeta-notes.html", "Zeta notes"),
-                        ("alpha-guide.html", "Alpha guide")):
-        (repo / ".gator" / "docs" / name).write_text(
-            f"<!doctype html><html><head><meta charset=\"utf-8\">"
-            f"<title>{title}</title></head><body><h1 id=\"doc-title\">"
-            f"{title}</h1></body></html>\n", encoding="utf-8")
-    (repo / "docs").mkdir(exist_ok=True)
-    (repo / "docs" / "project-notes.md").write_text(
-        "# Project notes (repo-root docs/, not a Gator document)\n",
-        encoding="utf-8")
-
-    # Long markdown for the Repo-view markdown-scroll pin. Lives
-    # under `.gator/artifacts/` (not `docs/`) so it doesn't leak
-    # into the Docs filter.
+    # Long markdown for the Repo-view markdown-scroll pin.
     (repo / ".gator" / "artifacts" / "long.md").write_text(
         f"# Long doc for scroll pin\n\n{long_body}\n",
         encoding="utf-8")
