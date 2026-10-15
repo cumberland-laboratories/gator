@@ -178,7 +178,7 @@ def test_every_shipped_document_is_served_and_listed():
     docs_js = (SCRIPTS_DIR / "dashboard" / "views" / "docs.js").read_text(encoding="utf-8")
     listed = re.findall(r'\{ doc: "([^"]+)",', docs_js)
     assert set(listed) == shipped and len(listed) == len(shipped), listed
-    assert listed[:len(NAMES)] == NAMES  # Welcome topics first, in Welcome order
+    assert listed[:len(NAMES)] == NAMES  # Docs order: Gator overview first
 
 
 def test_gatorize_page_prompt_matches_dashboard():

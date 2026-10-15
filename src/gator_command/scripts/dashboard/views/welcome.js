@@ -32,10 +32,12 @@
   window.GatorViews = window.GatorViews || {};
 
   var TOPICS = [
+    // "Start a session" is first and the default (Architect, 2026-10-15):
+    // its copy-prompt button is what returning users come back for.
+    { key: "session",  label: "Start a session with Gator", doc: "start-a-session.html" },
     { key: "overview", label: "Gator overview",             doc: "gator-overview.html" },
     { key: "can",      label: "What Gator can do",          doc: "what-gator-can-do.html" },
     { key: "gatorize", label: "Gatorize a repo",            doc: "gatorize-a-repo.html" },
-    { key: "session",  label: "Start a session with Gator", doc: "start-a-session.html" },
   ];
 
   var DOC_ROUTE = "/api/welcome/docs/";
@@ -55,7 +57,7 @@
   var COPY_REQUEST = "copy-session-prompt";
   var COPY_RESULT = "copy-session-prompt-result";
 
-  var selectedTopic = "overview";
+  var selectedTopic = "session";
   var root = null;
   // The current mount's frames, by topic key. Replaced on every mount.
   var frames = {};

@@ -35,7 +35,8 @@ SESSION_PROMPT = (
     "those reads are complete."
 )
 
-TOPICS = ["overview", "can", "gatorize", "session"]
+TOPICS = ["session", "overview", "can", "gatorize"]
+DEFAULT = TOPICS[0]  # the first tab is the default (2026-10-15)
 LABELS = {
     "overview": "Gator overview",
     "can": "What Gator can do",
@@ -134,7 +135,7 @@ def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     _open_welcome(page)
     assert page.text_content("#topbar-title") == "Welcome to Gator!"
     assert page.get_attribute("#brand-home", "aria-current") == "page"
-    assert _selected(page) == ["overview"]
+    assert _selected(page) == [DEFAULT]
 
     for topic in TOPICS:
         page.click("#welcome-tab-" + topic)
@@ -161,23 +162,23 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     for key, t in tabs.items():
         assert t["panelRole"] == "tabpanel"
         assert t["panelLabelledBy"] == t["id"]
-        selected = key == "overview"
+        selected = key == DEFAULT
         assert t["selected"] == ("true" if selected else "false")
         assert t["tabindex"] == ("0" if selected else "-1")
         assert t["panelHidden"] is (not selected)
 
-    page.click("#welcome-tab-gatorize")
-    assert _selected(page) == ["gatorize"]
+    page.click("#welcome-tab-can")
+    assert _selected(page) == ["can"]
     page.keyboard.press("ArrowRight")
-    assert _selected(page) == ["session"]
-    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
+    assert _selected(page) == ["gatorize"]
+    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-gatorize"
     page.keyboard.press("ArrowRight")  # wraps
-    assert _selected(page) == ["overview"]
-    page.keyboard.press("ArrowLeft")  # wraps back
     assert _selected(page) == ["session"]
-    page.keyboard.press("Home")
-    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-overview"
+    page.keyboard.press("ArrowLeft")  # wraps back
+    assert _selected(page) == ["gatorize"]
     page.keyboard.press("End")
+    assert page.evaluate("() => document.activeElement.id") == "welcome-tab-gatorize"
+    page.keyboard.press("Home")
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-session"
     tabs = _tabs(page)
     assert [k for k, t in tabs.items() if not t["panelHidden"]] == ["session"]
@@ -232,7 +233,7 @@ def test_welcome_narrow_width(page, dashboard_fleet):
 
 def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     """Back/Forward stay shell-owned and keep the topic while the page is
-    loaded; a fresh load starts on Gator overview."""
+    loaded; a fresh load starts on Start a session (the first tab)."""
     _goto_fleet(page, dashboard_fleet)
     length = page.evaluate("() => history.length")
     _open_welcome(page)
@@ -255,7 +256,7 @@ def test_welcome_back_forward_and_topic_reset(page, dashboard_fleet):
     page.reload(wait_until="load")
     page.wait_for_selector(".welcome-workspace", timeout=15000)
     assert page.get_attribute("#brand-home", "aria-current") == "page"
-    assert _selected(page) == ["overview"]
+    assert _selected(page) == [DEFAULT]
 
 
 def _frames(page):
@@ -284,11 +285,11 @@ def test_welcome_frames_lazy_persistent_sandboxed(page, dashboard_fleet):
     page.on("request", lambda r: requests.append(r.url))
     _open_welcome(page)
     page.wait_for_function(
-        "() => document.querySelector('#welcome-panel-overview iframe')", timeout=5000)
+        "() => document.querySelector('#welcome-panel-" + DEFAULT + " iframe')", timeout=5000)
     frames = {f["panel"]: f for f in _frames(page)}
-    assert frames["welcome-panel-overview"]["count"] == 1
+    assert frames["welcome-panel-" + DEFAULT]["count"] == 1
     assert all(frames["welcome-panel-" + k]["count"] == 0
-               for k in ("can", "gatorize", "session"))
+               for k in TOPICS if k != DEFAULT)
 
     for key in TOPICS:
         page.click("#welcome-tab-" + key)
@@ -331,11 +332,11 @@ def test_welcome_frame_fills_to_bottom_padding(page, dashboard_fleet, viewport):
     short window scrolls with the frame at its minimum height."""
     page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
     page.goto(_origin(dashboard_fleet), wait_until="load")
-    page.wait_for_selector("#welcome-panel-overview iframe", timeout=15000)
+    page.wait_for_selector("#welcome-panel-session iframe", timeout=15000)
     geo = page.evaluate("""() => {
         const v = document.getElementById('view-slot');
         const s = v.getBoundingClientRect();
-        const f = document.querySelector('#welcome-panel-overview iframe').getBoundingClientRect();
+        const f = document.querySelector('#welcome-panel-session iframe').getBoundingClientRect();
         return {gap: s.bottom - f.bottom,
                 pad: parseFloat(getComputedStyle(v).paddingBottom)};
     }""")
@@ -343,7 +344,7 @@ def test_welcome_frame_fills_to_bottom_padding(page, dashboard_fleet, viewport):
     page.set_viewport_size({"width": 1100, "height": 500})
     short = page.evaluate("""() => {
         const v = document.getElementById('view-slot');
-        const f = document.querySelector('#welcome-panel-overview iframe');
+        const f = document.querySelector('#welcome-panel-session iframe');
         return {h: f.getBoundingClientRect().height,
                 scrolls: v.scrollHeight > v.clientHeight};
     }""")

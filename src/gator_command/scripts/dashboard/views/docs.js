@@ -19,8 +19,9 @@
   var DOC_ROUTE = "/api/welcome/docs/";
 
   // Sidebar order and reader-friendly labels. Every name must be in
-  // WELCOME_DOC_NAMES (dashboard/helpers.py); the Welcome topics come
-  // first, in Welcome-tab order (TOPICS in views/welcome.js).
+  // WELCOME_DOC_NAMES (dashboard/helpers.py). Reading order for a library:
+  // Gator overview first (Welcome's tab order differs on purpose: there
+  // "Start a session" comes first for its copy-prompt button).
   var DOCS = [
     { doc: "gator-overview.html",             label: "Gator overview" },
     { doc: "what-gator-can-do.html",          label: "What Gator can do" },
