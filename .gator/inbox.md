@@ -49,6 +49,11 @@ by one. Rough edges to tidy (small, unfiled):
 - In Docs, "Start a session"'s Copy button has no Dashboard channel, so it
   falls back to manual copy; give the Docs frame Welcome's copy channel.
 
+**#70 Windows UI flakes (2026-10-16):** two causes found locally.
+- (1) **Confirmed and fixed:** a navigation made before `/api/data` returned was replaced by Welcome when `init()` finished. Regression test in `test_welcome_ui.py`.
+- (2) **Measured:** `/files` (and search) cost about 2,500 filesystem calls per listing and degrade 5–10x under load. Next: a planning loop from `artifacts/2026-10-16-dashboard-listing-performance-sketch.md`. It first needs an Architect decision: search does not apply the listing visibility policy its charter claims.
+- The 2026-10-15 diagnostic-bundle loops were abandoned (Playwright tracing would add about 45% to CI time).
+
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
 `vault/artifacts/2026-10-09-codex-sandbox-temp-and-profile-block-sketch.md`.

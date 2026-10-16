@@ -29,6 +29,10 @@
 
   // #56: true while a popstate restoration runs; nothing pushes meanwhile.
   let restoring = false;
+  // #70: incremented by every showView(). init() compares it across its
+  // /api/data await so a navigation made meanwhile is never replaced by
+  // the landing view.
+  let viewRenders = 0;
 
   // ── view metadata ─────────────────────────────────────────────────────────
 
@@ -243,6 +247,7 @@
   });
 
   function showView(name, extra, repoKeyOverride, opts) {
+    viewRenders++;
     // Tear down the previous view's lifecycle resources (poll timers, global
     // listeners) before rendering the next. Only the repo view registers any;
     // the hook is null otherwise. This is what stops the auto-refresh poll
@@ -636,11 +641,21 @@
       refreshBtn.style.display = "none";
     }
 
+    const rendersBeforeLoad = viewRenders;
     try {
       state.data = await loadData();
       updateTimestamp(state.data.generated_at);
     } catch (err) {
       viewSlot.innerHTML = `<div class="error-block">Failed to load dashboard data: ${err.message}</div>`;
+      return;
+    }
+
+    // #70: something navigated while /api/data was loading (a sidebar
+    // click, gatorNavToRepo, Back). Keep that view and re-render it with
+    // the loaded data, as doRefresh does; do not replace it with the
+    // landing view or rewrite the history entry it pushed.
+    if (viewRenders !== rendersBeforeLoad) {
+      showView(state.activeView, state.activeRepo, state.activeRepoKey || undefined);
       return;
     }
 

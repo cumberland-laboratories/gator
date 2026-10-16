@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator: refresh the runtime pin timestamp",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "gator-update"
+  ],
+  "commit": "c913f4701c75dc451ad7c892d261b2c9db79ee99",
+  "short_commit": "c913f47",
+  "snippet_id": "snippet-c913f4701c75d",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "deaf6107d84edeb2debae51d2849dc658e7a1b30",
+  "started_at": "2026-10-15T22:57:41Z",
+  "ended_at": "2026-10-15T22:57:41Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-15-gator-deaf6107d84ed.json"
+  ],
+  "notes": [
+    "The runtime pin was re-stamped by a local Gator run. The pinned version",
+    "(2.25.1), the machine and the file manifest are unchanged; only",
+    "`pinned_at` moved."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

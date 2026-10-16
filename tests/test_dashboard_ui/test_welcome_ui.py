@@ -16,7 +16,9 @@ Each test proves a distinct risk:
   404;
 - snapshot frames: srcdoc, the same sandbox, the injected CSP meta;
 - the narrow-width layout;
-- shell-owned Back/Forward, and the default topic on a fresh load.
+- shell-owned Back/Forward, and the default topic on a fresh load;
+- a navigation made before /api/data returns is not replaced by
+  Welcome (#70).
 """
 
 import sys
@@ -110,6 +112,37 @@ def _repo_context(page):
         docs: document.getElementById('docs-tab').classList.contains('dimmed'),
         loop: document.getElementById('loop-tab').classList.contains('dimmed'),
     })""")
+
+
+@pytest.mark.parametrize("how", ["gatorNavToRepo", "sidebar-fleet"])
+def test_navigation_before_data_load_is_not_replaced_by_welcome(
+        page, dashboard_fleet, how):
+    """#70: a navigation made while /api/data is still loading must
+    survive init(). Before the fix, init() finished afterwards and
+    showed Welcome, so the Repo file tree never appeared (the Windows
+    CI flake). /api/data is held so the race is deterministic."""
+    held = []
+    page.route("**/api/data", lambda route: held.append(route))
+    page.goto(_origin(dashboard_fleet), wait_until="load")
+    page.wait_for_function("() => typeof window.gatorNavToRepo === 'function'")
+    assert held, "the initial /api/data request should be held"
+    if how == "gatorNavToRepo":
+        page.evaluate("() => window.gatorNavToRepo('alpha')")
+        page.wait_for_selector("#view-slot .repo-file-item", timeout=15000)
+    else:
+        page.evaluate(
+            "() => document.querySelector('.sidebar-item[data-view=\"fleet\"]').click()")
+    for route in held:
+        route.continue_()
+    page.unroute("**/api/data")
+    if how == "gatorNavToRepo":
+        # Re-rendered with data: the branch appears in the subtitle.
+        page.wait_for_selector("#branch-history-btn", timeout=15000)
+        page.wait_for_selector("#view-slot .repo-file-item", timeout=15000)
+        assert _repo_context(page)["label"].endswith("alpha")
+    else:
+        page.wait_for_selector("#view-slot table.data-table", timeout=15000)
+    assert page.locator(".welcome-workspace").count() == 0
 
 
 @pytest.mark.parametrize("start", ["fleet", "repo", "loop"])
