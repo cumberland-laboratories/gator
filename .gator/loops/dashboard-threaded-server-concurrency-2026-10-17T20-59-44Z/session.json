@@ -1,0 +1,906 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z",
+  "feature": "dashboard-threaded-server-concurrency",
+  "mode": "coding",
+  "created_at": "2026-10-17T20:59:44.518780+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 3,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-17T22:59:13.624159+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-17T22:06:00.335349+00:00",
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-007",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-007",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T21:17:16.267866+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T21:17:46.318058+00:00",
+      "round": 0,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T21:23:42.522915+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T21:23:54.904587+00:00",
+      "round": 1,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    },
+    {
+      "turn_id": "draftor-003",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T21:46:38.518865+00:00",
+      "round": 1,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-2.md"
+    },
+    {
+      "turn_id": "reviewer-003",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T21:47:20.273995+00:00",
+      "round": 1,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-2.md"
+    },
+    {
+      "turn_id": "draftor-004",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T21:52:39.776728+00:00",
+      "round": 2,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-3.md"
+    },
+    {
+      "turn_id": "reviewer-004",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T21:52:53.565172+00:00",
+      "round": 2,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-3.md"
+    },
+    {
+      "turn_id": "draftor-005",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T22:01:03.860210+00:00",
+      "round": 2,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-4.md"
+    },
+    {
+      "turn_id": "reviewer-005",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T22:01:22.756758+00:00",
+      "round": 2,
+      "summary": "Implementation review findings submitted",
+      "artifact_path": "findings.round-4.md"
+    },
+    {
+      "turn_id": "draftor-006",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T22:05:47.726067+00:00",
+      "round": 3,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-5.md"
+    },
+    {
+      "turn_id": "reviewer-006",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T22:06:00.335311+00:00",
+      "round": 3,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-5.md"
+    },
+    {
+      "turn_id": "draftor-007",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T22:57:14.383874+00:00",
+      "round": 3,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-6.md"
+    },
+    {
+      "turn_id": "reviewer-007",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T22:59:13.624140+00:00",
+      "round": 3,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-6.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z",
+    "plan_sha256": "8a9662dd1c480a2aa2d3f327eb18e03108627d097a2fc8b5ba1054eebee66f7d",
+    "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+    "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-17T21:17:16.267896+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "000dc4c746485938c34d8d9f21651fe50e3cd3dc",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_count": 5,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "000dc4c746485938c34d8d9f21651fe50e3cd3dc",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-17T21:17:46.315705+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 4,
+            "title": "Shared state snapshots",
+            "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 1,
+        "submitted_at": "2026-10-17T21:23:42.522950+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_count": 5,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 1,
+          "generation": 1,
+          "reviewed_tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-17T21:23:54.902485+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 4,
+            "title": "Shared state snapshots",
+            "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a"
+          }
+        }
+      },
+      {
+        "round": 1,
+        "generation": 2,
+        "submitted_at": "2026-10-17T21:46:38.518887+00:00",
+        "artifact_path": "implementation.round-2.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "37e89c1e20e9d2f10a56217a5ea8c8f3979dc007",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+          "changed_count": 3,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 1,
+          "generation": 2,
+          "reviewed_tree": "37e89c1e20e9d2f10a56217a5ea8c8f3979dc007",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-2.md",
+          "reviewed_at": "2026-10-17T21:47:20.272200+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 4,
+            "title": "Mutation admission",
+            "base_tree": "4841e1730af784d2c34b942a302e2d89578afdb1"
+          }
+        }
+      },
+      {
+        "round": 2,
+        "generation": 3,
+        "submitted_at": "2026-10-17T21:52:39.776761+00:00",
+        "artifact_path": "implementation.round-3.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+          "changed_count": 3,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 2,
+          "generation": 3,
+          "reviewed_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-3.md",
+          "reviewed_at": "2026-10-17T21:52:53.563032+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 4,
+            "title": "Mutation admission",
+            "base_tree": "4841e1730af784d2c34b942a302e2d89578afdb1"
+          }
+        }
+      },
+      {
+        "round": 2,
+        "generation": 4,
+        "submitted_at": "2026-10-17T22:01:03.860230+00:00",
+        "artifact_path": "implementation.round-4.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "87b50895006f835b8cba32c8ca35e8e9ed733fdd",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+          "changed_count": 3,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "revise",
+          "round": 2,
+          "generation": 4,
+          "reviewed_tree": "87b50895006f835b8cba32c8ca35e8e9ed733fdd",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-4.md",
+          "reviewed_at": "2026-10-17T22:01:22.754751+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 4,
+            "title": "Restart and upgrade drain",
+            "base_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c"
+          }
+        }
+      },
+      {
+        "round": 3,
+        "generation": 5,
+        "submitted_at": "2026-10-17T22:05:47.726090+00:00",
+        "artifact_path": "implementation.round-5.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-4.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-4.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp3",
+          "index": 2,
+          "base_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+          "changed_count": 3,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 3,
+          "generation": 5,
+          "reviewed_tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-5.md",
+          "reviewed_at": "2026-10-17T22:06:00.333456+00:00",
+          "checkpoint": {
+            "id": "cp3",
+            "index": 3,
+            "count": 4,
+            "title": "Restart and upgrade drain",
+            "base_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c"
+          }
+        }
+      },
+      {
+        "round": 3,
+        "generation": 6,
+        "submitted_at": "2026-10-17T22:57:14.383894+00:00",
+        "artifact_path": "implementation.round-6.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "head_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "89abc0eb0d323f2f642e3d1d186e93213634ae90",
+          "base_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-cross-cutting.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/gator-dashboard.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_concurrency.py"
+            },
+            {
+              "status": "M",
+              "path": "tests/test_dashboard_remove.py"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_ui/test_request_concurrency_ui.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/plan.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/session.json",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-38-59Z/sketch.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/approved-plan.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/events.jsonl",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-4.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/findings.round-5.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.current.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-0.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-1.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-2.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-3.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-4.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/implementation.round-5.md",
+            ".gator/loops/dashboard-threaded-server-concurrency-2026-10-17T20-59-44Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp4",
+          "index": 3,
+          "base_tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8",
+          "changed_count": 5,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 3,
+          "generation": 6,
+          "reviewed_tree": "89abc0eb0d323f2f642e3d1d186e93213634ae90",
+          "reviewed_head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-6.md",
+          "reviewed_at": "2026-10-17T22:59:13.622140+00:00",
+          "checkpoint": {
+            "id": "cp4",
+            "index": 4,
+            "count": 4,
+            "title": "Threaded server",
+            "base_tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "89abc0eb0d323f2f642e3d1d186e93213634ae90",
+      "head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+      "round": 3,
+      "generation": 6,
+      "ts": "2026-10-17T22:59:13.622140+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 3,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Shared state snapshots",
+          "scope": "add `_STATE_LOCK` / `_STATE_WRITE_LOCK`, the registry and Fleet snapshot/publish helpers, and the pure Fleet builders; migrate every reader to snapshots; make register, remove and config publish copy-on-write under the writer lock (so different-path registry writers never lose an update); update the remove cache-coherence test. The server stays serialized.",
+          "verify": "`tests/test_dashboard_remove.py`, `tests/test_dashboard_loops.py`, `tests/test_dashboard_sessions.py`, plus the pin 4 read-coherence tests and the different-path register race (pin 4c), run against a test-local `ThreadingHTTPServer`.",
+          "state": "approved",
+          "base_tree": "d42cac773e52d72e9734ad639ce30f744ce5b97a",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+            "head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+            "generation": 1,
+            "ts": "2026-10-17T21:23:54.902485+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Mutation admission",
+          "scope": "refresh single-flight with reconciliation; `_repo_action` with `_resolve_action_target` / `_still_targeted` for all six same-repository mutations (register, remove, update, gatorize, config, topology); `_AUDIT_LOCK`; the Loop busy (503) mapping.",
+          "verify": "new concurrency tests for pin 3, pin 5, and the remove-versus-same-path tests 4a\u20134c; the Loop dashboard suites.",
+          "state": "approved",
+          "base_tree": "4841e1730af784d2c34b942a302e2d89578afdb1",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+            "head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+            "generation": 3,
+            "ts": "2026-10-17T21:52:53.563032+00:00"
+          }
+        },
+        {
+          "id": "cp3",
+          "title": "Restart and upgrade drain",
+          "scope": "`_LifecycleGate`, the 503 for POSTs while draining, and `_drain_then()` around the unchanged restart/upgrade functions.",
+          "verify": "new concurrency tests for pin 6 (with restart/upgrade monkeypatched).",
+          "state": "approved",
+          "base_tree": "42ed56931b0b7c4f9d7bb21521c4b66813985b6c",
+          "findings_rounds": 1,
+          "accepted": {
+            "tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8",
+            "head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+            "generation": 5,
+            "ts": "2026-10-17T22:06:00.333456+00:00"
+          }
+        },
+        {
+          "id": "cp4",
+          "title": "Threaded server",
+          "scope": "`DashboardHTTPServer` with worker and heavy-work admission, the heavy-route wrapping, `main()` construction, and the debug files-gate seam; the browser-level proof and the stress test.",
+          "verify": "concurrency pins 1, 2, 7 and 8; `tests/test_dashboard_ui/test_request_concurrency_ui.py`; the full `tests/test_dashboard_ui/` suite; the recorded performance check.",
+          "state": "approved",
+          "base_tree": "0e4a0bf713328ab5eba97e0f73e1c947f51d11a8",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "89abc0eb0d323f2f642e3d1d186e93213634ae90",
+            "head": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+            "generation": 6,
+            "ts": "2026-10-17T22:59:13.622140+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

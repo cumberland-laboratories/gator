@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard: a slow listing no longer blocks unrelated requests (threaded server, safe shared state)",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "concurrency",
+    "70"
+  ],
+  "commit": "5743dd4036934cbc88023c99f56f34f4c97b4db0",
+  "short_commit": "5743dd4",
+  "snippet_id": "snippet-5743dd4036934",
+  "session_group_key": "anthropic:d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+  "started_at": "2026-10-17T20:15:15Z",
+  "ended_at": "2026-10-17T23:13:24Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-17-gator-9368471a7e718.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_concurrency.py",
+    "tests/test_dashboard_remove.py",
+    "tests/test_dashboard_ui/test_request_concurrency_ui.py"
+  ],
+  "notes": [
+    "Shared Dashboard state is now published as whole snapshots and never changed in place: the registry and the Fleet data are read through `_registry_snapshot()` / `_fleet_snapshot()` and replaced under one writer lock. Registering, removing and changing a repository's config no longer lose updates or alter data that another request is still reading.",
+    "Changes to one repository can no longer overlap: register, remove, update, gatorize, config and topology for the same repository run one at a time. A second request gets a clear \"another change is running\" (409), and a change that arrives after a remove gets 404 instead of acting on a removed repository. Refresh runs one collection at a time and no longer brings back a repository removed while it ran. Audit-session requests are serialized, and a Loop action that times out on a busy loop lock gets a retryable 503 instead of a dropped connection.",
+    "Restart and upgrade now wait (up to 5 s) for changes already in progress before the process is replaced, and refuse new ones meanwhile with \"dashboard is restarting\" (503), so a Loop action or registry write is not cut off half-way. The restart request itself still answers immediately, and repeat requests do not trigger a second restart.",
+    "The Dashboard now serves requests concurrently (`DashboardHTTPServer`, at most 16 workers, at most 4 on expensive listing/search/Git work). A slow repository listing no longer makes an unrelated document or click wait behind it: on this repository a small file read stays around 8 ms while four 3-second listings run. A browser test reproduces the old symptom on the single-request server and passes on the new one. This removes one plausible cause of the #70 Windows UI flakes; it is not claimed to close #70."
+  ],
+  "transcript_session_id": "d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "transcript_ref": null
+}
