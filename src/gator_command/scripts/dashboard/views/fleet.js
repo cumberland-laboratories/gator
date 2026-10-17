@@ -77,9 +77,21 @@
       const lifecycleLabel = isGatorized ? "Update" : "Gatorize";
       const lifecycleDisabled = !repo.accessible || (isGatorized && !needsUpdate);
 
+      // #80: open the repository in a new workspace context (key-addressed)
+      // or a new browser tab (a native same-origin link). A snapshot has
+      // no workspaces and no server, so neither is offered there.
+      const openHtml = window.GATOR_SNAPSHOT ? "" : `
+          <button class="menu-item menu-open-workspace"
+            data-repo-name="${escHtml(repo.name)}"
+            data-repo-key="${escHtml(repo.repo_key || "")}"
+            data-action="open-workspace">Open in new workspace tab</button>
+          <a class="menu-item menu-open-browser-tab"
+            href="?repo=${escHtml(encodeURIComponent(repo.name))}"
+            target="_blank" rel="noopener">Open in new browser tab</a>`;
+
       const menuHtml = `<div class="overflow-menu-wrapper">
         <button class="overflow-menu-btn" aria-label="Actions for ${escHtml(repo.name)}">&#8942;</button>
-        <div class="overflow-menu">
+        <div class="overflow-menu">${openHtml}
           <button class="menu-item menu-lifecycle"
             data-repo-name="${escHtml(repo.name)}"
             data-action="${lifecycleAction}"
@@ -246,7 +258,11 @@
         const repoPath = this.dataset.repoPath;
         closeAllMenus(container);
 
-        if (action === "remove") {
+        if (action === "open-workspace") {
+          if (window.gatorOpenRepoInNewContext) {
+            window.gatorOpenRepoInNewContext(repoName, this.dataset.repoKey || null);
+          }
+        } else if (action === "remove") {
           openRemoveConfirmDialog(repoName, repoPath, container);
         } else if (action === "update" || action === "gatorize") {
           performLifecycleAction(repoName, action, container);

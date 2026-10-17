@@ -56,7 +56,9 @@ class TestBuildSnapshot:
         assert 'src="views/settings.js"' not in html
         assert 'src="views/welcome.js"' not in html
         assert 'src="views/docs.js"' not in html
+        assert 'src="workspace.js"' not in html
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
+        assert "window.GatorWorkspace" in html  # #80 workspace model inlined
         assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
         assert "window.GatorViews.docs" in html  # repo-independent Docs inlined
 
@@ -143,6 +145,7 @@ class TestBuildSnapshot:
             'src="views/settings.js"',
             'src="views/welcome.js"',
             'src="views/docs.js"',
+            'src="workspace.js"',
             'src="dashboard.js"',
         ]:
             assert ref not in html, f"External reference not inlined: {ref}"

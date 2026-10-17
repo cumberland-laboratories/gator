@@ -121,7 +121,9 @@ machine-local reference material.
 - **Document tabs**: dropped from current scope. Hands-on use of the
   shipped sidebar navigation showed tabs are unnecessary. Do not
   implement Phase 2 tab strip / tab-descriptor model unless new
-  usage evidence creates a concrete need.
+  usage evidence creates a concrete need. (Not to be confused with
+  #80 **workspace tabs**, 2026-10-16: one tab per repository context
+  above the shell. That feature does not revive per-document tabs.)
 - **`field-guides/` retirement**: deferred to lowest priority.
   Preserve current behavior; revisit later.
 

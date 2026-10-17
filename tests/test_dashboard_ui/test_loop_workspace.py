@@ -24,6 +24,7 @@ Coverage:
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -3279,7 +3280,9 @@ def test_history_state_never_holds_tokens(page, dashboard_fleet):
         assert "Executive Summary" not in raw and "prompt" not in raw.lower()
         st = json.loads(raw)
         assert st["gatorDashboard"] == 1
-        assert set(st) == {"gatorDashboard", "view", "repo", "repoKey", "sub"}
+        # #80 adds `ctx`: the opaque id of the workspace context shown.
+        assert set(st) == {"gatorDashboard", "view", "repo", "repoKey", "sub", "ctx"}
+        assert st["ctx"] is None or re.fullmatch(r"[a-z0-9]{1,16}", st["ctx"])
         if st["sub"] is not None:
             assert set(st["sub"]) == {"view", "mode", "loopId"}
 

@@ -1,6 +1,6 @@
 # Charter: Dashboard Browser UI
 
-**Covers**: `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/views/**`, `src/gator_command/scripts/dashboard/*.png` (including `views/loop-markdown.js`, #45)
+**Covers**: `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/workspace.js` (#80), `src/gator_command/scripts/dashboard/views/**`, `src/gator_command/scripts/dashboard/*.png` (including `views/loop-markdown.js`, #45)
 
 ## Owns
 
@@ -24,19 +24,101 @@ Own browser history, selected repository/view state, and dispatch into view modu
 -> `views/*`
 ! URL state and visible selection stay synchronized; refresh re-renders the same repo/view rather than silently returning home.
 ! **Shell-owned history (#56).** `dashboard.js` is the only owner of Dashboard history entries, for every view.
-  - **State shape:** `{gatorDashboard: 1, view, repo, repoKey, sub}`, built by `shellState(sub)`. Entries are state-only (`""` title, URL unchanged), so a reload behaves as before (`?repo=` only). `sub` is `null` except for Loop entries: `cleanSub()` keeps exactly `{view: create|history, mode: create|inspect, loopId}`. **No token, prompt text or artifact content ever enters a state object.**
-  - **`navigate()` versus `showView()`:** `navigate()` = `showView()` plus `history.pushState`. It is used by the sidebar click handler and `gatorNavToRepo`. `init()` calls `showView` and then `replaceState`. `doRefresh` calls `showView` and pushes nothing. `showView(name, extra, repoKeyOverride, opts)` is a renderer only. It passes `opts.initialSub` as the fifth argument to `views.loop`, and records `state.mountedLoopKey` (the repo key a mounted Loop view uses; `undefined` otherwise).
+  - **State shape:** `{gatorDashboard: 1, view, repo, repoKey, sub, ctx}`, built by `shellState(sub)`. `ctx` (#80) is the opaque id of the workspace context shown, or null before hydration and in snapshots. `isShellEntry` accepts it absent, null or a string. Since #80, every entry also carries the canonical URL of the active context (see "Shell URL (#80)" below). Snapshot entries stay state-only (`file:` URLs). `sub` is `null` except for Loop entries: `cleanSub()` keeps exactly `{view: create|history, mode: create|inspect, loopId}`. **No token, prompt text or artifact content ever enters a state object.**
+  - **`navigate()` versus `showView()`:** `navigate()` = `showView()` plus `recordShell("pushState")`. It is used by the sidebar click handler and `gatorNavToRepo`. `init()` lands through `applyShellEntry()` and then `recordShell("replaceState")`. `doRefresh` calls `showView` and pushes nothing. `showView(name, extra, repoKeyOverride, opts)` is a renderer only. It passes `opts.initialSub` as the fifth argument to `views.loop`, and records `state.mountedLoopKey` (the repo key a mounted Loop view uses; `undefined` otherwise).
   - **`window.GatorShell`:** `pushSubState(sub)` pushes only when the active view is Loop and no restoration is running. `replaceSubState(sub)` replaces the current entry (Loop only). `isRestoring()`.
-  - **Landing view (`init()`):** `?repo=<name>` → that Repo view; otherwise a snapshot (`window.GATOR_SNAPSHOT`) → Fleet (a snapshot is a fleet report); otherwise → **Welcome** (the front door, Architect direction 2026-10-11; opening on the "Start a session with Gator" topic since 2026-10-15). The landing entry is recorded with `replaceState`, so Back from the first navigation returns to Welcome.
+  - ! **Shell URL (#80) — `shellUrl(view, repo)` / `parseShellUrl()` / `recordShell(method, sub)`.**
+    - **Canonical forms** (`shellUrl`):
+      - `?repo=<name>` for the Repo view (the legacy link, still produced by `gator dashboard --repo`);
+      - `?repo=<name>&view=<view>` for any other view with a repository;
+      - `?view=<view>` without a repository;
+      - no query (the page path) for Welcome without a repository.
+    - **What stays out of the URL:** Loop `sub` and `repoKey` stay in history state only. The URL never carries a token, prompt or path.
+    - **Parsing:** `parseShellUrl()` returns `{repo, view}`. A `view` outside `VIEW_META` and an empty `repo` are null.
+    - **Recording:** `recordShell` is the only writer of shell entries: `navigate`, `GatorShell.push/replaceSubState`, the landing and the unregistered fallback. With `window.GATOR_SNAPSHOT` it omits the URL argument (state-only).
+    - **The server never reads `view`.** The root route strips the query, and `_parse_request` tolerates it (see `scripts-dashboard.md`).
+    - **`views/repo.js`** still pushes its own entries, including `?repo=<name>&q=<query>`. That URL is valid under this contract (no `view` means Repo).
+  - **Landing view (`init()`):** it builds an entry from `parseShellUrl()`.
+    - **Choosing the view.** A missing `view` keeps the legacy meaning: `?repo=<name>` → that Repo view; otherwise a snapshot (`window.GATOR_SNAPSHOT`) → Fleet (a snapshot is a fleet report); otherwise → **Welcome** (the front door, Architect direction 2026-10-11; opening on the "Start a session with Gator" topic since 2026-10-15). `?view=<view>` (with or without `repo`) lands on that view.
+    - **Reload or duplicated tab.** When `history.state` is a valid shell entry for the same view and repository name, its `repoKey` (which disambiguates same-named repositories) and `cleanSub(sub)` are reused, so a Loop tab and selection survive a reload.
+    - **Dispatch.** The entry goes through `applyShellEntry()`, the same hydrate → dispatch path as Back/Forward. **An unregistered `?repo=` therefore lands on Fleet with the "no longer registered" notice** (before #80 it mounted a failing Repo view).
+    - **Recording.** The landing entry is recorded with `recordShell("replaceState")`, so Back from the first navigation returns to the landing view.
+    - **#70:** the guard below runs before any of this and is unchanged.
   - ! **Navigation during load wins (#70).** `showView()` increments `viewRenders`; `init()` compares it across its `/api/data` await. If anything rendered a view meanwhile (sidebar click, `gatorNavToRepo`, popstate), `init()` re-renders that view with the loaded data (`showView(activeView, activeRepo, activeRepoKey)`, like `doRefresh`) and skips both the landing view and the landing `replaceState`. Before this, a navigation made before `/api/data` returned was replaced by Welcome (Windows CI flake #70).
   - **Welcome (#72):** `welcome` is a `VIEW_META` view ("Welcome to Gator!") shown on a live load without `?repo=` (see Landing view), and reached from the `#brand-home` logo button (`aria-label="Open Welcome"`; `navigate("welcome")`; `aria-current="page"` while it is shown) and from Back/Forward. Its `showView` branch never calls `setActiveRepo` / `clearActiveRepo`, and its entries carry `sub: null` (`cleanSub` stays Loop-only).
   - **Repository context:** `setActiveRepo(name, key)` (extracted from the `repo` branch) sets `activeRepo` / `activeRepoKey`, the "▸ <name>" Repo label, and un-dims Repo/Loop. `clearActiveRepo()` is its inverse (label "Repo", those tabs dimmed). **Docs is always enabled** (2026-10-13): it is repository-independent (`GatorViews.docs`), never dimmed, not guarded by the sidebar click handler, and its `showView` branch needs no active repository and shows no repo search box.
-  - **Restoration:** a single `popstate` handler → `restoreShellState(entry)`, run under the `restoring` flag (cleared in `finally`):
+  - **Restoration:** a single `popstate` handler → `restoreShellState(entry)`, run under the `restoring` flag (cleared in `finally`). Step 1 is in `restoreShellState`; steps 2–3 are `applyShellEntry(entry)` (#80), which `init()` also uses. **Before step 1 (#80):** when `entry.ctx` names a workspace context that is still open and is not the active one, that context is selected (`GatorWorkspace.select`, no push). Back therefore undoes a strip selection. Otherwise (no `ctx`, or a closed context) the entry is applied to the active context, whose inactive duplicate for the same repository is dropped.
     1. **Validate:** `isShellEntry` (marker, a `VIEW_META` view, `repo` null or a string). Anything else is ignored.
-    2. **Hydrate the repository before any dispatch.** The fleet entry matching name and recorded key, else name only, is authoritative → `setActiveRepo`. An unregistered repo → `clearActiveRepo`, Fleet with a `.shell-notice` "That repository is no longer registered.", and `replaceState` to Fleet. A null repo → `clearActiveRepo`.
+    2. **Hydrate the repository before any dispatch.** The fleet entry matching name and recorded key, else name only, is authoritative → `setActiveRepo`. An unregistered repo → `clearActiveRepo`, Fleet with a `.shell-notice` "That repository is no longer registered.", and `recordShell("replaceState")` to Fleet (URL `?view=fleet`). A null repo → `clearActiveRepo`.
     3. **Dispatch:** a Loop entry for the already-mounted Loop view of the *same* repo key → `views.loop.restore(sub)` (no remount). Otherwise `showView(view, repo, activeRepoKey, {initialSub})`, so a repository change always remounts.
   - **`views/repo.js` entries:** `repo.js` still pushes its own search/file entries (`{view: "repo", repo, searchQuery|filePath}`, no marker) and applies them with its own controller-scoped `popstate` listener while mounted. The shell leaves such an entry to `repo.js` when that repo's Repo view is mounted (Docs no longer mounts `repo.js`). Otherwise it restores that Repo view, so Back never goes dead.
   - **No re-entrancy:** pushes are suppressed while restoring, and the restore paths call no pushing function.
+  - ! **Browser-tab title (#80) — `formatDocumentTitle(view, repo)` / `updateDocumentTitle()`.**
+    - **Formatter:** a pure function of the shell's `activeView` and `activeRepo`:
+      - `Gator · Fleet` and `Gator · Welcome` never show a repository;
+      - any other view with a repository is `Gator · <repo> · <Label>` (for example `Gator · alpha · Docs`, `Gator · alpha · Loop`);
+      - otherwise `Gator · <Label>`.
+    - **Labels:** `TITLE_LABELS` (`welcome` → "Welcome", `history` → "Commits"), else `VIEW_META[view].title`.
+    - **Repository part:** the registry display name, truncated to `TITLE_REPO_MAX` (60) characters with "…". It is assigned through `document.title` (text). It never comes from repository content, a file path or a document.
+    - **Single exit:** `showView()` is now `viewRenders++`, then `renderView()` (the former body) in `try`, then `updateDocumentTitle()` in `finally`. Every path that renders therefore sets the title: landing, `navigate()`, `doRefresh`, the #70 re-render, `restoreShellState()` and its unregistered-repository Fleet fallback. No other code assigns `document.title`. `views.loop.restore()` (no remount) keeps the same view and repository, so the title is already correct.
+    - **Pinned by** `tests/test_dashboard_ui/test_workspace_tabs.py` (`test_document_title_follows_view`, `test_two_pages_distinct_titles_and_urls`).
+
+### window.GatorWorkspace — configure() / load() / syncActive() / findByRepo() / active() / list() (#80) · shell side: syncWorkspace() / hydrateWorkspace() / validateRepo()
+File: src/gator_command/scripts/dashboard/workspace.js
+File: src/gator_command/scripts/dashboard/dashboard.js
+The per-browser-tab list of workspace contexts `{id, repo, repoKey, view, sub}` and its session cache. A context is an optional repository plus the last view to restore for it.
+<- `dashboard.js`: `syncWorkspace(sub)` from `showView()`'s `finally`, `recordShell()`, and the `views.loop.restore` branch of `applyShellEntry()`; `hydrateWorkspace()` at the end of `init()` (landing and #70 branches)
+-> `sessionStorage` only
+! TRIPWIRE: `workspace.js` never routes. It renders no view, never calls `history`, `showView` or `fetch`. `dashboard.js` stays the only router.
+! **The active context is a recorded copy of the shell state, never a second authority.** `syncActive()` writes the shell's `activeView` / `activeRepo` / `activeRepoKey` (+ Loop `sub`) into the active context. `showView()` syncs with `sub: null`; the Loop mount's `GatorShell.replaceSubState` then records the real sub.
+! **Before hydration nothing is written.** `syncActive()` and `save()` are no-ops until `load()`, so the landing never overwrites the cache before reading it.
+- **`load(current, validateRepo)`**, after the landing or the #70 re-render, so a navigation during load still wins:
+  1. Read the cache.
+  2. Keep a cached context only if `validateRepo(repo, repoKey)` finds it in the current fleet data: by key when the record has one, else by name. It takes the registry's current name and key and never substitutes another repository. A repository-less context always survives.
+  3. The active context is the cached one for the same repository, or (no repository) the cached active context when it was repository-less. Otherwise a new context is appended; at 12 contexts the last inactive one is dropped.
+  4. Sync it from `current` and save.
+- **One context per repository:** `sameRepo` matches by key when both are known, else by name. A cache with duplicates keeps the first. `syncActive` drops an inactive duplicate of the active context's repository (the active wins).
+- **Storage contract:** key `gator.dashboard.workspace`, `sessionStorage` (per browser tab; never `localStorage`). Value `{"v": 1, "activeId", "contexts": [...]}`.
+  - **Rejected whole:** a wrong `v`, a non-array `contexts`, more than 12 contexts, more than 16,384 **UTF-8 bytes** (`overLimit()`: string length first, then `TextEncoder` byte length; never `.length` alone, since a non-ASCII name or loop id takes several bytes per character), a parse error, or a throwing accessor. The result is an empty cache, and the page renders the URL's context.
+  - **Dropped quietly, one record at a time:** an invalid `id` (`/^[a-z0-9]{1,16}$/`), a `view` outside `VIEW_META`, a `repo` that is not a 1–200 character string or null, a `repoKey` that does not match `/^[A-Za-z0-9_-]{1,128}$/` or is non-null with a null repo, and duplicate ids or repositories.
+  - **`sub`:** kept only for `view: "loop"`, through the shell's `cleanSub` (configured), with `loopId` capped at 200 characters.
+  - **Writes:** `save()` skips a value over the same `overLimit()` byte limit and swallows a throwing `setItem`.
+  - **Never stored:** tokens, prompts, artifact text, filesystem paths or API responses.
+- **Snapshot:** `workspace()` returns null when `window.GATOR_SNAPSHOT` is set. A static fleet report has no workspaces, and nothing is read or written.
+- **Accessors** `active()` / `list()` / `findByRepo()` return copies. `configure({isView, cleanSub})` is called once by the shell at script load.
+- **Pinned by** `tests/test_dashboard_ui/test_workspace_tabs.py` (`test_workspace_cache_rejects_bad_records`, `test_workspace_cache_keeps_valid_contexts`, `test_workspace_cache_holds_only_bounded_fields`).
+- **List operations** (`create` (null at 12) / `select` / `neighbourOf` (right, else left) / `remove` / `count`) change only the list and save. The shell renders and records.
+
+### Workspace strip — GatorWorkspace.renderStrip() · shell side: renderWorkspaceStrip() / selectContext() / newContext() / closeContext() (#80)
+File: src/gator_command/scripts/dashboard/workspace.js
+File: src/gator_command/scripts/dashboard/dashboard.js
+File: src/gator_command/scripts/dashboard/dashboard.html
+The full-width strip of workspace contexts above the sidebar and main pane. Top tabs are places the Architect has open; sidebar items are activities in the selected place.
+<- `syncWorkspace()` (after every sync) and strip clicks
+-> `applyShellEntry()`, `recordShell("pushState")`
+- **Markup:**
+  - `nav#workspace-strip[aria-label="Workspaces"]` is the first child of `<body>`, before `#app-shell`, which carries `role="tabpanel"` and an `aria-labelledby` that follows the active tab.
+  - The strip holds a `div.workspace-tablist[role=tablist][aria-label="Open workspaces"]` of `div.workspace-item[role=presentation]`, each with:
+    - `button.workspace-tab[role=tab]` (`#ws-tab-<id>`, `aria-selected`, `aria-controls="app-shell"`, roving `tabindex`, `data-ctx`), labelled with the repository display name or `—` (`title="No repository"`);
+    - a separately focusable `button.workspace-tab-close` labelled "Close <repo> workspace" / "Close workspace without repository" (`tabindex` 0 on the active item, else -1).
+  - Then `button.workspace-new` ("+", `aria-label="New workspace"`). At 12 contexts it is disabled, with the title "Workspace limit reached (12)".
+  - All text is set through `textContent`.
+- **Keyboard (manual activation):** Left/Right (wrapping), Home and End move focus and the roving `tabindex` only. Enter/Space (native button click) selects. The reason: a selection remounts a view and records history, which must not happen on every arrow key.
+- **Rendering:** `renderStrip` rebuilds only when `[activeId, ids, repos]` changes (or `force`). Focus inside the strip (tab, close or +) is restored across a rebuild, falling back to the active tab. `focusActive` puts focus on the active tab, even when the strip is unchanged (the strip may already have been rebuilt by the sync inside the same selection). The active tab is scrolled into view.
+- **`selectContext(id, {force, focus})`:** a no-op for the active context unless `force`.
+  1. `GatorWorkspace.select`.
+  2. If the context's repository is no longer registered (`validateRepo`), apply `{view: fleet, repo: null}` and show the "no longer registered" notice: the context becomes repository-less, never another repository. Otherwise apply `{view, repo, repoKey, sub}` through `applyShellEntry()`. Its `showView()` runs the previous view's teardown first.
+  3. Push one entry with `recordShell("pushState", sub)`.
+  4. Re-render the strip.
+- **`newContext()`:** creates `{repo: null, view: "welcome"}` and selects it with focus.
+- **`closeContext(id)`:**
+  - **An inactive context** is removed, with no navigation and no history entry.
+  - **The active context** is removed, then its right-hand (else left-hand) neighbour is selected with focus.
+  - **The last context** is replaced by a new repository-less Welcome context.
+  - Close never calls a registry or Loop endpoint.
+- **Snapshot:** `init()` hides the strip and removes `#app-shell`'s tab-panel role.
+! TRIPWIRE: inactive contexts are not live. Only the selected context is rendered, so switching tears down Loop polling, timers and listeners through `showView()`'s existing teardown. Never keep hidden DOM copies of other contexts.
+- **Pinned by** `test_strip_spans_shell_above_sidebar`, `test_strip_aria_keyboard_and_close_labels`, `test_switch_restores_each_context`, `test_only_active_loop_context_polls` and `test_close_changes_navigation_only` in `tests/test_dashboard_ui/test_workspace_tabs.py`.
 
 ### apiFetch() / mutation requests
 File: src/gator_command/scripts/dashboard/dashboard.js
@@ -53,6 +135,14 @@ Render repository health and expose explicit per-repository actions via a three-
 ! The overflow menu carries dual identity: `data-repo-name` for name-addressed Update/Gatorize, `data-repo-path` for path-addressed Remove. Each action dispatches to the correct identity.
 ! Actions use the repository's stable key, not display text or array position.
 ! Missing repositories remain representable so users can understand and clean stale registry entries.
+! **Opening actions (#80).**
+  - **The ⋮ menu** gains two items, before Update/Gatorize and Remove, and only when `!window.GATOR_SNAPSHOT`:
+    - **"Open in new workspace tab":** `button.menu-item.menu-open-workspace[data-action="open-workspace"]`, carrying `data-repo-name` and `data-repo-key`. It dispatches to `window.gatorOpenRepoInNewContext(name, key)`.
+    - **"Open in new browser tab":** a native `a.menu-item.menu-open-browser-tab`, with `href="?repo=<encodeURIComponent(name)>"`, `target="_blank"` and `rel="noopener"`. It is a same-origin relative link with no handler of its own, so middle-click works. It never names a path or key.
+  - **The row link** (`gatorNavToRepo`) means "open in the current context". When another context already holds that repository, it selects that context instead (one context per repository). Otherwise it navigates as before, which turns the current context into that repository's context.
+  - **`gatorOpenRepoInNewContext`** (`dashboard.js`) selects the existing context for that repository, or creates `{repo, repoKey, view: "repo"}` (the Repo overview) and selects it with focus. At 12 contexts it shows the `.shell-notice` "Workspace limit reached (12). Close a workspace first." and does nothing else.
+  - **Identity:** contexts match by `repoKey` when both sides have one, never by row position.
+  - **Pinned by** `test_fleet_open_actions` and `test_fleet_open_workspace_at_limit` (`test_workspace_tabs.py`).
 
 ### openRemoveConfirmDialog() / remove handler
 File: src/gator_command/scripts/dashboard/views/fleet.js
@@ -378,6 +468,12 @@ File: src/gator_command/scripts/dashboard/dashboard.css
 Maintain the sidebar/topbar/content flex chain and usable narrow-screen layout.
 <- all views
 ! Repository content and iframe containers need `min-width: 0`; HTML preview retains a visible minimum height and scrollable overflow.
+! **Body column (#80):**
+  - **Layout:** `body` is a column flex box (`height: 100vh; overflow: hidden`) holding `#workspace-strip` and then `#app-shell`.
+  - **The strip** is `flex: 0 0 var(--workspace-strip-height)` (36px). It is one row that never wraps, and scrolls horizontally when narrow.
+  - **`#app-shell`** is `flex: 1; min-height: 0; position: relative`. It replaced `height: 100vh`, and the page still never scrolls.
+  - **`#sidebar-toggle`** is `position: absolute` within `#app-shell` (no positioned ancestor between), with unchanged offsets, so it sits below the strip.
+  - **Selected tab:** weight 700 plus a 3px `currentColor` underline (border-bottom); never colour alone.
 ! **Shared main-pane tab bar (#72):** `.gator-tabbar` is a full-width block that owns the 1px baseline (it reaches the main pane's right edge); `.gator-tabbar [role="tablist"]` wraps when narrow; `.gator-tab` keeps a fixed 13px label. Selected = `aria-selected="true"` → weight 700 plus a 3px `currentColor` underline; unselected = weight 400, transparent underline; `:focus-visible` outline. Never colour alone. Loop's Create / History uses it; the old `.loop-subnav*` styles were removed (the class names remain as hooks).
 ! **Logo button (#72):** `.brand-home` resets button chrome around the unchanged `#brand-logo` sizing and adds a `:focus-visible` outline. Welcome content uses `.welcome-body` under the default `#view-slot` scrolling. It has no max-width and no side padding, so each topic frame spans the full main-pane content width, aligned with the tab bar. Each document sets its own reading width inside its frame (Architect direction 2026-10-10; this replaces the #72 760px cap). A column flex chain (`.welcome-workspace` `min-height: 100%` → `.welcome-body` `flex: 1` → `.welcome-panel:not([hidden])` `flex: 1` → `.welcome-frame` `flex: 1`) makes each topic iframe fill the main pane down to `#view-slot`'s bottom padding, so the bottom margin matches the side margins (Architect direction 2026-10-11; replaces the `100vh - 220px` estimate, which left ~66px unused). `.welcome-frame` is block, full width, no border, `min-height: 480px` (`420px` at ≤600px); below that the view slot scrolls. ! The panel rule must keep `:not([hidden])`: a bare `display: flex` would override the `hidden` attribute and show every topic. There is no auto-height cross-frame coordination: a document scrolls inside its frame. `.welcome-doc-status` styles the snapshot's unavailable-document notice. The old Markdown, list, next-button and copy rules were removed.
 ! Loop height chain: `.loop-workspace` (column, `height:100%`) → `.loop-workspace-body` (`flex:1; min-height:0`) keeps `.loop-sidebar` / `.loop-main` as the scroll owners.

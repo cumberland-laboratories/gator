@@ -48,10 +48,115 @@ html, body {
 
 /* ── app shell ─────────────────────────────────────────────────────────── */
 
-#app-shell {
+/* #80: the body is a column — the workspace strip, then the shell. The
+   page itself never scrolls; the shell's flex chain owns scrolling. */
+body {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
+}
+
+#app-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;   /* #80: anchors #sidebar-toggle below the strip */
+}
+
+/* ── workspace strip (#80) ─────────────────────────────────────────────── */
+
+:root {
+  --workspace-strip-height: 36px;
+}
+
+#workspace-strip {
+  flex: 0 0 var(--workspace-strip-height);
+  height: var(--workspace-strip-height);
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border-bottom: 1px solid var(--color-border);
+}
+
+#workspace-strip[hidden] {
+  display: none;
+}
+
+.workspace-tablist {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+.workspace-item {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-tab,
+.workspace-tab-close,
+.workspace-new {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Selected = weight 700 + a 3px currentColor underline; never colour alone. */
+.workspace-tab {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px 0 14px;
+  font-weight: 400;
+  border-bottom: 3px solid transparent;
+}
+
+.workspace-tab[aria-selected="true"] {
+  font-weight: 700;
+  color: var(--sidebar-active);
+  border-bottom-color: currentColor;
+}
+
+.workspace-tab-close {
+  padding: 0 10px 0 6px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.workspace-new {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.workspace-new:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.workspace-tab:hover,
+.workspace-tab-close:hover,
+.workspace-new:hover:not(:disabled) {
+  background: var(--sidebar-hover-bg);
+}
+
+.workspace-tab:focus-visible,
+.workspace-tab-close:focus-visible,
+.workspace-new:focus-visible {
+  outline: 2px solid var(--sidebar-active);
+  outline-offset: -2px;
 }
 
 /* ── sidebar ───────────────────────────────────────────────────────────── */
@@ -74,7 +179,7 @@ html, body {
 }
 
 #sidebar-toggle {
-  position: fixed;
+  position: absolute;   /* #80: within #app-shell, below the strip */
   top: 8px;
   left: 8px;
   z-index: 100;
@@ -711,6 +816,11 @@ a:hover, .link-btn:hover {
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/* #80: "Open in new browser tab" is a native link styled as a menu item. */
+a.menu-item {
+  text-decoration: none;
 }
 
 .overflow-menu .menu-item:hover:not(:disabled) {

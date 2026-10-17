@@ -86,6 +86,7 @@ def build_snapshot(fast_data):
     settings_js = _read_asset("views/settings.js")
     welcome_js = _read_asset("views/welcome.js")  # #72
     docs_js = _read_asset("views/docs.js")  # repo-independent Docs view
+    workspace_js = _read_asset("workspace.js")  # #80 workspace contexts
     shell_js = _read_asset("dashboard.js")
 
     data_block = (
@@ -120,6 +121,7 @@ def build_snapshot(fast_data):
         f"<script>\n{welcome_js}\n</script>\n"
         f"<script>\n{docs_js}\n</script>\n"
         f"{data_block}\n"
+        f"<script>\n{workspace_js}\n</script>\n"
         f"<script>\n{shell_js}\n</script>"
     )
     html = re.sub(
@@ -133,6 +135,7 @@ def build_snapshot(fast_data):
         r'<script src="views/settings\.js"></script>\s*'
         r'<script src="views/welcome\.js"></script>\s*'
         r'<script src="views/docs\.js"></script>\s*'
+        r'<script src="workspace\.js"></script>\s*'
         r'<script src="dashboard\.js"></script>',
         lambda m: scripts_block,
         html,
