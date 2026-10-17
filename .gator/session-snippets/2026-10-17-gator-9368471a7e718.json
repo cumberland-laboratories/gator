@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Inbox: gator loop codex removes Codex's own settings from the managed config block",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "inbox",
+    "loop",
+    "codex"
+  ],
+  "commit": "9368471a7e718c6ba794a121a349b21bd029c0d3",
+  "short_commit": "9368471",
+  "snippet_id": "snippet-9368471a7e718",
+  "session_group_key": "anthropic:d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "72b4725ea2aa75548bd7239ea940fc8195d47da2",
+  "started_at": "2026-10-17T20:15:15Z",
+  "ended_at": "2026-10-17T20:38:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-17-gator-72b4725ea2aa7.json"
+  ],
+  "notes": [
+    "`inbox.md`: records that `gator loop codex` replaces the whole Gator-managed block in the loop home's `config.toml`, which removes settings Codex wrote there itself (such as trusted hook hashes). Two possible fixes are noted."
+  ],
+  "transcript_session_id": "d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "transcript_ref": null
+}

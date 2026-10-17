@@ -173,10 +173,13 @@ class TestRemoveRepo:
 
         _post(server.url, "/api/repos/remove", {"path": repo_path})
 
+        # The registry is published as a new snapshot, never mutated in
+        # place, so read the published value rather than the seeded list.
         assert not any(
             str(Path(r.get("path", "")).resolve()) == repo_path
-            for r in server._registry_list
+            for r in dashboard._registry_snapshot()
         )
+        assert any(r.get("path") == repo_path for r in server._registry_list)
         fast_repos = dashboard.DashboardHandler.fast_data.get("repos", [])
         assert not any(
             str(Path(r.get("path", "")).resolve()) == repo_path

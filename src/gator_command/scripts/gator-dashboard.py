@@ -23,12 +23,15 @@ Flags:
 
 import argparse
 import collections
+import contextlib
+import errno
 import http as _http
 import json
 import logging
 import os
 import re
 import socket
+import socketserver
 import subprocess
 import sys
 import threading
@@ -47,7 +50,7 @@ DASHBOARD_DIR = SCRIPTS_DIR / "dashboard"
 COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root (src/gator_command/scripts/ → repo root)
 
 sys.path.insert(0, str(SCRIPTS_DIR))
-from gator_core import get_version, import_sibling, git  # noqa: E402
+from gator_core import get_version, import_sibling, git, normalize_path  # noqa: E402
 
 # ── extracted modules ─────────────────────────────────────────────────────────
 from dashboard.helpers import (  # noqa: E402
@@ -77,6 +80,256 @@ from dashboard.data import (  # noqa: E402
 
 # Registry-based repo list (for path resolution)
 _REGISTRY_REPOS = []
+
+# ── shared Dashboard state: snapshots and publication ─────────────────────
+# Registry records and the Fleet object are published whole and never
+# mutated afterwards. Readers take a snapshot under _STATE_LOCK (a leaf:
+# reference read or swap only, no I/O). Writers hold _STATE_WRITE_LOCK
+# around their read-modify-write (small JSON file I/O and Path.resolve()
+# are allowed; never a subprocess, Git, repository scan, or Loop lock) and
+# publish through the helpers below. See scripts-dashboard.md (lock order).
+_STATE_LOCK = threading.Lock()
+_STATE_WRITE_LOCK = threading.Lock()
+
+
+def _registry_snapshot():
+    """Return the published registry as an immutable tuple of records."""
+    with _STATE_LOCK:
+        return tuple(_REGISTRY_REPOS)
+
+
+def _registry_publish(records):
+    """Publish a new registry. Caller holds _STATE_WRITE_LOCK."""
+    global _REGISTRY_REPOS
+    new = tuple(records)
+    with _STATE_LOCK:
+        _REGISTRY_REPOS = new
+    return new
+
+
+def _fleet_snapshot():
+    """Return the published Fleet (Tier-1) object. Never mutate it."""
+    with _STATE_LOCK:
+        return DashboardHandler.fast_data
+
+
+def _fleet_publish(data):
+    """Publish a new Fleet object. Caller holds _STATE_WRITE_LOCK."""
+    with _STATE_LOCK:
+        DashboardHandler.fast_data = data
+    return data
+
+
+def _resolved_or_none(raw):
+    try:
+        return str(Path(raw).resolve()) if raw else None
+    except OSError:
+        return None
+
+
+def _fleet_reconciled(fleet, registry):
+    """New Fleet object keeping only repos still in the given registry.
+
+    A refresh collects from the registry it started with; a remove that
+    lands meanwhile must not be undone by publishing that collection.
+    """
+    current = {_resolved_or_none(r.get("path", "")) for r in registry}
+    new = dict(fleet)
+    new["repos"] = [
+        r for r in fleet.get("repos", [])
+        if _resolved_or_none(r.get("path", "")) in current
+    ]
+    return new
+
+
+# ── same-repository mutation exclusion ────────────────────────────────────
+# Register, remove, update, gatorize, config and topology for one resolved
+# repository path never overlap. Different repositories run in parallel.
+# The lock is acquired non-blocking (a busy repository gets 409), before any
+# side effect, and is held through the response; Dashboard state locks may
+# be taken inside it, never the reverse. See scripts-dashboard.md.
+_REPO_ACTION_GUARD = threading.Lock()
+_REPO_ACTION_LOCKS = {}
+_REPO_BUSY_ERROR = "another change is running for this repository"
+
+# A Loop session transaction blocks on session.lock (session._lock_exclusive).
+# On Windows, msvcrt.locking(LK_LOCK) gives up under contention after about
+# 9-10 s with OSError(errno 36 EDEADLOCK == EDEADLK, "Resource deadlock
+# avoided"); measured on Windows 10 / Python 3.13 and pinned end to end by
+# test_real_windows_session_lock_contention_maps_to_503. POSIX flock(LOCK_EX)
+# waits without a timeout, so it never produces this error. Report it as a
+# retryable 503, never a dropped connection; other OSErrors are real faults
+# and propagate as before.
+_LOOP_BUSY_ERROR = "loop is busy; retry"
+_LOOP_LOCK_BUSY_ERRNOS = frozenset(
+    e for e in (getattr(errno, "EDEADLK", None),
+                getattr(errno, "EDEADLOCK", None)) if e is not None)
+
+
+def _loop_lock_busy(exc):
+    return getattr(exc, "errno", None) in _LOOP_LOCK_BUSY_ERRNOS
+
+
+# /api/audit/sessions runs one at a time (session-aggregator cache writes).
+_AUDIT_LOCK = threading.Lock()
+
+
+# ── restart / upgrade drain ───────────────────────────────────────────────
+# Restart and upgrade end the process (os.execv / os._exit). Before that,
+# in-flight POSTs get a bounded chance to finish, and new POSTs are refused,
+# so a Loop transaction or registry write is not cut off mid-way when it
+# can finish within the bound. GETs are read-only and are not gated.
+_DRAIN_SECONDS = 5.0
+_GATE_EXEMPT_POSTS = frozenset({"/api/restart", "/api/updates/upgrade"})
+_RESTARTING_ERROR = "dashboard is restarting"
+
+
+class _LifecycleGate:
+    """Counts in-flight POSTs; refuses new ones once draining starts."""
+
+    def __init__(self):
+        self._cond = threading.Condition()
+        self._in_flight = 0
+        self._draining = False
+        self._action = None  # "restarting" | "upgrading" while draining
+
+    def enter(self):
+        """Admit a POST. False once draining has started."""
+        with self._cond:
+            if self._draining:
+                return False
+            self._in_flight += 1
+            return True
+
+    def leave(self):
+        with self._cond:
+            self._in_flight -= 1
+            if self._in_flight == 0:
+                self._cond.notify_all()
+
+    def start_draining(self, action):
+        """Begin draining for `action`, atomically.
+
+        Returns (started, active): started is True only for the first
+        caller; active is the action that owns the drain (this one, or the
+        one already in progress).
+        """
+        with self._cond:
+            if self._draining:
+                return False, self._action
+            self._draining = True
+            self._action = action
+            return True, action
+
+    def cancel_draining(self):
+        """Undo start_draining() when the coordinator could not start."""
+        with self._cond:
+            self._draining = False
+            self._action = None
+
+    def wait_drained(self, timeout):
+        """Wait (releasing the condition) until no POST is in flight.
+        Returns False when the bound expired first."""
+        with self._cond:
+            return self._cond.wait_for(lambda: self._in_flight == 0, timeout)
+
+    @property
+    def draining(self):
+        with self._cond:
+            return self._draining
+
+
+_LIFECYCLE_GATE = _LifecycleGate()
+
+
+def _drain_then(fn):
+    """Coordinator for restart/upgrade, run on its own daemon thread.
+
+    The triggering request is exempt from the gate, so this never waits for
+    it. Holds no lock while waiting (the condition is released by wait_for).
+    After the bound, `fn` runs even if a POST is still in flight.
+    """
+    def run():
+        gate = _LIFECYCLE_GATE
+        if not gate.wait_drained(_DRAIN_SECONDS):
+            _debug_print("[lifecycle] drain bound reached with POSTs in flight")
+        fn()
+    return run
+
+
+def _repo_action_key(repo_path):
+    return _resolved_or_none(repo_path) or str(repo_path)
+
+
+@contextlib.contextmanager
+def _repo_action(repo_path):
+    """Yield True when this request owns the repository, False when busy."""
+    key = _repo_action_key(repo_path)
+    with _REPO_ACTION_GUARD:
+        lock = _REPO_ACTION_LOCKS.setdefault(key, threading.Lock())
+    acquired = lock.acquire(blocking=False)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            lock.release()
+
+
+def _resolve_action_target(repo_name, registry, fleet):
+    """Resolve a name-addressed lifecycle target before any work.
+
+    Same lookup as `data.resolve_repo_update()`: the registry by name, else
+    an accessible Fleet entry by name. Returns (path, source) with source
+    "registry" or "fleet", or (None, None) when there is nothing to act on
+    (the caller then lets `data.py` produce its usual error response).
+    """
+    for r in registry:
+        if r.get("name") == repo_name:
+            raw = r.get("path", "")
+            return (normalize_path(raw), "registry") if raw else (None, None)
+    for r in (fleet or {}).get("repos", []):
+        if r.get("name") == repo_name:
+            raw = r.get("path", "")
+            if r.get("accessible") and raw:
+                return normalize_path(raw), "fleet"
+            return None, None
+    return None, None
+
+
+def _still_targeted(path, source):
+    """Re-check, under `_repo_action`, that the target was not removed."""
+    key = _repo_action_key(path)
+    if source == "registry":
+        records = _registry_snapshot()
+    else:
+        records = _fleet_snapshot().get("repos", [])
+    return any(_repo_action_key(normalize_path(r.get("path", "")) or "") == key
+               for r in records if r.get("path"))
+
+
+def _fleet_without(fleet, resolved_paths):
+    """New Fleet object without repos whose resolved path is listed."""
+    drop = set(resolved_paths)
+    new = dict(fleet)
+    new["repos"] = [
+        r for r in fleet.get("repos", [])
+        if _resolved_or_none(r.get("path", "")) not in drop
+    ]
+    return new
+
+
+def _fleet_with_repo_config(fleet, repo_name, config):
+    """New Fleet object whose first repo named repo_name has config merged."""
+    new = dict(fleet)
+    repos = list(fleet.get("repos", []))
+    for i, r in enumerate(repos):
+        if r.get("name") == repo_name:
+            entry = dict(r)
+            entry["config"] = {**(r.get("config") or {}), **config}
+            repos[i] = entry
+            break
+    new["repos"] = repos
+    return new
 
 # ── security: denied file paths (loop secrets, override internals)
 _DENIED_FILENAMES = frozenset({
@@ -231,7 +484,7 @@ def _sweep_liveness(repo_path):
 
 def _adopt_orphaned_loops():
     """Server startup: scan repos for active loops and adopt orphans."""
-    for r in _REGISTRY_REPOS:
+    for r in _registry_snapshot():
         raw_path = r.get("path", "")
         if not raw_path:
             continue
@@ -284,7 +537,8 @@ def _resolve_repo_by_key(repo_key):
     """
     if not repo_key:
         raise KeyError("empty repo_key")
-    for r in _REGISTRY_REPOS:
+    registry = _registry_snapshot()
+    for r in registry:
         if r.get("repo_key") == repo_key:
             return str(Path(r["path"]).resolve())
     # repo_key is computed from resolved path via session_cache_key —
@@ -293,7 +547,7 @@ def _resolve_repo_by_key(repo_key):
         agg = import_sibling("gator-session-aggregator")
     except Exception:
         raise KeyError(repo_key)
-    for r in _REGISTRY_REPOS:
+    for r in registry:
         raw = r.get("path", "")
         if not raw:
             continue
@@ -1451,6 +1705,86 @@ def apply_html_csp_headers(handler, *, external):
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
 
+# ── threaded request server ───────────────────────────────────────────────
+# One worker thread per request (HTTP/1.0: one request per connection),
+# at most MAX_WORKERS at once; excess connections wait in the listen
+# backlog. Expensive routes (listing, search, Git, subprocess status,
+# discovery, audit) additionally share HEAVY_WORKERS slots, so at least
+# MAX_WORKERS - HEAVY_WORKERS workers stay free for small reads. A browser
+# opens at most 6 HTTP/1.x connections per origin. See scripts-dashboard.md.
+MAX_WORKERS = 16
+HEAVY_WORKERS = 4
+_HEAVY_TIMEOUT = 60.0
+_HEAVY_SLOTS = threading.BoundedSemaphore(HEAVY_WORKERS)
+_HEAVY_BUSY_ERROR = "dashboard busy; retry"
+
+
+@contextlib.contextmanager
+def _heavy_work():
+    """Yield True holding a heavy-work slot, or False after _HEAVY_TIMEOUT."""
+    slots = _HEAVY_SLOTS
+    if not slots.acquire(timeout=_HEAVY_TIMEOUT):
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        slots.release()
+
+
+def _debug_files_gate_wait():
+    """Test-only seam: hold a live /files listing until a file exists.
+
+    Active only when GATOR_DASHBOARD_DEBUG=1 AND
+    GATOR_DASHBOARD_DEBUG_FILES_GATE=<path>; waits at most 30 s. Without
+    both variables it does nothing (the debug-seam rule).
+    """
+    if os.environ.get("GATOR_DASHBOARD_DEBUG") != "1":
+        return
+    gate = os.environ.get("GATOR_DASHBOARD_DEBUG_FILES_GATE")
+    if not gate:
+        return
+    deadline = _time_mod.monotonic() + 30
+    while not os.path.exists(gate) and _time_mod.monotonic() < deadline:
+        _time_mod.sleep(0.05)
+
+
+class DashboardHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """Loopback HTTP server: one daemon worker per request, bounded.
+
+    `process_request` (the serve_forever thread) takes a worker slot before
+    starting the worker, blocking while all slots are busy, so excess
+    connections queue in the listen backlog instead of being refused or
+    creating unbounded threads. The worker releases its slot when done.
+    """
+    daemon_threads = True      # Ctrl+C / os.execv never wait on a worker
+    block_on_close = False
+    request_queue_size = 64
+
+    def __init__(self, server_address, handler_class,
+                 max_workers=MAX_WORKERS):
+        self._worker_slots = threading.BoundedSemaphore(max_workers)
+        super().__init__(server_address, handler_class)
+
+    def process_request(self, request, client_address):
+        self._worker_slots.acquire()
+        try:
+            threading.Thread(
+                target=self.process_request_thread,
+                args=(request, client_address),
+                daemon=True, name="dashboard-request",
+            ).start()
+        except Exception:
+            self._worker_slots.release()
+            self.shutdown_request(request)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._worker_slots.release()
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     # Shared across all requests; set before server starts
     fast_data: dict = {}
@@ -1466,6 +1800,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             super().handle_one_request()
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass  # Expected during restart — old socket closing
+
+    def _send_heavy_busy(self, cache_control=None):
+        """503 when no heavy-work slot freed within _HEAVY_TIMEOUT."""
+        self._send_json({"error": _HEAVY_BUSY_ERROR}, 503,
+                        cache_control=cache_control)
 
     def _send_json(self, data, status=200, *, cache_control=None):
         """JSON response. Uniform Content-Type
@@ -1613,9 +1952,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         `_serialize_listing_entry` so the wire schema is single-
         sourced (errata E1).
         """
+        _debug_files_gate_wait()
         cache_ctl = "no-store" if req.version_present else None
         repo_path = _resolve_repo_path(req.repo_name,
-                                        _REGISTRY_REPOS)
+                                        _registry_snapshot())
         if not repo_path or not Path(repo_path).is_dir():
             return self._send_json_error(
                 400, "repo not accessible",
@@ -1721,7 +2061,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return self._send_json_error(
                 404, "not found", cache_control=cache_ctl)
         repo_path = _resolve_repo_path(req.repo_name,
-                                        _REGISTRY_REPOS)
+                                        _registry_snapshot())
         if not repo_path:
             return self._send_json_error(
                 404, "repo not found", cache_control=cache_ctl)
@@ -1790,7 +2130,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return self._raw_error_from_req(
                 404, "not found", req)
         repo_path = _resolve_repo_path(req.repo_name,
-                                        _REGISTRY_REPOS)
+                                        _registry_snapshot())
         if not repo_path:
             return self._raw_error_from_req(
                 404, "repo not found", req)
@@ -1878,7 +2218,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             "history"):
             return self._send_json_error(404, "not found")
         repo_path = _resolve_repo_path(req.repo_name,
-                                        _REGISTRY_REPOS)
+                                        _registry_snapshot())
         if not repo_path:
             return self._send_json_error(404, "repo not found")
 
@@ -1972,10 +2312,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         fleet = qs.get("fleet", [""])[0].lower() == "true"
         refresh = qs.get("refresh", [""])[0].lower() == "true"
 
-        result = _resolve_audit_sessions(
-            repo_hash=repo_hash, fleet=fleet, refresh=refresh,
-            registry_repos=_REGISTRY_REPOS,
-        )
+        # Serialized: the aggregator's cache write is not safe for two
+        # concurrent writers. Route-local; no other route takes this lock.
+        with _AUDIT_LOCK:
+            result = _resolve_audit_sessions(
+                repo_hash=repo_hash, fleet=fleet, refresh=refresh,
+                registry_repos=_registry_snapshot(),
+            )
         self._send_json(result["data"], result.get("status", 200))
 
     def do_GET(self):
@@ -1996,7 +2339,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "raw":     self._handle_raw,
                 "history": self._handle_history,
             }
-            return handler_by_endpoint[req.endpoint](req)
+            handler = handler_by_endpoint[req.endpoint]
+            if req.endpoint in ("files", "history"):
+                # Listing walks the repository; history runs Git.
+                with _heavy_work() as admitted:
+                    if not admitted:
+                        return self._send_heavy_busy(
+                            "no-store" if req.version_present else None)
+                    return handler(req)
+            return handler(req)
 
         # req.endpoint == "other" — control falls through to the
         # existing shipped legacy branches BELOW, unchanged.
@@ -2007,7 +2358,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_dashboard_html()
             return
 
-        # Debug seam — exposes live _REGISTRY_REPOS so the test
+        # Debug seam — exposes the published registry so the test
         # harness can prove read-side isolation (the actual state
         # every handler operates on, not a recomputed Path.home()
         # shortcut). Gated per-request on GATOR_DASHBOARD_DEBUG=1
@@ -2017,19 +2368,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if os.environ.get("GATOR_DASHBOARD_DEBUG") != "1":
                 self.send_error(404, "Not found")
                 return
+            registry = _registry_snapshot()
             self._send_json({
                 "registry_repos": [
                     {"name": r.get("name"), "path": r.get("path")}
-                    for r in _REGISTRY_REPOS
+                    for r in registry
                 ],
-                "count": len(_REGISTRY_REPOS),
+                "count": len(registry),
                 "command_post_root": str(COMMAND_POST_ROOT),
             })
             return
 
         # Tier 1 data
         if path == "/api/data":
-            self._send_json(self.__class__.fast_data)
+            self._send_json(_fleet_snapshot())
             return
 
         # Welcome topics: the four shipped HTML documents, shown in
@@ -2042,58 +2394,87 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/refresh":
             cls = self.__class__
 
-            def _do_refresh():
-                with cls._refresh_lock:
-                    cls.fast_data = collect_standalone_data(_REGISTRY_REPOS)
-
-            if not cls._refresh_lock.locked():
-                threading.Thread(target=_do_refresh, daemon=True).start()
-                self._send_json({"status": "refreshing"})
-            else:
+            # Single-flight: admission is one non-blocking acquire in the
+            # request thread; the worker owns the lock and releases it.
+            if not cls._refresh_lock.acquire(blocking=False):
                 self._send_json({"status": "already_refreshing"})
+                return
+
+            def _do_refresh():
+                try:
+                    data = collect_standalone_data(_registry_snapshot())
+                    with _STATE_WRITE_LOCK:
+                        _fleet_publish(_fleet_reconciled(
+                            data, _registry_snapshot()))
+                except Exception as exc:
+                    _debug_print(f"[refresh] collection failed: {exc}")
+                finally:
+                    cls._refresh_lock.release()
+
+            try:
+                threading.Thread(target=_do_refresh, daemon=True,
+                                 name="dashboard-refresh").start()
+            except Exception as exc:
+                cls._refresh_lock.release()
+                self._send_json(
+                    {"error": f"could not start refresh: {exc}"}, 500)
+                return
+            self._send_json({"status": "refreshing"})
             return
 
         # Session summaries — lazy / on-demand aggregation (enterprise)
         if path == "/api/audit/sessions":
-            self._handle_audit_sessions()
-            return
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                self._handle_audit_sessions()
+                return
 
         # Commit history — git log based, no session dependency
         if path.startswith("/api/repo/") and path.endswith("/history"):
-            repo_name = path[len("/api/repo/"):-len("/history")]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                repo_name = path[len("/api/repo/"):-len("/history")]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if not repo_path or not Path(repo_path).is_dir():
+                    self._send_json({"error": "repo not accessible"}, 400)
+                    return
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                limit = int(qs.get("limit", ["20"])[0])
+                commits = _get_repo_history(repo_path, limit)
+                self._send_json({"commits": commits, "repo": repo_name})
                 return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path or not Path(repo_path).is_dir():
-                self._send_json({"error": "repo not accessible"}, 400)
-                return
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            limit = int(qs.get("limit", ["20"])[0])
-            commits = _get_repo_history(repo_path, limit)
-            self._send_json({"commits": commits, "repo": repo_name})
-            return
 
         # Cross-document search — server-side grep
         if path.startswith("/api/repo/") and path.endswith("/search"):
-            repo_name = path[len("/api/repo/"):-len("/search")]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                repo_name = path[len("/api/repo/"):-len("/search")]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                query = qs.get("q", [""])[0]
+                if not query or len(query) < 2:
+                    self._send_json({"results": []})
+                    return
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if not repo_path or not Path(repo_path).is_dir():
+                    self._send_json({"error": "repo not accessible"}, 400)
+                    return
+                results = _search_repo_files(repo_path, query)
+                self._send_json({"results": results, "query": query})
                 return
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            query = qs.get("q", [""])[0]
-            if not query or len(query) < 2:
-                self._send_json({"results": []})
-                return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path or not Path(repo_path).is_dir():
-                self._send_json({"error": "repo not accessible"}, 400)
-                return
-            results = _search_repo_files(repo_path, query)
-            self._send_json({"results": results, "query": query})
-            return
 
         # Self-update check — read-only, no git fetch, no network
         if path == "/api/updates/check":
@@ -2102,54 +2483,62 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         # Check for available updates (dry-run, read-only)
         if path.startswith("/api/repo/") and path.endswith("/check"):
-            repo_name = path[len("/api/repo/"):-len("/check")]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                repo_name = path[len("/api/repo/"):-len("/check")]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if not repo_path or not Path(repo_path).is_dir():
+                    self._send_json({"error": "repo not accessible"}, 400)
+                    return
+                update_data = run_json("gator-update", "--dry-run", "--json",
+                                       "--path", repo_path, timeout=30)
+                # Also run charter-verify for charter health
+                charter_data = run_json("gator-charter-verify",
+                                        "--path", repo_path, timeout=15)
+                result = dict(update_data)
+                result["charter_health"] = {
+                    "finding_count": charter_data.get("finding_count", 0),
+                    "findings": charter_data.get("findings", []),
+                } if not charter_data.get("error") else {"finding_count": -1, "findings": []}
+                self._send_json(result)
                 return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path or not Path(repo_path).is_dir():
-                self._send_json({"error": "repo not accessible"}, 400)
-                return
-            update_data = run_json("gator-update", "--dry-run", "--json",
-                                   "--path", repo_path, timeout=30)
-            # Also run charter-verify for charter health
-            charter_data = run_json("gator-charter-verify",
-                                    "--path", repo_path, timeout=15)
-            result = dict(update_data)
-            result["charter_health"] = {
-                "finding_count": charter_data.get("finding_count", 0),
-                "findings": charter_data.get("findings", []),
-            } if not charter_data.get("error") else {"finding_count": -1, "findings": []}
-            self._send_json(result)
-            return
 
         # List .gator/ markdown files for a repo
         # GET /api/repo/<name>/commits — recent commit history for the repo
         if path.startswith("/api/repo/") and path.endswith("/commits"):
-            repo_name = path[len("/api/repo/"):-len("/commits")]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                repo_name = path[len("/api/repo/"):-len("/commits")]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if not repo_path:
+                    self._send_json({"error": "repo not found"}, 404)
+                    return
+                log_output, ok = _git_run(
+                    "log", "--format=%H%n%h%n%ai%n%s", "-50",
+                    cwd=repo_path,
+                )
+                commits = []
+                if ok and log_output:
+                    lines = log_output.splitlines()
+                    for i in range(0, len(lines) - 3, 4):
+                        commits.append({
+                            "hash": lines[i],
+                            "short_hash": lines[i + 1],
+                            "date": lines[i + 2],
+                            "message": lines[i + 3],
+                        })
+                self._send_json({"commits": commits})
                 return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if not repo_path:
-                self._send_json({"error": "repo not found"}, 404)
-                return
-            log_output, ok = _git_run(
-                "log", "--format=%H%n%h%n%ai%n%s", "-50",
-                cwd=repo_path,
-            )
-            commits = []
-            if ok and log_output:
-                lines = log_output.splitlines()
-                for i in range(0, len(lines) - 3, 4):
-                    commits.append({
-                        "hash": lines[i],
-                        "short_hash": lines[i + 1],
-                        "date": lines[i + 2],
-                        "message": lines[i + 3],
-                    })
-            self._send_json({"commits": commits})
-            return
 
         # B1 Slice 2 (v2.13.0): `/files`, `/raw/`, `/history/<file>`,
         # `/file/` are handled by the parse-once dispatch at the top
@@ -2160,23 +2549,31 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         # Tier 2 — per-repo deep status (lazy, on demand)
         if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/check", "/topology", "/files")):
-            repo_name = path[len("/api/repo/"):]
-            if not repo_name:
-                self._send_json({"error": "repo name required"}, 400)
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                repo_name = path[len("/api/repo/"):]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                # Resolve name to path from registry for standalone compatibility
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if repo_path:
+                    data = run_json("gator-repo-status", "--path", repo_path, timeout=30)
+                else:
+                    data = run_json("gator-repo-status", "--repo", repo_name, timeout=30)
+                self._send_json(data)
                 return
-            # Resolve name to path from registry for standalone compatibility
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
-            if repo_path:
-                data = run_json("gator-repo-status", "--path", repo_path, timeout=30)
-            else:
-                data = run_json("gator-repo-status", "--repo", repo_name, timeout=30)
-            self._send_json(data)
-            return
 
         # GET /api/repos/discover — find local Git repos not yet registered
         if path == "/api/repos/discover":
-            self._handle_repo_discover()
-            return
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy()
+                    return
+                self._handle_repo_discover()
+                return
 
         # ── Loop workspace routes (repo-by-key addressed) ────────────
         if path.startswith("/api/repo-by-key/"):
@@ -2202,7 +2599,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         roots = [str(c) for c in _resolve_discovery_roots()]
 
         registered_paths = set()
-        for r in _REGISTRY_REPOS:
+        for r in _registry_snapshot():
             p = r.get("path", "")
             if p:
                 try:
@@ -3185,6 +3582,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
             return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
+            return
 
         self._send_json({"ok": True})
 
@@ -3210,6 +3612,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             handle_interject(token, message, loop_dir=loop_dir)
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
+            return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
             return
 
         self._send_json({"ok": True})
@@ -3253,6 +3660,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                            turn_timeout=turn_timeout, no_response=no_response)
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
+            return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
             return
         except ValueError as exc:
             # Response contract / timeout violations — nothing was written.
@@ -3306,6 +3718,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 token, rounds, message, loop_dir=loop_dir)
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
+            return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
             return
         except RuntimeError as exc:
             # Another active loop, or a start/extension in progress.
@@ -3423,6 +3840,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
             return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
+            return
         except RuntimeError as exc:
             self._send_json({"error": str(exc)}, 409)
             return
@@ -3468,12 +3890,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except PermissionError as exc:
             self._send_json({"error": str(exc)}, 409)
             return
+        except OSError as exc:
+            if not _loop_lock_busy(exc):
+                raise
+            self._send_json({"error": _LOOP_BUSY_ERROR}, 503)
+            return
 
         self._send_json({"ok": True})
 
     def _handle_repo_register(self):
         """Register a repo path in the local dashboard registry."""
-        global _REGISTRY_REPOS
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else b""
         try:
@@ -3490,8 +3916,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Not a Git repository"}, 400)
             return
 
+        abs_path = str(Path(repo_path).resolve())
+        with _repo_action(abs_path) as owned:
+            if not owned:
+                self._send_json({"error": _REPO_BUSY_ERROR}, 409)
+                return
+            self._register_owned(repo_path, abs_path)
+
+    def _register_owned(self, repo_path, abs_path):
+        """Register body; the caller owns `_repo_action(abs_path)`."""
         from gator_core import ensure_dashboard_registry_entry
-        result = ensure_dashboard_registry_entry(repo_path, source="dashboard")
+        from datetime import datetime, timezone
+
+        # Registry read-modify-write and publication under the writer lock,
+        # so two Dashboard registry writes never lose an update. Responses
+        # are sent only after the lock is released.
+        with _STATE_WRITE_LOCK:
+            result = ensure_dashboard_registry_entry(repo_path, source="dashboard")
+            if result["status"] == "added":
+                # Publish the new registry so refresh sees the repo immediately
+                current = _registry_snapshot()
+                if not any(_resolved_or_none(r.get("path", "")) == abs_path
+                           for r in current):
+                    _registry_publish(current + ({
+                        "name": Path(repo_path).name,
+                        "path": abs_path,
+                        "remote": "",
+                        "registered": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "source": "dashboard",
+                    },))
 
         if result["status"] == "already_registered":
             self._send_json({"error": "Already registered"}, 409)
@@ -3500,22 +3953,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": result.get("detail", "Registration failed")}, 500)
             return
 
-        # Update in-memory registry so refresh sees the new repo immediately
-        abs_path = str(Path(repo_path).resolve())
-        from datetime import datetime, timezone
-        _REGISTRY_REPOS.append({
-            "name": Path(repo_path).name,
-            "path": abs_path,
-            "remote": "",
-            "registered": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "source": "dashboard",
-        })
-
         self._send_json({"registered": True, "path": abs_path, "name": Path(repo_path).name})
 
     def _handle_repo_remove(self):
         """Remove a repo from the dashboard registry by its registered path."""
-        global _REGISTRY_REPOS
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else b""
         try:
@@ -3530,25 +3971,32 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         resolved = str(Path(repo_path).resolve())
+        with _repo_action(resolved) as owned:
+            if not owned:
+                self._send_json({"error": _REPO_BUSY_ERROR}, 409)
+                return
+            self._remove_owned(resolved)
 
-        # 1. Write registry — remove_dashboard_repo matches by resolved path
+    def _remove_owned(self, resolved):
+        """Remove body; the caller owns `_repo_action(resolved)`."""
         from gator_core import remove_dashboard_repo
-        if not remove_dashboard_repo(resolved):
+        with _STATE_WRITE_LOCK:
+            # 1. Write registry — remove_dashboard_repo matches by resolved path
+            removed = remove_dashboard_repo(resolved)
+            if removed:
+                # 2. Publish the registry without the repo
+                _registry_publish([
+                    r for r in _registry_snapshot()
+                    if _resolved_or_none(r.get("path", "")) != resolved
+                ])
+
+                # 3. Publish a Fleet copy so the next GET /api/data is coherent
+                _fleet_publish(_fleet_without(_fleet_snapshot(), [resolved]))
+
+        # Responses are sent only after the writer lock is released.
+        if not removed:
             self._send_json({"error": "not found"}, 404)
             return
-
-        # 2. Update in-memory registry
-        _REGISTRY_REPOS[:] = [
-            r for r in _REGISTRY_REPOS
-            if str(Path(r.get("path", "")).resolve()) != resolved
-        ]
-
-        # 3. Update fast_data so the next GET /api/data is coherent
-        cached_repos = self.__class__.fast_data.get("repos", [])
-        self.__class__.fast_data["repos"] = [
-            r for r in cached_repos
-            if str(Path(r.get("path", "")).resolve()) != resolved
-        ]
 
         self._send_json({"status": "ok", "removed": resolved})
 
@@ -3561,10 +4009,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return None, f"unsupported source_kind: {source_kind}"
 
         # Resolve repo path from registry
-        repo_path = _resolve_repo_path(repo, _REGISTRY_REPOS)
+        repo_path = _resolve_repo_path(repo, _registry_snapshot())
         if not repo_path:
             # Fallback: check standalone data repos list
-            repos = self.__class__.fast_data.get("repos", [])
+            repos = _fleet_snapshot().get("repos", [])
             match = next((r for r in repos if r.get("name") == repo), None)
             if not match:
                 return None, f"repo '{repo}' not found"
@@ -3622,6 +4070,92 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except OSError:
             self.close_connection = True
 
+    def _with_repo_action(self, repo_name, repo_path, source, fn):
+        """Run a same-repository mutation under `_repo_action`.
+
+        Busy -> 409. Removed since the route's snapshot -> 404, before any
+        side effect. Otherwise `fn()` runs, and writes its response, while
+        the repository is still owned.
+        """
+        with _repo_action(repo_path) as owned:
+            if not owned:
+                self._send_json({"error": _REPO_BUSY_ERROR}, 409)
+                return
+            if not _still_targeted(repo_path, source):
+                self._send_json({"error": f"repo '{repo_name}' not found"}, 404)
+                return
+            fn()
+
+    def _lifecycle_action(self, repo_name, resolve_fn):
+        """Update/gatorize: resolve the target first, then run it owned.
+
+        `resolve_fn` is `data.resolve_repo_update` or `resolve_repo_gatorize`.
+        With no target it runs on the route's snapshots and returns its usual
+        error. With a target it runs under `_with_repo_action` on a one-entry
+        registry holding exactly that path, so the subprocess can only touch
+        the repository that was locked and re-checked.
+        """
+        registry, fleet = _registry_snapshot(), _fleet_snapshot()
+        target, source = _resolve_action_target(repo_name, registry, fleet)
+        if target is None:
+            result = resolve_fn(repo_name, registry_repos=registry,
+                                fleet_data=fleet)
+            self._send_json(result["data"], result["status"])
+            return
+
+        def run():
+            result = resolve_fn(
+                repo_name,
+                registry_repos=({"name": repo_name, "path": target},),
+                fleet_data={},
+            )
+            self._send_json(result["data"], result["status"])
+
+        self._with_repo_action(repo_name, target, source, run)
+
+    def _config_owned(self, repo_name, repo_path, req):
+        """Config POST body; the caller owns `_repo_action(repo_path)`."""
+        config_path = Path(repo_path) / ".gator" / "config.json"
+        # Read existing config
+        config = {}
+        if config_path.exists():
+            try:
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                config = {}
+        # Apply changes
+        if "enforcement_level" in req:
+            level = req["enforcement_level"]
+            if level not in ("strict", "warn", "off"):
+                self._send_json({"error": "enforcement_level must be strict, warn, or off"}, 400)
+                return
+            config["enforcement_level"] = level
+        config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        # Publish a Fleet copy so page refresh reflects the change
+        with _STATE_WRITE_LOCK:
+            _fleet_publish(_fleet_with_repo_config(
+                _fleet_snapshot(), repo_name, config))
+        self._send_json({"status": "ok", "config": config})
+        return
+
+    def _topology_owned(self, repo_path, target_topology):
+        """Topology POST body; the caller owns `_repo_action(repo_path)`."""
+        gator_dir = Path(repo_path) / ".gator"
+        if not gator_dir.is_dir():
+            self._send_json({"error": "repo has no .gator/ directory"}, 400)
+            return
+
+        from gator_core import get_repo_topology, clear_policy_artifacts
+
+        if target_topology == "standalone":
+            clear_policy_artifacts(gator_dir)
+            new_topology = get_repo_topology(gator_dir)
+            self._send_json({"status": "ok", "topology": new_topology})
+        elif target_topology == "policy-synced":
+            # Command-post architecture retired — policy-sync no longer supported
+            self._send_json({"error": "policy-synced topology is no longer supported"}, 400)
+        return
+
     def do_POST(self):
         path = self.path.split("?")[0]
 
@@ -3629,6 +4163,54 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self._check_post_auth():
             return
 
+        # ── restart/upgrade drain gate ──────────────────────────────────────
+        # The restart and upgrade routes are never counted, so the drain
+        # coordinator never waits for the request that triggered it.
+        if path in _GATE_EXEMPT_POSTS:
+            self._post_routes(path)
+            return
+        gate = _LIFECYCLE_GATE
+        if not gate.enter():
+            self._drain_request_body()
+            self._send_json({"error": _RESTARTING_ERROR}, 503)
+            return
+        try:
+            self._post_routes(path)
+        finally:
+            gate.leave()
+
+    def _start_lifecycle(self, fn, action, name):
+        """Start the drain coordinator for restart/upgrade (`action` is
+        "restarting" or "upgrading", the route's success status).
+
+        Returns True when the caller may report `action`: it started the
+        coordinator, or the same action is already in progress (idempotent).
+        Returns False after sending the response otherwise:
+        409 when a different action owns the drain (never a false success),
+        500 when the coordinator thread could not start (draining is then
+        undone, so the Dashboard keeps serving instead of refusing every
+        POST with no restart coming).
+        """
+        gate = _LIFECYCLE_GATE
+        started, active = gate.start_draining(action)
+        if not started:
+            if active == action:
+                return True
+            self._send_json(
+                {"error": f"dashboard is already {active}", "status": active},
+                409)
+            return False
+        try:
+            threading.Thread(target=_drain_then(fn), daemon=True,
+                             name=name).start()
+        except Exception as exc:
+            gate.cancel_draining()
+            self._send_json({"error": f"could not start: {exc}"}, 500)
+            return False
+        return True
+
+    def _post_routes(self, path):
+        """POST dispatch (after auth and the drain gate)."""
         # ── Loop workspace POST routes (repo-by-key addressed) ─────────
         if path.startswith("/api/repo-by-key/"):
             self._dispatch_loop_post(path)
@@ -3657,35 +4239,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json({"error": "invalid JSON"}, 400)
                 return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
+            repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
             if not repo_path:
                 self._send_json({"error": f"repo '{repo_name}' not found in registry"}, 404)
                 return
-            config_path = Path(repo_path) / ".gator" / "config.json"
-            # Read existing config
-            config = {}
-            if config_path.exists():
-                try:
-                    config = json.loads(config_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    config = {}
-            # Apply changes
-            if "enforcement_level" in req:
-                level = req["enforcement_level"]
-                if level not in ("strict", "warn", "off"):
-                    self._send_json({"error": "enforcement_level must be strict, warn, or off"}, 400)
-                    return
-                config["enforcement_level"] = level
-            config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-            # Update cached fast_data so page refresh reflects the change
-            cached_repos = self.__class__.fast_data.get("repos", [])
-            for r in cached_repos:
-                if r.get("name") == repo_name:
-                    if "config" not in r:
-                        r["config"] = {}
-                    r["config"].update(config)
-                    break
-            self._send_json({"status": "ok", "config": config})
+            self._with_repo_action(
+                repo_name, repo_path, "registry",
+                lambda: self._config_owned(repo_name, repo_path, req))
             return
 
         # POST /api/repo/<name>/topology — switch repo between policy-synced and standalone
@@ -3705,24 +4265,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if target_topology not in ("standalone", "policy-synced"):
                 self._send_json({"error": "topology must be 'standalone' or 'policy-synced'"}, 400)
                 return
-            repo_path = _resolve_repo_path(repo_name, _REGISTRY_REPOS)
+            repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
             if not repo_path:
                 self._send_json({"error": f"repo '{repo_name}' not found in registry"}, 404)
                 return
-            gator_dir = Path(repo_path) / ".gator"
-            if not gator_dir.is_dir():
-                self._send_json({"error": "repo has no .gator/ directory"}, 400)
-                return
-
-            from gator_core import get_repo_topology, clear_policy_artifacts
-
-            if target_topology == "standalone":
-                clear_policy_artifacts(gator_dir)
-                new_topology = get_repo_topology(gator_dir)
-                self._send_json({"status": "ok", "topology": new_topology})
-            elif target_topology == "policy-synced":
-                # Command-post architecture retired — policy-sync no longer supported
-                self._send_json({"error": "policy-synced topology is no longer supported"}, 400)
+            self._with_repo_action(
+                repo_name, repo_path, "registry",
+                lambda: self._topology_owned(repo_path, target_topology))
             return
 
         # POST /api/updates/upgrade — pipx upgrade + restart
@@ -3730,9 +4279,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             if length:
                 self.rfile.read(length)
+            # Drain in-flight POSTs (bounded), then upgrade; that function
+            # exits the process. A repeat request does not start a second one.
+            if not self._start_lifecycle(upgrade_and_restart, "upgrading",
+                                         "dashboard-upgrade"):
+                return
             self._send_json({"status": "upgrading"})
-            # This function exits the process after responding
-            threading.Thread(target=upgrade_and_restart, daemon=True).start()
             return
 
         # POST /api/restart — restart the dashboard server process
@@ -3740,9 +4292,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             if length:
                 self.rfile.read(length)
+            # Drain in-flight POSTs (bounded), then restart. A repeat request
+            # does not start a second one.
+            if not self._start_lifecycle(_restart_server, "restarting",
+                                         "dashboard-restart"):
+                return
             self._send_json({"status": "restarting"})
-            # Schedule restart after response is sent
-            threading.Thread(target=_restart_server, daemon=True).start()
             return
 
         # POST /api/session — serve raw markdown content of a session summary
@@ -3788,12 +4343,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if length:
                 self.rfile.read(length)
 
-            result = _resolve_repo_update(
-                repo_name,
-                registry_repos=_REGISTRY_REPOS,
-                fleet_data=self.__class__.fast_data,
-            )
-            self._send_json(result["data"], result["status"])
+            self._lifecycle_action(repo_name, _resolve_repo_update)
             return
 
         # POST /api/repo/<name>/gatorize — install Gator into an ungoverned local repo
@@ -3805,12 +4355,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if length:
                 self.rfile.read(length)
 
-            result = _resolve_repo_gatorize(
-                repo_name,
-                registry_repos=_REGISTRY_REPOS,
-                fleet_data=self.__class__.fast_data,
-            )
-            self._send_json(result["data"], result["status"])
+            self._lifecycle_action(repo_name, _resolve_repo_gatorize)
             return
 
         self.send_error(404, f"Not found: {path}")
@@ -3893,18 +4438,17 @@ def main():
             print(f"  Not found in dashboard: {args.remove_repo}")
         return
 
-    global _REGISTRY_REPOS
-
     version = get_version() or "unknown"
     print(f"\n  gator dashboard  {version}")
 
     # Load registry
-    _REGISTRY_REPOS = _load_registry_repos(COMMAND_POST_ROOT)
+    with _STATE_WRITE_LOCK:
+        _registry_publish(_load_registry_repos(COMMAND_POST_ROOT))
+    registry = _registry_snapshot()
 
-    print(f"  Repos registered: {len(_REGISTRY_REPOS)}", flush=True)
-    fast_data = collect_standalone_data(_REGISTRY_REPOS)
-
-    DashboardHandler.fast_data = fast_data
+    print(f"  Repos registered: {len(registry)}", flush=True)
+    with _STATE_WRITE_LOCK:
+        _fleet_publish(collect_standalone_data(registry))
 
     _adopt_orphaned_loops()
 
@@ -3913,10 +4457,10 @@ def main():
         # from server_address. `find_free_port(0)` returns 0 (the
         # input value) not the assigned port, so skip it on the zero
         # path.
-        server = HTTPServer(("127.0.0.1", 0), DashboardHandler)
+        server = DashboardHTTPServer(("127.0.0.1", 0), DashboardHandler)
     else:
         port = find_free_port(args.port)
-        server = HTTPServer(("127.0.0.1", port), DashboardHandler)
+        server = DashboardHTTPServer(("127.0.0.1", port), DashboardHandler)
     actual_port = server.server_address[1]
     base_url = f"http://127.0.0.1:{actual_port}"
     open_url = f"{base_url}/?repo={args.repo}" if args.repo else base_url

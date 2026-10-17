@@ -117,20 +117,49 @@ Emit no-store/security headers and the embedded-versus-external CSP for HTML raw
 ! HTML CSP forbids dynamic-code evaluation. `Vary: Sec-Fetch-Dest` remains present because iframe and external navigation receive different policies.
 ! The directives come from `content_policy.HTML_CSP_DIRECTIVES` (`_B2_CSP_DIRECTIVES` is an alias); `_B2_CSP_EMBEDDED` / `_B2_CSP_EXTERNAL` header bytes are unchanged and pinned by `tests/test_dashboard_ui/test_html_preview.py`. In-document scripts in shipped HTML (the Welcome Start-a-session copy action) depend on `script-src 'unsafe-inline'`: tightening it breaks them.
 
+### _registry_snapshot() / _registry_publish(records) / _fleet_snapshot() / _fleet_publish(data) / _fleet_without(fleet, resolved_paths) / _fleet_with_repo_config(fleet, repo_name, config) / _STATE_LOCK / _STATE_WRITE_LOCK
+File: src/gator_command/scripts/gator-dashboard.py
+The single authority for shared Dashboard state (threaded-server plan, checkpoint 1). The registry (`_REGISTRY_REPOS`) and the Fleet object (`DashboardHandler.fast_data`) are published whole and never mutated afterwards. `_registry_snapshot()` returns `tuple(_REGISTRY_REPOS)` and `_fleet_snapshot()` returns the published reference, both under `_STATE_LOCK`. `_registry_publish()` and `_fleet_publish()` rebind the slot under `_STATE_LOCK`, and their callers hold `_STATE_WRITE_LOCK`. `_fleet_without()` and `_fleet_with_repo_config()` are pure builders that return a new dict, with the changed repo entry copied.
+<- every registry or Fleet reader (`_adopt_orphaned_loops`, `_resolve_repo_by_key`, the content handlers, the `do_GET` legacy branches, the debug seam, `_handle_repo_discover`, `_find_session_content`, the `do_POST` lifecycle branches, `main()`); writers `_handle_repo_register`, `_handle_repo_remove`, config POST, `/api/refresh` worker, `main()`
+! TRIPWIRE: never mutate a published registry record or Fleet object (no `append`, slice assignment, `fast_data[...] =`, or nested `.update`). Build a new value and publish it. Readers take one snapshot at route entry and work from it. A stale snapshot gives an honest error, never a fallback to another repository.
+! Lock order: `_STATE_LOCK` is a leaf (reference read or swap only, no I/O). `_STATE_WRITE_LOCK` covers a writer's read-modify-write. Small registry-JSON I/O and `Path.resolve()` are allowed under it. A subprocess, Git, a repository scan, a Loop lock, or `_refresh_lock` are not. Neither is writing an HTTP response: every handler decides its outcome under the lock and sends it after release, including rejections (`_handle_repo_register` 409/500, `_handle_repo_remove` 404). This is pinned by `test_registry_responses_are_sent_outside_the_writer_lock`. Order: write lock, then state lock; never the reverse.
+! The slots stay the module global and the class attribute, so tests may still `monkeypatch.setattr(dashboard, "_REGISTRY_REPOS", [...])` or assign `DashboardHandler.fast_data`. The helpers read whatever is bound.
+! **Refresh (`GET /api/refresh`) is single-flight.** Admission is one `DashboardHandler._refresh_lock.acquire(blocking=False)` in the request thread; a request never waits on it.
+  - The `dashboard-refresh` worker owns the lock and releases it in `finally`. A failed `Thread.start()` releases it and returns 500.
+  - The worker collects from a registry snapshot outside every state lock. Under `_STATE_WRITE_LOCK` it then publishes `_fleet_reconciled(data, _registry_snapshot())`, which drops repos removed during the collection, so a refresh never brings back a removed repository.
+  - A collection failure is a debug diagnostic, and the old Fleet stays published. Responses are `refreshing` / `already_refreshing`, unchanged.
+  - Pinned by `TestRefreshSingleFlight` in `tests/test_dashboard_concurrency.py`.
+
+### _repo_action(repo_path) / _REPO_ACTION_LOCKS / _resolve_action_target(repo_name, registry, fleet) / _still_targeted(path, source) / DashboardHandler._with_repo_action() / _lifecycle_action() / _register_owned() / _remove_owned() / _config_owned() / _topology_owned()
+File: src/gator_command/scripts/gator-dashboard.py
+Same-repository mutation exclusion (threaded-server plan, checkpoint 2). Register, remove, update, gatorize, config and topology for one resolved path never overlap; different repositories run in parallel.
+- `_repo_action` is a context manager over a per-resolved-path `threading.Lock`. The acquire is non-blocking and yields False when busy, and the route then returns 409 `another change is running for this repository`.
+- `_resolve_action_target` repeats `data.resolve_repo_update()`'s lookup (registry by name, else an accessible Fleet entry) in the route, so the key is known before any work.
+- `_with_repo_action` takes the lock and re-checks with `_still_targeted` against fresh snapshots. If the repository was removed since the route's snapshot, it returns 404 `repo '<name>' not found` with no side effect. Otherwise it runs the body and writes the response while the lock is still held.
+- `_lifecycle_action` calls `resolve_repo_update` / `resolve_repo_gatorize` with a one-entry registry holding exactly the locked path, so the subprocess can only touch that repository. With no target, it calls them on the route's snapshots for their usual 400/404 error.
+<- `do_POST` register, remove, `/api/repo/<name>/{update,gatorize,config,topology}`
+! TRIPWIRE: a same-repository mutation is ordered strictly against remove. It either finishes before the removal, or it is rejected: 409 while one is running, 404 afterwards. No success for a same-path action can be reported after a later remove. Pinned by `TestRemoveVersusSamePath`.
+! Lock order: `_repo_action` comes first. `_STATE_WRITE_LOCK` / `_STATE_LOCK` may be taken inside it (register, remove, config publish), never the reverse. `_repo_action` may be held across the update/gatorize subprocess; that is its purpose, and only same-path requests contend.
+! Loop routes do not take `_repo_action`. Their authority is the Loop OS locks. Remove is registry-only and never touches `.gator/loops/`.
+
+### _AUDIT_LOCK
+File: src/gator_command/scripts/gator-dashboard.py
+Serializes `GET /api/audit/sessions` (`_handle_audit_sessions`), because the session aggregator's cache write (`_atomic_write`: unlink, then rename) is not safe for two concurrent writers. The lock is route-local and no other route takes it. The result is computed under the lock, and the response is sent after release.
+
 ### _handle_repo_remove()
 File: src/gator_command/scripts/gator-dashboard.py
 Remove a single registry entry identified by its exact registered path. Registry-only — no filesystem access to the repo directory.
 <- `POST /api/repos/remove` with `{"path": "/abs/path"}` in body
--> `gator_core.remove_dashboard_repo()`
+-> `gator_core.remove_dashboard_repo()`, `_registry_publish()`, `_fleet_publish(_fleet_without(...))`
 ! Identity is the resolved registered path, not the display name. Duplicate display names cannot cause multi-entry removal.
-! Cache mutation is synchronous: (1) write registry JSON, (2) filter `_REGISTRY_REPOS`, (3) filter `fast_data["repos"]` — all before the success response.
+! Publication is synchronous and under `_STATE_WRITE_LOCK`: (1) write registry JSON, (2) publish a registry tuple without the path, (3) publish a Fleet copy without it — all before the success response. `_handle_repo_register()` runs its `ensure_dashboard_registry_entry()` read-modify-write and publication under the same lock, so Dashboard registry writes never lose an update. Config POST writes `config.json`, then publishes a `_fleet_with_repo_config()` copy under the lock.
 ! Test paths must be resolved through `Path.resolve()` so the `os.path.isabs()` validation passes on both Windows and Linux CI.
 
 ### _resolve_repo_by_key(repo_key) / _resolve_loop_dir(repo_key, loop_id)
 File: src/gator_command/scripts/gator-dashboard.py
 Resolve `repo_key` (path-hash) to registered repo path, then validate `loop_id` and return a containment-safe loop directory Path. Single gatekeeper for all loop-file access.
 <- loop workspace route handlers
--> `_REGISTRY_REPOS`, `session_cache_key()` (fallback)
+-> `_registry_snapshot()` (one snapshot for both passes), `session_cache_key()` (fallback)
 ! `loop_id` is user-visible URL input — reject `..`, `/`, `\`, and null bytes before filesystem access.
 ! Reject reparse points/symlinks on `.gator`, `loops`, and the loop entry using `_is_reparse_point()` (catches POSIX symlinks and Windows junctions). Namespace-root checks run before any loop entry access; loop-entry check split: `is_symlink()` before resolve (catches dangling), `_is_reparse_point()` after existence confirmed (catches junctions).
 ! Containment is structural: `loops_root_resolved in loop_dir.parents` and `repo_root_resolved in loops_root_resolved.parents` — immune to same-prefix sibling attacks (`loops-escape`).
@@ -206,6 +235,12 @@ Architect control endpoints. Each resolves `loop_dir` via `_resolve_loop_dir()`,
 <- `_dispatch_loop_post()` via action suffix matching (`/pause`, `/interject`, `/unblock`, `/end`; `/extend` and `/renotify` have their own entries below)
 -> `_resolve_loop_dir()`, `loop.session.load_tokens()`, `loop.submit.handle_pause()`, `loop.submit.handle_interject()`, `loop.submit.handle_unblock()`, `loop.submit.handle_end()`
 ! Dashboard never acquires the session lock itself — all writes delegate to `submit.py` handlers.
+! **Busy (threaded-server plan, checkpoint 2).** `session.lock` is blocking (`session._lock_exclusive`).
+  - **The proven boundary:** on Windows, `msvcrt.locking(LK_LOCK)` gives up under contention after about 9–10 s with `OSError(36, "Resource deadlock avoided")`; errno 36 is `EDEADLOCK`, which equals `EDEADLK` on Windows. This was measured on Windows 10 with Python 3.13, and `test_real_windows_session_lock_contention_maps_to_503` pins it end to end by holding the real lock from another handle (Windows-only). POSIX `flock(LOCK_EX)` waits without a timeout, so it never produces this error.
+  - **Mapping:** pause, interject, unblock, end, extend and reopen map exactly that errno (`_LOOP_LOCK_BUSY_ERRNOS`, `_loop_lock_busy()`) to 503 `{"error": "loop is busy; retry"}`, with nothing written.
+  - **Everything else is unchanged.** Any other `OSError` propagates as before (pinned with `EIO` by `test_other_session_lock_errors_are_not_reported_busy`). An `EACCES` is a `PermissionError`, which these routes already map to 409.
+  - **If the platform signal changes**, for example a Python version that raises a different errno, the real-contention test fails. Re-measure, then update `_LOOP_LOCK_BUSY_ERRNOS`. Do not widen the mapping to all `OSError`s.
+  - Concurrent same-loop requests are still decided by the Loop locks: one valid transition, and an honest 409 or 503 for the other. Pinned by `TestLoopRaces`.
 ! `_resolve_architect_token()` is the shared gatekeeper — resolves loop_dir and reads the architect token; returns None (with error response sent) on failure.
 ! Interject requires non-empty message (400 if absent). Pause and end accept optional message/reason.
 ! Unblock accepts `message` (string, optional), `no_response` (bool, default false), and `timeout` (optional JSON integer 30..3600 via `_validate_http_turn_timeout()`; strings/floats/bools → 400). The response contract (a pending escalation needs a message or explicit `no_response`) is enforced by `submit.handle_unblock()`, not by the endpoint; its `ValueError` maps to 400 with nothing written, `PermissionError` to 409. An ordinary pause unblocks with no response.
@@ -283,6 +318,7 @@ Dispatch API, asset, repository content, update, lifecycle, and loop workspace r
 ! Every POST calls `_check_post_auth()` before mutation and requires `X-Gator-Dashboard: 1`. A rejected POST first drains its body (`_drain_request_body()`, bounded at `_MAX_DRAIN_BYTES` = 1 MiB; larger bodies close the connection instead), so the 403 is delivered reliably. Closing a socket with unread request data makes Windows reset the connection, which clients saw as an intermittent `ConnectionAbortedError`. Pinned by `test_rejected_post_with_body_is_delivered_reliably` (40 header-less POSTs with a body).
 ! Do not add permissive CORS. The custom header plus unanswered cross-origin preflight is the local anti-CSRF boundary.
 ! Debug GET routes return 404 unless `GATOR_DASHBOARD_DEBUG=1` is set for the test process.
+! Debug seam `_debug_files_gate_wait()` (threaded-server plan, checkpoint 4). When `GATOR_DASHBOARD_DEBUG=1` **and** `GATOR_DASHBOARD_DEBUG_FILES_GATE=<path>` are both set, a live `/files` listing waits up to 30 s until that file exists. It gives the browser-level concurrency proof a deterministic slow listing. Without both variables it does nothing.
 
 ### build_snapshot(fast_data)
 File: src/gator_command/scripts/dashboard/snapshot.py
@@ -299,12 +335,43 @@ Inline dashboard assets and Tier-1 data into a self-contained offline HTML docum
 ### check_for_updates() / upgrade_and_restart() / restart_server()
 File: src/gator_command/scripts/dashboard/updates.py
 Check PyPI, perform an explicit pipx upgrade in a detached helper, and relaunch the dashboard.
-<- update API routes
+<- update API routes (through `_drain_then()`, below)
 ! Checking is read-only. Upgrade happens only after an authenticated explicit POST and must not strand the response process mid-write.
+
+### _LifecycleGate / _LIFECYCLE_GATE / _drain_then(fn) / DashboardHandler._start_lifecycle(fn, name) / _post_routes(path) / _DRAIN_SECONDS / _GATE_EXEMPT_POSTS
+File: src/gator_command/scripts/gator-dashboard.py
+Restart and upgrade drain (threaded-server plan, checkpoint 3). `do_POST` first runs `_check_post_auth()`, then the gate, then `_post_routes()`, which holds the former `do_POST` dispatch unchanged.
+- `_LifecycleGate` counts in-flight POSTs under one condition (`enter` / `leave`). After `start_draining()`, `enter()` refuses, and the route drains the body and returns 503 `{"error": "dashboard is restarting"}`.
+- `POST /api/restart` and `/api/updates/upgrade` are in `_GATE_EXEMPT_POSTS`. They are never counted, so the coordinator never waits for the request that triggered it.
+- `_start_lifecycle(fn, action, name)` starts the `_drain_then(fn)` coordinator thread **before** the route responds `restarting` / `upgrading`. `start_draining(action)` atomically records which action owns the drain, and only the first caller starts a coordinator.
+  - A repeat of the **same** action gets the same success response, idempotently, and starts nothing.
+  - A **different** action gets 409 `{"error": "dashboard is already <active>", "status": "<active>"}` and starts nothing. This holds for restart-then-upgrade and for upgrade-then-restart, so no route acknowledges an action that will not run.
+- The coordinator waits up to `_DRAIN_SECONDS` (5 s) for in-flight POSTs, via `Condition.wait_for`, which holds no lock while waiting. It then calls the unchanged `restart_server()` / `upgrade_and_restart()`, even if a POST is still in flight after the bound.
+<- `do_POST`
+-> `restart_server()`, `upgrade_and_restart()` (resolved at request time, so tests may monkeypatch them)
+! GETs are read-only and not gated; they keep being served until the process is replaced, and in-flight GETs are abandoned then. Loop watcher threads die with the process as before; the OS releases `host.lock`, and adoption re-hosts after the restart.
+! If the coordinator thread cannot start, `cancel_draining()` undoes the drain and the route returns 500. The Dashboard never refuses every POST with no restart coming, and never reports `restarting` falsely.
+! `_LIFECYCLE_GATE`'s condition is a leaf; the gate is entered before any route lock (`_repo_action`, the state locks).
+! Pinned by `TestRestartDrain` in `tests/test_dashboard_concurrency.py`.
+
+### DashboardHTTPServer / MAX_WORKERS / HEAVY_WORKERS / _HEAVY_SLOTS / _HEAVY_TIMEOUT / _heavy_work() / DashboardHandler._send_heavy_busy()
+File: src/gator_command/scripts/gator-dashboard.py
+The threaded request server (threaded-server plan, checkpoint 4; #70 head-of-line blocking). A slow listing, search, Git call or subprocess no longer delays an unrelated document, API or UI request on the same port.
+- `DashboardHTTPServer(socketserver.ThreadingMixIn, HTTPServer)` runs one daemon worker per request (`daemon_threads = True`, `block_on_close = False`, `request_queue_size = 64`).
+- `process_request` runs on the `serve_forever` thread. It takes one of `MAX_WORKERS` (16) slots, blocking while all are busy, so excess connections queue in the listen backlog rather than being refused or creating unbounded threads. It then starts a `dashboard-request` thread, which releases the slot in `finally`. If `Thread.start()` fails, it releases the slot and closes the connection.
+- `_heavy_work()` admits expensive routes to `HEAVY_WORKERS` (4) shared slots, waiting up to `_HEAVY_TIMEOUT` (60 s) and then sending 503 `{"error": "dashboard busy; retry"}` via `_send_heavy_busy()`. At least 12 workers therefore stay free for small reads.
+  - **Heavy routes:** `/files` and per-file `/history` (the parse-once dispatch), the repo-scope `/history`, `/search`, `/check`, `/commits`, Tier-2 `/api/repo/<name>`, `/api/repos/discover`, and `/api/audit/sessions` (taken before `_AUDIT_LOCK`).
+  - **Not heavy:** `/file`, `/raw`, `/api/data`, Welcome documents, static assets, and all Loop routes.
+<- `main()`; the concurrency tests construct it on port 0.
+! TRIPWIRE: `protocol_version` stays HTTP/1.0, so each connection carries one request and one worker. HTTP/1.1 keep-alive would pin workers to idle browser connections and starve the cap.
+! The cap values come from browser behavior (at most 6 HTTP/1.x connections per origin), not measurement alone. Re-measure before changing them: see the checkpoint 4 performance record in the loop's implementation artifact.
+! Every request is concurrent with every other. Shared state goes through the snapshot helpers, same-repository mutations through `_repo_action`, and POSTs through `_LifecycleGate`. Never add module or class state that a handler mutates without one of those contracts. Lock order: `_LifecycleGate` (POST admission), then `_heavy_work` / `_AUDIT_LOCK` / `_repo_action`, then `_STATE_WRITE_LOCK`, then `_STATE_LOCK`. Loop OS locks and `_LOOP_HOSTS_LOCK` are never taken under a Dashboard state lock.
+! A slot is held while the response is written, so a slow client holds its slot. This is bounded by the 16 and 4 caps and by the client socket.
+! Pinned by `TestThreadedServer`, `TestConcurrentReads`, `TestContentPolicyUnderConcurrency` and `TestMixedStress` in `tests/test_dashboard_concurrency.py`, and by `tests/test_dashboard_ui/test_request_concurrency_ui.py`.
 
 ### main()
 File: src/gator_command/scripts/gator-dashboard.py
-Load registry/settings, collect initial data, bind loopback, optionally open a browser, or emit a snapshot.
+Load registry/settings, collect initial data, bind loopback, optionally open a browser, or emit a snapshot. It serves with `DashboardHTTPServer` on both bind paths (port 0 and a fixed port).
 <- `gator dashboard`
 -> server, data modules, browser UI
 ! Bind to loopback only. Keep startup usable when individual repositories are missing or malformed.
