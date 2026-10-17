@@ -1,0 +1,374 @@
+{
+  "schema": "gator-loop-session-v1",
+  "loop_id": "dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z",
+  "feature": "dashboard-repo-tree-return-cache",
+  "mode": "coding",
+  "created_at": "2026-10-17T00:48:38.587473+00:00",
+  "roles": {
+    "draftor": {
+      "role": "draftor",
+      "joined": true
+    },
+    "reviewer": {
+      "role": "reviewer",
+      "joined": true
+    },
+    "architect": {
+      "role": "architect"
+    }
+  },
+  "status": {
+    "stage": "implementation_approved",
+    "next_role": null,
+    "plan_status": "approved",
+    "architect_action_required": false,
+    "blocked": false,
+    "round": 0,
+    "max_rounds": 8,
+    "unresolved_findings": 0,
+    "turn_deadline": null,
+    "turn_timeout_seconds": 300,
+    "resume_stage": null,
+    "resume_next_role": null,
+    "last_updated": "2026-10-17T01:20:41.910781+00:00",
+    "turn_started_at": null,
+    "attention_notified_turn": "2026-10-17T01:00:45.174758+00:00",
+    "architect_message": null,
+    "architect_message_for": null,
+    "architect_response_artifact": null,
+    "architect_message_decision": null
+  },
+  "current": {
+    "draft": null,
+    "findings": {
+      "turn_id": "reviewer-002",
+      "summary": "Implementation approved",
+      "artifact_path": "findings.current.md"
+    },
+    "implementation": {
+      "turn_id": "draftor-002",
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.current.md"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "draftor-001",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T00:59:46.299881+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-0.md"
+    },
+    {
+      "turn_id": "reviewer-001",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T01:00:45.174719+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-0.md"
+    },
+    {
+      "turn_id": "draftor-002",
+      "role": "draftor",
+      "type": "implementation",
+      "ts": "2026-10-17T01:19:40.981812+00:00",
+      "round": 0,
+      "summary": "Implementation submitted",
+      "artifact_path": "implementation.round-1.md"
+    },
+    {
+      "turn_id": "reviewer-002",
+      "role": "reviewer",
+      "type": "implementation_review",
+      "ts": "2026-10-17T01:20:41.910761+00:00",
+      "round": 0,
+      "summary": "Implementation approved",
+      "artifact_path": "findings.round-1.md"
+    }
+  ],
+  "decisions": [],
+  "contract": {
+    "attention_interval": 1
+  },
+  "coding": {
+    "source_loop_id": "dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z",
+    "plan_sha256": "fca1c67a6c2512dd417cab750d1f4656685821ff56283875d00113f998a683dc",
+    "base_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+    "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+    "generations": [
+      {
+        "round": 0,
+        "generation": 0,
+        "submitted_at": "2026-10-17T00:59:46.299906+00:00",
+        "artifact_path": "implementation.round-0.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "head_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "373d19115436c8e686cd181754f4e6c1831576a5",
+          "base_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/inbox.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-e4bcabb51ded4.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/repo.js"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_ui/test_repo_tree_cache.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/events.jsonl",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/findings.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/findings.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/plan.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/plan.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/session.json",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/sketch.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/approved-plan.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/events.jsonl",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/session.json",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/events.jsonl",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/session.json",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/sketch.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/approved-plan.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/events.jsonl",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-2.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-3.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-4.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-5.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-2.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-3.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-4.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-5.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp1",
+          "index": 0,
+          "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "changed_count": 6,
+          "revisited_count": 0
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 0,
+          "reviewed_tree": "373d19115436c8e686cd181754f4e6c1831576a5",
+          "reviewed_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-0.md",
+          "reviewed_at": "2026-10-17T01:00:45.172774+00:00",
+          "checkpoint": {
+            "id": "cp1",
+            "index": 1,
+            "count": 2,
+            "title": "Keyed tree state and mount lifecycle guard",
+            "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa"
+          }
+        }
+      },
+      {
+        "round": 0,
+        "generation": 1,
+        "submitted_at": "2026-10-17T01:19:40.981860+00:00",
+        "artifact_path": "implementation.round-1.md",
+        "snapshot": {
+          "schema": "gator-loop-gitsnap-v1",
+          "ok": true,
+          "worktree_root": "C:\\Users\\curator\\code2\\gator",
+          "current_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "head_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "detached": false,
+          "branch": "refs/heads/dev",
+          "staged_tree": "f60ce6a21e935025414481f4bcf2e1574e9359cf",
+          "base_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "changed_paths": [
+            {
+              "status": "M",
+              "path": ".gator/charters/scripts-dashboard-ui.md"
+            },
+            {
+              "status": "M",
+              "path": ".gator/inbox.md"
+            },
+            {
+              "status": "A",
+              "path": ".gator/session-snippets/2026-10-17-gator-e4bcabb51ded4.json"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/dashboard.js"
+            },
+            {
+              "status": "M",
+              "path": "src/gator_command/scripts/dashboard/views/repo.js"
+            },
+            {
+              "status": "A",
+              "path": "tests/test_dashboard_ui/test_repo_tree_cache.py"
+            }
+          ],
+          "changed_truncated": 0,
+          "unstaged_paths": [
+            ".gator/commit_draft.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/events.jsonl",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/findings.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/findings.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/plan.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/plan.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/session.json",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-44-35Z/sketch.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/approved-plan.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/events.jsonl",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/findings.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/findings.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/implementation.current.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/implementation.round-0.md",
+            ".gator/loops/dashboard-repo-tree-return-cache-2026-10-17T00-48-38Z/session.json",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/events.jsonl",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/findings.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/plan.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/session.json",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-27-01Z/sketch.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/approved-plan.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/events.jsonl",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-2.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-3.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-4.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/findings.round-5.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.current.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-0.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-1.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-2.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-3.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-4.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/implementation.round-5.md",
+            ".gator/loops/dashboard-workspace-tabs-2026-10-16T23-34-56Z/session.json"
+          ],
+          "unstaged_truncated": 0
+        },
+        "checkpoint": {
+          "id": "cp2",
+          "index": 1,
+          "base_tree": "373d19115436c8e686cd181754f4e6c1831576a5",
+          "changed_count": 3,
+          "revisited_count": 3
+        },
+        "review": {
+          "verdict": "approve",
+          "round": 0,
+          "generation": 1,
+          "reviewed_tree": "f60ce6a21e935025414481f4bcf2e1574e9359cf",
+          "reviewed_head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+          "candidate_changed": false,
+          "live_snapshot_ok": true,
+          "artifact_path": "findings.round-1.md",
+          "reviewed_at": "2026-10-17T01:20:41.909117+00:00",
+          "checkpoint": {
+            "id": "cp2",
+            "index": 2,
+            "count": 2,
+            "title": "Cached return and background reconciliation",
+            "base_tree": "373d19115436c8e686cd181754f4e6c1831576a5"
+          }
+        }
+      }
+    ],
+    "approval": {
+      "tree": "f60ce6a21e935025414481f4bcf2e1574e9359cf",
+      "head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+      "round": 0,
+      "generation": 1,
+      "ts": "2026-10-17T01:20:41.909117+00:00"
+    },
+    "source_brief": null,
+    "source_brief_decision": "none_available",
+    "checkpoints": {
+      "contract": 1,
+      "source": "declared",
+      "current": 1,
+      "items": [
+        {
+          "id": "cp1",
+          "title": "Keyed tree state and mount lifecycle guard",
+          "scope": "pass `repoKey` into `GatorViews.repo`, replace `_treeState` with the bounded per-key map and a single selected-file writer, add the mount-generation guard to `loadFileList` and `pollRepoFiles`, register the search and `popstate` listeners once per mount and remove them at teardown, and update the debug seam.",
+          "verify": "`test_return_restores_expansion_and_selection`, `test_stale_listing_response_is_ignored`, `test_same_name_different_key_state_is_separate`, `test_single_search_listener_after_revisits`, `test_harness.py`, `test_responsive_shell.py`.",
+          "state": "approved",
+          "base_tree": "5fa96d3fbb68a3bbb0112e0286950f37e4b7a1fa",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "373d19115436c8e686cd181754f4e6c1831576a5",
+            "head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+            "generation": 0,
+            "ts": "2026-10-17T01:00:45.172774+00:00"
+          }
+        },
+        {
+          "id": "cp2",
+          "title": "Cached return and background reconciliation",
+          "scope": "the bounded live-only LRU listing cache, the immediate cached render, the guarded background fingerprint check (unchanged \u2192 no DOM write, changed \u2192 `applyRefresh`, failure keeps the cache), the teardown scroll capture and restore, the version bypass, and the eviction and item budget.",
+          "verify": "`test_return_draws_cached_tree_before_listing`, `test_return_restores_scroll`, `test_background_listing_reconciles`, `test_versioned_view_bypasses_cache`, `test_cache_bounds_evict_oldest`, `test_workspace_tabs.py`; then, for final approval, `tests/test_dashboard_ui/`.",
+          "state": "approved",
+          "base_tree": "373d19115436c8e686cd181754f4e6c1831576a5",
+          "findings_rounds": 0,
+          "accepted": {
+            "tree": "f60ce6a21e935025414481f4bcf2e1574e9359cf",
+            "head": "e4bcabb51ded413044f020d03df6db8e58d3fef0",
+            "generation": 1,
+            "ts": "2026-10-17T01:20:41.909117+00:00"
+          }
+        }
+      ]
+    }
+  }
+}

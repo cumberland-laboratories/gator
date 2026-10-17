@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters: Dashboard UI headings name real functions the pre-commit check can verify",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charters",
+    "dashboard",
+    "charter-lint"
+  ],
+  "commit": "467f44d5608032d6b8f4cb738fb2608e24853b73",
+  "short_commit": "467f44d",
+  "snippet_id": "snippet-467f44d560803",
+  "session_group_key": "anthropic:ba5f9027-b5c0-41e6-8a3c-9c06d04608da",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-16T23:25:29Z",
+  "ended_at": "2026-10-17T20:01:12Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-17-gator-8434f941ac7be.json"
+  ],
+  "notes": [
+    "The pre-commit check warned on every Dashboard UI commit that the charter",
+    "referred to functions it could not find. Two causes, both in the charter:",
+    "It names each `### ` entry by the text before its first `(`, so headings",
+    "that began with a label (\"Workspace strip — …\") or used a name that never",
+    "existed in the code (`apiFetch`, `renderFleet`, `renderHistory`,",
+    "`renderAudit`, `renderUpdates`, `renderSettings`) could never match.",
+    "Those headings now start with the real identifiers (for example",
+    "`GatorViews.fleet()`, `GatorViews.history()`), with the label after."
+  ],
+  "transcript_session_id": "ba5f9027-b5c0-41e6-8a3c-9c06d04608da",
+  "transcript_ref": null
+}

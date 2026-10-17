@@ -1,0 +1,5 @@
+{"event":"loop_started","detail":"Loop initialized","ts":"2026-10-16T23:27:01.815615+00:00","loop_id":"dashboard-workspace-tabs-2026-10-16T23-27-01Z"}
+{"event":"draft_submitted","role":"draftor","round":0,"artifact_path":"plan.round-0.md","detail":"Plan draft submitted, advancing to plan_review","ts":"2026-10-16T23:31:52.186189+00:00","loop_id":"dashboard-workspace-tabs-2026-10-16T23-27-01Z"}
+{"event":"revision_requested","role":"reviewer","round":1,"artifact_path":"findings.round-0.md","detail":"Findings submitted, revision requested","ts":"2026-10-16T23:32:27.205747+00:00","loop_id":"dashboard-workspace-tabs-2026-10-16T23-27-01Z"}
+{"event":"draft_submitted","role":"draftor","round":1,"artifact_path":"plan.round-1.md","detail":"Plan draft submitted, advancing to plan_review","ts":"2026-10-16T23:33:38.121298+00:00","loop_id":"dashboard-workspace-tabs-2026-10-16T23-27-01Z"}
+{"event":"plan_approved","role":"reviewer","round":1,"artifact_path":"findings.round-1.md","detail":"Reviewer approved the plan","ts":"2026-10-16T23:33:56.725078+00:00","loop_id":"dashboard-workspace-tabs-2026-10-16T23-27-01Z"}
