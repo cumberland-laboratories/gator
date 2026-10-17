@@ -156,6 +156,16 @@ the TestPyPI wait step passed before pip still saw a stale list. Tracked
 in [#77](https://github.com/cumberland-laboratories/gator/issues/77),
 which recommends a retrying install step rather than a wider poll.
 
+### `gator loop codex` removes Codex's own settings from the managed block (2026-10-17, unfiled)
+
+Codex writes its own state (`[tui]`, `[hooks.state]` trusted hashes) into
+`config.toml` in the dedicated loop home, below the `BEGIN GATOR LOOP PROFILE`
+line. `render_config` in `codex_launcher.py` replaces the whole block on each
+run, so the next launch loses those settings (for example, Codex asks again
+to trust the session-start hooks). Seen with `gator loop codex --dry-run`, which
+plans `write config.toml` with no change made by Gator. Possible fix: keep
+Codex-written tables outside the block, or replace only the tables Gator owns.
+
 ### Repo sidebar preferences are keyed by display name (2026-10-17, unfiled)
 
 The Repo tree state is now per repository key, but the sidebar width and
