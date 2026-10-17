@@ -1,6 +1,6 @@
 # Charter: Dashboard Browser UI
 
-**Covers**: `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/workspace.js` (#80), `src/gator_command/scripts/dashboard/views/**`, `src/gator_command/scripts/dashboard/*.png` (including `views/loop-markdown.js`, #45)
+**Covers**: `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.css`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/workspace.js` (#80), `src/gator_command/scripts/dashboard/views/**`, `src/gator_command/scripts/dashboard/*.png`. The view files, named one by one so the pre-commit heading check (which reads only literal paths, not globs) can verify them: `src/gator_command/scripts/dashboard/views/fleet.js`, `src/gator_command/scripts/dashboard/views/history.js`, `src/gator_command/scripts/dashboard/views/syntax.js`, `src/gator_command/scripts/dashboard/views/repo.js`, `src/gator_command/scripts/dashboard/views/updates.js`, `src/gator_command/scripts/dashboard/views/loop-markdown.js` (#45), `src/gator_command/scripts/dashboard/views/loop.js`, `src/gator_command/scripts/dashboard/views/settings.js`, `src/gator_command/scripts/dashboard/views/welcome.js`, `src/gator_command/scripts/dashboard/views/docs.js`, `src/gator_command/scripts/dashboard/views/audit.js`.
 
 ## Owns
 
@@ -17,7 +17,7 @@
 
 ---
 
-### navigate() / showView() / restoreShellState() / setActiveRepo() / clearActiveRepo() / window.GatorShell
+### navigate() / showView() / renderView() / restoreShellState() / applyShellEntry() / setActiveRepo() / clearActiveRepo() / shellUrl() / parseShellUrl() / recordShell() / formatDocumentTitle() / updateDocumentTitle() / window.GatorShell
 File: src/gator_command/scripts/dashboard/dashboard.js
 Own browser history, selected repository/view state, and dispatch into view modules.
 <- sidebar, topbar, `window.gatorNavToRepo` (fleet rows), popstate
@@ -63,7 +63,7 @@ Own browser history, selected repository/view state, and dispatch into view modu
     - **Single exit:** `showView()` is now `viewRenders++`, then `renderView()` (the former body) in `try`, then `updateDocumentTitle()` in `finally`. Every path that renders therefore sets the title: landing, `navigate()`, `doRefresh`, the #70 re-render, `restoreShellState()` and its unregistered-repository Fleet fallback. No other code assigns `document.title`. `views.loop.restore()` (no remount) keeps the same view and repository, so the title is already correct.
     - **Pinned by** `tests/test_dashboard_ui/test_workspace_tabs.py` (`test_document_title_follows_view`, `test_two_pages_distinct_titles_and_urls`).
 
-### window.GatorWorkspace — configure() / load() / syncActive() / findByRepo() / active() / list() (#80) · shell side: syncWorkspace() / hydrateWorkspace() / validateRepo()
+### syncWorkspace() / hydrateWorkspace() / validateRepo() / workspace() · window.GatorWorkspace: configure() / load() / syncActive() / findByRepo() / active() / list() / readCache() / save() / sanitize() / overLimit() / sameRepo() / dropDuplicatesOf() / assign() / newId() / cleanRepo() / cleanKey() / cleanContextSub() (#80)
 File: src/gator_command/scripts/dashboard/workspace.js
 File: src/gator_command/scripts/dashboard/dashboard.js
 The per-browser-tab list of workspace contexts `{id, repo, repoKey, view, sub}` and its session cache. A context is an optional repository plus the last view to restore for it.
@@ -89,7 +89,7 @@ The per-browser-tab list of workspace contexts `{id, repo, repoKey, view, sub}` 
 - **Pinned by** `tests/test_dashboard_ui/test_workspace_tabs.py` (`test_workspace_cache_rejects_bad_records`, `test_workspace_cache_keeps_valid_contexts`, `test_workspace_cache_holds_only_bounded_fields`).
 - **List operations** (`create` (null at 12) / `select` / `neighbourOf` (right, else left) / `remove` / `count`) change only the list and save. The shell renders and records.
 
-### Workspace strip — GatorWorkspace.renderStrip() · shell side: renderWorkspaceStrip() / selectContext() / newContext() / closeContext() (#80)
+### renderWorkspaceStrip() / selectContext() / newContext() / closeContext() · GatorWorkspace: renderStrip() / onStripKey() / tabLabel() / closeLabel() / create() / select() / neighbourOf() / remove() — workspace strip (#80)
 File: src/gator_command/scripts/dashboard/workspace.js
 File: src/gator_command/scripts/dashboard/dashboard.js
 File: src/gator_command/scripts/dashboard/dashboard.html
@@ -120,14 +120,14 @@ The full-width strip of workspace contexts above the sidebar and main pane. Top 
 ! TRIPWIRE: inactive contexts are not live. Only the selected context is rendered, so switching tears down Loop polling, timers and listeners through `showView()`'s existing teardown. Never keep hidden DOM copies of other contexts.
 - **Pinned by** `test_strip_spans_shell_above_sidebar`, `test_strip_aria_keyboard_and_close_labels`, `test_switch_restores_each_context`, `test_only_active_loop_context_polls` and `test_close_changes_navigation_only` in `tests/test_dashboard_ui/test_workspace_tabs.py`.
 
-### apiFetch() / mutation requests
+### fetch() / mutation requests — same-origin API calls from every view
 File: src/gator_command/scripts/dashboard/dashboard.js
 Call same-origin dashboard APIs and normalize errors for views.
 <- all view modules
 -> Dashboard server
 ! Every POST includes `X-Gator-Dashboard: 1`. Never add cross-origin fallback behavior.
 
-### renderFleet() / fleet actions
+### renderStandaloneRepos() / GatorViews.fleet() / window.gatorNavToRepo() / window.gatorOpenRepoInNewContext() — Fleet view and actions
 File: src/gator_command/scripts/dashboard/views/fleet.js
 Render repository health and expose explicit per-repository actions via a three-dot overflow menu.
 <- fleet route
@@ -152,7 +152,7 @@ Confirmation dialog for removing a repo from the dashboard registry. Reuses the 
 ! Registry-only operation — no filesystem access. Dialog text makes this explicit.
 ! Posts the registered path, not the display name.
 
-### renderHistory()
+### GatorViews.history() — Commits view
 File: src/gator_command/scripts/dashboard/views/history.js
 Render Git-native commit history and Gator trailer attribution.
 <- history route (nav label and topbar title "Commits" since #56; the route key `history`, `data-view="history"` and the endpoint are unchanged)
@@ -160,7 +160,7 @@ Render Git-native commit history and Gator trailer attribution.
 ! Accept both current Architect and legacy PI attribution supplied by the backend.
 ! **Stale-render guard (#56):** the commits fetch writes only while the "Loading history..." node it created is still attached. If another view owns `#view-slot` by the time the fetch resolves (for example after a quick Back), the result is dropped.
 
-### GatorViews.repo(data, container, repoName, version, repoKey) / loadFileList() / loadFile() / acquireTreeState() / setSelectedFile() / isCurrentMount() / installSearchListeners() / teardownRepoView()
+### GatorViews.repo(data, container, repoName, version, repoKey) / loadFileList() / renderListing() / loadFile() / applyRefresh() / pollRepoFiles() / pickDefaultFile() / currentFilePaths() / cleanRepoKey() / newTreeState() / acquireTreeState() / treeState() / setSelectedFile() / isCurrentMount() / installSearchListeners() / teardownRepoView() / cacheGet() / cachePut() / cacheable()
 File: src/gator_command/scripts/dashboard/views/repo.js
 Render the repository knowledge browser, fetch canonical listings, and display supported content.
 <- repo route and sidebar clicks; `dashboard.js` passes `state.activeRepoKey` as `repoKey` from the `showView("repo")` branch and the branch-history dropdown
@@ -227,7 +227,7 @@ The expanded artifact body. `loadArtifactContent()` calls it after its generatio
   - The tests check: no excerpt and no fetch when collapsed; the full document Rendered by default; Raw identical to what was served; keyboard switching with no refetch; 0 mutations and 0 renders on unchanged polls and on an unchanged refetch; a changed refresh updating both panes and keeping Raw; a stale response unable to reset text or view; and the large and failure fallbacks.
   - **Mutation-checked:** Raw via `innerHTML`, no equality skip, no revision guard, a collapsed fetch restored, and the view reset on render all fail it.
 
-### GatorLoopMarkdown.render(text) / safeHref(url) (#45)
+### render(text) / safeHref(url) — window.GatorLoopMarkdown (#45)
 File: src/gator_command/scripts/dashboard/views/loop-markdown.js
 A closed display formatter for **expanded Loop artifacts**: hostile, model-authored text. It is loaded before `views/loop.js` and inlined by `build_snapshot()`.
 - **Closed grammar** (plan rev 2), in one linear pass with no nesting and no recursion. Anything else is literal text.
@@ -253,21 +253,21 @@ A closed display formatter for **expanded Loop artifacts**: hostile, model-autho
 
   Pinned by `tests/test_dashboard_ui/test_loop_markdown_ui.py`: an allowlist walk over an adversarial corpus; images giving no `img`, no `a` and no request; the link policy; malformed input; size. Mutation-checked: an HTML text write, link-before-image ordering, any scheme accepted, and parsed bold content each fail it.
 
-### renderAudit() / showSessionModal()
+### GatorViews.audit() / showSessionModal() — Audit view
 File: src/gator_command/scripts/dashboard/views/audit.js
 Render session evidence and request source-qualified drill-down content.
 <- audit/repo session panels
 -> audit/session endpoints
 ! Preserve `source_kind` and repository identity through drill-down; never fetch a same-named file from a different source.
 
-### renderUpdates()
+### GatorViews.updates() — Updates view
 File: src/gator_command/scripts/dashboard/views/updates.js
 Render installed/latest version state and request an explicit upgrade.
 <- updates route
 -> check and upgrade endpoints
 ! Checking and upgrading are visibly separate actions; failure output remains visible after restart attempts.
 
-### Loop workspace — buildLoopTabs() / ensureLoopPanels() / applyTabState() / switchTab() / renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderOutcomeHeader() / renderBlockedCard() / renderPromptSection() / renderControls() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / openReopenForm() / refreshCoding()
+### buildLoopTabs() / ensureLoopPanels() / applyTabState() / switchTab() / renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderOutcomeHeader() / renderBlockedCard() / renderPromptSection() / renderControls() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / openReopenForm() / refreshCoding() — Loop workspace
 File: src/gator_command/scripts/dashboard/views/loop.js
 Render the governed planning loop workspace: a full-width Create / History tab bar across the top of the main pane (#72), a secondary list sidebar (Create: Create Loop + Active; History: terminal loops) and mode-driven main content (creation workspace or active-loop explanation, participant handoff, or selected-loop inspection).
 <- loop route
@@ -454,7 +454,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
   - **Removed:** `extractSummary()`, `SUMMARY_MAX_CHARS` / `SUMMARY_RE`, `window.GatorViews._extractSummary`, the `.loop-event-summary` / `.loop-timeline-summary-*` nodes and styles, and the "No executive summary supplied" fallback. The `## Executive Summary` artifact requirement is unchanged: it remains part of the full rendered document.
   - **Pinned by** `tests/test_dashboard_ui/test_loop_workspace.py`: link-only cards (exactly one link, `href="#"`, no excerpt, no `_extractSummary`); no link on an event without an artifact; a link without an Executive Summary; **zero `/artifact/` requests** on initial render and on appended events until a link is followed, then exactly one; an open section stays open with no refetch; keyboard Enter activation; and the existing navigation and round-zero link tests. Mutation-checked: a restored timeline fetch, an unconditional toggle, a missing link, and a missing `href` each fail it.
 
-### GatorViews.docs / showDoc() / select() (repo-independent Docs view, 2026-10-13)
+### GatorViews.docs() / showDoc() / select() (repo-independent Docs view, 2026-10-13)
 File: src/gator_command/scripts/dashboard/views/docs.js
 The Docs view: the shipped Gator HTML documents, from the installed package, the same list for every repository. A `nav.repo-sidebar.docs-sidebar` (`aria-label="Gator documents"`) lists `DOCS` in order with reader-friendly labels (library reading order: Gator overview, What Gator can do, Gatorize a repo, Start a session, then "Charter formation process", "Charter schema", "Code migrations"; deliberately not Welcome's tab order); `.repo-content.docs-content` holds one `iframe.repo-iframe.docs-frame` (`sandbox="allow-scripts"`, `title` = label) inside `.repo-iframe-wrapper`. Reuses the repo-browser classes so the `.route-repo` flex chain sizes it.
 ! **Product intent (Architect, 2026-10-13):** Docs is Gator's comprehensive documentation library, what someone coming from docs.python.org expects: the same everywhere and never a per-repository collection. Repository-specific understanding belongs in `.gator/blueprints/`, the charters and the other `.gator/` surfaces, not in Docs.
@@ -466,7 +466,7 @@ The Docs view: the shipped Gator HTML documents, from the installed package, the
 ! The DOM is built with `createElement`/`textContent` only: no document text or label is interpolated into HTML.
 - **Pinned by** `tests/test_dashboard_ui/test_docs_view.py`.
 
-### GatorViews.welcome / applyTopic() / selectTopic() / ensureFrame() / bindCopyListener() / isCopyRequest() / handleCopyRequest() / replyCopy() (#72; Welcome HTML documents)
+### GatorViews.welcome() / applyTopic() / selectTopic() / ensureFrame() / bindCopyListener() / isCopyRequest() / handleCopyRequest() / replyCopy() (#72; Welcome HTML documents)
 File: src/gator_command/scripts/dashboard/views/welcome.js
 The Welcome workspace: four topics (Start a session with Gator · Gator overview · What Gator can do · Gatorize a repo; the session topic is first and the default since 2026-10-15, for its copy-prompt button) in the shared main-pane tab bar. Each topic body is a shipped standalone HTML document in a sandboxed iframe.
 <- `showView("welcome")` (live landing view from `init()`, the `#brand-home` logo button, and Back/Forward)
@@ -487,7 +487,7 @@ The Welcome workspace: four topics (Start a session with Gator · Gator overview
 ! Welcome never calls `setActiveRepo` / `clearActiveRepo` and works without a registered repository or an active Loop.
 - **Pinned by** `tests/test_dashboard_ui/test_welcome_ui.py`. Tests read frame content through `page.frame_locator(...)`, which waits for the (src or srcdoc) document to load; scanning `page.frames` right after the iframe appears races on slow runners (Windows CI run 38101334192).
 
-### renderSettings()
+### GatorViews.settings() — Settings view
 File: src/gator_command/scripts/dashboard/views/settings.js
 Render and update machine-local dashboard preferences exposed by the server.
 <- settings route
