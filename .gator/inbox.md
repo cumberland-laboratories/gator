@@ -156,6 +156,15 @@ the TestPyPI wait step passed before pip still saw a stale list. Tracked
 in [#77](https://github.com/cumberland-laboratories/gator/issues/77),
 which recommends a retrying install step rather than a wider poll.
 
+### Repo sidebar preferences are keyed by display name (2026-10-17, unfiled)
+
+The Repo tree state is now per repository key, but the sidebar width and
+collapse preferences (`gator-sidebar-width:<name>` /
+`gator-sidebar-collapsed:<name>` in `localStorage`) are still keyed by
+display name, so two registered repositories with the same name share
+them. The server's `/files`, `/file` and `/search` routes are name-addressed
+too. Small; file an issue if duplicate names show up in practice.
+
 ### Post-legacy-repo cleanup — deferred, no work item
 
 After the Architect archives the legacy

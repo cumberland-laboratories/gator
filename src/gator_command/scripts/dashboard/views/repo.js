@@ -379,11 +379,77 @@
   }
 
   // ── sidebar tree model ────────────────────────────────────────────────────
-  // Local browsing state, persisted across re-renders and view switches so
-  // returning to a repo reopens where the user left off. Keyed by repo name;
-  // reset only when the repo changes. teardown() (added with auto-refresh)
-  // must NOT clear this — only lifecycle resources (timers/listeners).
-  const _treeState = { repoName: null, expandedDirs: new Set(), selectedFile: null };
+  // Local browsing state, kept per repository KEY (never the display name:
+  // two registered repositories can share a name) so returning to a repo
+  // reopens where the user left off. Bounded LRU (Map insertion order).
+  // teardown() must NOT clear it — only lifecycle resources. A mount with
+  // no key gets a transient state of its own and never touches the map.
+  const TREE_STATE_MAX = 32;
+  const _treeStates = new Map();
+
+  function cleanRepoKey(key) {
+    return typeof key === "string" && key.length > 0 && key.length <= 128 ? key : null;
+  }
+
+  function newTreeState() {
+    return { expandedDirs: new Set(["section:gator"]), selectedFile: null, scrollTop: 0 };
+  }
+
+  function acquireTreeState(repoKey) {
+    if (!repoKey) return newTreeState();
+    let s = _treeStates.get(repoKey);
+    if (s) _treeStates.delete(repoKey);
+    else s = newTreeState();
+    _treeStates.set(repoKey, s);
+    while (_treeStates.size > TREE_STATE_MAX) {
+      _treeStates.delete(_treeStates.keys().next().value);
+    }
+    return s;
+  }
+
+  // ── live listing cache ───────────────────────────────────────────────────
+  // The last canonical /files array per repository KEY, so returning to a
+  // repository draws its tree at once while a guarded background request
+  // checks for changes. Browser memory only (never serialized), live views
+  // only (a ?version= mount neither reads nor writes it), bounded LRU by
+  // Map insertion order. No rendered HTML and no file content.
+  const LIVE_CACHE_MAX_REPOS = 8;
+  const LIVE_CACHE_MAX_ITEMS = 20000;
+  const _listingCache = new Map();  // repoKey -> {files, fp, items}
+
+  function cacheGet(repoKey) {
+    const entry = repoKey ? _listingCache.get(repoKey) : null;
+    if (!entry) return null;
+    _listingCache.delete(repoKey);
+    _listingCache.set(repoKey, entry);  // most recently used
+    return entry;
+  }
+
+  // Store a listing; one over the item budget is not cached (and drops
+  // any older entry). Evicts least-recently-used entries, never `repoKey`.
+  function cachePut(repoKey, files) {
+    if (!repoKey) return;
+    _listingCache.delete(repoKey);
+    if (files.length > LIVE_CACHE_MAX_ITEMS) return;
+    _listingCache.set(repoKey, { files: files, fp: fingerprint(files), items: files.length });
+    let total = 0;
+    for (const e of _listingCache.values()) total += e.items;
+    for (const key of Array.from(_listingCache.keys())) {
+      if (_listingCache.size <= LIVE_CACHE_MAX_REPOS && total <= LIVE_CACHE_MAX_ITEMS) break;
+      if (key === repoKey) continue;
+      total -= _listingCache.get(key).items;
+      _listingCache.delete(key);
+    }
+  }
+
+  // Whether this mount may use the live cache.
+  function cacheable() {
+    return !!_repoView.repoKey && !_repoView.version;
+  }
+
+  // The active mount's state, and the ONLY writer of its selected file.
+  function treeState() { return _repoView.state; }
+  function setSelectedFile(path) { _repoView.state.selectedFile = path || null; }
 
   // Plan C Slice 2 (v2.13.0): sidebar collapse state (persisted per repo).
   // Module-scope because renderSidebarShell — called from every sidebar
@@ -408,21 +474,20 @@
   if (_DEBUG) {
     window.__gator_debug = Object.freeze({
       get sidebar() {
+        const s = _repoView.state;
         return {
-          expandedDirs: Array.from(_treeState.expandedDirs),
-          selectedFile: _treeState.selectedFile,
-          repoName: _treeState.repoName,
+          repoName: _repoView.repoName,
+          repoKey: _repoView.repoKey,
+          expandedDirs: Array.from(s.expandedDirs),
+          selectedFile: s.selectedFile,
+          scrollTop: s.scrollTop,
         };
       },
+      // Live listing cache in LRU order (oldest first): keys and sizes only.
+      get listingCache() {
+        return Array.from(_listingCache, ([repoKey, e]) => ({ repoKey: repoKey, items: e.items }));
+      },
     });
-  }
-
-  function resetTreeStateFor(repoName) {
-    if (_treeState.repoName !== repoName) {
-      _treeState.repoName = repoName;
-      _treeState.expandedDirs = new Set(["section:gator"]); // .gator open by default
-      _treeState.selectedFile = null;
-    }
   }
 
   function _isGcFile(f) {
@@ -434,13 +499,27 @@
   // The dashboard shell (dashboard.js) owns view mount/unmount, not repo.js.
   // This controller holds the poll timer and global listeners so they are
   // registered once per mount and always cleared on view switch / repo change.
-  // teardown() clears lifecycle resources ONLY — never _treeState (that
+  // teardown() clears lifecycle resources ONLY — never the tree states (that
   // persistence is what restores the user's place when they return).
   const _repoView = {
-    repoName: null, container: null, version: null,
-    timerId: null, popHandler: null, lastFp: null, pinnedFile: null,
+    repoName: null, repoKey: null, container: null, version: null,
+    timerId: null, popHandler: null, searchHandler: null, searchTimer: null,
+    lastFp: null, pinnedFile: null, files: null, fromCache: false,
+    gen: null, state: newTreeState(),
   };
   const POLL_INTERVAL_MS = 5000;
+
+  // Mount generation: incremented at teardown and at mount. Every async
+  // listing path captures it before awaiting and may write DOM, state,
+  // cache or lastFp afterwards only while isCurrentMount(gen) holds, so a
+  // late response from an earlier mount can never touch the current one.
+  let _mountGen = 0;
+
+  function isCurrentMount(gen) {
+    const c = _repoView.container;
+    return gen === _repoView.gen && !!c && c.isConnected
+      && !!c.querySelector("#repo-file-list");
+  }
 
   // Cheap change signal over the flat file list: count + newest mtime + a
   // rolling hash of paths. Equal fingerprints ⇒ nothing changed ⇒ no DOM work.
@@ -463,10 +542,25 @@
   }
 
   function teardownRepoView() {
+    // Remember the tree's scroll position while its DOM still exists. The
+    // shell tears down before clearing the view slot; the mount's own
+    // idempotent call finds no sidebar and records nothing.
+    const sb = _repoView.container && _repoView.container.querySelector("#repo-file-list");
+    if (sb && sb.isConnected && _repoView.gen !== null) {
+      _repoView.state.scrollTop = Math.max(0, Math.round(sb.scrollTop));
+    }
+    _mountGen++;
+    _repoView.gen = null;  // in-flight listing work is now stale
     if (_repoView.timerId) { clearInterval(_repoView.timerId); _repoView.timerId = null; }
     if (_repoView.popHandler) { window.removeEventListener("popstate", _repoView.popHandler); _repoView.popHandler = null; }
+    if (_repoView.searchTimer) { clearTimeout(_repoView.searchTimer); _repoView.searchTimer = null; }
+    if (_repoView.searchHandler) {
+      const input = document.getElementById("repo-search-input");
+      if (input) input.removeEventListener("input", _repoView.searchHandler);
+      _repoView.searchHandler = null;
+    }
     window._gatorRepoTeardown = null;
-    // _treeState is intentionally preserved across teardown.
+    // Tree states are intentionally preserved across teardown.
   }
 
   async function _fetchRepoFiles() {
@@ -488,12 +582,14 @@
     const content = container.querySelector("#repo-file-content");
     if (!sidebar) return;
     const filtered = filterFiles(files);
-    if (_treeState.selectedFile && !filtered.some(f => f.path === _treeState.selectedFile)) {
-      _treeState.selectedFile = null;
+    const selected = treeState().selectedFile;
+    if (selected && !filtered.some(f => f.path === selected)) {
+      setSelectedFile(null);
     }
     const scrollTop = sidebar.scrollTop;               // preserve sidebar scroll across refresh
     renderSidebarInto(sidebar, content, _repoView.repoName, filtered);
     sidebar.scrollTop = scrollTop;
+    _repoView.files = files;
     _repoView.lastFp = fingerprint(files);
   }
 
@@ -501,9 +597,12 @@
   async function pollRepoFiles() {
     if (document.hidden) return;        // pause when the tab is not visible
     if (isPinnedView()) return;         // never reseat under a pinned history view
+    const gen = _repoView.gen;
     try {
       const files = await _fetchRepoFiles();
+      if (!isCurrentMount(gen) || isPinnedView()) return;  // a later mount owns the view
       if (!files) return;
+      if (cacheable()) cachePut(_repoView.repoKey, files);
       if (fingerprint(files) === _repoView.lastFp) return;  // unchanged → no work
       applyRefresh(files);
     } catch (e) { /* transient — retry next tick */ }
@@ -543,7 +642,7 @@
   // `.repo-sidebar.collapsed .repo-sidebar-inner { display: none }`.
   function toggleSidebarCollapse() {
     _sidebarCollapsed = !_sidebarCollapsed;
-    const repoName = _repoView.repoName || _treeState.repoName;
+    const repoName = _repoView.repoName;
     if (repoName) {
       try {
         localStorage.setItem(
@@ -669,8 +768,8 @@
         const willOpen = contents.style.display === "none";
         contents.style.display = willOpen ? "block" : "none";
         if (arrow) arrow.innerHTML = willOpen ? "&#9662;" : "&#9656;";
-        if (willOpen) _treeState.expandedDirs.add(key);
-        else _treeState.expandedDirs.delete(key);
+        if (willOpen) treeState().expandedDirs.add(key);
+        else treeState().expandedDirs.delete(key);
       });
     });
 
@@ -679,7 +778,7 @@
       item.addEventListener("click", function () {
         sidebar.querySelectorAll(".repo-file-item").forEach(i => i.classList.remove("active"));
         this.classList.add("active");
-        _treeState.selectedFile = this.dataset.path;
+        setSelectedFile(this.dataset.path);
         _repoView.pinnedFile = null;            // live navigation clears the history pin
         loadFile(repoName, this.dataset.path, content, window._gatorRepoVersion);
       });
@@ -744,18 +843,19 @@
   }
 
   function expandAncestors(path) {
-    if (path.startsWith("gator-command/")) _treeState.expandedDirs.add("section:gc");
-    else if (path.startsWith("source/")) _treeState.expandedDirs.add("section:source");
-    else _treeState.expandedDirs.add("section:gator");
+    const dirs = treeState().expandedDirs;
+    if (path.startsWith("gator-command/")) dirs.add("section:gc");
+    else if (path.startsWith("source/")) dirs.add("section:source");
+    else dirs.add("section:gator");
     const segs = path.split("/");
-    for (let k = 1; k < segs.length; k++) _treeState.expandedDirs.add(segs.slice(0, k).join("/"));
+    for (let k = 1; k < segs.length; k++) dirs.add(segs.slice(0, k).join("/"));
   }
 
   function renderTree(nodes, depth) {
     let html = "";
     for (const n of nodes) {
       if (n.type === "dir") {
-        const open = _treeState.expandedDirs.has(n.path);
+        const open = treeState().expandedDirs.has(n.path);
         const pad = 12 + depth * 14;
         html += `<button class="repo-tree-dir" data-dir="${escHtml(n.path)}" style="padding-left:${pad}px"><span class="group-arrow">${open ? "&#9662;" : "&#9656;"}</span> ${escHtml(n.name)}/</button>`;
         html += `<div class="repo-tree-children" style="display:${open ? "block" : "none"}">`;
@@ -763,7 +863,7 @@
         html += `</div>`;
       } else {
         const pad = 12 + depth * 14 + 14;
-        const active = _treeState.selectedFile === n.path ? " active" : "";
+        const active = treeState().selectedFile === n.path ? " active" : "";
         const label = n.name.replace(/\.(md|json)$/, "");
         html += `<button class="repo-file-item${active}" data-path="${escHtml(n.path)}" style="padding-left:${pad}px">${escHtml(label)}</button>`;
       }
@@ -773,7 +873,7 @@
 
   function renderSection(label, sectionKey, treeNodes) {
     if (!treeNodes.length) return "";
-    const open = _treeState.expandedDirs.has(sectionKey);
+    const open = treeState().expandedDirs.has(sectionKey);
     let h = `<button class="repo-sidebar-section" data-toggle="${sectionKey}"><span class="group-arrow">${open ? "&#9662;" : "&#9656;"}</span> ${escHtml(label)}</button>`;
     h += `<div class="repo-dir-contents" style="display:${open ? "block" : "none"}">`;
     h += renderTree(treeNodes, 0);
@@ -783,15 +883,21 @@
 
   // ── main render ───────────────────────────────────────────────────────────
 
-  window.GatorViews.repo = function (data, container, repoName, version) {
+  window.GatorViews.repo = function (data, container, repoName, version, repoKey) {
     // Clear any prior view's timer/listeners (idempotent) even if the shell
     // teardown hook is absent, then set up this mount.
     teardownRepoView();
+    const gen = ++_mountGen;
+    _repoView.gen = gen;
     _repoView.repoName = repoName;
+    _repoView.repoKey = cleanRepoKey(repoKey);
+    _repoView.state = acquireTreeState(_repoView.repoKey);
     _repoView.container = container;
     _repoView.version = version || null;
     _repoView.pinnedFile = null;
     _repoView.lastFp = null;
+    _repoView.files = null;
+    _repoView.fromCache = false;
 
     const verLabel = version ? ` @ ${version.substring(0, 8)}` : "";
     // Plan C Slice 2 (v2.13.0): restore persisted sidebar state
@@ -819,7 +925,19 @@
       );
     }
 
-    loadFileList(repoName, container, version);
+    // One search listener and one popstate handler per mount, installed
+    // now (not after the listing await) and removed by teardownRepoView().
+    installSearchListeners(repoName, container);
+
+    // A live repository visited before: draw its last listing now; the
+    // guarded request below reconciles it.
+    const cached = cacheable() ? cacheGet(_repoView.repoKey) : null;
+    if (cached && initialSidebar) {
+      renderListing(repoName, container, cached.files);
+      _repoView.fromCache = true;
+    }
+
+    loadFileList(gen, repoName, container, version);
 
     // Expose the teardown hook to the shell (dashboard.js) so it stops the
     // poll timer + listeners when the user navigates away from the repo view.
@@ -832,17 +950,113 @@
     }
   };
 
-  async function loadFileList(repoName, container, version) {
+  // The default document of a filtered listing: pulse.md, else mission.md,
+  // else the first non-HTML .gator/ file, else the first non-HTML file.
+  function pickDefaultFile(filtered) {
+    const gatorTopFiles = filtered.filter(f => !_isGcFile(f) && !_isSourceFile(f) && !f.dir);
+    const nonHtml = f => !/\.html?$/i.test(f.path);
+    return gatorTopFiles.find(f => f.name === "pulse.md")
+      || gatorTopFiles.find(f => f.name === "mission.md")
+      || gatorTopFiles.find(nonHtml) || filtered.find(nonHtml) || null;
+  }
+
+  function currentFilePaths() {
+    return (_repoView.files || []).map(f => f.path);
+  }
+
+  function installSearchListeners(repoName, container) {
+    const searchInput = document.getElementById("repo-search-input");
+    if (!searchInput) return;
+    const contentEl = () => container.querySelector("#repo-file-content");
+
+    _repoView.searchHandler = function () {
+      clearTimeout(_repoView.searchTimer);
+      const query = this.value.trim();
+      const content = contentEl();
+      if (!content) return;
+      if (!query || query.length < 2) {
+        // Restore the default file or clear
+        if (window._gatorSearchActive) {
+          window._gatorSearchActive = false;
+          history.pushState({ view: "repo", repo: repoName }, "");
+          const defaultFile = pickDefaultFile(filterFiles(_repoView.files || []));
+          if (defaultFile) loadFile(repoName, defaultFile.path, content, window._gatorRepoVersion);
+          else content.innerHTML = '<div class="muted" style="padding:40px;text-align:center">Select a file to view</div>';
+        }
+        return;
+      }
+      // Debounce 300ms; teardownRepoView() clears a pending search.
+      _repoView.searchTimer = setTimeout(
+        () => runCrossDocSearch(repoName, query, currentFilePaths(), content), 300);
+    };
+    searchInput.addEventListener("input", _repoView.searchHandler);
+
+    // Handle browser back button. Registered on the controller so
+    // teardownRepoView() removes it — a window-level listener would
+    // otherwise accumulate one per render (pre-existing leak).
+    _repoView.popHandler = function (e) {
+      const content = contentEl();
+      if (!content) return;
+      if (e.state && e.state.searchQuery) {
+        searchInput.value = e.state.searchQuery;
+        runCrossDocSearch(repoName, e.state.searchQuery, currentFilePaths(), content);
+      } else if (e.state && e.state.filePath) {
+        searchInput.value = "";
+        window._gatorSearchActive = false;
+        loadFile(repoName, e.state.filePath, content, window._gatorRepoVersion);
+      } else if (e.state && e.state.view === "repo") {
+        searchInput.value = "";
+        window._gatorSearchActive = false;
+      }
+    };
+    window.addEventListener("popstate", _repoView.popHandler);
+  }
+
+  // First render of a listing in this mount (from the cache or the first
+  // response): choose the file, draw the tree, restore its scroll
+  // position, load the file.
+  function renderListing(repoName, container, files) {
     const sidebar = container.querySelector("#repo-file-list");
     const content = container.querySelector("#repo-file-content");
+    const filtered = filterFiles(files);
+
+    // Choose the file to display: restore the prior selection if it still
+    // exists, else the default document. Expand its ancestors before render
+    // so the active item is visible.
+    const defaultFile = pickDefaultFile(filtered);
+    const prior = treeState().selectedFile;
+    const restore = prior && filtered.some(f => f.path === prior);
+    const loadPath = restore ? prior : (defaultFile && defaultFile.path) || null;
+    setSelectedFile(loadPath);
+    if (loadPath) expandAncestors(loadPath);
+
+    renderSidebarInto(sidebar, content, repoName, filtered);
+    sidebar.scrollTop = treeState().scrollTop;
+    _repoView.files = files;
+    _repoView.lastFp = fingerprint(files);
+
+    // Load the chosen file (its sidebar row is already marked active by render).
+    if (loadPath) {
+      _repoView.pinnedFile = null;
+      loadFile(repoName, loadPath, content, window._gatorRepoVersion);
+    }
+
+    // Resize handle
+    initResizeHandle(sidebar);
+  }
+
+  async function loadFileList(gen, repoName, container, version) {
+    const sidebar = container.querySelector("#repo-file-list");
 
     try {
       let filesUrl = `/api/repo/${encodeURIComponent(repoName)}/files`;
       if (version) filesUrl += `?version=${encodeURIComponent(version)}`;
       const resp = await fetch(filesUrl);
       const data = await resp.json();
+      if (!isCurrentMount(gen)) return;  // a later mount owns the view
 
       if (data.error) {
+        if (_repoView.fromCache) return;  // keep the cached tree
         renderSidebarShell(
           sidebar,
           `<div class="repo-sidebar-header">${escHtml(repoName)}</div>` +
@@ -852,80 +1066,15 @@
       }
 
       const files = data.files || [];
-      const filtered = filterFiles(files);
-      resetTreeStateFor(repoName);
-
-      // Choose the file to display: restore the prior selection if it still
-      // exists, else the default document. Expand its ancestors before render
-      // so the active item is visible.
-      const gatorTopFiles = filtered.filter(f => !_isGcFile(f) && !_isSourceFile(f) && !f.dir);
-      const nonHtml = f => !/\.html?$/i.test(f.path);
-      const defaultFile = gatorTopFiles.find(f => f.name === "pulse.md")
-        || gatorTopFiles.find(f => f.name === "mission.md")
-        || gatorTopFiles.find(nonHtml) || filtered.find(nonHtml) || null;
-      const restore = _treeState.selectedFile && filtered.some(f => f.path === _treeState.selectedFile);
-      const loadPath = restore ? _treeState.selectedFile : (defaultFile && defaultFile.path) || null;
-      if (loadPath) {
-        _treeState.selectedFile = loadPath;
-        expandAncestors(loadPath);
-      }
-
-      renderSidebarInto(sidebar, content, repoName, filtered);
-      _repoView.lastFp = fingerprint(files);
-
-      // Load the chosen file (its sidebar row is already marked active by render).
-      if (loadPath) {
-        _repoView.pinnedFile = null;
-        loadFile(repoName, loadPath, content, window._gatorRepoVersion);
-      }
-
-      // Resize handle
-      initResizeHandle(sidebar);
-
-      // Cross-document search
-      const searchInput = document.getElementById("repo-search-input");
-      if (searchInput) {
-        // Collect all file paths for searching
-        const allFiles = files.map(f => f.path);
-
-        let searchTimer = null;
-        searchInput.addEventListener("input", function () {
-          clearTimeout(searchTimer);
-          const query = this.value.trim();
-          if (!query || query.length < 2) {
-            // Restore the default file or clear
-            if (window._gatorSearchActive) {
-              window._gatorSearchActive = false;
-              history.pushState({ view: "repo", repo: repoName }, "");
-              if (defaultFile) loadFile(repoName, defaultFile.path, content, window._gatorRepoVersion);
-              else content.innerHTML = '<div class="muted" style="padding:40px;text-align:center">Select a file to view</div>';
-            }
-            return;
-          }
-          // Debounce 300ms
-          searchTimer = setTimeout(() => runCrossDocSearch(repoName, query, allFiles, content), 300);
-        });
-
-        // Handle browser back button. Registered on the controller so
-        // teardownRepoView() removes it — a window-level listener would
-        // otherwise accumulate one per render (pre-existing leak).
-        _repoView.popHandler = function (e) {
-          if (e.state && e.state.searchQuery) {
-            searchInput.value = e.state.searchQuery;
-            runCrossDocSearch(repoName, e.state.searchQuery, allFiles, content);
-          } else if (e.state && e.state.filePath) {
-            searchInput.value = "";
-            window._gatorSearchActive = false;
-            loadFile(repoName, e.state.filePath, content, window._gatorRepoVersion);
-          } else if (e.state && e.state.view === "repo") {
-            searchInput.value = "";
-            window._gatorSearchActive = false;
-          }
-        };
-        window.addEventListener("popstate", _repoView.popHandler);
-      }
-
+      if (cacheable()) cachePut(_repoView.repoKey, files);
+      if (!_repoView.fromCache) {
+        renderListing(repoName, container, files);
+      } else if (fingerprint(files) !== _repoView.lastFp) {
+        applyRefresh(files);  // changed while away: reconcile in place
+      }                       // unchanged: no DOM write
     } catch (err) {
+      if (!isCurrentMount(gen)) return;
+      if (_repoView.fromCache) return;  // keep the cached tree
       renderSidebarShell(
         sidebar,
         `<div class="repo-sidebar-header">${escHtml(repoName)}</div>` +
@@ -981,7 +1130,7 @@
         el.style.cursor = "pointer";
         el.addEventListener("click", function () {
           const filePath = this.dataset.path;
-          _treeState.selectedFile = filePath;  // keep persisted selection in sync
+          setSelectedFile(filePath);  // keep persisted selection in sync
           _repoView.pinnedFile = null;         // live navigation clears the history pin
           history.pushState({ view: "repo", repo: repoName, filePath }, "");
           loadFile(repoName, filePath, contentEl, window._gatorRepoVersion);
@@ -1033,7 +1182,7 @@
         // Plan C Slice 2 (v2.13.0): persist the final width so
         // subsequent repo-view mounts of the same repo restore it.
         const finalWidth = sidebar.offsetWidth;
-        const repoName = _repoView.repoName || _treeState.repoName;
+        const repoName = _repoView.repoName;
         if (repoName && finalWidth >= 120 && finalWidth <= 500) {
           try {
             localStorage.setItem(
@@ -1285,7 +1434,7 @@
               target = target.replace(/[^/]+\/\.\.\//, "");
             }
             target = target.replace(/^\.\.\//, "");
-            _treeState.selectedFile = target;  // keep persisted selection in sync
+            setSelectedFile(target);  // keep persisted selection in sync
             _repoView.pinnedFile = null;       // live navigation clears the history pin
             loadFile(repoName, target, contentEl, window._gatorRepoVersion);
             // Update sidebar active state

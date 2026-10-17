@@ -160,11 +160,41 @@ Render Git-native commit history and Gator trailer attribution.
 ! Accept both current Architect and legacy PI attribution supplied by the backend.
 ! **Stale-render guard (#56):** the commits fetch writes only while the "Loading history..." node it created is still attached. If another view owns `#view-slot` by the time the fetch resolves (for example after a quick Back), the result is dropped.
 
-### renderRepo() / loadFileList() / loadFile()
+### GatorViews.repo(data, container, repoName, version, repoKey) / loadFileList() / loadFile() / acquireTreeState() / setSelectedFile() / isCurrentMount() / installSearchListeners() / teardownRepoView()
 File: src/gator_command/scripts/dashboard/views/repo.js
 Render the repository knowledge browser, fetch canonical listings, and display supported content.
-<- repo route and sidebar clicks
+<- repo route and sidebar clicks; `dashboard.js` passes `state.activeRepoKey` as `repoKey` from the `showView("repo")` branch and the branch-history dropdown
 -> list/file/raw/search endpoints
+! **Tree state is per repository KEY (2026-10-17, repo-tree return).**
+  - **Storage:** `_treeStates: Map<repoKey, {expandedDirs: Set, selectedFile, scrollTop}>`, bounded at `TREE_STATE_MAX` (32), LRU by Map insertion order.
+  - **`acquireTreeState(key)`** returns the stored state or a new one with `section:gator` expanded. `cleanRepoKey` accepts a 1–128 character string.
+  - **No key:** a mount without a key gets a transient state of its own and never reads or writes the map, so it never borrows another repository's state.
+  - **Never the display name:** two registered repositories can share one.
+  - **`_repoView.state`** is the active state, read through `treeState()`.
+  - **`setSelectedFile(path)`** is the ONLY writer of the selected file: tree click, search-result click, Markdown link, default selection and the `applyRefresh` drop.
+  - **Teardown keeps every state.** The old single `_treeState` / `resetTreeStateFor` (reset on every repository change) is gone.
+! **Mount generation guard.**
+  - **The counter:** `_mountGen` is incremented in `teardownRepoView()` (which also sets `_repoView.gen = null`) and again at mount (`_repoView.gen = gen`).
+  - **`isCurrentMount(gen)`** requires the same `gen` and a connected container that still holds `#repo-file-list`.
+  - **The rule:** every asynchronous listing path captures `gen` before awaiting. In `loadFileList(gen, …)` (success, error and catch) and `pollRepoFiles()` (which also re-checks `isPinnedView()`), nothing writes DOM, state, `files` or `lastFp` after the `await` unless `isCurrentMount(gen)`.
+  - **Why:** without this, a late alpha response could change beta's view and state after a switch. `loadFile()` content writes still go to their captured element, which is detached once another view mounts.
+! **Single-registration listeners.** `installSearchListeners()` runs synchronously at mount, not after the listing `await`. It registers exactly one search-box `input` handler (`_repoView.searchHandler`, debounce timer `_repoView.searchTimer`) and one `popstate` handler (`_repoView.popHandler`). `teardownRepoView()` removes both and clears a pending search. Before this, each mount added an `input` listener that was never removed, so one keystroke ran one search per earlier visit. The handlers read the latest listing from `_repoView.files` and pick the default document with `pickDefaultFile()`.
+! **Live listing cache — `cacheGet()` / `cachePut()` / `cacheable()` / `renderListing()` (checkpoint 2).**
+  - **Storage:** `_listingCache: Map<repoKey, {files, fp, items}>` holds the last canonical unfiltered `/files` array per key. It is browser memory only (never serialized) and holds no rendered HTML and no file content.
+  - **Scope:** `cacheable()` is true only for a mount with a key and no `version`. A historical (`?version=`) mount neither reads nor writes the cache.
+  - **Bounds:** `LIVE_CACHE_MAX_REPOS` (8) and `LIVE_CACHE_MAX_ITEMS` (20,000 total entries). `cachePut` drops a listing over the item budget (and any older entry for that key), and evicts least-recently-used entries but never the key being stored. `cacheGet` marks an entry most recently used.
+  - **Writes:** only after a guarded successful response, from `loadFileList` or `pollRepoFiles`.
+  - **Mount sequence:** on a cache hit, the mount calls `renderListing()` at once and sets `_repoView.fromCache = true`. `renderListing()` is the single first-render path, cached or fresh: choose the file, draw the tree, set `#repo-file-list.scrollTop` from the tree state, set `files` / `lastFp`, load the file, and bind the resize handle (once per mount).
+  - **The guarded background `loadFileList` then:**
+    - error body or failure with `fromCache` → keeps the cached tree, with no DOM write;
+    - same fingerprint → no DOM write;
+    - different fingerprint → `applyRefresh(files)`, which redraws while keeping expansion and scroll and drops a vanished selection;
+    - no cache hit → `renderListing` (a first visit keeps "Loading files…" until then).
+  - **Scroll capture:** `teardownRepoView()` writes `#repo-file-list.scrollTop` into the tree state while that element is still connected and the mount is live (`gen !== null`). The shell tears down before clearing the slot; the mount's own idempotent teardown records nothing.
+  - **Inactive views are still not live (#80):** only data is cached, never DOM, timers or listeners.
+! **Debug seam:** `__gator_debug.sidebar` returns a fresh plain object `{repoName, repoKey, expandedDirs: [...], selectedFile, scrollTop}` from `_repoView`, never the map or a `Set`. `__gator_debug.listingCache` returns a fresh `[{repoKey, items}]` in LRU order (oldest first): keys and sizes only.
+! The listing, file and search routes are addressed by **name** on the server (`scripts-dashboard.md`). Two same-named repositories therefore fetch the same listing even though their browser state is separate. The sidebar width and collapse preferences (`gator-sidebar-*:<name>` in `localStorage`) are also keyed by name: follow-up in `inbox.md`.
+- **Pinned by** `tests/test_dashboard_ui/test_repo_tree_cache.py` and `test_harness.py` (debug seam).
 ! Encode file paths per segment so separators retain namespace meaning.
 ! Render untrusted text as text or through the syntax renderer; do not interpolate repository content into executable markup.
 ! **No Docs mode (2026-10-13).** `GatorViews.repo(data, container, repoName, version)` has no `filter` parameter: the Docs view is the repository-independent `GatorViews.docs` (`views/docs.js`), which reads the shipped documents from the package. The Repo tree still shows `.gator/docs/` (Markdown and HTML) like any other `.gator/` folder.

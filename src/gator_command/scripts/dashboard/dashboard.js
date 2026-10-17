@@ -554,7 +554,7 @@
       // Make subtitle container position:relative for dropdown
       topbarSubtitle.style.position = "relative";
       if (views.repo) {
-        views.repo(state.data, viewSlot, repoName);
+        views.repo(state.data, viewSlot, repoName, null, state.activeRepoKey);
       } else {
         viewSlot.innerHTML = "<p class='muted'>Repo view not available.</p>";
       }
@@ -617,7 +617,7 @@
                 // Set version context and reload file list
                 window._gatorRepoVersion = hash || null;
                 if (views.repo) {
-                  views.repo(state.data, viewSlot, repoName, hash || null);
+                  views.repo(state.data, viewSlot, repoName, hash || null, state.activeRepoKey);
                 }
               });
             });
