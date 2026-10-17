@@ -299,7 +299,7 @@ File: src/gator_command/scripts/gator-dashboard.py
 File: src/gator_command/scripts/gator-dashboard.py
 Startup retention sweep (`loop.liveness.sweep()`), run for each registry repo at the start of `_adopt_orphaned_loops()`. It projects surviving loops (prune / 7-day terminal retention) and deletes sidecar files whose loop directory is gone. It is best-effort: a failure is a debug diagnostic only and never affects adoption.
 
-### _LOOP_HOSTS / _HostEntry / _run_watcher() / _ensure_loop_watcher() / _adopt_orphaned_loops()
+### _run_watcher() / _ensure_loop_watcher() / _adopt_orphaned_loops() · _LOOP_HOSTS / _HostEntry
 File: src/gator_command/scripts/gator-dashboard.py
 Server-local host registry tracking watcher threads, held `host.lock` file descriptors, and entry nonces. Startup adoption scans registered repos for orphaned active loops. `_ensure_loop_watcher(repo_path, loop_id, loop_dir, retry=False)` is the **single attach path** for every Dashboard watcher (start, adoption, and #39 extension) and returns `(state, detail)` with `WATCHER_ATTACHED` / `WATCHER_ALREADY_HOSTED` / `WATCHER_FAILED`.
 <- server startup, `_handle_loop_start()`, `_handle_loop_extend()` (M5b)
@@ -310,7 +310,7 @@ Server-local host registry tracking watcher threads, held `host.lock` file descr
 ! Adoption decides "terminal" with the mode-aware `state_machine.is_terminal()` (#41), not a hard-coded stage list, so an approved coding loop (`implementation_approved`) is never re-hosted, and a session with an unknown mode is skipped rather than hosted blind.
 ! Adoption skips loops whose `host.lock` is already held (another host is live). Loop start maps any non-attached result to HTTP 500 (`failed to start host watcher` or `failed to acquire host lock`) — a brand-new loop cannot legitimately be hosted elsewhere.
 
-### DashboardHandler.do_GET() / DashboardHandler.do_POST()
+### do_GET() / do_POST() — DashboardHandler
 File: src/gator_command/scripts/gator-dashboard.py
 Dispatch API, asset, repository content, update, lifecycle, and loop workspace routes.
 <- loopback HTTP server
@@ -338,7 +338,7 @@ Check PyPI, perform an explicit pipx upgrade in a detached helper, and relaunch 
 <- update API routes (through `_drain_then()`, below)
 ! Checking is read-only. Upgrade happens only after an authenticated explicit POST and must not strand the response process mid-write.
 
-### _LifecycleGate / _LIFECYCLE_GATE / _drain_then(fn) / DashboardHandler._start_lifecycle(fn, name) / _post_routes(path) / _DRAIN_SECONDS / _GATE_EXEMPT_POSTS
+### _drain_then(fn) / _start_lifecycle(fn, action, name) / _post_routes(path) · _LifecycleGate / _LIFECYCLE_GATE / _DRAIN_SECONDS / _GATE_EXEMPT_POSTS
 File: src/gator_command/scripts/gator-dashboard.py
 Restart and upgrade drain (threaded-server plan, checkpoint 3). `do_POST` first runs `_check_post_auth()`, then the gate, then `_post_routes()`, which holds the former `do_POST` dispatch unchanged.
 - `_LifecycleGate` counts in-flight POSTs under one condition (`enter` / `leave`). After `start_draining()`, `enter()` refuses, and the route drains the body and returns 503 `{"error": "dashboard is restarting"}`.
@@ -354,7 +354,7 @@ Restart and upgrade drain (threaded-server plan, checkpoint 3). `do_POST` first 
 ! `_LIFECYCLE_GATE`'s condition is a leaf; the gate is entered before any route lock (`_repo_action`, the state locks).
 ! Pinned by `TestRestartDrain` in `tests/test_dashboard_concurrency.py`.
 
-### DashboardHTTPServer / MAX_WORKERS / HEAVY_WORKERS / _HEAVY_SLOTS / _HEAVY_TIMEOUT / _heavy_work() / DashboardHandler._send_heavy_busy()
+### _heavy_work() / _send_heavy_busy() · DashboardHTTPServer / MAX_WORKERS / HEAVY_WORKERS / _HEAVY_SLOTS / _HEAVY_TIMEOUT
 File: src/gator_command/scripts/gator-dashboard.py
 The threaded request server (threaded-server plan, checkpoint 4; #70 head-of-line blocking). A slow listing, search, Git call or subprocess no longer delays an unrelated document, API or UI request on the same port.
 - `DashboardHTTPServer(socketserver.ThreadingMixIn, HTTPServer)` runs one daemon worker per request (`daemon_threads = True`, `block_on_close = False`, `request_queue_size = 64`).

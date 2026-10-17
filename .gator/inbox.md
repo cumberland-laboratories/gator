@@ -53,6 +53,7 @@ by one. Rough edges to tidy (small, unfiled):
 - (1) **Confirmed and fixed:** a navigation made before `/api/data` returned was replaced by Welcome when `init()` finished. Regression test in `test_welcome_ui.py`.
 - (2) **Measured:** `/files` (and search) cost about 2,500 filesystem calls per listing and degrade 5–10x under load. Next: a planning loop from `artifacts/2026-10-16-dashboard-listing-performance-sketch.md`. It first needs an Architect decision: search does not apply the listing visibility policy its charter claims.
 - The 2026-10-15 diagnostic-bundle loops were abandoned (Playwright tracing would add about 45% to CI time).
+- **Threaded server landed on `dev` (2026-10-17, `5743dd4`).** A slow listing no longer blocks unrelated requests: on this repository, a small read stays about 8 ms while four 3 s listings run. This removes one plausible cause of the flakes, but it does not close #70: the listing cost itself is unchanged, and it is not yet verified on Linux CI.
 
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
@@ -155,6 +156,10 @@ smoke jobs (TestPyPI and PyPI) failed twice on a stale package index, and
 the TestPyPI wait step passed before pip still saw a stale list. Tracked
 in [#77](https://github.com/cumberland-laboratories/gator/issues/77),
 which recommends a retrying install step rather than a wider poll.
+
+### Repo view: a late default-document load can replace a newer HTML selection (2026-10-17, unfiled)
+
+Seen while stabilizing `tests/test_dashboard_ui/test_request_concurrency_ui.py`. If you click an HTML file while the repository's default document is still loading, the content pane can end up with no frame: the file is selected in the tree, but `#repo-file-content` has no `iframe.repo-iframe`. The likely cause is in `views/repo.js`: `loadFile()` writes the HTML frame synchronously, and the default document's later response then overwrites the pane. No generation or selection check guards the write. Reproduced only in a test ordering (after `test_repo_tree_cache.py`); the test now waits for the default document first. A fix would make `loadFile()` drop a response for a file that is no longer selected.
 
 ### `gator loop codex` removes Codex's own settings from the managed block (2026-10-17, unfiled)
 
