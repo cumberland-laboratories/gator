@@ -60,6 +60,7 @@
   const refreshBtn     = document.getElementById("refresh-btn");
   const repoTab        = document.getElementById("repo-tab");
   const loopTab        = document.getElementById("loop-tab");
+  const historyTab     = document.getElementById("history-tab");
   const topbarTitle    = document.getElementById("topbar-title");
   const brandHome      = document.getElementById("brand-home");
 
@@ -147,13 +148,14 @@
   }
 
   // Set the shell's repository context: name, API key, the Repo sidebar
-  // label, and the Repo/Loop tabs enabled. Docs is repository-independent
+  // label, and the Repo/Commits/Loop tabs enabled. Docs is repository-independent
   // and always enabled.
   function setActiveRepo(repoName, repoKey) {
     state.activeRepo = repoName;
     state.activeRepoKey = repoKey || null;
     setRepoTabLabel(repoName);
     repoTab.classList.remove("dimmed");
+    if (historyTab) historyTab.classList.remove("dimmed");
     if (loopTab) loopTab.classList.remove("dimmed");
   }
 
@@ -163,6 +165,7 @@
     state.activeRepoKey = null;
     setRepoTabLabel("Repo");
     repoTab.classList.add("dimmed");
+    if (historyTab) historyTab.classList.add("dimmed");
     if (loopTab) loopTab.classList.add("dimmed");
   }
 

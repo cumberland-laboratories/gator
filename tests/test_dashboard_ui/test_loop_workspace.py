@@ -66,6 +66,31 @@ def test_loop_tab_enabled_after_repo_selection(page, dashboard_fleet):
     assert is_dimmed is False, "Loop tab should be enabled after repo selection"
 
 
+def test_commits_tab_is_gated_like_loop(page, dashboard_fleet):
+    """Commits (#history-tab) is dimmed and inert until a repository is
+    selected, exactly like Loop (2026-10-18)."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin, wait_until="load")
+    page.wait_for_selector("#view-slot", timeout=10000)
+    dimmed = ("() => ['history-tab', 'loop-tab'].map("
+              "id => document.getElementById(id).classList.contains('dimmed'))")
+    assert page.evaluate(dimmed) == [True, True]
+    title = page.evaluate("() => document.getElementById('topbar-title').textContent")
+    page.click('.sidebar-item[data-view="history"]')
+    page.wait_for_timeout(300)
+    assert page.evaluate(
+        "() => document.getElementById('topbar-title').textContent") == title, \
+        "clicking a dimmed Commits item must not change the view"
+
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    assert page.evaluate(dimmed) == [False, False]
+    page.click('.sidebar-item[data-view="history"]')
+    page.wait_for_function(
+        "() => document.querySelector('.sidebar-item[data-view=\"history\"]')"
+        ".classList.contains('active')", timeout=10000)
+
+
 def test_loop_view_renders_workspace_layout(page, dashboard_fleet):
     """Clicking the Loop tab renders the workspace with list and
     main panel sections."""
@@ -3288,10 +3313,11 @@ def test_history_state_never_holds_tokens(page, dashboard_fleet):
 
 
 def test_commits_nav_label(page, dashboard_fleet):
-    """The global commit timeline is labelled Commits; route unchanged."""
+    """The repository commit view is labelled Commits; route unchanged.
+    Commits is enabled only with a repository selected (2026-10-18)."""
     origin = dashboard_fleet["url"].rstrip("/") + "/"
-    page.goto(origin, wait_until="load")
-    page.wait_for_selector("#view-slot", timeout=10000)
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
     label = page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"history\"]').textContent")
     assert "Commits" in label and "History" not in label
