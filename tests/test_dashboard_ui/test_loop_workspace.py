@@ -119,6 +119,11 @@ def test_loop_list_renders_cards(page, dashboard_fleet):
 def test_loop_list_active_first_sort(page, dashboard_fleet):
     """Active/paused loops sort before terminal loops."""
     _navigate_to_loop(page, dashboard_fleet)
+    # The cards come from a separate /loops request after the sidebar
+    # container appears; wait for them (Windows CI race, #70, 2026-10-18).
+    page.wait_for_function(
+        "() => document.querySelectorAll('.loop-card .loop-badge').length >= 2",
+        timeout=10000)
     badges = page.evaluate("""
         () => Array.from(document.querySelectorAll('.loop-card .loop-badge'))
             .map(el => el.textContent)

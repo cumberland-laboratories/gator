@@ -285,6 +285,13 @@ def test_workspace_cache_holds_only_bounded_fields(page, dashboard_fleet):
 
 def _keys(page, fleet):
     page.goto(_origin(fleet), wait_until="load")
+    # Let this landing page finish hydrating before returning: hydration
+    # (and the re-render after its first data load) saves the workspace,
+    # so a late save could undo a caller's sessionStorage.clear() and leave
+    # an extra repository-less context (seen on Windows CI, 2026-10-18).
+    page.wait_for_function("() => window.GatorWorkspace && window.GatorWorkspace.isHydrated()",
+                           timeout=10000)
+    page.wait_for_load_state("networkidle", timeout=15000)
     return {n: r.get("repo_key") for n, r in _fleet_repos(page, fleet).items()}
 
 
