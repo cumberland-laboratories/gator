@@ -4,6 +4,54 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.26.0] — 2026-10-18
+
+Feature release. **The Dashboard handles several requests at once.** A slow repository listing no longer makes an unrelated document or click wait behind it. **Workspace tabs** keep several repositories open in one window. **Docs** is now Gator's always-available documentation library. Also: returning to a repository shows its file tree at once, as you left it, and several smaller fixes to the Dashboard UI.
+
+### Added
+
+- **Workspace tabs (#80).** A strip across the top of the Dashboard holds one tab per place you have open: a repository, or none.
+  - Each tab remembers its last view, so you can move between, say, alpha's Loop and beta's Docs without going back through Fleet. `+` opens a workspace and × closes one; closing never changes the registry or a loop. Only the selected workspace is live, so a Loop you switch away from stops polling.
+  - Back undoes a tab switch. Arrow keys move between tabs and Enter selects. The selected tab is shown by bold text and an underline, never by colour alone.
+  - A workspace with no repository shows the white Gator mark.
+  - Fleet's ⋮ menu can open a repository in a new workspace tab or a new browser tab. A repository that already has a workspace is selected instead of opened twice.
+  - Pinned by `tests/test_dashboard_ui/test_workspace_tabs.py`; see the workspace strip entry in `scripts-dashboard-ui.md`.
+- **Docs library.** The Docs sidebar entry is always enabled and is the same everywhere. It lists the HTML documents shipped in the package, with readable labels, and opens each in a sandboxed frame: the four Welcome topics, *Charter formation process*, *Charter schema* and *Code migrations*.
+  - *Code migrations* is new: the three-layer charter method (legacy source, migration contract, target) for moving a system from one implementation to another.
+  - Repository-specific material belongs in `.gator/blueprints/` and the charters.
+  - Pinned by `tests/test_dashboard_ui/test_docs_view.py` and `tests/test_welcome_docs.py`.
+- **Repo tree return.** Each repository keeps its own expanded folders and selected file, keyed by its registry key. Returning to a repository draws its last file list at once from memory (up to 8 repositories), then refreshes it in the background. Pinned by `tests/test_dashboard_ui/test_repo_tree_cache.py`.
+
+### Changed
+
+- **The Dashboard serves requests concurrently.** `DashboardHTTPServer` runs at most 16 requests at once. At most 4 of them can be slow work (listing, search, Git, subprocess status, discovery, audit), so small reads always have a worker. On the Gator repository, a small file read stays at about 8 ms while four 3-second listings run. Shared state was made safe first:
+  - The registry and the Fleet data are published as whole snapshots and never changed in place.
+  - Register, remove, update, gatorize, config and topology for one repository run one at a time.
+  - Refresh runs one collection at a time and never brings back a repository removed meanwhile.
+  - Audit-session requests are serialized.
+  - Restart and upgrade wait up to 5 s for changes already in progress.
+  - Pinned by `tests/test_dashboard_concurrency.py` and `tests/test_dashboard_ui/test_request_concurrency_ui.py`; see the lock-order tripwire in `scripts-dashboard.md`.
+- **New status codes on existing Dashboard routes.** These responses used to be served one request at a time, so they could not happen before:
+  - 409 "another change is running for this repository";
+  - 503 "dashboard busy; retry" (no slow-work slot within 60 s);
+  - 503 "dashboard is restarting" (during the restart wait);
+  - 503 "loop is busy; retry" (a Loop action timed out on the loop's session lock; Windows only, after about 10 s);
+  - 409 "dashboard is already restarting/upgrading" (the other action was requested during the wait).
+- **Welcome opens on "Start a session with Gator"**, now the first tab, because its copy-prompt button is what people come back for.
+- **Commits** stays inactive until a repository is selected, like Repo and Loop. Without one it could only show a placeholder.
+
+### Fixed
+
+- **A navigation made while the Dashboard is still loading is kept.** Before, the first data load finished afterwards and switched to Welcome anyway, so a first click could be lost on a slow machine. This was one confirmed cause of the intermittent Windows Dashboard UI failures (#70).
+- **The Fleet row ⋮ menu is never clipped (#74)**, including on the last repository and in a short window. The table no longer clips its contents, and a menu that does not fit below its button opens upward. Pinned by `test_last_row_menu_is_fully_visible`.
+- **A late file-list response no longer changes the repository you switched to**, and each Repo visit no longer adds another search-box listener.
+
+### Known issues
+
+- #70 (Windows Dashboard UI flakes) is not closed. The threaded server removes head-of-line blocking, but `/files` itself still costs about 3 s on large repositories (separate listing-performance work), and the concurrency changes are not yet verified on Linux CI.
+- On Windows, a Loop write to `session.json` can fail with "Access is denied" when another reader holds the file at that moment (#61). The write fails cleanly with nothing changed, but the Dashboard reports it as a 409. Concurrent `/status` reads make this somewhat more likely than before. A bounded retry is the planned fix.
+- Another process (`gator init`, `gatorize`) can still write the Dashboard registry file at the same time as the Dashboard without a lock. This was already true before this release.
+
 ## [2.25.1] — 2026-10-12
 
 Documentation patch. *What Gator can do* gains a closing section on the Dashboard and the vault, and the Gator source repository no longer carries its own agent-native instruction files.
