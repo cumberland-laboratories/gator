@@ -45,6 +45,10 @@ def _navigate_to_loop(page, fleet, repo="alpha"):
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
     page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    # The list comes from a separate /loops request after the container
+    # appears; renderLoopSidebar() always draws the section headers (even
+    # when empty), so they mark "list rendered" (Windows CI races, #70).
+    page.wait_for_selector(".loop-sidebar-section-header", timeout=10000)
     return page
 
 

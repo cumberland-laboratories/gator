@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: two Dashboard UI tests wait for the state they read (Windows CI races)",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "dashboard-ui",
+    "70"
+  ],
+  "commit": "409d9997a052a166972fd49c87be97494ec26c34",
+  "short_commit": "409d999",
+  "snippet_id": "snippet-409d9997a052a",
+  "session_group_key": "anthropic:d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "aca867926cdd752e7a77da413f7ce86bac349ae6",
+  "started_at": "2026-10-17T20:15:15Z",
+  "ended_at": "2026-10-18T20:06:23Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-18-gator-aca867926cdd7.json",
+    "tests/test_dashboard_ui/test_loop_workspace.py",
+    "tests/test_dashboard_ui/test_workspace_tabs.py"
+  ],
+  "notes": [
+    "`test_workspace_tabs.py` `_keys()` now waits until the landing page has hydrated and its requests are idle. Before, a late workspace save from that page could undo a test's `sessionStorage.clear()` and leave an extra repository-less tab (`test_switch_restores_each_context` on Windows CI, run 39158653845).",
+    "`test_loop_list_active_first_sort` waits for the loop cards, which arrive from a separate `/loops` request, before reading them (Windows CI, run 39155143491; recorded on #70)."
+  ],
+  "transcript_session_id": "d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "transcript_ref": null
+}
