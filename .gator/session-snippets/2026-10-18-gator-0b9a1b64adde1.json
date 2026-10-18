@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: Loop UI tests wait for the rendered loop list, not just its container",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "dashboard-ui",
+    "70"
+  ],
+  "commit": "0b9a1b64adde1655f464b15debc469fb31bf23f0",
+  "short_commit": "0b9a1b6",
+  "snippet_id": "snippet-0b9a1b64adde1",
+  "session_group_key": "anthropic:72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "409d9997a052a166972fd49c87be97494ec26c34",
+  "started_at": "2026-10-18T19:09:28Z",
+  "ended_at": "2026-10-18T20:55:21Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-18-gator-409d9997a052a.json",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "`test_loop_workspace.py` `_navigate_to_loop()` now waits for the Loop sidebar's section headers, which are drawn once the `/loops` list has arrived. Before, it returned when the empty sidebar container appeared, and tests that read the list at once could find nothing on Windows CI (`test_sidebar_three_sections`, run 39161800835; `test_loop_list_active_first_sort` earlier). The helper is shared by the brief and attention UI tests too."
+  ],
+  "transcript_session_id": "72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "transcript_ref": null
+}

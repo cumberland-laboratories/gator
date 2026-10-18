@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-12._ Current strategy, priorities, and planned work.
+_Updated 2026-10-18._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,13 +11,11 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.25.1 (2026-10-12) — *What Gator can
-do* adds "The Dashboard and the vault" (read-only inspection; the vault is
-optional, only for files that must not be committed). v2.25.0 the same
-day: the Dashboard opens on a Welcome workspace with four shipped HTML
-topics, a sub-second `gator init`, clearer commit-draft guidance, and
-native Windows session attribution. Release detail lives in
-`CHANGELOG.md` and the GitHub Releases.
+**Latest released version**: v2.26.0 (2026-10-18) — the Dashboard serves
+requests concurrently (a slow listing no longer blocks unrelated requests),
+workspace tabs (#80), the always-available Docs library, Repo tree return,
+and Dashboard UI fixes (#74). Release detail lives in `CHANGELOG.md` and the
+GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
