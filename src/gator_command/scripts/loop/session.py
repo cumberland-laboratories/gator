@@ -10,11 +10,13 @@ Concurrency Safety section for the full rationale.
 """
 
 import base64
+import errno
 import json
 import os
 import secrets
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -825,15 +827,85 @@ IMPLICIT_CHECKPOINT = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Windows sharing violations (#61)
+# ---------------------------------------------------------------------------
+#
+# On Windows, os.replace() onto session.json fails while any other handle
+# has it open (a reader: the host watcher, the Dashboard, a participant's
+# status/wait), and an open can fail while a replace is in progress. These
+# are transient. They surface as PermissionError with winerror 5
+# (ERROR_ACCESS_DENIED) or 32 (ERROR_SHARING_VIOLATION). POSIX never sets
+# winerror, so POSIX behavior is unchanged.
+
+_SHARING_WINERRORS = frozenset({5, 32})
+SHARING_RETRY_ATTEMPTS = 10
+SHARING_RETRY_FIRST_DELAY = 0.01   # seconds; doubles per attempt
+SHARING_RETRY_MAX_DELAY = 0.2      # ~1.2 s worst case in total
+
+
+class SessionBusyError(OSError):
+    """session.json stayed in use by another process for the whole retry
+    window. Nothing was written: the old file is intact. Retryable.
+
+    Deliberately not a PermissionError (callers map that to a state-machine
+    rejection); errno is EBUSY so callers can report "busy; retry".
+    """
+
+    def __init__(self, path, cause):
+        super().__init__(
+            errno.EBUSY,
+            "session.json is in use by another process; nothing was "
+            "written. Retry.",
+            str(path))
+        self.__cause__ = cause
+
+
+def _is_sharing_violation(exc):
+    if not isinstance(exc, PermissionError):
+        return False
+    winerror = getattr(exc, "winerror", None)
+    if winerror in _SHARING_WINERRORS:
+        return True
+    # An open() during a replace goes through the C runtime, which reports
+    # the pending delete as EACCES with no winerror (measured 2026-10-18).
+    return (sys.platform == "win32" and winerror is None
+            and exc.errno == errno.EACCES)
+
+
+def _retry_sharing(fn, path, sleep=None):
+    """Run fn(), retrying a transient Windows sharing violation with a
+    short bounded backoff. Any other error is raised at once. Exhausting
+    the retries raises SessionBusyError. Holds no lock of its own: it runs
+    inside whatever the caller already holds (the session lock for saves).
+    """
+    sleep = sleep or time.sleep
+    delay = SHARING_RETRY_FIRST_DELAY
+    for attempt in range(SHARING_RETRY_ATTEMPTS):
+        try:
+            return fn()
+        except OSError as exc:
+            if not _is_sharing_violation(exc):
+                raise
+            if attempt == SHARING_RETRY_ATTEMPTS - 1:
+                raise SessionBusyError(path, exc)
+            sleep(delay)
+            delay = min(delay * 2, SHARING_RETRY_MAX_DELAY)
+
+
 def load_session(loop_dir):
     """Read session.json from the loop directory.
 
     Returns the parsed session dict. Raises on missing or corrupt files.
+    A transient Windows sharing violation while a writer replaces the file
+    is retried briefly (#61).
     """
     session_path = Path(loop_dir) / SESSION_FILENAME
     if not session_path.exists():
         raise FileNotFoundError(f"Session file not found: {session_path}")
-    return json.loads(session_path.read_text(encoding="utf-8"))
+    text = _retry_sharing(lambda: session_path.read_text(encoding="utf-8"),
+                          session_path)
+    return json.loads(text)
 
 
 def save_session(loop_dir, session):
@@ -854,7 +926,10 @@ def save_session(loop_dir, session):
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(session, f, indent=2)
             f.write("\n")
-        Path(tmp_path).replace(target)
+        # #61: a reader holding session.json open makes the replace fail
+        # on Windows; retry briefly. Never fall back to writing the target
+        # in place: the replace is what keeps readers from seeing a torn file.
+        _retry_sharing(lambda: os.replace(tmp_path, target), target)
     except Exception:
         # Clean up temp file on failure
         try:

@@ -28,6 +28,7 @@ if _LOOP_DIR not in sys.path:
 
 from session import (
     create_session, save_session, load_session, with_session_lock,
+    SessionBusyError,
     make_token, save_tokens, make_loop_id,
     find_gator_root, ensure_loops_gitignore,
     _make_readonly, _make_writable, attention_mode,
@@ -710,7 +711,13 @@ def _init_revision_loop(feature, sketch_path, revise_from, max_rounds,
 
 
 def find_active_loop(loops_base):
-    """Scan loops_base for any non-terminal session. Returns loop_id or None."""
+    """Scan loops_base for any non-terminal session. Returns loop_id or None.
+
+    Fails closed (#61): a session.json that stays in use past the read
+    retry (SessionBusyError) counts as active, so a transient Windows
+    sharing violation can never hide an active loop from the
+    single-active guard. Missing or corrupt sessions are skipped as before.
+    """
     loops_base = Path(loops_base)
     if not loops_base.is_dir():
         return None
@@ -721,9 +728,11 @@ def find_active_loop(loops_base):
         if not session_file.is_file():
             continue
         try:
-            session = _json.loads(session_file.read_text(encoding="utf-8"))
+            session = load_session(entry)
             if not is_terminal(session):
                 return entry.name
+        except SessionBusyError:
+            return entry.name
         except (OSError, _json.JSONDecodeError, KeyError, ValueError):
             continue
     return None

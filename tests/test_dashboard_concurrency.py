@@ -795,6 +795,7 @@ class TestLoopRaces:
 
     def test_only_the_lock_timeout_errno_counts_as_busy(self):
         assert dashboard._loop_lock_busy(OSError(errno.EDEADLK, "x"))
+        assert dashboard._loop_lock_busy(OSError(errno.EBUSY, "x"))  # SessionBusyError (#61)
         assert not dashboard._loop_lock_busy(OSError(errno.EIO, "x"))
         assert not dashboard._loop_lock_busy(OSError("no errno"))
 

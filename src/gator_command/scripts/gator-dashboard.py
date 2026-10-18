@@ -159,11 +159,14 @@ _REPO_BUSY_ERROR = "another change is running for this repository"
 # test_real_windows_session_lock_contention_maps_to_503. POSIX flock(LOCK_EX)
 # waits without a timeout, so it never produces this error. Report it as a
 # retryable 503, never a dropped connection; other OSErrors are real faults
-# and propagate as before.
+# and propagate as before. EBUSY is session.SessionBusyError (#61):
+# session.json stayed in use past its short sharing-violation retry, and
+# nothing was written.
 _LOOP_BUSY_ERROR = "loop is busy; retry"
 _LOOP_LOCK_BUSY_ERRNOS = frozenset(
     e for e in (getattr(errno, "EDEADLK", None),
-                getattr(errno, "EDEADLOCK", None)) if e is not None)
+                getattr(errno, "EDEADLOCK", None),
+                getattr(errno, "EBUSY", None)) if e is not None)
 
 
 def _loop_lock_busy(exc):

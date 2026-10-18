@@ -149,7 +149,18 @@ Read/write session.json. Save uses atomic temp+rename. Sets read-only (444) on P
 Filesystem: `.gator/loops/<loop-id>/session.json` (RW)
 ! **Test hygiene:** loop files (`session.json`, plan, findings and implementation artifacts, briefs) are read-only on POSIX, and `_make_readonly` is a no-op on Windows. A test that tampers with one directly must call `_make_writable(path)` (or `os.chmod`) first. A miss passes on Windows and fails only on the POSIX CI legs, as `test_corrupt_session_json_retries` did at 2.19.0.
 <- all loop modules
+-> `_retry_sharing()`
 ! Atomic rename prevents partial reads by the host's non-locking read path.
+! **Windows sharing violations (#61), `_retry_sharing(fn, path)` / `_is_sharing_violation()` / `SessionBusyError`.** On Windows, `os.replace()` onto `session.json` fails with `PermissionError` (winerror 5, `ERROR_ACCESS_DENIED`) while any reader has the file open: reproduced 2026-10-18. An open can also fail with winerror 32 during a replace.
+  - **Retry:** the save's replace and the load's read retry only these two winerrors, up to `SHARING_RETRY_ATTEMPTS` (10) times, with backoff starting at 0.01 s, doubling, and capped at 0.2 s (about 1.2 s worst case).
+  - **When retries run out:** `SessionBusyError` (an `OSError` with errno `EBUSY`, deliberately **not** a `PermissionError`) means nothing was written, the old file is intact, and the temp file was removed.
+  - **Read-side variant (measured 2026-10-18):** an `open()` during a replace fails with `PermissionError` errno `EACCES` and no `winerror`, because the C runtime sets only `errno`. On Windows that also counts as transient. Trade-off: a genuine Windows ACL denial on `session.json` surfaces as `SessionBusyError` after the retry window, instead of immediately as `PermissionError`.
+  - **POSIX is unchanged:** it never sets `winerror`, and the `EACCES` rule applies on Windows only.
+  - **Never** fall back to writing `session.json` in place; the replace is the atomicity guarantee.
+  - **Limit:** readers that re-open the file with no pause at all can starve a save past the window. Measured on 2026-10-18: four zero-gap readers left 95 of 100 saves busy, while 1 ms gaps left none. Every real reader polls (the Dashboard every 3 s). A new reader must not read `session.json` in a tight loop.
+  - **Locks:** the retry holds no lock of its own. A save retries inside the session lock its caller already holds (and inside `start.lock` for extend/reopen), never inside a Dashboard state lock or the liveness lock.
+  - **Callers:** a non-locking reader that catches `OSError` (host watcher, `wait`) simply polls again. The Dashboard maps errno `EBUSY` to 503 "loop is busy; retry" (`_LOOP_LOCK_BUSY_ERRNOS`).
+  - **Pinned by** `tests/test_loop_session_sharing.py`.
 
 ### with_session_lock(loop_dir, fn)
 File: `src/gator_command/scripts/loop/session.py`
@@ -614,6 +625,7 @@ Scans `loops_base` for non-terminal sessions. Returns `loop_id` or None.
 Filesystem: `.gator/loops/*/session.json` (R)
 <- `start_loop()`, dashboard `_handle_loop_start()`, dashboard `_adopt_orphaned_loops()`
 -> `load_session()`, `is_terminal()`
+! **Fails closed (#61, 2026-10-18).** It reads through `load_session()`, with the sharing-violation retry. Until 2026-10-18 it read `session.json` directly and skipped any loop that raised `OSError`, which drifted from the `->` line above. A `SessionBusyError` now counts that loop as **active**, so a transient Windows sharing violation can never hide an active loop from the single-active guard; the start or extend is refused instead. Missing, corrupt or malformed sessions are still skipped. Pinned by `test_find_active_loop_fails_closed_when_session_is_busy`.
 
 ### _try_record_attention(loop_dir, now=None) / _attention_due(session, now) / _find_attention_event(loop_dir, key) / _ensure_events_newline(path) (#47)
 File: `src/gator_command/scripts/loop/host.py`
