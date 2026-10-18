@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop: session.json saves and reads survive brief Windows sharing violations (#61)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop",
+    "windows",
+    "durability",
+    "61"
+  ],
+  "commit": "aeb5a9afb20b64cdda8f451230ec10d535bbf4d7",
+  "short_commit": "aeb5a9a",
+  "snippet_id": "snippet-aeb5a9afb20b6",
+  "session_group_key": "anthropic:72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "d7c9860f4e8ebbe0b5686268db11b18054af95cf",
+  "started_at": "2026-10-18T19:09:28Z",
+  "ended_at": "2026-10-18T22:35:59Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-10-18-gator-d7c9860f4e8eb.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "src/gator_command/scripts/loop/host.py",
+    "src/gator_command/scripts/loop/session.py",
+    "tests/test_dashboard_concurrency.py",
+    "tests/test_loop_session_sharing.py"
+  ],
+  "notes": [
+    "On Windows, saving `session.json` failed with \"Access is denied\" whenever another reader had the file open at that moment: the loop watcher, the Dashboard, or a participant's `status` / `wait`. Saves and reads now retry that briefly (up to about 1.2 s) and keep the atomic replace. If the file stays in use, the save stops with a clear \"busy\" error, writes nothing and leaves the old file intact. The Dashboard reports it as 503 \"loop is busy; retry\". POSIX behavior is unchanged.",
+    "The single-active-loop guard (`find_active_loop()`) now reads through the same path and fails closed. A session it cannot read because the file is busy counts as active. Before, it skipped the loop, so a sharing violation could let a second loop start."
+  ],
+  "transcript_session_id": "72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "transcript_ref": null
+}

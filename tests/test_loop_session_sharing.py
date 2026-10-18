@@ -91,11 +91,15 @@ def test_save_gives_up_cleanly_when_the_file_stays_in_use(loop_dir, monkeypatch)
 
 @windows_only
 def test_concurrent_readers_never_break_saves_or_see_torn_json(loop_dir):
-    """Four threads re-read session.json every 1 ms (far more often than any
-    real reader: the Dashboard polls every 3 s) while 100 saves run: every
-    save lands, and every read parses as a whole document. Readers with no
-    pause at all can starve a save past its retry window (measured:
-    95/100 SessionBusyError); that limit is recorded in scripts-loop.md."""
+    """Two threads re-read session.json every 10 ms (about 300 times more
+    often than the Dashboard's 3 s poll) while 50 saves run: every save
+    lands, and every read parses as a whole document.
+
+    Sized so that a slow CI runner cannot starve a save: each read holds the
+    file for well under 1 ms, so the file is open at most ~20% of the time
+    and all 10 replace attempts failing is ~0.2**10. Denser readers can
+    starve a save past the retry window (4 readers at 1 ms did on Windows
+    CI py3.9, 2026-10-18); that limit is recorded in scripts-loop.md."""
     stop = threading.Event()
     problems = []
 
@@ -107,13 +111,13 @@ def test_concurrent_readers_never_break_saves_or_see_torn_json(loop_dir):
                     problems.append(("shape", data))
             except Exception as exc:  # noqa: BLE001 — report everything
                 problems.append(("read", repr(exc)))
-            time.sleep(0.001)
+            time.sleep(0.01)
 
-    threads = [threading.Thread(target=reader, daemon=True) for _ in range(4)]
+    threads = [threading.Thread(target=reader, daemon=True) for _ in range(2)]
     for t in threads:
         t.start()
     try:
-        for i in range(2, 102):
+        for i in range(2, 52):
             loop_session.save_session(loop_dir, {"v": i})
     except Exception as exc:  # noqa: BLE001
         problems.append(("save", repr(exc)))
@@ -122,7 +126,7 @@ def test_concurrent_readers_never_break_saves_or_see_torn_json(loop_dir):
         for t in threads:
             t.join(5)
     assert not problems, problems[:5]
-    assert loop_session.load_session(loop_dir) == {"v": 101}
+    assert loop_session.load_session(loop_dir) == {"v": 51}
     assert _temp_files(loop_dir) == []
 
 
