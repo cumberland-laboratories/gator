@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: the #61 concurrent-reader test is sized so a slow CI runner cannot starve a save",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "loop",
+    "windows",
+    "61"
+  ],
+  "commit": "4dffac7e73ca6d53ebc4340cfbc958b9b1e60268",
+  "short_commit": "4dffac7",
+  "snippet_id": "snippet-4dffac7e73ca6",
+  "session_group_key": "anthropic:72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "aeb5a9afb20b64cdda8f451230ec10d535bbf4d7",
+  "started_at": "2026-10-18T19:09:28Z",
+  "ended_at": "2026-10-18T22:50:16Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-10-18-gator-aeb5a9afb20b6.json",
+    "tests/test_loop_session_sharing.py"
+  ],
+  "notes": [
+    "`test_concurrent_readers_never_break_saves_or_see_torn_json` used four readers re-opening `session.json` every 1 ms, and on Windows CI py3.9 that starved one save past its retry window (run 39172952413). It now uses two readers every 10 ms, still about 300 times more often than the Dashboard polls, so the chance of a starved save is negligible. It still fails every time on the code before the #61 fix. The Loop charter's limit note records the CI measurement."
+  ],
+  "transcript_session_id": "72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "transcript_ref": null
+}

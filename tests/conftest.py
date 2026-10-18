@@ -5,8 +5,11 @@ Provides mock directory structures for command-post and governed-repo
 scenarios, plus an import helper for hyphenated script names.
 """
 
+import contextlib
 import importlib.util
+import io
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -15,6 +18,37 @@ import pytest
 SCRIPTS_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+
+
+class _OwnThreadStdout(io.TextIOBase):
+    """A stdout stand-in that keeps only one thread's writes (#71)."""
+
+    def __init__(self, buf, owner, other):
+        self._buf, self._owner, self._other = buf, owner, other
+
+    def write(self, text):
+        target = self._buf if threading.get_ident() == self._owner else self._other
+        return target.write(text)
+
+    def flush(self):
+        self._other.flush()
+
+
+@contextlib.contextmanager
+def own_stdout(buf):
+    """Like contextlib.redirect_stdout(buf), but only the calling thread's
+    writes go to buf. Writes from other threads keep going to the original
+    stdout (#71).
+
+    redirect_stdout swaps sys.stdout for the whole process. A loop watcher
+    thread left running by an earlier test (for example an attention-mode
+    loop that records its own `architect_attention_due` event) can print an
+    event line such as "  [HH:MM:SS] ..." while a test captures CLI JSON,
+    which then fails to parse ("Expecting ',' delimiter: line 1 column 6").
+    """
+    proxy = _OwnThreadStdout(buf, threading.get_ident(), sys.stdout)
+    with contextlib.redirect_stdout(proxy):
+        yield buf
 
 
 def load_script(name, search_dir=None):

@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import own_stdout
+
 # Ensure loop package is importable
 SCRIPTS_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "scripts"
 LOOP_DIR = SCRIPTS_DIR / "loop"
@@ -901,7 +903,7 @@ class TestStructuredDecisionRequests:
 
         args = argparse.Namespace(token=e["architect_token"], json=False)
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             try:
                 from cli import _cmd_status
                 _cmd_status(args)
@@ -921,7 +923,7 @@ class TestStructuredDecisionRequests:
 
         args = argparse.Namespace(token=e["architect_token"], json=True)
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             try:
                 from cli import _cmd_status
                 _cmd_status(args)
@@ -1174,7 +1176,7 @@ class TestDurableArchitectResponses:
             token=e["draftor_token"], json=True
         )
         stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
+        with own_stdout(stdout):
             try:
                 from cli import _cmd_status
                 _cmd_status(args)
@@ -1673,7 +1675,7 @@ class TestArchitectMessage:
 
         args = argparse.Namespace(token=e["reviewer_token"], json=False)
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             try:
                 _cmd_status(args)
             except SystemExit:
@@ -1693,7 +1695,7 @@ class TestArchitectMessage:
 
         args = argparse.Namespace(token=e["reviewer_token"], json=True)
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             try:
                 _cmd_status(args)
             except SystemExit:
@@ -2728,7 +2730,7 @@ class TestWaitCommand:
             token=loop_env["draftor_token"], json=True, poll=0.1
         )
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             try:
                 _cmd_wait(args)
             except SystemExit:
@@ -2907,7 +2909,7 @@ class TestBoundedWait:
             token=e["draftor_token"], json=as_json, poll=0.01, max_seconds=0.05,
         )
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             with pytest.raises(SystemExit) as exc:
                 _cmd_wait(args)
         return exc.value.code, output.getvalue()
@@ -2936,7 +2938,7 @@ class TestBoundedWait:
         from cli import _cmd_wait
         args = argparse.Namespace(token=loop_env["draftor_token"], json=True, poll=0.1)
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with own_stdout(output):
             with pytest.raises(SystemExit) as exc:
                 _cmd_wait(args)
         data = json.loads(output.getvalue())

@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import own_stdout
+
 SCRIPTS_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "scripts"
 LOOP_DIR = SCRIPTS_DIR / "loop"
 for p in [str(SCRIPTS_DIR), str(LOOP_DIR)]:
@@ -118,7 +120,7 @@ def test_suspend_requires_active_loop():
 
 def _status_text(token):
     out = io.StringIO()
-    with contextlib.redirect_stdout(out):
+    with own_stdout(out):
         with pytest.raises(SystemExit):
             loop_cli._cmd_status(argparse.Namespace(token=token, json=False))
     return out.getvalue()
@@ -242,11 +244,18 @@ def test_legacy_pause_unblocks_as_before():
 def _run(fn, **kw):
     import json as _json
     out = io.StringIO()
-    with contextlib.redirect_stdout(out):
+    with own_stdout(out):
         with pytest.raises(SystemExit) as exc:
             fn(argparse.Namespace(**kw))
     text = out.getvalue()
-    return exc.value.code, (_json.loads(text) if kw.get("json") else text)
+    if not kw.get("json"):
+        return exc.value.code, text
+    try:
+        return exc.value.code, _json.loads(text)
+    except ValueError as err:
+        # #71: show what was actually captured, not just the parse error.
+        raise AssertionError(f"{fn.__name__} --json printed non-JSON "
+                             f"({err}): {text!r}") from err
 
 
 def _suspend_via(e, kind):
@@ -298,3 +307,32 @@ def test_status_and_wait_keep_participant_in_loop(loop_env, kind):  # noqa: F811
     code, _ = _run(loop_cli._cmd_wait, token=e["reviewer_token"], json=True,
                    max_seconds=0.2, poll=0.05)
     assert code == 2
+
+
+def test_captured_cli_json_ignores_other_threads_output():
+    """#71: a watcher thread left by an earlier test may print an event line
+    ("  [HH:MM:SS] ...") while a test captures CLI JSON. With a process-wide
+    redirect that line lands in the buffer and fails exactly as on CI;
+    own_stdout keeps only the calling thread's output."""
+    import json as _json
+    import threading as _threading
+
+    def foreign_print():
+        # An hour of 10-23 gives CI's exact error; 00-09 fail one character
+        # earlier ("0" is a whole JSON number).
+        print("  [21:52:35] architect attention due")
+
+    def captured(redirect):
+        buf = io.StringIO()
+        with redirect(buf):
+            t = _threading.Thread(target=foreign_print)
+            t.start()
+            t.join(5)
+            print(_json.dumps({"ok": True}, indent=2))
+        return buf.getvalue()
+
+    with pytest.raises(ValueError) as info:
+        _json.loads(captured(contextlib.redirect_stdout))
+    assert "Expecting ',' delimiter: line 1 column 6 (char 5)" in str(info.value)
+    assert _json.loads(captured(own_stdout)) == {"ok": True}
+

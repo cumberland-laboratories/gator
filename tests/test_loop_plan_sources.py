@@ -24,6 +24,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import own_stdout
+
 SCRIPTS_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "scripts"
 LOOP_DIR = SCRIPTS_DIR / "loop"
 for p in [str(SCRIPTS_DIR), str(LOOP_DIR)]:
@@ -86,7 +88,7 @@ def _tokens(loop_dir):
 
 def _status(token, as_json=False):
     out = io.StringIO()
-    with contextlib.redirect_stdout(out):
+    with own_stdout(out):
         with pytest.raises(SystemExit) as exc:
             loop_cli._cmd_status(argparse.Namespace(token=token, json=as_json))
     text = out.getvalue()
