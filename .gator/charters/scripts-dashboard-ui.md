@@ -127,7 +127,7 @@ Call same-origin dashboard APIs and normalize errors for views.
 -> Dashboard server
 ! Every POST includes `X-Gator-Dashboard: 1`. Never add cross-origin fallback behavior.
 
-### renderStandaloneRepos() / GatorViews.fleet() / window.gatorNavToRepo() / window.gatorOpenRepoInNewContext() — Fleet view and actions
+### renderStandaloneRepos() / GatorViews.fleet() / placeMenu() / window.gatorNavToRepo() / window.gatorOpenRepoInNewContext() — Fleet view and actions
 File: src/gator_command/scripts/dashboard/views/fleet.js
 Render repository health and expose explicit per-repository actions via a three-dot overflow menu.
 <- fleet route
@@ -135,6 +135,10 @@ Render repository health and expose explicit per-repository actions via a three-
 ! The overflow menu carries dual identity: `data-repo-name` for name-addressed Update/Gatorize, `data-repo-path` for path-addressed Remove. Each action dispatches to the correct identity.
 ! Actions use the repository's stable key, not display text or array position.
 ! Missing repositories remain representable so users can understand and clean stale registry entries.
+! **⋮ menu stays visible (#74, 2026-10-18).** The menu (`.overflow-menu`, absolute in `.overflow-menu-wrapper`) must never be clipped, including on the last row and in a short window.
+  - The Fleet table is `table.data-table.fleet-table` with `overflow: visible`. `.data-table`'s `overflow: hidden` would clip a menu that extends past the last row. The rounded corners are kept by radius on the header's top corner cells and the last body row's bottom corner cells. Other `.data-table` uses keep `overflow: hidden`.
+  - `placeMenu(btn, menu)` runs on every open. It measures the space below the button inside the visible area (the window, or `#view-slot` if that ends sooner). If the menu does not fit there and there is more room above, it adds `.open-up` (`bottom: 100%`). `closeAllMenus()` removes `open` and `open-up`.
+  - Pinned by `test_last_row_menu_is_fully_visible` (`test_fleet_layout.py`).
 ! **Opening actions (#80).**
   - **The ⋮ menu** gains two items, before Update/Gatorize and Remove, and only when `!window.GATOR_SNAPSHOT`:
     - **"Open in new workspace tab":** `button.menu-item.menu-open-workspace[data-action="open-workspace"]`, carrying `data-repo-name` and `data-repo-key`. It dispatches to `window.gatorOpenRepoInNewContext(name, key)`.

@@ -513,6 +513,20 @@ body {
   background: #f8f9fb;
 }
 
+/* #74: the Fleet table holds the ⋮ row menus, so it must not clip them.
+   It drops the table's overflow clipping and rounds its corner cells
+   directly instead (header top corners; last row's bottom corners, which
+   also carry the row hover background). Other .data-table uses keep
+   overflow: hidden. */
+.data-table.fleet-table {
+  overflow: visible;
+}
+
+.data-table.fleet-table thead tr:first-child th:first-child { border-top-left-radius: 8px; }
+.data-table.fleet-table thead tr:first-child th:last-child { border-top-right-radius: 8px; }
+.data-table.fleet-table tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
+.data-table.fleet-table tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+
 /* ── session table ─────────────────────────────────────────────────────── */
 
 .session-row:hover td {
@@ -830,6 +844,14 @@ a:hover, .link-btn:hover {
 
 .overflow-menu.open {
   display: block;
+}
+
+/* #74: opened upward when there is no room below (placeMenu in fleet.js). */
+.overflow-menu.open-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 2px;
 }
 
 .overflow-menu .menu-item {

@@ -38,7 +38,7 @@
         <button class="gator-btn gator-btn-primary" id="add-repo-btn">Add Repository</button>
       </div>
       <div class="section">
-        <table class="data-table">
+        <table class="data-table fleet-table">
           <thead>
             <tr>
               <th>Repo</th>
@@ -237,7 +237,10 @@
         const menu = this.nextElementSibling;
         const wasOpen = menu.classList.contains("open");
         closeAllMenus(container);
-        if (!wasOpen) menu.classList.add("open");
+        if (!wasOpen) {
+          menu.classList.add("open");
+          placeMenu(this, menu);
+        }
       });
     });
 
@@ -271,8 +274,24 @@
     });
   }
 
+  // #74: open upward when the menu does not fit below its button inside
+  // the visible area (the window, or the scrolling view pane if it ends
+  // sooner) and there is more room above. Measured once per open.
+  function placeMenu(btn, menu) {
+    menu.classList.remove("open-up");
+    const pane = btn.closest("#view-slot");
+    const visibleTop = Math.max(0, pane ? pane.getBoundingClientRect().top : 0);
+    const visibleBottom = Math.min(window.innerHeight,
+      pane ? pane.getBoundingClientRect().bottom : window.innerHeight);
+    const b = btn.getBoundingClientRect();
+    const needed = menu.offsetHeight + 4;
+    const below = visibleBottom - b.bottom;
+    const above = b.top - visibleTop;
+    if (below < needed && above > below) menu.classList.add("open-up");
+  }
+
   function closeAllMenus(container) {
-    container.querySelectorAll(".overflow-menu.open").forEach(m => m.classList.remove("open"));
+    container.querySelectorAll(".overflow-menu.open").forEach(m => m.classList.remove("open", "open-up"));
   }
 
   // ── Lifecycle actions (Update / Gatorize) ─────────────────────────────

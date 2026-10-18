@@ -157,3 +157,49 @@ def test_every_fleet_activity_cell_contains_indicator_at_initial_render(
             f"Fleet row {i}: .activity-cell contains {n} "
             f"`.activity-indicator` children; expected exactly 1 "
             f"(the permanent reservation slot)")
+
+
+_MENU_PROBE = """i => {
+    const btns = document.querySelectorAll('#view-slot .data-table .overflow-menu-btn');
+    const btn = btns[i < 0 ? btns.length + i : i];
+    btn.scrollIntoView({block: 'nearest'});
+    btn.click();
+    const menu = btn.nextElementSibling;
+    const items = Array.from(menu.querySelectorAll('.menu-item')).map(item => {
+        const r = item.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return {text: item.textContent.trim(), top: r.top, bottom: r.bottom,
+                usable: !!hit && (hit === item || item.contains(hit))};
+    });
+    return {up: menu.classList.contains('open-up'), open: menu.classList.contains('open'),
+            vh: window.innerHeight, items};
+}"""
+
+
+@pytest.mark.parametrize("viewport_h", [900, 420])
+def test_last_row_menu_is_fully_visible(page, dashboard_fleet, viewport_h):
+    """#74: the last row's menu is never clipped by the table or the
+    window. Every item is inside the viewport and is the element actually
+    under its own centre (so it can be clicked). A top row still opens
+    downward."""
+    page.set_viewport_size({"width": 1280, "height": viewport_h})
+    page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
+    _wait_for_fleet_render(page)
+    count = page.locator("#view-slot .data-table .overflow-menu-btn").count()
+    assert count >= 3, "the fleet fixture needs several rows"
+
+    last = page.evaluate(_MENU_PROBE, -1)
+    assert last["open"] and last["up"], last
+    texts = [i["text"] for i in last["items"]]
+    assert any("Remove" in t for t in texts), texts
+    assert any(("Update" in t) or ("Gatorize" in t) for t in texts), texts
+    for item in last["items"]:
+        assert 0 <= item["top"] and item["bottom"] <= last["vh"], item
+        assert item["usable"], item
+
+    page.keyboard.press("Escape")
+    page.evaluate("() => document.getElementById('view-slot').scrollTo(0, 0)")
+    first = page.evaluate(_MENU_PROBE, 0)
+    assert first["open"] and not first["up"], first
+    assert all(i["usable"] for i in first["items"]), first
