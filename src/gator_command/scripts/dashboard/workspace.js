@@ -264,7 +264,7 @@
   let stripPrint = null;
 
   function tabLabel(ctx) {
-    return ctx.repo === null ? "—" : ctx.repo;
+    return ctx.repo === null ? "Gator" : ctx.repo;
   }
 
   function closeLabel(ctx) {
@@ -330,8 +330,16 @@
         type: "button", class: "workspace-tab", role: "tab", id: "ws-tab-" + ctx.id,
         "aria-selected": active ? "true" : "false", "aria-controls": "app-shell",
         tabindex: active ? "0" : "-1", "data-ctx": ctx.id,
-      }, tabLabel(ctx));
-      if (ctx.repo === null) tab.title = "No repository";
+      }, ctx.repo === null ? undefined : tabLabel(ctx));
+      if (ctx.repo === null) {
+        // No repository: the white Gator mark, with "Gator" kept as the
+        // tab's text (visually hidden) for its accessible name.
+        tab.classList.add("workspace-tab-gator");
+        tab.appendChild(el("img", { class: "workspace-tab-logo",
+                                    src: "gator-logo.png", alt: "" }));
+        tab.appendChild(el("span", { class: "workspace-tab-text" }, tabLabel(ctx)));
+        tab.title = "No repository";
+      }
       tab.addEventListener("click", function () { callbacks.onSelect(ctx.id); });
       const close = el("button", {
         type: "button", class: "workspace-tab-close", "aria-label": closeLabel(ctx),

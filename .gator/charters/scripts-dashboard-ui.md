@@ -99,7 +99,7 @@ The full-width strip of workspace contexts above the sidebar and main pane. Top 
 - **Markup:**
   - `nav#workspace-strip[aria-label="Workspaces"]` is the first child of `<body>`, before `#app-shell`, which carries `role="tabpanel"` and an `aria-labelledby` that follows the active tab.
   - The strip holds a `div.workspace-tablist[role=tablist][aria-label="Open workspaces"]` of `div.workspace-item[role=presentation]`, each with:
-    - `button.workspace-tab[role=tab]` (`#ws-tab-<id>`, `aria-selected`, `aria-controls="app-shell"`, roving `tabindex`, `data-ctx`), labelled with the repository display name or `—` (`title="No repository"`);
+    - `button.workspace-tab[role=tab]` (`#ws-tab-<id>`, `aria-selected`, `aria-controls="app-shell"`, roving `tabindex`, `data-ctx`), labelled with the repository display name. A context with no repository (`.workspace-tab-gator`) instead shows the white Gator mark (`img.workspace-tab-logo`, `gator-logo.png`, `alt=""`, 18 px, opacity 0.7, or 1 when selected). Its text is "Gator" in a visually hidden `span.workspace-tab-text`, so its accessible name and `textContent` stay "Gator", and its `title` is "No repository". Before 2026-10-17 this tab was labelled `—`;
     - a separately focusable `button.workspace-tab-close` labelled "Close <repo> workspace" / "Close workspace without repository" (`tabindex` 0 on the active item, else -1).
   - Then `button.workspace-new` ("+", `aria-label="New workspace"`). At 12 contexts it is disabled, with the title "Workspace limit reached (12)".
   - All text is set through `textContent`.

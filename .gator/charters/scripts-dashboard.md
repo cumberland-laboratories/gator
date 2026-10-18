@@ -331,6 +331,7 @@ Inline dashboard assets and Tier-1 data into a self-contained offline HTML docum
   - **Current order:** fleet, history, syntax, repo, updates, **loop-markdown (#45)**, loop, settings, **welcome (#72)**, **docs (2026-10-13)**, **workspace (#80)**, then `dashboard.js`. In the inlined block, the data block sits between docs and workspace.
   - **Pinned by** `tests/test_snapshot.py`, including that `window.GatorLoopMarkdown`, `GatorViews.welcome`, `GatorViews.docs` and `window.GatorWorkspace` are inlined.
 ! `GATOR_SNAPSHOT` also turns off workspace contexts and keeps shell history entries state-only (no URL argument on `file:` URLs) (#80; see `scripts-dashboard-ui.md`).
+! Images are not inlined. In a snapshot, `renderWorkspaceStrip()` returns early (`workspace()` is null), so the strip's `gator-logo.png` mark for repository-less tabs (2026-10-17) is never rendered. Its path appears only as text inside the inlined `workspace.js`. Rendering the strip in a snapshot would add an external image reference. The sidebar `#brand-logo` in `dashboard.html` is already one such reference (pre-existing).
 
 ### check_for_updates() / upgrade_and_restart() / restart_server()
 File: src/gator_command/scripts/dashboard/updates.py

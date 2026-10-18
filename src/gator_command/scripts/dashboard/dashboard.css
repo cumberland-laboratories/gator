@@ -122,6 +122,34 @@ body {
   border-bottom: 3px solid transparent;
 }
 
+/* A context with no repository shows the white Gator mark; "Gator" stays
+   in the DOM as the tab's text, visually hidden. */
+.workspace-tab-gator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.workspace-tab-logo {
+  height: 18px;
+  width: auto;
+  display: block;
+  opacity: 0.7;
+}
+
+.workspace-tab-gator[aria-selected="true"] .workspace-tab-logo {
+  opacity: 1;
+}
+
+.workspace-tab-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .workspace-tab[aria-selected="true"] {
   font-weight: 700;
   color: var(--sidebar-active);

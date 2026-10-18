@@ -401,7 +401,23 @@ def test_strip_aria_keyboard_and_close_labels(page, dashboard_fleet):
     _land_alpha(page, dashboard_fleet)
     page.wait_for_selector("#workspace-strip .workspace-tab", timeout=10000)
     tabs = _strip(page)
-    assert [t["label"] for t in tabs] == ["alpha", "beta", "—"]
+    assert [t["label"] for t in tabs] == ["alpha", "beta", "Gator"]
+    # The repository-less tab shows the white Gator mark (loaded, decorative)
+    # with "Gator" kept as hidden text; repository tabs show text only.
+    marks = page.evaluate("""() => Array.from(
+        document.querySelectorAll('#workspace-strip .workspace-tab')).map(t => {
+            const img = t.querySelector('img.workspace-tab-logo');
+            const text = t.querySelector('.workspace-tab-text');
+            return img ? {src: img.getAttribute('src'), alt: img.getAttribute('alt'),
+                          loaded: img.complete && img.naturalWidth > 0,
+                          height: img.getBoundingClientRect().height,
+                          textWidth: text ? text.getBoundingClientRect().width : null,
+                          title: t.title} : null;
+        })""")
+    assert marks[0] is None and marks[1] is None
+    assert marks[2]["src"] == "gator-logo.png" and marks[2]["alt"] == ""
+    assert marks[2]["loaded"] and marks[2]["height"] == 18
+    assert marks[2]["textWidth"] <= 1 and marks[2]["title"] == "No repository"
     assert [t["selected"] for t in tabs] == ["true", "false", "false"]
     assert [t["tabindex"] for t in tabs] == ["0", "-1", "-1"]
     assert all(t["role"] == "tab" and t["controls"] == "app-shell" for t in tabs)
@@ -454,8 +470,8 @@ def test_switch_restores_each_context(page, dashboard_fleet):
 
     page.click("#workspace-strip .workspace-new")
     page.wait_for_selector(".welcome-workspace", timeout=10000)
-    assert _strip(page)[-1]["label"] == "—"
-    assert _focused(page)["cls"] == "workspace-tab"
+    assert _strip(page)[-1]["label"] == "Gator"
+    assert "workspace-tab" in _focused(page)["cls"].split()
     open_fleet(page)
     page.evaluate("() => window.gatorNavToRepo('beta')")
     page.wait_for_selector(".repo-file-item", timeout=15000)
@@ -560,7 +576,7 @@ def test_close_changes_navigation_only(page, dashboard_fleet):
     page.click('#workspace-strip .workspace-tab-close[data-ctx="a1"]')
     page.wait_for_selector(".welcome-workspace", timeout=10000)
     tabs = _strip(page)
-    assert len(tabs) == 1 and tabs[0]["label"] == "—"
+    assert len(tabs) == 1 and tabs[0]["label"] == "Gator"
     assert page.evaluate("() => location.search") == ""
 
     assert set(methods) <= {"GET"}, methods
@@ -590,13 +606,13 @@ def test_fleet_open_actions(page, dashboard_fleet):
     page.reload(wait_until="load")
     page.wait_for_function("() => window.GatorWorkspace.isHydrated()", timeout=10000)
     open_fleet(page)
-    assert _labels(page) == ["—"]
+    assert _labels(page) == ["Gator"]
     blank_id = _strip(page)[0]["id"]
 
     _fleet_menu(page, "alpha", "menu-open-workspace")
     page.wait_for_selector(".repo-file-item", timeout=15000)
     _wait_title(page, "Gator · alpha · Repo")
-    assert _labels(page) == ["—", "alpha"]
+    assert _labels(page) == ["Gator", "alpha"]
     alpha_id = _strip(page)[1]["id"]
     assert _active_tab(page) == [alpha_id]
     assert _focused(page) == {"cls": "workspace-tab", "ctx": alpha_id}
@@ -606,14 +622,14 @@ def test_fleet_open_actions(page, dashboard_fleet):
     page.wait_for_selector("#view-slot table.data-table", timeout=10000)
     _fleet_menu(page, "alpha", "menu-open-workspace")
     page.wait_for_selector(".repo-file-item", timeout=15000)
-    assert _labels(page) == ["—", "alpha"] and _active_tab(page) == [alpha_id]
+    assert _labels(page) == ["Gator", "alpha"] and _active_tab(page) == [alpha_id]
 
     # The row link from the blank context also selects it, not a duplicate.
     _click_tab(page, blank_id)
     page.wait_for_selector("#view-slot table.data-table", timeout=10000)
     page.click('#view-slot .link-btn:text-is("alpha")')
     page.wait_for_selector(".repo-file-item", timeout=15000)
-    assert _labels(page) == ["—", "alpha"] and _active_tab(page) == [alpha_id]
+    assert _labels(page) == ["Gator", "alpha"] and _active_tab(page) == [alpha_id]
 
     # The row link for a repository with no context opens it in the
     # current context.

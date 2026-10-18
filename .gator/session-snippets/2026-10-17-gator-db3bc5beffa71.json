@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters: Dashboard server headings name real functions; inbox records the threaded server and a Repo view race",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "charters",
+    "inbox",
+    "dashboard",
+    "70"
+  ],
+  "commit": "db3bc5beffa71c785e948a03c349809e04e5ee21",
+  "short_commit": "db3bc5b",
+  "snippet_id": "snippet-db3bc5beffa71",
+  "session_group_key": "anthropic:d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "858f7947690c95b68d4fee429c4354492ee12f63",
+  "started_at": "2026-10-17T20:15:15Z",
+  "ended_at": "2026-10-17T23:20:30Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-17-gator-858f7947690c9.json"
+  ],
+  "notes": [
+    "`scripts-dashboard.md`: four headings that began with a class or constant (`_LOOP_HOSTS`, `DashboardHandler.do_GET`, `_LifecycleGate`, `DashboardHTTPServer`) now begin with a function the pre-commit check can find, so it no longer warns on every Dashboard server commit. The lifecycle heading also gets the current `_start_lifecycle(fn, action, name)` signature.",
+    "`inbox.md`: records that the threaded server landed (`5743dd4`) without closing #70, and a Repo view race in which a late default-document load can replace a newer HTML selection."
+  ],
+  "transcript_session_id": "d212af8d-afd5-4e1d-8103-2f23d3c8fa5c",
+  "transcript_ref": null
+}
