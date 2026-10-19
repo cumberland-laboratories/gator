@@ -11,7 +11,9 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.26.0 (2026-10-18) — the Dashboard serves
+**Latest released version**: v2.26.1 (2026-10-18) — Loop `session.json`
+saves and reads survive brief Windows sharing violations (#61). v2.26.0 the
+same day: the Dashboard serves
 requests concurrently (a slow listing no longer blocks unrelated requests),
 workspace tabs (#80), the always-available Docs library, Repo tree return,
 and Dashboard UI fixes (#74). Release detail lives in `CHANGELOG.md` and the
