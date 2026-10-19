@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: CLI JSON captures keep only their own thread's output (#71)",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "loop",
+    "windows",
+    "71"
+  ],
+  "commit": "35d54ddcc6576053e5e355a0fbd313e405a4e537",
+  "short_commit": "35d54dd",
+  "snippet_id": "snippet-35d54ddcc6576",
+  "session_group_key": "anthropic:72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "4dffac7e73ca6d53ebc4340cfbc958b9b1e60268",
+  "started_at": "2026-10-18T19:09:28Z",
+  "ended_at": "2026-10-18T23:34:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-10-18-gator-4dffac7e73ca6.json",
+    "tests/conftest.py",
+    "tests/test_loop.py",
+    "tests/test_loop_plan_sources.py",
+    "tests/test_loop_suspension.py"
+  ],
+  "notes": [
+    "The intermittent `JSONDecodeError` in `test_status_and_wait_keep_participant_in_loop[paused]` (#71) came from the test, not the CLI. `contextlib.redirect_stdout` swaps `sys.stdout` for the whole process, and a loop watcher thread left running by an earlier Dashboard test can print an event line (\"  [HH:MM:SS] ...\") at any moment. That line then lands in the captured JSON, giving exactly CI's \"Expecting ',' delimiter: line 1 column 6\". A real `gator loop status --json` runs in its own process and is unaffected.",
+    "A new `own_stdout()` helper in `tests/conftest.py` keeps only the calling thread's writes. All 11 loop-test capture sites use it, and the suspension test's helper now shows the raw captured text if it ever fails to parse. A regression test reproduces the CI error with the old capture and passes with the new one."
+  ],
+  "transcript_session_id": "72f50847-dfbd-4b36-ac15-05b9d592e7c2",
+  "transcript_ref": null
+}

@@ -4,6 +4,19 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.26.1] — 2026-10-18
+
+Patch release. **Loop state survives brief Windows file-sharing conflicts.**
+
+### Fixed
+
+- **Saving `session.json` on Windows no longer fails with "Access is denied" when another reader has the file open at that moment (#61).** Readers include the loop watcher, the Dashboard and a participant's `status` / `wait`. Saves and reads now retry the Windows sharing violation briefly (up to about 1.2 s) and keep the atomic replace: the file is never written in place. If it stays in use, the save stops with a clear "busy" error (`SessionBusyError`, errno `EBUSY`), writes nothing and leaves the old file intact. The Dashboard reports that as 503 "loop is busy; retry", instead of the misleading 409 "Access is denied". POSIX behavior is unchanged. Pinned by `tests/test_loop_session_sharing.py`; see the #61 entry in `scripts-loop.md`.
+- **The single-active-loop guard fails closed.** `find_active_loop()` now reads sessions through the same path. A session it cannot read because the file is busy counts as active. Before, it skipped that loop, so a sharing violation could let a second loop start.
+
+### Changed (tests only)
+
+- **Loop CLI JSON captures keep only their own thread's output (#71).** The intermittent Windows `JSONDecodeError` in `test_loop_suspension.py` came from a process-wide `redirect_stdout` picking up an event line printed by a leftover watcher thread. A new `own_stdout()` helper in `tests/conftest.py` fixes it. The leftover threads are tracked as #83.
+
 ## [2.26.0] — 2026-10-18
 
 Feature release. **The Dashboard handles several requests at once.** A slow repository listing no longer makes an unrelated document or click wait behind it. **Workspace tabs** keep several repositories open in one window. **Docs** is now Gator's always-available documentation library. Also: returning to a repository shows its file tree at once, as you left it, and several smaller fixes to the Dashboard UI.
