@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.27.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "3a5e287a99fed2b63fd5f235a5734326e3c166b3",
+  "short_commit": "3a5e287",
+  "snippet_id": "snippet-3a5e287a99fed",
+  "session_group_key": "anthropic:ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "ed59feec2e28ed2131e56c4102ddc038b1d68185",
+  "started_at": "2026-10-19T08:53:09Z",
+  "ended_at": "2026-10-19T22:16:24Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-19-gator-ed59feec2e28e.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.27.0: the Dashboard's calmer, lighter \"Paper\" shell (light",
+    "strip and sidebar, title-only header, a sidebar repository card, and",
+    "selection shown by a teal bar plus bold text, never colour alone). See",
+    "the CHANGELOG `[2.27.0]` section."
+  ],
+  "transcript_session_id": "ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "transcript_ref": null
+}
