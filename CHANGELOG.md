@@ -4,6 +4,45 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.27.0] — 2026-10-19
+
+Feature release. **The Dashboard has a calmer, lighter "Paper" look.** The frame around every view is new: a light workspace strip and sidebar, an off-white page, a large title-only header and a card that names the selected repository. Selected tabs and items are marked by a teal bar plus bold text, never by colour alone. The view contents themselves (Fleet, Commits, Loop) are unchanged and get their own redesigns next.
+
+### Added
+
+- **Sidebar repository card.** The top of the sidebar shows the selected repository's name, branch and Gator version, or "None selected · Choose one in Fleet". It is built from text only, follows Refresh, and is hidden on narrow screens, where the workspace tab already names the repository.
+- **Welcome in the sidebar.** Welcome is now an ordinary sidebar item, the first one under Overview. The logo still opens it too.
+- **One visible focus ring.** Every shell control (workspace tabs, sidebar items, in-view tabs, Refresh, the Repo history button, the sidebar toggle) shows the same 2px teal outline when reached by keyboard.
+- **Reduced motion.** With the operating system's "reduce motion" setting, the shell's transitions are turned off.
+
+### Changed
+
+- **Paper frame (#80, #5).**
+  - The workspace strip, sidebar and page are light.
+  - The strip is 46px and the sidebar 244px.
+  - The page header shows only the title, at 30px, over a teal rule (64px with a 24px title on narrow screens). The subtitle line is gone.
+  - The page has wider margins.
+  - The logo is smaller and drawn dark.
+- **Strip status.** "Updated …" and Refresh moved from the header to the right end of the workspace strip, outside the tabs, so arrow keys never reach them. An offline snapshot report hides the strip, so its banner now shows the capture time instead.
+- **Repo history picker.** The ▾ commit-history button (and "Viewing: <commit>") moved into the header, beside the Repo search box. The repository name and branch it used to sit next to are now in the sidebar card.
+- **Selection: a bar plus bold, never colour alone.** Each family uses its own edge:
+  - **Workspace tabs:** a teal top bar, and the tab joins the page;
+  - **in-view tabs** (Welcome topics, Loop's Create / History): a teal bottom rule;
+  - **sidebar items:** a teal left rail and a light teal fill.
+
+  Selected text is semibold (600) instead of bold (700).
+- **The Repo sidebar item reads "Repo".** It no longer shows "▸ <repository>" and is not indented.
+- **Unavailable items say why.** Without a repository, Repo, Commits and Loop are greyed out in an AA-contrast grey, are marked `aria-disabled`, and have the tooltip "Choose a repository in Fleet first".
+- **Code is monospace.** Markdown code blocks and inline code, commit hashes, the file path above a document and Loop's technical values now use the monospace face. Several stylesheet rules had referred to a font token that did not exist yet, so they rendered in the plain face. Repository-tree labels stay in the plain face.
+- **Colours come from one token set.** The Dashboard's colours, type sizes, spacing and radii are defined once (Tailwind grays plus teal), and the older names are aliases of them. The page background, borders and body text are slightly different greys, and links are teal instead of blue.
+- The 14px base text size is a temporary step. It moves to 16px after the Commits and Loop redesigns.
+
+Pinned by the new `tests/test_dashboard_ui/test_paper_shell.py` (title-only header on every view, frame geometry at desktop and narrow widths, the card and its text-only rendering, the Welcome item, unavailable-item cues, the per-family selection rule, a WCAG AA contrast check of the shell's quiet text, the focus ring and reduced motion), plus updated pins in `test_workspace_tabs.py`, `test_welcome_ui.py`, `test_loop_workspace.py`, `test_repo_tree_cache.py` and `test_docs_view.py`. See the "Paper tokens", "Paper frame" and "Repository context" entries in `scripts-dashboard-ui.md`.
+
+### Changed (repository only)
+
+- The repository's runtime pin is 2.26.1.
+
 ## [2.26.1] — 2026-10-18
 
 Patch release. **Loop state survives brief Windows file-sharing conflicts.**

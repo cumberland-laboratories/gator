@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator: pin the 2.26.1 runtime; record the Dashboard Paper direction",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-pin",
+    "inbox",
+    "dashboard",
+    "paper"
+  ],
+  "commit": "ed59feec2e28ed2131e56c4102ddc038b1d68185",
+  "short_commit": "ed59fee",
+  "snippet_id": "snippet-ed59feec2e28e",
+  "session_group_key": "anthropic:ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-19T08:53:09Z",
+  "ended_at": "2026-10-19T22:03:23Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/inbox.md",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-19-gator-e0f19b349086a.json"
+  ],
+  "notes": [
+    "`gator update` advanced the repository's runtime pin from 2.25.1 to the",
+    "installed 2.26.1 CLI (`.gator/runtime-pin.json`, `.gator/.gator-version`).",
+    "The inbox records the Architect's Dashboard \"Paper\" visual direction",
+    "(2026-10-18): the mock-ups, the simplicity principle, and the review",
+    "decisions that the Paper shell (`e0f19b3`) and the later Fleet, Commits",
+    "and Loop work follow."
+  ],
+  "transcript_session_id": "ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "transcript_ref": null
+}
