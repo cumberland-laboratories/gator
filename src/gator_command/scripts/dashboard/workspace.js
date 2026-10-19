@@ -325,7 +325,10 @@
                              class: "workspace-tablist" });
     for (const ctx of ws.contexts) {
       const active = ctx.id === ws.activeId;
-      const item = el("div", { class: "workspace-item", role: "presentation" });
+      // `.workspace-item-active` lets the selected tab and its close button
+      // share one Paper fill and top bar (presentation only).
+      const item = el("div", { class: active ? "workspace-item workspace-item-active" : "workspace-item",
+                               role: "presentation" });
       const tab = el("button", {
         type: "button", class: "workspace-tab", role: "tab", id: "ws-tab-" + ctx.id,
         "aria-selected": active ? "true" : "false", "aria-controls": "app-shell",

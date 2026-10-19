@@ -80,7 +80,11 @@ def test_commits_tab_is_gated_like_loop(page, dashboard_fleet):
               "id => document.getElementById(id).classList.contains('dimmed'))")
     assert page.evaluate(dimmed) == [True, True]
     title = page.evaluate("() => document.getElementById('topbar-title').textContent")
-    page.click('.sidebar-item[data-view="history"]')
+    # Paper: a dimmed item is also aria-disabled, so Playwright's
+    # actionability check refuses an ordinary click; force a real mouse
+    # click to prove the shell itself ignores it.
+    assert page.get_attribute('.sidebar-item[data-view="history"]', "aria-disabled") == "true"
+    page.click('.sidebar-item[data-view="history"]', force=True)
     page.wait_for_timeout(300)
     assert page.evaluate(
         "() => document.getElementById('topbar-title').textContent") == title, \
@@ -3032,6 +3036,7 @@ def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
             sideTop: side.top, mainTop: main.top,
             baseline: style('#loop-tabbar').borderBottomWidth,
             selWeight: parseInt(sel.fontWeight, 10), selBorder: sel.borderBottomWidth,
+            selBorderColor: sel.borderBottomColor,
             unWeight: parseInt(un.fontWeight, 10),
             unBorderColor: un.borderBottomColor,
         };
@@ -3041,7 +3046,9 @@ def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
     assert geo["barBottom"] <= geo["sideTop"] + 1
     assert geo["barBottom"] <= geo["mainTop"] + 1
     assert geo["baseline"] == "1px"
-    assert geo["selWeight"] >= 700 and geo["selBorder"] == "3px"
+    # Paper: selected = weight 600 + a 3px teal bottom rule.
+    assert geo["selWeight"] >= 600 and geo["selBorder"] == "3px"
+    assert geo["selBorderColor"] == "rgb(25, 174, 184)"
     assert geo["unWeight"] == 400
     assert geo["unBorderColor"] in ("rgba(0, 0, 0, 0)", "transparent")
 
@@ -3228,7 +3235,7 @@ def test_back_restores_loop_in_its_own_repository(page, dashboard_fleet):
         }
     }""")
     page.wait_for_selector(".repo-file-item", timeout=15000)
-    assert "beta" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+    assert "beta" in page.evaluate("() => document.querySelector('#sidebar-context .ctx-name').textContent")
 
     loop_requests = []
     page.on("request", lambda req: loop_requests.append(req.url)
@@ -3237,7 +3244,7 @@ def test_back_restores_loop_in_its_own_repository(page, dashboard_fleet):
     page.wait_for_selector(".link-btn", timeout=10000)
     _history_back(page)
     _wait_header(page, "auth-migration")
-    assert "alpha" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+    assert "alpha" in page.evaluate("() => document.querySelector('#sidebar-context .ctx-name').textContent")
     assert page.evaluate(
         "() => document.querySelector('.loop-sidebar-card.loop-sidebar-item-selected"
         " .loop-card-feature').textContent") == "auth-migration"
@@ -3251,7 +3258,7 @@ def test_back_restores_loop_in_its_own_repository(page, dashboard_fleet):
     page.wait_for_selector(".repo-file-item", timeout=15000)
     assert page.evaluate(
         "() => document.querySelector('.sidebar-item.active').dataset.view") == "repo"
-    assert "beta" in page.evaluate("() => document.getElementById('repo-tab').textContent")
+    assert "beta" in page.evaluate("() => document.querySelector('#sidebar-context .ctx-name').textContent")
 
 
 def test_back_to_unregistered_repo_falls_back_to_fleet(page, dashboard_fleet):

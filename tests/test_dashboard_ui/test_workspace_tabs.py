@@ -313,6 +313,8 @@ _STRIP_JS = """() => {
             elId: t.id,
             weight: getComputedStyle(t).fontWeight,
             underline: getComputedStyle(t).borderBottomWidth,
+            bar: getComputedStyle(t.parentElement).boxShadow,
+            itemActive: t.parentElement.classList.contains('workspace-item-active'),
             closeLabel: c.getAttribute('aria-label'),
             closeTabindex: c.getAttribute('tabindex'),
         };
@@ -385,7 +387,7 @@ def test_strip_spans_shell_above_sidebar(page, dashboard_fleet, viewport):
     assert geo["newDisabled"] is True
     assert geo["strip"]["top"] == 0 and geo["strip"]["left"] == 0
     assert geo["strip"]["width"] == geo["vw"]
-    assert geo["strip"]["height"] == 36
+    assert geo["strip"]["height"] == 46  # Paper strip (36px before)
     assert geo["sidebar"]["top"] >= geo["strip"]["bottom"]
     assert geo["main"]["top"] >= geo["strip"]["bottom"]
     assert geo["toggle"]["top"] >= geo["strip"]["bottom"]
@@ -397,7 +399,7 @@ def test_strip_spans_shell_above_sidebar(page, dashboard_fleet, viewport):
 
 def test_strip_aria_keyboard_and_close_labels(page, dashboard_fleet):
     """Roles, roving tabindex, the tab-panel link, labelled close buttons,
-    weight-plus-underline selection, and manual activation: arrows move
+    weight-plus-top-bar selection, and manual activation: arrows move
     focus only; Enter selects."""
     keys = _keys(page, dashboard_fleet)
     _seed_contexts(page, [
@@ -432,8 +434,13 @@ def test_strip_aria_keyboard_and_close_labels(page, dashboard_fleet):
         "Close alpha workspace", "Close beta workspace",
         "Close workspace without repository"]
     assert [t["closeTabindex"] for t in tabs] == ["0", "-1", "-1"]
-    assert tabs[0]["weight"] == "700" and tabs[1]["weight"] == "400"
-    assert tabs[0]["underline"] == "3px"
+    # Paper: selected = weight 600 + a 3px teal TOP bar on its item (no
+    # underline); unselected = 400 with no bar.
+    assert tabs[0]["weight"] == "600" and tabs[1]["weight"] == "400"
+    assert [t["underline"] for t in tabs] == ["0px", "0px", "0px"]
+    assert [t["itemActive"] for t in tabs] == [True, False, False]
+    assert tabs[0]["bar"] == "rgb(25, 174, 184) 0px 3px 0px 0px inset"
+    assert tabs[1]["bar"] == "none" and tabs[2]["bar"] == "none"
     assert page.evaluate("""() => {
         const s = document.getElementById('app-shell');
         const l = document.querySelector('#workspace-strip [role=tablist]');
@@ -461,6 +468,55 @@ def test_strip_aria_keyboard_and_close_labels(page, dashboard_fleet):
     _wait_title(page, "Gator · beta · Docs")
     assert _active_tab(page) == ["b1"]
     assert _focused(page)["ctx"] == "b1"
+
+
+def test_strip_status_outside_tablist(page, dashboard_fleet):
+    """Paper: the strip holds #workspace-tabs (renderStrip's container),
+    a spacer and #strip-status (timestamp, Refresh). The status region is
+    outside the tablist, survives a strip rebuild as the same nodes, and
+    arrow keys never reach it."""
+    keys = _keys(page, dashboard_fleet)
+    _seed_contexts(page, [_ctx("a1", "alpha", keys["alpha"], "repo"), _ctx("w1")], "a1")
+    _land_alpha(page, dashboard_fleet)
+    page.wait_for_selector("#workspace-strip .workspace-tab", timeout=10000)
+    layout = page.evaluate("""() => {
+        const strip = document.getElementById('workspace-strip');
+        const status = document.getElementById('strip-status');
+        window.__stripStatus = status;
+        window.__stripRefresh = document.getElementById('refresh-btn');
+        return {
+            children: Array.from(strip.children).map(c => c.id || c.className),
+            inTablist: !!status.closest('[role=tablist]'),
+            inTabs: document.getElementById('workspace-tabs').contains(status),
+            tablistInTabs: !!document.querySelector('#workspace-tabs > [role=tablist]'),
+            refresh: status.contains(window.__stripRefresh),
+            time: status.querySelector('#generated-at').textContent,
+            label: status.getAttribute('aria-label'),
+        };
+    }""")
+    assert layout["children"] == ["workspace-tabs", "strip-spacer", "strip-status"]
+    assert layout["inTablist"] is False and layout["inTabs"] is False
+    assert layout["tablistInTabs"] is True and layout["refresh"] is True
+    assert layout["time"].startswith("Updated ")
+    assert layout["label"] == "Dashboard status"
+
+    # + adds a context, which rebuilds the strip; the status nodes stay.
+    page.click("#workspace-strip .workspace-new")
+    page.wait_for_selector(".welcome-workspace", timeout=10000)
+    tabs = _strip(page)
+    assert len(tabs) == 3
+    assert page.evaluate("""() => window.__stripStatus.isConnected
+        && document.getElementById('strip-status') === window.__stripStatus
+        && document.getElementById('refresh-btn') === window.__stripRefresh""")
+
+    # Arrow keys move among the tabs only: End reaches the last tab, and
+    # Right from it wraps to the first, never into the status region.
+    page.focus('#workspace-strip .workspace-tab[data-ctx="%s"]' % tabs[0]["id"])
+    page.keyboard.press("End")
+    assert _focused(page)["ctx"] == tabs[-1]["id"]
+    page.keyboard.press("ArrowRight")
+    assert _focused(page)["ctx"] == tabs[0]["id"]
+    assert "workspace-tab" in _focused(page)["cls"].split()
 
 
 def test_switch_restores_each_context(page, dashboard_fleet):

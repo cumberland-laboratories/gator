@@ -55,6 +55,9 @@ def test_docs_is_enabled_without_a_repository(page, dashboard_fleet):
         "() => document.getElementById('topbar-title').textContent") == "Docs"
     # No repository context was created, and the repo search box is hidden.
     assert "dimmed" in (page.locator("#repo-tab").get_attribute("class") or "")
+    # The unavailable state has a non-colour cue (Paper).
+    assert page.locator("#repo-tab").get_attribute("aria-disabled") == "true"
+    assert page.locator("#repo-tab").get_attribute("title") == "Choose a repository in Fleet first"
     assert page.evaluate("""() => {
         const s = document.getElementById('repo-search-input');
         return !s || s.style.display === 'none'; }""")
@@ -103,3 +106,5 @@ def test_docs_is_the_same_with_a_repository_selected(page, dashboard_fleet):
     assert [(i["doc"], i["label"]) for i in _items(page)] == EXPECTED
     # The repository stays selected for Repo/Loop.
     assert "dimmed" not in (page.locator("#repo-tab").get_attribute("class") or "")
+    assert page.locator("#repo-tab").get_attribute("aria-disabled") is None
+    assert page.locator("#repo-tab").get_attribute("title") is None

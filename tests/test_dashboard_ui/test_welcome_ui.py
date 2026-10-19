@@ -107,7 +107,7 @@ def _selected(page):
 
 def _repo_context(page):
     return page.evaluate("""() => ({
-        label: document.getElementById('repo-tab').textContent.trim(),
+        label: document.querySelector('#sidebar-context .ctx-name').textContent.trim(),
         repo: document.getElementById('repo-tab').classList.contains('dimmed'),
         docs: document.getElementById('docs-tab').classList.contains('dimmed'),
         loop: document.getElementById('loop-tab').classList.contains('dimmed'),
@@ -229,6 +229,7 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
             baseline: cs('.welcome-tabbar').borderBottomWidth,
             selWeight: parseInt(cs('#welcome-tab-session').fontWeight, 10),
             selBorder: cs('#welcome-tab-session').borderBottomWidth,
+            selBorderColor: cs('#welcome-tab-session').borderBottomColor,
             unWeight: parseInt(cs('#welcome-tab-overview').fontWeight, 10),
             unBorderColor: cs('#welcome-tab-overview').borderBottomColor,
         };
@@ -236,7 +237,9 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
     assert abs(geo["barLeft"] - geo["contentLeft"]) <= 1
     assert abs(geo["barRight"] - geo["contentRight"]) <= 1
     assert geo["baseline"] == "1px"
-    assert geo["selWeight"] >= 700 and geo["selBorder"] == "3px"
+    # Paper: selected = weight 600 + a 3px teal bottom rule.
+    assert geo["selWeight"] >= 600 and geo["selBorder"] == "3px"
+    assert geo["selBorderColor"] == "rgb(25, 174, 184)"
     assert geo["unWeight"] == 400
     assert geo["unBorderColor"] in ("rgba(0, 0, 0, 0)", "transparent")
 
@@ -438,6 +441,18 @@ def test_welcome_snapshot_frames(page, tmp_path):
     page.wait_for_function(
         "() => document.getElementById('topbar-title').textContent === 'Fleet'",
         timeout=10000)
+    # Paper: the strip (and its status region with Refresh) is hidden, so
+    # the banner carries the capture time.
+    banner = page.evaluate("""() => ({
+        shown: getComputedStyle(document.getElementById('snapshot-banner')).display !== 'none',
+        time: document.getElementById('snapshot-generated-at').textContent,
+        stripHidden: document.getElementById('workspace-strip').hidden,
+        stripHeight: document.getElementById('workspace-strip').getBoundingClientRect().height,
+        refresh: getComputedStyle(document.getElementById('refresh-btn')).display,
+    })""")
+    expected = page.evaluate("() => 'at ' + new Date('2026-10-10T00:00:00Z').toLocaleString()")
+    assert banner == {"shown": True, "time": expected, "stripHidden": True,
+                      "stripHeight": 0, "refresh": "none"}
     _open_welcome(page)
     page.click("#welcome-tab-session")
     page.wait_for_function(

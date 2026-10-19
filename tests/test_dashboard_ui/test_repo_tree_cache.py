@@ -313,6 +313,12 @@ def test_versioned_view_bypasses_cache(page, dashboard_fleet):
     _open_alpha(page, dashboard_fleet)
     before = _cache(page)
     assert any(e["items"] > 0 for e in before)
+    # Paper: the picker lives in the header's #topbar-repo-tools.
+    assert page.evaluate("""() => {
+        const t = document.getElementById('topbar-repo-tools');
+        return !t.hidden && t.contains(document.getElementById('branch-history-btn'))
+            && t.contains(document.getElementById('branch-history-dropdown'));
+    }""")
     page.click("#branch-history-btn")
     page.wait_for_selector('#branch-history-dropdown .history-item[data-hash]:not([data-hash=""])',
                            timeout=10000)

@@ -8,7 +8,14 @@
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <nav id="workspace-strip" aria-label="Workspaces"></nav>
+  <nav id="workspace-strip" aria-label="Workspaces">
+    <div id="workspace-tabs"></div>
+    <div class="strip-spacer"></div>
+    <div id="strip-status" role="group" aria-label="Dashboard status">
+      <span id="generated-at"></span>
+      <button id="refresh-btn" title="Re-run fleet scan">↺ Refresh</button>
+    </div>
+  </nav>
   <div id="app-shell" role="tabpanel">
 
     <aside id="sidebar">
@@ -18,18 +25,26 @@
         </button>
       </div>
 
+      <div id="sidebar-context" aria-live="polite">
+        <div class="ctx-name ctx-empty">None selected</div>
+        <div class="ctx-meta">Choose one in Fleet</div>
+      </div>
+
       <nav id="sidebar-nav">
         <div class="nav-group-label">Overview</div>
+        <button class="sidebar-item" data-view="welcome" id="welcome-nav">
+          <span class="sidebar-icon">⌂</span> Welcome
+        </button>
         <button class="sidebar-item active" data-view="fleet">
           <span class="sidebar-icon">◈</span> Fleet
         </button>
-        <button class="sidebar-item dimmed" data-view="repo" id="repo-tab" style="padding-left:28px">
+        <button class="sidebar-item dimmed" data-view="repo" id="repo-tab" aria-disabled="true" title="Choose a repository in Fleet first">
           <span class="sidebar-icon">▸</span> Repo
         </button>
-        <button class="sidebar-item dimmed" data-view="history" id="history-tab">
+        <button class="sidebar-item dimmed" data-view="history" id="history-tab" aria-disabled="true" title="Choose a repository in Fleet first">
           <span class="sidebar-icon">◉</span> Commits
         </button>
-        <button class="sidebar-item dimmed" data-view="loop" id="loop-tab">
+        <button class="sidebar-item dimmed" data-view="loop" id="loop-tab" aria-disabled="true" title="Choose a repository in Fleet first">
           <span class="sidebar-icon">⇄</span> Loop
         </button>
 
@@ -54,17 +69,16 @@
       <header id="topbar">
         <div id="topbar-left">
           <h1 id="topbar-title">Fleet</h1>
-          <span id="topbar-subtitle"></span>
+          <span id="topbar-subtitle" hidden></span>
         </div>
         <div id="topbar-right">
+          <span id="topbar-repo-tools" hidden></span>
           <input type="text" id="repo-search-input" class="topbar-search" placeholder="Search... (AND / OR)" style="display:none" />
-          <span id="generated-at"></span>
-          <button id="refresh-btn" title="Re-run fleet scan">↺ Refresh</button>
         </div>
       </header>
 
       <div id="snapshot-banner" style="display:none" class="snapshot-note">
-        Snapshot — data captured at generation time.
+        Snapshot — data captured <span id="snapshot-generated-at">at generation time</span>.
         Run <code>gator dashboard</code> for live view with Repo drill-down.
       </div>
 

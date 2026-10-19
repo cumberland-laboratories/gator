@@ -6,7 +6,7 @@
  *   - Route sidebar clicks to view modules
  *   - Handle ?repo=<name> query param to pre-load Repo view
  *   - Manage Refresh button (re-fetches /api/refresh then /api/data)
- *   - Update topbar title/subtitle from active view
+ *   - Update the topbar title (title only; Paper) from the active view
  *   - Own browser history for every view (#56): navigate() pushes, one
  *     popstate handler restores; views add sub-state via window.GatorShell
  *
@@ -61,6 +61,7 @@
   const repoTab        = document.getElementById("repo-tab");
   const loopTab        = document.getElementById("loop-tab");
   const historyTab     = document.getElementById("history-tab");
+  const sidebarContext = document.getElementById("sidebar-context");
   const topbarTitle    = document.getElementById("topbar-title");
   const brandHome      = document.getElementById("brand-home");
 
@@ -73,7 +74,8 @@
       sidebar.classList.toggle("collapsed");
     });
   }
-  const topbarSubtitle = document.getElementById("topbar-subtitle");
+  const repoTools      = document.getElementById("topbar-repo-tools");
+  const snapshotGeneratedAt = document.getElementById("snapshot-generated-at");
 
   // ── data loading ───────────────────────────────────────────────────────────
 
@@ -92,6 +94,11 @@
     try {
       const d = new Date(ts);
       generatedAt.textContent = "Updated " + d.toLocaleTimeString();
+      // A snapshot hides the strip (and #generated-at with it), so the
+      // banner carries the capture time.
+      if (window.GATOR_SNAPSHOT && snapshotGeneratedAt) {
+        snapshotGeneratedAt.textContent = "at " + d.toLocaleString();
+      }
     } catch (_) {
       generatedAt.textContent = ts;
     }
@@ -99,10 +106,11 @@
 
   // ── topbar ─────────────────────────────────────────────────────────────────
 
-  function updateTopbar(name, subtitle) {
-    const meta = VIEW_META[name] || { title: name, subtitle: "" };
+  // Paper: the header shows the title only. #topbar-subtitle stays in the
+  // DOM, hidden and never written.
+  function updateTopbar(name) {
+    const meta = VIEW_META[name] || { title: name };
     topbarTitle.textContent = meta.title;
-    topbarSubtitle.innerHTML = subtitle || meta.subtitle;
   }
 
   // ── browser-tab title (#80) ───────────────────────────────────────────────
@@ -138,35 +146,75 @@
       || (state.data && state.data.repos) || [];
   }
 
-  function setRepoTabLabel(text) {
-    repoTab.textContent = "";
-    const icon = document.createElement("span");
-    icon.className = "sidebar-icon";
-    icon.textContent = "▸";
-    repoTab.appendChild(icon);
-    repoTab.appendChild(document.createTextNode(" " + text));
+  // Paper sidebar context card (#sidebar-context): the active repository's
+  // name, branch and Gator version from its Fleet record (by key, else by
+  // name), or the empty state. Text nodes only: names and branches are
+  // never parsed as markup.
+  function contextEl(tag, cls, text) {
+    const el = document.createElement(tag);
+    el.className = cls;
+    el.textContent = text;
+    return el;
   }
 
-  // Set the shell's repository context: name, API key, the Repo sidebar
-  // label, and the Repo/Commits/Loop tabs enabled. Docs is repository-independent
-  // and always enabled.
+  function renderSidebarContext() {
+    if (!sidebarContext) return;
+    sidebarContext.textContent = "";
+    if (!state.activeRepo) {
+      sidebarContext.appendChild(contextEl("div", "ctx-name ctx-empty", "None selected"));
+      sidebarContext.appendChild(contextEl("div", "ctx-meta", "Choose one in Fleet"));
+      return;
+    }
+    const repos = fleetRepos();
+    const rec = (state.activeRepoKey && repos.find(r => r.repo_key === state.activeRepoKey))
+      || repos.find(r => r.name === state.activeRepo) || {};
+    sidebarContext.appendChild(contextEl("div", "ctx-name", state.activeRepo));
+    const meta = document.createElement("div");
+    meta.className = "ctx-meta";
+    if (rec.branch) meta.appendChild(contextEl("span", "ctx-branch", String(rec.branch)));
+    if (rec.cli_version) {
+      if (rec.branch) meta.appendChild(document.createTextNode(" · "));
+      meta.appendChild(document.createTextNode("Gator "));
+      meta.appendChild(contextEl("span", "ctx-version", String(rec.cli_version)));
+    }
+    if (meta.firstChild) sidebarContext.appendChild(meta);
+  }
+
+  // Repo/Commits/Loop need a repository. A dimmed item also carries
+  // aria-disabled and an explanatory title (a non-colour cue); the
+  // sidebar click handler still keys on the `dimmed` class.
+  const REPO_ITEM_HINT = "Choose a repository in Fleet first";
+
+  function setRepoItemsEnabled(enabled) {
+    [repoTab, historyTab, loopTab].forEach(item => {
+      if (!item) return;
+      item.classList.toggle("dimmed", !enabled);
+      if (enabled) {
+        item.removeAttribute("aria-disabled");
+        item.removeAttribute("title");
+      } else {
+        item.setAttribute("aria-disabled", "true");
+        item.title = REPO_ITEM_HINT;
+      }
+    });
+  }
+
+  // Set the shell's repository context: name, API key, the sidebar
+  // context card, and the Repo/Commits/Loop items enabled. Docs is
+  // repository-independent and always enabled.
   function setActiveRepo(repoName, repoKey) {
     state.activeRepo = repoName;
     state.activeRepoKey = repoKey || null;
-    setRepoTabLabel(repoName);
-    repoTab.classList.remove("dimmed");
-    if (historyTab) historyTab.classList.remove("dimmed");
-    if (loopTab) loopTab.classList.remove("dimmed");
+    renderSidebarContext();
+    setRepoItemsEnabled(true);
   }
 
   // Inverse of setActiveRepo(): the initial page state.
   function clearActiveRepo() {
     state.activeRepo = null;
     state.activeRepoKey = null;
-    setRepoTabLabel("Repo");
-    repoTab.classList.add("dimmed");
-    if (historyTab) historyTab.classList.add("dimmed");
-    if (loopTab) loopTab.classList.add("dimmed");
+    renderSidebarContext();
+    setRepoItemsEnabled(false);
   }
 
   // ── browser history (#56) ──────────────────────────────────────────────────
@@ -267,12 +315,15 @@
   // records one ordinary history entry.
 
   const workspaceStrip = document.getElementById("workspace-strip");
+  // renderStrip() empties its container on a rebuild, so it gets only the
+  // tabs region; #strip-status (timestamp, Refresh) is a sibling.
+  const workspaceTabs = document.getElementById("workspace-tabs");
   const appShell = document.getElementById("app-shell");
 
   function renderWorkspaceStrip(opts) {
     const ws = workspace();
-    if (!ws || !workspaceStrip) return;
-    const tabId = ws.renderStrip(workspaceStrip, {
+    if (!ws || !workspaceTabs) return;
+    const tabId = ws.renderStrip(workspaceTabs, {
       onSelect: id => selectContext(id),
       onClose: id => closeContext(id),
       onNew: newContext,
@@ -496,6 +547,12 @@
       repoSearchInput.style.display = name === "repo" ? "" : "none";
       if (name !== "repo") repoSearchInput.value = "";
     }
+    // The Repo branch-history picker lives in #topbar-repo-tools (Paper:
+    // the title-only header has no subtitle). Only the Repo branch fills it.
+    if (repoTools) {
+      repoTools.textContent = "";
+      repoTools.hidden = true;
+    }
 
     // Clear slot
     viewSlot.innerHTML = "";
@@ -503,10 +560,7 @@
     const views = window.GatorViews || {};
 
     if (name === "fleet") {
-      const repos = (state.data && state.data.repos) || [];
-      const total = repos.length;
-      const accessible = repos.filter(r => r.accessible).length;
-      updateTopbar("fleet", `${total} repos · ${accessible} accessible`);
+      updateTopbar("fleet");
       if (views.fleet) {
         views.fleet(state.data, viewSlot);
       } else {
@@ -516,7 +570,7 @@
     }
 
     if (name === "history") {
-      updateTopbar("history", "Recent commits");
+      updateTopbar("history");
       if (views.history) {
         views.history(state.data, viewSlot, state.activeRepo);
       } else {
@@ -528,7 +582,7 @@
     if (name === "repo") {
       const repoName = extra || state.activeRepo;
       if (!repoName) {
-        updateTopbar("repo", "Select a repo from Fleet");
+        updateTopbar("repo");
         viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view.</p>";
         return;
       }
@@ -547,15 +601,17 @@
       // Find branch from fleet data
       const repoInfo = fleetRepos().find(r => r.name === repoName);
       const branch = repoInfo && repoInfo.branch ? repoInfo.branch : "";
-      const subtitle = branch
-        ? repoName + ' <span class="muted" style="font-weight:normal">' + branch + '</span>'
-          + ' <button class="history-toggle-btn" id="branch-history-btn" title="Browse commit history" style="font-size:13px;">&#9662;</button>'
-          + '<span id="branch-version-label"></span>'
-          + '<div class="history-dropdown" id="branch-history-dropdown" style="display:none; left:0; right:auto;"></div>'
-        : repoName;
-      updateTopbar("repo", subtitle);
-      // Make subtitle container position:relative for dropdown
-      topbarSubtitle.style.position = "relative";
+      updateTopbar("repo");
+      // The branch-history tools (static markup: the repository name and
+      // branch are in the sidebar context, not here). The dropdown is
+      // positioned against #topbar-repo-tools.
+      if (branch && repoTools) {
+        repoTools.innerHTML =
+          '<span id="branch-version-label"></span>'
+          + '<button class="history-toggle-btn" id="branch-history-btn" title="Browse commit history" style="font-size:13px;">&#9662;</button>'
+          + '<div class="history-dropdown" id="branch-history-dropdown" style="display:none;"></div>';
+        repoTools.hidden = false;
+      }
       if (views.repo) {
         views.repo(state.data, viewSlot, repoName, null, state.activeRepoKey);
       } else {
@@ -635,7 +691,7 @@
 
     // Docs: the shipped Gator documents, repository-independent (views/docs.js).
     if (name === "docs") {
-      updateTopbar("docs", "");
+      updateTopbar("docs");
       if (views.docs) {
         views.docs(state.data, viewSlot);
       } else {
@@ -645,7 +701,7 @@
     }
 
     if (name === "updates") {
-      updateTopbar("updates", "Gator updates");
+      updateTopbar("updates");
       if (views.updates) {
         views.updates(state.data, viewSlot);
       } else {
@@ -657,11 +713,11 @@
     if (name === "loop") {
       const repoName = state.activeRepo;
       if (!repoName) {
-        updateTopbar("loop", "Select a repo from Fleet");
+        updateTopbar("loop");
         viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view first.</p>";
         return;
       }
-      updateTopbar("loop", repoName);
+      updateTopbar("loop");
       if (views.loop) {
         state.mountedLoopKey = state.activeRepoKey;
         views.loop(state.data, viewSlot, repoName, state.activeRepoKey,
@@ -675,7 +731,7 @@
     // #72: Welcome is repository-independent. It never reads or changes
     // activeRepo / activeRepoKey, so Repo/Docs/Loop dimming is untouched.
     if (name === "welcome") {
-      updateTopbar("welcome", "");
+      updateTopbar("welcome");
       if (views.welcome) {
         views.welcome(state.data, viewSlot);
       } else {
@@ -685,7 +741,7 @@
     }
 
     if (name === "settings") {
-      updateTopbar("settings", "Fleet settings");
+      updateTopbar("settings");
       if (views.settings) {
         views.settings(state.data, viewSlot, {
           standalone: true,
@@ -845,6 +901,8 @@
         if (fresh.generated_at !== oldTs) {
           state.data = fresh;
           updateTimestamp(fresh.generated_at);
+          // The card's branch/version come from the fresh Fleet record.
+          renderSidebarContext();
           // Full rerender so repo-shell metadata (activeRepoKey, tab label,
           // subtitle/branch) is recomputed from fresh state.data. The repo
           // browser self-restores its expansion/selection via _treeState, so

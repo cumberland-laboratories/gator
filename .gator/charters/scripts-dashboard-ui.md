@@ -45,8 +45,30 @@ Own browser history, selected repository/view state, and dispatch into view modu
     - **Recording.** The landing entry is recorded with `recordShell("replaceState")`, so Back from the first navigation returns to the landing view.
     - **#70:** the guard below runs before any of this and is unchanged.
   - ! **Navigation during load wins (#70).** `showView()` increments `viewRenders`; `init()` compares it across its `/api/data` await. If anything rendered a view meanwhile (sidebar click, `gatorNavToRepo`, popstate), `init()` re-renders that view with the loaded data (`showView(activeView, activeRepo, activeRepoKey)`, like `doRefresh`) and skips both the landing view and the landing `replaceState`. Before this, a navigation made before `/api/data` returned was replaced by Welcome (Windows CI flake #70).
+  - **Title-only header (Paper, 2026-10-19) — `updateTopbar(name)`:**
+    - It writes only `#topbar-title`, through `textContent`, from `VIEW_META[name].title`. `#topbar-subtitle` stays in the DOM, `hidden` and never written; the `VIEW_META.*.subtitle` fields are unused (follow-up: remove both).
+    - **Repo branch tools:** the branch-history picker (`#branch-version-label`, `#branch-history-btn`, `#branch-history-dropdown`, with unchanged ids and click wiring) lives in `span#topbar-repo-tools` in `#topbar-right`, before `#repo-search-input`.
+      - `showView()` empties and hides it on every render.
+      - Only the Repo branch with a known `branch` fills it, from static markup only: no repository name or branch text, which the sidebar context shows. It is then un-hidden.
+      - The dropdown is positioned against it (`.history-dropdown`: `right: 0`).
+      - Before Paper, this markup, with the name and branch, was written into the subtitle through `innerHTML`.
   - **Welcome (#72):** `welcome` is a `VIEW_META` view ("Welcome to Gator!") shown on a live load without `?repo=` (see Landing view), and reached from the `#brand-home` logo button (`aria-label="Open Welcome"`; `navigate("welcome")`; `aria-current="page"` while it is shown) and from Back/Forward. Its `showView` branch never calls `setActiveRepo` / `clearActiveRepo`, and its entries carry `sub: null` (`cleanSub` stays Loop-only).
-  - **Repository context:** `setActiveRepo(name, key)` (extracted from the `repo` branch) sets `activeRepo` / `activeRepoKey`, the "▸ <name>" Repo label, and un-dims Repo, Commits (`#history-tab`, since 2026-10-18) and Loop. `clearActiveRepo()` is its inverse (label "Repo", those tabs dimmed). The sidebar click handler ignores a dimmed item, so Commits, like Loop, does nothing until a repository is selected; without one the view would only show its "Select a repo" placeholder. **Docs is always enabled** (2026-10-13): it is repository-independent (`GatorViews.docs`), never dimmed, not guarded by the sidebar click handler, and its `showView` branch needs no active repository and shows no repo search box.
+  - **Repository context:** `setActiveRepo(name, key)` (extracted from the `repo` branch) sets `activeRepo` / `activeRepoKey`, calls `renderSidebarContext()`, and un-dims Repo, Commits (`#history-tab`, since 2026-10-18) and Loop through `setRepoItemsEnabled(true)`. `clearActiveRepo()` is its inverse: the empty card, and those items dimmed.
+    - **Context card (Paper, 2026-10-19):** `renderSidebarContext()` rebuilds `div#sidebar-context[aria-live="polite"]` (under `#sidebar-brand`) from the shell state and the matching Fleet record (by `repo_key` when known, else by name).
+      - **With a repository:** `.ctx-name` holds the registry display name, then `.ctx-meta` holds `span.ctx-branch` (`branch`) · "Gator " `span.ctx-version` (`cli_version`). A missing field is omitted, and the meta line is dropped when both are missing (for example, a navigation made before `/api/data` returned; the #70 re-render fills it).
+      - **Empty state** (also the static HTML before any script runs): `.ctx-name.ctx-empty` "None selected" and `.ctx-meta` "Choose one in Fleet".
+      - **`doRefresh`** re-renders the card from the fresh data.
+      - ! Every value is set with `textContent` / text nodes (`contextEl()`), never markup.
+      - Mono applies only to the branch and version fragments.
+      - The card is hidden at ≤768px, where the strip tab already names the repository.
+    - **Repo label:** the Repo item is the static "▸ Repo" label. The "▸ <name>" label and `setRepoTabLabel()` are gone, and so is the item's inline 28px indentation.
+    - **Unavailable items:** `setRepoItemsEnabled(enabled)` toggles `dimmed` together with `aria-disabled="true"` and `title="Choose a repository in Fleet first"` on `#repo-tab`, `#history-tab` and `#loop-tab`; the static HTML starts in that state. This is the non-colour cue for the gray-500 dimmed text.
+    - **Welcome item:** `button.sidebar-item#welcome-nav[data-view="welcome"]` ("⌂ Welcome") is the first Overview item. It is never dimmed, it navigates through the ordinary sidebar click handler, and it gets `.active` from `showView()`. The `#brand-home` logo stays a second Welcome entry, with its `aria-current`.
+    - **Pinned by:**
+      - `tests/test_dashboard_ui/test_paper_shell.py`: `test_context_card_shows_repository_and_empty_state`, `test_context_card_renders_text_literally`, `test_context_card_hidden_when_narrow`, `test_welcome_sidebar_item_navigates` and `test_unavailable_items_carry_non_colour_cue`;
+      - `test_docs_view.py`: the `aria-disabled` / `title` toggle;
+      - `test_loop_workspace.py` / `test_welcome_ui.py`: the card name follows Back/Forward and landing;
+      - `test_loop_workspace.py` `test_commits_tab_is_gated_like_loop` (an existing test): a dimmed click still does nothing. It is now a forced click, because an `aria-disabled` item fails Playwright's actionability check, and it asserts `aria-disabled` first. The sidebar click handler ignores a dimmed item, so Commits, like Loop, does nothing until a repository is selected; without one the view would only show its "Select a repo" placeholder. **Docs is always enabled** (2026-10-13): it is repository-independent (`GatorViews.docs`), never dimmed, not guarded by the sidebar click handler, and its `showView` branch needs no active repository and shows no repo search box.
   - **Restoration:** a single `popstate` handler → `restoreShellState(entry)`, run under the `restoring` flag (cleared in `finally`). Step 1 is in `restoreShellState`; steps 2–3 are `applyShellEntry(entry)` (#80), which `init()` also uses. **Before step 1 (#80):** when `entry.ctx` names a workspace context that is still open and is not the active one, that context is selected (`GatorWorkspace.select`, no push). Back therefore undoes a strip selection. Otherwise (no `ctx`, or a closed context) the entry is applied to the active context, whose inactive duplicate for the same repository is dropped.
     1. **Validate:** `isShellEntry` (marker, a `VIEW_META` view, `repo` null or a string). Anything else is ignored.
     2. **Hydrate the repository before any dispatch.** The fleet entry matching name and recorded key, else name only, is authoritative → `setActiveRepo`. An unregistered repo → `clearActiveRepo`, Fleet with a `.shell-notice` "That repository is no longer registered.", and `recordShell("replaceState")` to Fleet (URL `?view=fleet`). A null repo → `clearActiveRepo`.
@@ -99,8 +121,14 @@ The full-width strip of workspace contexts above the sidebar and main pane. Top 
 -> `applyShellEntry()`, `recordShell("pushState")`
 - **Markup:**
   - `nav#workspace-strip[aria-label="Workspaces"]` is the first child of `<body>`, before `#app-shell`, which carries `role="tabpanel"` and an `aria-labelledby` that follows the active tab.
-  - The strip holds a `div.workspace-tablist[role=tablist][aria-label="Open workspaces"]` of `div.workspace-item[role=presentation]`, each with:
-    - `button.workspace-tab[role=tab]` (`#ws-tab-<id>`, `aria-selected`, `aria-controls="app-shell"`, roving `tabindex`, `data-ctx`), labelled with the repository display name. A context with no repository (`.workspace-tab-gator`) instead shows the white Gator mark (`img.workspace-tab-logo`, `gator-logo.png`, `alt=""`, 18 px, opacity 0.7, or 1 when selected). Its text is "Gator" in a visually hidden `span.workspace-tab-text`, so its accessible name and `textContent` stay "Gator", and its `title` is "No repository". Before 2026-10-17 this tab was labelled `—`;
+  - **Two regions (Paper, 2026-10-19).** The strip holds two static regions:
+    - `div#workspace-tabs`, the **render container**. `renderWorkspaceStrip()` passes it to `GatorWorkspace.renderStrip`, which empties and rebuilds it.
+    - `div#strip-status[role=group][aria-label="Dashboard status"]`, which holds `#generated-at` ("Updated <time>") and `#refresh-btn` ("↺ Refresh", `doRefresh`).
+
+    A flexible `div.strip-spacer` sits between them. The status region is a sibling of the render container, so a rebuild never touches it, and it is outside the tablist, so arrow keys never reach it.
+    ! TRIPWIRE: never pass `#workspace-strip` itself to `renderStrip` (`container.textContent = ""` would delete the status region).
+  - `#workspace-tabs` holds a `div.workspace-tablist[role=tablist][aria-label="Open workspaces"]` of `div.workspace-item[role=presentation]`. The active context's item also has `.workspace-item-active` (Paper, presentation only), so the selected tab and its close button share one fill and one top bar. The class changes only with `activeId`, which is already in the rebuild fingerprint. Each item holds:
+    - `button.workspace-tab[role=tab]` (`#ws-tab-<id>`, `aria-selected`, `aria-controls="app-shell"`, roving `tabindex`, `data-ctx`), labelled with the repository display name. A context with no repository (`.workspace-tab-gator`) instead shows the Gator mark (`img.workspace-tab-logo`, `gator-logo.png`, `alt=""`, 18 px, opacity 0.7, or 1 when selected), drawn dark on the light strip by `filter: brightness(0) opacity(.8)`. Its text is "Gator" in a visually hidden `span.workspace-tab-text`, so its accessible name and `textContent` stay "Gator", and its `title` is "No repository". Before 2026-10-17 this tab was labelled `—`;
     - a separately focusable `button.workspace-tab-close` labelled "Close <repo> workspace" / "Close workspace without repository" (`tabindex` 0 on the active item, else -1).
   - Then `button.workspace-new` ("+", `aria-label="New workspace"`). At 12 contexts it is disabled, with the title "Workspace limit reached (12)".
   - All text is set through `textContent`.
@@ -117,7 +145,7 @@ The full-width strip of workspace contexts above the sidebar and main pane. Top 
   - **The active context** is removed, then its right-hand (else left-hand) neighbour is selected with focus.
   - **The last context** is replaced by a new repository-less Welcome context.
   - Close never calls a registry or Loop endpoint.
-- **Snapshot:** `init()` hides the strip and removes `#app-shell`'s tab-panel role.
+- **Snapshot:** `init()` hides the strip, which also hides `#strip-status` and its Refresh button, and removes `#app-shell`'s tab-panel role. `updateTimestamp()` then also writes "at <date-time>" into `#snapshot-generated-at` in `#snapshot-banner`, so a static report keeps its capture time.
 ! TRIPWIRE: inactive contexts are not live. Only the selected context is rendered, so switching tears down Loop polling, timers and listeners through `showView()`'s existing teardown. Never keep hidden DOM copies of other contexts.
 - **Pinned by** `test_strip_spans_shell_above_sidebar`, `test_strip_aria_keyboard_and_close_labels`, `test_switch_restores_each_context`, `test_only_active_loop_context_polls` and `test_close_changes_navigation_only` in `tests/test_dashboard_ui/test_workspace_tabs.py`.
 
@@ -285,7 +313,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
   - **State:** `applyTabState(container)` looks tabs and panels up from the view container and writes `aria-selected`, roving `tabindex` (0/-1) and the inactive panel's `hidden` only when they differ (it skips silently until the panels exist).
   - **Inert until loaded (#72):** the bar exists from mount, but `switchTab()` returns early until `#loop-panel-create` exists (the first `/loops` response). Before that, `_state` still holds the previous mount's mode/loops, and a push would land ahead of the mount's landing `shellReplace()`. ARIA relationships cross containers (tablist in the bar, panels in the sidebar); DOM order keeps the tablist before its panels.
   - **Pinned by** `test_loop_subnav_tabs` (roles, roving tabindex, keys; `_tab_state` asserts the tablist is in `#loop-tabbar` and not in `#loop-sidebar-nav`), `test_loop_tabs_survive_polls` (tablist node and focus survive polls), `test_loop_tabs_inert_until_loops_load` (a pre-load click adds no history entry and the mount lands on its default; mutation-checked), and `test_loop_tabbar_spans_main_pane` (bar from the sidebar's left edge to the pane's content edge, above both columns; weight + underline; a half-filled form survives History → Create).
-  - **Keyboard:** Left/Right/Home/End switch and focus the tab (automatic activation). The selected tab is shown by weight plus an underline, never colour alone.
+  - **Keyboard:** Left/Right/Home/End switch and focus the tab (automatic activation). The selected tab is shown by weight plus an underline (the shared `.gator-tab` Paper rule), never colour alone.
   - **`_state.view`** (`"create" | "history"`) selects the tab. `_state.mode` keeps its meaning.
   - **Create panel:** the always-actionable `.loop-sidebar-create` button and the "Active" section (active cards only). The active loop is never listed in History.
   - **History panel:** the "History" section with terminal loops only. The `.loop-sidebar-section(-header)` markup is kept inside the panels.
@@ -498,6 +526,21 @@ Render and update machine-local dashboard preferences exposed by the server.
 <- settings route
 ! Client validation improves feedback but does not replace server-side shape validation.
 
+### Paper tokens (Dashboard Paper visual system, 2026-10-19)
+File: src/gator_command/scripts/dashboard/dashboard.css
+The one token source for browser UI. It is the first `:root` block.
+- **Type:** `--font-sans`, `--font-mono`, `--text-xs/sm/base/nav/section/page` (11/12/14/13/18/30px), `--leading-compact/ui/prose`, `--weight-normal/medium/emphasis`, `--tracking-label`.
+- **Neutrals and teal:** `--gray-50…900` (Tailwind gray), `--teal`, `--teal-dark`, `--teal-ink`, `--teal-light`, `--focus-ring`.
+- **Rhythm:** `--space-1…7` (4, 8, 12, 16, 24, 32, 48px) and `--radius-control` (6px) / `--radius-card` (8px).
+- **Legacy names are aliases, not a second source.** In the second `:root` block, `--color-bg` (gray-50), `--color-border` (gray-200), `--color-text` (gray-800), `--color-muted` (gray-500) and `--color-link` (teal-ink) read the Paper scale, and `--font` / `--mono` alias `--font-sans` / `--font-mono`. View CSS that reads them follows Paper without a rewrite. Status colours (`--color-healthy` …) and `--sidebar-*` are not yet Paper (the sidebar moves with the Paper frame).
+! **Temporary baseline:** `html, body` is 14px/1.5 (`--text-base`, `--leading-ui`). The final 16px/1.6 root, with explicit compact overrides for tables, trees, technical metadata, controls and code, follows the Commits and Loop redesigns (Paper sketch step 6). Do not claim final Paper typography before then.
+! New shell CSS uses tokens, never new palette literals. The roughly 200 legacy hex literals in view CSS retire with each view's redesign.
+! Mono marks literal technical values (versions, SHAs, paths, code), not "small text". `gray-400` is for decorative rules only, never meaningful text: `gray-500` is the minimum for supporting text on white (WCAG AA).
+! **Dormant `--font-mono` references woke up.** Nine view rules read `var(--font-mono)` before the token existed. The seven with no fallback therefore inherited sans; the two with a `monospace` fallback used the browser monospace. Defining the token switches them all to the Consolas stack.
+  - **Mono, as the rule above intends:** `.repo-file-header` (the file path), `.history-hash`, `.md-code-block`, `.md-inline-code`, `.loop-brief-input` and `.loop-coding-value`.
+  - **Kept sans with `font-family: inherit`:** the three navigation labels `.repo-sidebar-header`, `.repo-sidebar-section` and `.repo-tree-dir`, so their rendering is unchanged.
+  - **For later Paper work:** a newly defined token can activate existing `var()` reads. Grep for the name before adding one.
+
 ### responsive shell
 File: src/gator_command/scripts/dashboard/dashboard.css
 Maintain the sidebar/topbar/content flex chain and usable narrow-screen layout.
@@ -505,11 +548,33 @@ Maintain the sidebar/topbar/content flex chain and usable narrow-screen layout.
 ! Repository content and iframe containers need `min-width: 0`; HTML preview retains a visible minimum height and scrollable overflow.
 ! **Body column (#80):**
   - **Layout:** `body` is a column flex box (`height: 100vh; overflow: hidden`) holding `#workspace-strip` and then `#app-shell`.
-  - **The strip** is `flex: 0 0 var(--workspace-strip-height)` (36px). It is one row that never wraps, and scrolls horizontally when narrow.
+  - **The strip** is `flex: 0 0 var(--workspace-strip-height)` (46px since Paper; 36px before). It is one row that never wraps, and scrolls horizontally when narrow. The `#strip-status` region scrolls with it. Surfaces: gray-100 fill, gray-600 text, a gray-200 bottom border and gray-200 item seams.
   - **`#app-shell`** is `flex: 1; min-height: 0; position: relative`. It replaced `height: 100vh`, and the page still never scrolls.
-  - **`#sidebar-toggle`** is `position: absolute` within `#app-shell` (no positioned ancestor between), with unchanged offsets, so it sits below the strip.
-  - **Selected tab:** weight 700 plus a 3px `currentColor` underline (border-bottom); never colour alone.
-! **Shared main-pane tab bar (#72):** `.gator-tabbar` is a full-width block that owns the 1px baseline (it reaches the main pane's right edge); `.gator-tabbar [role="tablist"]` wraps when narrow; `.gator-tab` keeps a fixed 13px label. Selected = `aria-selected="true"` → weight 700 plus a 3px `currentColor` underline; unselected = weight 400, transparent underline; `:focus-visible` outline. Never colour alone. Loop's Create / History uses it; the old `.loop-subnav*` styles were removed (the class names remain as hooks).
+  - **`#sidebar-toggle`** is `position: absolute` within `#app-shell` (no positioned ancestor between), so it sits below the strip. Its `top` centres it on the header (`(var(--topbar-height) - 28px) / 2`; 8px at ≤768px), and `left` is unchanged.
+! **Paper frame (2026-10-19):**
+  - **Sidebar:** white, `--sidebar-width` 244px (220px before), a gray-200 right border (removed when collapsed), gray-700 items at `--text-nav` with a 36px minimum height, gray-100 hover. Group labels are 11px/600, uppercase, tracked, gray-500. The footer is gray-500 on a gray-200 top rule.
+  - **Logo:** `#brand-logo` is 56px (120px before; 32px at ≤768px) and drawn dark by `filter: brightness(0) opacity(.8)`. It is still the snapshot's one external image reference.
+  - **Unavailable items:** `.sidebar-item.dimmed` / `.placeholder` text is **gray-500**, never gray-400, because these are meaningful labels that must meet WCAG AA on white. Only the redundant icon glyph is lighter (`opacity: .6`).
+  - **Page header (`#topbar`):**
+    - `--topbar-height` is 88px (64px at ≤768px), with a gray-50 background like the canvas and no bottom border.
+    - The title `#topbar-title` is `--text-page` (30px; 24px at ≤768px) / 700, line-height 1.2, `-.015em` tracking, gray-900, ellipsis.
+    - It sits over a 3px teal rule (`#topbar::after`, decorative), inset by `--page-gutter`.
+    - `#topbar-left` no longer needs its 36px toggle padding: the 48px gutter clears the toggle (8px + 28px) and aligns the title with view content.
+  - **Gutter:** `--page-gutter` is 48px (32px at ≤768px). `#view-slot` padding is 32px × gutter (32px all round at ≤768px). `.route-repo` keeps `padding: 0`.
+  - **Strip status:** `#generated-at` is 12px sans gray-600 (no longer mono: a clock time is not a literal technical value). `#refresh-btn` is a white button with a gray-300 border and 12px/500 text.
+  - **Selection grammar: three families, one rule.** Every selected state is a positioned teal bar plus weight 600, never colour alone. The bar's edge encodes the control's place:
+    - **Workspace tab, TOP bar:** `.workspace-item-active` has a gray-50 fill joined to the canvas, gray-200 side and top seams, an 8px top-only radius, and `box-shadow: inset 0 3px 0 var(--teal)`. Its tab is 600 gray-900. Items are 38px on the strip's bottom edge (`align-items: flex-end`), and inactive items keep a transparent 1px seam so selection never shifts the row. The strip's baseline is `box-shadow: inset 0 -1px 0 gray-200`, not a border, so the selected item paints over it.
+    - **In-view tab (`.gator-tab`), BOTTOM rule:** transparent fill; selected is a 3px teal `border-bottom` + 600 gray-900; unselected is 400 gray-600 with a transparent rule.
+    - **Sidebar item (`.sidebar-item.active`), LEFT rail:** `--sidebar-active-bg` (teal-light) fill, `--sidebar-active` (gray-900) text, 600, and `box-shadow: inset 4px 0 0 var(--teal)`, inset so the label does not move. Sidebar items stay buttons, never `role=tab`.
+  - **Focus:** one 2px `--focus-ring` (teal-dark) `:focus-visible` outline for `.gator-tab`, `.sidebar-item`, `#refresh-btn`, `#topbar-repo-tools button`, `#sidebar-toggle` and `.brand-home` (offset 2px; 4px for the logo). Strip controls draw it inside (offset −2px), because the strip clips overflow.
+  - **Reduced motion:** `@media (prefers-reduced-motion: reduce)` sets `transition: none; animation: none` on `#sidebar`, `.sidebar-item`, `#refresh-btn` and `.motion-shell`. `.motion-shell` is the hook that later shell animations (loop marks) must use.
+  - **Selection, focus, contrast and motion are pinned by** `test_paper_shell.py`: `test_selection_families_bar_plus_weight`, `test_shell_text_meets_wcag_aa` (10 quiet-text selectors ≥ 4.5:1 against the composited background, including dimmed items), `test_focus_ring_visible_on_shell_controls` and `test_reduced_motion_turns_off_shell_transitions`. They are also pinned by the selected-state assertions in `test_workspace_tabs.py` (`test_strip_aria_keyboard_and_close_labels`), `test_welcome_ui.py` and `test_loop_workspace.py` (`test_loop_tabbar_spans_main_pane`).
+  - **Pinned by:**
+    - `tests/test_dashboard_ui/test_paper_shell.py`: `test_header_is_title_only` (seven views) and `test_paper_frame_geometry_bounded` (1440 and 375);
+    - `test_workspace_tabs.py`: `test_strip_spans_shell_above_sidebar` (46px) and `test_strip_status_outside_tablist`;
+    - `test_repo_tree_cache.py` `test_versioned_view_bypasses_cache` (the picker in `#topbar-repo-tools`);
+    - `test_welcome_ui.py` `test_welcome_snapshot_frames` (the banner capture time, with the strip and Refresh hidden).
+! **Shared main-pane tab bar (#72):** `.gator-tabbar` is a full-width block that owns the 1px baseline (it reaches the main pane's right edge); `.gator-tabbar [role="tablist"]` wraps when narrow; `.gator-tab` keeps a fixed 13px label. Selected = `aria-selected="true"` → weight 600 plus a 3px teal underline (Paper; 700 and `currentColor` before); unselected = weight 400 gray-600, transparent underline; the Paper `:focus-visible` ring. Never colour alone. Loop's Create / History uses it; the old `.loop-subnav*` styles were removed (the class names remain as hooks).
 ! **Logo button (#72):** `.brand-home` resets button chrome around the unchanged `#brand-logo` sizing and adds a `:focus-visible` outline. Welcome content uses `.welcome-body` under the default `#view-slot` scrolling. It has no max-width and no side padding, so each topic frame spans the full main-pane content width, aligned with the tab bar. Each document sets its own reading width inside its frame (Architect direction 2026-10-10; this replaces the #72 760px cap). A column flex chain (`.welcome-workspace` `min-height: 100%` → `.welcome-body` `flex: 1` → `.welcome-panel:not([hidden])` `flex: 1` → `.welcome-frame` `flex: 1`) makes each topic iframe fill the main pane down to `#view-slot`'s bottom padding, so the bottom margin matches the side margins (Architect direction 2026-10-11; replaces the `100vh - 220px` estimate, which left ~66px unused). `.welcome-frame` is block, full width, no border, `min-height: 480px` (`420px` at ≤600px); below that the view slot scrolls. ! The panel rule must keep `:not([hidden])`: a bare `display: flex` would override the `hidden` attribute and show every topic. There is no auto-height cross-frame coordination: a document scrolls inside its frame. `.welcome-doc-status` styles the snapshot's unavailable-document notice. The old Markdown, list, next-button and copy rules were removed.
 ! Loop height chain: `.loop-workspace` (column, `height:100%`) → `.loop-workspace-body` (`flex:1; min-height:0`) keeps `.loop-sidebar` / `.loop-main` as the scroll owners.
 
