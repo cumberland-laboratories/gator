@@ -117,6 +117,38 @@ The below is intentionally NOT in the tracker — either ratified
 decisions with no work-item, watch-only observations, or
 machine-local reference material.
 
+### Dashboard "Paper" visual direction (Architect preference 2026-10-18)
+
+Static mock-ups applied the Welcome view's narrative style to Fleet,
+Commits and Loop, with three sidebar/strip treatments. The Architect
+prefers **Paper**: an all-light shell, large type, quiet colour, as simple
+as possible. Mock-ups (machine-local):
+`vault/artifacts/2026-10-18-dashboard-calm-mockups/index.html`. They draw
+on #5 (Loop visual direction), #62, #65, #79 and #80. They are for design
+review only and do not yet have an issue or plan.
+
+Guiding principle (Architect, 2026-10-18): **simplicity and minimalism**.
+Decisions made during review:
+- Page headers: the title only, with no subtitle. The main area is off-white (`gray-50`).
+- Running loop: a pulsing mark on the workspace tab and beside Loop in the
+  sidebar. A solid dot means Coding and a hollow ring means Planning; the
+  shape carries the meaning and the colour (green or amber) is a second cue.
+  The sidebar also shows the word.
+- Fleet: no summary sentence. One-column sorting on every column.
+- Active Loop: no status sentence, no elapsed time, no status ledger (this
+  supersedes the #65 ledger idea) and no horizontal checkpoint bars. The
+  timeline is newest first and opens with a "Now" line. Beside it, a
+  vertical checkpoint list (finished gray, current amber and thicker, upcoming
+  light gray) has a light "?" after each name. The "?" opens that
+  checkpoint's text from the plan, with its Verify steps.
+- Artifacts: rows only. "Approved plan" comes first and opens the rendered
+  plan. No cards.
+- The "?" text comes from the plan's `## Coding Checkpoints` section. 12 of 13
+  approved plans already use it in the same form (numbered, **bold
+  title**, `Verify:` line). Plans bound for coding should be required to
+  have it (see #69). A plan without it shows an honest "not described
+  separately" message.
+
 ### Dashboard inspection-workspace decisions (Architect-ratified 2026-09-12)
 
 - **Document tabs**: dropped from current scope. Hands-on use of the
