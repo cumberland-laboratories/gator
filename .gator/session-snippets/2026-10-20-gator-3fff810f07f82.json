@@ -1,0 +1,53 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard: Commits view shows one line per commit with a readable Gator record",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "paper",
+    "commits",
+    "trailers"
+  ],
+  "commit": "3fff810f07f82537ef6fdf44edd75b04da378e00",
+  "short_commit": "3fff810",
+  "snippet_id": "snippet-3fff810f07f82",
+  "session_group_key": "anthropic:ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "2b4800d9c13b8dbcb30069e0875e061f5e4d3fa1",
+  "started_at": "2026-10-19T08:53:09Z",
+  "ended_at": "2026-10-20T02:13:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-19-gator-2b4800d9c13b8.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/data.py",
+    "src/gator_command/scripts/dashboard/views/history.js",
+    "tests/test_dashboard_history.py",
+    "tests/test_dashboard_ui/test_commits_view.py"
+  ],
+  "notes": [
+    "Commits view: each commit is one line, grouped by day, with a type label",
+    "(✦ Feature, ✚ Fix, ▤ Docs, ⬆ Release, ↺ Housekeeping) and ★ Notable /",
+    "⚑ Override flags. Opening a commit shows its description and a Gator",
+    "record (type, significance, charters, issues, decision tags and the",
+    "knowledge-layer counts), plus an override note when one was approved.",
+    "\"Raw trailers\" shows every Gator trailer as committed, including the",
+    "machine id. Filter chips and a search box work over the loaded commits.",
+    "The history API adds `description` (the body without its trailer block)"
+  ],
+  "transcript_session_id": "ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "transcript_ref": null
+}
