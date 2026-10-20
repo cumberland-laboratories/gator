@@ -66,12 +66,15 @@ Read repository-local Git history and session evidence without moving data betwe
   - The `/api/repo/<name>/history` route and its heavy-route admission are unchanged.
   - **Pinned by** `tests/test_dashboard_history.py`.
 
-### parse_search_query() / search_repo_files()
+### parse_search_query() / search_documents() / SEARCH_NAMESPACES / SEARCH_EXTS
 File: src/gator_command/scripts/dashboard/data.py
-Parse bounded AND/OR search terms and scan allowed repository documents server-side.
-<- search endpoint
--> dashboard content policy
-! Search uses the same visibility policy as listing and file reads; it is not a bypass around denied paths or extensions.
+Parse bounded AND/OR/phrase search terms and match them against authorized governance documents server-side. Keeps candidates in `SEARCH_NAMESPACES` (`.gator`, `gator-command`) with a case-folded `SEARCH_EXTS` suffix (`.md`, `.json`), reads them in namespace → extension → `normcase` path order, stops after `max_results` (50) matches, then ranks by `match_count`. Each result's `path` is the candidate's canonical logical path.
+<- `/api/repo/<name>/search` in `do_GET` (inside `_heavy_work()`), fed by `_iter_live_candidates(repo_path, SEARCH_NAMESPACES)`
+-> candidate `target.read_text()`
+! Search never discovers paths: its candidates come only from the live-candidate seam, so it applies the listing visibility policy (dot-dirs/files, denied dirs and basenames, `_active`, reparse points) and can only be narrower than listing. `.gator/.includes/**` is therefore not searchable (Architect decision 2026-10-20).
+! No existence oracle: a denied, missing or unreadable candidate yields no hit and no error; the route still returns 200.
+! `data.py` never imports `gator-dashboard.py`; candidates are duck-typed (`namespace_root`, `disk_rel`, `logical`, `target`).
+- **Pinned by** `tests/test_dashboard_ui/test_search_visibility.py`.
 
 ### resolve_repo_update() / resolve_repo_gatorize()
 File: src/gator_command/scripts/dashboard/data.py
@@ -97,17 +100,28 @@ Parses one request into a typed route/request object and classifies malformed in
 ### _contained_repo_path() / _contained_namespace_root() / _is_reparse_point()
 File: src/gator_command/scripts/gator-dashboard.py
 Resolve live filesystem targets while rejecting escapes and reparse/symlink traversal.
-<- live list/file/raw/search paths
+<- `_contained_repo_path()`: `/file`, `/raw` and other direct-URL paths (live listing uses `_iter_live_candidates()` instead); `_contained_namespace_root()`: `/history`; `_is_reparse_point()`: scanner, seam, and the walk above
 -> filesystem
 ! Validate unresolved path components before final resolution; a logical in-repo path that resolves into denied content is still denied.
 ! Missing or permission-denied targets return 404 without becoming an existence oracle; unrelated I/O faults remain server errors.
+
+### _iter_live_candidates() / _live_namespace_bases() / _scanner_target() / LiveCandidate
+File: src/gator_command/scripts/gator-dashboard.py
+One per-request authority for authorized live files: derive the repo root and each namespace root once, walk with the reparse-aware scanner, gate each file's canonical logical path, and prove it with one resolve. Yields `LiveCandidate(namespace_root, disk_rel, logical, entry, target)` in scanner order; no stat, no read.
+<- live `/files` (`_handle_files`; `entry.stat()` per candidate, wire schema unchanged); `/search` (`search_documents()` over `SEARCH_NAMESPACES`)
+-> `_iter_scanner_files()`, `_canonical_logical_for()`, `parse_logical_path()`, `is_browsable(..., "files")`, `_is_reparse_point()`, `_path_exists()`
+! Per-request only: no cache, no cross-request state.
+! `_live_namespace_bases()` makes `_contained_repo_path()` step (1)'s checks once per namespace: a non-source namespace root that is a reparse point is skipped (`dashboard.security` warning), an unresolvable root is skipped, and the root must equal or descend from the repo root.
+! F2 for scanner-fed paths is **resolve-equality** (Architect decision-1, Option A): `_scanner_target()` returns the strict resolve only if it equals the lexical `base_r / disk_rel`, so any symlink, junction or mount point below the base (even one swapped in after the scan) rejects the candidate. It is valid ONLY for scanner-enumerated paths; direct URLs keep `_contained_repo_path()` and its per-component walk.
+! Calls `_iter_scanner_files` through the module global, so the `gated_listing` patch in `tests/test_dashboard_concurrency.py` applies.
+- **Pinned by** `tests/test_dashboard_ui/test_live_candidates.py`.
 
 ### is_browsable() / _iter_scanner_files() / _serialize_listing_entry()
 File: src/gator_command/scripts/gator-dashboard.py
 File: src/gator_command/scripts/dashboard/content_policy.py
 Apply one extension/path policy to live and historical listings and canonicalize wire entries.
-<- list, search, file, and raw endpoints
-! Listing and serving use the same predicate. Adding a file type requires coordinated allowlist and MIME-map changes.
+<- `is_browsable()`: `_iter_live_candidates()` (live listing), `_reparse_ls_tree_entry()` (historical listing), file, raw and history endpoints; `_iter_scanner_files()`: `_iter_live_candidates()` only; `_serialize_listing_entry()`: both `/files` branches
+! Listing, search and serving use the same predicate (search through the live-candidate seam, then narrowed to `SEARCH_EXTS`). Adding a file type requires coordinated allowlist and MIME-map changes.
 - **`HTML_CSP_DIRECTIVES` / `html_csp_meta_policy()` (Welcome HTML documents):** `content_policy.py` holds the one HTML CSP directive string (moved verbatim from `gator-dashboard.py`). `_B2_CSP_DIRECTIVES` aliases it, and `html_csp_meta_policy()` returns it without `frame-ancestors` (ignored in `<meta>`) for the snapshot's Welcome documents. Change the directives here only.
 ! `_DENIED_EXACT_BASENAMES` covers override internals by their REAL names (#34): `override-request.json` and `override-approved.json` (the v1 hook wrote these undotted), plus the historical dotted aliases `.override-request.json` / `.override-approved.json` / `.override-meta.json` and the retired `.override` bypass. v2 override state lives under `.git/gator-override/`, outside the working tree, so it is never scanned. Pinned by `test_files_never_lists_override_internal` and `test_override_internals_never_served` (both `/file` and `/raw`, 404 — no oracle) in `tests/test_dashboard_ui/test_content_transport_slice2.py`.
 
@@ -395,6 +409,7 @@ Find and terminate Gator-owned dashboard listeners, with port/all/dry-run scopin
 
 - Treat URL parsing, containment, response headers, and POST auth as one security boundary.
 - Exercise live and historical paths, Windows name rules, reparse points, and missing targets.
+- Keep the two F2 proofs apart: server-discovered paths (listing, search) go through `_iter_live_candidates()`; a client-supplied URL path never goes through `_scanner_target()` and keeps `_contained_repo_path()`.
 - Preserve structured per-repo empty states.
 - Run backend dashboard tests plus the Playwright content-transport suite when wire or HTML behavior changes.
 

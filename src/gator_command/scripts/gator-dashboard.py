@@ -72,7 +72,8 @@ from dashboard.data import (  # noqa: E402
     resolve_discovery_roots as _resolve_discovery_roots,
     inject_repo_keys as _inject_repo_keys,
     parse_search_query as _parse_search_query,
-    search_repo_files as _search_repo_files,
+    search_documents as _search_documents,
+    SEARCH_NAMESPACES as _SEARCH_NAMESPACES,
     collect_standalone_data,
 )
 
@@ -1337,9 +1338,10 @@ def _iter_scanner_files(namespace_root_path, namespace_root):
     `_is_denied_segment`), with a `namespace_root == ".gator"`
     safety-net exception for the walker's own root name.
 
-    Yields file DirEntry objects. Callers MUST still run
-    `_contained_repo_path` on the yielded entry as the F2
-    belt-and-suspenders invariant.
+    Yields file DirEntry objects. Callers MUST still run an F2
+    belt-and-suspenders check on the yielded entry:
+    `_scanner_target` (via `_iter_live_candidates`) or
+    `_contained_repo_path`.
     """
     stack = [namespace_root_path]
     reserved_top = frozenset(
@@ -1432,6 +1434,106 @@ def _canonical_logical_for(ns_root, disk_rel):
     if ns_root == "gator-command":
         return "gator-command/" + disk_rel
     return None
+
+
+# ── Live candidate seam (#70 listing cost, Architect decision-1) ─
+#
+# One per-request authority for "authorized live candidate", for
+# server-enumerated paths only. Repo root and namespace roots are
+# derived once per request; each survivor gets one resolve-equality
+# proof (`_scanner_target`) in place of the per-component walk.
+# Direct-URL routes (`/file`, `/raw`) keep `_contained_repo_path`.
+# Nothing here survives the request.
+
+LiveCandidate = collections.namedtuple(
+    "LiveCandidate", "namespace_root disk_rel logical entry target")
+
+
+def _live_namespace_bases(repo_path, namespaces):
+    """Yield `(namespace_root, base_r)` for each namespace whose
+    root exists and passes the checks `_contained_repo_path`
+    step (1) made per file: a non-source namespace root that is
+    itself a reparse point is skipped (with a `dashboard.security`
+    warning), a root that does not resolve is skipped, and `base_r`
+    must equal or descend from the repo root. The repo root is
+    resolved once; if it does not resolve, nothing is yielded.
+    """
+    try:
+        repo_root_r = Path(repo_path).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return
+    for ns in namespaces:
+        ns_path = Path(repo_path) / ns if ns else Path(repo_path)
+        if ns and _path_exists(ns_path) and _is_reparse_point(ns_path):
+            logging.getLogger("dashboard.security").warning(
+                "reparse_point_namespace_root path=%s", str(ns_path))
+            continue
+        try:
+            base_r = ns_path.resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if base_r != repo_root_r and repo_root_r not in base_r.parents:
+            continue
+        yield ns, base_r
+
+
+def _scanner_target(base_r, disk_rel):
+    """F2 proof for a SCANNER-FED candidate: return the resolved
+    Path, or None. Resolves `base_r / disk_rel` strictly and
+    requires the result to EQUAL the lexical path, so any symlink,
+    junction or mount point below `base_r` (including one swapped
+    in after the scan) rejects the candidate. Equality implies
+    containment in `base_r`.
+
+    Valid ONLY for paths enumerated by `_iter_scanner_files` under
+    a `base_r` from `_live_namespace_bases`. Direct-URL paths keep
+    `_contained_repo_path` and its per-component walk.
+    """
+    lexical = base_r.joinpath(*disk_rel.split("/"))
+    try:
+        target_r = lexical.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if target_r != lexical:
+        return None
+    return target_r
+
+
+def _iter_live_candidates(repo_path, namespaces):
+    """Yield `LiveCandidate`s for the authorized live files of
+    `namespaces`, in scanner order. Each one passed
+    `_live_namespace_bases`, the reparse-aware scanner,
+    `parse_logical_path` + `is_browsable(..., "files")` on its
+    canonical logical path, and `_scanner_target`. Does no stat
+    and no read. Calls `_iter_scanner_files` through the module
+    global so tests can patch it.
+    """
+    for ns, base_r in _live_namespace_bases(repo_path, namespaces):
+        base_s = str(base_r)
+        for entry in _iter_scanner_files(base_s, ns):
+            try:
+                disk_rel = os.path.relpath(
+                    entry.path, base_s).replace(os.sep, "/")
+            except ValueError:
+                continue
+            logical = _canonical_logical_for(ns, disk_rel)
+            if logical is None:
+                continue
+            lp = parse_logical_path(logical)
+            if lp is None:
+                continue
+            if not is_browsable(lp.namespace_root, lp.disk_rel,
+                                "files"):
+                continue
+            target = _scanner_target(base_r, lp.disk_rel)
+            if target is None:
+                logging.getLogger("dashboard.discovery").warning(
+                    "symlink_or_junction_candidate_rejected "
+                    "repo=%s path=%s reason=containment",
+                    repo_path, disk_rel)
+                continue
+            yield LiveCandidate(lp.namespace_root, lp.disk_rel,
+                                logical, entry, target)
 
 
 def _reparse_ls_tree_entry(entry, namespace_root):
@@ -2006,45 +2108,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 {"files": files, "version": sha},
                 cache_control=cache_ctl)
 
-        # Live path — three namespaces enumerated symmetrically.
+        # Live path — three namespaces enumerated symmetrically
+        # through the per-request candidate seam (F2 included).
         files = []
-        for ns in _HISTORICAL_NAMESPACES:
-            base = _contained_namespace_root(repo_path, ns)
-            if base is None or base is _NAMESPACE_ABSENT_OK:
+        for c in _iter_live_candidates(repo_path,
+                                       _HISTORICAL_NAMESPACES):
+            try:
+                st = c.entry.stat()
+            except OSError:
                 continue
-            for entry in _iter_scanner_files(str(base), ns):
-                try:
-                    disk_rel = os.path.relpath(
-                        entry.path, str(base)).replace(os.sep, "/")
-                except ValueError:
-                    continue
-                logical = _canonical_logical_for(ns, disk_rel)
-                if logical is None:
-                    continue
-                lp = parse_logical_path(logical)
-                if lp is None:
-                    continue
-                if not is_browsable(lp.namespace_root, lp.disk_rel,
-                                    "files"):
-                    continue
-                # F2 belt-and-suspenders — resolved-path
-                # containment on every survivor.
-                target = _contained_repo_path(
-                    repo_path, lp.namespace_root, lp.disk_rel)
-                if target is None:
-                    logging.getLogger(
-                        "dashboard.discovery").warning(
-                        "symlink_or_junction_candidate_rejected "
-                        "repo=%s path=%s reason=containment",
-                        req.repo_name, disk_rel)
-                    continue
-                try:
-                    st = entry.stat()
-                except OSError:
-                    continue
-                files.append(_serialize_listing_entry(
-                    lp.namespace_root, lp.disk_rel,
-                    entry.name, st.st_size, mtime=st.st_mtime))
+            files.append(_serialize_listing_entry(
+                c.namespace_root, c.disk_rel,
+                c.entry.name, st.st_size, mtime=st.st_mtime))
         return self._send_json({"files": files})
 
     def _handle_file(self, req):
@@ -2475,7 +2550,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if not repo_path or not Path(repo_path).is_dir():
                     self._send_json({"error": "repo not accessible"}, 400)
                     return
-                results = _search_repo_files(repo_path, query)
+                # Candidates come only from the guarded live seam.
+                results = _search_documents(
+                    _iter_live_candidates(repo_path, _SEARCH_NAMESPACES),
+                    query)
                 self._send_json({"results": results, "query": query})
                 return
 

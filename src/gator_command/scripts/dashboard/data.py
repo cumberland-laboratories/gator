@@ -350,70 +350,80 @@ def parse_search_query(query):
     return ("phrase", [query.lower()])
 
 
-def search_repo_files(repo_path, query, max_results=50):
-    """Search .gator/ and gator-command/ files for a query string.
+# Search scope: governance documents only, narrower than listing.
+SEARCH_NAMESPACES = (".gator", "gator-command")
+SEARCH_EXTS = (".md", ".json")
+
+
+def search_documents(candidates, query, max_results=50):
+    """Search authorized governance documents for a query string.
+
+    `candidates` are objects with `namespace_root`, `disk_rel`,
+    `logical` and `target` (the server's live-candidate seam provides
+    them); this function never discovers paths itself. It keeps the
+    ones in SEARCH_NAMESPACES with a SEARCH_EXTS suffix (case-folded),
+    reads them in namespace -> extension -> path order, and stops after
+    `max_results` matches. An unreadable candidate is skipped silently.
 
     Supports boolean operators: AND (all terms), OR (any term), or plain phrase.
     Returns list of {path, snippet, match_count} dicts.
     """
-    repo_root = Path(repo_path)
     mode, terms = parse_search_query(query)
     results = []
 
-    scan_dirs = []
-    gator_dir = repo_root / ".gator"
-    gc_dir = repo_root / "gator-command"
-    if gator_dir.is_dir():
-        scan_dirs.append((gator_dir, ".gator"))
-    if gc_dir.is_dir():
-        scan_dirs.append((gc_dir, "gator-command"))
+    ordered = []
+    for c in candidates:
+        if c.namespace_root not in SEARCH_NAMESPACES:
+            continue
+        ext = os.path.splitext(c.disk_rel)[1].casefold()
+        if ext not in SEARCH_EXTS:
+            continue
+        key = (SEARCH_NAMESPACES.index(c.namespace_root),
+               SEARCH_EXTS.index(ext),
+               tuple(os.path.normcase(s) for s in c.disk_rel.split("/")))
+        ordered.append((key, c))
+    ordered.sort(key=lambda kc: kc[0])
 
-    for base_dir, prefix in scan_dirs:
-        for ext in ("*.md", "*.json"):
-            for f in sorted(base_dir.rglob(ext)):
-                if len(results) >= max_results:
-                    break
-                rel = str(f.relative_to(base_dir)).replace("\\", "/")
-                if rel.startswith("sessions/_active/"):
-                    continue
-                try:
-                    content = f.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    continue
-                lower_content = content.lower()
+    for _, c in ordered:
+        if len(results) >= max_results:
+            break
+        try:
+            content = c.target.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        lower_content = content.lower()
 
-                if mode == "and":
-                    if not all(t in lower_content for t in terms):
-                        continue
-                elif mode == "or":
-                    if not any(t in lower_content for t in terms):
-                        continue
-                else:
-                    if terms[0] not in lower_content:
-                        continue
+        if mode == "and":
+            if not all(t in lower_content for t in terms):
+                continue
+        elif mode == "or":
+            if not any(t in lower_content for t in terms):
+                continue
+        else:
+            if terms[0] not in lower_content:
+                continue
 
-                match_count = 0
-                first_idx = len(content)
-                for t in terms:
-                    match_count += lower_content.count(t)
-                    idx = lower_content.find(t)
-                    if 0 <= idx < first_idx:
-                        first_idx = idx
+        match_count = 0
+        first_idx = len(content)
+        for t in terms:
+            match_count += lower_content.count(t)
+            idx = lower_content.find(t)
+            if 0 <= idx < first_idx:
+                first_idx = idx
 
-                start = max(0, first_idx - 60)
-                end = min(len(content), first_idx + 80)
-                snippet = content[start:end].replace("\n", " ")
-                if start > 0:
-                    snippet = "..." + snippet
-                if end < len(content):
-                    snippet = snippet + "..."
+        start = max(0, first_idx - 60)
+        end = min(len(content), first_idx + 80)
+        snippet = content[start:end].replace("\n", " ")
+        if start > 0:
+            snippet = "..." + snippet
+        if end < len(content):
+            snippet = snippet + "..."
 
-                file_path = rel if prefix == ".gator" else prefix + "/" + rel
-                results.append({
-                    "path": file_path,
-                    "snippet": snippet,
-                    "match_count": match_count,
-                })
+        results.append({
+            "path": c.logical,
+            "snippet": snippet,
+            "match_count": match_count,
+        })
 
     results.sort(key=lambda r: r["match_count"], reverse=True)
     return results[:max_results]

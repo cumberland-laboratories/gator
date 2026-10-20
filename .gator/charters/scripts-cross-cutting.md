@@ -67,7 +67,7 @@ Machine-local JSON readers return discriminated states such as `absent`, `malfor
 
 Paths persisted by Windows, MSYS, or POSIX callers are normalized through `normalize_path()` before filesystem checks. Registry writers must use the canonical helper rather than writing JSON directly.
 
-Directory containment checks must test **both** `is_symlink()` and the reparse-point attribute (`_is_reparse_point`). On Windows a directory junction is a reparse point that `is_symlink()` does not report, so a symlink-only check lets a junction redirect reads outside a governed tree; per-file checks behind it cannot catch that. Domain instance: loop source directories (`scripts-loop.md`, TRIPWIRE "Source Loop Directories Are Contained").
+Directory containment checks must test **both** `is_symlink()` and the reparse-point attribute (`_is_reparse_point`). On Windows a directory junction is a reparse point that `is_symlink()` does not report, so a symlink-only check lets a junction redirect reads outside a governed tree; per-file checks behind it cannot catch that. Domain instances: loop source directories (`scripts-loop.md`, TRIPWIRE "Source Loop Directories Are Contained"); Dashboard live discovery (`scripts-dashboard.md`, `_iter_live_candidates()`), where server-enumerated paths rely on the scanner's `DirEntry` reparse check plus resolve-equality, while direct-URL paths keep the full per-component walk in `_contained_repo_path()`.
 
 ## TRIPWIRE: CLI and Git Compatibility
 
