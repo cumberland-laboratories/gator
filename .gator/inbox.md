@@ -51,9 +51,10 @@ by one. Rough edges to tidy (small, unfiled):
 
 **#70 Windows UI flakes (2026-10-16):** two causes found locally.
 - (1) **Confirmed and fixed:** a navigation made before `/api/data` returned was replaced by Welcome when `init()` finished. Regression test in `test_welcome_ui.py`.
-- (2) **Measured:** `/files` (and search) cost about 2,500 filesystem calls per listing and degrade 5–10x under load. Next: a planning loop from `artifacts/2026-10-16-dashboard-listing-performance-sketch.md`. It first needs an Architect decision: search does not apply the listing visibility policy its charter claims.
+- (2) **Fixed on `dev` (2026-10-20, `103341b`):** live `/files` and `/search` share one per-request candidate seam. Listing containment cost no longer grows with path depth, and search no longer reads what listing hides (`.gator/.includes/` is no longer searchable, by Architect decision). Source CI passed on all seven jobs (Linux and Windows, py3.9–3.13).
 - The 2026-10-15 diagnostic-bundle loops were abandoned (Playwright tracing would add about 45% to CI time).
-- **Threaded server landed on `dev` (2026-10-17, `5743dd4`).** A slow listing no longer blocks unrelated requests: on this repository, a small read stays about 8 ms while four 3 s listings run. This removes one plausible cause of the flakes, but it does not close #70: the listing cost itself is unchanged, and it is not yet verified on Linux CI.
+- **Threaded server landed on `dev` (2026-10-17, `5743dd4`).** A slow listing no longer blocks unrelated requests.
+- **Open:** all three causes are addressed. #70 stays open until a few more CI runs show the Windows UI flakes are gone.
 
 Next: the Codex sandboxed test temp root and profile-block
 preservation (#37 follow-up). Sketch:
