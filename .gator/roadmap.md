@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-19._ Current strategy, priorities, and planned work.
+_Updated 2026-10-20._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,13 +11,13 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.27.0 (2026-10-19) — the Dashboard's
-"Paper" shell: a light strip and sidebar, a title-only header, a sidebar
-repository card, and selection shown by a teal bar plus bold text (#80, #5).
-The view contents (Fleet, Commits, Loop) and the 16px text size come next.
-v2.26.1 (2026-10-18): Loop `session.json` survives brief Windows sharing
-violations (#61). Release detail lives in `CHANGELOG.md` and the GitHub
-Releases.
+**Latest released version**: v2.28.0 (2026-10-20) — a readable Commits
+view: one line per commit, grouped by day, with a structured Gator record
+instead of trailer lines. v2.27.0 (2026-10-19): the Dashboard's "Paper"
+shell (#80, #5). Next: the #70 listing-cost fix (planning loop from
+`artifacts/2026-10-16-dashboard-listing-performance-sketch.md`), then the
+Loop and Fleet Paper redesigns and the 16px text size. Release detail lives
+in `CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 

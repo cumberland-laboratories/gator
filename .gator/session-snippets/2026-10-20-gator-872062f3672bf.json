@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "curator",
+  "agent": "codex",
+  "intent": "Define safe Dashboard listing and search optimization sequence",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "dashboard",
+    "performance",
+    "security"
+  ],
+  "commit": "872062f3672bfc399c1b5f36bbeaa8d7556f54b2",
+  "short_commit": "872062f",
+  "snippet_id": "snippet-872062f3672bf",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-20T09:57:09Z",
+  "ended_at": "2026-10-20T09:57:09Z",
+  "vendor_inferred": "openai",
+  "model_inferred": "codex",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-10-16-dashboard-listing-performance-sketch.md",
+    ".gator/session-snippets/2026-10-20-gator-ec299108710dd.json"
+  ],
+  "notes": [
+    "Records that governance-document search must share listing's containment and visibility gates while retaining its narrower `.gator` and `gator-command` scope.",
+    "Defines the planning proof, coding checkpoints, deterministic performance pin, and adversarial test matrix for the #70 follow-up."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
