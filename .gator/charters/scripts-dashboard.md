@@ -51,12 +51,20 @@ Build the Tier-1 dashboard payload and attach stable repository keys used by lat
 -> fleet/repo-status scripts, session cache key
 ! Command-post and standalone modes emit the same consumer-facing repository identity fields.
 
-### get_repo_history() / resolve_audit_sessions()
+### get_repo_history() / _parse_trailer_lines() / _split_description() / resolve_audit_sessions()
 File: src/gator_command/scripts/dashboard/data.py
 Read repository-local Git history and session evidence without moving data between repositories.
 <- history and audit endpoints
 -> Git, session reader/aggregator
 ! Missing optional session modules degrade the session panel only.
+! **Commit records (Commits view, 2026-10-19).** `get_repo_history(repo_path, limit)` clamps `limit` to 1–`HISTORY_LIMIT_MAX` (200); a non-integer falls back to 20. It reads `%(trailers:only,unfold)` alongside the existing format.
+  - **Fields:** `hash`, `short_hash`, `date`, `author`, `subject`, `body` (unchanged, still including the trailer block), `description`, `trailers`, `agent` and `architect`. All are additive; no existing field changed meaning.
+  - **`description`:** `_split_description()` removes only the **final** paragraph, and only when every line of it (after unfolding continuation lines, whitespace-normalised) is one of the trailers Git itself parsed. A prose `Key: value` line is never dropped, and a body without trailers is returned unchanged.
+  - **`trailers`:** an ordered list of `{key, value}` (`_parse_trailer_lines()`) for every key starting with `Gator-`, which includes legacy `Gator-PI` and `Gator-Machine-Id`. `Co-Authored-By` and other non-Gator trailers are ignored. The Commits view shows `Gator-Machine-Id` only under "Raw trailers", never in its record (Architect decision 2026-10-19).
+  - **`architect`:** falls back to `Gator-PI` when `Gator-Architect` is absent (cross-cutting: readers accept both).
+  - Parsing is in Python, not Git's `key_value_separator` option, to avoid a Git version floor.
+  - The `/api/repo/<name>/history` route and its heavy-route admission are unchanged.
+  - **Pinned by** `tests/test_dashboard_history.py`.
 
 ### parse_search_query() / search_repo_files()
 File: src/gator_command/scripts/dashboard/data.py

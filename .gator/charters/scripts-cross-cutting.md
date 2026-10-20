@@ -121,6 +121,14 @@ Override audit trailers (#34, #35) are additive: `Gator-Override-Approved-By` an
 
 The `change-type`, `significance`, vendor, and source-kind vocabularies are shared contracts. Update producers, schemas, compatibility tests, and consumers together.
 
+**Commits view as a trailer and vocabulary consumer (2026-10-19).** The Dashboard Commits view reads commit trailers through `dashboard/data.py` `get_repo_history()`, which projects every `Gator-*` trailer in order and folds legacy `Gator-PI` into `architect`. It renders them in `views/history.js`.
+- **`change-type`:** `KINDS` labels every value in the producer's `VALID_CHANGE_TYPES`. An unknown value gets a neutral label. `tests/test_dashboard_ui/test_commits_view.py` fails if the producer adds a type the view does not label, so a vocabulary change must update the view too.
+- **`significance`:** only `notable` gets a flag; any other value is shown as text.
+- **Override trailers:** they are optional; the view shows an override note only when one is present.
+- **`Gator-Machine-Id`:** shown only in the view's Raw trailers.
+
+See `scripts-dashboard.md` → `get_repo_history()` and `scripts-dashboard-ui.md` → Commits view.
+
 ## TRIPWIRE: Product Boundary
 
 The base `gator-command` wheel may expose the `gator enterprise` dispatcher but must not import Enterprise server dependencies or ship the Enterprise implementation package. Enterprise code stays under `enterprise/` and is installed separately.

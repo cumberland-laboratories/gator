@@ -94,13 +94,58 @@ def resolve_repo_path(repo_name, registry_repos):
 
 # ── git history ───────────────────────────────────────────────────────────────
 
+HISTORY_LIMIT_MAX = 200
+
+
+def _parse_trailer_lines(text):
+    """Parse git's `%(trailers:only,unfold)` output into [(key, value)]."""
+    pairs = []
+    for line in (text or "").splitlines():
+        key, sep, value = line.partition(":")
+        if sep and key and key == key.strip() and " " not in key:
+            pairs.append((key, value.strip()))
+    return pairs
+
+
+def _split_description(body, trailer_pairs):
+    """Return the body without its trailing trailer block.
+
+    Only the final paragraph is removed, and only when every line in it
+    (after unfolding continuation lines) is one of the trailers Git itself
+    parsed. A prose `Key: value` line is therefore never dropped.
+    """
+    body = (body or "").strip()
+    if not body or not trailer_pairs:
+        return body
+    paragraphs = [p for p in body.split("\n\n")]
+    last = paragraphs[-1]
+    unfolded = []
+    for line in last.splitlines():
+        if line[:1] in (" ", "\t") and unfolded:
+            unfolded[-1] += " " + line.strip()
+        else:
+            unfolded.append(line)
+    known = {" ".join(f"{k}: {v}".split()) for k, v in trailer_pairs}
+    if unfolded and all(" ".join(l.split()) in known for l in unfolded):
+        return "\n\n".join(paragraphs[:-1]).strip()
+    return body
+
+
 def get_repo_history(repo_path, limit=20):
     """Get recent commit history from a repo via git log.
 
     Returns list of commit dicts with hash, short_hash, date, author,
-    subject, body, and trailers. Pure git — no session dependency.
+    subject, body, description (body without its trailer block), trailers
+    (every Gator-* pair, in order), agent and architect.
+    Pure git — no session dependency.
     """
-    fmt = "%H%x00%h%x00%aI%x00%an%x00%s%x00%b%x00%(trailers:key=Gator-Agent)%x00%(trailers:key=Gator-Architect)%x01"
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, HISTORY_LIMIT_MAX))
+    fmt = ("%H%x00%h%x00%aI%x00%an%x00%s%x00%b%x00%(trailers:key=Gator-Agent)"
+           "%x00%(trailers:key=Gator-Architect)%x00%(trailers:only,unfold)%x01")
     out, ok = git(
         "log", f"--max-count={limit}", f"--format={fmt}",
         cwd=repo_path,
@@ -116,6 +161,12 @@ def get_repo_history(repo_path, limit=20):
         parts = record.split("\x00")
         if len(parts) < 6:
             continue
+        pairs = _parse_trailer_lines(parts[8]) if len(parts) > 8 else []
+        trailers = [{"key": k, "value": v} for k, v in pairs if k.startswith("Gator-")]
+        architect = parts[7].strip().replace("Gator-Architect: ", "") if len(parts) > 7 else ""
+        if not architect:
+            # Legacy commits name the Architect as Gator-PI.
+            architect = next((v for k, v in pairs if k == "Gator-PI"), "")
         commits.append({
             "hash": parts[0],
             "short_hash": parts[1],
@@ -123,8 +174,10 @@ def get_repo_history(repo_path, limit=20):
             "author": parts[3],
             "subject": parts[4],
             "body": parts[5].strip(),
+            "description": _split_description(parts[5], pairs),
+            "trailers": trailers,
             "agent": parts[6].strip().replace("Gator-Agent: ", "") if len(parts) > 6 else "",
-            "architect": parts[7].strip().replace("Gator-Architect: ", "") if len(parts) > 7 else "",
+            "architect": architect,
         })
     return commits
 

@@ -185,13 +185,37 @@ Confirmation dialog for removing a repo from the dashboard registry. Reuses the 
 ! Registry-only operation — no filesystem access. Dialog text makes this explicit.
 ! Posts the registered path, not the display name.
 
-### GatorViews.history() — Commits view
+### GatorViews.history() / buildView() / commitRow() / commitBody() / recordOf() / kindOf() / renderDescription() / dayLabel() — Commits view
 File: src/gator_command/scripts/dashboard/views/history.js
-Render Git-native commit history and Gator trailer attribution.
+Render Git-native commit history as collapsed rows with a readable Gator record (Paper Commits view, 2026-10-19).
 <- history route (nav label and topbar title "Commits" since #56; the route key `history`, `data-view="history"` and the endpoint are unchanged)
--> repo history endpoint
-! Accept both current Architect and legacy PI attribution supplied by the backend.
+-> `GET /api/repo/<name>/history?limit=30` (`description` and `trailers` fields: see `scripts-dashboard.md` → `get_repo_history()`); `window.GatorLoopMarkdown` (#45)
+! Accept both current Architect and legacy PI attribution supplied by the backend (the server already folds `Gator-PI` into `architect`).
 ! **Stale-render guard (#56):** the commits fetch writes only while the "Loading history..." node it created is still attached. If another view owns `#view-slot` by the time the fetch resolves (for example after a quick Back), the result is dropped.
+! TRIPWIRE (untrusted text): commit text is model-authored. Every commit-derived string reaches the DOM through `textContent` / text nodes (`el()`), and the description through `GatorLoopMarkdown.render()` (closed grammar, DOM-only). No `innerHTML` anywhere in the view. If the formatter throws (too large) or is missing, `renderDescription()` shows the literal text in `pre.commit-desc-raw`.
+- **Layout:** `div.commits-view` > `div.commit-toolbar` + `div.commit-list`.
+  - **List:** `h3.commit-day` headings by **local** day ("Today · …", "Yesterday · …", then the weekday and date; the year when it is not the current one; "Undated" for a bad date). Each commit is a `details.commit-row[data-kind=<group>][data-hash]`, collapsed by default and opened by click or Enter/Space (native `<summary>`).
+  - **Summary:** `span.commit-kind` (glyph + label tag), `div.commit-subject`, `div.commit-meta` (`span.commit-hash` short hash · local time · "<agent> with <architect>", else whichever is known, else the author), and `span.commit-flags`: "★ Notable" only for significance `notable`, "⚑ Override" only when an override trailer exists, then a chevron.
+  - **Body (`commitBody()`):**
+    - `div.commit-desc`: the `description`, or "No description.";
+    - an optional `div.commit-override` (amber left border): approved by, rules, block, reason;
+    - `div.commit-record` with three columns: **Change** (Type, Significance, Charters through `CHARTER_TEXT`: yes / no / override-skip; plus **Issues** chips "#N" from `Gator-Issues`), **Decision tags** (chips), and **Knowledge layer at this commit** (Charters, Functions, Threads). A missing field is omitted, never "undefined", so older commits render cleanly;
+    - `div.commit-actions`: "⧉ Copy hash" (full hash via the Clipboard API; the label shows "✓ Copied" or "Copy failed" for 1.5 s) and "{ } Raw trailers" (`aria-expanded`), which toggles `pre.commit-raw` with every projected `Key: value` line. `Gator-Machine-Id` appears **only** there; `recordOf()` never reads it, so the record stays free of machine identity (Architect decision 2026-10-19).
+- **Change types (`KINDS`):** one entry per producer value (`VALID_CHANGE_TYPES`).
+  - Feature ✦, Fix ✚, Docs ▤ and Release ⬆ each have their own group.
+  - Housekeeping ↺ groups maintenance, governance, refactor and test, each still labelled by its own name.
+  - Review ◇ is grouped "other".
+  - `kindOf()` gives any unknown or empty value a neutral "•" label (the raw value, or "Commit").
+  - `GatorViews.history.changeTypes` exposes the keys read-only so the test can pin them against the producer.
+- **Toolbar:**
+  - **Filter chips:** `div.commit-filters[role=group]` buttons with `aria-pressed` and a count: All, Features, Fixes, Docs, Housekeeping, Releases. "Other" commits show only under All.
+  - **Search:** `input.commit-search[type=search]` matches subject, full or short hash, and decision tags, case-insensitive.
+  - **Scope and state:** both work over the loaded commits only (30). The filter, query and set of open rows live in the mount's closure. A re-render keeps open rows open, and nothing is stored or put in history.
+- **CSS:** `commit-*` rules under "Commits view (Paper)" in `dashboard.css`, built from tokens. The 120px type column folds above the subject at ≤1100px.
+  - The old commit-list classes (`.history-commit`, `-header`, `-subject`, `-meta`, `-badge`, `-body`) are gone.
+  - ! The `.history-toggle-btn`, `.history-dropdown`, `.history-item`, `.history-active`, `.history-hash`, `.history-date` and `.history-msg` rules belong to the **Repo branch-history dropdown** (`#topbar-repo-tools`) and stay.
+  - The old view's second `.history-hash` rule used to restyle that dropdown through the cascade; its properties were folded into the dropdown's own rule, so the dropdown looks the same.
+- **Pinned by** `tests/test_dashboard_ui/test_commits_view.py`.
 
 ### GatorViews.repo(data, container, repoName, version, repoKey) / loadFileList() / renderListing() / loadFile() / applyRefresh() / pollRepoFiles() / pickDefaultFile() / currentFilePaths() / cleanRepoKey() / newTreeState() / acquireTreeState() / treeState() / setSelectedFile() / isCurrentMount() / installSearchListeners() / teardownRepoView() / cacheGet() / cachePut() / cacheable()
 File: src/gator_command/scripts/dashboard/views/repo.js
@@ -530,7 +554,7 @@ Render and update machine-local dashboard preferences exposed by the server.
 File: src/gator_command/scripts/dashboard/dashboard.css
 The one token source for browser UI. It is the first `:root` block.
 - **Type:** `--font-sans`, `--font-mono`, `--text-xs/sm/base/nav/section/page` (11/12/14/13/18/30px), `--leading-compact/ui/prose`, `--weight-normal/medium/emphasis`, `--tracking-label`.
-- **Neutrals and teal:** `--gray-50…900` (Tailwind gray), `--teal`, `--teal-dark`, `--teal-ink`, `--teal-light`, `--focus-ring`.
+- **Neutrals and teal:** `--gray-50…900` (Tailwind gray), `--teal`, `--teal-dark`, `--teal-ink`, `--teal-light`, `--amber-light` (the tint behind amber-ruled notes, such as the Commits override note), `--focus-ring`.
 - **Rhythm:** `--space-1…7` (4, 8, 12, 16, 24, 32, 48px) and `--radius-control` (6px) / `--radius-card` (8px).
 - **Legacy names are aliases, not a second source.** In the second `:root` block, `--color-bg` (gray-50), `--color-border` (gray-200), `--color-text` (gray-800), `--color-muted` (gray-500) and `--color-link` (teal-ink) read the Paper scale, and `--font` / `--mono` alias `--font-sans` / `--font-mono`. View CSS that reads them follows Paper without a rewrite. Status colours (`--color-healthy` …) and `--sidebar-*` are not yet Paper (the sidebar moves with the Paper frame).
 ! **Temporary baseline:** `html, body` is 14px/1.5 (`--text-base`, `--leading-ui`). The final 16px/1.6 root, with explicit compact overrides for tables, trees, technical metadata, controls and code, follows the Commits and Loop redesigns (Paper sketch step 6). Do not claim final Paper typography before then.
