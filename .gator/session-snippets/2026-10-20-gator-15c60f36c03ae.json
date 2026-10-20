@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator: pin the 2.27.0 runtime",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-pin"
+  ],
+  "commit": "15c60f36c03aede50ba011c29e5cf4f590935948",
+  "short_commit": "15c60f3",
+  "snippet_id": "snippet-15c60f36c03ae",
+  "session_group_key": "anthropic:ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "3fff810f07f82537ef6fdf44edd75b04da378e00",
+  "started_at": "2026-10-19T08:53:09Z",
+  "ended_at": "2026-10-20T02:15:43Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-20-gator-3fff810f07f82.json"
+  ],
+  "notes": [
+    "`gator update` advanced the repository's runtime pin from 2.26.1 to the",
+    "installed 2.27.0 CLI (`.gator/runtime-pin.json`, `.gator/.gator-version`)."
+  ],
+  "transcript_session_id": "ac2b4ad6-6a59-4ac1-8677-791915b29afd",
+  "transcript_ref": null
+}

@@ -4,6 +4,39 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.28.0] — 2026-10-20
+
+Feature release. **The Commits view is readable.** Each commit is one line, grouped by day, and opening it shows the description and a clear Gator record instead of a wall of trailer lines.
+
+### Added
+
+- **Collapsed commits, grouped by day.** Each commit shows a type label with a glyph (✦ Feature, ✚ Fix, ▤ Docs, ⬆ Release, ↺ Housekeeping, and its own name for refactor, test and governance), the subject, the short hash, the time, and "<agent> with <architect>". ★ Notable and ⚑ Override appear only when they apply. Headings read "Today", "Yesterday", then the date, in your local time.
+- **The Gator record.** Opening a commit shows:
+  - its description: the commit body without the trailer block, with bullets, `code` and **bold**;
+  - **Change:** type, significance, charters ("✓ Updated with the code", "— No code changed" or "⚑ Skipped by approved override") and issue numbers;
+  - **Decision tags;**
+  - **Knowledge layer at this commit:** charters, functions and threads;
+  - an amber **override note** when a pre-commit block was overridden: who approved it, the rule, the block and the reason.
+
+  "⧉ Copy hash" copies the full hash. "{ } Raw trailers" shows every Gator trailer exactly as committed, including the machine id.
+- **Filters and search.** Chips with counts (All, Features, Fixes, Docs, Housekeeping, Releases) and a search box (subject, hash or decision tag) work over the loaded commits.
+- **History API fields.** `GET /api/repo/<name>/history` adds two fields; the existing fields are unchanged.
+  - `description`: the body without its trailer block. Only the final paragraph is removed, and only when Git parses every line of it as a trailer, so a prose `Key: value` line is kept.
+  - `trailers`: the `Gator-*` trailers, in order.
+
+  A legacy `Gator-PI` trailer still names the Architect, and `limit` is capped at 200.
+
+### Changed
+
+- **Commit text is shown as text only.** The view builds no HTML from commit text, which is model-authored: a subject or description that looks like markup is displayed, not run.
+- **Change types follow the pre-commit vocabulary.** The view labels every type the pre-commit hook can write, and a test fails if the hook gains one the view does not know. An unknown value shows a neutral label.
+
+Pinned by the new `tests/test_dashboard_history.py` (trailer parsing on a real repository) and `tests/test_dashboard_ui/test_commits_view.py` (collapsed rows, the record, the override note, hostile text, filters and search, the stale-response guard, a commit without trailers, and the change-type vocabulary). See `get_repo_history()` in `scripts-dashboard.md`, the Commits view in `scripts-dashboard-ui.md`, and the trailer contracts in `scripts-cross-cutting.md`.
+
+### Changed (repository only)
+
+- The repository's runtime pin is 2.27.0.
+
 ## [2.27.0] — 2026-10-19
 
 Feature release. **The Dashboard has a calmer, lighter "Paper" look.** The frame around every view is new: a light workspace strip and sidebar, an off-white page, a large title-only header and a card that names the selected repository. Selected tabs and items are marked by a teal bar plus bold text, never by colour alone. The view contents themselves (Fleet, Commits, Loop) are unchanged and get their own redesigns next.
