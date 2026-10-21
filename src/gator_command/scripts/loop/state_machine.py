@@ -687,15 +687,23 @@ APPROVAL_INVALIDATED = "invalidated"
 def resolve_approval(approval, snap):
     """Pure: where does an approved candidate stand against live Git facts?
 
-    - committed: HEAD moved and ``HEAD^{tree}`` equals the approved tree
-      (the ordinary commit landed exactly the reviewed candidate).
+    - committed: the immediate first-parent successor of the approved HEAD
+      (``snap["approval_history"]``, #85) carries the approved tree — the
+      ordinary commit landed exactly the reviewed candidate. ``commit`` is
+      that successor, not the current HEAD, so later commits and later
+      index movement never change the result.
     - pending: HEAD is still the approved HEAD and the staged tree is still
       the approved tree (return to the Draftor for one normal commit).
-    - stale: anything else, with a reason — ``staged_tree_changed`` (HEAD
-      unchanged, index differs), ``head_moved_tree_differs`` (a commit or
-      branch move whose tree is not the approved tree, including a hook
-      that changed committed content), or ``detached_mismatch``.
-    - unknown: the snapshot failed; never treated as approved.
+    - stale, with a reason: ``staged_tree_changed`` (HEAD unchanged, index
+      differs); ``detached_mismatch`` (HEAD moved and is detached — never
+      committed, history is not consulted); ``head_moved_tree_differs``
+      (the first commit after approval does not carry the approved tree,
+      e.g. a hook changed committed content — a later matching tree cannot
+      repair it); ``history_diverged`` (the approved HEAD is not on the
+      current first-parent history).
+    - unknown: the snapshot or the history observation failed
+      (``history_unavailable`` when no history fact was supplied); never
+      treated as approved.
     - none / invalidated: no approval, or one invalidated by reopen.
     """
     base = {"approved_tree": None, "approved_head": None}
@@ -716,12 +724,21 @@ def resolve_approval(approval, snap):
         if snap.get("staged_tree") == approval.get("tree"):
             return dict(out, state=APPROVAL_PENDING, reason=None)
         return dict(out, state=APPROVAL_STALE, reason="staged_tree_changed")
-    if snap.get("head_tree") == approval.get("tree"):
-        return dict(out, state=APPROVAL_COMMITTED, reason=None,
-                    commit=snap.get("current_head"))
-    reason = ("detached_mismatch" if snap.get("detached")
-              else "head_moved_tree_differs")
-    return dict(out, state=APPROVAL_STALE, reason=reason)
+    if snap.get("detached"):
+        return dict(out, state=APPROVAL_STALE, reason="detached_mismatch")
+    hist = snap.get("approval_history")
+    if not isinstance(hist, dict):
+        return dict(out, state=APPROVAL_UNKNOWN, reason="history_unavailable")
+    if not hist.get("ok"):
+        return dict(out, state=APPROVAL_UNKNOWN,
+                    reason=hist.get("error") or "history_unavailable")
+    if hist.get("status") == "successor":
+        if hist.get("tree") == approval.get("tree"):
+            return dict(out, state=APPROVAL_COMMITTED, reason=None,
+                        commit=hist.get("commit"))
+        return dict(out, state=APPROVAL_STALE,
+                    reason="head_moved_tree_differs")
+    return dict(out, state=APPROVAL_STALE, reason="history_diverged")
 
 
 def advance_reopened(session, turn_timeout, message=None):

@@ -3866,8 +3866,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             cache_control="no-store")
             return
         coding = session.get("coding") or {}
+        approval = coding.get("approval")
+        # #85: the same approval-history fact as the CLI; never served raw.
         snap = gitsnap.snapshot(Path(loop_dir).parent.parent.parent,
-                                coding.get("base_head"))
+                                coding.get("base_head"),
+                                approved_head=(approval.get("head")
+                                               if isinstance(approval, dict)
+                                               else None))
         if snap.get("ok"):
             loop_res, other_res = split_residue(snap.get("unstaged_paths") or [])
             live = {
@@ -3888,7 +3893,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json({
             "schema": "gator-loop-coding-snapshot-v1",
             "stage": session.get("status", {}).get("stage"),
-            "approval_resolution": resolve_approval(coding.get("approval"), snap),
+            "approval_resolution": resolve_approval(approval, snap),
             "live": live,
         }, cache_control="no-store")
 

@@ -5,6 +5,8 @@ Real throwaway repos for every promised environment: clean, staged,
 unstaged/untracked, renames, unborn, conflict (unmerged index), linked
 worktree, bad base, detached HEAD, bare, not-a-repo, Git missing, and the
 index-lock busy retry. Python 3.9-compatible fixtures.
+
+#85: the opt-in ``approval_history`` first-parent-successor fact.
 """
 
 import os
@@ -266,10 +268,101 @@ class TestFailures:
                   (repo / "a.txt").read_bytes(),
                   git(repo, "status", "--porcelain").stdout)
         gitsnap.snapshot(repo, head(repo))
+        gitsnap.snapshot(repo, head(repo), approved_head=head(repo))
         after = (head(repo), git(repo, "ls-files", "--stage").stdout,
                  (repo / "a.txt").read_bytes(),
                  git(repo, "status", "--porcelain").stdout)
         assert before == after
+
+
+def commit(r, name, text, msg=None):
+    write(r / name, text)
+    git(r, "add", name)
+    git(r, "commit", "-q", "-m", msg or name)
+    return head(r)
+
+
+def history(r, approved):
+    s = gitsnap.snapshot(r, approved_head=approved)
+    assert s["ok"] is True
+    return s["approval_history"]
+
+
+class TestApprovalHistory:
+    """#85: the immediate first-parent successor of the approved HEAD."""
+
+    def test_absent_unless_requested(self, repo):
+        assert "approval_history" not in gitsnap.snapshot(repo, head(repo))
+
+    def test_same_head(self, repo):
+        assert history(repo, head(repo)) == {"ok": True, "status": "same_head"}
+
+    @pytest.mark.parametrize("later", [0, 2])
+    def test_successor_is_first_commit_after_approval(self, repo, later):
+        approved = head(repo)
+        first = commit(repo, "a.txt", "approved\n")
+        tree = git(repo, "rev-parse", "HEAD^{tree}").stdout.strip()
+        for i in range(later):
+            commit(repo, f"later{i}.txt", "x\n")
+        h = history(repo, approved)
+        assert h == {"ok": True, "status": "successor", "commit": first,
+                     "tree": tree}
+
+    def test_not_ancestor_after_branch_switch(self, repo):
+        git(repo, "checkout", "-q", "-b", "side")
+        approved = commit(repo, "a.txt", "on side\n")
+        git(repo, "checkout", "-q", "main")
+        commit(repo, "b.txt", "on main\n")
+        assert history(repo, approved) == {"ok": True, "status": "diverged",
+                                           "why": "not_ancestor"}
+
+    @pytest.mark.parametrize("approved", ["0" * 40, "-x", "ABC", 12345])
+    def test_head_missing(self, repo, monkeypatch, approved):
+        calls = []
+        real = gitsnap._run
+
+        def spy(args, cwd):
+            calls.append(list(args))
+            return real(args, cwd)
+        monkeypatch.setattr(gitsnap, "_run", spy)
+        s = gitsnap.snapshot(repo, approved_head=approved)
+        assert s["approval_history"] == {"ok": True, "status": "diverged",
+                                         "why": "head_missing"}
+        # A malformed value never reaches Git.
+        if approved != "0" * 40:
+            assert not any(str(approved) in " ".join(a) for a in calls)
+
+    def test_not_first_parent(self, repo):
+        git(repo, "checkout", "-q", "-b", "side")
+        approved = commit(repo, "side.txt", "s\n")
+        git(repo, "checkout", "-q", "main")
+        commit(repo, "b.txt", "main\n")
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        assert history(repo, approved) == {"ok": True, "status": "diverged",
+                                           "why": "not_first_parent"}
+
+    @pytest.mark.parametrize("probe", ["rev-parse", "rev-list"])
+    def test_fatal_probe_is_failure_not_divergence(self, repo, monkeypatch,
+                                                    probe):
+        approved = head(repo)
+        commit(repo, "a.txt", "approved\n")
+        real = gitsnap._run
+
+        def fatal(args, cwd):
+            hit = (args[:1] == ["rev-list"] if probe == "rev-list"
+                   else args[:3] == ["rev-parse", "--verify", "-q"]
+                   and args[3].startswith(approved))
+            if hit:
+                return subprocess.CompletedProcess(
+                    args, 128 if probe == "rev-list" else 1, b"",
+                    b"fatal: bad object")
+            return real(args, cwd)
+        monkeypatch.setattr(gitsnap, "_run", fatal)
+        s = gitsnap.snapshot(repo, approved_head=approved)
+        assert s["ok"] is True and s["staged_tree"]
+        h = s["approval_history"]
+        assert h["ok"] is False and h["error"] == "git_error"
+        assert "status" not in h
 
 
 def test_parse_name_status_rejects_malformed():

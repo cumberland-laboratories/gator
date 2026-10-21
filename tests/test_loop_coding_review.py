@@ -59,8 +59,11 @@ def sess(c):
 
 def resolution(c):
     s = sess(c)
-    snap = gitsnap.snapshot(c["repo"], s["coding"]["base_head"])
-    return sm.resolve_approval(s["coding"]["approval"], snap)
+    approval = s["coding"]["approval"]
+    # Mirrors the CLI / Dashboard consumers (#85): pass the approved head.
+    snap = gitsnap.snapshot(c["repo"], s["coding"]["base_head"],
+                            approved_head=(approval or {}).get("head"))
+    return sm.resolve_approval(approval, snap)
 
 
 def loop_bytes(c):
@@ -79,6 +82,8 @@ def last_event(c):
 # ---------------------------------------------------------------------------
 
 APPROVAL = {"tree": "t" * 40, "head": "h" * 40, "round": 0, "ts": "x"}
+SUCCESSOR = {"ok": True, "status": "successor", "commit": "n" * 40,
+             "tree": "t" * 40}
 
 
 def snap(**kw):
@@ -108,25 +113,55 @@ class TestResolveApproval:
     def test_committed(self):
         r = sm.resolve_approval(APPROVAL, snap(current_head="n" * 40,
                                                head_tree="t" * 40,
-                                               staged_tree="t" * 40))
+                                               staged_tree="t" * 40,
+                                               approval_history=SUCCESSOR))
         assert r["state"] == "committed" and r["commit"] == "n" * 40
+
+    def test_committed_names_successor_not_current_head(self):
+        # #85: later commits moved HEAD; the approval commit is historical.
+        r = sm.resolve_approval(APPROVAL, snap(
+            current_head="l" * 40, head_tree="z" * 40,
+            approval_history=dict(SUCCESSOR, commit="c" * 40)))
+        assert r["state"] == "committed" and r["commit"] == "c" * 40
+        assert "approval_history" not in r
 
     def test_committed_even_if_index_moved_after_commit(self):
         r = sm.resolve_approval(APPROVAL, snap(current_head="n" * 40,
                                                head_tree="t" * 40,
-                                               staged_tree="q" * 40))
+                                               staged_tree="q" * 40,
+                                               approval_history=SUCCESSOR))
         assert r["state"] == "committed"
 
     def test_head_moved_tree_differs(self):
-        r = sm.resolve_approval(APPROVAL, snap(current_head="n" * 40,
-                                               head_tree="d" * 40))
+        r = sm.resolve_approval(APPROVAL, snap(
+            current_head="n" * 40, head_tree="t" * 40,
+            approval_history=dict(SUCCESSOR, tree="d" * 40)))
         assert (r["state"], r["reason"]) == ("stale", "head_moved_tree_differs")
 
-    def test_detached_mismatch(self):
-        r = sm.resolve_approval(APPROVAL, snap(current_head="n" * 40,
-                                               head_tree="d" * 40,
-                                               detached=True))
+    @pytest.mark.parametrize("tree", ["d" * 40, "t" * 40])
+    def test_detached_mismatch_precedes_history(self, tree):
+        # A matching successor does not make a detached HEAD committed.
+        r = sm.resolve_approval(APPROVAL, snap(
+            current_head="n" * 40, head_tree=tree, detached=True,
+            approval_history=dict(SUCCESSOR, tree=tree)))
         assert (r["state"], r["reason"]) == ("stale", "detached_mismatch")
+
+    def test_history_diverged(self):
+        r = sm.resolve_approval(APPROVAL, snap(
+            current_head="n" * 40, head_tree="t" * 40,
+            approval_history={"ok": True, "status": "diverged",
+                              "why": "not_ancestor"}))
+        assert (r["state"], r["reason"]) == ("stale", "history_diverged")
+
+    @pytest.mark.parametrize("hist,reason", [
+        (None, "history_unavailable"),
+        ({"ok": False, "error": "git_error", "detail": "x"}, "git_error"),
+    ])
+    def test_history_missing_or_failed_is_unknown(self, hist, reason):
+        kw = {} if hist is None else {"approval_history": hist}
+        r = sm.resolve_approval(APPROVAL, snap(current_head="n" * 40,
+                                               head_tree="t" * 40, **kw))
+        assert (r["state"], r["reason"]) == ("unknown", reason)
 
 
 class TestAdvanceReviewed:
@@ -371,6 +406,60 @@ class TestCli:
         git(c["repo"], "commit", "-q", "-m", "commit")
         r = cli(c, "status", "--token", c["tok"]["draftor"])
         assert "COMMITTED" in r.stdout
+
+    def test_committed_survives_later_commits(self, coding):
+        # #85: the original false-Stale report.
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        review(c, approve=True)
+        git(c["repo"], "commit", "-q", "-m", "the one normal commit")
+        normal = git(c["repo"], "rev-parse", "HEAD").stdout.strip()
+        for i in range(2):
+            stage_change(c["repo"], f"later{i}.py", "x = 1\n")
+            git(c["repo"], "commit", "-q", "-m", f"later {i}")
+        r = cli(c, "status", "--token", c["tok"]["architect"])
+        assert f"COMMITTED -- handoff complete (commit {normal})" in r.stdout
+        assert "gator loop reopen" not in r.stdout
+        out = json.loads(cli(c, "status", "--token", c["tok"]["architect"],
+                             "--json").stdout)
+        res = out["approval_resolution"]
+        assert res["state"] == "committed" and res["commit"] == normal
+        assert res["current_head"] != normal
+
+    def test_coincidental_later_tree_cannot_repair_stale(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        review(c, approve=True)
+        approved_tree = sess(c)["coding"]["approval"]["tree"]
+        stage_change(c["repo"], "hook-added.txt", "status\n")
+        git(c["repo"], "commit", "-q", "-m", "hook-altered normal commit")
+        git(c["repo"], "rm", "-q", "hook-added.txt")
+        git(c["repo"], "commit", "-q", "-m", "restores the approved tree")
+        assert git(c["repo"], "rev-parse",
+                   "HEAD^{tree}").stdout.strip() == approved_tree
+        r = cli(c, "status", "--token", c["tok"]["architect"])
+        assert "STALE -- the first commit after approval does not" in r.stdout
+        out = json.loads(cli(c, "status", "--token", c["tok"]["architect"],
+                             "--json").stdout)
+        assert out["approval_resolution"]["reason"] == "head_moved_tree_differs"
+
+    def test_detached_after_commit_is_stale_until_reattached(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        review(c, approve=True)
+        git(c["repo"], "commit", "-q", "-m", "the one normal commit")
+        branch = git(c["repo"], "symbolic-ref", "--short",
+                     "HEAD").stdout.strip()
+        git(c["repo"], "checkout", "-q", "--detach")
+        r = cli(c, "status", "--token", c["tok"]["architect"])
+        assert "STALE -- HEAD moved and is detached" in r.stdout
+        assert "COMMITTED" not in r.stdout
+        git(c["repo"], "checkout", "-q", branch)
+        r = cli(c, "status", "--token", c["tok"]["architect"])
+        assert "COMMITTED -- handoff complete" in r.stdout
 
     def test_architect_sees_stale_and_reopen_hint(self, coding):
         c = coding

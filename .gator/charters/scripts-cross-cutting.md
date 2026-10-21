@@ -109,6 +109,8 @@ Loop turn windows (legacy) and Architect attention intervals (#47; same stored f
   - three fixed artifact names are served.
 - Timeline, tail and audit consumers must tolerate all of these.
 
+**#85 approval resolution (correction, no bump).** `approval_resolution` in `gator-loop-status-v1` and `gator-loop-coding-snapshot-v1` keeps its states and keys. `committed` now comes from the first first-parent commit after the approved HEAD, and `commit` names that commit. The new reasons `history_diverged` (stale) and `history_unavailable` (unknown) are additive. `detached_mismatch` now covers every moved detached HEAD. `gator-loop-gitsnap-v1` gains the opt-in internal `approval_history` key, which is never served. The CLI and Dashboard reason texts change together; see `scripts-loop.md` → `resolve_approval()`.
+
 `loop_extended` (#39) is an additive `events.jsonl` event type and is NOT terminal; timeline, tail, and audit consumers must tolerate it. The loop session schema is unchanged by extension — the audit record is the `loop_extended` event plus the Architect `extend` turn.
 
 **`gator-state-v2` (2026-10-08, gator-native entry point).** `gator state` JSON drops `entry_points` / `entry_point_baseline_kind` and adds informational `native_files`; this meaning change required the bump. `gator-update-v1` keeps `entry_point_actions` (always `[]`) and `gator init --json` gains an additive `session_opening`, so neither bumps. Gator never writes `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`; see `scripts-installer.md`, `scripts-repo-update.md` and `scripts-managed-state.md`.

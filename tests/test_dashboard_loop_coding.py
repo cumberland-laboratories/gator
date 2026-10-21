@@ -182,6 +182,14 @@ class TestSnapshot:
         git(env["repo"], "commit", "-q", "-m", "normal commit")
         body = json.loads(req(url(env, "/snapshot"))[1])
         assert body["approval_resolution"]["state"] == "committed"
+        # #85: a later commit keeps it committed, naming the normal commit.
+        normal = git(env["repo"], "rev-parse", "HEAD").stdout.strip()
+        stage_change(env["repo"], "later.py", "x = 1\n")
+        git(env["repo"], "commit", "-q", "-m", "later commit")
+        text = req(url(env, "/snapshot"))[1]
+        r = json.loads(text)["approval_resolution"]
+        assert r["state"] == "committed" and r["commit"] == normal
+        assert "approval_history" not in text
 
     def test_stale(self, env):
         submit_and_approve(env)
@@ -193,7 +201,7 @@ class TestSnapshot:
     def test_unknown_on_git_failure(self, env, monkeypatch):
         import gitsnap
         submit_and_approve(env)
-        monkeypatch.setattr(gitsnap, "snapshot", lambda root, base=None: {
+        monkeypatch.setattr(gitsnap, "snapshot", lambda root, base=None, **kw: {
             "ok": False, "error": "conflict", "detail": "x"})
         body = json.loads(req(url(env, "/snapshot"))[1])
         assert body["approval_resolution"]["state"] == "unknown"

@@ -13,7 +13,7 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop (attention recording for attention-mode loops, #47; legacy timeout enforcement otherwise), platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
 - `cli.py` owns argparse subcommand routing for all 17 loop subcommands (start [--mode planning|coding, --from-loop], status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant {watch,status}, tail, codex [--dry-run, --home], list)
 - `liveness.py` owns the private participant-liveness sidecar (#36): the per-worktree store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`, its strict schema allowlist, atomic persistence, the leaf lock, and the pure helpers `state_key()` / `classify()` / `prune()` / `redact()`. Operational data only; never loop authority
-- `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue) or an explicit error code. Read-only toward refs, index, and worktree
+- `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head, approved_head=None)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue, and with `approved_head` the #85 `approval_history` first-parent-successor fact) or an explicit error code. Read-only toward refs, index, and worktree
 - `codex_launcher.py` owns the opt-in Codex participant launcher (#37 follow-up). It prepares a dedicated `CODEX_HOME` with the canonical rule and the Gator-owned `config.toml` block. Read-only plan versus apply. It has no imports from the loop state modules, so it never affects loop authority
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
@@ -291,17 +291,23 @@ A wrong mode or stage raises ValueError.
 
 ### resolve_approval(approval, snap)
 File: `src/gator_command/scripts/loop/state_machine.py`
-Pure. Places an approved candidate against live Git facts:
+Pure. Places an approved candidate against live Git facts, checked in this order (#85):
 
-| State | Condition |
-|---|---|
-| `committed` | HEAD moved and `HEAD^{tree}` equals the approved tree; returns `commit` |
-| `pending` | HEAD unchanged and the staged tree unchanged |
-| `stale` | anything else, with a reason: `staged_tree_changed`, `head_moved_tree_differs` (a different commit or branch move, including a hook changing committed content), or `detached_mismatch` |
-| `unknown` | the snapshot failed; never treated as approved |
-| `none` / `invalidated` | no approval, or an approval invalidated by reopen |
+| Order | Condition | Result |
+|---|---|---|
+| 1 | no approval / invalidated | `none` / `invalidated` (`reopened`) |
+| 2 | snapshot not ok | `unknown`, reason = the snapshot error |
+| 3 | HEAD is the approved HEAD | `pending` if the staged tree is the approved tree, else `stale: staged_tree_changed` |
+| 4 | HEAD moved and is detached | `stale: detached_mismatch` (history is not consulted; a detached HEAD is never committed) |
+| 5 | no `approval_history` dict / history `ok: false` | `unknown: history_unavailable` / `unknown`, reason = its error code |
+| 6 | `successor` with the approved tree | `committed`, `commit` = the successor OID (not the current HEAD) |
+| 7 | `successor` with another tree | `stale: head_moved_tree_differs` |
+| 8 | `diverged` (any `why`) | `stale: history_diverged` |
 
-<- `cli._approval_resolution()` (status / wait / architect status); the Dashboard arrives in Module 5
+The question it answers: did the approved tree become the **immediate first-parent successor** of the approved HEAD? It never searches history for a matching tree, so a hook-altered normal commit stays stale even if a later commit restores the tree. It never reads prose, branch names or timestamps. The result keeps its keys (`approved_tree`, `approved_head`, `current_head`, `head_tree`, `staged_tree`, `detached`, `state`, `reason`, `commit`) and never echoes `approval_history`.
+
+<- `cli._approval_resolution()` (status / wait / architect status) and the Dashboard `_handle_loop_coding_snapshot()`; both pass `approved_head=approval.head` to one fresh `gitsnap.snapshot()`
+! Compatibility (#85): a correction within `gator-loop-status-v1` / `gator-loop-coding-snapshot-v1` with no bump. Committed was always meant to say the normal commit carried the reviewed tree. `head_moved_tree_differs` narrowed to the first successor. `detached_mismatch` widened to every moved detached HEAD (one sitting on the approval commit used to read Committed). `history_diverged` / `history_unavailable` are additive.
 ! The state strings are machine identifiers. Every display pairs them with explicit text (CLI markers `[OK]` / `[..]` / `[!!]` / `[??]` plus words), never color alone.
 
 ### advance_reopened(session, turn_timeout, message=None)
@@ -706,10 +712,10 @@ Filesystem: `session.json` (R), `.tokens.json` (R via resolve_token)
 
 ### _approval_resolution(session, loop_dir) / _print_approval_resolution(res, token=None)
 File: `src/gator_command/scripts/loop/cli.py`
-For an `implementation_approved` coding loop, `status` (model and Architect) and `wait` take a live snapshot and print the `resolve_approval()` result as text plus a marker:
+For an `implementation_approved` coding loop, `status` (model and Architect) and `wait` take a live snapshot, passing `approved_head` = the approval's `head` (#85; `None` for a non-dict approval), and print the `resolve_approval()` result as text plus a marker:
 - `[OK] COMMITTED -- handoff complete (commit <oid>)`;
 - `[..] PENDING COMMIT -- return to the Draftor session for one normal commit`;
-- `[!!] STALE -- <reason>`;
+- `[!!] STALE -- <reason>` (text from `_STALE_REASONS`, which `views/loop.js` `STALE_REASON_TEXT` mirrors word for word; an unmapped reason prints raw);
 - `[??] UNKNOWN -- never treat this as approved`.
 
 The Architect view adds the `gator loop reopen` hint for stale or unknown. JSON gains additive `approval_resolution` (and `mode` on the Architect view). `submit-review` for coding prints the approved tree and the one-normal-commit handoff, or the reviewed tree plus a resubmit note when the candidate changed.
@@ -883,9 +889,9 @@ The D2a receiver. It registers (heartbeat advertised as `max(15, ceil(poll_secon
 File: `src/gator_command/scripts/loop/cli.py`
 `gator loop participant watch --token T --max-seconds N [--poll-seconds S] [--adapter-label L] [--json]` and `gator loop participant status --token T [--json]`. `--max-seconds` is required. `--json` prints exactly one compact JSON line on stdout (the adapter reads the last JSON line of its output file) and nothing on stderr for normal outcomes. SIGTERM is mapped to KeyboardInterrupt so it releases like Ctrl+C. Output never contains the token or registration id.
 
-### snapshot(worktree_root, base_head=None)
+### snapshot(worktree_root, base_head=None, approved_head=None)
 File: `src/gator_command/scripts/loop/gitsnap.py`
-Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_head, head_tree, detached, branch, staged_tree, base_head, base_tree, changed_paths[{status, path[, old_path]}], changed_truncated, unstaged_paths, unstaged_truncated}`, or `{"ok": False, "error", "detail"}` and never raises for Git conditions.
+Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_head, head_tree, detached, branch, staged_tree, base_head, base_tree, changed_paths[{status, path[, old_path]}], changed_truncated, unstaged_paths, unstaged_truncated[, approval_history]}`, or `{"ok": False, "error", "detail"}` and never raises for Git conditions.
 
 | Field | Source command |
 |---|---|
@@ -897,6 +903,7 @@ Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_
 | `base_tree` | `rev-parse <base>^{tree}`, with `base_head` normalized to a full OID |
 | `changed_paths` | `diff --cached --name-status -z -M <base or HEAD>` |
 | `unstaged_paths` | the union of `diff --name-only -z` and `ls-files --others --exclude-standard -z` (gitignored files are not residue) |
+| `approval_history` (#85, only when `approved_head` is given) | `_approval_history(root, approved, current_head)`: `rev-parse --verify -q A^{commit}`, `merge-base --is-ancestor A H`, `rev-list --first-parent A..H` (oldest line = successor L), `rev-parse --verify -q L^1`, `rev-parse L^{tree}` |
 
 Error codes:
 - `git_unavailable` — reserved for failure to execute Git itself;
@@ -907,6 +914,10 @@ Error codes:
 - `bad_base` — the base commit cannot be resolved;
 - `git_busy` — an index-lock failure persists after one retry (0.2 s);
 - `git_error` — anything else.
+
+**`approval_history` (#85)** answers one question: what is the immediate first-parent successor of the approved HEAD A on the captured HEAD H's history? Shapes: `{ok: true, status: "same_head"}` (A == H, no Git call); `{ok: true, status: "successor", commit, tree}`; `{ok: true, status: "diverged", why}` with `why` = `head_missing` (A is not a full lowercase hex OID, or `rev-parse --verify -q` exit 1 with empty stderr), `not_ancestor` (`merge-base --is-ancestor` exit 1), or `not_first_parent` (L's first parent is not A: A came in only through a merge's second parent); or `{ok: false, error, detail}`. It is computed from the snapshot's own `current_head`, so HEAD and history are one observation. Policy (detached, tree match) belongs to `resolve_approval()`, not here.
+! Only those two exact exit-1 cases are divergence evidence. Every other non-zero exit (for example 128 `fatal:`), an empty range or a launch failure is `_GitError` -> `{ok: false}`, which resolves `unknown`, never stale or approved. A history failure never fails the snapshot: `snapshot.ok` stays true so the other live facts remain usable.
+! A is validated against `_OID_RE` before any Git call, so a session value can never become a Git option. The history probe is pure object-database reads and writes nothing (unlike `write-tree`). `rev-list` output is bounded by the commits since approval, and the `--is-ancestor` pre-check prevents a walk over unrelated history.
 
 Path lists are capped at `MAX_PATHS` (1000), with truncation counts; the staged-tree OID, not the list, is the binding. `_run` is the test seam.
 Filesystem: Git object database (W — tree objects written by `write-tree`, unreferenced until a commit; reclaimed by `git gc`). Refs, index, and worktree are never modified (pinned).

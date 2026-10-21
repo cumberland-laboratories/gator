@@ -763,10 +763,14 @@ def _print_action_prompt(session, role, loop_dir, token):
 
 _STALE_REASONS = {
     "staged_tree_changed": "the staged tree changed after approval",
-    "head_moved_tree_differs": ("HEAD moved and its tree is not the approved "
-                                "tree (a different commit, or a hook changed "
-                                "committed content)"),
-    "detached_mismatch": "detached HEAD whose tree is not the approved tree",
+    "head_moved_tree_differs": ("the first commit after approval does not "
+                                "carry the approved tree (a different commit, "
+                                "or a hook changed committed content)"),
+    "detached_mismatch": ("HEAD moved and is detached; an approved commit is "
+                          "confirmed only from branch history"),
+    "history_diverged": ("the approved HEAD is no longer on the current "
+                         "first-parent history (rebase, reset, branch switch, "
+                         "or merge)"),
 }
 
 
@@ -839,8 +843,12 @@ def _approval_resolution(session, loop_dir):
     from state_machine import resolve_approval
     coding = session.get("coding") or {}
     repo_root = Path(loop_dir).parent.parent.parent
-    snap = gitsnap.snapshot(repo_root, coding.get("base_head"))
-    return resolve_approval(coding.get("approval"), snap)
+    approval = coding.get("approval")
+    snap = gitsnap.snapshot(repo_root, coding.get("base_head"),
+                            approved_head=(approval.get("head")
+                                           if isinstance(approval, dict)
+                                           else None))
+    return resolve_approval(approval, snap)
 
 
 def _print_approval_resolution(res, token=None):

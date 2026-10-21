@@ -18,8 +18,16 @@ Side effect (documented): ``git write-tree`` writes tree objects for the
 current index into the object database. They are ordinary unreferenced
 objects (reclaimed by ``git gc``); refs, the index and the worktree are
 never touched.
+
+Approval history (#85): given ``approved_head``, the snapshot adds
+``approval_history`` — the immediate first-parent successor of that commit
+on the captured HEAD's history (``same_head`` / ``successor`` /
+``diverged``), or ``{"ok": False, ...}`` for a failed observation. Only two
+exact exits are evidence of divergence; every other Git failure is a
+failure. The history probe writes nothing, not even objects.
 """
 
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -34,6 +42,9 @@ ERROR_CODES = frozenset({
     "git_unavailable", "not_a_repo", "bare", "unborn", "conflict",
     "bad_base", "git_busy", "git_error",
 })
+
+# A session-supplied OID is validated before it reaches Git (never an option).
+_OID_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 
 _BUSY_MARKERS = ("index.lock", "Unable to create", "unable to create")
 _BUSY_RETRY_DELAY = 0.2
@@ -128,7 +139,7 @@ def _cap(items):
     return items[:MAX_PATHS], len(items) - MAX_PATHS
 
 
-def snapshot(worktree_root, base_head=None):
+def snapshot(worktree_root, base_head=None, approved_head=None):
     """Capture raw Git facts for a coding loop.
 
     ``worktree_root``: any path inside the target worktree.
@@ -136,18 +147,21 @@ def snapshot(worktree_root, base_head=None):
     ``changed_paths`` is the staged diff against it and ``base_tree`` is
     its tree; when None (capturing the base itself) the diff is against
     HEAD.
+    ``approved_head``: an approval's recorded HEAD (#85). When given, the
+    result adds ``approval_history`` (see ``_approval_history``); a history
+    failure never fails the snapshot itself.
 
     Returns ``{"ok": True, ...facts}`` or ``{"ok": False, "error", "detail"}``
     — never raises for Git conditions.
     """
     try:
-        return _snapshot(Path(worktree_root), base_head)
+        return _snapshot(Path(worktree_root), base_head, approved_head)
     except _GitError as exc:
         return {"schema": SNAPSHOT_SCHEMA, "ok": False, "error": exc.code,
                 "detail": exc.detail[:500]}
 
 
-def _snapshot(start, base_head):
+def _snapshot(start, base_head, approved_head=None):
     if not start.exists():
         raise _GitError("not_a_repo", f"path does not exist: {start}")
     if not start.is_dir():
@@ -217,7 +231,7 @@ def _snapshot(start, base_head):
     unstaged.update(_split_z(r.stdout))
     unstaged_list, unstaged_trunc = _cap(sorted(unstaged))
 
-    return {
+    out = {
         "schema": SNAPSHOT_SCHEMA,
         "ok": True,
         "worktree_root": str(root),
@@ -233,6 +247,63 @@ def _snapshot(start, base_head):
         "unstaged_paths": unstaged_list,
         "unstaged_truncated": unstaged_trunc,
     }
+    if approved_head is not None:
+        out["approval_history"] = _approval_history(root, approved_head,
+                                                    current_head)
+    return out
+
+
+def _diverged(why):
+    return {"ok": True, "status": "diverged", "why": why}
+
+
+def _approval_history(root, approved, head):
+    """Immediate first-parent successor of ``approved`` on ``head`` (#85).
+
+    Returns ``{"ok": True, "status": "same_head"}``,
+    ``{"ok": True, "status": "successor", "commit", "tree"}``,
+    ``{"ok": True, "status": "diverged", "why"}`` with ``why`` one of
+    ``head_missing`` / ``not_ancestor`` / ``not_first_parent``, or
+    ``{"ok": False, "error", "detail"}``. Only ``rev-parse --verify -q``
+    exit 1 with empty stderr (missing) and ``merge-base --is-ancestor``
+    exit 1 (not an ancestor) are evidence; any other failure is an error,
+    never divergence. Object-database reads only.
+    """
+    try:
+        if not isinstance(approved, str) or not _OID_RE.fullmatch(approved):
+            return _diverged("head_missing")
+        if approved == head:
+            return {"ok": True, "status": "same_head"}
+        r = _git(["rev-parse", "--verify", "-q", f"{approved}^{{commit}}"],
+                 root)
+        if r.returncode == 1 and not _err(r):
+            return _diverged("head_missing")
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r))
+        r = _git(["merge-base", "--is-ancestor", approved, head], root)
+        if r.returncode == 1:
+            return _diverged("not_ancestor")
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r))
+        r = _git(["rev-list", "--first-parent", f"{approved}..{head}"], root)
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r))
+        chain = _out(r).split()
+        if not chain:
+            raise _GitError("git_error", "empty first-parent range")
+        successor = chain[-1]
+        r = _git(["rev-parse", "--verify", "-q", f"{successor}^1"], root)
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r) or "successor has no parent")
+        if _out(r) != approved:
+            return _diverged("not_first_parent")
+        r = _git(["rev-parse", f"{successor}^{{tree}}"], root)
+        if r.returncode != 0:
+            raise _GitError("git_error", _err(r))
+        return {"ok": True, "status": "successor", "commit": successor,
+                "tree": _out(r)}
+    except _GitError as exc:
+        return {"ok": False, "error": exc.code, "detail": exc.detail[:500]}
 
 
 def diff_trees(worktree_root, from_tree, to_tree):

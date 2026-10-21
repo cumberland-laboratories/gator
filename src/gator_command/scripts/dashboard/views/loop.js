@@ -2631,8 +2631,9 @@
   };
   var STALE_REASON_TEXT = {
     staged_tree_changed: "the staged tree changed after approval",
-    head_moved_tree_differs: "HEAD moved and its tree is not the approved tree (a different commit, or a hook changed committed content)",
-    detached_mismatch: "detached HEAD whose tree is not the approved tree",
+    head_moved_tree_differs: "the first commit after approval does not carry the approved tree (a different commit, or a hook changed committed content)",
+    detached_mismatch: "HEAD moved and is detached; an approved commit is confirmed only from branch history",
+    history_diverged: "the approved HEAD is no longer on the current first-parent history (rebase, reset, branch switch, or merge)",
   };
 
   function isCoding(status) {

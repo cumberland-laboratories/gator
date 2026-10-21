@@ -482,8 +482,10 @@ Render the governed planning loop workspace: a full-width Create / History tab b
   - **Live resolution (`implementation_approved` only):** `refreshCoding()` fetches the Architect-only `/snapshot` (no-store) and renders one banner. Each state is text plus a distinct glyph plus weight or style (`data-state`), never hue alone:
     - ✓ Committed (commit),
     - ● Pending commit — one normal commit,
-    - ⚠ Stale (reason text),
+    - ⚠ Stale (reason text from `STALE_REASON_TEXT`, word for word the CLI's `_STALE_REASONS`: `staged_tree_changed`, `head_moved_tree_differs`, `detached_mismatch`, `history_diverged`; an unmapped reason shows raw),
     - ? Unknown — never treat as approved.
+
+    The state comes from the server alone (#85). Committed survives later commits, with the historical approval commit, and a detached HEAD after approval reads Stale. The browser holds no Git-history logic.
   - **Reopen:** a **Reopen for revision** button appears only for Stale or Unknown. It opens an inline required-reason form, Reopen stays disabled while the reason is blank, and it POSTs `/reopen` `{message}` with `X-Gator-Dashboard`. The notice reports invalidation and the watcher state.
   - **Patching:** each region is rewritten only when its own fingerprint changes; the resolution region never while the Reopen form is open (`data-reopen-open` on `#loop-region-resolution`; Reopen's close deletes `snap.fp.resolution`). `resolutionFingerprint` includes the stage, resolution state, reason, commit and `approved_tree`. Identical polls produce zero mutations (pinned).
   - **#55 checkpoints** apply when `status.coding.checkpoints` is present, which is declared loops only.

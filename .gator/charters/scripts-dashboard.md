@@ -302,8 +302,9 @@ Architect-only participant-liveness surface (#36).
 File: src/gator_command/scripts/gator-dashboard.py
 - **GET `/api/repo-by-key/<key>/loops/<id>/snapshot`:** requires Architect authority through the same `_resolve_liveness_loop()` (architect resolver plus nonce check: 404 / 403), and responds with `Cache-Control: no-store`.
   - A planning loop gets 409.
-  - The response, `gator-loop-coding-snapshot-v1`, is `{stage, approval_resolution, live}`. `approval_resolution` is the pure `state_machine.resolve_approval()` result against a fresh `gitsnap.snapshot()`. `live` holds slim facts (`ok`, HEAD, HEAD tree, staged tree, branch, detached, changed count, residue other/loop counts), or `{ok: false, error}`.
+  - The response, `gator-loop-coding-snapshot-v1`, is `{stage, approval_resolution, live}`. `approval_resolution` is the pure `state_machine.resolve_approval()` result against a fresh `gitsnap.snapshot()`, taken with `approved_head` = the approval's `head` (#85), exactly as the CLI does. `live` holds slim facts (`ok`, HEAD, HEAD tree, staged tree, branch, detached, changed count, residue other/loop counts), or `{ok: false, error}`.
   - Raw path lists are never served. Git trouble shows as `unknown`, never approved.
+  - **#85:** Committed survives later commits, and its `commit` is the historical approval commit (the first first-parent successor), not the current HEAD. Neither `live` nor the response ever carries the raw `approval_history` fact.
 - **POST `/reopen`** (via `_LOOP_ACTIONS`; anti-CSRF header enforced by `do_POST`). It mirrors `/extend`:
   - it goes through `_resolve_architect_token()`, and a non-blank `message` is required (400);
   - `host.reopen_loop()` errors map to 409 (`PermissionError` / `RuntimeError`) or 400 (`ValueError`);
