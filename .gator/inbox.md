@@ -71,46 +71,63 @@ Roadmap priorities — see `roadmap.md`.
 
 ## Open backlog (GitHub Issues)
 
-All open work lives in the issue tracker. Group indices below for
-quick session-open scanning; open the issue for full detail.
+The issue tracker holds all open work; this is a scan index only (checked
+against the code 2026-10-21). Issue `#N` is
+`github.com/cumberland-laboratories/gator/issues/N`. **Bold** = a bug.
 
-**Bugs:**
+**Loop:**
+- **#85** Committed coding loop shows Stale once a later commit lands
+- **#49** Interjection for one role is consumed by the other role's turn
+- **#60** Transient reviewer nonce mismatch after a failed approval retry
+- **#67** Sandbox Git denial reported as `git_busy`
+- **#68** `wait`/`status` result lost when the runtime drops exit codes
+- **#83** Dashboard loop tests leave ~70 watcher threads running
+- **#84** `gator loop codex` daemon locks its CODEX_HOME on Windows
+- #82 `gator loop codex` home holds a second ~1.2 GB Codex runtime
+- #79 One active loop per repository (in place; cross-repo test missing)
+- #54 Clean working tree before a coding loop
+- #57 Isolated loop branch/worktree (conflicts with #79)
+- #66 Commit-readiness preflight before final approval
+- #69 Preflight and template Architect-originated plans
+- #48 Advisory charter-map warning on `submit-draft`
+- #59 Codex-compatible participant liveness
+- #37 Command-approval profiles (Phase 1 shipped) and permission queue
+- #62 Executive summaries on timeline turns
+- #7 Loop card on Repo overview
+- #42 / #50 / #63 / #64 Provenance, external notices, Observer role, token usage
+- #5 Loop polish (umbrella)
 
-- [#1](https://github.com/cumberland-laboratories/gator/issues/1) Dashboard swallows `gator update` errors as bare "!" (dashboard) — partial fix in v2.9.2; broader error-surfacing sweep pending
-- [#3](https://github.com/cumberland-laboratories/gator/issues/3) `release-candidate.yml` doesn't inject RC suffix into wheel version (packaging)
-- [#13](https://github.com/cumberland-laboratories/gator/issues/13) Pre-commit block message points at stale `gator-approve.py` path (hooks)
-- [#14](https://github.com/cumberland-laboratories/gator/issues/14) `gator-approve.py --help` broken — prompts before argparse (hooks)
-- [#15](https://github.com/cumberland-laboratories/gator/issues/15) `gator kill dashboard` bare command lists but doesn't kill (dashboard)
-- [#16](https://github.com/cumberland-laboratories/gator/issues/16) `stale-charter-refs` false positive on compound headings (hooks)
-- [#17](https://github.com/cumberland-laboratories/gator/issues/17) `new-functions-undocumented` fires on `test_*` in `tests/**` (hooks)
-- [#18](https://github.com/cumberland-laboratories/gator/issues/18) `_required_charters_for_files` vs `INDEX.md` cardinality mismatch (hooks)
-- [#19](https://github.com/cumberland-laboratories/gator/issues/19) `gator update` + gatorize overlay ship `__pycache__/*.pyc` (packaging)
-- [#34](https://github.com/cumberland-laboratories/gator/issues/34) Pre-commit override approval unscoped, consumed too early, leaves stale residue (hooks)
-- [#35](https://github.com/cumberland-laboratories/gator/issues/35) Second block after approval is un-approvable — `gator hook approve` reports no pending request (hooks) — **high severity**
-- [#77](https://github.com/cumberland-laboratories/gator/issues/77) Release smoke jobs race the package-index CDN (TestPyPI and PyPI) (release)
-- [#78](https://github.com/cumberland-laboratories/gator/issues/78) `gator update` leaves pre-ignore hook files tracked: `whiteboard.md`, `status.json`, `commit_draft.md` (hooks)
+**Dashboard:**
+- **#86** Tab switch loses scroll position and unsent Create input
+- **#15** `gator kill dashboard` bare command only lists
+- #80 Workspace tabs (shipped; tab loop indicator remaining)
+- #81 Charter health view
+- #76 Pre-commit blocks and approvals in the Dashboard
+- #20 Stale-Dashboard-in-browser detection
+- #26 Deferred responsive-shell test pins
+- #31 Clickable functions in `charter-map.html`
 
-**Enhancements / Features:**
+**Hooks and governance:**
+- **#18** INDEX route requires every listed charter (UI-only overrides)
+- **#16** `stale-charter-refs` false positive on compound headings
+- **#17** `new-functions-undocumented` fires on tests
+- **#78** `gator update` leaves hook files tracked
+- #75 Separate charter enforcement from dangerous-pattern blocks
+- #23 Session-opening hardening (mostly done)
+- #21 / #22 Session-snippet notes and identity diagnostic
+- #24 Retention-standard check for roadmap/inbox
 
-- [#5](https://github.com/cumberland-laboratories/gator/issues/5) Gator Loop polish (umbrella) (loop)
-- [#6](https://github.com/cumberland-laboratories/gator/issues/6) Loop Dashboard events timeline (dashboard, loop)
-- [#7](https://github.com/cumberland-laboratories/gator/issues/7) Loop Dashboard session card on Repo overview (dashboard, loop)
-- [#8](https://github.com/cumberland-laboratories/gator/issues/8) Loop protocol + artifact-format refinement (loop)
-- [#20](https://github.com/cumberland-laboratories/gator/issues/20) Stale-Dashboard-in-browser detection (dashboard)
-- [#21](https://github.com/cumberland-laboratories/gator/issues/21) `precommit_session._extract_note_lines` captures preamble not verdict (hooks)
-- [#22](https://github.com/cumberland-laboratories/gator/issues/22) Session-snippet emission: diagnostic when no live registry identity (hooks)
-- [#23](https://github.com/cumberland-laboratories/gator/issues/23) Session-opening directive hardening (hooks)
-- [#24](https://github.com/cumberland-laboratories/gator/issues/24) Retention-standards mechanical check for roadmap/inbox (hooks)
-- [#25](https://github.com/cumberland-laboratories/gator/issues/25) Post-runtime-split authority for `product-source.json` (packaging)
-- [#26](https://github.com/cumberland-laboratories/gator/issues/26) Deferred Plan C §7 pins — dashboard-UI test coverage (dashboard)
-- [#31](https://github.com/cumberland-laboratories/gator/issues/31) Clickable "Representative functions" in `charter-map.html` — click-through to source (dashboard) — Blueprints 2.0 Level-3 step
+**Packaging and release:**
+- **#77** Release smoke jobs race the package-index CDN
+- **#3** RC retry vs byte-identical promotion (decision needed)
+- #58 Graceful discovery and runtime compatibility
+- #25 `product-source.json` authority after the runtime split
 
 **Documentation:**
-
-- [#27](https://github.com/cumberland-laboratories/gator/issues/27) Charter line-locator sweep across `.gator/charters/**`
-- [#28](https://github.com/cumberland-laboratories/gator/issues/28) Agent guidance: `commit_draft.md` is commit-message source of truth
-- [#29](https://github.com/cumberland-laboratories/gator/issues/29) Rewrite vaulted pre-monorepo docs for pipx-first
-- [#30](https://github.com/cumberland-laboratories/gator/issues/30) Decide `scripts-command-post.md` charter fate
+- #73 Commit-draft writing guidance (procedure shipped; gaps remain)
+- #27 Charter line-locator sweep (two historical references left)
+- #29 Rewrite pre-monorepo install/upgrade/getting-started docs
+- #30 Decide `scripts-command-post.md` charter fate
 
 ## Non-issue operational context
 
@@ -181,14 +198,6 @@ Possible future work:
 - Add a scoping check at `gator loop start`. It flags sketch paths
   with no charter coverage and sketches that span too many charters.
 - Keep escalation for Architect-owned decisions, not for more time.
-
-### CDN race — now tracked as #77
-
-The watch-only period ended with v2.25.1 (2026-10-12): both post-publish
-smoke jobs (TestPyPI and PyPI) failed twice on a stale package index, and
-the TestPyPI wait step passed before pip still saw a stale list. Tracked
-in [#77](https://github.com/cumberland-laboratories/gator/issues/77),
-which recommends a retrying install step rather than a wider poll.
 
 ### Repo view: a late default-document load can replace a newer HTML selection (2026-10-17, unfiled)
 

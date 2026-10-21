@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard: calm Loop workspace (L1)",
+  "change_type": "feature",
+  "significance": "notable",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "dashboard",
+    "loop",
+    "paper"
+  ],
+  "commit": "8d91c62514d3dbc5bda3cbc2c1d2447fe742e149",
+  "short_commit": "8d91c62",
+  "snippet_id": "snippet-8d91c62514d3d",
+  "session_group_key": "anthropic:1011f6b6-dab6-46b6-8c31-4ba72dbf0fb7",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-20T23:15:40Z",
+  "ended_at": "2026-10-21T00:46:42Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-20-gator-bd9074a1a8af9.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/loop.js",
+    "tests/test_dashboard_ui/test_loop_attention_ui.py",
+    "tests/test_dashboard_ui/test_loop_brief_ui.py",
+    "tests/test_dashboard_ui/test_loop_coding_ui.py",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "The selected-loop workspace now reads as a short operational story. A quiet",
+    "header carries the controls. A status-derived **Now** line says what is",
+    "happening and whether the Architect must act. The timeline sits below it,",
+    "and artifact and evidence rows come last. The plan row is first, and",
+    "candidate evidence and decision history are collapsed disclosures.",
+    "Declared-checkpoint coding loops get a vertical checkpoint rail. The",
+    "timeline is newest-first, grouped by checkpoint or round. Pauses and other",
+    "untagged events stay with the checkpoint they happened in. Respond,"
+  ],
+  "transcript_session_id": "1011f6b6-dab6-46b6-8c31-4ba72dbf0fb7",
+  "transcript_ref": null
+}
