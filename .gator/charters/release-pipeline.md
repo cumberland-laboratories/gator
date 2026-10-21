@@ -24,6 +24,7 @@ Runs fast platform/Python lanes plus packaging and compatibility work required f
 ! Source CI has no publication side effects.
 ! Every required lane must be green to merge; do not hide a required suite behind an uncollected path or missing optional dependency.
 ! Python versions remain consistent with `pyproject.toml` support.
+! The `fast` Ubuntu py3.9 lane is pinned to `ubuntu-24.04`. It uses a matrix `exclude` of `ubuntu-latest`/3.9 plus an `include` of `ubuntu-24.04`/3.9, so `runs-on` stays bound to `matrix.os`. The pin exists because, from 2026-10, `ubuntu-latest` resolves to Ubuntu 26.04, and `actions/setup-python` has no 3.9 build there (run 39584031531 failed in setup, before any tests). Every other Ubuntu lane stays on `ubuntu-latest`. Remove the pin when 3.9 support ends, or move it if GitHub retires the 24.04 image first.
 ! Jobs that execute contract tests install `contracts/requirements.txt`.
 ! Workflow syntax/action policy is validated by a real workflow linter and focused tests, not YAML parsing alone.
 ! Third-party actions use reviewed immutable pins or the repository's explicit major-version policy; permissions remain least-privilege per job.

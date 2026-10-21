@@ -3,7 +3,8 @@
 # Runs on every push to main and every PR into main. No publication side
 # effects. Two lanes:
 #
-#   fast     — matrix (Ubuntu, Windows) × (Python 3.9, 3.13) running the
+#   fast     — matrix (Ubuntu, Windows) × (Python 3.9, 3.13; Ubuntu 3.9
+#              pinned to ubuntu-24.04) running the
 #              main test suite + contracts compatibility suite, excluding
 #              the packaging suite (which builds a wheel + installs into
 #              a venv per class and is too slow to matrix out).
@@ -54,6 +55,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ['3.9', '3.13']
+        # setup-python has no Python 3.9 build for Ubuntu 26.04
+        # (ubuntu-latest since 2026-10). Keep the 3.9 lane on 24.04 while
+        # pyproject.toml supports 3.9; drop this pin when 3.9 support ends.
+        exclude:
+          - os: ubuntu-latest
+            python-version: '3.9'
+        include:
+          - os: ubuntu-24.04
+            python-version: '3.9'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
