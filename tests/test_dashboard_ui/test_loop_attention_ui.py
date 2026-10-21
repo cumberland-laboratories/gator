@@ -1,10 +1,10 @@
 """#47 M5 — Architect attention interval in the Loop workspace (Playwright).
 
-Attention-mode loops show elapsed turn time (not a countdown) and a
-text-led, non-error "Attention" notice in its own notice slot once the
-durable notice exists. Legacy loops keep their countdown. Identical polls
-stay mutation-free apart from the single permitted elapsed-text patch; the
-notice never erases an action notice or an open Architect control. The
+Attention-mode loops show a text-led, non-error "Attention" notice in its
+own notice slot once the durable notice exists. The calm workspace (L1)
+shows no elapsed or remaining turn time for any loop, so identical polls
+make no mutations at all; the notice never erases an action notice or an
+open Architect control. The
 unblock control offers no turn-window field, and the create form posts
 ``attention_interval``.
 """
@@ -44,30 +44,36 @@ def _slot(page, name):
     }""", name)
 
 
-def _count_non_elapsed_mutations(page):
+def _count_mutations(page):
+    # No exemptions: L1 removed the last permitted per-poll text patch.
     page.evaluate("""() => {
         window.__m2 = 0;
         new MutationObserver(function (records) {
-            records.forEach(function (r) {
-                var t = r.target.nodeType === 3 ? r.target.parentElement : r.target;
-                if (t && t.closest && (t.closest('.loop-elapsed')
-                                       || t.closest('.loop-time-remaining'))) return;
-                window.__m2++;
-            });
+            window.__m2 += records.length;
         }).observe(document.querySelector('#loop-main-content'),
                    {childList: true, subtree: true, characterData: true, attributes: true});
     }""")
 
 
-def test_elapsed_header_replaces_countdown(page, dashboard_fleet):
-    payload = _attention_payload(elapsed=90)
+@pytest.mark.parametrize("kind", ["attention", "legacy"])
+def test_no_time_display(page, dashboard_fleet, kind):
+    """L1 (Architect decision): neither the attention-mode elapsed time nor
+    the legacy countdown is shown; the attention notice still works."""
+    payload = (_attention_payload(elapsed=420, notified=True)
+               if kind == "attention" else _live_payload())
     try:
         _open_incremental(page, dashboard_fleet, payload)
-        header = page.evaluate("() => document.querySelector('#loop-region-header').textContent")
-        assert "Elapsed this turn" in header
-        assert "attention after 5 min" in header
-        assert "Time Remaining" not in header
-        assert _slot(page, "attention") == ""  # not due yet
+        if kind == "attention":
+            page.wait_for_function("""() => {
+                var s = document.querySelector('#loop-region-notice [data-slot="attention"]');
+                return s && s.textContent.indexOf('Attention:') !== -1;
+            }""", timeout=8000)
+        else:
+            assert _slot(page, "attention") == ""
+        main = page.evaluate("() => document.querySelector('#loop-main-content').textContent")
+        for word in ("Time Remaining", "Elapsed", "overdue", "attention after"):
+            assert word not in main
+        assert page.locator(".loop-elapsed, .loop-time-remaining").count() == 0
     finally:
         _unserve_mutable_loop(page)
 
@@ -85,7 +91,7 @@ def test_notice_appears_once_and_polls_stay_quiet(page, dashboard_fleet):
         assert "no action is required" in text and "◷" in text
         assert page.evaluate("""() => document.querySelector(
             '.loop-attention-notice').getAttribute('role')""") == "status"
-        _count_non_elapsed_mutations(page)
+        _count_mutations(page)
         page.wait_for_timeout(7000)  # >= two identical polls
         assert page.evaluate("() => window.__m2") == 0
     finally:
@@ -177,17 +183,6 @@ def test_turn_change_clears_notice(page, dashboard_fleet):
         _unserve_mutable_loop(page)
 
 
-def test_legacy_loop_keeps_countdown(page, dashboard_fleet):
-    payload = _live_payload()
-    try:
-        _open_incremental(page, dashboard_fleet, payload)
-        header = page.evaluate("() => document.querySelector('#loop-region-header').textContent")
-        assert "Time Remaining" in header and "Elapsed this turn" not in header
-        assert _slot(page, "attention") == ""
-    finally:
-        _unserve_mutable_loop(page)
-
-
 def test_sidebar_marker_tracks_selected_loop(page, dashboard_fleet):
     payload = _attention_payload(elapsed=420, notified=True)
     try:
@@ -221,8 +216,9 @@ def test_unblock_has_no_turn_window_for_attention_loop(page, dashboard_fleet):
         _open_incremental(page, dashboard_fleet, payload)
         page.evaluate("""() => document.querySelector(
             '.loop-ctrl-btn[data-action="unblock"]').click()""")
-        assert page.evaluate("""() => document.querySelector(
-            '.loop-ctrl-timeout-label').style.display""") == "none"
+        # L1: the resume dialog omits the legacy turn-window field entirely.
+        page.wait_for_selector('dialog.loop-dialog[data-kind="resume"][open]', timeout=5000)
+        assert page.locator("dialog.loop-dialog .loop-ctrl-timeout").count() == 0
         page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
         page.wait_for_timeout(500)
         assert posts and "timeout" not in posts[0]

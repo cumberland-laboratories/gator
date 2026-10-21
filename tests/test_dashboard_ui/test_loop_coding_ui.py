@@ -11,7 +11,7 @@ after a terminal one restarts polling.
 import copy
 import json
 
-from .test_loop_workspace import _navigate_to_loop, _select_loop_card
+from .test_loop_workspace import _live_payload, _navigate_to_loop, _select_loop_card
 
 ACTIVE_ID = "active-loop-2026-09-22T10-00-00Z"
 T1 = "1" * 40
@@ -123,7 +123,8 @@ def open_view(page, fleet, holder):
     _navigate_to_loop(page, fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
     _select_loop_card(page, "widget-refactor")
-    page.wait_for_selector(".loop-coding", timeout=10000)
+    # L1: the facts sit in the collapsed "Candidate evidence" disclosure.
+    page.wait_for_selector(".loop-coding", state="attached", timeout=10000)
 
 
 def text_of(page, sel):
@@ -359,7 +360,7 @@ def test_counters_header_and_sidebar(page, dashboard_fleet, kind):
             serve_list(page, _add_summaries)
         open_view(page, dashboard_fleet, holder)
         header = page.evaluate(
-            "() => (document.querySelector('.loop-status-grid') ||"
+            "() => (document.querySelector('.loop-counter-line') ||"
             " document.querySelector('.loop-outcome-meta')).textContent")
         active_card = card_counter(page, "widget-refactor")
         history_card = card_counter(page, "auth-migration")
@@ -401,7 +402,12 @@ def test_checkpoint_progress_and_labels(page, dashboard_fleet):
         _navigate_to_loop(page, dashboard_fleet)
         page.wait_for_selector(".loop-status-header", timeout=10000)
         _select_loop_card(page, "widget-refactor")
-        page.wait_for_selector(".loop-checkpoint-list", timeout=10000)
+        # L1: progress lives in the rail beside the timeline, not in the
+        # (collapsed) coding facts panel.
+        page.wait_for_selector("#loop-region-rail .loop-checkpoint-list", timeout=10000)
+        assert page.locator(".loop-coding .loop-checkpoint-list").count() == 0
+        assert page.evaluate("""() => document.querySelector(
+            '.loop-checkpoint-item[aria-current="step"]').dataset.state""") == "active"
         items = page.evaluate("""() => Array.from(document.querySelectorAll(
             '.loop-checkpoint-item')).map(e => [e.dataset.state,
               e.querySelector('.loop-checkpoint-glyph').textContent,
@@ -433,13 +439,13 @@ def test_identical_checkpoint_polls_are_mutation_free(page, dashboard_fleet):
               "reopen_calls": []}
     try:
         open_view(page, dashboard_fleet, holder)
-        page.wait_for_selector(".loop-checkpoint-list", timeout=10000)
-        # The header grid's live time fields tick by design; the checkpoint
-        # counters must survive identical polls untouched (same nodes).
+        page.wait_for_selector("#loop-region-rail .loop-checkpoint-list", timeout=10000)
+        # The checkpoint counters (header counter line), the rail and the
+        # coding region must survive identical polls untouched (same nodes).
         page.evaluate("""() => {
             window.__cpMut = 0;
             var obs = new MutationObserver(r => { window.__cpMut += r.length; });
-            ['#loop-region-coding', '.loop-checkpoint-counter',
+            ['#loop-region-coding', '#loop-region-rail', '.loop-checkpoint-counter',
              '.loop-generation-counter'].forEach(s => {
               var el = document.querySelector(s);
               el.__probe = 1;
@@ -452,5 +458,52 @@ def test_identical_checkpoint_polls_are_mutation_free(page, dashboard_fleet):
         assert page.evaluate("""() => ['.loop-checkpoint-counter',
             '.loop-generation-counter'].every(s =>
               document.querySelector(s).__probe === 1)""")
+    finally:
+        unserve(page)
+
+
+@pytest.mark.parametrize("kind", ["declared", "legacy-coding", "planning"])
+def test_rail_declared_checkpoints_only(page, dashboard_fleet, kind):
+    """L1: the rail appears only for declared-checkpoint coding loops, from
+    the status projection; legacy/implicit coding and planning loops get no
+    rail and no empty placeholder."""
+    if kind == "declared":
+        status = checkpoint_status()
+    elif kind == "legacy-coding":
+        status = coding_status("implementation_review")
+    else:
+        status = _live_payload()["status"]
+    holder = {"status": status, "snapshot": None, "reopen_calls": []}
+    try:
+        serve(page, holder)
+        _navigate_to_loop(page, dashboard_fleet)
+        page.wait_for_selector(".loop-status-header", timeout=10000)
+        _select_loop_card(page, "widget-refactor")
+        page.wait_for_selector("#loop-region-rail", state="attached", timeout=10000)
+        page.wait_for_timeout(500)
+        rail = page.evaluate("""() => {
+            var r = document.querySelector('#loop-region-rail');
+            return {display: getComputedStyle(r).display,
+                    children: r.children.length,
+                    items: Array.from(r.querySelectorAll('.loop-checkpoint-item'))
+                      .map(e => [e.dataset.state,
+                                 e.querySelector('.loop-checkpoint-glyph').textContent,
+                                 e.querySelector('.loop-checkpoint-state').textContent,
+                                 e.getAttribute('aria-current')]),
+                    label: r.querySelector('.loop-rail')
+                      ? r.querySelector('.loop-rail').getAttribute('aria-label') : null,
+                    columns: getComputedStyle(document.querySelector('.loop-body'))
+                      .gridTemplateColumns};
+        }""")
+        if kind == "declared":
+            assert rail["label"] == "Checkpoint progress"
+            assert rail["items"] == [
+                ["approved", "\u2713", "approved (tree dddddddddddd)", None],
+                ["active", "\u25cf", "active", "step"]]
+            assert rail["display"] != "none"
+            assert len(rail["columns"].split()) == 2  # rail column + timeline
+        else:
+            assert rail == {"display": "none", "children": 0, "items": [],
+                            "label": None, "columns": "none"}
     finally:
         unserve(page)

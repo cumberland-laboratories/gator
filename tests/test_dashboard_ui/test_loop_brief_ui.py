@@ -85,12 +85,14 @@ def notes(page):
         '.loop-brief-note')).map(n => n.textContent)""")
 
 
-def test_planning_brief_ok_listed_first(page, dashboard_fleet):
+def test_planning_brief_ok_listed_after_plan(page, dashboard_fleet):
+    # L1: the plan row comes first; the brief follows it.
     try:
         open_view(page, dashboard_fleet,
                   planning_status(brief=BRIEF_VIEW, brief_check="ok"))
         a = artifacts(page)
-        assert a[0] == ["architect-brief.md", "Architect brief (required reading)"]
+        assert a[0][0] == "plan.current.md"
+        assert a[1] == ["architect-brief.md", "Architect brief (required reading)"]
         assert notes(page) == []
     finally:
         unserve(page)
@@ -100,7 +102,7 @@ def test_mismatch_marker_is_text(page, dashboard_fleet):
     try:
         open_view(page, dashboard_fleet,
                   planning_status(brief=BRIEF_VIEW, brief_check="mismatch"))
-        assert artifacts(page)[0][1] == "Architect brief [!! DIGEST MISMATCH]"
+        assert artifacts(page)[1][1] == "Architect brief [!! DIGEST MISMATCH]"
     finally:
         unserve(page)
 
@@ -136,7 +138,8 @@ def test_coding_kept_and_dropped(page, dashboard_fleet):
             source_brief=SRC_VIEW, source_brief_check="ok",
             source_brief_decision="kept"))
         a = artifacts(page)
-        assert a[0] == ["source-architect-brief.md",
+        assert a[0][0] == "approved-plan.md"
+        assert a[1] == ["source-architect-brief.md",
                         "Architect brief — from approved plan (required reading)"]
     finally:
         unserve(page)

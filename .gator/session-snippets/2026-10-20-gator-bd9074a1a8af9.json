@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator: pin the 2.28.0 runtime; record the #70 listing fix",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "runtime-pin",
+    "inbox"
+  ],
+  "commit": "bd9074a1a8af90d93d5ba0c2e1dcf2538b4ed77c",
+  "short_commit": "bd9074a",
+  "snippet_id": "snippet-bd9074a1a8af9",
+  "session_group_key": "anthropic:1db61412-b681-4061-9c33-7eeccd1a8e95",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "103341b14cb9567759d832c90f0f03c1384e1960",
+  "started_at": "2026-10-20T17:27:52Z",
+  "ended_at": "2026-10-20T19:04:05Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/inbox.md",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-10-20-gator-103341b14cb95.json"
+  ],
+  "notes": [
+    "`gator update` advanced the repository's runtime pin from 2.27.0 to the",
+    "installed 2.28.0 CLI (`.gator/runtime-pin.json`, `.gator/.gator-version`).",
+    "`inbox.md`: the #70 entry records the listing and search fix",
+    "(`103341b`) and its green Source CI run. #70 stays open until more CI",
+    "runs show the Windows UI flakes are gone."
+  ],
+  "transcript_session_id": "1db61412-b681-4061-9c33-7eeccd1a8e95",
+  "transcript_ref": null
+}

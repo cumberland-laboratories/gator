@@ -153,34 +153,29 @@ def test_loop_list_active_first_sort(page, dashboard_fleet):
 
 
 def test_status_panel_renders_on_loop_select(page, dashboard_fleet):
-    """Selecting a loop populates the status panel with stage badge
-    and round info."""
+    """Selecting a loop populates the calm header with a stage badge and
+    the one-line round counter."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
     has_badge = page.locator(".loop-status-header .loop-badge").count() > 0
     assert has_badge, "Status header should contain a stage badge"
-    round_text = page.evaluate("""
-        () => {
-            const items = document.querySelectorAll('.loop-status-value');
-            for (const item of items) {
-                if (item.textContent.includes('/')) return item.textContent;
-            }
-            return null;
-        }
-    """)
-    assert round_text is not None, "Status panel should show round N/M"
+    counter = page.evaluate(
+        "() => document.querySelector('.loop-counter-line').textContent")
+    assert counter.startswith("Round ") and "/" in counter
 
 
 def test_status_panel_shows_role_state(page, dashboard_fleet):
-    """Status panel shows Draftor/Reviewer joined state."""
+    """L1: join state lives in Participant recovery (one row per role),
+    not in a header ledger."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
-    labels = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-status-label'))
-            .map(el => el.textContent)
+    page.wait_for_selector(".loop-recovery-row", state="attached", timeout=10000)
+    roles = page.evaluate("""
+        () => Array.from(document.querySelectorAll('.loop-recovery-row'))
+            .map(el => el.querySelector('.loop-recovery-role').textContent)
     """)
-    assert "Draftor" in labels
-    assert "Reviewer" in labels
+    assert roles == ["Draftor", "Reviewer"]
+    assert page.locator(".loop-status-grid").count() == 0
 
 
 # ── timeline ─────────────────────────────────────────────────────────────────
@@ -241,6 +236,14 @@ def _select_loop_card(page, feature_name):
         arg=feature_name,
         timeout=10000,
     )
+
+
+def _open_decision_dialog(page):
+    """L1: the blocked alert's Respond button opens the decision dialog,
+    where the full request and its artifact link now live."""
+    page.wait_for_selector(".loop-blocked-respond", timeout=10000)
+    page.evaluate("() => document.querySelector('.loop-blocked-respond').click()")
+    page.wait_for_selector('dialog.loop-dialog[data-kind="decision"][open]', timeout=5000)
 
 
 def test_artifact_toggle_loads_content(page, dashboard_fleet):
@@ -1199,8 +1202,11 @@ def test_blocked_loop_shows_prominent_card(page, dashboard_fleet):
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "blocked-feature")
     page.wait_for_selector(".loop-blocked-card", timeout=10000)
+    # L1: the compact alert carries no request text; the dialog does.
+    assert page.locator(".loop-blocked-card .loop-blocked-reason").count() == 0
+    _open_decision_dialog(page)
     reason = page.evaluate(
-        "() => document.querySelector('.loop-blocked-reason').textContent")
+        "() => document.querySelector('dialog.loop-dialog .loop-blocked-reason').textContent")
     assert "scope" in reason.lower()
     assert page.locator(".loop-blocked-artifact-link").count() == 1
 
@@ -1210,12 +1216,15 @@ def test_blocked_card_decision_link_opens_inspector(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "blocked-feature")
-    page.wait_for_selector(".loop-blocked-artifact-link", timeout=10000)
+    _open_decision_dialog(page)
     artifact_name = page.evaluate(
         "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
     assert "decision-request" in artifact_name
     page.evaluate(
         "() => document.querySelector('.loop-blocked-artifact-link').click()")
+    # Following the link closes the dialog and opens the artifact row.
+    page.wait_for_function(
+        "() => !document.querySelector('dialog.loop-dialog')", timeout=5000)
     page.wait_for_function(
         "(name) => {"
         "  var s = document.querySelector("
@@ -1289,7 +1298,7 @@ def test_pending_decision_selected_over_resolved(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "blocked-feature")
-    page.wait_for_selector(".loop-blocked-artifact-link", timeout=10000)
+    _open_decision_dialog(page)
     artifact_name = page.evaluate(
         "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
     assert artifact_name == "decision-request.decision-2.round-1.md", (
@@ -2084,13 +2093,14 @@ def _open_incremental(page, dashboard_fleet, payload):
     # Timeline cards are link-only (no async fills); let the first render
     # settle so it is not counted as a poll mutation.
     page.wait_for_timeout(500)
-    # Remember node identities and count main-panel mutations, ignoring the
-    # text-only countdown patch.
+    # Remember node identities and count ALL main-panel mutations: L1
+    # removed the countdown, the last permitted per-poll write.
     page.evaluate("""() => {
         var q = s => document.querySelector(s);
         window.__nodes = {
             root: q('#loop-main-content .loop-detail'),
             header: q('#loop-region-header').firstElementChild,
+            now: q('#loop-region-now').firstElementChild,
             controls: q('#loop-controls').firstElementChild,
             firstEvent: q('#loop-timeline').firstElementChild,
             sketch: q('.loop-artifact-section[data-artifact="sketch.md"]'),
@@ -2099,11 +2109,7 @@ def _open_incremental(page, dashboard_fleet, payload):
         window.__emptied = false;
         var main = q('#loop-main-content');
         new MutationObserver(function (records) {
-            records.forEach(function (r) {
-                var t = r.target.nodeType === 3 ? r.target.parentElement : r.target;
-                if (t && t.closest && t.closest('.loop-time-remaining')) return;
-                window.__mutations++;
-            });
+            window.__mutations += records.length;
             if (!main.querySelector('.loop-detail')) window.__emptied = true;
         }).observe(main, {childList: true, subtree: true, characterData: true,
                           attributes: true});
@@ -2141,10 +2147,214 @@ def test_identical_polls_do_not_touch_main_panel(page, dashboard_fleet):
     _open_incremental(page, dashboard_fleet, payload)
     page.evaluate("() => { window.__mutations = 0; }")
     page.wait_for_timeout(7000)  # >= two polls
-    for key in ("root", "header", "controls", "firstEvent", "sketch"):
+    for key in ("root", "header", "now", "controls", "firstEvent", "sketch"):
         assert _same(page, key), f"{key} node was replaced by an identical poll"
     assert page.evaluate("() => window.__mutations") == 0
     assert page.evaluate("() => window.__emptied") is False
+    _unserve_mutable_loop(page)
+
+
+def test_workspace_region_order(page, dashboard_fleet):
+    """L1: header (with controls) -> resolution -> source -> notices ->
+    blocked alert -> Now -> rail/timeline -> lower evidence section."""
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    order = ["#loop-region-header", "#loop-controls", "#loop-region-resolution",
+             "#loop-region-source", "#loop-region-notice", "#loop-region-blocked",
+             "#loop-region-now", "#loop-region-rail", "#loop-timeline",
+             "#loop-artifacts", "#loop-region-prompts", "#loop-region-liveness",
+             "#loop-region-decisions"]
+    in_order = page.evaluate("""sels => {
+        var els = sels.map(s => document.querySelector(s));
+        if (els.some(e => !e)) return "missing";
+        for (var i = 1; i < els.length; i++) {
+            if (!(els[i - 1].compareDocumentPosition(els[i])
+                  & Node.DOCUMENT_POSITION_FOLLOWING)) return sels[i];
+        }
+        return true;
+    }""", order)
+    assert in_order is True, in_order
+    layout = page.evaluate("""() => ({
+        controlsInHead: !!document.querySelector('.loop-head #loop-controls'),
+        railShown: getComputedStyle(document.querySelector('#loop-region-rail')).display,
+        candidateHidden: document.querySelector('#loop-candidate-details').hidden,
+    })""")
+    assert layout == {"controlsInHead": True, "railShown": "none",
+                      "candidateHidden": True}
+    _unserve_mutable_loop(page)
+
+
+_CP_ITEMS = [{"id": "cp1", "index": 1, "title": "One", "state": "approved"},
+             {"id": "cp2", "index": 2, "title": "Two", "state": "active",
+              "findings_rounds": 1}]
+
+
+def _now_case(payload, case):
+    st = payload["status"]
+    s = st["status"]
+    if case == "blocked":
+        s.update(stage="blocked_on_architect", next_role=None, blocked=True)
+        st["decisions"] = [{"id": "decision-2", "request": {
+            "reason": "Scope?", "role": "reviewer", "artifact_path": None,
+            "ts": "2026-09-22T10:03:00+00:00"}, "response": None}]
+    elif case == "paused":
+        s.update(stage="paused_by_architect", next_role=None, blocked=True)
+    elif case in ("checkpoint", "approved"):
+        st["mode"] = "coding"
+        st["coding"] = {"source_loop_id": "src", "generations": [],
+                        "checkpoints": {"items": _CP_ITEMS, "current": 1,
+                                        "count": 2}}
+        s.update(stage="implementation_review" if case == "checkpoint"
+                 else "implementation_approved", next_role="reviewer")
+    elif case == "max_rounds":
+        s.update(stage="max_rounds_exceeded", next_role=None)
+    elif case == "ended":
+        s.update(stage="ended_by_architect", next_role=None)
+
+
+@pytest.mark.parametrize("case,state,glyph,text", [
+    ("planning", "active", "\u25b6",
+     "Now: Draftor \u2014 Revision (round 2 of 3). No action needed from you."),
+    ("checkpoint", "active", "\u25b6",
+     "Now: Reviewer \u2014 Code Review (checkpoint 2 of 2). No action needed from you."),
+    ("blocked", "blocked", "\u2691",
+     "Now: your decision is required \u2014 Reviewer escalated decision-2. "
+     "Use Respond above."),
+    ("paused", "paused", "\u23f8",
+     "Now: paused by you. No participant is working; Resume or End when ready."),
+    ("approved", "approved", "\u2713",
+     "Now: implementation approved \u2014 the Draftor makes one normal commit. "
+     "The commit state is shown above."),
+    ("max_rounds", "max_rounds", "\u25a0",
+     "Now: maximum rounds reached. Continue loop to add rounds, or leave it ended."),
+    ("ended", "terminal", "\u25a0", "Outcome: Ended by Architect."),
+])
+def test_now_line_state_matrix(page, dashboard_fleet, case, state, glyph, text):
+    """The Now line is status-derived: glyph + words per state (colour is a
+    second cue only), and it never shows time."""
+    payload = _live_payload()
+    _now_case(payload, case)
+    try:
+        _open_incremental(page, dashboard_fleet, payload)
+        now = page.evaluate("""() => {
+            var p = document.querySelector('#loop-region-now .loop-now');
+            return {state: p.dataset.state,
+                    glyph: p.querySelector('.loop-now-glyph').textContent,
+                    text: p.querySelector('.loop-now-text').textContent};
+        }""")
+        assert now == {"state": state, "glyph": glyph, "text": text}
+    finally:
+        _unserve_mutable_loop(page)
+
+
+_TL_SHAPE = """() => Array.from(document.querySelectorAll(
+    '#loop-timeline > .loop-tl-group')).map(g => [g.dataset.group,
+    g.querySelector('.loop-tl-group-label').textContent,
+    Array.from(g.querySelectorAll('.loop-event')).map(
+        e => e.querySelector('.loop-event-label').textContent)])"""
+
+
+def test_timeline_newest_first_grouped(page, dashboard_fleet):
+    """L1: planning events group by round, newest group and card first;
+    cards stay link-only."""
+    payload = _live_payload()
+    payload["events"].append(
+        {"event": "draft_submitted", "ts": "2026-09-22T10:03:00Z", "round": 2,
+         "role": "draftor", "artifact_path": "plan.round-2.md"})
+    _open_incremental(page, dashboard_fleet, payload)
+    assert page.evaluate(_TL_SHAPE) == [
+        ["r:2", "Round 2", ["Draft submitted", "Revision requested"]],
+        ["r:1", "Round 1", ["Draft submitted"]],
+        ["r:0", "Round 0", ["Loop started"]],
+    ]
+    first = page.evaluate("""() => {
+        var c = document.querySelector('#loop-timeline .loop-event');
+        return [c.dataset.artifact,
+                c.querySelectorAll('.loop-timeline-artifact-link').length];
+    }""")
+    assert first == ["plan.round-2.md", 1]
+    _unserve_mutable_loop(page)
+
+
+def test_new_event_patches_front_only(page, dashboard_fleet):
+    """A new event of the front group is inserted first in that group; a
+    new group is inserted first in the timeline; existing nodes survive."""
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("""() => {
+        window.__tl = Array.from(document.querySelectorAll(
+            '#loop-timeline .loop-tl-group, #loop-timeline .loop-event'));
+    }""")
+    payload["events"].append(
+        {"event": "draft_submitted", "ts": "2026-09-22T10:03:00Z", "round": 2,
+         "role": "draftor", "artifact_path": "plan.round-2.md"})
+    page.wait_for_function(
+        "() => document.querySelectorAll('#loop-timeline .loop-event').length === 4",
+        timeout=8000)
+    same = page.evaluate("""() => {
+        var front = document.querySelector('#loop-timeline .loop-tl-group');
+        return {kept: window.__tl.every(n => n.isConnected),
+                frontKept: window.__tl.indexOf(front) !== -1,
+                newFirst: front.querySelector('.loop-event').dataset.artifact};
+    }""")
+    assert same == {"kept": True, "frontKept": True, "newFirst": "plan.round-2.md"}
+
+    payload["events"].append(
+        {"event": "review_submitted", "ts": "2026-09-22T10:04:00Z", "round": 3,
+         "role": "reviewer"})
+    page.wait_for_function(
+        "() => document.querySelectorAll('#loop-timeline .loop-event').length === 5",
+        timeout=8000)
+    shape = page.evaluate(_TL_SHAPE)
+    assert [g[0] for g in shape] == ["r:3", "r:2", "r:1", "r:0"]
+    assert page.evaluate("() => window.__tl.every(n => n.isConnected)")
+    _unserve_mutable_loop(page)
+
+
+_CP_SEQUENCE = [
+    {"event": "loop_started", "ts": "2026-09-22T10:00:00Z", "round": 0},
+    {"event": "implementation_submitted", "ts": "2026-09-22T10:01:00Z",
+     "round": 0, "role": "draftor", "generation": 0, "checkpoint_id": "cp1",
+     "artifact_path": "implementation.round-0.md"},
+    {"event": "loop_paused", "ts": "2026-09-22T10:02:00Z", "round": 1,
+     "reason": "Hold."},
+    {"event": "loop_unblocked", "ts": "2026-09-22T10:03:00Z", "round": 1},
+    {"event": "checkpoint_approved", "ts": "2026-09-22T10:04:00Z", "round": 0,
+     "role": "reviewer", "generation": 0, "checkpoint_id": "cp1",
+     "artifact_path": "findings.round-0.md"},
+    {"event": "implementation_submitted", "ts": "2026-09-22T10:05:00Z",
+     "round": 0, "role": "draftor", "generation": 1, "checkpoint_id": "cp2",
+     "artifact_path": "implementation.round-1.md"},
+]
+
+
+def test_checkpoint_grouping_inherits_untagged_events(page, dashboard_fleet):
+    """Declared-checkpoint history: untagged events that carry a round stay
+    in the checkpoint they happened in (no Round group). The whole render
+    and a one-event-per-poll patch give identical groups and order."""
+    expected_groups = ["cp:cp2", "cp:cp1", "start"]
+
+    payload = _live_payload()
+    _now_case(payload, "checkpoint")
+    payload["events"] = list(_CP_SEQUENCE)
+    _open_incremental(page, dashboard_fleet, payload)
+    whole = page.evaluate(_TL_SHAPE)
+    _unserve_mutable_loop(page)
+    assert [g[0] for g in whole] == expected_groups
+    assert len(whole[1][2]) == 4  # submitted, paused, unblocked, approved
+    assert not any(g[0].startswith("r:") for g in whole)
+
+    page.goto("about:blank")
+    payload = _live_payload()
+    _now_case(payload, "checkpoint")
+    payload["events"] = _CP_SEQUENCE[:1]
+    _open_incremental(page, dashboard_fleet, payload)
+    for n in range(2, len(_CP_SEQUENCE) + 1):
+        payload["events"] = _CP_SEQUENCE[:n]
+        page.wait_for_function(
+            "n => document.querySelectorAll('#loop-timeline .loop-event').length === n",
+            arg=n, timeout=8000)
+    assert page.evaluate(_TL_SHAPE) == whole
     _unserve_mutable_loop(page)
 
 
@@ -2156,13 +2366,17 @@ def test_status_change_patches_header_preserves_artifacts_and_timeline(page, das
     st = payload["status"]["status"]
     st.update({"stage": "plan_review", "next_role": "reviewer",
                "last_updated": "2026-09-22T10:05:00+00:00"})
+    # L1: the stage badge (header) and the Now line both follow the change.
     page.wait_for_function("""() => {
-        var h = document.querySelector('#loop-region-header');
-        return h && h.textContent.indexOf('reviewer') !== -1;
+        var h = document.querySelector('#loop-region-header .loop-badge');
+        return h && h.textContent === 'Review';
     }""", timeout=8000)
 
     assert _same(page, "root")
     assert not _same(page, "header"), "header should be re-rendered on a status change"
+    assert not _same(page, "now"), "Now line should follow the stage change"
+    assert "Now: Reviewer" in page.evaluate(
+        "() => document.querySelector('.loop-now-text').textContent")
     assert _same(page, "firstEvent"), "timeline must be preserved on a status-only change"
     assert _same(page, "sketch")
     assert _sketch_still_expanded(page)
@@ -2191,7 +2405,8 @@ def test_new_events_append_and_preserve_artifact_expansion(page, dashboard_fleet
     names = page.evaluate("""() => Array.from(document.querySelectorAll(
         '#loop-artifacts > .loop-artifact-section')).map(s => s.dataset.artifact)""")
     assert names[-1] == "plan.round-2.md"
-    assert names[:3] == ["sketch.md", "plan.current.md", "findings.current.md"]
+    # L1: the plan row comes first.
+    assert names[:3] == ["plan.current.md", "sketch.md", "findings.current.md"]
     _unserve_mutable_loop(page)
 
 
@@ -2213,8 +2428,9 @@ def test_composed_control_survives_unrelated_status_change(page, dashboard_fleet
 
     assert page.evaluate("() => document.querySelector('.loop-ctrl-input').value") \
         == "half-typed guidance"
+    # L1: the Interject dialog is still open over the unchanged controls.
     assert page.evaluate(
-        "() => document.querySelector('.loop-ctrl-input-area').style.display") == "flex"
+        "() => document.querySelector('dialog.loop-dialog[data-kind=\"interject\"]').open")
     _unserve_mutable_loop(page)
 
 
@@ -2415,7 +2631,9 @@ def test_continue_success_goes_live_in_place(page, dashboard_fleet):
     page.wait_for_function(
         f"() => document.querySelectorAll('#loop-timeline .loop-event').length === {events_before + 1}",
         timeout=8000)
-    assert "Extended" in page.inner_text("#loop-timeline .loop-event:last-child")
+    # L1: newest first -- the Extended card leads the timeline.
+    assert "Extended" in page.evaluate(
+        "() => document.querySelector('#loop-timeline .loop-event').textContent")
     assert _same(page, "firstEvent")
 
     # The notice survives subsequent polls (unpatched region).
@@ -2469,9 +2687,10 @@ def test_blocked_card_shows_request_from_real_fields(page, dashboard_fleet):
     page.wait_for_selector(".loop-card", timeout=10000)
     _select_loop_card(page, "blocked-feature")
     page.wait_for_selector(".loop-decision-card", timeout=10000)
+    _open_decision_dialog(page)
     card = page.evaluate("""() => {
         var c = document.querySelector('.loop-decision-card');
-        var r = c.querySelector('.loop-blocked-reason');
+        var r = document.querySelector('dialog.loop-dialog .loop-blocked-reason');
         return {kind: c.dataset.kind,
                 title: c.querySelector('.loop-blocked-title').textContent,
                 text: c.textContent,
@@ -2489,6 +2708,266 @@ def test_blocked_card_shows_request_from_real_fields(page, dashboard_fleet):
     assert "Resumes: Reviewer \u00b7 plan_review" in card["text"]
     assert "Architect hold" not in card["text"]
     assert page.locator(".loop-hold-card").count() == 0
+
+
+def test_decisions_disclosure(page, dashboard_fleet):
+    """L1: decision history is a collapsed, skeleton-owned disclosure with a
+    count; hidden with no decisions; a manual expansion survives identical
+    polls; durable text, labels and artifact links stay inside it."""
+    # No decisions: the disclosure is hidden (no empty row).
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector("#loop-decisions-details", state="attached", timeout=10000)
+    assert page.evaluate(
+        "() => document.querySelector('#loop-decisions-details').hidden") is True
+
+    answered = {
+        "id": "decision-0",
+        "request": {"reason": "Which parser?", "role": "reviewer",
+                    "artifact_path": "decision-request.decision-0.round-0.md",
+                    "round": 0, "ts": "2026-09-22T09:00:00+00:00"},
+        "response": {"message": "Use the fast one.", "kind": "message",
+                     "artifact_path": None, "ts": "2026-09-22T09:30:00+00:00"},
+    }
+    _route_paused_status(page, "blocked_on_architect", pending_decision=True,
+                         extra_decisions=[answered])
+    # The live loop's next poll (3 s) picks up the routed blocked status.
+    page.wait_for_function("""() => {
+        var d = document.querySelector('#loop-decisions-details');
+        return d && !d.hidden;
+    }""", timeout=10000)
+    head = page.evaluate("""() => {
+        var d = document.querySelector('#loop-decisions-details');
+        return {open: d.open, summary: d.querySelector('summary').textContent};
+    }""")
+    assert head == {"open": False, "summary": "Decisions (2)"}
+
+    page.evaluate("() => document.querySelector('#loop-decisions-details > summary').click()")
+    page.wait_for_selector(".loop-decision-item", timeout=5000)
+    text = page.evaluate(
+        "() => document.querySelector('#loop-region-decisions').textContent")
+    assert "Which parser?" in text and "Need scope decision" in text
+    assert "Answered" in text and "Use the fast one." in text
+    assert "Pending" in text
+
+    page.evaluate("""() => {
+        window._dm = 0;
+        new MutationObserver(r => { window._dm += r.length; }).observe(
+            document.querySelector('#loop-decisions-details'),
+            {subtree: true, childList: true, characterData: true, attributes: true});
+    }""")
+    page.wait_for_timeout(7000)  # >= two identical polls
+    assert page.evaluate("() => window._dm") == 0
+    assert page.evaluate(
+        "() => document.querySelector('#loop-decisions-details').open") is True
+
+    page.evaluate("() => document.querySelector('.loop-decision-artifact-link').click()")
+    page.wait_for_function("""() => {
+        var c = document.querySelector('.loop-artifact-section[data-artifact='
+            + '"decision-request.decision-0.round-0.md"] .loop-artifact-content');
+        return c && c.style.display === 'block';
+    }""", timeout=5000)
+    page.unroute("**/loops/*/status")
+
+
+def test_decision_dialog_flow(page, dashboard_fleet):
+    """L1: the compact alert's Respond opens one focused dialog holding the
+    full request and its link. Escape sends nothing and returns focus; a
+    blank response is refused; a valid one posts unblock exactly once."""
+    import json as _json
+    posts = []
+    page.route("**/loops/*/unblock",
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json",
+                   body='{"ok": true}')))
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-card", timeout=10000)
+    _select_loop_card(page, "blocked-feature")
+    _open_decision_dialog(page)
+    dlg = page.evaluate("""() => {
+        var d = document.querySelector('dialog.loop-dialog');
+        return {modal: d.matches(':modal'),
+                title: d.querySelector('.loop-dialog-title').textContent,
+                reason: d.querySelector('.loop-blocked-reason').textContent,
+                link: !!d.querySelector('.loop-blocked-artifact-link'),
+                label: d.querySelector('.loop-ctrl-label').textContent,
+                focus: document.activeElement === d.querySelector('.loop-ctrl-input'),
+                disabled: d.querySelector('.loop-ctrl-confirm').disabled,
+                endInstead: !!d.querySelector('.loop-dialog-end-instead')};
+    }""")
+    assert dlg["modal"] and dlg["link"] and dlg["focus"] and dlg["disabled"]
+    assert dlg["endInstead"]
+    assert "Decision requested by Reviewer (decision-2)" == dlg["title"]
+    assert "scope" in dlg["reason"].lower()
+    assert dlg["label"] == "Response to Reviewer (required)"
+
+    page.keyboard.press("Escape")
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=5000)
+    assert page.evaluate("() => document.activeElement.classList"
+                         ".contains('loop-blocked-respond')")
+    assert posts == []
+
+    _open_decision_dialog(page)
+    page.fill(".loop-ctrl-input", "   ")
+    page.evaluate("""() => { var b = document.querySelector('.loop-ctrl-confirm');
+        b.disabled = false; b.click(); }""")
+    page.wait_for_selector("dialog.loop-dialog .loop-ctrl-error", timeout=5000)
+    assert posts == []
+    page.fill(".loop-ctrl-input", "Narrow it to the parser.")
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=5000)
+    assert len(posts) == 1
+    assert _json.loads(posts[0])["message"] == "Narrow it to the parser."
+    page.unroute("**/loops/*/unblock")
+
+
+@pytest.mark.parametrize("action,consequence,confirm", [
+    ("pause", "no participant acts until you resume it", "Pause loop"),
+    ("end", "it cannot be resumed", "End loop"),
+])
+def test_pause_end_confirm(page, dashboard_fleet, action, consequence, confirm):
+    """L1: Pause and End are quiet header controls that open a small
+    confirmation stating the consequence; Cancel sends nothing; Confirm
+    posts once."""
+    import json as _json
+    posts = []
+    page.route("**/" + _ACTIVE_ID + "/" + action,
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json",
+                   body='{"ok": true}')))
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    sel = ".loop-ctrl-" + action
+    assert page.evaluate(f"() => document.querySelector('{sel}')"
+                         ".classList.contains('loop-ctrl-quiet')")
+    page.evaluate(f"() => document.querySelector('{sel}').click()")
+    page.wait_for_selector(f'dialog.loop-dialog[data-kind="{action}"][open]', timeout=5000)
+    text = page.evaluate("() => document.querySelector('dialog.loop-dialog').textContent")
+    assert consequence in text
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-confirm')"
+                         ".textContent") == confirm
+    page.evaluate("() => document.querySelector('.loop-ctrl-cancel').click()")
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=5000)
+    assert posts == []
+
+    page.evaluate(f"() => document.querySelector('{sel}').click()")
+    page.wait_for_selector(f'dialog.loop-dialog[data-kind="{action}"][open]', timeout=5000)
+    page.fill(".loop-ctrl-input", "Done for today.")
+    page.evaluate("() => document.querySelector('.loop-ctrl-confirm').click()")
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=5000)
+    assert len(posts) == 1
+    key = "reason" if action == "end" else "message"
+    assert _json.loads(posts[0]) == {key: "Done for today."}
+    page.unroute("**/" + _ACTIVE_ID + "/" + action)
+    _unserve_mutable_loop(page)
+
+
+def test_context_change_closes_dialog(page, dashboard_fleet):
+    """L1: a change of control context while a dialog is open closes it
+    without sending and says so."""
+    posts = []
+    page.route("**/" + _ACTIVE_ID + "/interject",
+               lambda route: (posts.append(route.request.post_data), route.fulfill(
+                   status=200, content_type="application/json", body='{"ok": true}')))
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    page.evaluate("() => document.querySelector('.loop-ctrl-interject').click()")
+    page.wait_for_selector('dialog.loop-dialog[data-kind="interject"][open]', timeout=5000)
+    page.fill(".loop-ctrl-input", "half-typed guidance")
+
+    payload["status"]["status"].update(stage="paused_by_architect", next_role=None,
+                                       blocked=True)
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=8000)
+    notice = page.evaluate("""() => document.querySelector(
+        '#loop-region-notice [data-slot="action"]').textContent""")
+    assert "nothing was sent" in notice
+    assert posts == []
+    assert page.locator(".loop-ctrl-unblock").count() == 1
+    # Keyboard focus lands on a concrete, current control, never the body.
+    assert page.evaluate("""() => {
+        var a = document.activeElement;
+        return a !== document.body && a.isConnected
+            && a.matches('#loop-controls .loop-ctrl-unblock');
+    }""")
+    page.unroute("**/" + _ACTIVE_ID + "/interject")
+    _unserve_mutable_loop(page)
+
+
+def test_pending_request_allows_one_send(page, dashboard_fleet):
+    """While a dialog action is in flight, dismissing or reopening cannot
+    start a second request; settling restores usable controls, a failure
+    is reported, and a retry then sends exactly one more request."""
+    held = []
+    page.route("**/" + _ACTIVE_ID + "/interject", lambda route: held.append(route))
+    payload = _live_payload()
+    _open_incremental(page, dashboard_fleet, payload)
+    page.click(".loop-ctrl-interject")
+    page.wait_for_selector('dialog.loop-dialog[data-kind="interject"][open]', timeout=5000)
+    page.fill(".loop-ctrl-input", "Check the parser.")
+    page.click("dialog.loop-dialog .loop-ctrl-confirm")
+    for _ in range(50):
+        if held:
+            break
+        page.wait_for_timeout(100)
+    assert len(held) == 1
+    state = page.evaluate("""() => {
+        var d = document.querySelector('dialog.loop-dialog');
+        return {confirm: d.querySelector('.loop-ctrl-confirm').textContent,
+                cancel: d.querySelector('.loop-ctrl-cancel').disabled,
+                header: document.querySelector('.loop-ctrl-interject').disabled};
+    }""")
+    assert state == {"confirm": "Sending\u2026", "cancel": True, "header": True}
+
+    # Escape cannot dismiss a sending dialog; even a forced reopen of the
+    # control is refused while the first request is outstanding.
+    page.keyboard.press("Escape")
+    page.evaluate("""() => { var b = document.querySelector('.loop-ctrl-interject');
+        b.disabled = false; b.click(); }""")
+    page.wait_for_timeout(500)
+    assert len(held) == 1
+    assert page.evaluate("""() => Array.from(document.querySelectorAll(
+        'dialog.loop-dialog')).every(d => d.dataset.sending === '1')""")
+    assert "still being sent" in page.evaluate("""() => document.querySelector(
+        '#loop-region-notice [data-slot="action"]').textContent""")
+
+    held[0].fulfill(status=500, content_type="application/json",
+                    body='{"error": "boom"}')
+    page.wait_for_function("""() => {
+        var b = document.querySelector('.loop-ctrl-interject');
+        return b && !b.disabled;
+    }""", timeout=5000)
+    reported = page.evaluate("""() => {
+        var d = document.querySelector('dialog.loop-dialog');
+        if (d) return d.querySelector('.loop-ctrl-error').textContent;
+        return document.querySelector(
+            '#loop-region-notice [data-slot="action"]').textContent;
+    }""")
+    assert "boom" in reported
+
+    if not page.evaluate("() => !!document.querySelector('dialog.loop-dialog')"):
+        page.click(".loop-ctrl-interject")
+        page.wait_for_selector('dialog.loop-dialog[open]', timeout=5000)
+        page.fill(".loop-ctrl-input", "Check the parser.")
+    assert page.evaluate("() => document.querySelector('.loop-ctrl-input').value") \
+        == "Check the parser."
+    page.click("dialog.loop-dialog .loop-ctrl-confirm")
+    for _ in range(50):
+        if len(held) == 2:
+            break
+        page.wait_for_timeout(100)
+    assert len(held) == 2
+    held[1].fulfill(status=200, content_type="application/json", body='{"ok": true}')
+    page.wait_for_function("() => !document.querySelector('dialog.loop-dialog')",
+                           timeout=5000)
+    assert len(held) == 2
+    page.unroute("**/" + _ACTIVE_ID + "/interject")
+    _unserve_mutable_loop(page)
 
 
 def test_paused_card_is_an_architect_hold(page, dashboard_fleet):
@@ -2565,6 +3044,9 @@ def test_decision_history_and_unblock_notice(page, dashboard_fleet):
                    status=200, content_type="application/json",
                    body='{"ok": true}')))
     _open_unblock(page, dashboard_fleet)
+    # L1: decision history sits in the collapsed Decisions disclosure.
+    page.evaluate("() => document.querySelector("
+                  "'#loop-decisions-details > summary').click()")
     page.wait_for_selector(".loop-decision-item", timeout=10000)
     text = page.evaluate(
         "() => document.querySelector('#loop-region-decisions').textContent")
@@ -2625,7 +3107,8 @@ def test_multiline_pause_history_readable_after_unblock(page, dashboard_fleet):
             clipped: el.scrollWidth > el.clientWidth + 1}))""")
     full = [d for d in details if d["full"]]
     assert len(full) == 2
-    assert full[0]["text"].endswith(reason) and full[1]["text"].endswith(response)
+    # L1: newest first -- the unblock response precedes the pause reason.
+    assert full[0]["text"].endswith(response) and full[1]["text"].endswith(reason)
     assert all(d["ws"] == "pre-wrap" and not d["clipped"] for d in full)
     compact = [d for d in details if not d["full"]]
     assert compact and all(d["ws"] == "nowrap" for d in compact)
@@ -2780,8 +3263,10 @@ def test_architect_plan_inspection_labels_order_timeline(page, dashboard_fleet):
         '#loop-artifacts > .loop-artifact-section')).map(s => [s.dataset.artifact,
         s.querySelector('.loop-artifact-toggle').textContent])""")
     names = [n for n, _ in order]
-    assert names[0] == "architect-plan.md"
-    assert order[0][1] == "Architect-originated draft plan (provenance, unapproved)"
+    # L1: the plan row comes first; provenance follows it.
+    assert names[0] == "plan.current.md"
+    assert names[1] == "architect-plan.md"
+    assert order[1][1] == "Architect-originated draft plan (provenance, unapproved)"
     assert "sketch.md" not in names  # no sketch for this loop
     labels = page.evaluate("""() => Array.from(document.querySelectorAll(
         '#loop-timeline .loop-event-label')).map(e => e.textContent)""")
@@ -2821,11 +3306,12 @@ def test_revision_inspection_labels_and_integrity(page, dashboard_fleet):
     order = page.evaluate("""() => Array.from(document.querySelectorAll(
         '#loop-artifacts > .loop-artifact-section')).map(s => [s.dataset.artifact,
         s.querySelector('.loop-artifact-toggle').textContent])""")
-    assert order[0] == ["revision-baseline-plan.md",
+    assert order[0][0] == "plan.current.md"  # L1: plan first
+    assert order[1] == ["revision-baseline-plan.md",
                         "Baseline: approved plan from src-loop-2026-09-01T10-00-00Z"]
-    assert order[1] == ["revision-baseline-approval.md",
+    assert order[2] == ["revision-baseline-approval.md",
                         "Baseline: approving review [!! DIGEST MISMATCH]"]
-    assert order[2] == ["sketch.md", "Revision sketch"]
+    assert order[3] == ["sketch.md", "Revision sketch"]
     page.unroute("**/loops/*/status")
 
 

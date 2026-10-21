@@ -1598,8 +1598,8 @@
   //      timeline cursor. Keyed to `_state.generation`, so any selection,
   //      mount, or mode change rebuilds the skeleton.
   //   2. A region is rewritten only when its fingerprint changes; an
-  //      unchanged poll performs no main-panel DOM writes except the
-  //      countdown text (patched only when its text differs).
+  //      unchanged poll performs no main-panel DOM writes at all (L1
+  //      removed the countdown/elapsed text, the last per-poll write).
   //   3. Timeline appends strictly-new events; artifacts reconcile by name,
   //      preserving expanded/loaded sections.
   // Fingerprints come from returned data only, never wall-clock time.
@@ -1609,16 +1609,14 @@
             ev.round === undefined ? "" : ev.round].join("|");
   }
 
+  // Only the inputs renderLiveHeader()/renderOutcomeHeader() read. The
+  // calm header shows no time and no role ledger (L1), so turn times,
+  // joins and the next role (the Now line's input) are not here.
   function headerFingerprint(status, terminal) {
     var s = status.status || {};
-    var roles = status.roles || {};
     return JSON.stringify([
-      terminal, s.stage, s.round, s.max_rounds, s.next_role, s.blocked,
-      s.last_updated, s.turn_deadline, status.feature, status.loop_id,
-      status.created_at, s.turn_started_at || null,
-      status.attention ? status.attention.interval_seconds : null,
-      !!(roles.draftor && roles.draftor.joined),
-      !!(roles.reviewer && roles.reviewer.joined),
+      terminal, s.stage, s.round, s.max_rounds, status.feature,
+      status.loop_id, status.created_at,
       checkpointCounters(status),
       loopModeInfo(status).key,
     ]);
@@ -1687,24 +1685,49 @@
     return true;
   }
 
+  // Calm workspace (L1): header with controls -> approval resolution ->
+  // source -> notices -> blocked/paused alert -> Now -> rail + timeline ->
+  // lower evidence (artifacts, candidate evidence, recovery, liveness,
+  // decisions). The two <details> wrappers and #loop-dialog-host belong to
+  // the skeleton: polls patch only the regions inside them, so their open
+  // state survives.
   function buildLoopSkeleton(mainEl) {
     mainEl.innerHTML = '<div class="loop-detail">'
+      + '<div class="loop-head">'
       + '<div id="loop-region-header"></div>'
+      + '<div id="loop-controls"></div>'
+      + '</div>'
+      + '<div id="loop-region-resolution"></div>'
       + '<div id="loop-region-source"></div>'
-      + '<div id="loop-region-blocked"></div>'
-      + '<div id="loop-region-decisions"></div>'
-      + '<div id="loop-region-coding"></div>'
-      + '<div id="loop-region-prompts"></div>'
       + '<div id="loop-region-notice">'
       + '<div class="loop-notice-slot" data-slot="refresh"></div>'
       + '<div class="loop-notice-slot" data-slot="action"></div>'
       + '<div class="loop-notice-slot" data-slot="attention"></div>'
       + '</div>'
-      + '<div id="loop-region-liveness"></div>'
-      + '<div id="loop-controls"></div>'
-      + '<div class="section-title" style="margin-top:20px;">Timeline</div>'
+      + '<div id="loop-region-blocked"></div>'
+      + '<div id="loop-region-now"></div>'
+      + '<div class="loop-body">'
+      + '<div id="loop-region-rail"></div>'
+      + '<div class="loop-timeline-col">'
+      + '<div class="section-title">Timeline</div>'
       + '<div id="loop-timeline"></div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="loop-lower">'
       + '<div id="loop-artifacts"></div>'
+      + '<details class="loop-disclosure" id="loop-candidate-details" hidden>'
+      + '<summary class="loop-disclosure-summary">Candidate evidence</summary>'
+      + '<div id="loop-region-coding"></div>'
+      + '</details>'
+      + '<div id="loop-region-prompts"></div>'
+      + '<div id="loop-region-liveness"></div>'
+      + '<details class="loop-disclosure" id="loop-decisions-details" hidden>'
+      + '<summary class="loop-disclosure-summary">Decisions'
+      + '<span class="loop-disclosure-count"></span></summary>'
+      + '<div id="loop-region-decisions"></div>'
+      + '</details>'
+      + '</div>'
+      + '<div id="loop-dialog-host"></div>'
       + '</div>';
     return {
       generation: _state.generation,
@@ -1714,6 +1737,9 @@
       eventCount: 0,
       lastEventKey: null,
       timelineRendered: false,
+      timelineScheme: null, // L1: "checkpoint" | "round", fixed per snapshot
+      frontGroupKey: null,  // L1: key of the newest (front) timeline group
+      pendingAction: null,  // L1: in-flight dialog action; blocks a second send
       liveness: { built: false, actionFp: {}, lastView: null, lastGood: false },
       statusRoles: null,    // #56: status.roles of the last render (recovery need)
       recovery: null,       // #56: {needKey} while the recovery disclosure is built
@@ -1749,7 +1775,10 @@
       root.querySelector("#loop-region-header").innerHTML =
         terminal ? renderOutcomeHeader(status) : renderLiveHeader(status);
     });
-    if (!terminal) updateTimeRemaining(root, s, status);
+    var now = nowLine(status, terminal);
+    patchRegion(snap, "now", JSON.stringify(now), function () {
+      renderNowLine(root, now);
+    });
     patchRegion(snap, "source", sourceFingerprint(status), function () {
       renderSourceLine(status, root);
     });
@@ -1761,10 +1790,14 @@
     patchRegion(snap, "decisions", decisionsFingerprint(status), function () {
       renderDecisionHistory(status, root, container);
     });
+    syncDecisionsDisclosure(root, status);
     // #53: the liveness panel words a connected watcher during a hold.
     snap.suspended = !!PAUSED_STAGES[s.stage || ""];
 
     patchCodingRegion(snap, status);
+    patchRegion(snap, "rail", railFingerprint(status), function () {
+      renderRail(root.querySelector("#loop-region-rail"), status);
+    });
 
     snap.statusRoles = status.roles || {};
     patchRegion(snap, "prompts", terminal ? "terminal" : "live", function () {
@@ -1773,9 +1806,23 @@
     applyRecovery(snap);
 
     patchRegion(snap, "controls", controlsFingerprint(status, terminal), function () {
+      // L1: a dialog belongs to the control context it was opened in. A
+      // context change closes it unsent (an in-flight send is left alone;
+      // its own completion reports the result).
+      var open = root.querySelector("#loop-dialog-host > dialog.loop-dialog");
+      var closed = !!open && !open.dataset.sending && closeLoopDialog(root, false);
+      if (closed) setNotice(root, "action", DIALOG_CHANGED_HTML);
       renderControls(status, root);
+      // The invoker was just rebuilt: keep keyboard focus on a concrete,
+      // current control rather than letting it fall to the document body.
+      if (closed) focusAfterDialogInvalidated(root);
     });
 
+    // A loop never changes grouping scheme; fix it on the snapshot's first
+    // render so it is not a per-poll input.
+    if (snap.timelineScheme === null) {
+      snap.timelineScheme = checkpointCounters(status) ? "checkpoint" : "round";
+    }
     updateTimeline(snap, events, root);
 
     patchRegion(snap, "artifacts", artifactsFingerprint(status, events), function () {
@@ -1940,6 +1987,9 @@
           + '<div class="loop-blocked-reason">' + escHtml(s.pause_reason) + '</div>';
       }
     } else {
+      // L1: a compact, durable alert. The full request, its artifact link
+      // and the response are read and resolved in the decision dialog
+      // (openLoopDialog "decision"), never laid out across the page.
       html = '<div class="loop-blocked-card loop-suspension-card loop-decision-card"'
         + ' data-kind="architect_decision" role="region"'
         + ' aria-label="Blocked on Architect decision">'
@@ -1948,25 +1998,22 @@
       if (pd) who.push(escHtml(pd.id));
       if (req.role) who.push("requested by " + escHtml(roleName(req.role)));
       if (req.ts) who.push(escHtml(formatStamp(req.ts)));
+      if (preserved) who.push("Resumes: " + escHtml(preserved));
       if (who.length) {
         html += '<div class="loop-suspension-meta">' + who.join(" · ") + '</div>';
       }
-      html += '<div class="loop-blocked-reason">'
-        + (req.reason ? escHtml(req.reason) : "No request text on record.")
-        + '</div>';
-      if (req.artifact_path) {
-        html += '<a class="loop-blocked-artifact-link" data-artifact="'
-          + escHtml(req.artifact_path) + '" href="#">View decision request</a>';
-      }
-      if (preserved) {
-        html += '<div class="loop-suspension-meta">Resumes: '
-          + escHtml(preserved) + '</div>';
-      }
+      html += '<button type="button" class="loop-blocked-respond">'
+        + escHtml(pd ? "Respond" : "Resume") + '</button>';
     }
     html += '</div>';
     region.innerHTML = html;
-    var link = region.querySelector(".loop-blocked-artifact-link");
-    if (link) wireArtifactJump(link, container);
+    var respond = region.querySelector(".loop-blocked-respond");
+    if (respond && _state.render && _state.render.pendingAction) respond.disabled = true;
+    if (respond) {
+      respond.addEventListener("click", function () {
+        openLoopDialog(pd ? "decision" : "resume", status, respond);
+      });
+    }
   }
 
   // ── #53: decision history (requests and their resolution) ──────────────
@@ -1994,8 +2041,9 @@
       region.innerHTML = "";
       return;
     }
-    var html = '<div class="section-title" style="margin-top:16px;">Architect decisions</div>'
-      + '<ol class="loop-decision-list">';
+    // L1: the list sits inside the skeleton's collapsed "Decisions"
+    // disclosure (syncDecisionsDisclosure), which supplies the heading.
+    var html = '<ol class="loop-decision-list">';
     decisions.forEach(function (d) {
       var req = d.request || {}, resp = d.response;
       html += '<li class="loop-decision-item" data-decision="' + escHtml(d.id || "") + '"'
@@ -2034,6 +2082,18 @@
     region.querySelectorAll(".loop-decision-artifact-link").forEach(function (a) {
       wireArtifactJump(a, container);
     });
+  }
+
+  // L1: the Decisions disclosure is skeleton-owned. Only its visibility and
+  // count are synced, each written only when it differs; `open` is never
+  // touched, so a manual expansion survives polls and nothing opens it
+  // automatically (a pending decision is answered from the blocked alert).
+  function syncDecisionsDisclosure(root, status) {
+    var details = root.querySelector("#loop-decisions-details");
+    if (!details) return;
+    var n = ((status && status.decisions) || []).length;
+    setHidden(details, n === 0);
+    setText(details.querySelector(".loop-disclosure-count"), n ? " (" + n + ")" : "");
   }
 
   // ── participant recovery (#56) ──────────────────────────────────────────
@@ -2132,30 +2192,11 @@
     if (details.open !== want) details.open = want;
   }
 
-  function timeRemainingText(s) {
-    if (!s.turn_deadline) return "";
-    var diffMs = new Date(s.turn_deadline) - new Date();
-    if (diffMs <= 0) return "overdue";
-    var mins = Math.floor(diffMs / 60000);
-    var secs = Math.floor((diffMs % 60000) / 1000);
-    return mins + "m " + secs + "s";
-  }
-
-  function updateTimeRemaining(root, s, status) {
-    // Text-only patch: the countdown must never force a region rebuild.
-    var el = root.querySelector(".loop-time-remaining");
-    if (el) {
-      var text = timeRemainingText(s);
-      if (el.textContent !== text) el.textContent = text;
-    }
-    var el2 = root.querySelector(".loop-elapsed");
-    if (el2) {
-      var text2 = elapsedText(status);
-      if (el2.textContent !== text2) el2.textContent = text2;
-    }
-  }
-
   // ── #47 Architect attention (Architect-only; participants never see it) ──
+  //
+  // L1 (Architect decision): the workspace shows no elapsed or remaining
+  // turn time. The legacy countdown and the "Elapsed this turn" item are
+  // gone; legacy timeout behavior and the attention notice are unchanged.
 
   var ATTENTION_MARKER_TEXT = "\u25F7 attention";
 
@@ -2163,19 +2204,6 @@
     if (seconds >= 60 && seconds % 60 === 0) return (seconds / 60) + " min";
     if (seconds >= 60) return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s";
     return seconds + "s";
-  }
-
-  function elapsedText(status) {
-    var att = status && status.attention;
-    if (!att || !att.turn_started_at) return "";
-    var started = new Date(att.turn_started_at);
-    if (isNaN(started.getTime())) return "";
-    var secs = Math.max(0, Math.floor((new Date() - started) / 1000));
-    var text = Math.floor(secs / 60) + "m " + (secs % 60) + "s";
-    if (typeof att.interval_seconds === "number") {
-      text += " \u00B7 attention after " + formatDuration(att.interval_seconds);
-    }
-    return text;
   }
 
   function attentionNoticeState(status, terminal) {
@@ -2239,65 +2267,88 @@
     }
   }
 
+  // ── L1 calm header and Now line ──────────────────────────────────────────
+  //
+  // The header is an eyebrow (mode + stage), the loop name and one counter
+  // line. It carries no time, no role ledger and no status sentence; the
+  // Now line says what is happening. Counters keep the #55 rule: a
+  // checkpoint loop never shows "Round X / Y".
+
+  function counterLineHtml(status) {
+    var s = status.status || {};
+    var cp = checkpointCounters(status);
+    if (!cp) {
+      return '<span class="loop-round-counter">Round ' + (s.round || 0)
+        + ' / ' + (s.max_rounds || 0) + '</span>';
+    }
+    return '<span class="loop-checkpoint-counter">' + escHtml(checkpointHeaderText(cp))
+      + '</span> · <span class="loop-generation-counter">Generation '
+      + escHtml(generationText(cp.generation)) + '</span>';
+  }
+
   function renderLiveHeader(status) {
     var s = status.status || {};
-    var stage = s.stage || "";
-    var roles = status.roles || {};
-    var draftorJoined = roles.draftor && roles.draftor.joined;
-    var reviewerJoined = roles.reviewer && roles.reviewer.joined;
-
-    var timeRemaining = timeRemainingText(s);
-
-    var html = '<div class="loop-status-header">'
+    return '<div class="loop-status-header">'
+      + '<div class="loop-eyebrow">' + modeBadge(loopModeInfo(status))
+      + stageBadge(s.stage || "") + '</div>'
       + '<h3>' + escHtml(status.feature || status.loop_id || "") + '</h3>'
-      + modeBadge(loopModeInfo(status))
-      + stageBadge(stage)
+      + '<div class="loop-counter-line">' + counterLineHtml(status) + '</div>'
       + '</div>';
+  }
 
-    html += '<div class="loop-status-grid">';
+  // The unblock control's word: Respond answers a pending escalation;
+  // Resume ends an ordinary Architect hold.
+  function unblockActionLabel(status) {
+    return pendingDecision(status) ? "Respond" : "Resume";
+  }
+
+  // Pure and status-only: never artifacts, time, liveness or a missing
+  // event. Each state has its own glyph and words; colour is only a second
+  // cue (data-state). Approved coding defers to the resolution banner, the
+  // only authority for Committed / Pending / Stale / Unknown.
+  function nowLine(status, terminal) {
+    var s = status.status || {};
+    var stage = s.stage || "";
+    if (stage === "blocked_on_architect") {
+      var pd = pendingDecision(status);
+      var req = (pd && pd.request) || {};
+      var who = req.role ? roleName(req.role) + " escalated" : "A participant escalated";
+      if (pd && pd.id) who += " " + pd.id;
+      return { state: "blocked", glyph: "⚑",
+        text: "Now: your decision is required — " + who + ". Use "
+          + unblockActionLabel(status) + " above." };
+    }
+    if (stage === "paused_by_architect") {
+      return { state: "paused", glyph: "⏸",
+        text: "Now: paused by you. No participant is working; Resume or End when ready." };
+    }
+    if (stage === "implementation_approved") {
+      return { state: "approved", glyph: "✓",
+        text: "Now: implementation approved — the Draftor makes one normal commit. "
+          + "The commit state is shown above." };
+    }
+    if (stage === EXTENDABLE_STAGE) {
+      return { state: "max_rounds", glyph: "■",
+        text: "Now: maximum rounds reached. Continue loop to add rounds, or leave it ended." };
+    }
+    if (terminal) {
+      return { state: "terminal", glyph: "■",
+        text: "Outcome: " + (OUTCOME_LABELS[stage] || stage) + "." };
+    }
     var cp = checkpointCounters(status);
-    if (cp) {
-      html += '<div class="loop-status-item">'
-        + '<div class="loop-status-label">Checkpoint</div>'
-        + '<div class="loop-status-value loop-checkpoint-counter">' + escHtml(checkpointHeaderText(cp)) + '</div>'
-        + '</div>';
-      html += '<div class="loop-status-item">'
-        + '<div class="loop-status-label">Generation</div>'
-        + '<div class="loop-status-value loop-generation-counter">' + escHtml(generationText(cp.generation)) + '</div>'
-        + '</div>';
-    } else {
-      html += '<div class="loop-status-item">'
-        + '<div class="loop-status-label">Round</div>'
-        + '<div class="loop-status-value">' + (s.round || 0) + ' / ' + (s.max_rounds || 0) + '</div>'
-        + '</div>';
-    }
-    html += '<div class="loop-status-item">'
-      + '<div class="loop-status-label">Active Role</div>'
-      + '<div class="loop-status-value">' + escHtml(s.next_role || "—") + '</div>'
-      + '</div>';
-    html += '<div class="loop-status-item">'
-      + '<div class="loop-status-label">Draftor</div>'
-      + '<div class="loop-status-value">' + (draftorJoined ? "Joined" : "Waiting") + '</div>'
-      + '</div>';
-    html += '<div class="loop-status-item">'
-      + '<div class="loop-status-label">Reviewer</div>'
-      + '<div class="loop-status-value">' + (reviewerJoined ? "Joined" : "Waiting") + '</div>'
-      + '</div>';
-    var elapsed = elapsedText(status);
-    if (elapsed) {
-      html += '<div class="loop-status-item">'
-        + '<div class="loop-status-label">Elapsed this turn</div>'
-        + '<div class="loop-status-value loop-elapsed">' + escHtml(elapsed) + '</div>'
-        + '</div>';
-    }
-    if (timeRemaining) {
-      html += '<div class="loop-status-item">'
-        + '<div class="loop-status-label">Time Remaining</div>'
-        + '<div class="loop-status-value loop-time-remaining">' + escHtml(timeRemaining) + '</div>'
-        + '</div>';
-    }
-    html += '</div>';
-    return html;
+    var where = cp ? "checkpoint " + cp.index + " of " + cp.count
+      : "round " + (s.round || 0) + " of " + (s.max_rounds || 0);
+    return { state: "active", glyph: "▶",
+      text: "Now: " + (roleName(s.next_role) || "The active role") + " — "
+        + (STAGE_LABELS[stage] || stage) + " (" + where + "). No action needed from you." };
+  }
+
+  function renderNowLine(root, now) {
+    var region = root.querySelector("#loop-region-now");
+    if (!region) return;
+    region.innerHTML = '<p class="loop-now" data-state="' + escHtml(now.state) + '">'
+      + '<span class="loop-now-glyph" aria-hidden="true">' + escHtml(now.glyph) + '</span> '
+      + '<span class="loop-now-text">' + escHtml(now.text) + '</span></p>';
   }
 
   function renderOutcomeHeader(status) {
@@ -2306,9 +2357,9 @@
     var outcomeLabel = OUTCOME_LABELS[stage] || stage;
 
     var html = '<div class="loop-status-header">'
+      + '<div class="loop-eyebrow">' + modeBadge(loopModeInfo(status))
+      + '<span class="loop-badge loop-badge-outcome">' + escHtml(outcomeLabel) + '</span></div>'
       + '<h3>' + escHtml(status.feature || status.loop_id || "") + '</h3>'
-      + modeBadge(loopModeInfo(status))
-      + '<span class="loop-badge loop-badge-outcome">' + escHtml(outcomeLabel) + '</span>'
       + '</div>';
 
     html += '<div class="loop-outcome-meta">';
@@ -2597,35 +2648,51 @@
     return oid ? String(oid).slice(0, 12) : "—";
   }
 
-  function codingFingerprint(status, live) {
+  // L1 splits the coding panel by responsibility: candidate facts (folded
+  // into the "Candidate evidence" disclosure) and the approval resolution
+  // (#loop-region-resolution, next to the header). Each has its own
+  // fingerprint.
+  function codingFingerprint(status) {
+    var s = status.status || {};
+    return JSON.stringify([s.stage, s.round, s.max_rounds, status.coding]);
+  }
+
+  function resolutionFingerprint(status, live) {
     var s = status.status || {};
     var res = live && live.approval_resolution;
     return JSON.stringify([
-      s.stage, s.round, s.max_rounds, status.coding,
+      s.stage,
       live ? (live._error !== undefined ? ["err", live._error]
               : [res && res.state, res && res.reason, res && res.commit,
+                 res && res.approved_tree,
                  live.live && live.live.ok, live.live && live.live.error]) : null,
     ]);
   }
 
   function patchCodingRegion(snap, status) {
-    var region = snap.root && snap.root.querySelector("#loop-region-coding");
-    if (!region) return;
+    var root = snap.root;
+    var region = root && root.querySelector("#loop-region-coding");
+    var resRegion = root && root.querySelector("#loop-region-resolution");
+    if (!region || !resRegion) return;
+    setHidden(root.querySelector("#loop-candidate-details"), !isCoding(status));
     if (!isCoding(status)) {
       patchRegion(snap, "coding", "none", function () { region.innerHTML = ""; });
+      patchRegion(snap, "resolution", "none", function () { resRegion.innerHTML = ""; });
       return;
     }
+    patchRegion(snap, "coding", codingFingerprint(status), function () {
+      renderCodingRegion(region, status);
+    });
     // Never rebuild under an open Reopen form; the next poll catches up.
-    if (region.dataset.reopenOpen === "1") return;
+    if (resRegion.dataset.reopenOpen === "1") return;
     var live = isApprovedCoding(status) ? snap.codingLive : null;
-    patchRegion(snap, "coding", codingFingerprint(status, live), function () {
-      renderCodingRegion(region, status, live, snap);
+    patchRegion(snap, "resolution", resolutionFingerprint(status, live), function () {
+      renderResolution(resRegion, status, live, snap);
     });
   }
 
-  function renderCodingRegion(region, status, live, snap) {
+  function renderCodingRegion(region, status) {
     var c = status.coding || {};
-    var s = status.status || {};
     var gens = c.generations || [];
     var g = gens.length ? gens[gens.length - 1] : null;
 
@@ -2670,63 +2737,104 @@
       row("Candidate", "No implementation submitted yet");
     }
 
-    var html = '<div class="loop-coding">'
-      + '<div class="section-title" style="margin-top:16px;">Coding candidate</div>'
-      + rows.join("");
-
-    if (cpc) {
-      // Progress as text + glyph + weight, never colour alone.
-      html += '<ol class="loop-checkpoint-list">';
-      cps.items.forEach(function (it) {
-        var state = it.state === "approved" ? "approved"
-          : (it.state === "active" ? "active" : "pending");
-        var glyph = state === "approved" ? "\u2713" : (state === "active" ? "\u25cf" : "\u25cb");
-        var text = state === "approved"
-          ? "approved" + (it.accepted_tree ? " (tree " + shortOid(it.accepted_tree) + ")" : "")
-          : (state === "active" ? "active" : "not started");
-        html += '<li class="loop-checkpoint-item" data-state="' + state + '">'
-          + '<span class="loop-checkpoint-glyph" aria-hidden="true">' + glyph + '</span> '
-          + '<span class="loop-checkpoint-name">' + escHtml((it.id || "") + " " + (it.title || "")) + '</span>'
-          + ' \u2014 <span class="loop-checkpoint-state">' + escHtml(text) + '</span></li>';
-      });
-      html += '</ol>';
-    }
+    var html = '<div class="loop-coding">' + rows.join("");
 
     if (g && g.residue_other_count > 0) {
       html += '<div class="loop-coding-warning"><strong>Note:</strong> '
         + escHtml(String(g.residue_other_count))
         + ' unstaged/untracked path(s) outside the loop directory were NOT part of the candidate.</div>';
     }
+    html += '</div>';
+    region.innerHTML = html;
+  }
 
-    if (s.stage === "implementation_approved") {
-      var res = live && live.approval_resolution;
-      var info;
-      if (!live) {
-        html += '<div class="loop-coding-resolution">Checking live Git state…</div>';
-      } else if (live._error !== undefined) {
-        info = RESOLUTION_TEXT.unknown;
-        html += '<div class="loop-coding-resolution ' + info.cls + '" data-state="unknown">'
-          + escHtml(info.glyph + " " + info.label) + '</div>';
-      } else if (res && RESOLUTION_TEXT[res.state]) {
-        info = RESOLUTION_TEXT[res.state];
-        var detail = "";
-        if (res.state === "committed") {
-          detail = " (commit " + shortOid(res.commit) + ")";
-        } else if (res.state === "pending") {
-          detail = " of tree " + shortOid(res.approved_tree);
-        } else if (res.state === "stale") {
-          detail = ": " + (STALE_REASON_TEXT[res.reason] || res.reason);
-        } else if (res.state === "unknown") {
-          detail = " (" + (res.reason || "error") + ")";
-        }
-        html += '<div class="loop-coding-resolution ' + info.cls
-          + '" data-state="' + escHtml(res.state) + '">'
-          + escHtml(info.glyph + " " + info.label + detail) + '</div>';
-        if (res.state === "stale" || res.state === "unknown") {
-          html += '<div class="loop-coding-reopen">'
-            + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-btn">'
-            + 'Reopen for revision</button></div>';
-        }
+  // ── L1 checkpoint rail (#55 progress) ────────────────────────────────────
+  //
+  // Declared-checkpoint coding loops only (checkpointCounters non-null);
+  // every other loop leaves #loop-region-rail empty, which CSS hides, so
+  // there is no placeholder. Built only from status.coding.checkpoints
+  // items: no plan parsing, no scope or Verify text, no request. Each state
+  // is glyph + text + weight; the active item adds aria-current="step".
+  // The rail is non-interactive (no focus stops to miss).
+
+  function railItems(status) {
+    if (!checkpointCounters(status)) return null;
+    var m = status.coding.checkpoints;
+    return m.items.map(function (it, i) {
+      var state = it.state === "approved" ? "approved"
+        : (it.state === "active" ? "active" : "pending");
+      return { id: it.id || "", title: it.title || "", state: state,
+               current: i === m.current,
+               tree: state === "approved" ? (it.accepted_tree || null) : null };
+    });
+  }
+
+  function railFingerprint(status) {
+    var items = railItems(status);
+    return items ? JSON.stringify(items) : "none";
+  }
+
+  function renderRail(region, status) {
+    if (!region) return;
+    var items = railItems(status);
+    if (!items) {
+      region.innerHTML = "";
+      return;
+    }
+    var html = '<section class="loop-rail" aria-label="Checkpoint progress">'
+      + '<div class="section-title">Checkpoints</div>'
+      + '<ol class="loop-checkpoint-list">';
+    items.forEach(function (it) {
+      var glyph = it.state === "approved" ? "✓"
+        : (it.state === "active" ? "●" : "○");
+      var text = it.state === "approved"
+        ? "approved" + (it.tree ? " (tree " + shortOid(it.tree) + ")" : "")
+        : (it.state === "active" ? "active" : "not started");
+      html += '<li class="loop-checkpoint-item" data-state="' + it.state + '"'
+        + (it.current && it.state === "active" ? ' aria-current="step"' : '') + '>'
+        + '<span class="loop-checkpoint-glyph" aria-hidden="true">' + glyph + '</span> '
+        + '<span class="loop-checkpoint-name">' + escHtml(it.id + " " + it.title) + '</span>'
+        + ' — <span class="loop-checkpoint-state">' + escHtml(text) + '</span></li>';
+    });
+    region.innerHTML = html + '</ol></section>';
+  }
+
+  // The approval resolution (implementation_approved only): one banner,
+  // text + glyph + weight per state, plus Reopen for Stale / Unknown.
+  function renderResolution(region, status, live, snap) {
+    var s = status.status || {};
+    if (s.stage !== "implementation_approved") {
+      region.innerHTML = "";
+      return;
+    }
+    var html = '<div class="loop-resolution">';
+    var res = live && live.approval_resolution;
+    var info;
+    if (!live) {
+      html += '<div class="loop-coding-resolution">Checking live Git state…</div>';
+    } else if (live._error !== undefined) {
+      info = RESOLUTION_TEXT.unknown;
+      html += '<div class="loop-coding-resolution ' + info.cls + '" data-state="unknown">'
+        + escHtml(info.glyph + " " + info.label) + '</div>';
+    } else if (res && RESOLUTION_TEXT[res.state]) {
+      info = RESOLUTION_TEXT[res.state];
+      var detail = "";
+      if (res.state === "committed") {
+        detail = " (commit " + shortOid(res.commit) + ")";
+      } else if (res.state === "pending") {
+        detail = " of tree " + shortOid(res.approved_tree);
+      } else if (res.state === "stale") {
+        detail = ": " + (STALE_REASON_TEXT[res.reason] || res.reason);
+      } else if (res.state === "unknown") {
+        detail = " (" + (res.reason || "error") + ")";
+      }
+      html += '<div class="loop-coding-resolution ' + info.cls
+        + '" data-state="' + escHtml(res.state) + '">'
+        + escHtml(info.glyph + " " + info.label + detail) + '</div>';
+      if (res.state === "stale" || res.state === "unknown") {
+        html += '<div class="loop-coding-reopen">'
+          + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-btn">'
+          + 'Reopen for revision</button></div>';
       }
     }
     html += '</div>';
@@ -2759,7 +2867,7 @@
     });
     function close() {
       region.dataset.reopenOpen = "0";
-      delete snap.fp.coding;  // rebuild from the latest data
+      delete snap.fp.resolution;  // rebuild from the latest data
       loadSelectedLoop();
     }
     holder.querySelector(".loop-coding-reopen-cancel").addEventListener("click", close);
@@ -3007,162 +3115,311 @@
     var html = '<div class="loop-controls-bar">';
     var isActive = !TERMINAL_STAGES[stage] && !PAUSED_STAGES[stage];
 
+    // L1: the primary action first, then the quiet Pause/End controls.
     if (isActive) {
-      html += '<button class="loop-ctrl-btn loop-ctrl-pause" data-action="pause">Pause</button>';
       html += '<button class="loop-ctrl-btn loop-ctrl-interject" data-action="interject">Interject</button>';
-      html += '<button class="loop-ctrl-btn loop-ctrl-end" data-action="end">End</button>';
+      html += '<button class="loop-ctrl-btn loop-ctrl-pause loop-ctrl-quiet" data-action="pause">Pause</button>';
+      html += '<button class="loop-ctrl-btn loop-ctrl-end loop-ctrl-quiet" data-action="end">End</button>';
     } else {
-      html += '<button class="loop-ctrl-btn loop-ctrl-unblock" data-action="unblock">Unblock</button>';
-      html += '<button class="loop-ctrl-btn loop-ctrl-end" data-action="end">End</button>';
+      html += '<button class="loop-ctrl-btn loop-ctrl-unblock" data-action="unblock">'
+        + escHtml(unblockActionLabel(status)) + '</button>';
+      html += '<button class="loop-ctrl-btn loop-ctrl-end loop-ctrl-quiet" data-action="end">End</button>';
     }
-
-    // An escalation leaves a pending decision; an ordinary Architect pause
-    // does not. Only the former requires a response to unblock.
-    var pd = pendingDecision(status);
-    var currentTimeout = s.turn_timeout_seconds || 300;
-    var legacyWindow = !status.attention;  // #47: no participant window to change
 
     html += '</div>';
-    // #53: a multiline textarea so the Architect can write a considered
-    // response; its <label> is programmatically associated.
-    html += '<div class="loop-ctrl-input-area" style="display:none;">'
-      + '<label class="loop-ctrl-label" for="loop-ctrl-message"></label>'
-      + '<textarea id="loop-ctrl-message" class="loop-ctrl-input" rows="4"'
-      + ' placeholder="Message (optional)"></textarea>'
-      + '<label class="loop-ctrl-timeout-label" style="display:none;">Turn window (s) '
-      + '<input type="number" class="loop-ctrl-timeout" min="' + TURN_TIMEOUT_MIN
-      + '" max="' + TURN_TIMEOUT_MAX + '" step="1" value="' + escHtml(String(currentTimeout)) + '">'
-      + '</label>'
-      + '<button class="loop-ctrl-confirm">Confirm</button>'
-      + '<button class="loop-ctrl-cancel">Cancel</button>'
-      + '</div>';
     panel.innerHTML = html;
 
-    var inputArea = panel.querySelector(".loop-ctrl-input-area");
-    var input = panel.querySelector(".loop-ctrl-input");
-    var label = panel.querySelector(".loop-ctrl-label");
-    var timeoutLabel = panel.querySelector(".loop-ctrl-timeout-label");
-    var timeoutInput = panel.querySelector(".loop-ctrl-timeout");
-    var confirmBtn = panel.querySelector(".loop-ctrl-confirm");
-    var pendingAction = null;
-    var responseRequired = false;
+    if (_state.render && _state.render.pendingAction) setControlsPending(parentEl, true);
 
-    function syncConfirmEnabled() {
-      confirmBtn.disabled = responseRequired && !input.value.trim();
+    // L1: every button opens a focused dialog; nothing is sent from here.
+    panel.querySelectorAll(".loop-ctrl-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var action = btn.dataset.action;
+        var kind = action === "unblock"
+          ? (pendingDecision(status) ? "decision" : "resume") : action;
+        openLoopDialog(kind, status, btn);
+      });
+    });
+  }
+
+  // ── L1 focused intervention dialogs ──────────────────────────────────────
+  //
+  // Respond (decision), Resume, Interject, Pause and End each open one
+  // native <dialog> (showModal: focus trap, inert page, Escape cancels) in
+  // the unpatched #loop-dialog-host. Only a click opens one -- never a
+  // poll. Confirm is the only state-changing step and goes through the
+  // existing postAction() with the existing validation. Closing returns
+  // focus to the invoking button (or the main heading if it was rebuilt).
+  // A change of control context (controlsFingerprint) closes an open dialog
+  // without sending, and says so; an identical poll touches nothing, so a
+  // typed draft survives.
+
+  var DIALOG_CHANGED_HTML = '<div class="loop-dialog-closed-notice" role="status">'
+    + '<strong>The loop changed while the dialog was open;</strong> nothing was sent. '
+    + 'Reopen the control to act on the current state.</div>';
+  var DIALOG_PENDING_HTML = '<div class="loop-dialog-closed-notice" role="status">'
+    + '<strong>A request is still being sent.</strong> '
+    + 'Wait for it to finish before sending another.</div>';
+
+  // The in-flight Architect action belongs to the selected-loop snapshot
+  // (snap.pendingAction), not to a dialog node, so closing or replacing a
+  // dialog can never permit a second concurrent send. While it is set, the
+  // workspace's dialog-opening buttons are disabled and openLoopDialog()
+  // refuses with a notice. A new selection builds a new snapshot.
+  function setControlsPending(root, pending) {
+    if (!root) return;
+    root.querySelectorAll("#loop-controls .loop-ctrl-btn[data-action], .loop-blocked-respond")
+      .forEach(function (b) {
+        if (b.disabled !== pending) b.disabled = pending;
+      });
+  }
+
+  function focusAfterDialogInvalidated(root) {
+    var target = root && root.querySelector("#loop-controls button:not([disabled])");
+    if (target) target.focus();
+    else focusMainHeading();
+  }
+
+  function loopDialogConfig(kind, status) {
+    var s = status.status || {};
+    var pd = pendingDecision(status);
+    var req = (pd && pd.request) || {};
+    var asker = req.role ? roleName(req.role) : "participant";
+    var preserved = preservedText(s);
+    if (kind === "decision") {
+      var meta = [];
+      if (req.ts) meta.push("Requested " + formatStamp(req.ts));
+      if (preserved) meta.push("Resumes: " + preserved);
+      return {
+        title: "Decision requested by " + (req.role ? asker : "a participant")
+          + (pd && pd.id ? " (" + pd.id + ")" : ""),
+        body: (meta.length ? '<div class="loop-suspension-meta">'
+            + escHtml(meta.join(" · ")) + '</div>' : '')
+          + '<div class="loop-blocked-reason">'
+          + (req.reason ? escHtml(req.reason) : "No request text on record.") + '</div>'
+          + (req.artifact_path ? '<a class="loop-blocked-artifact-link" data-artifact="'
+            + escHtml(req.artifact_path) + '" href="#">View decision request</a>' : ''),
+        action: "unblock", label: "Response to " + asker + " (required)",
+        placeholder: "Answer the escalation" + (pd && pd.id ? " (" + pd.id + ")" : ""),
+        required: true, requiredText: "A response is required to resolve the escalation.",
+        confirm: "Record response and resume", timeout: true, endInstead: true,
+      };
+    }
+    if (kind === "resume") {
+      return {
+        title: "Resume the loop",
+        body: preserved ? '<div class="loop-suspension-meta">Resumes: '
+          + escHtml(preserved) + '</div>' : '',
+        action: "unblock", label: "Message (optional)", placeholder: "Message (optional)",
+        required: false, confirm: "Resume", timeout: true,
+      };
+    }
+    if (kind === "interject") {
+      return {
+        title: "Interject",
+        body: '<p class="loop-dialog-note">Send an Architect message into the loop. '
+          + 'The loop keeps running.</p>',
+        action: "interject", label: "Message (required)", placeholder: "Message (required)",
+        required: true, requiredText: "A message is required.", confirm: "Send",
+      };
+    }
+    if (kind === "pause") {
+      return {
+        title: "Pause the loop",
+        body: '<p class="loop-dialog-note">Pausing holds the loop: no participant acts '
+          + 'until you resume it.</p>',
+        action: "pause", label: "Message (optional)", placeholder: "Message (optional)",
+        required: false, confirm: "Pause loop",
+      };
+    }
+    return {
+      title: "End the loop",
+      body: '<p class="loop-dialog-note">Ending stops the loop permanently; '
+        + 'it cannot be resumed.</p>',
+      action: "end", label: "Reason (optional)", placeholder: "Reason (optional)",
+      required: false, confirm: "End loop", bodyKey: "reason",
+    };
+  }
+
+  // Closes the open dialog, if any, without sending. Returns true when one
+  // was open. `restore === false` skips the focus return (the caller is
+  // moving focus elsewhere, e.g. to an artifact).
+  function closeLoopDialog(root, restore) {
+    var dlg = root && root.querySelector("#loop-dialog-host > dialog.loop-dialog");
+    if (!dlg) return false;
+    if (restore === false) dlg.dataset.noRestore = "1";
+    if (dlg.open) dlg.close();
+    else dlg.remove();
+    return true;
+  }
+
+  function openLoopDialog(kind, status, invoker) {
+    var snap = _state.render;
+    var root = snap && snap.root;
+    var host = root && root.querySelector("#loop-dialog-host");
+    if (!host) return;
+    if (snap.pendingAction) {
+      setNotice(root, "action", DIALOG_PENDING_HTML);
+      return;
+    }
+    closeLoopDialog(root, false);
+
+    var cfg = loopDialogConfig(kind, status);
+    var s = status.status || {};
+    var loopId = _state.selectedLoopId;
+    var gen = _state.generation;
+    var legacyWindow = !status.attention;  // #47: no participant window to change
+    var currentTimeout = s.turn_timeout_seconds || 300;
+    var showTimeout = !!cfg.timeout && legacyWindow;
+
+    var dlg = document.createElement("dialog");
+    dlg.className = "loop-dialog";
+    dlg.dataset.kind = kind;
+    dlg.setAttribute("aria-labelledby", "loop-dialog-title");
+    dlg.innerHTML = '<h4 id="loop-dialog-title" class="loop-dialog-title">'
+      + escHtml(cfg.title) + '</h4>'
+      + cfg.body
+      + '<div class="loop-ctrl-input-area">'
+      + '<label class="loop-ctrl-label" for="loop-ctrl-message">' + escHtml(cfg.label) + '</label>'
+      + '<textarea id="loop-ctrl-message" class="loop-ctrl-input" rows="4" autofocus'
+      + ' placeholder="' + escHtml(cfg.placeholder) + '"'
+      + ' aria-label="' + escHtml(cfg.label) + '"></textarea>'
+      + (showTimeout ? '<label class="loop-ctrl-timeout-label">Turn window (s) '
+        + '<input type="number" class="loop-ctrl-timeout" min="' + TURN_TIMEOUT_MIN
+        + '" max="' + TURN_TIMEOUT_MAX + '" step="1" value="'
+        + escHtml(String(currentTimeout)) + '"></label>' : '')
+      + '</div>'
+      + '<div class="loop-dialog-actions">'
+      + (cfg.endInstead ? '<button type="button" class="loop-dialog-end-instead">'
+        + 'End loop instead…</button>' : '')
+      + '<button type="button" class="loop-ctrl-cancel">Cancel</button>'
+      + '<button type="button" class="loop-ctrl-confirm">' + escHtml(cfg.confirm) + '</button>'
+      + '</div>';
+    host.appendChild(dlg);
+
+    var input = dlg.querySelector(".loop-ctrl-input");
+    var timeoutInput = dlg.querySelector(".loop-ctrl-timeout");
+    var confirmBtn = dlg.querySelector(".loop-ctrl-confirm");
+    var cancelBtn = dlg.querySelector(".loop-ctrl-cancel");
+    var endInstead = dlg.querySelector(".loop-dialog-end-instead");
+
+    // While sending, the dialog cannot be dismissed or replaced from its own
+    // controls; if the browser still closes it (Escape without activation),
+    // the snapshot's pendingAction keeps any second send refused.
+    function setSending(on) {
+      if (on) dlg.dataset.sending = "1";
+      else delete dlg.dataset.sending;
+      snap.pendingAction = on ? cfg.action : null;
+      cancelBtn.disabled = on;
+      if (endInstead) endInstead.disabled = on;
+      confirmBtn.textContent = on ? "Sending\u2026" : cfg.confirm;
+      setControlsPending(root, on);
+      syncConfirm();
     }
 
-    function showInput(action, labelText, placeholder, required) {
-      pendingAction = action;
-      responseRequired = required;
-      label.textContent = labelText;
-      input.placeholder = placeholder;
-      input.setAttribute("aria-label", labelText || placeholder);
-      input.value = "";
-      input.classList.remove("loop-ctrl-input-error");
-      timeoutLabel.style.display = action === "unblock" && legacyWindow ? "" : "none";
-      timeoutInput.value = String(currentTimeout);
-      timeoutInput.classList.remove("loop-ctrl-input-error");
-      inputArea.style.display = "flex";
-      syncConfirmEnabled();
+    function syncConfirm() {
+      confirmBtn.disabled = !!dlg.dataset.sending
+        || (cfg.action === "unblock" && cfg.required && !input.value.trim());
     }
-
-    function showCtrlError(text) {
-      var errEl = panel.querySelector(".loop-ctrl-error");
-      if (!errEl) {
-        errEl = document.createElement("div");
-        errEl.className = "loop-ctrl-error";
-        inputArea.parentNode.insertBefore(errEl, inputArea.nextSibling);
+    function showError(text) {
+      var el = dlg.querySelector(".loop-ctrl-error");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "loop-ctrl-error";
+        el.setAttribute("role", "alert");
+        dlg.querySelector(".loop-dialog-actions").before(el);
       }
-      errEl.textContent = text;
+      el.textContent = text;
     }
-
-    function clearCtrlError() {
-      var el = panel.querySelector(".loop-ctrl-error");
+    function clearError() {
+      var el = dlg.querySelector(".loop-ctrl-error");
       if (el) el.remove();
     }
 
-    panel.querySelectorAll(".loop-ctrl-btn").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        clearCtrlError();
-        var action = btn.dataset.action;
-        if (action === "interject") {
-          showInput(action, "", "Message (required)", false);
-        } else if (action === "pause") {
-          showInput(action, "", "Message (optional)", false);
-        } else if (action === "unblock") {
-          if (pd) {
-            var asker = pd.request && pd.request.role;
-            showInput(action, "Response to "
-              + (asker ? roleName(asker) : "participant") + " (required)",
-              "Answer the escalation (" + pd.id + ")", true);
-          } else {
-            showInput(action, "Message (optional)", "Message (optional)", false);
-          }
-        } else if (action === "end") {
-          showInput(action, "", "Reason (optional)", false);
-        }
+    dlg.addEventListener("close", function () {
+      var restore = !dlg.dataset.noRestore;
+      dlg.remove();
+      if (!restore) return;
+      if (invoker && invoker.isConnected) invoker.focus();
+      else focusMainHeading();
+    });
+    dlg.addEventListener("cancel", function (e) {
+      if (dlg.dataset.sending) e.preventDefault();
+    });
+    cancelBtn.addEventListener("click", function () {
+      if (!dlg.dataset.sending) dlg.close();
+    });
+    if (endInstead) {
+      endInstead.addEventListener("click", function () {
+        if (!dlg.dataset.sending) openLoopDialog("end", status, invoker);
       });
+    }
+    var link = dlg.querySelector(".loop-blocked-artifact-link");
+    if (link) {
+      link.addEventListener("click", function () { closeLoopDialog(root, false); });
+      wireArtifactJump(link, _state.container);
+    }
+    input.addEventListener("input", function () {
+      input.classList.remove("loop-ctrl-input-error");
+      syncConfirm();
     });
-
-    panel.querySelector(".loop-ctrl-cancel").addEventListener("click", function () {
-      clearCtrlError();
-      inputArea.style.display = "none";
-      pendingAction = null;
-      responseRequired = false;
-    });
+    if (timeoutInput) {
+      timeoutInput.addEventListener("input", function () {
+        timeoutInput.classList.remove("loop-ctrl-input-error");
+      });
+    }
 
     confirmBtn.addEventListener("click", function () {
-      if (!pendingAction) return;
-      var action = pendingAction;
+      if (dlg.dataset.sending) return;
+      clearError();
       var msg = input.value.trim();
-
-      if ((action === "interject" || responseRequired) && !msg) {
+      if (cfg.required && !msg) {
         input.classList.add("loop-ctrl-input-error");
-        showCtrlError(responseRequired
-          ? "A response is required to resolve the escalation."
-          : "A message is required.");
+        showError(cfg.requiredText);
         return;
       }
-
       var body = {};
-      if (action === "end") {
-        if (msg) body.reason = msg;
-      } else {
-        if (msg) body.message = msg;
-      }
-
-      if (action === "unblock" && legacyWindow) {
+      if (msg) body[cfg.bodyKey || "message"] = msg;
+      if (showTimeout) {
         var raw = timeoutInput.value.trim();
         var t = Number(raw);
         if (!/^\d+$/.test(raw) || t < TURN_TIMEOUT_MIN || t > TURN_TIMEOUT_MAX) {
           timeoutInput.classList.add("loop-ctrl-input-error");
-          showCtrlError("Turn window must be a whole number of seconds between "
+          showError("Turn window must be a whole number of seconds between "
             + TURN_TIMEOUT_MIN + " and " + TURN_TIMEOUT_MAX + ".");
           return;
         }
         if (t !== currentTimeout) body.timeout = t;
       }
-
-      postAction(loopId, action, body).then(function (result) {
+      setSending(true);
+      postAction(loopId, cfg.action, body).then(function (result) {
+        if (gen !== _state.generation || _state.render !== snap) return;
+        var wasOpen = dlg.isConnected;
+        setSending(false);
         if (result && result._failed) {
-          showCtrlError(result.error || "Action failed");
+          var text = result.error || "Action failed";
+          if (wasOpen) {
+            showError(text);  // the dialog and its input stay for retry
+          } else {
+            setNotice(root, "action", '<div class="loop-ctrl-error" role="alert">'
+              + escHtml(cfg.title + ": not sent \u2014 " + text) + '</div>');
+          }
           return;
         }
-        inputArea.style.display = "none";
-        pendingAction = null;
-        responseRequired = false;
-        if (action === "unblock") showUnblockNotice(parentEl, s);
+        if (wasOpen) dlg.close();
+        if (cfg.action === "unblock") {
+          showUnblockNotice(root, s);
+        } else if (!wasOpen) {
+          setNotice(root, "action", '<div class="loop-unblock-notice" role="status">'
+            + '<strong>' + escHtml(cfg.title) + ':</strong> the request completed.</div>');
+        }
         loadSelectedLoop();
       });
     });
 
-    input.addEventListener("input", function () {
-      input.classList.remove("loop-ctrl-input-error");
-      syncConfirmEnabled();
-    });
-    timeoutInput.addEventListener("input", function () {
-      timeoutInput.classList.remove("loop-ctrl-input-error");
-    });
+    dlg.showModal();
+    syncConfirm();
+    input.focus();
   }
 
   // ── rendering: event timeline ──────────────────────────────────────────────
@@ -3214,28 +3471,88 @@
     return html;
   }
 
+  // ── L1 newest-first grouped timeline ─────────────────────────────────────
+  //
+  // Groups come from event fields only, under one scheme per snapshot:
+  //   "checkpoint" (declared-checkpoint coding loops): key "cp:<id>" from
+  //     checkpoint_id; an untagged event (pause, interjection, escalation,
+  //     unblock, reopen) inherits the previous event's key even when it
+  //     carries a round, so it stays in the checkpoint it happened in.
+  //   "round" (planning, legacy/implicit coding): key "r:<round>"; an event
+  //     with no numeric round inherits the previous key.
+  // Leading events with no key belong to "start". Groups are contiguous
+  // runs in chronological order (a recurring key after a different one
+  // opens a new group), rendered newest group first, newest card first.
+  // The full render and the front patch share timelineGroupKey(), so both
+  // paths always produce the same groups.
+
+  function timelineGroupKey(ev, scheme, prevKey) {
+    if (scheme === "checkpoint") {
+      if (typeof ev.checkpoint_id === "string" && ev.checkpoint_id) {
+        return "cp:" + ev.checkpoint_id;
+      }
+    } else if (typeof ev.round === "number") {
+      return "r:" + ev.round;
+    }
+    return prevKey || "start";
+  }
+
+  function groupLabel(key) {
+    if (key.indexOf("cp:") === 0) return "Checkpoint " + key.slice(3);
+    if (key.indexOf("r:") === 0) return "Round " + key.slice(2);
+    return "Start";
+  }
+
+  function groupHtml(key, cardsHtml) {
+    return '<section class="loop-tl-group" data-group="' + escHtml(key) + '">'
+      + '<h4 class="loop-tl-group-label">' + escHtml(groupLabel(key)) + '</h4>'
+      + '<div class="loop-tl-cards">' + cardsHtml + '</div></section>';
+  }
+
+  function timelineGroups(events, scheme) {
+    var groups = [];
+    var key = null;
+    events.forEach(function (ev) {
+      var k = timelineGroupKey(ev, scheme, key);
+      if (!groups.length || k !== key) groups.push({ key: k, events: [] });
+      groups[groups.length - 1].events.push(ev);
+      key = k;
+    });
+    return groups;
+  }
+
   function updateTimeline(snap, events, root) {
-    // Returns true when the timeline changed. Appends strictly-new events
-    // when the previously rendered tail is still the same event; otherwise
-    // redraws only the timeline container.
+    // Returns true when the timeline changed. When the previously rendered
+    // newest event is still at the same index, strictly-new events are
+    // patched in at the front (newest first); otherwise only the timeline
+    // container is redrawn.
     var n = events.length;
     var lastKey = n ? eventKey(events[n - 1]) : null;
     if (snap.timelineRendered && snap.eventCount === n && snap.lastEventKey === lastKey) {
       return false;
     }
     var timeline = root.querySelector("#loop-timeline");
-    var canAppend = snap.timelineRendered && snap.eventCount > 0
+    var canPatch = snap.timelineRendered && snap.eventCount > 0
       && n > snap.eventCount
       && eventKey(events[snap.eventCount - 1]) === snap.lastEventKey;
-    if (canAppend && timeline) {
-      var before = timeline.children.length;
-      var html = "";
-      for (var i = snap.eventCount; i < n; i++) html += eventCardHtml(events[i]);
-      timeline.insertAdjacentHTML("beforeend", html);
-      var added = Array.prototype.slice.call(timeline.children, before);
-      wireTimelineCards(added, root);
+    if (canPatch && timeline) {
+      for (var i = snap.eventCount; i < n; i++) {
+        var key = timelineGroupKey(events[i], snap.timelineScheme, snap.frontGroupKey);
+        var front = timeline.firstElementChild;
+        var cards;
+        if (key === snap.frontGroupKey && front
+            && front.classList.contains("loop-tl-group")) {
+          cards = front.querySelector(".loop-tl-cards");
+          cards.insertAdjacentHTML("afterbegin", eventCardHtml(events[i]));
+        } else {
+          timeline.insertAdjacentHTML("afterbegin", groupHtml(key, eventCardHtml(events[i])));
+          cards = timeline.firstElementChild.querySelector(".loop-tl-cards");
+          snap.frontGroupKey = key;
+        }
+        wireTimelineCards([cards.firstElementChild], root);
+      }
     } else {
-      renderTimeline(events, root);
+      snap.frontGroupKey = renderTimeline(events, root, snap.timelineScheme);
     }
     snap.eventCount = n;
     snap.lastEventKey = lastKey;
@@ -3243,19 +3560,29 @@
     return true;
   }
 
-  function renderTimeline(events, parentEl) {
+  // Redraws only #loop-timeline; returns the front (newest) group key.
+  function renderTimeline(events, parentEl, scheme) {
     var timeline = parentEl.querySelector("#loop-timeline");
-    if (!timeline) return;
+    if (!timeline) return null;
 
     if (!events.length) {
       timeline.innerHTML = '<div class="muted" style="padding:12px;">No events yet.</div>';
-      return;
+      return null;
     }
 
+    var groups = timelineGroups(events, scheme);
     var html = "";
-    for (var i = 0; i < events.length; i++) html += eventCardHtml(events[i]);
+    for (var g = groups.length - 1; g >= 0; g--) {
+      var cards = "";
+      for (var i = groups[g].events.length - 1; i >= 0; i--) {
+        cards += eventCardHtml(groups[g].events[i]);
+      }
+      html += groupHtml(groups[g].key, cards);
+    }
     timeline.innerHTML = html;
-    wireTimelineCards(Array.prototype.slice.call(timeline.children), parentEl);
+    wireTimelineCards(Array.prototype.slice.call(
+      timeline.querySelectorAll(".loop-event")), parentEl);
+    return groups[groups.length - 1].key;
   }
 
   // Binds the "View full artifact" links only; never fetches. Following a
@@ -3477,6 +3804,16 @@
         artifacts.unshift(briefs[bi].name);
         briefLabels[briefs[bi].name] = briefEntryLabel(briefs[bi]);
       }
+    }
+
+    // L1: the plan comes first (approved plan for coding, the current plan
+    // for planning), then briefs, provenance and the rest. This replaces
+    // the #43 brief-first order; brief labels are unchanged.
+    var planName = status.mode === "coding" ? "approved-plan.md" : "plan.current.md";
+    var planAt = artifacts.indexOf(planName);
+    if (planAt > 0) {
+      artifacts.splice(planAt, 1);
+      artifacts.unshift(planName);
     }
 
     var suffixes = artifactSuffixes(events);
