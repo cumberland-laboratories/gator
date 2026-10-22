@@ -869,6 +869,10 @@ def _print_approval_resolution(res, token=None):
     elif state == "unknown":
         print(f"  Approval: [??] UNKNOWN -- Git facts unavailable ({res.get('reason')});")
         print("            never treat this as approved.")
+        import gitsnap
+        guidance = gitsnap.error_guidance(res.get("reason"))
+        if guidance:
+            print("            " + guidance)
     if token and state in ("stale", "unknown"):
         print("  Return it to implementation review (requires a reason):")
         print(f"    gator loop reopen --token {token} --message \"...\"")

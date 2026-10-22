@@ -991,7 +991,7 @@ def _coding_review(session, role, loop_dir, source, approve):
         if not live_ok:
             raise ValueError(
                 "Cannot verify the live candidate before approval: "
-                f"{snap.get('error')} ({snap.get('detail', '')})")
+                + gitsnap.failure_text(snap))
         raise ValueError(
             "The candidate changed since submission (staged tree or HEAD "
             "differs); approval is blocked. Submit findings so the Draftor "
@@ -1460,7 +1460,7 @@ def handle_submit_implementation(token, file_path, loop_dir=None,
         if not snap.get("ok"):
             raise ValueError(
                 "Cannot capture the staged candidate: "
-                f"{snap.get('error')} ({snap.get('detail', '')})")
+                + gitsnap.failure_text(snap))
         gen_num = len(coding.get("generations") or [])
         cp_view = None
         active = declared_checkpoint(session)

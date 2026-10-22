@@ -887,7 +887,7 @@ def _init_coding_loop(feature, from_loop, max_rounds, turn_timeout,
     if not snap.get("ok"):
         raise ValueError(
             "Cannot capture the Git base for a coding loop: "
-            f"{snap.get('error')} ({snap.get('detail', '')})")
+            + gitsnap.failure_text(snap))
 
     loops_base.mkdir(parents=True, exist_ok=True)
     ensure_loops_gitignore(loops_base)

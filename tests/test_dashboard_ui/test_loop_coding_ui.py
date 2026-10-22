@@ -225,6 +225,42 @@ def test_unknown_banner_offers_reopen(page, dashboard_fleet):
         banner = text_of(page, ".loop-coding-resolution")
         assert banner.startswith("? Unknown") and "never treat as approved" in banner
         assert page.locator(".loop-coding-reopen-btn").count() == 1
+        assert page.locator(".loop-coding-guidance").count() == 0
+    finally:
+        unserve(page)
+
+
+GUIDANCE = ("Host denied Git write access to `.git/index.lock`. "
+            "<b>not markup</b>")
+
+
+def test_unknown_shows_server_guidance(page, dashboard_fleet):
+    """#67: the Unknown banner shows the server's guidance as escaped text;
+    Reopen stays; identical polls leave the resolution region untouched."""
+    snap = snapshot("unknown", reason="git_permission_denied")
+    snap["live"] = {"ok": False, "error": "git_permission_denied",
+                    "guidance": GUIDANCE}
+    holder = {"status": coding_status("implementation_approved", APPROVAL,
+                                      APPROVED_REVIEW),
+              "snapshot": snap, "reopen_calls": []}
+    try:
+        open_view(page, dashboard_fleet, holder)
+        page.wait_for_selector(".loop-coding-guidance", timeout=10000)
+        assert text_of(page, ".loop-coding-guidance") == GUIDANCE
+        assert page.locator(".loop-coding-guidance b").count() == 0
+        banner = text_of(page, ".loop-coding-resolution")
+        assert banner.startswith("? Unknown") and "approved" not in \
+            banner.replace("never treat as approved", "")
+        assert page.locator(".loop-coding-reopen-btn").count() == 1
+        page.evaluate("""() => {
+            window.__resMut = 0;
+            new MutationObserver(r => { window.__resMut += r.length; })
+              .observe(document.querySelector('#loop-region-resolution'),
+                       {childList: true, subtree: true, characterData: true,
+                        attributes: true});
+        }""")
+        page.wait_for_timeout(7000)  # >= two polls (status + snapshot)
+        assert page.evaluate("() => window.__resMut") == 0
     finally:
         unserve(page)
 

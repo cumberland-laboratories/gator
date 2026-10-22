@@ -414,5 +414,16 @@ def test_launch_reference_note_documents_quick_setup(note):
     assert "~/.gator/adapters/codex/loop-home" in text
 
 
+@pytest.mark.parametrize("note", NOTE_PAIR, ids=["template", "dogfood"])
+def test_reference_note_names_permission_denial(note):
+    """#67: the note teaches git_permission_denied as a host denial, and no
+    longer shows the old git_busy Permission-denied example."""
+    text = note.read_text(encoding="utf-8")
+    assert "git_permission_denied (fatal: Unable to create" in text
+    assert "execution-permission condition" in text
+    assert "git_busy (fatal:" not in text
+    assert "git_busy … index.lock … Permission denied" not in text
+
+
 def test_launch_reference_note_pair_is_byte_identical():
     assert NOTE_PAIR[0].read_bytes() == NOTE_PAIR[1].read_bytes()

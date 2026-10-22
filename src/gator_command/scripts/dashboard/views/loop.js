@@ -2878,7 +2878,8 @@
       live ? (live._error !== undefined ? ["err", live._error]
               : [res && res.state, res && res.reason, res && res.commit,
                  res && res.approved_tree,
-                 live.live && live.live.ok, live.live && live.live.error]) : null,
+                 live.live && live.live.ok, live.live && live.live.error,
+                 live.live && live.live.guidance]) : null,
     ]);
   }
 
@@ -3044,6 +3045,11 @@
       html += '<div class="loop-coding-resolution ' + info.cls
         + '" data-state="' + escHtml(res.state) + '">'
         + escHtml(info.glyph + " " + info.label + detail) + '</div>';
+      // #67: the server's explanation for the snapshot error, as text.
+      var guidance = res.state === "unknown" && live.live && live.live.guidance;
+      if (typeof guidance === "string" && guidance) {
+        html += '<div class="loop-coding-guidance">' + escHtml(guidance) + '</div>';
+      }
       if (res.state === "stale" || res.state === "unknown") {
         html += '<div class="loop-coding-reopen">'
           + '<button type="button" class="loop-ctrl-btn loop-coding-reopen-btn">'

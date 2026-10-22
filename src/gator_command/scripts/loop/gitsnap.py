@@ -12,7 +12,13 @@ the review authority; prose never substitutes for it.
 Failure is explicit and never yields a misleading binding: the result is
 ``{"ok": False, "error": <code>, "detail": <text>}`` with ``error`` one of
 ``git_unavailable``, ``not_a_repo``, ``bare``, ``unborn``, ``conflict``,
-``bad_base``, ``git_busy``, ``git_error``.
+``bad_base``, ``git_busy``, ``git_permission_denied``, ``git_error``.
+``git_permission_denied`` (#67): the host denied Git write access on an
+index-touching snapshot command (a sandbox execution-permission
+condition), reported after one invocation and never retried.
+``git_busy`` means only real index-lock contention that persists after
+one retry. ``error_guidance()`` / ``failure_text()`` are the single source
+of each code's participant-facing explanation.
 
 Side effect (documented): ``git write-tree`` writes tree objects for the
 current index into the object database. They are ordinary unreferenced
@@ -40,7 +46,7 @@ MAX_PATHS = 1000
 
 ERROR_CODES = frozenset({
     "git_unavailable", "not_a_repo", "bare", "unborn", "conflict",
-    "bad_base", "git_busy", "git_error",
+    "bad_base", "git_busy", "git_permission_denied", "git_error",
 })
 
 # A session-supplied OID is validated before it reaches Git (never an option).
@@ -48,6 +54,35 @@ _OID_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 
 _BUSY_MARKERS = ("index.lock", "Unable to create", "unable to create")
 _BUSY_RETRY_DELAY = 0.2
+
+# Closed, case-insensitive set (#67): POSIX EACCES text, the Windows text,
+# and Git's read-only object-database text. Nothing broader (no EPERM).
+_PERMISSION_MARKERS = ("permission denied", "access is denied",
+                       "insufficient permission")
+
+PERMISSION_GUIDANCE = (
+    "Host denied Git write access to `.git/index.lock`. This is an "
+    "execution-permission condition from the runtime sandbox, not Git "
+    "contention, a code finding, or an Architect decision. Approve the "
+    "host prompt or use a supported participant profile."
+)
+
+ERROR_GUIDANCE = {"git_permission_denied": PERMISSION_GUIDANCE}
+
+
+def error_guidance(code):
+    """The participant-facing explanation for ``code``, or None."""
+    return ERROR_GUIDANCE.get(code)
+
+
+def failure_text(snap):
+    """``"<error> (<detail>)"`` for a failed snapshot, plus
+    ``" -- <guidance>"`` only when the code has guidance."""
+    text = f"{snap.get('error')} ({snap.get('detail', '')})"
+    guidance = error_guidance(snap.get("error"))
+    if guidance:
+        text += " -- " + guidance
+    return text
 
 
 class _GitError(Exception):
@@ -86,12 +121,27 @@ def _invoke(args, cwd):
 
 def _git(args, cwd, *, retry_busy=False):
     r = _invoke(args, cwd)
-    if r.returncode != 0 and retry_busy and _is_busy(r):
+    if not retry_busy:
+        return r
+    # Permission is checked before busy on every result, so a denial that
+    # also names index.lock is never retried or reported as contention.
+    if _is_permission_denied(r):
+        raise _GitError("git_permission_denied", _err(r))
+    if r.returncode != 0 and _is_busy(r):
         time.sleep(_BUSY_RETRY_DELAY)
         r = _invoke(args, cwd)
+        if _is_permission_denied(r):
+            raise _GitError("git_permission_denied", _err(r))
         if r.returncode != 0 and _is_busy(r):
             raise _GitError("git_busy", _err(r))
     return r
+
+
+def _is_permission_denied(r):
+    if r.returncode == 0:
+        return False
+    msg = _err(r).lower()
+    return any(m in msg for m in _PERMISSION_MARKERS)
 
 
 def _is_busy(r):

@@ -270,6 +270,48 @@ class TestReviewEndToEnd:
         rv = sess(c)["coding"]["generations"][-1]["review"]
         assert rv["live_snapshot_ok"] is False and rv["candidate_changed"]
 
+    def test_permission_denied_blocks_approval_with_guidance(self, coding,
+                                                             monkeypatch):
+        """#67: a host denial refuses approval with the shared guidance and
+        writes nothing; findings are still recorded."""
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        monkeypatch.setattr(gitsnap, "snapshot", lambda root, base=None: {
+            "ok": False, "error": "git_permission_denied",
+            "detail": "fatal: Unable to create '.git/index.lock': "
+                      "Permission denied"})
+        before = loop_bytes(c)
+        with pytest.raises(ValueError) as ei:
+            review(c, approve=True)
+        msg = str(ei.value)
+        assert msg.startswith("Cannot verify the live candidate before "
+                              "approval: git_permission_denied (")
+        assert msg.endswith(" -- " + gitsnap.PERMISSION_GUIDANCE)
+        assert loop_bytes(c) == before
+        review(c, approve=False)
+        rv = sess(c)["coding"]["generations"][-1]["review"]
+        assert rv["live_snapshot_ok"] is False
+
+    def test_permission_denied_refuses_implementation(self, coding,
+                                                      monkeypatch):
+        c = coding
+        stage_change(c["repo"])
+        monkeypatch.setattr(gitsnap, "snapshot", lambda root, base=None: {
+            "ok": False, "error": "git_permission_denied",
+            "detail": "Permission denied"})
+        d = c["loop_dir"]
+        before = (loop_bytes(c), sorted(p.name for p in d.iterdir()
+                                        if p.name != "session.lock"))
+        with pytest.raises(ValueError) as ei:
+            submit_impl(c)
+        assert str(ei.value) == (
+            "Cannot capture the staged candidate: git_permission_denied "
+            "(Permission denied) -- " + gitsnap.PERMISSION_GUIDANCE)
+        assert (loop_bytes(c), sorted(p.name for p in d.iterdir()
+                                      if p.name != "session.lock")) == before
+        assert not sess(c)["coding"].get("generations")
+
     def test_post_approval_drift_is_stale_then_reopen_cycle(self, coding):
         c = coding
         stage_change(c["repo"])
@@ -386,6 +428,24 @@ def cli(c, *args):
 
 
 class TestCli:
+    def test_status_prints_permission_guidance(self, capsys):
+        """#67: Unknown adds the guidance line only for a code that has
+        guidance; the marker and existing words are unchanged."""
+        import cli as loop_cli
+        loop_cli._print_approval_resolution(
+            {"state": "unknown", "reason": "git_permission_denied"})
+        out = capsys.readouterr().out.splitlines()
+        assert out[0] == ("  Approval: [??] UNKNOWN -- Git facts unavailable "
+                          "(git_permission_denied);")
+        assert out[1] == "            never treat this as approved."
+        assert out[2] == "            " + gitsnap.PERMISSION_GUIDANCE
+        loop_cli._print_approval_resolution(
+            {"state": "unknown", "reason": "git_busy"})
+        out = capsys.readouterr().out
+        assert "[??] UNKNOWN" in out
+        assert gitsnap.PERMISSION_GUIDANCE not in out
+        assert len(out.splitlines()) == 2
+
     def test_approve_message_and_restart_resolution(self, coding):
         c = coding
         stage_change(c["repo"])

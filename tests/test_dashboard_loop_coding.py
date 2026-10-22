@@ -207,6 +207,21 @@ class TestSnapshot:
         assert body["approval_resolution"]["state"] == "unknown"
         assert body["live"] == {"ok": False, "error": "conflict"}
 
+    def test_unknown_permission_denied_carries_guidance(self, env,
+                                                        monkeypatch):
+        """#67: the server adds its guidance text for a host denial only."""
+        import gitsnap
+        submit_and_approve(env)
+        monkeypatch.setattr(gitsnap, "snapshot", lambda root, base=None, **kw: {
+            "ok": False, "error": "git_permission_denied",
+            "detail": "Permission denied"})
+        body = json.loads(req(url(env, "/snapshot"))[1])
+        res = body["approval_resolution"]
+        assert (res["state"], res["reason"]) == ("unknown",
+                                                 "git_permission_denied")
+        assert body["live"] == {"ok": False, "error": "git_permission_denied",
+                                "guidance": gitsnap.PERMISSION_GUIDANCE}
+
     def test_planning_loop_409(self, env):
         status, _, headers = req(url(env, "/snapshot", env["src_id"]))
         assert status == 409 and headers.get("Cache-Control") == "no-store"

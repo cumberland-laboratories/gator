@@ -11,7 +11,7 @@ and a Codex Draftor cannot submit an implementation without a host approval
 prompt. The failure looks like this:
 
 ```
-Error: Cannot verify the live candidate before approval: git_busy (fatal: Unable to create '…/.git/index.lock': Permission denied)
+Error: Cannot verify the live candidate before approval: git_permission_denied (fatal: Unable to create '…/.git/index.lock': Permission denied) -- Host denied Git write access …
 ```
 
 This profile is one Codex rule that allows exactly five `gator loop`
@@ -186,13 +186,16 @@ This was not tested live. A Draftor still needs one host approval for
   exit `1` for every non-zero exit, so `2` (loop ended) and `3` (still
   waiting) look the same. Use the output: `Loop ended.` means stop, and
   `Your turn: YES` means act. Otherwise reissue the bounded `wait`.
-- **Under Codex, a `git_busy … index.lock … Permission denied` error is a
-  host denial.** It is not Git contention, a code finding or an Architect
-  decision. Gator's `git_busy` label does not say so. It usually means the
-  profile is not active in this session: the wrong `CODEX_HOME`, or a
-  missing or edited rule. Approve the host prompt, or tell the Architect out
-  of band. Do not `gator loop escalate` for it, and do not submit findings
-  about it.
+- **`git_permission_denied` is a host denial.** It is a sandbox
+  execution-permission condition, not Git contention, a code finding or an
+  Architect decision. Under Codex it usually means the profile is not active
+  in this session: the wrong `CODEX_HOME`, or a missing or edited rule. Use
+  the permitted profile (`gator loop codex`), or approve the one-off host
+  prompt when the profile is not active. Do not `gator loop escalate` for
+  it, and do not submit findings about it. A direct `git write-tree` stays
+  outside the profile's allow-list.
+- **`git_busy` now means only real Git lock contention** (another Git
+  process holds `index.lock`). One retry may help.
 - Copy the role token exactly. A mis-copied token fails safely with
   `Loop directory not found`.
 

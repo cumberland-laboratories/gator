@@ -2959,6 +2959,9 @@ mark.search-hit {
 .loop-coding-resolution[data-state="pending"] { font-weight: 600; font-style: italic; }
 .loop-coding-resolution[data-state="stale"] { font-weight: 700; text-decoration: underline; }
 .loop-coding-resolution[data-state="unknown"] { font-weight: 700; font-style: italic; }
+/* #67: the server's explanation under the Unknown banner. Plain text; the
+   banner's glyph and label carry the state. */
+.loop-coding-guidance { margin: 0 0 6px; font-size: 12px; font-weight: 400; color: var(--gray-600); }
 .loop-coding-reopen { margin-top: 6px; }
 .loop-coding-reopen-error { margin-top: 6px; font-weight: 600; font-size: 12px; }
 

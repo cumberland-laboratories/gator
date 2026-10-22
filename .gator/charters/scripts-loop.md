@@ -424,7 +424,7 @@ Coding Draftor submission (#41). Returns `(loop_id, role, loop_dir, generation)`
 2. **Checkpoint binding (#55).**
    - A manifest loop requires `checkpoint == active.id`; the error names the active checkpoint. The only exception is an implicit manifest, which may omit the flag.
    - A session without a manifest rejects `checkpoint` outright.
-3. `gitsnap.snapshot(repo_root, coding.base_head)`, which must be `ok` (otherwise ValueError naming the error code).
+3. `gitsnap.snapshot(repo_root, coding.base_head)`, which must be `ok` (otherwise ValueError "Cannot capture the staged candidate: " + `gitsnap.failure_text(snap)`, which names the code and adds the #67 guidance for `git_permission_denied`).
 4. Something must be staged (otherwise "Nothing is staged…"):
    - pre-#55 and implicit loops require `staged_tree != base_tree`;
    - declared loops require `staged_tree != active.base_tree`.
@@ -464,7 +464,7 @@ File: `src/gator_command/scripts/loop/submit.py`
 Planning reviews are unchanged. For coding loops (#41), inside the same session lock:
 - **Binding:** the review binds to the LATEST generation's submitted candidate (`reviewed_tree` / `reviewed_head`). The Reviewer inspects it with the immutable `git diff <base_tree> <staged_tree>`.
 - **Live check:** a fresh `gitsnap` snapshot is taken.
-  - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** If the live snapshot fails, approval is also rejected ("Cannot verify…").
+  - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** If the live snapshot fails, approval is also rejected ("Cannot verify the live candidate before approval: " + `gitsnap.failure_text(snap)`; #67 adds the guidance sentence for `git_permission_denied`).
   - **Findings are always accepted**, flagged `candidate_changed` / `live_snapshot_ok`, so the loop can never deadlock in review.
 - **Artifact:** it must be UTF-8 and must not author `## Reviewed Candidate`. The CLI appends that section (verdict, reviewed tree / HEAD, round, live-unchanged) to `findings.round-N.md` / `findings.current.md`.
 - **Records:** the review is stored on the generation (`generation.review`, with `generation` and, for declared loops, `checkpoint: {id, index, count, title, base_tree}`). The approval is stored as `{tree, head, round, generation, ts}` via `advance_implementation_reviewed()`.
@@ -557,7 +557,7 @@ The guarded coding successor (#41). Steps, in order:
    | legacy | `implicit` (`IMPLICIT_CHECKPOINT`) | `declared` | refused with the problems |
 
    The manifest is frozen into `coding.checkpoints` (cp1 based on the snapshot's `head_tree`) and never re-parsed.
-4. Take `gitsnap.snapshot(repo_root)`, which must be ok; this rejects unborn, conflicted, bare and missing-Git cases.
+4. Take `gitsnap.snapshot(repo_root)`, which must be ok; this rejects unborn, conflicted, bare and missing-Git cases. The error is "Cannot capture the Git base for a coding loop: " + `gitsnap.failure_text(snap)` (#67).
 5. Create the loop dir, write `approved-plan.md` (read-only), and re-read it to compare SHA-256 against the source bytes.
 6. Only then write tokens, `session.json`, and a `loop_started` event (with `mode`, `source_loop_id`).
 
@@ -716,7 +716,7 @@ For an `implementation_approved` coding loop, `status` (model and Architect) and
 - `[OK] COMMITTED -- handoff complete (commit <oid>)`;
 - `[..] PENDING COMMIT -- return to the Draftor session for one normal commit`;
 - `[!!] STALE -- <reason>` (text from `_STALE_REASONS`, which `views/loop.js` `STALE_REASON_TEXT` mirrors word for word; an unmapped reason prints raw);
-- `[??] UNKNOWN -- never treat this as approved`.
+- `[??] UNKNOWN -- never treat this as approved`, plus one indented line with `gitsnap.error_guidance(reason)` when that returns text (#67: `git_permission_denied`). JSON is unchanged; its `reason` already carries the code.
 
 The Architect view adds the `gator loop reopen` hint for stale or unknown. JSON gains additive `approval_resolution` (and `mode` on the Architect view). `submit-review` for coding prints the approved tree and the one-normal-commit handoff, or the reviewed tree plus a resubmit note when the candidate changed.
 
@@ -912,8 +912,15 @@ Error codes:
 - `unborn` — HEAD has no commit;
 - `conflict` — unmerged index entries, checked before `write-tree`;
 - `bad_base` — the base commit cannot be resolved;
-- `git_busy` — an index-lock failure persists after one retry (0.2 s);
+- `git_permission_denied` (#67) — the host denied Git write access on an index-touching snapshot command (`write-tree`, `diff --cached`, `diff --name-only`, the `retry_busy=True` calls): stderr matches a closed, case-insensitive `_PERMISSION_MARKERS` (`permission denied`, `access is denied`, `insufficient permission`). Checked before `_is_busy()` on the first result and on the retried result, so it is reported after exactly one invocation with no sleep, and a later permission failure is never `git_busy`;
+- `git_busy` — real index-lock contention: a lock failure without a permission marker persists after one retry (0.2 s);
 - `git_error` — anything else.
+
+! The permission check runs only inside `_git(..., retry_busy=True)`. Read-only `rev-parse` / `ls-files` calls keep their own typed results, and a launch-time Python `PermissionError` in `_invoke()` stays `git_unavailable` / `not_a_repo`. No `EPERM` / "operation not permitted" matching (it can mean a non-sandbox ownership problem). A localized Git prints translated text and falls back to `git_busy` / `git_error`, as before #67.
+
+### error_guidance(code) / failure_text(snap) (#67)
+File: `src/gator_command/scripts/loop/gitsnap.py`
+The single source of each error code's participant-facing explanation. `ERROR_GUIDANCE` maps only `git_permission_denied` -> `PERMISSION_GUIDANCE` (the sandbox execution-permission sentence; it names no vendor). `error_guidance(code)` returns that text or None. `failure_text(snap)` returns `"<error> (<detail>)"`, plus `" -- " + guidance` only when guidance exists, so every other code's message is byte-identical to the pre-#67 inline format. Pure; display text only, never authority.
 
 **`approval_history` (#85)** answers one question: what is the immediate first-parent successor of the approved HEAD A on the captured HEAD H's history? Shapes: `{ok: true, status: "same_head"}` (A == H, no Git call); `{ok: true, status: "successor", commit, tree}`; `{ok: true, status: "diverged", why}` with `why` = `head_missing` (A is not a full lowercase hex OID, or `rev-parse --verify -q` exit 1 with empty stderr), `not_ancestor` (`merge-base --is-ancestor` exit 1), or `not_first_parent` (L's first parent is not A: A came in only through a merge's second parent); or `{ok: false, error, detail}`. It is computed from the snapshot's own `current_head`, so HEAD and history are one observation. Policy (detached, tree match) belongs to `resolve_approval()`, not here.
 ! Only those two exact exit-1 cases are divergence evidence. Every other non-zero exit (for example 128 `fatal:`), an empty range or a launch failure is `_GitError` -> `{ok: false}`, which resolves `unknown`, never stale or approved. A history failure never fails the snapshot: `snapshot.ok` stays true so the other live facts remain usable.

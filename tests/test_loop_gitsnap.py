@@ -260,6 +260,91 @@ class TestFailures:
         monkeypatch.setattr(gitsnap, "_run", flaky)
         assert gitsnap.snapshot(repo)["ok"] is True
 
+    @pytest.mark.parametrize("stderr", [
+        b"fatal: Unable to create '/r/.git/index.lock': Permission denied",
+        b"fatal: Unable to create 'C:/r/.git/index.lock': Access is denied.",
+        b"error: insufficient permission for adding an object to "
+        b"repository database .git/objects",
+        b"FATAL: UNABLE TO CREATE '.GIT/INDEX.LOCK': PERMISSION DENIED",
+    ])
+    def test_permission_denied_classified_without_retry(
+            self, repo, monkeypatch, stderr):
+        """#67: a host denial is git_permission_denied after exactly one
+        invocation, with no sleep, even when it names index.lock."""
+        def no_sleep(_):
+            raise AssertionError("permission denial must not sleep")
+        monkeypatch.setattr(gitsnap.time, "sleep", no_sleep)
+        real = gitsnap._run
+        calls = {"n": 0}
+
+        def denied(args, cwd):
+            if args[:1] == ["write-tree"]:
+                calls["n"] += 1
+                return subprocess.CompletedProcess(args, 128, b"", stderr)
+            return real(args, cwd)
+        monkeypatch.setattr(gitsnap, "_run", denied)
+        s = gitsnap.snapshot(repo)
+        assert s["ok"] is False and s["error"] == "git_permission_denied"
+        assert s["detail"] == stderr.decode().strip()
+        assert calls["n"] == 1
+
+    def test_permission_on_retry_is_permission(self, repo, monkeypatch):
+        """A lock-only first failure followed by a permission denial is
+        git_permission_denied, never git_busy."""
+        monkeypatch.setattr(gitsnap, "_BUSY_RETRY_DELAY", 0)
+        real = gitsnap._run
+        calls = {"n": 0}
+
+        def lock_then_denied(args, cwd):
+            if args[:1] == ["write-tree"]:
+                calls["n"] += 1
+                msg = (b"fatal: Unable to create 'index.lock': File exists."
+                       if calls["n"] == 1 else
+                       b"fatal: Unable to create 'index.lock': "
+                       b"Permission denied")
+                return subprocess.CompletedProcess(args, 128, b"", msg)
+            return real(args, cwd)
+        monkeypatch.setattr(gitsnap, "_run", lock_then_denied)
+        s = gitsnap.snapshot(repo)
+        assert s["ok"] is False and s["error"] == "git_permission_denied"
+        assert calls["n"] == 2
+
+    def test_permission_text_on_read_only_call_is_unchanged(
+            self, repo, monkeypatch):
+        """The check runs only on retry_busy (index-touching) calls."""
+        def denied(args, cwd):
+            return subprocess.CompletedProcess(
+                args, 128, b"", b"fatal: Permission denied")
+        monkeypatch.setattr(gitsnap, "_run", denied)
+        s = gitsnap.snapshot(repo)
+        assert s["ok"] is False and s["error"] == "not_a_repo"
+
+    def test_launch_permission_error_stays_unavailable(self, repo,
+                                                      monkeypatch):
+        def refused(args, cwd):
+            raise PermissionError("[WinError 5] Access is denied")
+        monkeypatch.setattr(gitsnap, "_run", refused)
+        s = gitsnap.snapshot(repo)
+        assert s["ok"] is False and s["error"] == "git_unavailable"
+
+    def test_failure_text_and_guidance(self):
+        assert "git_permission_denied" in gitsnap.ERROR_CODES
+        assert gitsnap.error_guidance("git_permission_denied") == \
+            gitsnap.PERMISSION_GUIDANCE
+        assert "execution-permission condition" in gitsnap.PERMISSION_GUIDANCE
+        assert "Codex" not in gitsnap.PERMISSION_GUIDANCE
+        for code in sorted(gitsnap.ERROR_CODES - {"git_permission_denied"}):
+            assert gitsnap.error_guidance(code) is None
+            snap = {"ok": False, "error": code, "detail": "d"}
+            assert gitsnap.failure_text(snap) == f"{code} (d)"
+        snap = {"ok": False, "error": "git_permission_denied",
+                "detail": "Permission denied"}
+        assert gitsnap.failure_text(snap) == (
+            "git_permission_denied (Permission denied) -- "
+            + gitsnap.PERMISSION_GUIDANCE)
+        assert gitsnap.failure_text({"ok": False, "error": "git_busy"}) == \
+            "git_busy ()"
+
     def test_never_mutates_refs_index_or_worktree(self, repo):
         write(repo / "a.txt", "staged\n")
         git(repo, "add", "a.txt")

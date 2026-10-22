@@ -573,11 +573,11 @@ Render the governed planning loop workspace. A full-width tab bar runs across th
     - ✓ Committed (commit),
     - ● Pending commit — one normal commit,
     - ⚠ Stale (reason text from `STALE_REASON_TEXT`, word for word the CLI's `_STALE_REASONS`: `staged_tree_changed`, `head_moved_tree_differs`, `detached_mismatch`, `history_diverged`; an unmapped reason shows raw),
-    - ? Unknown — never treat as approved.
+    - ? Unknown — never treat as approved. #67: when `live.live.guidance` is a string, a `div.loop-coding-guidance` shows it as escaped plain text under the banner (normal weight, gray; the glyph and label carry the state). The browser never parses Git text.
 
     The state comes from the server alone (#85). Committed survives later commits, with the historical approval commit, and a detached HEAD after approval reads Stale. The browser holds no Git-history logic.
   - **Reopen:** a **Reopen for revision** button appears only for Stale or Unknown. It opens an inline required-reason form, Reopen stays disabled while the reason is blank, and it POSTs `/reopen` `{message}` with `X-Gator-Dashboard`. The notice reports invalidation and the watcher state.
-  - **Patching:** each region is rewritten only when its own fingerprint changes; the resolution region never while the Reopen form is open (`data-reopen-open` on `#loop-region-resolution`; Reopen's close deletes `snap.fp.resolution`). `resolutionFingerprint` includes the stage, resolution state, reason, commit and `approved_tree`. Identical polls produce zero mutations (pinned).
+  - **Patching:** each region is rewritten only when its own fingerprint changes; the resolution region never while the Reopen form is open (`data-reopen-open` on `#loop-region-resolution`; Reopen's close deletes `snap.fp.resolution`). `resolutionFingerprint` includes the stage, resolution state, reason, commit, `approved_tree`, and the live `ok` / `error` / `guidance` (#67). Identical polls produce zero mutations (pinned).
   - **#55 checkpoints** apply when `status.coding.checkpoints` is present, which is declared loops only.
     - **Counters.** `checkpointCounters(status)` builds them from the projection plus `status.max_rounds`.
       - The **live header** replaces "Round X / Y" with a "Checkpoint" item ("Checkpoint K of N · findings round r of b", `.loop-checkpoint-counter`) and a separate "Generation" item (`.loop-generation-counter`, "none yet" before the first submission).

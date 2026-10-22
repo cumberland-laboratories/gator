@@ -3893,6 +3893,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             }
         else:
             live = {"ok": False, "error": snap.get("error")}
+            guidance = gitsnap.error_guidance(snap.get("error"))
+            if guidance:
+                live["guidance"] = guidance
         self._send_json({
             "schema": "gator-loop-coding-snapshot-v1",
             "stage": session.get("status", {}).get("stage"),
