@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: departed Loop mount waits for the mount, not the landing",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard-ui-tests",
+    "ci"
+  ],
+  "commit": "e1eb816849bcd5a072ad232989cab3cfcff5c2e9",
+  "short_commit": "e1eb816",
+  "snippet_id": "snippet-e1eb816849bcd",
+  "session_group_key": "anthropic:f820f726-b725-41bd-82f1-6f110b132017",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "14ee89ed3749e04d56f18f988e470c9196c4aae6",
+  "started_at": "2026-10-21T22:51:06Z",
+  "ended_at": "2026-10-22T02:34:23Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-22-gator-14ee89ed3749e.json",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "`test_departed_mount_does_not_resurrect_polling` holds the `/loops` response",
+    "for up to 10 seconds to test navigating away mid-fetch. The Active-tab change",
+    "made it wait for the Loop view's `data-loaded` landing, which can only happen",
+    "after that hold, so the wait raced its own 10-second timeout. Ubuntu Source CI",
+    "failed on it (run 39708991077). It now waits for the mounted Loop view again,",
+    "as it did before."
+  ],
+  "transcript_session_id": "f820f726-b725-41bd-82f1-6f110b132017",
+  "transcript_ref": null
+}

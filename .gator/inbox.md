@@ -76,7 +76,6 @@ against the code 2026-10-21). Issue `#N` is
 `github.com/cumberland-laboratories/gator/issues/N`. **Bold** = a bug.
 
 **Loop:**
-- **#85** Committed coding loop shows Stale once a later commit lands
 - **#49** Interjection for one role is consumed by the other role's turn
 - **#60** Transient reviewer nonce mismatch after a failed approval retry
 - **#67** Sandbox Git denial reported as `git_busy`
