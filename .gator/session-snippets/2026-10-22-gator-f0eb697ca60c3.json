@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop: participant prompts open with \\\"Please join the following loop:\\\"",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "loop",
+    "participant-prompt"
+  ],
+  "commit": "f0eb697ca60c3b9e61a0d4f57f1893920ee3c31d",
+  "short_commit": "f0eb697",
+  "snippet_id": "snippet-f0eb697ca60c3",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "e6dbaf3d3d02058454c704bc2a7d1e66c8a6ba5d",
+  "started_at": "2026-10-22T23:28:42Z",
+  "ended_at": "2026-10-22T23:28:42Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-22-gator-e6dbaf3d3d020.json",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_loop_brief.py"
+  ],
+  "notes": [
+    "The prompt the Dashboard copies for a Draftor or Reviewer now opens with",
+    "\"Please join the following loop:\" above the `gator loop join` block. This",
+    "applies to planning and coding loops alike. A pasted block of bare loop",
+    "facts read as information rather than a request, so the receiving agent",
+    "asked the Architect whether it was meant to join. The rest of the prompt",
+    "is unchanged."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
