@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.29.0 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "e6dbaf3d3d02058454c704bc2a7d1e66c8a6ba5d",
+  "short_commit": "e6dbaf3",
+  "snippet_id": "snippet-e6dbaf3d3d020",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-22T23:21:51Z",
+  "ended_at": "2026-10-22T23:21:51Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-10-22-gator-e1eb816849bcd.json"
+  ],
+  "notes": [
+    "`roadmap.md`: v2.29.0 (2026-10-22) is the latest release. Next is the",
+    "approved #67 plan's coding loop, then the Fleet Paper redesign.",
+    "`inbox.md`: #85 is closed (fixed in 9dc5e67 and shipped in v2.29.0), so it",
+    "leaves the backlog index."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

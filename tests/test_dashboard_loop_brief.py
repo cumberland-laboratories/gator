@@ -307,15 +307,20 @@ class TestArtifactsAndPrompt:
 
     def test_prompt_names_explicit_gator_init_start(self, env):
         """Gator-native entry point: the join prompt does not rely on native
-        agent files; it names `gator init` and GATOR_INIT.md (pointer only)."""
+        agent files; it names `gator init` and GATOR_INIT.md (pointer only).
+        Both roles' prompts open with an explicit request to join, so a
+        pasted prompt is not mistaken for bare information (2026-10-22)."""
         code, text = start(env, feature="feat-init-pointer")
         loop_id = json.loads(text)["loop_id"]
-        code, text = req(env["base"] + f"/{loop_id}/prompt", "POST",
-                         {"role": "reviewer"})
-        prompt = json.loads(text)["prompt"]
-        assert prompt.startswith("gator loop join\n")
-        assert "Run `gator init` first" in prompt and "GATOR_INIT.md" in prompt
-        assert prompt.index("gator loop status --token") < prompt.index("gator init")
+        for role in ("draftor", "reviewer"):
+            code, text = req(env["base"] + f"/{loop_id}/prompt", "POST",
+                             {"role": role})
+            prompt = json.loads(text)["prompt"]
+            assert prompt.startswith(
+                "Please join the following loop:\n\ngator loop join\n")
+            assert "Run `gator init` first" in prompt and "GATOR_INIT.md" in prompt
+            assert (prompt.index("gator loop status --token")
+                    < prompt.index("gator init"))
 
 
 # ---------------------------------------------------------------------------

@@ -3434,6 +3434,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         token = role_data["token"]
         feature = session.get("feature", loop_id)
         prompt_text = (
+            # An explicit request first: a pasted block of bare loop facts
+            # left the receiving agent asking whether to join (2026-10-22).
+            "Please join the following loop:\n\n"
             f"gator loop join\n\n"
             f"  Loop: {loop_id}\n"
             f"  Feature: {feature}\n"
