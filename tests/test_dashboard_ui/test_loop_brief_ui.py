@@ -176,7 +176,7 @@ def test_identical_polls_do_not_touch_brief_entries(page, dashboard_fleet):
 
 def open_create(page, fleet, starts):
     _navigate_to_loop(page, fleet)
-    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     page.route("**/api/repo-by-key/*/loops", lambda r: r.fulfill(
         status=200, content_type="application/json",
         body=json.dumps({"loops": []})))
@@ -261,7 +261,7 @@ def open_coding_create(page, fleet, list_after, checks, starts, gates=None,
     /status per id with a given brief_check, and a captured /start."""
     gates = gates or {}
     _navigate_to_loop(page, fleet)
-    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     state = {"list": []}
     page.route("**/api/repo-by-key/*/loops", lambda r: r.fulfill(
         status=200, content_type="application/json",

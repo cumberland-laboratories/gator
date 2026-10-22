@@ -11,6 +11,7 @@ after a terminal one restarts polling.
 import copy
 import json
 
+from ._harness import keep_sole_active
 from .test_loop_workspace import _live_payload, _navigate_to_loop, _select_loop_card
 
 ACTIVE_ID = "active-loop-2026-09-22T10-00-00Z"
@@ -316,11 +317,14 @@ LIST_SUMMARY = {"index": 2, "count": 2, "findings_round": 2,
 
 
 def serve_list(page, mutate):
-    """Pass /loops through, letting ``mutate(items)`` add summaries."""
+    """Pass /loops through, letting ``mutate(items)`` add summaries. The
+    list keeps widget-refactor as its only live loop, like the suite's
+    default (``_harness.keep_sole_active``)."""
     def handler(route):
         resp = route.fetch()
         data = resp.json()
-        mutate(data.get("loops") or [])
+        data["loops"] = keep_sole_active(data.get("loops") or [])
+        mutate(data["loops"])
         route.fulfill(response=resp, body=json.dumps(data),
                       headers={"Content-Type": "application/json",
                                "Cache-Control": "no-store"})
@@ -362,19 +366,19 @@ def test_counters_header_and_sidebar(page, dashboard_fleet, kind):
         header = page.evaluate(
             "() => (document.querySelector('.loop-counter-line') ||"
             " document.querySelector('.loop-outcome-meta')).textContent")
-        active_card = card_counter(page, "widget-refactor")
+        # The active loop has no card (2026-10-21); its counters live in the
+        # header. History cards keep theirs.
+        assert card_counter(page, "widget-refactor") is None
         history_card = card_counter(page, "auth-migration")
         if kind == "legacy":
             assert "Round" in header and "1 / 3" in header
             assert "Checkpoint" not in header
-            assert "Round " in active_card
             return
         assert "Checkpoint 2 of 2 · findings round 2 of 2" in header
         assert "Generation" in header and "3" in header
-        assert "Checkpoint 2/2 · findings 2/2 · gen 3" in active_card
         assert "Checkpoint 2/2 · findings 2/2 · gen 3" in history_card
         # No checkpoint-loop surface ever shows Round X/Y (here: 3/2).
-        for txt in (header, active_card, history_card,
+        for txt in (header, history_card,
                     text_of(page, ".loop-coding")):
             assert "Round" not in txt and "3/2" not in txt and "3 / 2" not in txt
         # Planning cards keep Round X/Y.

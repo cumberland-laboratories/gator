@@ -2328,6 +2328,10 @@ mark.search-hit {
   min-height: 0;
 }
 
+/* The list pane holds History only; it is hidden on the Primary tab
+   (Create / Active), so .loop-main fills the body with no blank column. */
+.loop-sidebar[hidden] { display: none; }
+
 .loop-sidebar {
   width: 280px;
   min-width: 220px;
@@ -2897,8 +2901,6 @@ mark.search-hit {
   font-size: 12px;
 }
 .loop-attention-glyph { font-weight: 700; }
-.loop-card-attention { font-size: 11px; font-weight: 600; }
-.loop-card-attention:empty { display: none; }
 .loop-attention-hint { font-style: italic; }
 
 .loop-refresh-failed {
@@ -3153,24 +3155,6 @@ textarea.loop-ctrl-input {
   color: var(--color-muted);
   padding: 4px 4px 6px;
 }
-.loop-sidebar-create {
-  display: block;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--color-link);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-link);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-}
-.loop-sidebar-create:hover { background: rgba(26, 95, 168, 0.06); }
-.loop-sidebar-create-label {
-  display: block;
-  margin-bottom: 2px;
-}
 
 /* #72 Shared main-pane tab bar (Welcome topics, Loop Create / History).
    The bar spans the main pane and owns the full-width baseline; the
@@ -3230,27 +3214,22 @@ textarea.loop-ctrl-input {
   }
 }
 
-/* #56 Create with an active loop: explanation card, not a disabled form. */
-.loop-create-active-card {
+/* Primary tab notices (more than one active loop; later: a loop ended).
+   Text-led: glyph, bold text and a dashed border, never colour alone. */
+.loop-primary-notice {
   max-width: 560px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-muted);
+  border-radius: 6px;
+  font-weight: 600;
 }
-.loop-create-active-badges {
+.loop-conflict-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
 }
-.loop-create-active-text { margin: 0 0 6px; }
-.loop-create-active-counter {
-  margin: 0 0 12px;
-  font-size: 12px;
-  color: var(--color-muted);
-}
-.loop-sidebar-open-active {
+.loop-conflict-open {
   padding: 8px 14px;
   border: 1px solid var(--color-link);
   border-radius: 6px;
@@ -3260,7 +3239,7 @@ textarea.loop-ctrl-input {
   font-weight: 600;
   cursor: pointer;
 }
-.loop-sidebar-open-active:hover { background: rgba(26, 95, 168, 0.06); }
+.loop-conflict-open:hover { background: rgba(26, 95, 168, 0.06); }
 
 /* #56 shell notice (e.g. a Back to an unregistered repository). */
 .shell-notice {

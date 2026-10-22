@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from ._harness import build_dashboard_fleet
+from ._harness import build_dashboard_fleet, sole_active_loop_list
 # B1 Slice 2 (v2.13.0) — deterministic module-scope import
 # registers `seed_content_fixtures` + `seed_history_commits` on
 # the harness BEFORE any fixture builds the fleet.
@@ -79,6 +79,19 @@ def dashboard_fleet_debug_off(tmp_path_factory):
 
 
 # ── §4.4: page fixtures ───────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _sole_active_loop(request):
+    """Every UI test that uses `page` sees `widget-refactor` as alpha's only
+    active loop (see `sole_active_loop_list`). A test marked
+    `raw_loop_list` sees the seeded list unchanged (several live loops,
+    which the Loop view shows as a conflict)."""
+    if ("page" in request.fixturenames
+            and request.node.get_closest_marker("raw_loop_list") is None):
+        sole_active_loop_list(request.getfixturevalue("page"))
+    yield
+
 
 
 @pytest.fixture

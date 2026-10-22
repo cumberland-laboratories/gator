@@ -183,22 +183,6 @@ def test_turn_change_clears_notice(page, dashboard_fleet):
         _unserve_mutable_loop(page)
 
 
-def test_sidebar_marker_tracks_selected_loop(page, dashboard_fleet):
-    payload = _attention_payload(elapsed=420, notified=True)
-    try:
-        _open_incremental(page, dashboard_fleet, payload)
-        page.wait_for_function("""id => {
-            var c = document.querySelector(
-                '.loop-sidebar-card[data-loop-id="' + id + '"] .loop-card-attention');
-            return c && c.textContent.indexOf('attention') !== -1;
-        }""", arg=_ACTIVE_ID, timeout=8000)
-        assert "◷" in page.evaluate("""id => document.querySelector(
-            '.loop-sidebar-card[data-loop-id="' + id + '"] .loop-card-attention').textContent""",
-            _ACTIVE_ID)
-    finally:
-        _unserve_mutable_loop(page)
-
-
 def test_unblock_has_no_turn_window_for_attention_loop(page, dashboard_fleet):
     payload = _attention_payload(elapsed=30)
     st = payload["status"]["status"]

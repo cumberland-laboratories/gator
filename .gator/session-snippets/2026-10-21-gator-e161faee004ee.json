@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "CI: pin the Ubuntu py3.9 Source CI lane to ubuntu-24.04",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "ci",
+    "source-ci",
+    "python-3.9"
+  ],
+  "commit": "e161faee004ee75dd2949a633a89e0ab648663ee",
+  "short_commit": "e161fae",
+  "snippet_id": "snippet-e161faee004ee",
+  "session_group_key": "anthropic:c875888e-3004-4f8b-b92c-97a4e8f07ef0",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "9dc5e67b39f149deef7a9d02b8089d2118b1fd57",
+  "started_at": "2026-10-21T10:24:25Z",
+  "ended_at": "2026-10-21T14:48:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/session-snippets/2026-10-21-gator-9dc5e67b39f14.json",
+    ".github/workflows/source-ci.yml"
+  ],
+  "notes": [
+    "Source CI run 39584031531 failed before any tests ran. `ubuntu-latest` now",
+    "resolves to Ubuntu 26.04, and `actions/setup-python` has no Python 3.9 build",
+    "there. This was runner-image drift, not a code failure.",
+    "Python 3.9 is still supported (`requires-python >=3.9`), so only that lane",
+    "moves to `ubuntu-24.04`, through a matrix exclude/include. Every other Ubuntu",
+    "lane stays on `ubuntu-latest`. The release-pipeline charter records the pin",
+    "and when to remove it.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "c875888e-3004-4f8b-b92c-97a4e8f07ef0",
+  "transcript_ref": null
+}

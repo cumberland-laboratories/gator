@@ -96,7 +96,7 @@ def test_active_view_in_url_and_reload(page, dashboard_fleet):
     page.goto(_origin(dashboard_fleet) + "?repo=alpha", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
     _click_sidebar(page, "loop")
-    page.wait_for_selector("#loop-panel-create", timeout=15000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=15000)
     page.click("#loop-tab-history")
     page.wait_for_function(
         "() => document.getElementById('loop-tab-history')"
@@ -105,7 +105,7 @@ def test_active_view_in_url_and_reload(page, dashboard_fleet):
 
     page.evaluate("() => sessionStorage.clear()")
     page.reload(wait_until="load")
-    page.wait_for_selector("#loop-panel-history", timeout=15000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=15000)
     page.wait_for_function(
         "() => document.getElementById('loop-tab-history')"
         ".getAttribute('aria-selected') === 'true'", timeout=10000)
@@ -256,7 +256,7 @@ def test_workspace_cache_holds_only_bounded_fields(page, dashboard_fleet):
     repos = _fleet_repos(page, dashboard_fleet)
     _land_alpha(page, dashboard_fleet)
     _click_sidebar(page, "loop")
-    page.wait_for_selector("#loop-panel-create", timeout=15000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=15000)
     page.click("#loop-tab-history")
     page.wait_for_function(
         "k => (sessionStorage.getItem(k) || '').includes('\"history\"')",
@@ -527,7 +527,7 @@ def test_switch_restores_each_context(page, dashboard_fleet):
     page.evaluate("() => sessionStorage.clear()")
     _land_alpha(page, dashboard_fleet)
     _click_sidebar(page, "loop")
-    page.wait_for_selector("#loop-panel-create", timeout=15000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=15000)
     page.click("#loop-tab-history")
     _history_tab_selected(page)
 

@@ -324,33 +324,122 @@ Render installed/latest version state and request an explicit upgrade.
 -> check and upgrade endpoints
 ! Checking and upgrading are visibly separate actions; failure output remains visible after restart attempts.
 
-### buildLoopTabs() / ensureLoopPanels() / applyTabState() / switchTab() / renderLoopSidebar() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderLiveHeader() / counterLineHtml() / renderOutcomeHeader() / nowLine() / renderNowLine() / unblockActionLabel() / renderBlockedCard() / syncDecisionsDisclosure() / renderPromptSection() / renderControls() / loopDialogConfig() / openLoopDialog() / closeLoopDialog() / setControlsPending() / focusAfterDialogInvalidated() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / timelineGroupKey() / timelineGroups() / groupLabel() / groupHtml() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / renderResolution() / railItems() / railFingerprint() / renderRail() / openReopenForm() / refreshCoding() — Loop workspace
+### buildLoopTabs() / applyTabState() / applyPrimaryLabel() / switchTab() / primaryState() / primaryDecision() / applyPrimary() / setPrimaryDisplay() / landPrimary() / renderHistoryList() / syncListChrome() / reconcilePrimary() / showPrimaryNotice() / primaryNoticeEl() / landFromLoops() / retryLanding() / renderListUnavailable() / renderActiveConflict() / renderCreateWorkspace() / renderHandoff() / renderSelectedLoop() / buildLoopSkeleton() / patchRegion() / renderLiveHeader() / counterLineHtml() / renderOutcomeHeader() / nowLine() / renderNowLine() / unblockActionLabel() / renderBlockedCard() / syncDecisionsDisclosure() / renderPromptSection() / renderControls() / loopDialogConfig() / openLoopDialog() / closeLoopDialog() / setControlsPending() / focusAfterDialogInvalidated() / renderContinueControl() / showExtendNotice() / ensurePolling() / updateTimeline() / renderTimeline() / timelineGroupKey() / timelineGroups() / groupLabel() / groupHtml() / renderArtifacts() / fetchLiveness() / postRenotify() / refreshLiveness() / applyLiveness() / openRenotifyForm() / fetchCodingSnapshot() / patchCodingRegion() / renderCodingRegion() / renderResolution() / railItems() / railFingerprint() / renderRail() / openReopenForm() / refreshCoding() — Loop workspace
 File: src/gator_command/scripts/dashboard/views/loop.js
-Render the governed planning loop workspace: a full-width Create / History tab bar across the top of the main pane (#72), a secondary list sidebar (Create: Create Loop + Active; History: terminal loops) and mode-driven main content (creation workspace or active-loop explanation, participant handoff, or selected-loop inspection).
+Render the governed planning loop workspace. A full-width tab bar runs across the top of the main pane (#72). It holds a derived **Primary** tab (**Create** or **Active**) and **History**. The list pane holds History only. The main content follows the mode: the creation form, the participant handoff, the selected-loop inspection, or the defensive conflict state.
 <- loop route
 -> loop list/status/events/artifact endpoints, control endpoints (pause/interject/unblock/end/extend), start endpoint, prompt endpoint, sketch-sources endpoint (`/api/repo-by-key/<repo_key>/...`)
-! **Mode state**: `_state.mode` ("create" | "handoff" | "inspect") drives which main content renderer is called. `_state.handoffId` tracks the loop during participant handoff.
-! **Create / History tabs (#56; main-pane bar since #72)**: `renderLoopSidebar()` classifies loops into active (non-terminal) and history (terminal, newest-first). It always draws both `.loop-sidebar-section-header`s ("Active", "History") once `/loops` returns, even when a section is empty (`.loop-sidebar-empty`). UI tests use the headers as the "list rendered" signal: `test_loop_workspace.py` `_navigate_to_loop()` waits for them, because `#loop-sidebar-nav` appears before the list (Windows CI races, 2026-10-18).
-  - **Layout:** the mount skeleton is `.loop-workspace` (column) → `#loop-tabbar.gator-tabbar.loop-tabbar` (full width, owns the baseline) + `.loop-workspace-body` (row: `#loop-sidebar-nav` + `#loop-main-content`; stacks at ≤768px). `.loop-workspace` keeps `dataset.polling`.
-  - **Tabs:** `buildLoopTabs(container)` writes a `role="tablist"` (`.loop-subnav`, the JS/test hook) with two `button.gator-tab.loop-subnav-tab[role=tab]`, **Create** and **History** (`#loop-tab-create` / `#loop-tab-history`, `aria-controls`), into `#loop-tabbar`, **once per mount**, right after the skeleton. `renderLoopSidebar()` never builds or rewrites it, so a focused tab keeps focus across polls.
-  - **Panels:** the two `role="tabpanel"` containers (`#loop-panel-create` / `#loop-panel-history`, `aria-labelledby`) stay in `#loop-sidebar-nav`: they are the lists the tab chooses. `ensureLoopPanels(listEl)` replaces the sidebar's "Loading…" placeholder with them once; polls re-render only their contents.
-  - **State:** `applyTabState(container)` looks tabs and panels up from the view container and writes `aria-selected`, roving `tabindex` (0/-1) and the inactive panel's `hidden` only when they differ (it skips silently until the panels exist).
-  - **Inert until loaded (#72):** the bar exists from mount, but `switchTab()` returns early until `#loop-panel-create` exists (the first `/loops` response). Before that, `_state` still holds the previous mount's mode/loops, and a push would land ahead of the mount's landing `shellReplace()`. ARIA relationships cross containers (tablist in the bar, panels in the sidebar); DOM order keeps the tablist before its panels.
-  - **Pinned by** `test_loop_subnav_tabs` (roles, roving tabindex, keys; `_tab_state` asserts the tablist is in `#loop-tabbar` and not in `#loop-sidebar-nav`), `test_loop_tabs_survive_polls` (tablist node and focus survive polls), `test_loop_tabs_inert_until_loops_load` (a pre-load click adds no history entry and the mount lands on its default; mutation-checked), and `test_loop_tabbar_spans_main_pane` (bar from the sidebar's left edge to the pane's content edge, above both columns; weight + underline; a half-filled form survives History → Create).
-  - **Keyboard:** Left/Right/Home/End switch and focus the tab (automatic activation). The selected tab is shown by weight plus an underline (the shared `.gator-tab` Paper rule), never colour alone.
-  - **`_state.view`** (`"create" | "history"`) selects the tab. `_state.mode` keeps its meaning.
-  - **Create panel:** the always-actionable `.loop-sidebar-create` button and the "Active" section (active cards only). The active loop is never listed in History.
-  - **History panel:** the "History" section with terminal loops only. The `.loop-sidebar-section(-header)` markup is kept inside the panels.
-  - **`switchTab()`:** Create switches the main content to the creation workspace (unless already there, so a half-filled form survives). History changes only the list; the main content stays until a card is chosen.
-  - **Selection:** `selectLoop(id)` sets inspect mode and the tab that matches the loop's terminal state.
-  - **Mount default unchanged:** an active loop opens in inspect with the Create tab selected; otherwise Create.
-! **Active-loop explanation (#56)**: with an active loop, `renderCreateWorkspace()` calls `renderActiveLoopExplanation()` instead of rendering a form. It shows: "A **<Mode>** loop ‘<feature>’ is active (<stage>). Only one loop runs at a time.", plus the mode and stage badges, the counter text, and an **Open active loop** button (`.loop-sidebar-open-active`). The button selects the loop (inspect) and focuses its heading. With no active loop the form renders exactly as before.
+! **Mode state**: `_state.mode` ("create" | "handoff" | "inspect" | "conflict") selects the main content renderer (`renderMainContent()` / `showMain()`).
+  - `_state.handoffId` tracks the loop during participant handoff.
+  - `_state.conflictIds` holds the sorted active ids while the conflict state is shown.
+  - `_state.conflictChoice`: see below.
+! **Primary tab (Active-tab simplification, 2026-10-21).** The first tab is derived from the loop list.
+  - **Labels:** it reads **Create** (the creation form) when no loop is active, and **Active** (that loop's handoff or live workspace) when one is.
+  - **Removed:** the `+ Create Loop` action, the sidebar Active section and card, and the "a loop is active" explanation. `renderActiveLoopExplanation()` and `.loop-sidebar-open-active` are gone; this supersedes the #56 explanation.
+  - **`primaryState(loops)`** (pure, built on `classifyLoops`) returns `{kind: "none"}`, `{kind: "one", id}` or `{kind: "many", ids}` (ids sorted).
+  - **`primaryDecision(ps, display)`** (pure) is the one rule for what Primary shows. `display` comes from `currentDisplay()`: `{mode, selectedLoopId, handoffId, conflictIds, conflictChoice}`. It returns `keep`, `create`, `inspect(loopId)` or `conflict(ids)`:
+
+    | `ps` | `keep` when | otherwise |
+    |---|---|---|
+    | none | mode `create` | `create` |
+    | one(A) | inspect A, or handoff A | `inspect(A)` |
+    | many(ids) | mode `conflict` with the same ids; or inspect of a loop in ids **and** `conflictChoice === conflictKey(ids)` | `conflict(ids)` |
+
+  - **`applyPrimary(decision, opts)`** carries out a non-keep decision, in this order:
+    1. `generation++`;
+    2. `stopPolling()`, unless the decision is to inspect;
+    3. `setPrimaryDisplay()`, which always clears `handoffId`, `conflictIds` and `conflictChoice` before it sets the new display;
+    4. records history: `shellPush()` for `opts.record: "push"` (a user action), or `shellReplace()` for `"replace"` (an automatic transition);
+    5. `renderHistoryList()`, then `showMain()`.
+  - **Conflict state (defensive):** Gator allows one active loop. With more than one, `renderActiveConflict()` shows:
+    - the heading "Active loops";
+    - a text-led `.loop-primary-notice[role=status]` ("⚠ N loops are active… the Dashboard does not pick one…");
+    - one `button.loop-conflict-open[data-loop-id]` per loop, labelled with the escaped feature, in id order.
+
+    Nothing is chosen by position.
+  - **`conflictChoice`** is `conflictKey(ids)` (the ids joined by newlines).
+    - **Set:** only by a click in the conflict list (`selectLoop(id, {conflictKey})`).
+    - **Cleared:** by every other `selectLoop()`, by `setPrimaryDisplay()` (so by every non-keep `applyPrimary()` and every mount or restore landing), and by `teardownLoopView()`.
+    - **Never persisted:** `currentSub()` records the conflict state as mode `create`.
+  - **Label:**
+    - **Before the first list:** `buildLoopTabs()` creates the Primary tab (`#loop-tab-create`, `data-tab="create"`) as "…", with `aria-label="Loading loops"` and `data-primary="unknown"`. Nothing claims Create before a list exists.
+    - **After:** `applyPrimaryLabel(root, ps)` writes "Create" or "Active" and `data-primary="create|active"`, and removes the `aria-label`. It writes each only when it differs. The tab node is never rebuilt.
+  - **`syncListChrome(loops, container)`** is `applyPrimaryLabel()` plus `renderHistoryList()`. The mount landing calls it directly; every later list fetch reaches it through `reconcilePrimary()`.
+! **Primary reconciliation and list failure (2026-10-21).**
+  - **`fetchLoops()`** returns the `loops` array, or **null** on a non-2xx response, a network error, an unparsable body, or a body without an array `loops`. It returns `[]` only for a genuinely empty list, the same rule as `fetchEvents()` (#44). A failure is never read as "no active loop". The create-form pickers (`loadRevisePicker`, `loadSourcePicker`) treat null as an empty list, as before.
+  - **`reconcilePrimary(loops, opts)`** runs after every list fetch made after the landing: `pollLoop()`, `refreshSidebarOnly()`, `refreshSidebarAndMain()` and the 409 path. It returns `false` for a null list (nothing changes), `"kept"` or `"applied"`. On a valid list it, in order:
+    1. stores `_state.loops`. If `primaryState` is not `many`, it also clears `conflictChoice` (state only, before any early return). A choice therefore lasts only while the same conflict lasts unbroken;
+    2. `syncListChrome()`;
+    3. stops if `view === "history"`, so a refresh never moves the Architect out of History;
+    4. stops on `primaryDecision(...) === keep`, with no mutation;
+    5. otherwise calls `applyPrimary(decision, {record: "replace", notice})`. An automatic transition never adds a history entry.
+  - **Transition notice:**
+    - **When it appears:** when the previously shown loop (`shownLoopId()`: inspect or handoff) leaves Primary.
+    - **Listed as terminal** (`kind: "ended"`): "■ Loop ‘<feature>’ ended — <Outcome>." plus a "View in History" link, which calls `selectLoop(id)`.
+    - **No longer listed** (`kind: "gone"`): "Loop ‘<id>’ is no longer listed."
+    - **Caller text:** `opts.notice` overrides both (`kind: "text"`).
+    - **Rendering:** `primaryNoticeEl()` builds `p.loop-primary-notice.loop-transition-notice[role=status][data-kind]` from text nodes only. `showPrimaryNotice()` runs after `showMain()` resolves for the same generation. For Create or conflict, the notice goes first in `#loop-main-content`. For inspect, it goes in the new workspace's `action` slot.
+    - **Covers** one → none (the Create form, plan option (a): an approved loop's commit banner and Continue control are reached through History), the A → B turnover, and one → many.
+  - **`pollLoop()` ordering:** status, then events, then the list.
+    - **Failures:** a failed status or events response keeps the #44 behaviour. A failed list (null) keeps the workspace and `_state.loops`, shows the `refresh` slot's "Refresh failed — retrying.", and **never stops the timer** (see "Pending reconciliation keeps the timer").
+    - **Clearing the notice:** `setRefreshFailed(false)` runs only after all three succeed.
+    - **Terminal under Primary** (`view === "create"`): the poll does not patch first. It fetches the list and reconciles in the same poll, so no empty intermediate panel appears. If the list failed, or still lists the loop as active, it patches the terminal `/status` in place and keeps the timer, so the next poll reconciles.
+    - **Terminal under History:** unchanged — the in-place patch, then the timer stops (except approved coding, #41).
+  - **Pending reconciliation keeps the timer.** When Primary shows a loop whose status is terminal, that is a reconciliation still pending. The single timer runs until a valid list moves Primary (`applyPrimary()` → `stopPolling()`). A failed or stale list leaves the view in place, and the next poll retries.
+    - **`loadSelectedLoop()`:** a terminal status under Primary (a stale list, for example after a History detour) calls `ensurePolling()` and `refreshSidebarOnly()`. `pollLoop()`'s terminal-under-Primary branch then owns the retries.
+    - **`updateHandoffStatus()` terminal:** it keeps its epoch bump, "Loop ended" buttons and outcome badge, no longer stops the timer, then fetches the list and calls `reconcilePrimary()`. A null list adds the text-led `.loop-handoff-refresh` line ("Refresh failed — retrying.", via `setHandoffRefreshFailed()`), which is removed on the next valid list. Every poll repeats this until a valid list resolves it. Under History, a known list stops the timer instead.
+    - **`switchTab("create")` with `keep`:** for an inspect or handoff selection, the switch restarts a stopped timer, so a loop that finished while History was shown is checked and reconciled.
+  - **`refreshSidebarAndMain()`:** if reconciliation applied a transition, it is done. Otherwise (kept, or a null list) it renders the current selection as before.
+  - **Mount with a failed first list:**
+    - **What shows:** `renderListUnavailable()` shows `.loop-primary-notice[data-kind="unavailable"]` "Loop list unavailable — retrying.". `data-loaded` stays unset, so the tabs are inert and the label stays "…". The sub-state is kept in `_state.pendingSub`.
+    - **Retry:** `ensurePolling()` still starts the timer. `pollLoop()` calls `retryLanding()` until a valid list arrives. It is guarded by `_state.landing`, `mountId` and `isLoaded()`.
+    - **Landing:** `landFromLoops(loops, sub, mount)` (also the normal mount landing) applies the sub-state, records with `shellReplace()`, writes the chrome, and sets `data-loaded` before any await, so only one landing happens.
+    - **Restore before landing:** `restore()` only replaces `pendingSub`.
+  - **409 race (`handleCreateSubmit`):** a fresh list is fetched (generation-guarded).
+    - **One or more active loops:** `reconcilePrimary()` with the text notice "Another loop was already active; your form was not submitted. Showing the active loop." (Active, or the conflict state).
+    - **No active loop:** the form is kept, with "A loop is already active elsewhere. Refresh to see it."
+    - **A null list:** the form is kept, with "…and the loop list could not be loaded. Refresh to see it."
+
+    There is no "Open active loop" link (`.loop-create-open-active` is gone) and never a disabled form.
+  - **Pinned by** `test_active_loop_ends_reconciles_primary`, `test_primary_follows_active_identity`, `test_list_failure_keeps_primary_workspace`, `test_initial_list_failure_retries`, `test_creation_409_transitions_to_active`, `test_terminal_handoff_disables_copy_buttons` (including the failed-then-terminal list case) and `test_stale_primary_selection_retries_after_history`.
+! **Tabs and layout (#56; main-pane bar since #72; single tabpanel since 2026-10-21)**:
+  - **Layout:** the mount skeleton is `.loop-workspace` (a column) holding two children:
+    - `#loop-tabbar.gator-tabbar.loop-tabbar`: full width; it owns the baseline;
+    - `.loop-workspace-body#loop-tabpanel[role=tabpanel]`: a row of `#loop-sidebar-nav` + `#loop-main-content`, stacked at ≤768px.
+
+    `.loop-workspace` keeps `dataset.polling`, and gains `data-loaded="1"` once the first list has landed.
+  - **Tabs:** `buildLoopTabs(container)` writes the tablist **once per mount**. It is a `role="tablist"` (`.loop-subnav`, the JS/test hook) with two `button.gator-tab.loop-subnav-tab[role=tab]` (`#loop-tab-create` / `#loop-tab-history`).
+    - Both tabs have `aria-controls="loop-tabpanel"`. The workspace body is the single tab panel, the same pattern as `#app-shell` under the workspace strip.
+    - Polls never rebuild the tablist, so a focused tab keeps focus.
+  - **State:** `applyTabState(root)` writes, each only when it differs: `aria-selected`, the roving `tabindex` (0/-1), the body's `aria-labelledby` (`loop-tab-<view>`), and `#loop-sidebar-nav.hidden = (view !== "history")`. On Primary the list pane is hidden (`.loop-sidebar[hidden] { display: none }`), so `.loop-main` fills the body with no blank column.
+  - **History list:** `renderHistoryList(loops, container)` draws only `#loop-history-list.loop-sidebar-section`: the header "History", "No completed loops" when empty, and the terminal cards newest first. It wires card clicks to `selectLoop()`.
+    - It rewrites only when its fingerprint changes. The fingerprint is `listEl._gatorHistoryFp`, built per card from `[loop_id, stage, feature, mode key, counter text, date, selected]`. Unchanged polls therefore make no list writes.
+    - The active loop is never listed.
+  - **Inert until loaded (#72):** the bar exists from mount, but `switchTab()` returns early until `data-loaded="1"` (`isLoaded()`). Before that, `_state` may still hold the previous mount's selection, and a push would land ahead of the mount's landing `shellReplace()`. UI tests wait for `.loop-workspace[data-loaded="1"]` (`test_loop_workspace.py` `_navigate_to_loop()`).
+  - **Keyboard:** Left, Right, Home and End switch the tab and focus it (automatic activation). The selected tab is shown by weight plus an underline (the shared `.gator-tab` Paper rule), never colour alone.
+  - **`switchTab()`:**
+    - `"create"` computes `primaryDecision()`. `keep` re-renders nothing, so a half-filled form, or a live workspace kept from History, survives. Anything else runs `applyPrimary(…, {record: "push"})`.
+    - `"history"` changes only the list pane and the tab state. The main content stays until a card is chosen.
+  - **Selection:** `selectLoop(id, opts)` sets inspect mode and the tab that matches the loop's state: a terminal loop → History, otherwise Primary.
+  - **Mount default:** `applyDefaultSelection()` selects Primary and runs `landPrimary()` (`primaryDecision` against an empty display): none → Create, one → inspect it, many → the conflict state.
+  - **Pinned by** `test_loop_subnav_tabs`, `test_primary_tab_reflects_active_state`, `test_loop_tabs_survive_polls`, `test_loop_tabs_inert_until_loops_load`, `test_loop_tabbar_spans_main_pane` and `test_active_conflict_state`.
+  - **UI test fixture:** the `alpha` seed (`test_loop_seed.py`) holds four live loops on disk, so that each live state has a fixture. A list with several live loops is a #79 violation, and the view shows it as the conflict state.
+    - **Default:** the autouse `_sole_active_loop` fixture in `tests/test_dashboard_ui/conftest.py` serves the real list through `_harness.sole_active_loop_list(page, "widget-refactor")`. That keeps the terminal loops plus one live loop, so every test lands on `widget-refactor` as before.
+    - **Another live loop:** `_open_sole_active(page, fleet, feature)` makes a different live loop the only active one.
+    - **Raw list:** `@pytest.mark.raw_loop_list` sees the raw seed (used by `test_active_conflict_state`).
+    - **Own mocks:** a test's own list mock takes precedence. A held or counted request must be released with `route.fallback()`, not `route.continue_()`, so it still passes through the filter.
 ! **Loop history sub-state (#56)**: the shell owns history (see `navigate()` above). This view only contributes sub-state and registers **no** global listener.
-  - **Recording:** `currentSub()` gives `{view, mode, loopId}`; a handoff is recorded as inspect of that loop. User selections call `shellPush()` → `GatorShell.pushSubState`: tab switch, card select, Create Loop, Open active loop, the 409 "Open active loop" link, create → handoff, and handoff → Open loop workspace.
-  - **Restoring the tab:** `applySub()` restores the recorded `sub.view` as recorded, in both modes. A History tab chosen while an active loop stays inspected comes back as History; it is never derived from the loop's stage (pinned).
-  - **Mount:** `views.loop(…, initialSub)` applies `initialSub` through `applySub()` when its loop still exists (else `applyDefaultSelection()`), records the landing state with `shellReplace()` (no new entry), and focuses the main heading after a restore.
-  - **`views.loop.restore(sub)`** applies a sub-state to the mounted view: it bumps `generation`, re-renders the sidebar, then `loadSelectedLoop()` or `renderMainContent()`, and moves focus to the main heading (`focusMainHeading()`). It never pushes.
-! **Creation workspace**: `renderCreateWorkspace()` renders feature name, sketch source picker (dropdown from `/sketch-sources` + manual path toggle), advanced settings disclosure (max rounds 1–20, turn timeout 30–3600s), and Create button calling existing start endpoint. Client-side validation before POST. 409 "active loop exists" is race-recovery only (shows "Open active loop").
+  - **Recording:** `currentSub()` gives `{view, mode, loopId}`. A handoff is recorded as inspect of that loop, and the conflict state as mode `create`.
+    - The persisted vocabulary is unchanged: `view: create|history`, where `create` is the Primary tab. `dashboard.js` `cleanSub()` and `workspace.js` `cleanContextSub()` therefore need no change.
+    - User selections call `shellPush()` → `GatorShell.pushSubState`: a tab switch, a card select, a conflict-list choice, create → handoff, and handoff → Open loop workspace. Automatic Primary transitions (`reconcilePrimary`, including the 409 recovery) use `shellReplace()`.
+  - **Restoring (`applySub()`):** Primary content is always derived from the current list, never from the record:
+    - `{view: create, …}` → Primary plus `landPrimary()`: the Create form, the active loop inspected, or the conflict state;
+    - `{view: history, mode: inspect, loopId: L}` with L listed → History with L inspected, also when L is the active loop (pinned);
+    - `{view: history}` without a listed L → History, with the Primary landing in the main pane.
+  - **Mount:** `views.loop(…, initialSub)` applies `initialSub` through `applySub()` (else `applyDefaultSelection()`). It records the landing state with `shellReplace()` (no new entry), and focuses the main heading after a restore.
+  - **`views.loop.restore(sub)`** applies a sub-state to the mounted view. It bumps `generation`, re-renders the History list, then runs `loadSelectedLoop()` or `renderMainContent()`, and moves focus to the main heading (`focusMainHeading()`). It never pushes.
+  - **Pinned by** `test_old_loop_substate_records_restore`, `test_loop_back_forward_within_loop` and `test_history_tab_with_active_loop_round_trips`.
+! **Creation workspace**: `renderCreateWorkspace()` renders feature name, sketch source picker (dropdown from `/sketch-sources` + manual path toggle), advanced settings disclosure (max rounds 1–20, turn timeout 30–3600s), and Create button calling existing start endpoint. Client-side validation before POST. 409 "active loop exists" is race-recovery only: see "Primary reconciliation and list failure".
 ! **Participant handoff**: `renderHandoff()` shows prompt-copy cards for Draftor and Reviewer roles. `copyPrompt()` fetches from the no-store prompt endpoint, writes to clipboard, then nulls the prompt variable. Clipboard unavailable: shows read-only textarea fallback, removed on dismiss. Join state polls at 3s interval; Draftor joining does NOT remove Reviewer copy action. "Open loop workspace" navigates to inspect mode explicitly — never auto-navigates on join.
 ! **Token non-persistence**: prompt text never stored in localStorage, sessionStorage, URL state, data- attributes, or console logs. JS variable nulled after clipboard write. DOM elements removed on navigation.
 ! **Live vs history**: `renderSelectedLoop()` orchestrates live or read-only workspace. Live loops show the calm header with controls, the approval resolution (approved coding), source line, notices, the suspension card (#53, below), the Now line, the timeline, and the lower evidence section (artifacts, Candidate evidence, Participant recovery (#56), liveness, Decisions). Terminal loops show outcome header with badge (Approved/Max Rounds/Timed Out/Ended), completed date, no controls, no prompts.
@@ -390,7 +479,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
   - `planning` / `planning-only` → **Planning**;
   - anything else → **Unknown mode**.
 
-  It never reads feature names, filenames or artifacts. `modeBadge` renders `span.loop-mode-badge[data-mode]` with `aria-label="Loop mode: <label>"`: text plus a per-mode border (2px solid coding, solid planning, dashed legacy, dotted italic unknown), never colour alone. It appears in `renderLiveHeader`, `renderOutcomeHeader` and every sidebar card (`renderSidebarCard`, inside `.loop-card-badges` next to the stage badge). `headerFingerprint` includes the mode key, so identical polls stay mutation-free (pinned).
+  It never reads feature names, filenames or artifacts. `modeBadge` renders `span.loop-mode-badge[data-mode]` with `aria-label="Loop mode: <label>"`: text plus a per-mode border (2px solid coding, solid planning, dashed legacy, dotted italic unknown), never colour alone. It appears in `renderLiveHeader`, `renderOutcomeHeader` and every History card (`renderSidebarCard`, inside `.loop-card-badges` next to the stage badge). `headerFingerprint` includes the mode key, so identical polls stay mutation-free (pinned).
 ! **Participant recovery (#56)** — `#loop-region-prompts`, live loops only (terminal: empty, no `.loop-prompt-copy`). It replaces the bare copy buttons.
   - **Structure:** `renderPromptSection(terminal, root, snap)` builds, once per live snapshot (prompts fingerprint `live`/`terminal`): `<details class="loop-recovery" id="loop-recovery">` with summary "Participant recovery", the fixed guidance ("Use these prompts only to start a new participant session or reconnect one that dropped. Do not paste a prompt into a session that has already joined."), the credential warning, and one `.loop-recovery-row[data-role]` per role (a `.loop-recovery-need` line plus the existing `button.loop-prompt-copy[data-role]` → `copyPrompt()`). Copying is unchanged (epoch guard, fallback, token non-persistence) and mutates no loop state.
   - **`recoveryNeed(role, joined, livenessState)`** (pure):
@@ -448,7 +537,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
   - **Patching.** `updateTimeline()` front-patches strictly-new events when the previously rendered newest event (`eventKey()`: ts|event|round) is still at the same index. Each new event is keyed with `prevKey = snap.frontGroupKey` (the same function as the full render) and inserted first in the front group, or as a new front group. Any other change redraws just `#loop-timeline`. Unchanged polls make no timeline writes. Cards still come from `eventCardHtml()` and stay link-only.
 ! Artifacts: `renderArtifacts(status, events, root, refreshMutable)` reconciles sections by `data-artifact` — existing nodes keep expanded state and loaded content and are only re-ordered; new ones come from `createArtifactSection()`; missing ones are removed. On event-log change (`refreshMutable`), `MUTABLE_ARTIFACTS` (`plan.current.md`, `findings.current.md`, `implementation.current.md`): loaded content refreshes in place if expanded, or is marked unloaded if collapsed. **#45:** collapsed artifact cards carry **no excerpt and never fetch**; `loadArtifactSummary()`, `isSummaryArtifact()` and the `.loop-artifact-summary` node were removed. `fetchArtifact()` uses `cache: "no-store"` so refreshes are real.
 ! Artifact fetch ordering: `loadArtifactContent()` bumps a per-node request revision (`nextRequestRev()` → `content._gatorContentRev`) before each fetch and apply a completion only if it is still the latest for that node (in addition to the generation and `isConnected` checks). An older in-flight response for a mutable artifact therefore cannot overwrite newer content. A refresh of a collapsed mutable section also bumps the content revision so an in-flight body fetch cannot mark it loaded with stale text; an expanded section (loaded or still loading) is always refetched.
-! Terminal transition patches header/prompts/controls in place (never an empty intermediate panel), then polling stops.
+! Terminal transition patches header/prompts/controls in place (never an empty intermediate panel), then polling stops. Under the Primary tab a finished loop is instead replaced in the same poll (see "Primary reconciliation and list failure").
 ! **Terminal is not always final (#39).** For `max_rounds_exceeded` (`EXTENDABLE_STAGE`) `renderControls()` delegates to `renderContinueControl()`: a **Continue loop** button opening **Additional rounds** (number, `ROUNDS_MIN..ROUNDS_MAX` = 1..20, mirrors `loop/session.py`, default 2) and **Reason (required)**. Confirm stays disabled until the reason is non-blank; invalid rounds or a blank reason are refused before any request with a text error (not colour alone). It POSTs `{rounds, message}` to `/extend` via `postAction()`. Every other terminal stage renders no controls. `controlsFingerprint()` includes the extendable-stage flag so this control is (re)built only when that input changes.
 ! On extend success: `showExtendNotice()` writes to `#loop-region-notice` — a skeleton region that incremental rendering never patches, so the notice survives the terminal-to-live transition (cleared only by a skeleton rebuild on selection change). It states old → new ceiling and the participant re-engagement step, plus a **Warning:** line when `watcher === "failed"` (timeouts not enforced) or a neutral line for `already_hosted`. Then `ensurePolling()` restarts the interval (polling had stopped at terminal) and sets `data-polling="1"`, `refreshSidebarOnly()` moves the loop to Active, and `loadSelectedLoop()` patches header/prompts/controls live while timeline and artifacts are preserved; the timeline appends the `loop_extended` card (`EVENT_LABELS.loop_extended = "Extended"`).
 ! **Architect brief (#43)**
@@ -473,7 +562,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
 
       Host absence is never inferred from a missing marker. The state key includes the host value, so a host change rewrites the notice.
     - It uses `role="status"` and `.loop-attention-notice` (dashed border, glyph and bold label, never an error colour). It never touches the `refresh` / `action` slots or open controls, and clears when the turn changes or the loop pauses or ends.
-  - **Sidebar:** `.loop-card-attention` shows "◷ attention". The initial render comes from the `/loops` item's `attention_notified` (a marker-only check on the server). It is then kept live for the selected loop by `setAttentionNotice` (the sidebar is not re-fetched on polls).
+  - **No sidebar marker (2026-10-21):** the `.loop-card-attention` "◷ attention" marker lived on the active-loop card and was removed with it; `setAttentionNotice` writes only the notice slot. The browser no longer reads the `/loops` item's `attention_notified` (the server field is unchanged).
   - **Unblock control:** `legacyWindow = !status.attention`. Attention loops never show the "Turn window (s)" field and never post `timeout`. The controls fingerprint includes `!!status.attention`.
   - **Create form:** the field is labelled "Architect attention interval (seconds)" with the hint "Architect notice only — participants never see it…", and posts `attention_interval`. The element id `#loop-turn-timeout` is kept.
 ! **Coding candidate panel (#41)**: `#loop-region-coding` (facts, inside the collapsed "Candidate evidence" disclosure) and `#loop-region-resolution` (the approval banner, next to the header), shown only when `status.mode === "coding"` (they use the slim `status.coding` projection). L1 split them by responsibility: `renderCodingRegion()` / `codingFingerprint(status)` (stage, round, `max_rounds`, projection) own the facts; `renderResolution()` / `resolutionFingerprint(status, live)` own the banner and Reopen.
@@ -492,7 +581,7 @@ Render the governed planning loop workspace: a full-width Create / History tab b
     - **Counters.** `checkpointCounters(status)` builds them from the projection plus `status.max_rounds`.
       - The **live header** replaces "Round X / Y" with a "Checkpoint" item ("Checkpoint K of N · findings round r of b", `.loop-checkpoint-counter`) and a separate "Generation" item (`.loop-generation-counter`, "none yet" before the first submission).
       - The **outcome header** and the handoff subtitle do the same.
-      - **Sidebar cards**, active and history (`renderSidebarCard` via `sidebarCounterText`), show "Checkpoint K/N · findings r/b · gen g" from the `/loops` `checkpoint_summary`.
+      - **History cards** (`renderSidebarCard` via `sidebarCounterText`), show "Checkpoint K/N · findings r/b · gen g" from the `/loops` `checkpoint_summary`.
       - Every other card and header keeps "Round X/Y". **A checkpoint loop never renders `Round X/Y`** (pinned, with `status.round` 3 > budget 2).
     - **Coding region:**
       - Checkpoint and Generation rows; the candidate row reads "Candidate (cpK · gen g)".
@@ -510,10 +599,10 @@ Render the governed planning loop workspace: a full-width Create / History tab b
     - **Attention (#47):** owned solely by `setAttentionNotice()`, for attention-mode loops; it is empty for legacy loops.
 
     No path assigns the whole region's `innerHTML`, so clearing the refresh or attention notice can never erase an Architect message.
-  - **On a failed poll** (`fetchStatus()` gives null, or `fetchEvents()` gives **null**):
+  - **On a failed poll** (`fetchStatus()` gives null, `fetchEvents()` gives **null**, or the list fetch gives null):
     - `pollLoop()` returns without rendering, so the last valid workspace, artifacts, open controls, expanded sections and scroll all survive, and polling continues on the same single timer;
     - it shows the text-led "Refresh failed — retrying." notice (`role="status"`).
-  - **On recovery:** the next successful full status-plus-events refresh clears only that notice. `setRefreshFailed()` writes only when the state changes, so repeated failures and successes are mutation-free.
+  - **On recovery:** the next successful full status, events and list refresh clears only that notice. `setRefreshFailed()` writes only when the state changes, so repeated failures and successes are mutation-free.
   - **Stale guard:** it acts only if the snapshot is still `_state.render` for the same generation and `selectedLoopId`, with an attached root. A stale in-flight response can't set or clear a notice on a newer selection.
   - **Initial-load failure keeps its behavior:** the notice is shown only after a valid render of this selection, and `loadSelectedLoop()` still renders a failed events fetch as `[]`.
   - **`fetchEvents()` returns null on failure** (HTTP error, network, or a non-array body) and `[]` only for genuinely no events. A failure must never render as an empty history, which would prune event-derived artifact sections (the pre-fix behavior).

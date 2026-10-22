@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from ._harness import open_fleet
+from ._harness import open_fleet, sole_active_loop_list
 
 
 def _repo_key(path):
@@ -44,11 +44,10 @@ def _navigate_to_loop(page, fleet, repo="alpha"):
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
     # The list comes from a separate /loops request after the container
-    # appears; renderLoopSidebar() always draws the section headers (even
-    # when empty), so they mark "list rendered" (Windows CI races, #70).
-    page.wait_for_selector(".loop-sidebar-section-header", timeout=10000)
+    # appears; the mount sets data-loaded once it has landed (Windows CI
+    # races, #70). The list pane itself is hidden on the Primary tab.
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     return page
 
 
@@ -112,7 +111,7 @@ def test_loop_view_renders_workspace_layout(page, dashboard_fleet):
 
 
 def test_loop_list_renders_cards(page, dashboard_fleet):
-    """Loop list shows cards with feature names."""
+    """The History list shows terminal-loop cards with feature names."""
     _navigate_to_loop(page, dashboard_fleet)
     cards = page.locator(".loop-card")
     assert cards.count() >= 2, "Expected at least 2 loop cards"
@@ -120,33 +119,9 @@ def test_loop_list_renders_cards(page, dashboard_fleet):
         () => Array.from(document.querySelectorAll('.loop-card-feature'))
             .map(el => el.textContent)
     """)
-    assert "widget-refactor" in features
+    # Cards are History only (2026-10-21): the active loop is not a card.
+    assert "widget-refactor" not in features
     assert "auth-migration" in features
-
-
-def test_loop_list_active_first_sort(page, dashboard_fleet):
-    """Active/paused loops sort before terminal loops."""
-    _navigate_to_loop(page, dashboard_fleet)
-    # The cards come from a separate /loops request after the sidebar
-    # container appears; wait for them (Windows CI race, #70, 2026-10-18).
-    page.wait_for_function(
-        "() => document.querySelectorAll('.loop-card .loop-badge').length >= 2",
-        timeout=10000)
-    badges = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-card .loop-badge'))
-            .map(el => el.textContent)
-    """)
-    assert len(badges) >= 2
-    terminal_idx = None
-    for i, badge in enumerate(badges):
-        if badge == "Approved":
-            terminal_idx = i
-            break
-    if terminal_idx is not None:
-        for i in range(terminal_idx):
-            assert badges[i] != "Approved", (
-                f"Terminal badge at index {i} should not appear before "
-                f"active badges")
 
 
 # ── status panel ─────────────────────────────────────────────────────────────
@@ -209,8 +184,13 @@ def test_artifact_sections_present(page, dashboard_fleet):
 
 
 def _select_loop_card(page, feature_name):
-    """Click a loop card by feature name and wait for the status
-    panel to reflect the selection (avoids race with async load).
+    """Select a loop by feature name and wait for the status panel to
+    reflect the selection (avoids race with async load).
+
+    A terminal loop is a History card; a loop in the conflict state is a
+    conflict-list button. The active loop has no card (2026-10-21): it is
+    the Primary tab's content, so it is reached through that tab, and it is
+    left alone when it is already shown.
 
     Clears the status header before clicking so wait_for_function
     distinguishes a fresh render from a stale one left by a prior
@@ -219,13 +199,20 @@ def _select_loop_card(page, feature_name):
     page.evaluate("""
         (name) => {
             var h = document.querySelector('.loop-status-header h3');
-            if (h) h.textContent = '';
             var cards = document.querySelectorAll('.loop-card');
             for (var i = 0; i < cards.length; i++) {
                 if (cards[i].querySelector('.loop-card-feature').textContent === name) {
-                    cards[i].click(); break;
+                    if (h) h.textContent = '';
+                    cards[i].click(); return;
                 }
             }
+            var btns = document.querySelectorAll('.loop-conflict-open');
+            for (var j = 0; j < btns.length; j++) {
+                if (btns[j].textContent === name) { btns[j].click(); return; }
+            }
+            if (h && h.textContent === name) return;
+            if (h) h.textContent = '';
+            document.querySelector('#loop-tab-create').click();
         }
     """, feature_name)
     page.wait_for_function(
@@ -236,6 +223,14 @@ def _select_loop_card(page, feature_name):
         arg=feature_name,
         timeout=10000,
     )
+
+
+def _open_sole_active(page, dashboard_fleet, feature):
+    """Open alpha's Loop view with `feature` as the only active loop (the
+    Primary tab lands on it). See `_harness.sole_active_loop_list`."""
+    sole_active_loop_list(page, feature)
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, feature)
 
 
 def _open_decision_dialog(page):
@@ -249,7 +244,7 @@ def _open_decision_dialog(page):
 def test_artifact_toggle_loads_content(page, dashboard_fleet):
     """Clicking an artifact toggle fetches and displays content."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-artifact-toggle", timeout=10000)
     page.evaluate("""
@@ -275,9 +270,7 @@ def test_artifact_html_is_escaped(page, dashboard_fleet):
     """HTML in artifact content is text-escaped, not rendered as DOM.
     The XSS loop's sketch.md contains script/img tags that must
     appear as visible text, not execute."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "xss-test")
+    _open_sole_active(page, dashboard_fleet, "xss-test")
     page.wait_for_selector(".loop-artifact-toggle", timeout=10000)
     page.evaluate("""
         () => {
@@ -325,7 +318,7 @@ def test_terminal_loop_stops_polling(page, dashboard_fleet):
     request_count = [0]
     def _count(route):
         request_count[0] += 1
-        route.continue_()
+        route.fallback()
     page.route("**/api/repo-by-key/*/loops/**", _count)
     page.wait_for_timeout(4000)
     page.unroute("**/api/repo-by-key/*/loops/**")
@@ -367,10 +360,10 @@ def test_loop_view_empty_state_for_repo_without_loops(
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     text = page.evaluate(
         "() => document.getElementById('loop-sidebar-nav').textContent")
-    assert "No active loop" in text, (
+    assert "No completed loops" in text, (
         "Empty-state message expected for repo with no loops")
 
 
@@ -399,12 +392,12 @@ def test_name_only_navigation_resolves_fresh_key(page, dashboard_fleet):
     requests_made = []
     def _capture(route):
         requests_made.append(route.request.url)
-        route.continue_()
+        route.fallback()
     page.route("**/api/repo-by-key/*/loops*", _capture)
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     page.unroute("**/api/repo-by-key/*/loops*")
     assert len(requests_made) > 0, "Expected at least one Loop API request"
     for url in requests_made:
@@ -445,7 +438,7 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
 
     page.evaluate(
         "() => document.querySelector("
@@ -465,7 +458,7 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
 
     def _count(route):
         poll_count[0] += 1
-        route.continue_()
+        route.fallback()
 
     page.route("**/api/repo-by-key/*/loops**", _count)
     page.wait_for_timeout(4000)
@@ -527,7 +520,7 @@ def test_duplicate_name_fleet_row_uses_clicked_key(page, dashboard_fleet):
 
     def _capture(route):
         requests_made.append(route.request.url)
-        route.continue_()
+        route.fallback()
 
     page.route("**/api/repo-by-key/*/loops*", _capture)
 
@@ -535,7 +528,7 @@ def test_duplicate_name_fleet_row_uses_clicked_key(page, dashboard_fleet):
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
     page.unroute("**/api/repo-by-key/*/loops*")
 
     assert len(requests_made) > 0, "Expected at least one Loop API request"
@@ -570,7 +563,7 @@ def test_active_loop_shows_controls(page, dashboard_fleet):
 def test_terminal_loop_shows_no_controls(page, dashboard_fleet):
     """Terminal loop renders no control buttons."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "auth-migration")
     page.wait_for_timeout(1000)
     count = page.locator(".loop-ctrl-btn").count()
@@ -641,7 +634,7 @@ def test_pause_then_shows_unblock_controls(page, dashboard_fleet):
 
     def _status_paused(route):
         if not pause_done[0]:
-            route.continue_()
+            route.fallback()
             return
         route.fulfill(
             status=200,
@@ -834,7 +827,7 @@ def _count_artifact_requests(page):
 def test_timeline_card_is_link_only(page, dashboard_fleet):
     """An event with an artifact shows the link immediately and no excerpt."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
     cards = page.evaluate("""() => Array.from(
@@ -861,7 +854,7 @@ def test_timeline_card_is_link_only(page, dashboard_fleet):
 
 def test_event_without_artifact_has_no_link(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-event", timeout=10000)
     counts = page.evaluate("""() => Array.from(
@@ -875,7 +868,7 @@ def test_link_present_without_executive_summary(page, dashboard_fleet):
     """The link never depends on an Executive Summary heading: the active
     loop's findings artifact has none, and its event still has the link."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
     findings_links = page.evaluate("""() => Array.from(document.querySelectorAll(
@@ -925,7 +918,7 @@ def test_timeline_link_keeps_open_section_open(page, dashboard_fleet):
     """Following a link to an already-expanded artifact leaves it expanded
     (no toggle-close) and does not refetch it."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-timeline-artifact-link", timeout=10000)
     name = page.evaluate(
@@ -943,7 +936,7 @@ def test_timeline_link_keeps_open_section_open(page, dashboard_fleet):
 
 def test_timeline_link_keyboard_activation(page, dashboard_fleet):
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-timeline-artifact-link", timeout=10000)
     name = page.evaluate(
@@ -959,7 +952,7 @@ def test_timeline_link_keyboard_activation(page, dashboard_fleet):
 def test_timeline_event_shows_artifact_link(page, dashboard_fleet):
     """Submission events in the timeline include a 'View full artifact' link."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_function(
         "() => document.querySelector('.loop-timeline-artifact-link') !== null",
@@ -976,7 +969,7 @@ def test_timeline_event_shows_artifact_link(page, dashboard_fleet):
 def test_timeline_artifact_link_opens_inspector(page, dashboard_fleet):
     """Clicking 'View full artifact' in the timeline opens the artifact inspector."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_function(
         "() => document.querySelector('.loop-timeline-artifact-link') !== null",
@@ -1002,56 +995,35 @@ def test_timeline_artifact_link_opens_inspector(page, dashboard_fleet):
 # ── secondary sidebar (Module 1 / B1–B4) ──────────────────────────────────
 
 
-def test_sidebar_three_sections(page, dashboard_fleet):
-    """B1: sidebar renders Create Loop, Active header, History header."""
+def test_sidebar_active_and_history_classification(page, dashboard_fleet):
+    """B2 (2026-10-21): the list pane holds History only. Terminal loops
+    are listed; the active loop is not listed anywhere in it."""
     _navigate_to_loop(page, dashboard_fleet)
     headers = page.evaluate("""
-        () => Array.from(document.querySelectorAll('.loop-sidebar-section-header'))
-            .map(el => el.textContent)
+        () => Array.from(document.querySelectorAll(
+            '#loop-sidebar-nav .loop-sidebar-section-header')).map(el => el.textContent)
     """)
-    assert "Active" in headers
-    assert "History" in headers
-    has_create = page.locator(".loop-sidebar-create").count() > 0
-    assert has_create, "Create Loop action should be present"
-
-
-def test_sidebar_active_and_history_classification(page, dashboard_fleet):
-    """B2: active loops in Active section, terminal in History."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
-    sections = page.evaluate("""
-        () => {
-            var secs = document.querySelectorAll('.loop-sidebar-section');
-            var result = [];
-            for (var i = 0; i < secs.length; i++) {
-                var header = secs[i].querySelector('.loop-sidebar-section-header');
-                var features = Array.from(secs[i].querySelectorAll('.loop-card-feature'))
-                    .map(el => el.textContent);
-                result.push({ header: header ? header.textContent : '', features: features });
-            }
-            return result;
-        }
-    """)
-    active_sec = [s for s in sections if s["header"] == "Active"][0]
-    history_sec = [s for s in sections if s["header"] == "History"][0]
-    assert "auth-migration" in history_sec["features"], (
-        "Terminal loop should be in History section")
-    assert "auth-migration" not in active_sec["features"], (
-        "Terminal loop should not be in Active section")
+    assert headers == ["History"]
+    listed = _panel_features(page, "loop-sidebar-nav")
+    assert "auth-migration" in listed
+    assert "widget-refactor" not in listed
 
 
 def test_sidebar_empty_sections(page, dashboard_fleet):
-    """B3: repo with no loops shows empty-state text in both sections."""
+    """B3: a repo with no loops shows the History empty state, and no
+    Active section."""
     origin = dashboard_fleet["url"].rstrip("/") + "/"
     page.goto(origin + "?repo=beta", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
     page.evaluate(
         "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector("#loop-sidebar-nav", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert _tab_state(page)["sidebarHidden"] is False
     text = page.evaluate(
         "() => document.getElementById('loop-sidebar-nav').textContent")
-    assert "No active loop" in text
+    assert "No active loop" not in text
     assert "No completed loops" in text
 
 
@@ -1121,53 +1093,58 @@ def test_creation_validation_blocks_empty_feature(page, dashboard_fleet):
     assert "Feature" in error_visible or "required" in error_visible.lower()
 
 
-def test_creation_409_shows_open_active(page, dashboard_fleet):
-    """B12: 409 race recovery shows 'Open active loop' message."""
-    import json as _json
-
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
-
-    # Intercept loops list to report no active loop (so Create enables)
-    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
-        status=200, content_type="application/json",
-        body=_json.dumps({"loops": []})))
-    # Intercept sketch sources to return empty (so manual input shows)
+@pytest.mark.parametrize("after", ["active", "none", "failed"])
+def test_creation_409_transitions_to_active(page, dashboard_fleet, after):
+    """B12 (2026-10-21): a 409 "active loop exists" refetches the loop list.
+    With an active loop in it, Primary shows Active with a notice; with none,
+    or with a failed list, the form stays with an honest error text. There
+    is never an "Open active loop" link or a disabled form."""
+    holder = {"loops": [], "fail": None}
+    _serve_list(page, holder)
     page.route("**/sketch-sources", lambda route: route.fulfill(
         status=200, content_type="application/json",
-        body=_json.dumps({"sources": []})))
-
-    # Re-navigate to get fresh state with empty loops
-    page.evaluate(
-        "() => document.querySelector('.sidebar-item[data-view=\"loop\"]').click()"
-    )
+        body=json.dumps({"sources": []})))
+    _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector("#loop-create-action", timeout=10000)
-
-    # Intercept start to return 409
-    page.route("**/loops/start", lambda route: route.fulfill(
-        status=409, content_type="application/json",
-        body=_json.dumps({"error": "active loop exists", "loop_id": "test-loop"})))
-
-    # Wait for manual input to be visible (no sources → shown by default)
     page.wait_for_selector("#loop-sketch-manual", timeout=5000)
 
-    # Fill form and submit
+    def conflict(route):
+        if after == "active":
+            holder["loops"] = [_list_item(_ACTIVE_ID, "widget-refactor", "plan_drafting")]
+        elif after == "failed":
+            holder["fail"] = "http500"
+        route.fulfill(status=409, content_type="application/json",
+                      body=json.dumps({"error": "active loop exists",
+                                       "loop_id": _ACTIVE_ID}))
+
+    page.route("**/loops/start", conflict)
+    length = page.evaluate("() => history.length")
     page.fill("#loop-feature-input", "test-feature")
     page.fill("#loop-sketch-manual", ".gator/artifacts/test.md")
     page.evaluate("() => document.querySelector('#loop-create-action').click()")
 
-    page.wait_for_selector("#loop-create-error", timeout=5000)
-    page.wait_for_function(
-        "() => document.querySelector('#loop-create-error').style.display !== 'none'",
-        timeout=5000)
-    error_text = page.evaluate(
-        "() => document.querySelector('#loop-create-error').textContent")
-    assert "active" in error_text.lower()
-    assert page.locator(".loop-create-open-active").count() == 1
-
-    page.unroute("**/api/repo-by-key/*/loops")
-    page.unroute("**/loops/start")
-    page.unroute("**/sketch-sources")
+    if after == "active":
+        _wait_header(page, "widget-refactor")
+        page.wait_for_selector(
+            '[data-slot="action"] .loop-transition-notice[data-kind="text"]',
+            timeout=5000)
+        text = page.evaluate("""() => document.querySelector(
+            '[data-slot="action"] .loop-transition-notice').textContent""")
+        assert "your form was not submitted" in text
+        assert _tab_state(page)["create"]["text"] == "Active"
+        assert page.evaluate("() => history.length") == length
+    else:
+        page.wait_for_function(
+            "() => document.querySelector('#loop-create-error').style.display !== 'none'",
+            timeout=5000)
+        error_text = page.evaluate(
+            "() => document.querySelector('#loop-create-error').textContent")
+        assert "already active elsewhere" in error_text
+        assert ("could not be loaded" in error_text) == (after == "failed")
+        assert page.input_value("#loop-feature-input") == "test-feature"
+        assert not page.evaluate(
+            "() => document.querySelector('#loop-create-action').disabled")
+    assert page.locator(".loop-create-open-active").count() == 0
 
 
 # ── live vs history workspace (Module 5 / B18–B23) ────────────────────────
@@ -1176,7 +1153,7 @@ def test_creation_409_shows_open_active(page, dashboard_fleet):
 def test_active_loop_shows_controls_and_prompts(page, dashboard_fleet):
     """B18: active loop shows controls and prompt copy."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-ctrl-btn", timeout=10000)
     assert page.locator(".loop-ctrl-btn").count() > 0
@@ -1186,7 +1163,7 @@ def test_active_loop_shows_controls_and_prompts(page, dashboard_fleet):
 def test_terminal_loop_read_only(page, dashboard_fleet):
     """B19: terminal loop shows outcome badge, no controls, no prompts."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "auth-migration")
     page.wait_for_selector(".loop-badge-outcome", timeout=10000)
     assert page.locator(".loop-badge-outcome").count() > 0
@@ -1198,9 +1175,7 @@ def test_terminal_loop_read_only(page, dashboard_fleet):
 
 def test_blocked_loop_shows_prominent_card(page, dashboard_fleet):
     """B20: blocked loop shows prominent blocked card with decision link."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "blocked-feature")
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
     page.wait_for_selector(".loop-blocked-card", timeout=10000)
     # L1: the compact alert carries no request text; the dialog does.
     assert page.locator(".loop-blocked-card .loop-blocked-reason").count() == 0
@@ -1213,9 +1188,7 @@ def test_blocked_loop_shows_prominent_card(page, dashboard_fleet):
 
 def test_blocked_card_decision_link_opens_inspector(page, dashboard_fleet):
     """B21: clicking decision link opens inspector section with content."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "blocked-feature")
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
     _open_decision_dialog(page)
     artifact_name = page.evaluate(
         "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
@@ -1248,9 +1221,7 @@ def test_blocked_card_decision_link_opens_inspector(page, dashboard_fleet):
 def test_round_zero_artifact_via_timeline_link(page, dashboard_fleet):
     """B23: round-zero draft event timeline link opens plan.round-0.md
     inspector section with submitted content."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "roundzero-test")
+    _open_sole_active(page, dashboard_fleet, "roundzero-test")
     # Wait for the timeline artifact link for plan.round-0.md
     page.wait_for_function(
         "() => {"
@@ -1295,9 +1266,7 @@ def test_round_zero_artifact_via_timeline_link(page, dashboard_fleet):
 def test_pending_decision_selected_over_resolved(page, dashboard_fleet):
     """B22: blocked card with resolved older decision + later pending:
     card links to the pending request artifact, not the resolved one."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "blocked-feature")
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
     _open_decision_dialog(page)
     artifact_name = page.evaluate(
         "() => document.querySelector('.loop-blocked-artifact-link').dataset.artifact")
@@ -1314,7 +1283,7 @@ def test_history_only_defaults_to_create(page, dashboard_fleet):
     import json as _json
 
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
 
     # Intercept loops list to return only terminal loops
     page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
@@ -1396,7 +1365,7 @@ def test_successful_creation_transitions_to_handoff(page, dashboard_fleet):
     import json as _json
 
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-section", timeout=10000)
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
 
     # Intercept loops to report no loops (enable create)
     page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
@@ -1428,7 +1397,7 @@ def test_successful_creation_transitions_to_handoff(page, dashboard_fleet):
         if "/status" not in route.request.url
         and "/events" not in route.request.url
         and "/start" not in route.request.url
-        else route.continue_()
+        else route.fallback()
     ))
     # Intercept status for the new loop
     page.route("**/loops/new-test-loop/status", lambda route: route.fulfill(
@@ -1468,16 +1437,32 @@ def _enter_handoff(page, dashboard_fleet):
 
     _navigate_to_loop(page, dashboard_fleet)
 
-    # Intercept to show no loops → create workspace
-    page.route("**/api/repo-by-key/*/loops", lambda route: route.fulfill(
-        status=200, content_type="application/json",
-        body=_json.dumps({"loops": []})))
+    # Intercept to show no loops → create workspace; once the start call
+    # succeeds the list reports the new loop as active, like the server.
+    listed = {"loops": [], "fail": False}
+
+    def serve_listed(route):
+        if listed["fail"]:
+            route.fulfill(status=500, content_type="application/json",
+                          body=_json.dumps({"error": "boom"}))
+        else:
+            route.fulfill(status=200, content_type="application/json",
+                          body=_json.dumps({"loops": listed["loops"]}))
+
+    page.route("**/api/repo-by-key/*/loops", serve_listed)
     page.route("**/sketch-sources", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body=_json.dumps({"sources": []})))
-    page.route("**/loops/start", lambda route: route.fulfill(
-        status=201, content_type="application/json",
-        body=_json.dumps({"loop_id": "handoff-loop"})))
+
+    def start(route):
+        listed["loops"] = [{
+            "loop_id": "handoff-loop", "feature": "handoff-test",
+            "mode": "planning", "stage": "plan_drafting", "round": 0,
+            "max_rounds": 3, "created_at": "2026-10-21T10:00:00Z"}]
+        route.fulfill(status=201, content_type="application/json",
+                      body=_json.dumps({"loop_id": "handoff-loop"}))
+
+    page.route("**/loops/start", start)
     page.route("**/loops/handoff-loop/status", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body=_json.dumps({
@@ -1501,6 +1486,7 @@ def _enter_handoff(page, dashboard_fleet):
     page.fill("#loop-sketch-manual", ".gator/artifacts/test.md")
     page.evaluate("() => document.querySelector('#loop-create-action').click()")
     page.wait_for_selector(".loop-handoff", timeout=10000)
+    return listed
 
 
 def test_handoff_renders_both_cards_with_guidance(page, dashboard_fleet):
@@ -1587,22 +1573,33 @@ def test_handoff_open_workspace_transitions(page, dashboard_fleet):
     """B17: 'Open loop workspace' transitions to inspect mode."""
     _enter_handoff(page, dashboard_fleet)
 
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active" and st["create"]["selected"] == "true"
+    assert st["sidebarHidden"] is True
     page.evaluate("() => document.querySelector('#loop-handoff-open').click()")
     # Should transition to the selected loop workspace
     page.wait_for_selector(".loop-status-header", timeout=10000)
     assert page.locator(".loop-handoff").count() == 0, (
         "Handoff view should be gone after clicking Open workspace")
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active" and st["create"]["selected"] == "true"
+    assert st["sidebarHidden"] is True
 
 
 # ── terminal handoff credential removal ──────────────────────────────────
 
 
-def test_terminal_handoff_disables_copy_buttons(page, dashboard_fleet):
+@pytest.mark.parametrize("listing", ["active", "terminal", "failed_then_terminal"])
+def test_terminal_handoff_disables_copy_buttons(page, dashboard_fleet, listing):
     """Terminal status during handoff disables copy buttons, removes
-    fallback textareas, shows outcome badge, stops polling."""
+    fallback textareas and shows the outcome badge. While the list still
+    reports the loop active, or fails (a text-led retry line), the handoff
+    stays with the copy buttons disabled and the single timer kept for the
+    retry; once a valid list reports it terminal, the Primary tab returns
+    to Create with an "ended" notice and polling stops."""
     import json as _json
 
-    _enter_handoff(page, dashboard_fleet)
+    listed = _enter_handoff(page, dashboard_fleet)
 
     # Confirm copy buttons exist and are enabled
     assert page.locator(".loop-handoff-copy").count() == 2
@@ -1622,6 +1619,31 @@ def test_terminal_handoff_disables_copy_buttons(page, dashboard_fleet):
                       "reviewer": {"role": "reviewer", "joined": True}},
             "decisions": [],
         })))
+    if listing == "failed_then_terminal":
+        listed["fail"] = True
+        page.wait_for_selector(".loop-handoff-refresh", timeout=10000)
+        assert "Refresh failed" in page.evaluate(
+            "() => document.querySelector('.loop-handoff-refresh').textContent")
+        assert page.evaluate("""() => Array.from(document.querySelectorAll(
+            '.loop-handoff-copy')).every(b => b.disabled
+                && b.textContent === 'Loop ended')""")
+        assert page.evaluate(
+            "() => document.querySelector('.loop-workspace').dataset.polling") == "1"
+        assert _tab_state(page)["create"]["text"] == "Active"
+        listed["fail"] = False
+    if listing != "active":
+        listed["loops"] = [dict(listed["loops"][0], stage="plan_approved")]
+        page.wait_for_selector(
+            '.loop-create-workspace', timeout=10000)
+        page.wait_for_selector(
+            '#loop-main-content > .loop-transition-notice[data-kind="ended"]',
+            timeout=5000)
+        assert page.locator(".loop-handoff-copy").count() == 0
+        st = _tab_state(page)
+        assert st["create"]["text"] == "Create" and st["create"]["selected"] == "true"
+        assert page.evaluate(
+            "() => document.querySelector('.loop-workspace').dataset.polling") == "0"
+        return
 
     # Wait for buttons to become disabled
     page.wait_for_function(
@@ -1867,7 +1889,7 @@ def test_live_workspace_inflight_copy_blocked_by_terminal(page, dashboard_fleet)
     import json as _json
 
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     # #56: the copy buttons sit inside the (closed) recovery disclosure.
     page.wait_for_selector(".loop-prompt-copy", state="attached", timeout=10000)
@@ -1946,7 +1968,7 @@ def test_live_delayed_events_does_not_leak_prompt(page, dashboard_fleet):
     import threading
 
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     # #56: the copy buttons sit inside the (closed) recovery disclosure.
     page.wait_for_selector(".loop-prompt-copy", state="attached", timeout=10000)
@@ -2494,9 +2516,18 @@ def test_stale_mutable_artifact_response_cannot_overwrite_newer(page, dashboard_
     _unserve_mutable_loop(page)
 
 
+def _view_under_history(page):
+    """Keep the inspected loop in the main pane but select the History tab.
+    A loop that ends under the Primary tab leaves it (it becomes Create);
+    the in-place terminal patch and its polling stop apply under History."""
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert _tab_state(page)["history"]["selected"] == "true"
+
+
 def test_terminal_transition_patches_in_place_and_stops_polling(page, dashboard_fleet):
     payload = _live_payload()
     _open_incremental(page, dashboard_fleet, payload)
+    _view_under_history(page)
     _expand_sketch(page)
 
     payload["status"]["status"].update(
@@ -2605,6 +2636,7 @@ def test_continue_success_goes_live_in_place(page, dashboard_fleet):
     payload = _max_rounds_payload()
     posts = _route_extend(page, payload)
     _open_incremental(page, dashboard_fleet, payload)
+    _view_under_history(page)
     page.wait_for_function(
         "() => document.querySelector('.loop-workspace').dataset.polling === '0'", timeout=8000)
     _expand_sketch(page)
@@ -2683,9 +2715,7 @@ def test_continue_server_error_keeps_dialog_for_retry(page, dashboard_fleet):
 def test_blocked_card_shows_request_from_real_fields(page, dashboard_fleet):
     """The blocked card renders from the pending decision (role, time, full
     multi-line reason, request link) and the preserved resume pair."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "blocked-feature")
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
     page.wait_for_selector(".loop-decision-card", timeout=10000)
     _open_decision_dialog(page)
     card = page.evaluate("""() => {
@@ -2781,9 +2811,7 @@ def test_decision_dialog_flow(page, dashboard_fleet):
                lambda route: (posts.append(route.request.post_data), route.fulfill(
                    status=200, content_type="application/json",
                    body='{"ok": true}')))
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
-    _select_loop_card(page, "blocked-feature")
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
     _open_decision_dialog(page)
     dlg = page.evaluate("""() => {
         var d = document.querySelector('dialog.loop-dialog');
@@ -3339,12 +3367,16 @@ def _card_mode_badge(page, feature):
 ])
 def test_mode_badges_on_cards_and_headers(page, dashboard_fleet,
                                           feature, label, key):
-    """Sidebar card and selected header (live or outcome) show the same
-    mode badge, as text with an accessible name, from recorded mode only."""
+    """A History card and the selected header (live or outcome) show the
+    same mode badge, as text with an accessible name, from recorded mode
+    only. The active loop has no card; its header carries the badge."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     card = _card_mode_badge(page, feature)
-    assert card == {"text": label, "aria": "Loop mode: " + label, "mode": key}
+    if feature == "widget-refactor":
+        assert card is None  # the active loop has no card (2026-10-21)
+    else:
+        assert card == {"text": label, "aria": "Loop mode: " + label, "mode": key}
     _select_loop_card(page, feature)
     header = page.evaluate("""() => {
         var b = document.querySelector('.loop-status-header .loop-mode-badge');
@@ -3360,7 +3392,7 @@ def test_mode_badge_styles_differ_without_colour(page, dashboard_fleet):
     """Coding, planning and legacy badges differ by border style/width,
     not by hue alone."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card .loop-mode-badge", timeout=10000)
+    page.wait_for_selector(".loop-card .loop-mode-badge", state="attached", timeout=10000)
     styles = page.evaluate("""() => {
         var out = {};
         document.querySelectorAll('.loop-mode-badge').forEach(function (b) {
@@ -3377,7 +3409,7 @@ def test_mode_badge_poll_is_mutation_free(page, dashboard_fleet):
     """An identical poll leaves the header region (and its mode badge)
     untouched, apart from the text-only countdown patch."""
     _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector(".loop-status-header .loop-mode-badge",
                            timeout=10000)
@@ -3419,17 +3451,23 @@ def _panel_features(page, panel):
 
 def _tab_state(page):
     return page.evaluate("""() => {
-        var out = {};
+        var out = {controls: []};
         document.querySelectorAll('.loop-subnav [role="tab"]').forEach(function (t) {
-            var panel = document.getElementById(t.getAttribute('aria-controls'));
+            out.controls.push(t.getAttribute('aria-controls'));
             out[t.dataset.tab] = {
                 selected: t.getAttribute('aria-selected'),
                 tabindex: t.getAttribute('tabindex'),
-                panelHidden: panel ? panel.hidden : null,
-                panelRole: panel ? panel.getAttribute('role') : null,
                 text: t.textContent,
+                primary: t.dataset.primary || null,
             };
         });
+        // One tabpanel (the workspace body) for both tabs; the list pane
+        // (History only) is hidden on the Primary tab.
+        var body = document.getElementById('loop-tabpanel');
+        out.bodyRole = body ? body.getAttribute('role') : null;
+        out.labelledBy = body ? body.getAttribute('aria-labelledby') : null;
+        var side = document.getElementById('loop-sidebar-nav');
+        out.sidebarHidden = side ? side.hidden : null;
         // #72: the tablist sits in the main-pane bar, not in the sidebar.
         out.tablist = !!document.querySelector('#loop-tabbar [role="tablist"]')
             && !document.querySelector('#loop-sidebar-nav [role="tablist"]');
@@ -3453,32 +3491,31 @@ def _history_forward(page):
 
 
 def test_loop_subnav_tabs(page, dashboard_fleet):
-    """Create/History tabs with tab roles, roving tabindex, arrow keys;
-    History lists only terminal loops and the active loop is only in the
-    Create panel."""
+    """Primary (Active here) / History tabs: tab roles, one tabpanel body
+    labelled by the selected tab, roving tabindex and arrow keys. The list
+    pane holds only terminal loops and is shown only on History."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-subnav", timeout=10000)
     st = _tab_state(page)
     assert st["tablist"]
+    assert st["bodyRole"] == "tabpanel"
+    assert st["controls"] == ["loop-tabpanel", "loop-tabpanel"]
     assert st["create"] == {"selected": "true", "tabindex": "0",
-                            "panelHidden": False, "panelRole": "tabpanel",
-                            "text": "Create"}
+                            "text": "Active", "primary": "active"}
     assert st["history"] == {"selected": "false", "tabindex": "-1",
-                             "panelHidden": True, "panelRole": "tabpanel",
-                             "text": "History"}
-    created = _panel_features(page, "loop-panel-create")
-    history = _panel_features(page, "loop-panel-history")
-    assert "widget-refactor" in created
-    assert "widget-refactor" not in history
+                             "text": "History", "primary": None}
+    assert st["labelledBy"] == "loop-tab-create"
+    assert st["sidebarHidden"] is True
+    history = _panel_features(page, "loop-sidebar-nav")
     assert set(history) == {"auth-migration", "coding-finished", "planning-finished"}
-    assert not set(history) & set(created)
 
     # Keyboard: ArrowRight selects and focuses History; End/Home; ArrowLeft wraps.
     page.focus("#loop-tab-create")
     page.keyboard.press("ArrowRight")
     st = _tab_state(page)
-    assert st["history"]["selected"] == "true" and st["history"]["panelHidden"] is False
-    assert st["create"]["tabindex"] == "-1" and st["create"]["panelHidden"] is True
+    assert st["history"]["selected"] == "true" and st["sidebarHidden"] is False
+    assert st["labelledBy"] == "loop-tab-history"
+    assert st["create"]["tabindex"] == "-1"
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
     page.keyboard.press("Home")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
@@ -3486,40 +3523,55 @@ def test_loop_subnav_tabs(page, dashboard_fleet):
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
     page.keyboard.press("ArrowRight")  # wraps
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
-    assert _tab_state(page)["create"]["selected"] == "true"
+    st = _tab_state(page)
+    assert st["create"]["selected"] == "true" and st["sidebarHidden"] is True
 
 
 def test_loop_tabs_survive_polls(page, dashboard_fleet):
-    """Polls re-render panel contents only: the tablist node and a focused
-    tab survive."""
+    """Polls never touch the tab chrome: the tablist node and a focused tab
+    survive, and the tab bar, the body's tab attributes and the (hidden)
+    History list record zero mutations across unchanged polls."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
+    page.wait_for_timeout(500)
     page.focus("#loop-tab-create")
-    page.evaluate("() => { window._tl56 = document.querySelector('.loop-subnav'); }")
+    page.evaluate("""() => {
+        window._tl56 = document.querySelector('.loop-subnav');
+        window._chromeMutations = 0;
+        var count = function (r) { window._chromeMutations += r.length; };
+        var opts = {childList: true, subtree: true, characterData: true,
+                    attributes: true};
+        new MutationObserver(count).observe(
+            document.getElementById('loop-tabbar'), opts);
+        new MutationObserver(count).observe(
+            document.getElementById('loop-sidebar-nav'), opts);
+        new MutationObserver(count).observe(
+            document.getElementById('loop-tabpanel'), {attributes: true});
+    }""")
     page.wait_for_timeout(7000)  # more than two polls
     assert page.evaluate("() => window._tl56.isConnected")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
+    assert page.evaluate("() => window._chromeMutations") == 0
 
 
 def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
-    """#72: Create / History sit in a full-width bar across the top of the
-    Loop main pane (baseline to the pane's right edge, above both columns);
-    selection is weight plus underline. A half-filled creation form
-    survives a History -> Create round trip."""
+    """#72: Primary / History sit in a full-width bar across the top of the
+    Loop main pane; selection is weight plus underline. In Active the live
+    workspace spans the bar (no list pane); History shows the list pane
+    below the bar. A half-filled creation form survives History -> Create."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
     geo = page.evaluate("""() => {
         const r = s => document.querySelector(s).getBoundingClientRect();
         const style = s => getComputedStyle(document.querySelector(s));
         const bar = r('#loop-tabbar'), slot = r('#view-slot');
-        const side = r('#loop-sidebar-nav'), main = r('#loop-main-content');
+        const main = r('#loop-main-content');
         const sel = style('#loop-tab-create'), un = style('#loop-tab-history');
         return {
             barLeft: bar.left, barRight: bar.right, barBottom: bar.bottom,
-            sideLeft: side.left,
             // the pane's content edge: #view-slot minus its right padding
             slotRight: slot.right - parseFloat(style('#view-slot').paddingRight),
-            sideTop: side.top, mainTop: main.top,
+            mainLeft: main.left, mainRight: main.right, mainTop: main.top,
             baseline: style('#loop-tabbar').borderBottomWidth,
             selWeight: parseInt(sel.fontWeight, 10), selBorder: sel.borderBottomWidth,
             selBorderColor: sel.borderBottomColor,
@@ -3527,9 +3579,10 @@ def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
             unBorderColor: un.borderBottomColor,
         };
     }""")
-    assert abs(geo["barLeft"] - geo["sideLeft"]) <= 1
     assert abs(geo["barRight"] - geo["slotRight"]) <= 1
-    assert geo["barBottom"] <= geo["sideTop"] + 1
+    # Active: no list pane, so the live workspace spans the bar's width.
+    assert abs(geo["barLeft"] - geo["mainLeft"]) <= 1
+    assert abs(geo["barRight"] - geo["mainRight"]) <= 1
     assert geo["barBottom"] <= geo["mainTop"] + 1
     assert geo["baseline"] == "1px"
     # Paper: selected = weight 600 + a 3px teal bottom rule.
@@ -3537,6 +3590,18 @@ def test_loop_tabbar_spans_main_pane(page, dashboard_fleet):
     assert geo["selBorderColor"] == "rgb(25, 174, 184)"
     assert geo["unWeight"] == 400
     assert geo["unBorderColor"] in ("rgba(0, 0, 0, 0)", "transparent")
+
+    # History: the list pane appears below the bar, at its left edge.
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    side = page.evaluate("""() => {
+        const b = document.querySelector('#loop-tabbar').getBoundingClientRect();
+        const s = document.querySelector('#loop-sidebar-nav').getBoundingClientRect();
+        return {barLeft: b.left, barBottom: b.bottom, sideLeft: s.left,
+                sideTop: s.top, sideWidth: s.width};
+    }""")
+    assert side["sideWidth"] > 0
+    assert abs(side["barLeft"] - side["sideLeft"]) <= 1
+    assert side["barBottom"] <= side["sideTop"] + 1
 
     # Half-filled form survives History -> Create (beta has no loops).
     origin = dashboard_fleet["url"].rstrip("/") + "/"
@@ -3565,86 +3630,74 @@ def test_loop_tabs_inert_until_loops_load(page, dashboard_fleet):
     page.wait_for_selector("#loop-tab-history", timeout=10000)
     assert held, "the /loops request should be in flight"
     length = page.evaluate("() => history.length")
+    assert page.evaluate(
+        "() => document.querySelector('#loop-tab-create').textContent") == "\u2026"
     page.evaluate("() => document.querySelector('#loop-tab-history').click()")
     assert page.evaluate("() => history.length") == length
-    assert page.locator("#loop-panel-create").count() == 0
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.loaded") is None
     for route in held:
-        route.continue_()
+        route.fallback()
     page.unroute("**/api/repo-by-key/*/loops")
     page.wait_for_selector(".loop-status-header", timeout=10000)
     st = _tab_state(page)
-    assert st["create"]["selected"] == "true"
+    assert st["create"]["selected"] == "true" and st["create"]["text"] == "Active"
     assert st["history"]["selected"] == "false"
     assert page.evaluate("() => history.length") == length
 
 
-def test_sidebar_create_with_active_loop(page, dashboard_fleet):
-    """B4 (rewritten for #56): with an active loop the Create action stays
-    actionable and leads to the explanation, not a disabled form."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-sidebar-create", timeout=10000)
-    assert page.locator(".loop-sidebar-create-disabled").count() == 0
-    page.evaluate("() => document.querySelector('.loop-sidebar-create').click()")
-    page.wait_for_selector(".loop-create-active", timeout=5000)
-    assert page.locator(".loop-sidebar-open-active").count() == 1
-
-
-def test_create_with_active_loop_explains_and_opens(page, dashboard_fleet):
-    """Create with an active loop shows mode + feature + stage and no form;
-    Open active loop selects it and focuses its heading."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-status-header", timeout=10000)
-    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
-    page.wait_for_selector(".loop-create-active", timeout=5000)
-    text = page.evaluate(
-        "() => document.querySelector('.loop-create-active').textContent")
-    # The explanation names the first active card in the Create panel.
-    first = _panel_features(page, "loop-panel-create")[0]
-    assert "Planning · legacy" in text
-    assert "‘" + first + "’ is active" in text
-    assert "Only one loop runs at a time." in text
-    assert page.locator("#loop-feature-input").count() == 0
-    assert page.locator("#loop-create-action").count() == 0
-    page.evaluate("() => document.querySelector('.loop-sidebar-open-active').click()")
-    _wait_header(page, first)
-    page.wait_for_function(
-        "() => document.activeElement && document.activeElement.matches"
-        "('.loop-status-header h3')", timeout=5000)
-
-
-def test_create_without_active_loop_unchanged(page, dashboard_fleet):
-    """No active loop: the Create tab is selected and the form renders as
-    before."""
-    origin = dashboard_fleet["url"].rstrip("/") + "/"
-    page.goto(origin + "?repo=beta", wait_until="load")
-    page.wait_for_selector(".repo-file-item", timeout=15000)
-    _click_nav(page, "loop")
-    page.wait_for_selector(".loop-create-workspace", timeout=10000)
-    assert page.locator("#loop-feature-input").count() == 1
-    assert page.locator(".loop-create-active").count() == 0
-    assert _tab_state(page)["create"]["selected"] == "true"
+@pytest.mark.parametrize("repo", ["alpha", "beta"])
+def test_primary_tab_reflects_active_state(page, dashboard_fleet, repo):
+    """With an active loop (alpha) the Primary tab reads Active and opens
+    the live workspace at full width; with none (beta) it reads Create and
+    shows the form. Neither shows a Create Loop action, an Active card, the
+    old active-loop explanation or a visible list pane."""
+    if repo == "alpha":
+        _navigate_to_loop(page, dashboard_fleet)
+        _wait_header(page, "widget-refactor")
+    else:
+        origin = dashboard_fleet["url"].rstrip("/") + "/"
+        page.goto(origin + "?repo=beta", wait_until="load")
+        page.wait_for_selector(".repo-file-item", timeout=15000)
+        _click_nav(page, "loop")
+        page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    st = _tab_state(page)
+    assert st["create"]["selected"] == "true"
+    assert st["create"]["text"] == ("Active" if repo == "alpha" else "Create")
+    assert st["sidebarHidden"] is True
+    for gone in (".loop-sidebar-create", ".loop-create-active",
+                 ".loop-sidebar-open-active", ".loop-card-attention"):
+        assert page.locator(gone).count() == 0, gone
+    assert page.locator("#loop-feature-input").count() == (0 if repo == "alpha" else 1)
+    geo = page.evaluate("""() => {
+        const b = document.getElementById('loop-tabpanel').getBoundingClientRect();
+        const m = document.getElementById('loop-main-content').getBoundingClientRect();
+        return {bl: b.left, br: b.right, ml: m.left, mr: m.right};
+    }""")
+    assert abs(geo["ml"] - geo["bl"]) <= 1 and abs(geo["mr"] - geo["br"]) <= 1
 
 
 def test_loop_back_forward_within_loop(page, dashboard_fleet):
-    """7a: select a history loop -> Create tab -> Back restores History and
-    that loop's header without adding entries -> Forward returns to Create."""
+    """7a: select a history loop -> Active tab -> Back restores History and
+    that loop's header without adding entries -> Forward returns to Active
+    and the active loop."""
     _navigate_to_loop(page, dashboard_fleet)
     page.wait_for_selector(".loop-status-header", timeout=10000)
     _select_loop_card(page, "auth-migration")
     assert _tab_state(page)["history"]["selected"] == "true"
     page.evaluate("() => document.querySelector('#loop-tab-create').click()")
-    page.wait_for_selector(".loop-create-active", timeout=5000)
+    _wait_header(page, "widget-refactor")
+    assert _tab_state(page)["create"]["selected"] == "true"
     length = page.evaluate("() => history.length")
     _history_back(page)
     _wait_header(page, "auth-migration")
     assert _tab_state(page)["history"]["selected"] == "true"
-    assert page.locator(".loop-create-active").count() == 0
     assert page.evaluate("() => history.length") == length
     page.wait_for_function(
         "() => document.activeElement && document.activeElement.matches"
         "('.loop-status-header h3')", timeout=5000)
     _history_forward(page)
-    page.wait_for_selector(".loop-create-active", timeout=5000)
+    _wait_header(page, "widget-refactor")
     assert _tab_state(page)["create"]["selected"] == "true"
     assert page.evaluate("() => history.length") == length
 
@@ -3841,7 +3894,8 @@ def test_history_tab_with_active_loop_round_trips(page, dashboard_fleet):
         timeout=10000)
     active = page.evaluate(
         "() => document.querySelector('.loop-status-header h3').textContent")
-    assert active in _panel_features(page, "loop-panel-create")
+    assert active == "widget-refactor"
+    assert active not in _panel_features(page, "loop-sidebar-nav")
     page.evaluate("() => document.querySelector('#loop-tab-history').click()")
     assert _tab_state(page)["history"]["selected"] == "true"
     _wait_header(page, active)  # the main content is untouched
@@ -3858,7 +3912,7 @@ def test_history_tab_with_active_loop_round_trips(page, dashboard_fleet):
         "() => document.querySelector('#loop-tab-history')"
         ".getAttribute('aria-selected') === 'true'", timeout=5000)
     _wait_header(page, active)
-    assert _tab_state(page)["history"]["panelHidden"] is False
+    assert _tab_state(page)["sidebarHidden"] is False
 
     # Leave and come back: the remount restores the same tab and loop.
     _click_nav(page, "history")
@@ -3870,7 +3924,374 @@ def test_history_tab_with_active_loop_round_trips(page, dashboard_fleet):
     page.wait_for_function(
         "() => document.querySelector('#loop-tab-history')"
         ".getAttribute('aria-selected') === 'true'", timeout=5000)
-    assert _tab_state(page)["create"]["panelHidden"] is True
+    assert _tab_state(page)["sidebarHidden"] is False
+
+
+def _loop_id_of(page, feature):
+    return page.evaluate("""(name) => {
+        var cards = document.querySelectorAll('.loop-sidebar-card');
+        for (var i = 0; i < cards.length; i++) {
+            if (cards[i].querySelector('.loop-card-feature').textContent === name)
+                return cards[i].dataset.loopId;
+        }
+        return null;
+    }""", feature)
+
+
+@pytest.mark.parametrize("row", ["create_form", "create_inspect_terminal",
+                                 "history_missing_loop"])
+def test_old_loop_substate_records_restore(page, dashboard_fleet, row):
+    """Old Create/History records restore to the current state: Primary
+    content is derived from the loop list (never from the record), and a
+    History record without a listed loop shows the Primary content beside
+    the History list. Nothing sensitive reaches history or storage."""
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, "widget-refactor")
+    done_id = _loop_id_of(page, "auth-migration")
+    assert done_id
+    sub = {
+        "create_form": {"view": "create", "mode": "create", "loopId": None},
+        "create_inspect_terminal": {"view": "create", "mode": "inspect",
+                                    "loopId": done_id},
+        "history_missing_loop": {"view": "history", "mode": "inspect",
+                                 "loopId": "gone-loop"},
+    }[row]
+    page.evaluate("""(sub) => {
+        var st = history.state; st.sub = sub; history.replaceState(st, '');
+    }""", sub)
+    page.reload(wait_until="load")
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=15000)
+    _wait_header(page, "widget-refactor")
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active"
+    if row == "history_missing_loop":
+        assert st["history"]["selected"] == "true" and st["sidebarHidden"] is False
+    else:
+        assert st["create"]["selected"] == "true" and st["sidebarHidden"] is True
+    raw = page.evaluate("() => JSON.stringify(history.state)")
+    stored = page.evaluate(
+        "() => JSON.stringify(Object.assign({}, window.sessionStorage))")
+    for blob in (raw, stored):
+        assert "glp_" not in blob and "prompt" not in blob.lower()
+
+
+@pytest.mark.raw_loop_list
+def test_active_conflict_state(page, dashboard_fleet):
+    """Defensive: the raw alpha seed has several live loops. The Primary tab
+    reads Active, shows an honest conflict notice and one button per live
+    loop (id order), inspects nothing, and opens exactly the loop chosen."""
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-conflict", timeout=10000)
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active" and st["create"]["selected"] == "true"
+    assert st["sidebarHidden"] is True
+    notice = page.evaluate(
+        "() => document.querySelector('.loop-conflict .loop-primary-notice').textContent")
+    assert "4 loops are active" in notice and "does not pick one" in notice
+    assert page.locator(".loop-status-header").count() == 0
+    ids = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '.loop-conflict-open')).map(b => b.dataset.loopId)""")
+    assert ids == sorted(ids) and len(ids) == 4
+    names = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '.loop-conflict-open')).map(b => b.textContent)""")
+    assert set(names) == {"widget-refactor", "xss-test", "blocked-feature",
+                          "roundzero-test"}
+    _select_loop_card(page, "blocked-feature")
+    assert page.locator(".loop-conflict").count() == 0
+    assert _tab_state(page)["create"]["selected"] == "true"
+    page.wait_for_function(
+        "() => document.activeElement && document.activeElement.matches"
+        "('.loop-status-header h3')", timeout=5000)
+
+
+def _list_item(loop_id, feature, stage, mode="planning"):
+    return {"loop_id": loop_id, "feature": feature, "stage": stage,
+            "mode": mode, "round": 1, "max_rounds": 3,
+            "created_at": "2026-09-22T10:00:00Z"}
+
+
+_DONE_ITEM = _list_item("done-loop-2026-09-20T10-00-00Z", "auth-migration",
+                        "plan_approved")
+
+
+def _serve_list(page, holder):
+    """Serve the loop list from holder["loops"]; holder["fail"] makes it
+    fail ("http500", "abort" or "invalid": a body without a loops array)."""
+    def handler(route):
+        fail = holder.get("fail")
+        if fail == "abort":
+            route.abort()
+        elif fail == "http500":
+            route.fulfill(status=500, content_type="application/json",
+                          body=json.dumps({"error": "boom"}))
+        elif fail == "invalid":
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps({"items": []}))
+        else:
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps({"loops": holder["loops"]}))
+    page.route("**/api/repo-by-key/*/loops", handler)
+
+
+def _serve_extra_loop(page, loop_id, feature, stage):
+    """A live loop that exists only in the mocked list."""
+    payload = {
+        "loop_id": loop_id, "feature": feature,
+        "created_at": "2026-09-23T10:00:00+00:00",
+        "status": {"stage": stage, "next_role": "draftor", "round": 1,
+                   "max_rounds": 3, "blocked": False},
+        "roles": {"draftor": {"role": "draftor", "joined": True},
+                  "reviewer": {"role": "reviewer", "joined": True}},
+        "decisions": [],
+    }
+    page.route("**/loops/" + loop_id + "/status", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps(payload)))
+    page.route("**/loops/" + loop_id + "/events", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=json.dumps({"events": []})))
+
+
+def _end_live_loop(payload, holder, stage="plan_approved"):
+    """End the mocked widget-refactor loop in its status and in the list."""
+    payload["status"]["status"]["stage"] = stage
+    holder["loops"] = [dict(it, stage=stage) if it["loop_id"] == _ACTIVE_ID else it
+                       for it in holder["loops"]]
+
+
+@pytest.mark.parametrize("selected", ["active", "history"])
+def test_active_loop_ends_reconciles_primary(page, dashboard_fleet, selected):
+    """When the active loop ends: on the Active tab, Primary becomes Create
+    with an "ended" notice whose link opens the loop in History, with no
+    new history entry; on the History tab, polls never move the Architect
+    out of History, and only the Primary label changes."""
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    holder = {"loops": [_list_item(_ACTIVE_ID, "widget-refactor", "plan_revision"),
+                        _DONE_ITEM]}
+    _serve_list(page, holder)
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, "widget-refactor")
+    if selected == "history":
+        page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    length = page.evaluate("() => history.length")
+
+    _end_live_loop(payload, holder)
+    page.wait_for_function(
+        "() => document.querySelector('#loop-tab-create').dataset.primary === 'create'",
+        timeout=10000)
+    if selected == "active":
+        page.wait_for_selector(".loop-create-workspace", timeout=5000)
+        notice = page.wait_for_selector(
+            '#loop-main-content > .loop-transition-notice[data-kind="ended"]',
+            timeout=5000)
+        assert "widget-refactor" in notice.text_content()
+        assert "Approved" in notice.text_content()
+        st = _tab_state(page)
+        assert st["create"]["text"] == "Create" and st["create"]["selected"] == "true"
+        assert page.evaluate("() => history.length") == length
+        assert page.evaluate("() => history.state.sub.mode") == "create"
+        page.evaluate("() => document.querySelector('.loop-ended-history').click()")
+        _wait_header(page, "widget-refactor")
+        assert _tab_state(page)["history"]["selected"] == "true"
+    else:
+        page.wait_for_timeout(4000)  # at least one more poll window
+        st = _tab_state(page)
+        assert st["history"]["selected"] == "true" and st["sidebarHidden"] is False
+        assert st["create"]["text"] == "Create"
+        assert page.locator(".loop-create-workspace").count() == 0
+        _wait_header(page, "widget-refactor")
+        assert page.evaluate("() => history.length") == length
+
+
+@pytest.mark.parametrize("case", ["a_to_b", "one_to_many", "chosen_kept",
+                                  "membership_changed",
+                                  "chosen_then_sole_then_many", "many_to_none"])
+def test_primary_follows_active_identity(page, dashboard_fleet, case):
+    """Primary follows a valid list (no case adds a history entry):
+    a_to_b inspects B with an "A ended" notice; one_to_many from an ordinary
+    inspection shows the conflict state (no pick); a loop chosen from the
+    conflict list stays while the conflict is unchanged, and the conflict
+    returns when membership changes or after a sole-loop interval;
+    many_to_none shows the Create form."""
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    _serve_extra_loop(page, "loop-b", "beta-feature", "plan_drafting")
+    _serve_extra_loop(page, "loop-c", "gamma-feature", "plan_drafting")
+    a = _list_item(_ACTIVE_ID, "widget-refactor", "plan_revision")
+    b = _list_item("loop-b", "beta-feature", "plan_drafting")
+    c = _list_item("loop-c", "gamma-feature", "plan_drafting")
+    sole = case in ("a_to_b", "one_to_many")
+    holder = {"loops": [a, _DONE_ITEM] if sole else [a, b, _DONE_ITEM]}
+    _serve_list(page, holder)
+    _navigate_to_loop(page, dashboard_fleet)
+    if sole:
+        _wait_header(page, "widget-refactor")
+    else:
+        page.wait_for_selector(".loop-conflict", timeout=10000)
+        _select_loop_card(page, "widget-refactor")  # an explicit choice
+        assert page.locator(".loop-conflict").count() == 0
+    length = page.evaluate("() => history.length")
+
+    if case == "a_to_b":
+        _end_live_loop(payload, holder)
+        holder["loops"] = holder["loops"] + [b]
+        _wait_header(page, "beta-feature")
+        notice = page.wait_for_selector(
+            '[data-slot="action"] .loop-transition-notice[data-kind="ended"]',
+            timeout=5000)
+        assert "widget-refactor" in notice.text_content()
+        assert _tab_state(page)["create"]["text"] == "Active"
+    elif case in ("one_to_many", "membership_changed"):
+        holder["loops"] = holder["loops"] + ([b] if case == "one_to_many" else [c])
+        page.wait_for_selector(".loop-conflict", timeout=10000)
+        n = 2 if case == "one_to_many" else 3
+        assert page.locator(".loop-conflict-open").count() == n
+        assert page.locator(".loop-status-header").count() == 0
+    elif case == "chosen_kept":
+        page.wait_for_timeout(7000)  # two unchanged polls
+        assert page.locator(".loop-conflict").count() == 0
+        _wait_header(page, "widget-refactor")
+    elif case == "chosen_then_sole_then_many":
+        holder["loops"] = [a, _DONE_ITEM]
+        page.wait_for_timeout(3500)  # one poll sees one(A)
+        page.evaluate("""() => {
+            window._mainMutations = 0;
+            new MutationObserver(function (r) { window._mainMutations += r.length; })
+                .observe(document.getElementById('loop-main-content'),
+                         {childList: true, subtree: true, characterData: true,
+                          attributes: true});
+        }""")
+        page.wait_for_timeout(3500)  # another poll: A kept in place
+        assert page.evaluate("() => window._mainMutations") == 0
+        _wait_header(page, "widget-refactor")
+        holder["loops"] = [a, b, _DONE_ITEM]
+        page.wait_for_selector(".loop-conflict", timeout=10000)
+    elif case == "many_to_none":
+        _end_live_loop(payload, holder)
+        holder["loops"] = [dict(it, stage="plan_approved") if it["loop_id"] == "loop-b"
+                           else it for it in holder["loops"]]
+        page.wait_for_selector(".loop-create-workspace", timeout=10000)
+        page.wait_for_selector(
+            '#loop-main-content > .loop-transition-notice[data-kind="ended"]',
+            timeout=5000)
+        assert _tab_state(page)["create"]["text"] == "Create"
+    assert page.evaluate("() => history.length") == length
+
+
+@pytest.mark.parametrize("fail", ["http500", "abort", "invalid"])
+def test_list_failure_keeps_primary_workspace(page, dashboard_fleet, fail):
+    """A failed loop list (HTTP error, network error, or a body without a
+    loops array) is never read as "no active loop": the live workspace and
+    label stay, the refresh notice shows, and polling continues; a valid
+    list clears the notice. With the loop finished meanwhile, the terminal
+    status is shown in place and the timer kept until a valid list
+    reconciles Primary to Create."""
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    holder = {"loops": [_list_item(_ACTIVE_ID, "widget-refactor", "plan_revision"),
+                        _DONE_ITEM], "fail": None}
+    _serve_list(page, holder)
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, "widget-refactor")
+
+    holder["fail"] = fail
+    page.wait_for_selector(".loop-refresh-failed", timeout=10000)
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active" and st["create"]["selected"] == "true"
+    assert page.locator(".loop-create-workspace").count() == 0
+    _wait_header(page, "widget-refactor")
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.polling") == "1"
+    holder["fail"] = None
+    page.wait_for_selector(".loop-refresh-failed", state="detached", timeout=10000)
+
+    # Terminal under Primary while the list fails.
+    holder["fail"] = fail
+    _end_live_loop(payload, holder)
+    page.wait_for_selector(".loop-refresh-failed", timeout=10000)
+    page.wait_for_selector(".loop-outcome-badge, .loop-badge-outcome",
+                           state="attached", timeout=10000)
+    assert page.locator(".loop-create-workspace").count() == 0
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.polling") == "1"
+    holder["fail"] = None
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    page.wait_for_selector(
+        '#loop-main-content > .loop-transition-notice[data-kind="ended"]',
+        timeout=5000)
+
+
+def test_stale_primary_selection_retries_after_history(page, dashboard_fleet):
+    """The active loop ends while a terminal History loop is shown (its
+    timer stopped) and the list fails: back on the Active tab, the cached
+    list routes to that loop, its terminal status shows in place with the
+    refresh notice, and the timer keeps retrying; a valid list then lands
+    Primary on Create."""
+    payload = _live_payload()
+    _serve_mutable_loop(page, payload)
+    holder = {"loops": [_list_item(_ACTIVE_ID, "widget-refactor", "plan_revision"),
+                        _DONE_ITEM], "fail": None}
+    _serve_list(page, holder)
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, "widget-refactor")
+    _select_loop_card(page, "auth-migration")
+    page.wait_for_function(
+        "() => document.querySelector('.loop-workspace').dataset.polling === '0'",
+        timeout=10000)
+
+    # The loop ends unobserved; the list cannot be read.
+    payload["status"]["status"]["stage"] = "plan_approved"
+    holder["fail"] = "http500"
+    page.evaluate("() => document.querySelector('#loop-tab-create').click()")
+    _wait_header(page, "widget-refactor")
+    page.wait_for_selector(".loop-refresh-failed", timeout=10000)
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.polling") == "1"
+    st = _tab_state(page)
+    assert st["create"]["selected"] == "true" and st["create"]["text"] == "Active"
+    assert page.locator(".loop-create-workspace").count() == 0
+
+    holder["fail"] = None
+    holder["loops"] = [_list_item(_ACTIVE_ID, "widget-refactor", "plan_approved"),
+                       _DONE_ITEM]
+    page.wait_for_selector(".loop-create-workspace", timeout=10000)
+    page.wait_for_selector(
+        '#loop-main-content > .loop-transition-notice[data-kind="ended"]',
+        timeout=5000)
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.polling") == "0"
+
+
+def test_initial_list_failure_retries(page, dashboard_fleet):
+    """A failed first list shows "Loop list unavailable — retrying." with
+    the "…" label and inert tabs (nothing claims Create); the next valid
+    list lands on the default selection."""
+    holder = {"loops": [_list_item(_ACTIVE_ID, "widget-refactor", "plan_revision"),
+                        _DONE_ITEM], "fail": "http500"}
+    _serve_list(page, holder)
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    _click_nav(page, "loop")
+    notice = page.wait_for_selector(
+        '.loop-primary-notice[data-kind="unavailable"]', timeout=10000)
+    assert "retrying" in notice.text_content()
+    assert page.evaluate(
+        "() => document.querySelector('#loop-tab-create').textContent") == "\u2026"
+    length = page.evaluate("() => history.length")
+    page.evaluate("() => document.querySelector('#loop-tab-history').click()")
+    assert _tab_state(page)["history"]["selected"] == "false"
+    assert page.evaluate("() => history.length") == length
+    assert page.evaluate(
+        "() => document.querySelector('.loop-workspace').dataset.loaded") is None
+
+    holder["fail"] = None
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached",
+                           timeout=10000)
+    _wait_header(page, "widget-refactor")
+    st = _tab_state(page)
+    assert st["create"]["text"] == "Active" and st["create"]["selected"] == "true"
+    assert page.locator('.loop-primary-notice[data-kind="unavailable"]').count() == 0
 
 
 # ── #56 participant recovery ──────────────────────────────────────────────
@@ -3931,7 +4352,7 @@ def _recovery(page):
 
 def _open_recovery_loop(page, fleet):
     _navigate_to_loop(page, fleet)
-    page.wait_for_selector(".loop-card", timeout=10000)
+    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
     _select_loop_card(page, "widget-refactor")
     page.wait_for_selector("#loop-recovery", state="attached", timeout=10000)
 

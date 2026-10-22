@@ -11,6 +11,7 @@ imports from here and defines the pytest fixtures.
 import hashlib
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -400,3 +401,61 @@ def open_fleet(page):
     page.click('.sidebar-item[data-view="fleet"]')
     page.wait_for_selector("#view-slot .fleet-table, #view-slot table",
                            timeout=15000)
+
+
+# Loop stages after which a loop is no longer active (mirrors
+# TERMINAL_STAGES in dashboard/views/loop.js).
+LOOP_TERMINAL_STAGES = frozenset({
+    "plan_approved", "max_rounds_exceeded", "turn_timed_out",
+    "ended_by_architect", "implementation_approved",
+})
+
+
+def keep_sole_active(loops, feature="widget-refactor"):
+    """The loop list with every terminal loop and only the named live loop."""
+    return [lp for lp in loops
+            if lp.get("stage") in LOOP_TERMINAL_STAGES
+            or lp.get("feature") == feature]
+
+
+# A regex, not the "**/api/repo-by-key/*/loops" glob that tests mock and
+# unroute: page.unroute(glob) removes only routes registered with that same
+# glob, so a test's own unroute never drops this filter.
+LOOP_LIST_URL = re.compile(r".*/api/repo-by-key/[^/?]+/loops(\?.*)?$")
+
+
+def sole_active_loop_list(page, feature="widget-refactor"):
+    """Serve the real repository loop list with `feature` as its only
+    active loop.
+
+    The `alpha` seed holds several live loops on disk so that each live
+    state has a fixture. Gator allows one active loop per repository
+    (#79), and the Loop view shows a conflict state for more than one.
+    This filter keeps every terminal loop and the named live loop, so the
+    view lands on that loop as it would in a real repository. Status,
+    events and artifacts still come from disk. A route registered later
+    (a test's own /loops mock) takes precedence.
+    """
+    def handler(route):
+        if route.request.method != "GET":
+            route.fallback()
+            return
+        try:
+            resp = route.fetch()
+        except Exception:
+            return  # the page or context closed with the request in flight
+        try:
+            body = resp.json()
+        except Exception:
+            body = None
+        loops = body.get("loops") if isinstance(body, dict) else None
+        try:
+            if isinstance(loops, list):
+                body["loops"] = keep_sole_active(loops, feature)
+                route.fulfill(response=resp, json=body)
+            else:
+                route.fulfill(response=resp)
+        except Exception:
+            return  # closed while fulfilling; nothing is waiting for it
+
+    page.route(LOOP_LIST_URL, handler)
