@@ -4,6 +4,47 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.29.0] — 2026-10-22
+
+Feature release. **The Loop workspace is calmer and says what it can do.** A selected loop reads as a short story: a quiet header, a **Now** line, the newest-first timeline and, for checkpoint coding loops, a checkpoint rail. The Loop view's first tab is **Create** when no loop is active and **Active** when one is, and the active loop opens at full width. Approved coding loops also stay **Committed** after later commits land.
+
+### Added
+
+- **Now line.** It comes from the loop's status and says what is happening and whether the Architect must act. Blocked, paused, approved and ended states each have their own glyph and wording.
+- **Checkpoint rail.** A declared-checkpoint coding loop shows its checkpoints in a vertical list: ✓ approved, ● active, ○ not started.
+- **Focused intervention dialogs.** Respond, Resume, Interject, Pause and End each open one dialog, and only its Confirm sends anything. A loop that changes underneath an open dialog closes it unsent and says so.
+- **Active tab.** With one active loop, the Loop view's first tab reads **Active** and opens that loop (handoff or live workspace) directly. The list pane appears only under History.
+- **Honest conflict state.** More than one active loop breaks the one-loop rule (#79). The view shows a "N loops are active" notice with one button per loop, and never picks a loop by position.
+- **Live tab updates.** When the active loop ends, the tab returns to Create with a "Loop ‘…’ ended — <outcome>" notice that links to the loop in History. When another loop replaces it, that loop opens. Automatic changes replace the browser-history entry instead of adding one, and a refresh never moves you out of History.
+
+### Changed
+
+- **Calm Loop workspace (L1).** The selected-loop region order is header, approval resolution, source, notices, suspension card, Now line, checkpoint rail plus timeline, then artifacts and evidence. The approved plan row is listed first. Candidate evidence and decision history are collapsed disclosures.
+- **Timeline newest first, grouped** by checkpoint or round. A pause, interjection or escalation stays in the checkpoint it happened in.
+- **No turn time display.** The workspace no longer shows elapsed or remaining turn time (Architect decision), so an unchanged poll changes nothing on the page. Legacy timeout behaviour is unchanged.
+- **The Loop view's first tab replaces the Create workaround.** The `+ Create Loop` button, the sidebar Active section and card (with its "◷ attention" marker), and the "a loop is active" explanation screen are removed. The attention notice inside the workspace remains. Saved tabs and Back/Forward entries keep their `create|history` values and restore correctly.
+
+### Fixed
+
+- **Approved coding loops stayed Committed only until the next commit (#85).** The approval check compared the approved tree with the current HEAD, so any later commit made it read **Stale** and offered a wrong Reopen. It now checks the first commit after the approved HEAD on the current first-parent history, and names that commit. A hook-altered commit and a detached HEAD after approval still read Stale. Git failures are never taken as divergence. The CLI and Dashboard agree, and no schema identifier changes.
+- **A failed loop-list request no longer looks like "no active loop".** The Loop view keeps the last valid workspace, shows "Refresh failed — retrying." and keeps polling. A failed first load says "Loop list unavailable — retrying." and lands when the list returns.
+- **Dashboard listing and search share one live-file seam (#70).** Listing containment cost no longer grows with path depth. Search can no longer read files that the listing hides: before, its recursive glob entered dot-directories, junctions and symlinks. `/files` JSON is unchanged. `/search` keeps its shape, and `.gator/.includes/` is no longer searchable.
+
+Pinned by:
+- `tests/test_dashboard_ui/test_loop_workspace.py`: the Primary tab, conflict state, reconciliation, list failure, the 409 race and old sub-state records;
+- `tests/test_loop_coding_review.py` and `tests/test_loop_gitsnap.py`: approval history;
+- `tests/test_dashboard_loop_coding.py`;
+- `tests/test_dashboard_ui/test_repo_tree_cache.py` and `test_search_visibility.py`;
+- the calm-workspace UI tests.
+
+See the Loop workspace entry in `scripts-dashboard-ui.md`, `resolve_approval()` and `snapshot()` in `scripts-loop.md`, `_iter_live_candidates()` in `scripts-dashboard.md`, and the #85 note in `scripts-cross-cutting.md`.
+
+### Changed (repository only)
+
+- The repository's runtime pin is 2.28.0.
+- The Ubuntu Python 3.9 Source CI lane is pinned to `ubuntu-24.04`. `ubuntu-latest` moved to 26.04, which has no Python 3.9 build.
+- The Dashboard UI tests serve alpha's loop list with one live loop by default (`raw_loop_list` marker to opt out).
+
 ## [2.28.0] — 2026-10-20
 
 Feature release. **The Commits view is readable.** Each commit is one line, grouped by day, and opening it shows the description and a clear Gator record instead of a wall of trailer lines.
