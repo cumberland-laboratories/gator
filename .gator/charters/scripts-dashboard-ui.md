@@ -428,6 +428,7 @@ Render the governed planning loop workspace. A full-width tab bar runs across th
     - **Another live loop:** `_open_sole_active(page, fleet, feature)` makes a different live loop the only active one.
     - **Raw list:** `@pytest.mark.raw_loop_list` sees the raw seed (used by `test_active_conflict_state`).
     - **Own mocks:** a test's own list mock takes precedence. A held or counted request must be released with `route.fallback()`, not `route.continue_()`, so it still passes through the filter.
+    - **Held lists:** a test that holds the `/loops` response must wait for the mounted view (`#loop-sidebar-nav`, `state="attached"`), never for `data-loaded`, which can only appear after the hold. `test_departed_mount_does_not_resurrect_polling` raced its own timeout this way (Ubuntu Source CI, 2026-10-22).
 ! **Loop history sub-state (#56)**: the shell owns history (see `navigate()` above). This view only contributes sub-state and registers **no** global listener.
   - **Recording:** `currentSub()` gives `{view, mode, loopId}`. A handoff is recorded as inspect of that loop, and the conflict state as mode `create`.
     - The persisted vocabulary is unchanged: `view: create|history`, where `create` is the Primary tab. `dashboard.js` `cleanSub()` and `workspace.js` `cleanContextSub()` therefore need no change.

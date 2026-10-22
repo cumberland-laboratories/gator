@@ -438,7 +438,9 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached", timeout=10000)
+    # The Loop view has mounted. Do not wait for data-loaded here: the held
+    # /loops response can only land after the hold, which races the wait.
+    page.wait_for_selector("#loop-sidebar-nav", state="attached", timeout=10000)
 
     page.evaluate(
         "() => document.querySelector("

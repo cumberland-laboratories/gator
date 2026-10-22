@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.29.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "14ee89ed3749e04d56f18f988e470c9196c4aae6",
+  "short_commit": "14ee89e",
+  "snippet_id": "snippet-14ee89ed3749e",
+  "session_group_key": "anthropic:f820f726-b725-41bd-82f1-6f110b132017",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "eb1c26292bc4928ea2fd54c75691bf5010d38804",
+  "started_at": "2026-10-21T22:51:06Z",
+  "ended_at": "2026-10-22T01:17:11Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-22-gator-eb1c26292bc49.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.29.0: a calmer Loop workspace with a Now line, a checkpoint",
+    "rail and focused dialogs. The Loop view now has an Active tab, and",
+    "approved coding loops stay Committed after later commits (#85). See the",
+    "CHANGELOG `[2.29.0]` section."
+  ],
+  "transcript_session_id": "f820f726-b725-41bd-82f1-6f110b132017",
+  "transcript_ref": null
+}
