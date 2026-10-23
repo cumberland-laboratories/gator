@@ -20,6 +20,82 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ── sorting (Paper inventory) ────────────────────────────────────────────
+  //
+  // One column at a time, client-only. `fleetSort` lives for the page
+  // load: it is never stored, put in history or in the URL, and it
+  // survives a Fleet re-render (Refresh, gatorRefreshFleet). key null =
+  // registry order. Rows carry their sort values as data attributes, so a
+  // sort reorders the existing <tr> nodes and never rebinds a listener.
+
+  const SORT_COLUMNS = [
+    { key: "name", label: "Repo" },
+    { key: "branch", label: "Branch" },
+    { key: "enforcement", label: "Enforcement" },
+    { key: "version", label: "Version" },
+  ];
+  const SORT_ATTR = {
+    name: "sortName", branch: "sortBranch",
+    enforcement: "enforcement", version: "sortVersion",
+  };
+  const fleetSort = { key: null, dir: "asc" };
+
+  // Enforcement reads the SAVED level (data-enforcement), which changes
+  // only after a successful save, never an unsaved select value.
+  function sortValue(row, key) {
+    return row.dataset[SORT_ATTR[key]] || "";
+  }
+
+  // Stable: ties keep registry order; a missing value sorts last in both
+  // directions.
+  function sortRows(rows) {
+    const key = fleetSort.key;
+    const sign = fleetSort.dir === "desc" ? -1 : 1;
+    const index = row => Number(row.dataset.rowIndex);
+    return rows.slice().sort((a, b) => {
+      if (key) {
+        const va = sortValue(a, key), vb = sortValue(b, key);
+        if (!va !== !vb) return va ? -1 : 1;
+        const c = va.localeCompare(vb, undefined, { numeric: true, sensitivity: "base" });
+        if (c) return sign * c;
+      }
+      return index(a) - index(b);
+    });
+  }
+
+  function applySortHeaderState(table) {
+    table.querySelectorAll("th[data-sort-key]").forEach(th => {
+      const active = th.dataset.sortKey === fleetSort.key;
+      if (active) th.setAttribute("aria-sort", fleetSort.dir === "desc" ? "descending" : "ascending");
+      else th.removeAttribute("aria-sort");
+      th.classList.toggle("fleet-sort-active", active);
+      const mark = th.querySelector(".fleet-sort-mark");
+      if (mark) mark.textContent = active ? (fleetSort.dir === "desc" ? "▼" : "▲") : "";
+    });
+  }
+
+  // Reorder the existing rows in place (tbody.append moves them), then
+  // mark the headers. Shared by the render, header activation and a
+  // successful enforcement save.
+  function applySort(table) {
+    if (!table || !table.tBodies[0]) return;
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.rows).filter(r => r.dataset.rowIndex !== undefined);
+    sortRows(rows).forEach(r => tbody.append(r));
+    applySortHeaderState(table);
+  }
+
+  function bindSortHeaders(container) {
+    container.querySelectorAll(".fleet-sort").forEach(btn => {
+      btn.addEventListener("click", function () {
+        const key = this.dataset.sortKey;
+        fleetSort.dir = fleetSort.key === key && fleetSort.dir === "asc" ? "desc" : "asc";
+        fleetSort.key = key;
+        applySort(this.closest("table"));
+      });
+    });
+  }
+
   // ── render ─────────────────────────────────────────────────────────────
 
   window.GatorViews.fleet = function (data, container) {
@@ -34,17 +110,13 @@
 
     let html = `
       <div class="fleet-header">
-        <span></span>
         <button class="gator-btn gator-btn-primary" id="add-repo-btn">Add Repository</button>
       </div>
       <div class="section">
         <table class="data-table fleet-table">
           <thead>
             <tr>
-              <th>Repo</th>
-              <th>Branch</th>
-              <th>Enforcement</th>
-              <th>Version</th>
+              ${SORT_COLUMNS.map(c => `<th data-sort-key="${c.key}"><button class="fleet-sort" data-sort-key="${c.key}">${c.label}<span class="fleet-sort-mark" aria-hidden="true"></span></button></th>`).join("")}
               <th></th>
               <th style="width:24px"></th>
             </tr>
@@ -52,8 +124,8 @@
           <tbody>
     `;
 
-    for (const repo of repos) {
-      const accIcon = repo.accessible ? "" : ' <span title="Not accessible" class="muted">!</span>';
+    repos.forEach((repo, rowIndex) => {
+      const accIcon = repo.accessible ? "" : ' <span title="Not accessible" class="muted">!<span class="fleet-hidden-text">Not accessible</span></span>';
       const branch = repo.branch ? escHtml(repo.branch) : '<span class="muted">-</span>';
       const cliVersion = repo.cli_version ? escHtml(repo.cli_version) : "";
       const isCurrent = currentVersion && cliVersion === currentVersion;
@@ -104,30 +176,36 @@
       </div>`;
 
       html += `
-        <tr>
+        <tr data-row-index="${rowIndex}"
+            data-sort-name="${escHtml(repo.name)}"
+            data-sort-branch="${escHtml(repo.branch || "")}"
+            data-sort-version="${cliVersion}"
+            data-enforcement="${isGatorized ? escHtml(enfLevel) : ""}">
           <td>
-            <button class="link-btn" onclick="window.gatorNavToRepo('${escHtml(repo.name)}', '${escHtml(repo.repo_key || "")}')">${escHtml(repo.name)}</button>
+            <button class="link-btn fleet-repo-name" onclick="window.gatorNavToRepo('${escHtml(repo.name)}', '${escHtml(repo.repo_key || "")}')">${escHtml(repo.name)}</button>
             ${accIcon}
           </td>
-          <td>${branch}</td>
+          <td class="fleet-branch">${branch}</td>
           <td>${enfDropdown}</td>
-          <td class="mono" style="font-size:12px">${cliVersion || '<span class="muted">-</span>'}</td>
+          <td class="fleet-version">${cliVersion || '<span class="muted">-</span>'}</td>
           <td class="status-cell">${menuHtml}</td>
           <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
         </tr>
       `;
-    }
+    });
 
     if (repos.length === 0) {
-      html += `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">
-        No repos registered yet.<br><br>
-        <code style="font-size:12px;">gator gatorize /path/to/repo</code> — install governance + register<br>
-        <code style="font-size:12px;">gator dashboard --add-repo /path/to/repo</code> — register an existing gatorized repo
+      html += `<tr><td colspan="6" class="fleet-empty">
+        <p>No repos registered yet.</p>
+        <p><code>gator gatorize /path/to/repo</code> — install governance + register</p>
+        <p><code>gator dashboard --add-repo /path/to/repo</code> — register an existing gatorized repo</p>
       </td></tr>`;
     }
 
     html += `</tbody></table></div>`;
     container.innerHTML = html;
+    applySort(container.querySelector(".fleet-table"));
+    bindSortHeaders(container);
     bindOverflowMenus(container);
     bindEnforcementDropdowns(container);
 
@@ -400,6 +478,15 @@
           });
           const result = await resp.json();
           if (result.status === "ok") {
+            // The saved level is the one this request sent. An active
+            // Enforcement sort follows it at once; moving the row blurs
+            // the select, so focus returns to it.
+            const row = this.closest("tr");
+            if (row) row.dataset.enforcement = level;
+            if (row && fleetSort.key === "enforcement") {
+              applySort(row.closest("table"));
+              this.focus();
+            }
             const check = document.createElement("span");
             check.className = "save-check";
             check.textContent = " \u2713";

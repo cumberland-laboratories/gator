@@ -16,6 +16,8 @@ Each test proves a distinct risk:
 
 import pytest
 
+from ._harness import sole_active_loop_list
+
 
 def _origin(fleet):
     return fleet["url"].rstrip("/") + "/"
@@ -360,3 +362,176 @@ def test_reduced_motion_turns_off_shell_transitions(page, dashboard_fleet, motio
         assert all(set(d.replace(" ", "").split(",")) == {"0s"} for d in durations), durations
     else:
         assert all(d != "0s" for d in durations), durations
+
+
+# ── explicit type roles (Paper final typography, checkpoint 1) ────────────
+
+# Every visible text element (and form control) in the shell and in any
+# open dialog: its computed font size and line height.
+_TYPE_SNAPSHOT = """() => {
+    const roots = [document.getElementById('app-shell'),
+                   ...document.querySelectorAll('dialog[open]')];
+    const out = [];
+    for (const root of roots) {
+        for (const el of [root, ...root.querySelectorAll('*')]) {
+            if (!el.getClientRects().length) continue;
+            const control = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName);
+            const text = Array.from(el.childNodes).some(
+                n => n.nodeType === 3 && n.textContent.trim());
+            if (!control && !text) continue;
+            const cs = getComputedStyle(el);
+            const cls = Array.from(el.classList).slice(0, 2).join('.');
+            out.push({key: el.tagName.toLowerCase() + (el.id ? '#' + el.id : '')
+                           + (cls ? '.' + cls : ''),
+                      text: (el.textContent || '').trim().slice(0, 40),
+                      size: cs.fontSize, leading: cs.lineHeight});
+        }
+    }
+    return out;
+}"""
+
+_SENTINEL = """on => {
+    for (const el of [document.documentElement, document.body]) {
+        el.style.fontSize = on ? '23px' : '';
+        el.style.lineHeight = on ? '2.3' : '';
+    }
+}"""
+
+
+def _open_loop(page, fleet, feature):
+    sole_active_loop_list(page, feature)
+    page.goto(_origin(fleet) + "?repo=alpha&view=loop", wait_until="load")
+    page.wait_for_selector('.loop-workspace[data-loaded="1"]', state="attached",
+                           timeout=15000)
+    page.wait_for_selector(".loop-now", timeout=10000)
+
+
+def _surface_fleet(page, fleet):
+    page.goto(_origin(fleet) + "?view=fleet", wait_until="load")
+    page.wait_for_selector("#view-slot .fleet-table", timeout=15000)
+
+
+def _surface_fleet_modal(page, fleet):
+    _surface_fleet(page, fleet)
+    page.click("#add-repo-btn")
+    page.wait_for_selector(".gator-modal #discovered-repos :not(:empty)",
+                           state="attached", timeout=10000)
+    page.wait_for_timeout(300)
+
+
+def _surface_repo(page, fleet):
+    page.goto(_origin(fleet) + "?repo=alpha", wait_until="load")
+    page.wait_for_selector(".repo-markdown", timeout=15000)
+
+
+def _surface_commits(page, fleet):
+    page.goto(_origin(fleet) + "?repo=alpha&view=history", wait_until="load")
+    page.wait_for_selector("details.commit-row summary", timeout=15000)
+    page.click("details.commit-row summary")
+
+
+def _surface_updates(page, fleet):
+    # The version check reaches PyPI; a fixed answer makes the settled
+    # state (both versions and the status text) deterministic offline.
+    page.route("**/api/updates/check", lambda route: route.fulfill(
+        json={"current_version": "2.30.0", "latest_version": "2.30.0",
+              "update_available": False}))
+    page.goto(_origin(fleet) + "?view=updates", wait_until="load")
+    page.wait_for_function(
+        "() => (document.getElementById('upd-status') || {}).textContent === 'Up to date'",
+        timeout=15000)
+
+
+def _surface_settings(page, fleet):
+    page.goto(_origin(fleet) + "?repo=alpha&view=settings", wait_until="load")
+    page.wait_for_function(
+        "() => document.querySelector('#view-slot').textContent.trim().length > 0",
+        timeout=15000)
+    page.wait_for_timeout(500)
+
+
+def _surface_docs(page, fleet):
+    page.goto(_origin(fleet) + "?view=docs", wait_until="load")
+    page.wait_for_selector(".docs-sidebar", timeout=15000)
+
+
+def _surface_loop_active(page, fleet):
+    _open_loop(page, fleet, "widget-refactor")
+
+
+def _surface_loop_interject(page, fleet):
+    _open_loop(page, fleet, "widget-refactor")
+    page.click('#loop-controls .loop-ctrl-btn[data-action="interject"]')
+    page.wait_for_selector("dialog.loop-dialog[open]", timeout=5000)
+
+
+def _surface_loop_decision(page, fleet):
+    _open_loop(page, fleet, "blocked-feature")
+    page.click(".loop-blocked-respond")
+    page.wait_for_selector('dialog.loop-dialog[data-kind="decision"][open]',
+                           timeout=5000)
+
+
+def _surface_loop_history(page, fleet):
+    _open_loop(page, fleet, "widget-refactor")
+    page.click("#loop-tab-history")
+    page.wait_for_selector(".loop-sidebar-card", timeout=10000)
+    page.click(".loop-sidebar-card")
+    page.wait_for_selector(".loop-outcome-header, .loop-badge-outcome", timeout=10000)
+
+
+_TYPE_SURFACES = {
+    "fleet": _surface_fleet,
+    "fleet-add-modal": _surface_fleet_modal,
+    "repo-markdown": _surface_repo,
+    "commits-expanded": _surface_commits,
+    "updates": _surface_updates,
+    "settings": _surface_settings,
+    "docs": _surface_docs,
+    "loop-active": _surface_loop_active,
+    "loop-interject-dialog": _surface_loop_interject,
+    "loop-decision-dialog": _surface_loop_decision,
+    "loop-history-terminal": _surface_loop_history,
+}
+
+
+@pytest.mark.parametrize("surface", list(_TYPE_SURFACES))
+def test_no_text_inherits_root_type(page, dashboard_fleet, surface):
+    """Every Dashboard text role is explicit: no visible text takes its
+    size or line height from html/body. The root is set to sentinel values
+    (23px / 2.3) without touching the type tokens, so an element that uses a
+    token such as --text-base stays put, and only an accidental inheritor
+    moves. A new surface needs an explicit role or a compact-leading owner
+    (scripts-dashboard-ui.md, Paper tokens)."""
+    page.set_viewport_size({"width": 1440, "height": 900})
+    _TYPE_SURFACES[surface](page, dashboard_fleet)
+    before = page.evaluate(_TYPE_SNAPSHOT)
+    assert before, "no visible text measured"
+    page.evaluate(_SENTINEL, True)
+    after = page.evaluate(_TYPE_SNAPSHOT)
+    page.evaluate(_SENTINEL, False)
+    assert len(before) == len(after)
+    moved = sorted({f"{b['key']} {b['size']}/{b['leading']} -> "
+                    f"{a['size']}/{a['leading']} ({b['text']!r})"
+                    for b, a in zip(before, after)
+                    if (b["size"], b["leading"]) != (a["size"], a["leading"])})
+    assert not moved, "text inherits the root type:\n" + "\n".join(moved)
+
+
+def test_root_reading_baseline(page, dashboard_fleet):
+    """The final Paper reading baseline: html and body compute to
+    16px / 1.6, and the role tokens keep their sizes (section/action 14,
+    navigation 13, metadata 12 and 11)."""
+    page.goto(_origin(dashboard_fleet) + "?view=fleet", wait_until="load")
+    page.wait_for_selector("#view-slot .fleet-table", timeout=15000)
+    facts = page.evaluate("""() => {
+        const root = getComputedStyle(document.documentElement);
+        const tok = n => root.getPropertyValue(n).trim();
+        const css = el => [getComputedStyle(el).fontSize, getComputedStyle(el).lineHeight];
+        return {html: css(document.documentElement), body: css(document.body),
+                tokens: ['--text-base', '--text-ui', '--text-nav', '--text-sm',
+                         '--text-xs'].map(tok)};
+    }""")
+    assert facts["html"] == ["16px", "25.6px"], facts
+    assert facts["body"] == ["16px", "25.6px"], facts
+    assert facts["tokens"] == ["16px", "14px", "13px", "12px", "11px"], facts

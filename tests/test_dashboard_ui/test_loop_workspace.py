@@ -888,6 +888,62 @@ def test_timeline_card_summary_from_event(page, dashboard_fleet):
         _unserve_mutable_loop(page)
 
 
+def test_loop_reading_hierarchy(page, dashboard_fleet):
+    """Paper: the Now line, the turn's executive paragraph and the dialog
+    explanation are reading prose (--text-base / --leading-prose); event
+    metadata stays compact; artifact rows are sans action text; dialog
+    labels and inputs are --text-ui. CSS only: the paragraph is styled as
+    the card is built, with no reconciliation pass."""
+    events = list(_BASE_EVENTS)
+    events[2] = dict(events[2], executive_summary="The plan is ready to implement.")
+    try:
+        _open_with_events(page, dashboard_fleet, events)
+        page.wait_for_selector(".loop-event-executive:not(.loop-event-executive-absent)",
+                               timeout=10000)
+        page.wait_for_selector(".loop-artifact-toggle", timeout=10000)
+        facts = page.evaluate("""() => {
+            const root = getComputedStyle(document.documentElement);
+            const cs = s => getComputedStyle(document.querySelector(s));
+            const px = v => parseFloat(v);
+            const card = document.querySelector('.loop-event-executive').closest('.loop-event');
+            return {
+                base: px(root.getPropertyValue('--text-base')),
+                ui: px(root.getPropertyValue('--text-ui')),
+                prose: parseFloat(root.getPropertyValue('--leading-prose')),
+                now: [px(cs('.loop-now').fontSize), px(cs('.loop-now').lineHeight)],
+                exec: [px(cs('.loop-event-executive:not(.loop-event-executive-absent)').fontSize),
+                       px(cs('.loop-event-executive:not(.loop-event-executive-absent)').lineHeight)],
+                time: px(cs('.loop-event-time').fontSize),
+                label: px(cs('.loop-event-label').fontSize),
+                link: px(cs('.loop-timeline-artifact-link').fontSize),
+                cardPad: px(getComputedStyle(card).paddingTop),
+                toggle: [px(cs('.loop-artifact-toggle').fontSize),
+                         cs('.loop-artifact-toggle').fontFamily],
+            };
+        }""")
+        prose = [facts["base"], round(facts["base"] * facts["prose"], 1)]
+        assert facts["now"] == prose and facts["exec"] == prose, facts
+        assert facts["time"] <= 13 and facts["label"] <= 13 and facts["link"] == 12, facts
+        assert facts["cardPad"] == 12, facts
+        assert facts["toggle"][0] == facts["ui"], facts
+        assert "Consolas" not in facts["toggle"][1], facts
+
+        page.click('#loop-controls .loop-ctrl-btn[data-action="interject"]')
+        page.wait_for_selector("dialog.loop-dialog[open]", timeout=5000)
+        dialog = page.evaluate("""() => {
+            const cs = s => getComputedStyle(document.querySelector('dialog.loop-dialog[open] ' + s));
+            return {note: [parseFloat(cs('.loop-dialog-note').fontSize),
+                           parseFloat(cs('.loop-dialog-note').lineHeight)],
+                    label: parseFloat(cs('.loop-ctrl-label').fontSize),
+                    input: parseFloat(cs('.loop-ctrl-input').fontSize)};
+        }""")
+        assert dialog["note"] == prose, dialog
+        assert dialog["label"] == facts["ui"] and dialog["input"] == facts["ui"], dialog
+        page.keyboard.press("Escape")
+    finally:
+        _unserve_mutable_loop(page)
+
+
 _MAX = 1200
 
 

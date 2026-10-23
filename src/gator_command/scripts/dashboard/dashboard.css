@@ -19,7 +19,8 @@
 
   --text-xs:      11px;   /* timestamps, compact metadata only */
   --text-sm:      12px;   /* controls, dense metadata, source/tree rows */
-  --text-base:    14px;   /* app baseline */
+  --text-base:    16px;   /* reading prose (Now line, summaries, help) */
+  --text-ui:      14px;   /* section/action text: labels, row titles */
   --text-nav:     13px;   /* sidebar and workspace labels */
   --text-section: 18px;   /* redesigned view sections */
   --text-page:    30px;   /* shell page title */
@@ -94,15 +95,17 @@
   --mono: var(--font-mono);
 }
 
-/* Temporary 14px/1.5 Paper shell baseline; final 16px/1.6 follows the
-   Commits and Loop redesigns (Paper sketch step 6). */
+/* Final Paper reading baseline: 16px/1.6. Nothing visible inherits it:
+   every text role is explicit (a token or a rule), and dense surfaces are
+   compact-leading owners (line-height: var(--leading-ui)). The guard test
+   test_no_text_inherits_root_type pins this. */
 html, body {
   height: 100%;
   font-family: var(--font-sans);
   font-size: var(--text-base);
   color: var(--color-text);
   background: var(--color-bg);
-  line-height: var(--leading-ui);
+  line-height: var(--leading-prose);
 }
 
 /* ── app shell ─────────────────────────────────────────────────────────── */
@@ -131,6 +134,7 @@ body {
 }
 
 #workspace-strip {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   flex: 0 0 var(--workspace-strip-height);
   height: var(--workspace-strip-height);
   display: flex;
@@ -295,6 +299,7 @@ body {
 /* ── sidebar ───────────────────────────────────────────────────────────── */
 
 #sidebar {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   background: var(--sidebar-bg);
@@ -365,7 +370,7 @@ body {
 }
 
 .ctx-name {
-  font-size: var(--text-base);
+  font-size: var(--text-ui);
   font-weight: var(--weight-emphasis);
   color: var(--gray-900);
   line-height: var(--leading-compact);
@@ -616,6 +621,7 @@ body {
    toggles `.route-repo` on `#view-slot`. Padding is dropped so
    `.repo-browser` fills the slot; padding remains on non-Repo routes. */
 #view-slot.route-repo {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   overflow: hidden;
   display: flex;
   padding: 0;
@@ -630,6 +636,7 @@ body {
 /* ── view headers ──────────────────────────────────────────────────────── */
 
 .view-header {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -649,6 +656,7 @@ body {
 }
 
 .section {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   margin-bottom: 28px;
 }
 
@@ -667,6 +675,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  line-height: var(--leading-ui);   /* compact-leading owner */
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -712,6 +721,86 @@ body {
 .data-table.fleet-table thead tr:first-child th:last-child { border-top-right-radius: 8px; }
 .data-table.fleet-table tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
 .data-table.fleet-table tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+
+/* Fleet (Paper inventory): one quiet table under the title. The
+   repository name is the readable value; branch and version are compact
+   literal values. The sorted column is a mark (▲/▼) plus weight 600 and
+   aria-sort, never colour alone. Scoped to .fleet-table so other
+   .data-table uses keep their look. */
+.fleet-header .gator-btn-primary {
+  background: var(--color-surface);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-control);
+  color: var(--gray-800);
+  font-family: inherit;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-medium);
+}
+.fleet-header .gator-btn-primary:hover { background: var(--gray-100); }
+
+.data-table.fleet-table { border-color: var(--gray-200); }
+.data-table.fleet-table th {
+  background: var(--color-surface);
+  font-size: var(--text-ui);
+  font-weight: var(--weight-medium);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--gray-600);
+  border-bottom-color: var(--gray-200);
+}
+.data-table.fleet-table td { border-bottom-color: var(--gray-100); }
+.data-table.fleet-table tr:hover td { background: var(--gray-50); }
+
+.fleet-sort {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.fleet-sort:hover { color: var(--gray-900); }
+.fleet-sort:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.fleet-sort-mark { display: inline-block; min-width: 1em; font-size: var(--text-xs); }
+.fleet-sort-active { color: var(--gray-900); }
+.fleet-sort-active .fleet-sort { font-weight: var(--weight-emphasis); }
+
+/* .fleet-table raises specificity over the later `.link-btn { font: inherit }`. */
+.fleet-table .fleet-repo-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+/* Reviewed compact override (16px baseline): a narrow table scrolls
+   sideways, so a repository name and its "!" marker never break at a
+   hyphen into a tall row. */
+.fleet-table td:first-child { white-space: nowrap; }
+.fleet-branch,
+.fleet-version {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+}
+
+.fleet-empty { padding: var(--space-5); text-align: center; color: var(--gray-600); }
+.fleet-empty p { margin: 0 0 var(--space-2); font-size: var(--text-base); line-height: var(--leading-prose); }
+.fleet-empty code { font-family: var(--font-mono); font-size: var(--text-sm); }
+
+/* The "!" unavailable marker also carries its meaning as text. */
+.fleet-hidden-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
 /* ── session table ─────────────────────────────────────────────────────── */
 
@@ -826,6 +915,7 @@ body {
 }
 
 .card {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   flex: 1;
   min-width: 150px;
   background: var(--color-surface);
@@ -1119,6 +1209,7 @@ a.menu-item {
   z-index: 1000;
 }
 .gator-modal {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -1129,7 +1220,8 @@ a.menu-item {
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
-.gator-modal h3 { margin: 0 0 16px; }
+.gator-modal h3 { margin: 0 0 16px; font-size: var(--text-section); }
+.gator-modal-body p { font-size: var(--text-base); line-height: var(--leading-prose); }   /* Fleet dialog explanation (reading prose) */
 .gator-modal-footer { margin-top: 16px; text-align: right; }
 
 .gator-input-group label {
@@ -1807,9 +1899,9 @@ mark.search-hit {
 .repo-markdown h4 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; color: #444; }
 .repo-markdown h5, .repo-markdown h6 { font-size: 13px; font-weight: 600; margin: 10px 0 4px; color: #555; }
 
-.repo-markdown p { margin: 8px 0; line-height: 1.6; color: #333; text-align: justify; }
+.repo-markdown p { margin: 8px 0; font-size: var(--text-ui); line-height: 1.6; color: #333; text-align: justify; }
 .repo-markdown ul { margin: 8px 0; padding-left: 24px; }
-.repo-markdown li { margin: 4px 0; line-height: 1.5; color: #333; text-align: justify; }
+.repo-markdown li { margin: 4px 0; font-size: var(--text-ui); line-height: 1.5; color: #333; text-align: justify; }
 .repo-markdown hr { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
 .repo-markdown a { color: #0366d6; text-decoration: none; }
 .repo-markdown a:hover { text-decoration: underline; }
@@ -1888,6 +1980,7 @@ mark.search-hit {
    flags are words, so no state is carried by colour alone. */
 
 .commits-view {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   max-width: 1040px;
 }
 
@@ -2024,6 +2117,7 @@ mark.search-hit {
 }
 
 .commit-subject {
+  font-size: var(--text-ui);
   font-weight: var(--weight-emphasis);
   color: var(--gray-900);
   line-height: var(--leading-compact);
@@ -2059,6 +2153,7 @@ mark.search-hit {
 
 .commit-chev {
   width: 14px;
+  font-size: var(--text-ui);
   color: var(--gray-500);
   text-align: center;
 }
@@ -2068,6 +2163,7 @@ mark.search-hit {
 }
 
 .commit-body {
+  font-size: var(--text-ui);
   padding: var(--space-4) var(--space-5) var(--space-5) 152px;
   border-top: 1px solid var(--gray-100);
 }
@@ -2314,6 +2410,7 @@ mark.search-hit {
 /* ── loop workspace ───────────────────────────────────────────────────── */
 
 .loop-workspace {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -2509,6 +2606,7 @@ mark.search-hit {
   border-left: 4px solid var(--gray-300);
   background: var(--color-surface);
   font-size: var(--text-base);
+  line-height: var(--leading-prose);   /* reading prose */
   color: var(--gray-800);
 }
 .loop-now[data-state="blocked"],
@@ -2694,8 +2792,11 @@ mark.search-hit {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 6px 12px;   /* L1: compact disclosure rows */
-  font-size: 13px;
-  font-family: var(--mono);
+  /* Paper: the label is often prose ("Architect brief (required
+     reading)"), so it is sans action text, not mono. */
+  font-size: var(--text-ui);
+  font-weight: var(--weight-medium);
+  font-family: var(--font-sans);
   cursor: pointer;
   color: var(--color-link);
 }
@@ -2792,14 +2893,17 @@ mark.search-hit {
 }
 /* #62: the turn's executive summary is the card's main prose, on its own
    line below the metadata. Plain text: no border, background or alert
-   styling. The absence line is quieter; its words carry the meaning. */
+   styling. The absence line is quieter; its words carry the meaning.
+   Paper: the paragraph is reading prose, and a card that carries one gets
+   a little more vertical room (no fill, border or larger radius). */
 .loop-event { flex-wrap: wrap; }
+.loop-event:has(> .loop-event-executive) { padding: var(--space-3) 0; }
 .loop-event-executive {
   flex-basis: 100%;
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-base);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: var(--leading-prose);
   white-space: normal;
   overflow-wrap: anywhere;
   color: var(--color-text, inherit);
@@ -2812,7 +2916,7 @@ mark.search-hit {
 .loop-timeline-artifact-link {
   display: inline-block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--color-link, #4a9eff);
   cursor: pointer;
   text-decoration: none;
@@ -3092,6 +3196,7 @@ textarea.loop-ctrl-input {
 }
 /* L1 focused intervention dialogs (native <dialog>, showModal). */
 .loop-dialog {
+  line-height: var(--leading-ui);   /* compact-leading owner */
   width: min(560px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - 2 * var(--space-6));
   overflow: auto;
@@ -3109,8 +3214,19 @@ textarea.loop-ctrl-input {
   font-weight: 700;
   color: var(--gray-900);
 }
-.loop-dialog .loop-blocked-reason { margin: var(--space-2) 0; }
-.loop-dialog-note { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--gray-700); }
+.loop-dialog .loop-blocked-reason {
+  margin: var(--space-2) 0;
+  font-size: var(--text-base);          /* the request is reading prose */
+  line-height: var(--leading-prose);
+}
+.loop-dialog-note {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);          /* the explanation is reading prose */
+  line-height: var(--leading-prose);
+  color: var(--gray-700);
+}
+.loop-dialog .loop-ctrl-label,
+.loop-dialog .loop-ctrl-input { font-size: var(--text-ui); }
 .loop-dialog .loop-ctrl-input-area { flex-direction: column; align-items: stretch; }
 .loop-dialog textarea.loop-ctrl-input { min-width: 0; width: 100%; box-sizing: border-box; }
 .loop-dialog-actions {
@@ -3493,6 +3609,7 @@ textarea.loop-ctrl-input {
   border-radius: 6px;
 }
 .loop-recovery-summary {
+  font-size: var(--text-ui);
   font-weight: 600;
   cursor: pointer;
 }
@@ -3511,6 +3628,7 @@ textarea.loop-ctrl-input {
 }
 .loop-recovery-role {
   min-width: 70px;
+  font-size: var(--text-ui);
   font-weight: 600;
 }
 .loop-recovery-need {

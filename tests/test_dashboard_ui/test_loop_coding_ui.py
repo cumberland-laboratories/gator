@@ -459,6 +459,12 @@ def test_checkpoint_progress_and_labels(page, dashboard_fleet):
         weight = page.evaluate("""() => getComputedStyle(document.querySelector(
             '.loop-checkpoint-item[data-state="active"]')).fontWeight""")
         assert int(weight) >= 600
+        # Paper: the rail stays compact technical metadata, lighter than
+        # the Now line's reading prose.
+        rail, now = page.evaluate("""() => [
+            getComputedStyle(document.querySelector('.loop-checkpoint-item')).fontSize,
+            getComputedStyle(document.querySelector('.loop-now')).fontSize]""")
+        assert rail == "12px" and float(now[:-2]) > 12, (rail, now)
         coding = text_of(page, ".loop-coding")
         assert "Candidate (cp2 · gen 3)" in coding
         page.wait_for_selector(".loop-event", timeout=10000)

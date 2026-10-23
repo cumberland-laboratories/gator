@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.30.0 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "bd0f7c66b7d1ceddfc885089382fb72f82070f80",
+  "short_commit": "bd0f7c6",
+  "snippet_id": "snippet-bd0f7c66b7d1c",
+  "session_group_key": "anthropic:1e4ad5c6-abf5-4857-88d7-39eea7483c97",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "0d38c7dd36ce494437276946a54c845dae39742e",
+  "started_at": "2026-10-22T23:31:40Z",
+  "ended_at": "2026-10-23T14:44:34Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-10-23-gator-0d38c7dd36ce4.json"
+  ],
+  "notes": [
+    "`roadmap.md`: v2.30.0 (2026-10-23) is the latest release, with executive",
+    "summaries on Loop Timeline turns (#62) and the sandbox Git permission fix",
+    "(#67). Next is the Fleet Paper redesign and the 16px text size.",
+    "`inbox.md`: #62 and #67 shipped in v2.30.0, so they leave the backlog index."
+  ],
+  "transcript_session_id": "1e4ad5c6-abf5-4857-88d7-39eea7483c97",
+  "transcript_ref": null
+}
