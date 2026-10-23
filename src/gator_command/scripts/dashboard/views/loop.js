@@ -3656,6 +3656,38 @@
     loop_ended_by_architect: true,
   };
 
+  // #62: participant submission events carry the author's executive
+  // summary. Their card shows only the role as detail, so a tree id or path
+  // count never competes with the paragraph; technical detail stays in
+  // events.jsonl and the full artifact.
+  var PARTICIPANT_SUMMARY_EVENTS = {
+    draft_submitted: true,
+    revision_requested: true,
+    plan_approved: true,
+    max_rounds_exceeded: true,
+    implementation_submitted: true,
+    checkpoint_approved: true,
+    implementation_approved: true,
+  };
+  // Mirrors submit.EXECUTIVE_SUMMARY_MAX (pinned by a test).
+  var EXECUTIVE_SUMMARY_MAX = 1200;
+  var EXECUTIVE_SUMMARY_ABSENT = "Executive summary unavailable for this artifact.";
+
+  // #62: the closed projection check. Display text only for an artifact
+  // event whose executive_summary is a string of 1..MAX characters after
+  // the same whitespace collapse the CLI applies; otherwise null. Pure: it
+  // reads the event only, never an artifact.
+  function eventSummary(ev) {
+    if (!ev || !ev.artifact_path || typeof ev.executive_summary !== "string") {
+      return null;
+    }
+    var text = ev.executive_summary.replace(/\s+/g, " ").trim();
+    // Count code points, as the CLI's len() does: String.length counts
+    // UTF-16 units, so an emoji would count twice and hide valid text.
+    if (!text || Array.from(text).length > EXECUTIVE_SUMMARY_MAX) return null;
+    return text;
+  }
+
   function eventCardHtml(ev) {
     var eventType = ev.event || ev.type || "unknown";
     var label = (EVENT_LABELS[eventType] || eventType) + checkpointSuffix(ev);
@@ -3667,6 +3699,7 @@
     if (ev.role) detail = ev.role;
     if (ev.detail) detail = ev.detail;
     if (ev.reason) detail = ev.reason;
+    if (PARTICIPANT_SUMMARY_EVENTS[eventType]) detail = ev.role || "";
 
     var html = '<div class="loop-event' + (isTerminalEv ? " loop-event-terminal" : "") + '"'
       + (artifact ? ' data-artifact="' + escHtml(artifact) + '"' : '')
@@ -3679,9 +3712,16 @@
         + '">' + escHtml(detail) + '</span>';
     }
     if (artifact) {
-      // Link-only: rendered synchronously from event metadata. The card
-      // never fetches artifact text; the full rendered document opens in
-      // the artifact reader (#45) when the link is followed.
+      // #62: the summary comes from the event alone (escaped text); an
+      // artifact event without a valid one says so honestly.
+      var summary = eventSummary(ev);
+      html += summary !== null
+        ? '<p class="loop-event-executive">' + escHtml(summary) + '</p>'
+        : '<p class="loop-event-executive loop-event-executive-absent">'
+          + escHtml(EXECUTIVE_SUMMARY_ABSENT) + '</p>';
+      // Rendered synchronously from event metadata. The card never fetches
+      // artifact text; the full rendered document opens in the artifact
+      // reader (#45) when the link is followed.
       html += '<div class="loop-event-link-row">'
         + '<a class="loop-timeline-artifact-link" href="#" data-artifact="'
         + escHtml(artifact) + '">View full artifact</a></div>';

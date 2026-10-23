@@ -278,7 +278,8 @@ class TestPlanningStart:
         s = loop_session.load_session(loop_dir)
         assert "brief" not in s
         assert s["contract"] == {"context_evidence": 1, "attention_interval": 1,
-                                 "coding_checkpoints": 1}
+                                 "coding_checkpoints": 1,
+                                 "executive_summary": 1}
         assert not (loop_dir / loop_session.BRIEF_FILENAME).exists()
         ev = first_event(loop_dir)
         assert "brief_sha256" not in ev
@@ -397,7 +398,8 @@ class TestCodingSuccessor:
         ev = first_event(d)
         assert ev["source_brief_decision"] == "kept"
         assert ev["source_brief_sha256"] == c["source_brief"]["sha256"]
-        assert s["contract"] == {"attention_interval": 1}  # Context Checked is planning-only
+        # Context Checked is planning-only; the #62 summary flag is not.
+        assert s["contract"] == {"attention_interval": 1, "executive_summary": 1}
 
     def test_keep_and_new(self, repo):
         src_id, _ = planning(repo, brief=BRIEF)

@@ -57,6 +57,7 @@ Builds the initial session dict including empty `decisions: []` ledger. Does not
   - **Interval storage:** `turn_timeout_seconds` stores the Architect attention interval (default `DEFAULT_ATTENTION_INTERVAL = 300`).
 - **#55 coding checkpoints:** NEW planning sessions also carry `contract.coding_checkpoints: CHECKPOINT_CONTRACT` (1). This flag is the draft-gate migration boundary for `## Coding Checkpoints`; coding sessions never carry it.
   - **Legacy:** unflagged sessions keep their historical hard-timeout shape.
+- **#62 executive summary:** NEW planning AND coding sessions carry `contract.executive_summary: EXECUTIVE_SUMMARY_CONTRACT` (1). It is the migration boundary for the one-paragraph `## Executive Summary` and its event projection; a coding loop gets it at its own creation, whatever its source loop had. New planning sessions are therefore `{attention_interval, executive_summary, context_evidence, coding_checkpoints}` and coding sessions `{attention_interval, executive_summary}`.
 - Coding sessions' `coding` block gains `source_brief` (metadata or null) and `source_brief_decision` (`kept` / `dropped` / `none_available`).
 - Coding sessions (#41) carry `"mode": "coding"`, stage `implementation_drafting` (Draftor), `plan_status: "implementation"`, `current.implementation`, and the required `coding` binding `{source_loop_id, plan_sha256, base_head, base_tree, generations: [], approval: null}`.
 - A coding session without its binding, or an unknown mode, raises ValueError.
@@ -366,6 +367,14 @@ Filesystem: source file (R, once), `.gator/loops/<loop-id>/plan.round-N.md` and 
   - **Unflagged (legacy) sessions** keep `_copy_artifact` byte-for-byte, unchanged.
   - **#55:** `_plan_contract_flags(session)` returns `(context_evidence, coding_checkpoints)`; either flag (int ≥ 1, never bool) routes through the same capture-once path. `_check_plan_draft` runs every flagged check on the same decoded text and raises one `Plan draft rejected: ...` error listing all problems; checkpoint problems are prefixed `Coding Checkpoints: ` and a missing section quotes `ONE_CHECKPOINT_EXAMPLE`. Legacy sessions are never checkpoint-checked at draft time (their plans are re-checked when a coding loop starts, M2).
   - Coding loops never call this (implementation submissions have their own headings).
+  - **#62:** `_executive_summary_required(session)` (int ≥ 1, never bool) also routes through the capture-once path; the summary check is NOT part of `_check_plan_draft`, so Architect-originated plans (`host.py`) need none. The preflight and the authoritative in-lock check run `_summary_or_raise` on the same decoded bytes, and `draft_submitted` gains `executive_summary`.
+
+### executive_summary_problems(text) / _executive_summary_required(session) / _summary_or_raise(text, kind) (#62)
+File: `src/gator_command/scripts/loop/submit.py`
+Closed grammar for the participant's `## Executive Summary`. Returns `(summary, problems)`: exactly one VISIBLE level-2 heading, found by its own `_es_visible_sections(text)` (HTML comments removed first, an unterminated comment hides the rest; a fence closes only on the same character with at least the opener's length, so a shorter or different inner fence never exposes a heading); that section's body lines; one paragraph (no blank line between text lines); no line starting with a list marker (`-`, `*`, `+`, `N.`, `N)`), `#`, `|`, `>` or a fence; not a placeholder (`_PLACEHOLDER_BODIES` after stripping non-alphanumerics, so `...` counts); 1 to `EXECUTIVE_SUMMARY_MAX` (1,200) Unicode code points (`len()`) after whitespace collapse; the Timeline counts the same unit. The summary is the collapsed text. Problems are repair instructions, never a quality score. `_summary_or_raise` raises `ValueError("<kind> rejected: Executive Summary: ...")`. `_decode_or_raise` gives `"<kind> must be UTF-8 text"`.
+! Text after the paragraph with no new level-2 heading belongs to the section and is rejected; a section must end at the next `## ` heading.
+! A heading inside an HTML comment or a fenced example neither satisfies nor duplicates the section (checkpoint 1 review finding), so text a reader cannot see never becomes Timeline evidence. The scan is local to this parser; the shared `_h2_titles` / `_section_body` used by Context Checked and Commit State are unchanged. Normalization is for extraction only; the captured bytes are stored unchanged.
+! The shipped plan, findings, approval and implementation templates must pass it (drift-guarded in `tests/test_loop_context_evidence.py`).
 
 ### context_checked_problems(text)
 File: `src/gator_command/scripts/loop/submit.py`
@@ -390,6 +399,7 @@ Closed grammar for a plan's `## Coding Checkpoints` (#55). `parse_coding_checkpo
 ### handle_submit_review(token, file_path, approve)
 File: `src/gator_command/scripts/loop/submit.py`
 Same pattern as draft. Copies to `findings.current.md`. Branches on `--approve`: terminal or revision. Before the lock: if `approve` is False, reads the first 500 bytes (decoded with `errors="replace"` for safety) and checks for an actual `## Verdict` heading followed by `ESCALATE` (regex, case-insensitive). If matched, emits a stderr warning after the successful submission. This is a soft guard — does not block the submission and cannot raise on non-UTF-8 input.
+**#62 (flagged planning sessions):** the review is read ONCE before the lock (preflight `_summary_or_raise`, which also requires UTF-8), re-checked authoritatively in the lock, and **those bytes** are written with `_write_artifact_bytes` to `findings.round-N.md` and `findings.current.md`. The one emitted event (`revision_requested` / `plan_approved` / `max_rounds_exceeded`) gains the Reviewer's own `executive_summary`. Legacy sessions keep the path copy and accept non-UTF-8 findings. Rejection is before any write or state change.
 Filesystem: source file (R), `.gator/loops/<loop-id>/findings.current.md` (W)
 <- `cli._cmd_submit_review()`
 -> `resolve_token()`, `with_session_lock()`, `validate_action()`, `append_turn()`, `advance_review_submitted()`
@@ -418,6 +428,8 @@ File: `src/gator_command/scripts/loop/submit.py`
 Coding Draftor submission (#41). Returns `(loop_id, role, loop_dir, generation)`.
 
 **Before the lock:** the file must exist, be UTF-8 and non-empty, and contain the required level-2 headings (`IMPLEMENTATION_HEADINGS`: Executive Summary, Implementation Summary, Charter Updates, Verification, Commit State). Missing headings are listed in the ValueError. **Exactly one** level-2 `Commit State` heading may exist outside fences (`commit_state_heading_count`). A duplicate is rejected, so no author-controlled competing state block can sit next to the CLI-captured one; a Commit State example inside a code fence is allowed.
+
+**#62:** `executive_summary_problems(text)` runs on the participant text before the lock (before Commit State is replaced). In a flagged session a problem raises `ValueError("Implementation rejected: Executive Summary: ...")` right after `validate_action`, before the snapshot or any write, and `implementation_submitted` gains `executive_summary`.
 
 **Under the session lock:**
 1. `validate_action(..., "submit_implementation")`.
@@ -466,6 +478,7 @@ Planning reviews are unchanged. For coding loops (#41), inside the same session 
 - **Live check:** a fresh `gitsnap` snapshot is taken.
   - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** If the live snapshot fails, approval is also rejected ("Cannot verify the live candidate before approval: " + `gitsnap.failure_text(snap)`; #67 adds the guidance sentence for `git_permission_denied`).
   - **Findings are always accepted**, flagged `candidate_changed` / `live_snapshot_ok`, so the loop can never deadlock in review.
+- **#62:** in a flagged session `_summary_or_raise(text, "Review")` runs after the Reviewed-Candidate guard and before the snapshot, on the participant text (before the CLI appends Reviewed Candidate). `base_event` carries `executive_summary`, so all four outcomes (`checkpoint_approved`, `implementation_approved`, `revision_requested`, `max_rounds_exceeded`) carry the Reviewer's own text.
 - **Artifact:** it must be UTF-8 and must not author `## Reviewed Candidate`. The CLI appends that section (verdict, reviewed tree / HEAD, round, live-unchanged) to `findings.round-N.md` / `findings.current.md`.
 - **Records:** the review is stored on the generation (`generation.review`, with `generation` and, for declared loops, `checkpoint: {id, index, count, title, base_tree}`). The approval is stored as `{tree, head, round, generation, ts}` via `advance_implementation_reviewed()`.
 - **Naming (#55, all coding loops):** the review writes `findings.round-<g>.md`, where `g = len(generations) - 1` is the generation it reviews (always the latest), never `status.round`.
@@ -974,9 +987,9 @@ Pinned by `test_revision_lifecycle` (source byte-immutability, deleted-source in
 
 ## TRIPWIRE: Validated Bytes Are Persisted Bytes (#46)
 
-For context-evidence and coding-checkpoint sessions, `handle_submit_draft` persists exactly the buffer it validated inside the session lock. Never re-read the source path or `copy2` it after validation, and never make the preflight authoritative. Only `contract.context_evidence` / `contract.coding_checkpoints` gate enforcement. Never infer it from dates, mode strings, or the presence of a brief: legacy sessions must keep accepting old plans.
+For context-evidence, coding-checkpoint and executive-summary sessions, `handle_submit_draft` persists exactly the buffer it validated inside the session lock; since #62 a flagged planning `handle_submit_review` does the same, so a Timeline summary always matches its stored artifact. Never re-read the source path or `copy2` it after validation, and never make the preflight authoritative. Only `contract.context_evidence` / `contract.coding_checkpoints` / `contract.executive_summary` gate enforcement. Never infer it from dates, mode strings, or the presence of a brief: legacy sessions must keep accepting old plans.
 
-Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`; for checkpoints, `test_in_lock_gate_is_authoritative` pins the same rule.
+Violation: a validate-then-copy-path sequence lets a file swapped between check and write land unvalidated. That is pinned by `TestSwapRace`, which fails under that mutation. Dropping the in-lock check fails `test_in_lock_check_is_authoritative`; for checkpoints, `test_in_lock_gate_is_authoritative` pins the same rule; for planning reviews, `test_planning_review_persists_captured_bytes` (`tests/test_loop_executive_summary.py`).
 
 ## TRIPWIRE: Attention Is Architect Awareness, Never Participant Pressure or State (#47)
 

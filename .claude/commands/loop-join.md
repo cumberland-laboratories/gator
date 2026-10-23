@@ -38,6 +38,6 @@ gator loop status --token $ARGUMENTS
 
 Do NOT summarize the protocol — internalize it. Follow the 10 rules exactly. The CLI mediates all loop actions. You submit artifacts via `gator loop submit-draft` or `gator loop submit-review`, never by editing loop directory files directly.
 
-**Required in every submission**: include a `## Executive Summary` section (four bullets or ~120 words). The Dashboard extracts this for at-a-glance inspection. See the artifact format reference for the full template.
+**Required in every submission**: include a `## Executive Summary` section: one plain-English paragraph (about 60–120 words, at most 1,200 characters): what you did, the outcome or remaining concern, and what happens next. No lists, file paths, function names, tree IDs or test commands. The CLI copies it onto your Timeline event. New loops reject a missing or malformed one. See the artifact format reference for the full template.
 
 **Required in every plan draft and revision** (planning loops): exactly one `## Context Checked` section listing the Architect brief, charters, and code you actually consulted, or `None — <reason>`. The CLI rejects a missing, empty, or bare-placeholder section. Reviewers: check that it is credible.

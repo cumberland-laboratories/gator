@@ -161,6 +161,96 @@ def context_checked_problems(text):
 
 
 # ---------------------------------------------------------------------------
+# Executive Summary paragraph (#62) — a closed, one-paragraph grammar
+# ---------------------------------------------------------------------------
+
+EXECUTIVE_SUMMARY_HEADING = "Executive Summary"
+EXECUTIVE_SUMMARY_MAX = 1200
+_ES_BLOCK_LINE = __import__("re").compile(
+    r"^(?:[-*+](?:\s|$)|\d+[.)](?:\s|$)|#|\||>|```|~~~)")
+_ES_REPAIR = ("write one plain-English paragraph under '## Executive Summary': "
+              "what you did, the outcome or remaining concern, and what "
+              "happens next")
+_ES_FENCE = __import__("re").compile(r"^ {0,3}(`{3,}|~{3,})")
+
+
+def _es_visible_sections(text):
+    """``[(title_lower, body_lines)]`` for the level-2 sections a reader
+    actually sees. HTML comments are removed first (an unterminated one
+    hides the rest), and a fence closes only on the same character with at
+    least the opener's length, so headings inside comments or fenced
+    examples never open, count or end a section."""
+    import re as _re
+    text = _re.sub(r"<!--.*?-->", "", text, flags=_re.S)
+    cut = text.find("<!--")
+    if cut != -1:
+        text = text[:cut]
+    sections, current, fence = [], None, None
+    for line in text.splitlines():
+        m = _ES_FENCE.match(line)
+        if fence is not None:
+            if (m and m.group(1)[0] == fence[0]
+                    and len(m.group(1)) >= len(fence)
+                    and not line.strip()[len(m.group(1)):].strip()):
+                fence = None
+        elif m:
+            fence = m.group(1)
+        else:
+            title = _h2_title(line)
+            if title is not None:
+                current = (title.lower(), [])
+                sections.append(current)
+                continue
+        if current is not None:
+            current[1].append(line)
+    return sections
+
+
+def executive_summary_problems(text):
+    """The participant's ``## Executive Summary`` paragraph (#62).
+
+    Returns ``(summary, problems)``: ``summary`` is the whitespace-collapsed
+    paragraph when the section is valid, else None; ``problems`` lists
+    format repairs ([] = ok). Exactly one VISIBLE level-2 heading (see
+    ``_es_visible_sections``: not in an HTML comment or fenced block); one
+    paragraph (no blank line between text lines); no list, heading, table,
+    quote or fence line; 1 to ``EXECUTIVE_SUMMARY_MAX`` characters after
+    collapse; not a placeholder. Normalization is for extraction only; the
+    captured bytes are stored unchanged. Whether the English is
+    executive-level is the Reviewer's judgment, never checked here.
+    """
+    import re as _re
+    found = [body for title, body in _es_visible_sections(text)
+             if title == EXECUTIVE_SUMMARY_HEADING.lower()]
+    if not found:
+        return None, ["missing a '## Executive Summary' section; " + _ES_REPAIR]
+    if len(found) > 1:
+        return None, ["more than one '## Executive Summary' section; keep "
+                      "exactly one"]
+    lines = [l.strip() for l in found[0]]
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    if not lines:
+        return None, ["'## Executive Summary' is empty; " + _ES_REPAIR]
+    if any(_ES_BLOCK_LINE.match(l) for l in lines if l):
+        return None, ["'## Executive Summary' must be one prose paragraph, "
+                      "not a list, heading, table, quote or code block"]
+    if "" in lines:
+        return None, ["'## Executive Summary' must be exactly one paragraph "
+                      "(no blank lines inside it)"]
+    summary = " ".join(" ".join(lines).split())
+    if _re.sub(r"[^a-z0-9]+", "", summary.lower()) in _PLACEHOLDER_BODIES:
+        return None, ["'## Executive Summary' is only a placeholder; "
+                      + _ES_REPAIR]
+    if len(summary) > EXECUTIVE_SUMMARY_MAX:
+        return None, [f"'## Executive Summary' is {len(summary)} characters; "
+                      f"keep it to {EXECUTIVE_SUMMARY_MAX} or fewer"]
+    return summary, []
+
+
+# ---------------------------------------------------------------------------
 # Coding Checkpoints grammar (#55) — a closed, line-based list
 # ---------------------------------------------------------------------------
 
@@ -686,6 +776,33 @@ def _coding_checkpoints_required(session):
     return isinstance(level, int) and not isinstance(level, bool) and level >= 1
 
 
+def _executive_summary_required(session):
+    """#62 migration boundary: only sessions created with the
+    ``contract.executive_summary`` flag (both modes) require and project the
+    participant's Executive Summary paragraph."""
+    contract = session.get("contract") if isinstance(session, dict) else None
+    if not isinstance(contract, dict):
+        return False
+    level = contract.get("executive_summary")
+    return isinstance(level, int) and not isinstance(level, bool) and level >= 1
+
+
+def _summary_or_raise(text, kind):
+    """The validated summary, or ValueError("<kind> rejected: ...")."""
+    summary, problems = executive_summary_problems(text)
+    if problems:
+        raise ValueError(f"{kind} rejected: Executive Summary: "
+                         + "; ".join(problems))
+    return summary
+
+
+def _decode_or_raise(data, kind):
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError(f"{kind} must be UTF-8 text")
+
+
 def _plan_contract_flags(session):
     return (_context_evidence_required(session),
             _coding_checkpoints_required(session))
@@ -746,6 +863,9 @@ def handle_submit_draft(token, file_path):
     pre_flags = _plan_contract_flags(preflight_session)
     if any(pre_flags):
         _check_plan_draft(captured, *pre_flags)
+    if _executive_summary_required(preflight_session):
+        _summary_or_raise(_decode_or_raise(captured, "Plan draft"),
+                          "Plan draft")
 
     def _submit(session):
         # Validate inside lock (session may have changed)
@@ -757,8 +877,15 @@ def handle_submit_draft(token, file_path):
         round_num = session["status"]["round"]
         versioned_name = f"plan.round-{round_num}.md"
         flags = _plan_contract_flags(session)
-        if any(flags):
-            _check_plan_draft(captured, *flags)
+        summary_req = _executive_summary_required(session)
+        exec_summary = None
+        if any(flags) or summary_req:
+            if any(flags):
+                _check_plan_draft(captured, *flags)
+            if summary_req:
+                # #62: the projection comes from the exact captured bytes.
+                exec_summary = _summary_or_raise(
+                    _decode_or_raise(captured, "Plan draft"), "Plan draft")
             _write_artifact_bytes(loop_dir, versioned_name, captured)
             _write_artifact_bytes(loop_dir, "plan.current.md", captured)
         else:
@@ -797,6 +924,8 @@ def handle_submit_draft(token, file_path):
             "artifact_path": versioned_name,
             "detail": f"Plan draft submitted, advancing to plan_review",
         }
+        if exec_summary is not None:
+            event["executive_summary"] = exec_summary
         return session, event
 
     with_session_lock(loop_dir, _submit)
@@ -834,6 +963,21 @@ def handle_submit_review(token, file_path, approve=False, loop_dir=None):
 
     loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
 
+    # #62: flagged planning reviews are read ONCE, like flagged drafts: the
+    # in-lock check is authoritative and those exact bytes are persisted, so
+    # the event's summary always matches the stored artifact. Coding reviews
+    # read their own text in _coding_review().
+    try:
+        from session import load_session as _peek
+        preflight_session = _peek(loop_dir)
+    except Exception:
+        preflight_session = None  # the locked transaction reports problems
+    captured = None
+    if (_executive_summary_required(preflight_session)
+            and loop_mode(preflight_session) != "coding"):
+        captured = source.read_bytes()
+        _summary_or_raise(_decode_or_raise(captured, "Review"), "Review")
+
     def _submit(session):
         allowed, reason = validate_action(session, role, "submit_review")
         if not allowed:
@@ -846,8 +990,17 @@ def handle_submit_review(token, file_path, approve=False, loop_dir=None):
         # Capture round BEFORE advance (advance increments on findings)
         round_num = session["status"]["round"]
         versioned_name = f"findings.round-{round_num}.md"
-        _copy_artifact(source, loop_dir, versioned_name)
-        _copy_artifact(source, loop_dir, "findings.current.md")
+        exec_summary = None
+        if _executive_summary_required(session):
+            data = captured if captured is not None else source.read_bytes()
+            exec_summary = _summary_or_raise(_decode_or_raise(data, "Review"),
+                                             "Review")
+            _write_artifact_bytes(loop_dir, versioned_name, data)
+            _write_artifact_bytes(loop_dir, "findings.current.md", data)
+        else:
+            # Legacy (pre-#62) sessions: unchanged path copy.
+            _copy_artifact(source, loop_dir, versioned_name)
+            _copy_artifact(source, loop_dir, "findings.current.md")
 
         # Mark role as joined
         session["roles"]["reviewer"]["joined"] = True
@@ -897,6 +1050,8 @@ def handle_submit_review(token, file_path, approve=False, loop_dir=None):
                 "artifact_path": versioned_name,
                 "detail": "Findings submitted, revision requested",
             }
+        if exec_summary is not None:
+            event["executive_summary"] = exec_summary
         return session, event
 
     with_session_lock(loop_dir, _submit)
@@ -973,6 +1128,10 @@ def _coding_review(session, role, loop_dir, source, approve):
         raise ValueError(
             "Review artifact must not include a '## Reviewed Candidate' "
             "section; the CLI appends it")
+    # #62: taken from the participant text, before the CLI appends
+    # Reviewed Candidate, and before any snapshot or write.
+    exec_summary = (_summary_or_raise(text, "Review")
+                    if _executive_summary_required(session) else None)
 
     coding = session["coding"]
     gens = coding.get("generations") or []
@@ -1052,6 +1211,8 @@ def _coding_review(session, role, loop_dir, source, approve):
                   "reviewed_tree": review["reviewed_tree"],
                   "candidate_changed": changed,
                   "generation": gen_num}
+    if exec_summary is not None:
+        base_event["executive_summary"] = exec_summary
     if active is not None:
         idx, item, count = active
         base_event["checkpoint_id"] = item["id"]
@@ -1429,6 +1590,10 @@ def handle_submit_implementation(token, file_path, loop_dir=None,
             "Implementation artifact has more than one '## Commit State' "
             "section; keep exactly one (the CLI replaces its contents)")
 
+    # #62: parsed from the participant text, before Commit State is
+    # replaced; enforced in the lock only for flagged sessions.
+    es_summary, es_problems = executive_summary_problems(text)
+
     loop_id, role, loop_dir = resolve_token(token, loop_dir=loop_dir)
     repo_root = Path(loop_dir).parent.parent.parent
     result = {}
@@ -1437,6 +1602,10 @@ def handle_submit_implementation(token, file_path, loop_dir=None,
         allowed, reason = validate_action(session, role, "submit_implementation")
         if not allowed:
             raise PermissionError(reason)
+        summary_req = _executive_summary_required(session)
+        if summary_req and es_problems:
+            raise ValueError("Implementation rejected: Executive Summary: "
+                             + "; ".join(es_problems))
 
         coding = session["coding"]
         active = active_checkpoint(session)
@@ -1576,6 +1745,8 @@ def handle_submit_implementation(token, file_path, loop_dir=None,
                            f"{generation['checkpoint']['changed_count']} "
                            "path(s) changed in this checkpoint"),
             })
+        if summary_req:
+            event["executive_summary"] = es_summary
         return session, event
 
     with_session_lock(loop_dir, _submit)

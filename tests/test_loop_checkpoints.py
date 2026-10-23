@@ -26,7 +26,7 @@ EM = "—"
 
 
 def _plan(section_body, extra=""):
-    return ("# Plan\n\n## Context Checked\n\n- scripts-loop charter\n\n"
+    return ("# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Context Checked\n\n- scripts-loop charter\n\n"
             "## Coding Checkpoints\n\n" + section_body + "\n" + extra)
 
 
@@ -93,11 +93,11 @@ def test_grammar_invalid(name, body, needle):
 
 
 def test_grammar_absent_and_duplicate_and_fenced_heading():
-    assert loop_submit.parse_coding_checkpoints("# Plan\n\n## Approach\n\nx\n") == (False, [], [])
+    assert loop_submit.parse_coding_checkpoints("# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Approach\n\nx\n") == (False, [], [])
     dup = _plan(ONE) + "\n## Coding Checkpoints\n\n" + ONE + "\n"
     present, _items, problems = loop_submit.parse_coding_checkpoints(dup)
     assert present and "more than one" in problems[0]
-    fenced = "# Plan\n\n```\n## Coding Checkpoints\n\n" + ONE + "\n```\n"
+    fenced = "# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n```\n## Coding Checkpoints\n\n" + ONE + "\n```\n"
     assert loop_submit.parse_coding_checkpoints(fenced)[0] is False
 
 
@@ -132,7 +132,7 @@ def test_new_planning_sessions_carry_the_flag():
     assert "coding_checkpoints" not in c["contract"]
 
 
-ABSENT = "# Plan\n\n## Context Checked\n\n- scripts-loop charter\n\n## Approach\n\nx\n"
+ABSENT = "# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Context Checked\n\n- scripts-loop charter\n\n## Approach\n\nx\n"
 GATE = [
     # (session, plan text, accepted?)
     ("flagged", ABSENT, False),
@@ -172,7 +172,7 @@ def test_draft_gate(tmp_path, monkeypatch, kind, text, accepted):
 
 def test_both_contracts_reported_together(tmp_path, monkeypatch):
     loop_dir, tok = _make_env(tmp_path, monkeypatch)
-    draft = _write(tmp_path, "plan.md", "# Plan\n\n## Approach\n\nx\n")
+    draft = _write(tmp_path, "plan.md", "# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Approach\n\nx\n")
     with pytest.raises(ValueError) as exc:
         loop_submit.handle_submit_draft(tok["draftor"], str(draft))
     assert "Context Checked" in str(exc.value) and "Coding Checkpoints:" in str(exc.value)
@@ -208,7 +208,7 @@ from test_loop_coding_submit import GOOD_ARTIFACT, write  # noqa: E402
 from test_loop_coding_review import FINDINGS, REVIEW  # noqa: E402
 
 TWO_CP_PLAN = (
-    "# Implementation Plan\n\n## Executive Summary\n\n- approved\n\n"
+    "# Implementation Plan\n\n## Executive Summary\n\napproved\n\n"
     "## Coding Checkpoints\n\n"
     f"1. **Widget core** {EM} Add the widget module. Verify: unit test.\n"
     f"2. **Widget wiring** {EM} Wire the widget in. Verify: integration test.\n"

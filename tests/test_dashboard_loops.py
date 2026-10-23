@@ -2235,7 +2235,7 @@ class TestArchitectControlsCrossRepo:
 # ── #51: planning sources through the Dashboard ──────────────────────────────
 
 _GOOD_PLAN_51 = (
-    "# Plan\n\n## Executive Summary\n\n- small fix\n\n"
+    "# Plan\n\n## Executive Summary\n\nsmall fix\n\n"
     "## Context Checked\n\n- scripts-loop charter\n\n"
     "## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
     "Verify: the focused test.\n")
@@ -2259,7 +2259,7 @@ def _approve_planning_loop(repo, loop_id):
     draft.write_text(_GOOD_PLAN_51, encoding="utf-8")
     _submit.handle_submit_draft(toks["draftor"]["token"], str(draft))
     review = repo / "review-51.md"
-    review.write_text("# Review\n\nAPPROVE\n", encoding="utf-8")
+    review.write_text("# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\nAPPROVE\n", encoding="utf-8")
     _submit.handle_submit_review(toks["reviewer"]["token"], str(review),
                                  approve=True, loop_dir=loop_dir)
 

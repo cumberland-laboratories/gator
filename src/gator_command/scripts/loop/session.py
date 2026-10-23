@@ -298,6 +298,9 @@ CONTEXT_EVIDENCE_CONTRACT = 1
 ATTENTION_INTERVAL_CONTRACT = 1
 # #55: new planning sessions require a '## Coding Checkpoints' section.
 CHECKPOINT_CONTRACT = 1
+# #62: new planning AND coding sessions require one participant-authored
+# '## Executive Summary' paragraph, copied onto the submission event.
+EXECUTIVE_SUMMARY_CONTRACT = 1
 # Default interval; stored in status.turn_timeout_seconds (#47 Decision 2).
 DEFAULT_ATTENTION_INTERVAL = 300
 
@@ -649,6 +652,7 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     otherwise. ``plan_source`` / ``revision`` (#51) are the mutually
     exclusive planning-provenance blocks; both keys are absent for ordinary
     sketch loops, so legacy and ordinary sessions are unchanged.
+    #62: every new session also carries ``contract.executive_summary``.
     """
     if mode not in (MODE_PLANNING, MODE_CODING):
         raise ValueError(f"Unknown loop mode: {mode!r}")
@@ -704,6 +708,9 @@ def create_session(feature, loop_id, max_rounds=3, turn_timeout=300,
     # #47 migration boundary: every new session (both modes) uses an
     # Architect attention interval; turn_timeout_seconds stores it.
     session["contract"] = {"attention_interval": ATTENTION_INTERVAL_CONTRACT}
+    # #62 migration boundary (both modes): only flagged sessions validate
+    # and project the Executive Summary paragraph; legacy sessions never do.
+    session["contract"]["executive_summary"] = EXECUTIVE_SUMMARY_CONTRACT
     session["status"]["turn_started_at"] = now
     session["status"]["attention_notified_turn"] = None
     if mode == MODE_PLANNING:

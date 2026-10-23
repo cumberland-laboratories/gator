@@ -2785,9 +2785,29 @@ mark.search-hit {
 .loop-md th, .loop-md td { border: 1px solid var(--color-border); padding: 4px 8px; text-align: left; }
 .loop-md-link-blocked { color: var(--color-text-muted, #666); cursor: default; }
 
-/* Timeline artifact link (link-only cards; the reader is the artifact card) */
+/* Timeline artifact link (cards never fetch; the reader is the artifact card) */
 .loop-event-link-row {
   margin-top: 4px;
+  flex-basis: 100%;
+}
+/* #62: the turn's executive summary is the card's main prose, on its own
+   line below the metadata. Plain text: no border, background or alert
+   styling. The absence line is quieter; its words carry the meaning. */
+.loop-event { flex-wrap: wrap; }
+.loop-event-executive {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--color-text, inherit);
+}
+.loop-event-executive.loop-event-executive-absent {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--gray-600);
 }
 .loop-timeline-artifact-link {
   display: inline-block;

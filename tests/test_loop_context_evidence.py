@@ -25,18 +25,18 @@ import submit as loop_submit
 
 
 GOOD_PLAN = (
-    "# Plan\n\n## Executive Summary\n\n- x\n\n"
+    "# Plan\n\n## Executive Summary\n\nx\n\n"
     "## Context Checked\n\n- `.gator/charters/scripts-loop.md`\n"
     "- `src/gator_command/scripts/loop/submit.py`\n\n"
     "## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
     "Verify: the focused test.\n\n"
     "## Approach\n\nDo the thing.\n"
 )
-OLD_PLAN = "# Plan\n\n## Executive Summary\n\n- x\n\n## Approach\n\nDo it.\n"
+OLD_PLAN = "# Plan\n\n## Executive Summary\n\nx\n\n## Approach\n\nDo it.\n"
 
 
 def _plan(body):
-    return f"# Plan\n\n## Context Checked\n\n{body}\n\n## Approach\n\nx\n"
+    return f"# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Context Checked\n\n{body}\n\n## Approach\n\nx\n"
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ class TestValidator:
         assert len(problems) == 1 and "empty" in problems[0]
 
     def test_empty_at_eof_rejected(self):
-        problems = loop_submit.context_checked_problems("# Plan\n\n## Context Checked\n")
+        problems = loop_submit.context_checked_problems("# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Context Checked\n")
         assert problems and "empty" in problems[0]
 
     def test_duplicate_rejected(self):
@@ -83,7 +83,7 @@ class TestValidator:
         assert len(problems) == 1 and "more than one" in problems[0]
 
     def test_fenced_example_ignored(self):
-        text = ("# Plan\n\n```markdown\n## Context Checked\n\n- example\n```\n\n"
+        text = ("# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n```markdown\n## Context Checked\n\n- example\n```\n\n"
                 "## Approach\n\nx\n")
         problems = loop_submit.context_checked_problems(text)
         assert problems and "missing" in problems[0]
@@ -93,7 +93,7 @@ class TestValidator:
         assert loop_submit.context_checked_problems(text) == []
 
     def test_level3_heading_is_not_the_section(self):
-        text = "# Plan\n\n### Context Checked\n\n- x\n"
+        text = "# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n### Context Checked\n\n- x\n"
         assert "missing" in loop_submit.context_checked_problems(text)[0]
 
     def test_heading_case_insensitive(self):
@@ -101,7 +101,7 @@ class TestValidator:
             "Context Checked", "context checked")) == []
 
     def test_section_ends_at_next_h2(self):
-        text = "# Plan\n\n## Context Checked\n\n## Approach\n\n- not context\n"
+        text = "# Plan\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Context Checked\n\n## Approach\n\n- not context\n"
         assert "empty" in loop_submit.context_checked_problems(text)[0]
 
 
@@ -182,7 +182,7 @@ class TestSubmitFlagged:
         loop_submit.handle_submit_review(
             tok["reviewer"],
             str(_write(tmp_path, "findings.md",
-                       "# Findings\n\n## Verdict\n\nREVISE\n")))
+                       "# Findings\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Verdict\n\nREVISE\n")))
         assert loop_session.load_session(loop_dir)["status"]["stage"] == "plan_revision"
         current_before = (loop_dir / "plan.current.md").read_bytes()
         with pytest.raises(ValueError, match="Context Checked"):
@@ -341,6 +341,23 @@ class TestDriftGuards:
         tpl = _plan_template(FORMATS[1].read_text(encoding="utf-8"))
         assert loop_submit._h2_titles(tpl).count("context checked") == 1
         assert loop_submit.context_checked_problems(tpl) == []
+
+    @pytest.mark.parametrize("section", [
+        "## Plan (written by the draftor)",
+        "## Findings (written by the reviewer)",
+        "## When Approving",
+        "## Implementation (written by the draftor, coding loops)",
+    ])
+    def test_participant_templates_pass_executive_summary(self, section):
+        """#62: every shipped participant template teaches a summary the CLI
+        accepts, so following the template can never be rejected."""
+        text = FORMATS[1].read_text(encoding="utf-8")
+        start = text.index(section)
+        fence = text.index("```markdown", start)
+        end = text.index("\n```\n", fence + 11)
+        tpl = text[fence + len("```markdown\n"):end]
+        summary, problems = loop_submit.executive_summary_problems(tpl)
+        assert problems == [] and summary
 
     def test_protocol_mentions_brief_and_rules(self):
         text = PROTOCOLS[1].read_text(encoding="utf-8")

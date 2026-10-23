@@ -34,7 +34,7 @@ import state_machine as sm  # noqa: E402
 import submit as loop_submit  # noqa: E402
 
 GATOR_LOOP = SCRIPTS_DIR / "gator-loop.py"
-PLAN_TEXT = b"# Implementation Plan\n\n## Executive Summary\n\n- approved\n"
+PLAN_TEXT = b"# Implementation Plan\n\n## Executive Summary\n\napproved\n"
 
 
 # ---------------------------------------------------------------------------

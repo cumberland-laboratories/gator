@@ -37,8 +37,8 @@ from test_loop_coding_submit import (  # noqa: E402,F401
     GOOD_ARTIFACT, coding, stage_change, write)
 
 GATOR_LOOP = SCRIPTS_DIR / "gator-loop.py"
-REVIEW = "# Review\n\n## Executive Summary\n\n- ok\n\n## Verdict\n\nAPPROVE\n"
-FINDINGS = "# Review\n\n## Executive Summary\n\n- fix it\n\n## Verdict\n\nREVISE\n"
+REVIEW = "# Review\n\n## Executive Summary\n\nok\n\n## Verdict\n\nAPPROVE\n"
+FINDINGS = "# Review\n\n## Executive Summary\n\nfix it\n\n## Verdict\n\nREVISE\n"
 
 
 def submit_impl(c):

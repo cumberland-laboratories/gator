@@ -54,10 +54,10 @@ The plan is the draftor's proposed implementation. It should be specific enough 
 
 ## Executive Summary
 
-<Four bullets or ~120 words: what this plan proposes, the key design
-decision, the main risk, and the verification approach. This section
-is extracted by the Dashboard for at-a-glance inspection — keep it
-bounded and self-contained.>
+<One plain-English paragraph for the Architect: what this plan
+proposes, the main risk or open question, and what happens next. No
+lists, file paths or function names; at most 1,200 characters. The CLI
+copies it onto the Timeline event.>
 
 ## Summary
 
@@ -133,6 +133,7 @@ New modules that need new charters.>
 - When the repository provides `.gator/procedures/writing-implementation-plans.md`, use it to choose a proportionate planning path and make the module, simplicity, and test boundaries explicit. Reviewers use the same procedure when judging the plan.
 - If the reviewer sent findings on a previous round, address every finding explicitly — don't silently drop any
 - **Coding Checkpoints is required** on every draft and revision of planning loops created since #55: exactly one `## Coding Checkpoints` section listing the ordered, **responsibility-based** checkpoints the coding loop will review one at a time. Each item is `N. **Title** — scope. Verify: verification.` (numbered 1, 2, 3...; continuation lines indented two spaces; at most 12). Titles name a responsibility, never a file. A single-responsibility change declares one checkpoint, for example `1. **Fix** — <the change>. Verify: <the focused test>.` Submission rejects a missing, duplicate, empty, or malformed section. Whether the checkpoints are *meaningful* is the reviewer's call.
+- **Executive Summary is required** on every Draftor and Reviewer artifact in loops created since #62: exactly one `## Executive Summary` section holding one prose paragraph (at most 1,200 characters). Write it for the Architect. Good: "This plan stops sandbox permission errors being reported as Git contention. The main risk is localized Git messages, which fall back to today's behavior. Next, the Reviewer checks the error wording." Not this: a bullet list, a copy of your findings, or an inventory of files and commands. Submission rejects a missing, duplicate, empty, list-shaped, multi-paragraph or over-length section; the CLI copies the paragraph onto the Timeline event.
 - **Context Checked is required** on every draft and revision of planning loops created since #46: exactly one `## Context Checked` section listing the Architect brief (when present), charters, and code or artifacts you actually consulted — or `None — <reason>`. Submission rejects a missing, duplicate, empty, or bare-placeholder section. Whether the list is *adequate* is the reviewer's call.
 
 ---
@@ -146,10 +147,10 @@ Findings are the reviewer's assessment. They should be specific, numbered, and a
 
 ## Executive Summary
 
-<Four bullets or ~120 words: the verdict, the most important finding,
-what looks strong, and whether the plan is ready. Extracted by the
-Dashboard for at-a-glance inspection — keep it bounded and
-self-contained.>
+<One plain-English paragraph for the Architect: your verdict, the
+most important finding or remaining concern, and what happens next. No
+lists or copied findings; at most 1,200 characters. The CLI copies it
+onto the Timeline event.>
 
 ## Verdict
 
@@ -202,6 +203,12 @@ When the reviewer approves, the findings file should still exist as a real docum
 ```markdown
 # Review: <feature name>
 
+## Executive Summary
+
+The plan is ready to implement. It keeps the existing approval rules and
+covers the failure cases the sketch names. The next step is a coding loop
+against this plan.
+
 ## Verdict
 
 APPROVE — the plan is ready to implement as written.
@@ -233,8 +240,9 @@ In a coding loop the Draftor submits an implementation artifact with `gator loop
 
 ## Executive Summary
 
-<Four bullets or ~120 words: what changed, the key decision, the main
-risk, and how it was verified.>
+<One plain-English paragraph for the Architect: what this checkpoint
+changed, the main risk, and what happens next. No file paths, tree IDs
+or test commands; at most 1,200 characters.>
 
 ## Implementation Summary
 

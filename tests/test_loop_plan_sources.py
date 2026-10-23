@@ -39,7 +39,7 @@ import session as loop_session  # noqa: E402
 import submit as loop_submit  # noqa: E402
 
 GOOD_PLAN = (
-    "# Plan\n\n## Executive Summary\n\n- small fix\n\n"
+    "# Plan\n\n## Executive Summary\n\nsmall fix\n\n"
     "## Context Checked\n\n- scripts-loop charter\n\n"
     "## Coding Checkpoints\n\n1. **Fix** — Implement the change. "
     "Verify: the focused test.\n")
@@ -208,7 +208,7 @@ def test_architect_plan_lifecycle(repo):
                             mode="coding", from_loop=loop_id)
 
     # Findings hand the Architect's plan to the Draftor.
-    findings = _write(repo / "f.md", "# Findings\n\n1. Tighten scope.\n")
+    findings = _write(repo / "f.md", "# Findings\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n1. Tighten scope.\n")
     loop_submit.handle_submit_review(tok["reviewer"], str(findings))
     s = loop_session.load_session(loop_dir)
     assert (s["status"]["stage"], s["status"]["next_role"]) == (
@@ -219,7 +219,7 @@ def test_architect_plan_lifecycle(repo):
 
     # A Draftor revision replaces plan.current.md; provenance is unchanged.
     revised = _write(repo / "rev.md", GOOD_PLAN.replace(
-        "- small fix", "- small fix, revised"))
+        "small fix", "small fix, revised"))
     loop_submit.handle_submit_draft(tok["draftor"], str(revised))
     assert (loop_dir / "architect-plan.md").read_bytes() == data
     assert (loop_dir / "plan.current.md").read_bytes() != data
@@ -227,7 +227,7 @@ def test_architect_plan_lifecycle(repo):
     assert js["plan_source"]["architect_draft_current"] is False
 
     # Reviewer approval -> ordinary plan_approved -> coding may start.
-    approve = _write(repo / "a.md", "# Review\n\nAPPROVE\n")
+    approve = _write(repo / "a.md", "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\nAPPROVE\n")
     loop_submit.handle_submit_review(tok["reviewer"], str(approve), approve=True)
     s = loop_session.load_session(loop_dir)
     assert s["status"]["stage"] == "plan_approved"
@@ -396,7 +396,7 @@ def test_legacy_status_text_unchanged(repo):
 def _approved_loop(repo, kind, name="src-feature"):
     """An approved planning loop: ordinary (sketch + Draftor draft) or
     Architect-originated. Returns (loop_id, loop_dir)."""
-    approve = _write(repo / f"{name}-approve.md", "# Review\n\nAPPROVE\n")
+    approve = _write(repo / f"{name}-approve.md", "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\nAPPROVE\n")
     if kind == "architect":
         plan = _write(repo / f"{name}-plan.md", GOOD_PLAN)
         loop_id, loop_dir = loop_host.init_loop(name, None, repo_root=repo,

@@ -123,7 +123,7 @@ Write your output to a markdown file. The file must:
 - Follow the format in the artifact format reference (see below)
 
 **Draftor output** — an implementation plan:
-- `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
+- `## Executive Summary`: one plain-English paragraph (about 60–120 words, at most 1,200 characters): what you did, the outcome or remaining concern, and what happens next. No lists, file paths, function names, tree IDs or test commands. The CLI copies it onto your Timeline event (see below)
 - Clear scope statement
 - Architecture or approach
 - File/module changes with specific paths
@@ -133,12 +133,14 @@ Write your output to a markdown file. The file must:
 - `## Context Checked`: **required** on every draft and revision (see below)
 - `## Coding Checkpoints`: **required** on every draft and revision (see below; one checkpoint for a small fix)
 
+**Executive Summary (every Draftor and Reviewer artifact).** Write it for the Architect, who reads it on the Timeline without opening your artifact. It is exactly one `## Executive Summary` section holding one prose paragraph: say what you proposed, implemented, assessed, approved or asked to change; the material outcome or remaining concern; and what happens next, including any Architect attention genuinely needed. Keep technical evidence in the rest of the artifact. In loops created since #62 the CLI rejects a missing, duplicate, empty, list-shaped, multi-paragraph or over-1,200-character section before anything is written, and copies the paragraph onto the submission's event. It checks form only; whether the English is clear is the Reviewer's and the Architect's call.
+
 **Context Checked (draftor, planning loops).** Every plan includes exactly one `## Context Checked` section listing what you actually consulted: the Architect brief (`architect-brief.md`) when status lists one, the charters you read, and the code or prior artifacts you inspected. When nothing applies, write `None — <short reason>` (e.g. `None — greenfield script, no existing charter or code`). The CLI rejects the submission when the section is missing, duplicated, empty (comments do not count), or a bare placeholder (`None`, `N/A`, `-`, `TBD`). It checks structure only. Listing files you did not read is a protocol violation. This applies to planning loops created since the requirement shipped; older loops are not checked.
 
 **Coding Checkpoints (draftor, planning loops).** Every plan includes exactly one `## Coding Checkpoints` section: the ordered, **responsibility-based** increments the coding loop will review one at a time. Each item is `N. **Title** — scope. Verify: verification.`, numbered 1, 2, 3… (at most 12; continuation lines indented two spaces). A title names a responsibility, never a file. A single-responsibility change declares one checkpoint: `1. **Fix** — <the change>. Verify: <the focused test>.` The CLI rejects a missing, duplicate, empty or malformed section. This applies to planning loops created since the requirement shipped.
 
 **Reviewer output** — findings OR approval:
-- `## Executive Summary` (four bullets or ~120 words — extracted by the Dashboard)
+- `## Executive Summary`: one plain-English paragraph (about 60–120 words, at most 1,200 characters): what you did, the outcome or remaining concern, and what happens next. No lists, file paths, function names, tree IDs or test commands. The CLI copies it onto your Timeline event
 - Verdict line (APPROVE, REVISE, or ESCALATE)
 - Numbered findings with severity, location, issue, and suggestion
 - Scope check against the sketch

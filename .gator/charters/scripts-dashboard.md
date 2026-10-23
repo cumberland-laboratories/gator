@@ -193,6 +193,7 @@ Route `/api/repo-by-key/<repo_key>/...` GET requests. Dispatches both repo-scope
 <- `do_GET()` via prefix match on `/api/repo-by-key/`
 -> `_resolve_repo_by_key()`, `_resolve_loop_dir()`, `loop.session.load_session()`, `loop.events.read_all_events()`
 ! Read-only. No imports from `submit.py`. No token access. `.tokens.json` and `session.lock` never served.
+! **#62:** `/events` passes each event through raw, so a participant submission event's additive `executive_summary` (written by the CLI at submission) reaches the Timeline with no server change, extraction or artifact read. Older events never have it.
 ! **Sketch sources** (`GET /api/repo-by-key/<key>/sketch-sources`): scans `.gator/artifacts/`, `.gator/threads/`, `.gator/active-threads/` for `.md` files. Returns `{path, name, size, modified}` sorted newest-first. Skips candidate directories that are reparse points/symlinks; excludes hidden files, symlink entries, and reparse-point entries. Uses `_resolve_repo_by_key()` for containment — no user-supplied path component. The `/sketch-sources` route is dispatched inside `_dispatch_loop_get()` before the `/loops` branches.
 ! Status response uses `_LOOP_STATUS_ALLOWED_KEYS` allowlist — only known-safe fields appear in GET responses. Unknown/future fields are silently dropped.
 ! **Architect brief (#43):**

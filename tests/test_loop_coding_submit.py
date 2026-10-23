@@ -37,7 +37,7 @@ GOOD_ARTIFACT = """# Implementation: widget
 
 ## Executive Summary
 
-- Adds the widget.
+Adds the widget.
 
 ## Implementation Summary
 

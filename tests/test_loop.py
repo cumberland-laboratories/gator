@@ -66,13 +66,18 @@ def loop_env(tmp_path, monkeypatch):
     # must include a populated ## Context Checked section and (#55) a
     # ## Coding Checkpoints section.
     draft_file.write_text(
-        "# Plan\n\n## Context Checked\n\n- scripts-loop charter\n\n"
+        "# Plan\n\n## Executive Summary\n\nThe plan fixes the widget; "
+        "the Reviewer checks it next.\n\n"
+        "## Context Checked\n\n- scripts-loop charter\n\n"
         "Implementation details.\n\n"
         "## Coding Checkpoints\n\n1. **Fix** \u2014 Implement the change. "
         "Verify: the focused test.\n", encoding="utf-8")
 
     findings_file = tmp_path / "findings.md"
-    findings_file.write_text("# Findings\n\n1. Fix error handling.\n", encoding="utf-8")
+    findings_file.write_text(
+        "# Findings\n\n## Executive Summary\n\nThe plan needs better "
+        "error handling before approval.\n\n## Findings\n\n1. Fix error handling.\n",
+        encoding="utf-8")
 
     return {
         "tmp": tmp_path,
@@ -1363,7 +1368,7 @@ class TestEscalateVerdictWarning:
         # Write findings with ESCALATE verdict
         escalate_findings = e["tmp"] / "escalate-findings.md"
         escalate_findings.write_text(
-            "# Review\n\n## Verdict\n\nESCALATE\n\nScope is unclear.\n",
+            "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Verdict\n\nESCALATE\n\nScope is unclear.\n",
             encoding="utf-8",
         )
 
@@ -1406,7 +1411,7 @@ class TestEscalateVerdictWarning:
 
         findings_with_escalate = e["tmp"] / "approval-with-escalate.md"
         findings_with_escalate.write_text(
-            "# Review\n\n## Verdict\n\nAPPROVE\n\n"
+            "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Verdict\n\nAPPROVE\n\n"
             "Previously considered ESCALATE but resolved.\n",
             encoding="utf-8",
         )
@@ -1428,7 +1433,7 @@ class TestEscalateVerdictWarning:
 
         findings = e["tmp"] / "revise-mention-escalate.md"
         findings.write_text(
-            "# Review\n\n## Verdict\n\nREVISE\n\n"
+            "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Verdict\n\nREVISE\n\n"
             "Do not escalate this — handle it in the plan.\n",
             encoding="utf-8",
         )
@@ -1442,11 +1447,15 @@ class TestEscalateVerdictWarning:
         assert stderr.getvalue() == ""
 
     def test_non_utf8_findings_submit_succeeds(self, loop_env):
-        """Non-UTF-8 findings file submits successfully without exception."""
+        """Legacy (pre-#62) session: a non-UTF-8 findings file still submits;
+        the ESCALATE pre-read never crashes on it."""
         import io, contextlib
         e = loop_env
 
         loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        s = loop_session.load_session(e["loop_dir"])
+        del s["contract"]["executive_summary"]
+        loop_session.save_session(e["loop_dir"], s)
 
         binary_findings = e["tmp"] / "binary-findings.md"
         content = b"# Review\n\n## Verdict\n\nREVISE\n\nBad byte: \xff\xfe here.\n"
@@ -1461,6 +1470,18 @@ class TestEscalateVerdictWarning:
         # Submission succeeded
         s = loop_session.load_session(e["loop_dir"])
         assert s["status"]["stage"] in ("plan_revision", "max_rounds_exceeded")
+
+    def test_non_utf8_findings_rejected_when_summary_required(self, loop_env):
+        """#62: a flagged planning review must be UTF-8 (its summary is
+        parsed); the rejection is clean and changes nothing."""
+        e = loop_env
+        loop_submit.handle_submit_draft(e["draftor_token"], str(e["draft_file"]))
+        before = (e["loop_dir"] / "session.json").read_bytes()
+        bad = e["tmp"] / "binary-findings.md"
+        bad.write_bytes(b"# Review\n\n## Executive Summary\n\nBad \xff\xfe.\n")
+        with pytest.raises(ValueError, match="Review must be UTF-8 text"):
+            loop_submit.handle_submit_review(e["reviewer_token"], str(bad))
+        assert (e["loop_dir"] / "session.json").read_bytes() == before
 
 
 class TestSessionWrittenBeforeEvent:
@@ -3133,20 +3154,30 @@ class TestWaitHandoffAlignment:
 class TestExecutiveSummaryProducerPaths:
     """All participant-facing surfaces must teach the Executive Summary requirement."""
 
+    # #62: every surface teaches ONE plain-English paragraph (the CLI copies
+    # it onto the Timeline event), and none still teaches "four bullets".
+
     def test_loop_join_template_mentions_executive_summary(self):
         """Slash-command template tells participants about the executive summary requirement."""
         text = (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8")
         assert "Executive Summary" in text
+        assert "one plain-English paragraph" in text
+        assert "four bullets" not in text.lower()
 
     def test_protocol_mentions_executive_summary(self):
         """Loop protocol documents the Executive Summary section in draftor/reviewer output."""
         for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
             text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
             assert "Executive Summary" in text
+            assert "**Executive Summary (every Draftor and Reviewer artifact).**" in text
+            assert "copies the paragraph onto the submission's event" in text
+            assert "four bullets" not in text.lower()
 
     def test_artifact_formats_include_executive_summary_template(self):
         """Artifact format reference includes Executive Summary section in plan and findings templates."""
         for base in [INCLUDES_DIR / "reference-notes", TEMPLATES_DIR / "reference-notes"]:
             text = (base / "loop-artifact-formats.md").read_text(encoding="utf-8")
             assert "## Executive Summary" in text
-            assert "four bullets" in text.lower() or "Four bullets" in text
+            assert "One plain-English paragraph" in text
+            assert "**Executive Summary is required**" in text
+            assert "four bullets" not in text.lower()

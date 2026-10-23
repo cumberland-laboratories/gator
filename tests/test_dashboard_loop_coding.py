@@ -37,7 +37,7 @@ import submit as loop_submit  # noqa: E402
 from test_loop_coding_mode import _tokens, git, make_planning_source, start_coding  # noqa: E402
 from test_loop_coding_submit import GOOD_ARTIFACT, stage_change, write  # noqa: E402
 
-REVIEW = "# Review\n\n## Verdict\n\nAPPROVE\n"
+REVIEW = "# Review\n\n## Executive Summary\n\nThis turn records the fixture outcome.\n\n## Details\n\n## Verdict\n\nAPPROVE\n"
 
 
 def _rk(path):

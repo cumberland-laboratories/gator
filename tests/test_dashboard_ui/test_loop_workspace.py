@@ -826,32 +826,137 @@ def _count_artifact_requests(page):
     return lambda: list(seen)
 
 
-def test_timeline_card_is_link_only(page, dashboard_fleet):
-    """An event with an artifact shows the link immediately and no excerpt."""
-    _navigate_to_loop(page, dashboard_fleet)
-    page.wait_for_selector(".loop-card", state="attached", timeout=10000)
-    _select_loop_card(page, "widget-refactor")
-    page.wait_for_selector(".loop-event[data-artifact]", timeout=10000)
-    cards = page.evaluate("""() => Array.from(
-        document.querySelectorAll('#loop-timeline .loop-event[data-artifact]'))
+_XSS_SUMMARY = ('The plan is sound. <img src=x onerror="window.__xss62=1">'
+                ' <b>not bold</b> Address recovery next.')
+
+
+def _card_facts(page):
+    return page.evaluate("""() => Array.from(
+        document.querySelectorAll('#loop-timeline .loop-event'))
         .map(c => ({
-            artifact: c.dataset.artifact,
+            event: c.querySelector('.loop-event-label').textContent,
+            artifact: c.dataset.artifact || null,
+            detail: (c.querySelector('.loop-event-detail') || {}).textContent || null,
+            summary: Array.from(c.querySelectorAll('.loop-event-executive'))
+                .map(p => ({text: p.textContent,
+                            absent: p.classList.contains('loop-event-executive-absent'),
+                            elements: p.children.length})),
             links: Array.from(c.querySelectorAll('.loop-timeline-artifact-link'))
                 .map(a => ({text: a.textContent, artifact: a.dataset.artifact,
                             href: a.getAttribute('href')})),
-            excerpt: c.querySelectorAll('.loop-event-summary, '
-                + '.loop-timeline-summary-text, .loop-timeline-summary-absent').length,
+            order: Array.from(c.children).map(e => e.className),
         }))""")
-    assert cards, "expected timeline events with artifacts"
-    for c in cards:
-        assert len(c["links"]) == 1, c
-        link = c["links"][0]
-        assert link["text"] == "View full artifact"
-        assert link["artifact"] == c["artifact"]
-        assert link["href"] == "#"          # keyboard-focusable
-        assert c["excerpt"] == 0, c
-    assert page.evaluate(
-        "() => window.GatorViews && window.GatorViews._extractSummary") is None
+
+
+def _open_with_events(page, dashboard_fleet, events):
+    payload = _live_payload()
+    payload["events"] = events
+    _serve_mutable_loop(page, payload)
+    _navigate_to_loop(page, dashboard_fleet)
+    page.wait_for_selector(".loop-status-header", timeout=10000)
+    _select_loop_card(page, "widget-refactor")
+    page.wait_for_selector(".loop-event", timeout=10000)
+    return payload
+
+
+def test_timeline_card_summary_from_event(page, dashboard_fleet):
+    """#62: a summary-bearing event shows its escaped paragraph between the
+    metadata and exactly one link; participant markup stays text; the
+    technical detail gives way to the role; nothing is extracted."""
+    events = list(_BASE_EVENTS)
+    events[2] = dict(events[2], detail="Findings on staged tree abc123",
+                     executive_summary=_XSS_SUMMARY)
+    try:
+        _open_with_events(page, dashboard_fleet, events)
+        page.wait_for_selector(".loop-event-executive:not(.loop-event-executive-absent)",
+                               timeout=10000)
+        card = [c for c in _card_facts(page)
+                if c["artifact"] == "findings.round-1.md"][0]
+        assert card["summary"] == [{"text": _XSS_SUMMARY, "absent": False,
+                                    "elements": 0}]
+        assert card["detail"] == "reviewer"     # not the tree-id detail
+        assert card["links"] == [{"text": "View full artifact",
+                                  "artifact": "findings.round-1.md",
+                                  "href": "#"}]
+        names = [n.split()[0] for n in card["order"]]
+        assert names.index("loop-event-executive") < names.index("loop-event-link-row")
+        assert names.index("loop-event-label") < names.index("loop-event-executive")
+        assert page.evaluate("() => window.__xss62") is None
+        assert page.evaluate(
+            "() => window.GatorViews && window.GatorViews._extractSummary") is None
+    finally:
+        _unserve_mutable_loop(page)
+
+
+_MAX = 1200
+
+
+@pytest.mark.parametrize("value,expect", [
+    ("a" * _MAX, "a" * _MAX),
+    ("  a\n  b  ", "a b"),
+    ("", None),
+    ("   \n  ", None),
+    (42, None),
+    (None, None),
+    (["x"], None),
+    ("a" * (_MAX + 1), None),
+    # Review finding: code points, as the CLI counts (an emoji is one).
+    ("\U0001F600" + "a" * (_MAX - 1), "\U0001F600" + "a" * (_MAX - 1)),
+    ("\U0001F600" + "a" * _MAX, None),
+], ids=["at-limit", "normalized", "empty", "whitespace", "number", "null",
+        "list", "over-limit", "astral-at-limit", "astral-over-limit"])
+def test_timeline_projection_validity(page, dashboard_fleet, value, expect):
+    """#62 bounded display contract: only a 1..1200-character string on an
+    artifact event is shown; anything else is the absence line. The link
+    stays either way."""
+    events = list(_BASE_EVENTS)
+    events[1] = dict(events[1], executive_summary=value)
+    try:
+        _open_with_events(page, dashboard_fleet, events)
+        page.wait_for_selector('.loop-event[data-artifact="plan.round-1.md"] '
+                               '.loop-event-executive', timeout=10000)
+        card = [c for c in _card_facts(page)
+                if c["artifact"] == "plan.round-1.md"][0]
+        if expect is None:
+            assert card["summary"] == [{
+                "text": "Executive summary unavailable for this artifact.",
+                "absent": True, "elements": 0}]
+        else:
+            assert card["summary"] == [{"text": expect, "absent": False,
+                                        "elements": 0}]
+        assert len(card["links"]) == 1
+    finally:
+        _unserve_mutable_loop(page)
+
+
+def test_timeline_absence_only_for_artifact_events(page, dashboard_fleet):
+    """#62: legacy artifact events show the absence line; non-artifact
+    lifecycle events show none (even with a stray summary field) and keep
+    their full Architect detail."""
+    events = list(_BASE_EVENTS) + [
+        {"event": "loop_paused", "ts": "2026-09-22T10:03:00Z", "round": 2,
+         "role": "architect", "detail": "Hold for the demo.",
+         "executive_summary": "Looks valid but there is no artifact."},
+        {"event": "architect_interjection", "ts": "2026-09-22T10:04:00Z",
+         "round": 2, "role": "architect", "detail": "Keep scope narrow."},
+        {"event": "escalated", "ts": "2026-09-22T10:05:00Z", "round": 2,
+         "role": "draftor", "detail": "Need a decision on the API.",
+         "decision_request": "decision-request.decision-1.round-2.md"},
+    ]
+    try:
+        _open_with_events(page, dashboard_fleet, events)
+        page.wait_for_selector(".loop-event-executive-absent", timeout=10000)
+        facts = _card_facts(page)
+        for c in facts:
+            if c["artifact"]:
+                assert [s["absent"] for s in c["summary"]] == [True], c
+            else:
+                assert c["summary"] == [], c
+        details = {c["detail"] for c in facts if not c["artifact"]}
+        assert {"Hold for the demo.", "Keep scope narrow.",
+                "Need a decision on the API."} <= details
+    finally:
+        _unserve_mutable_loop(page)
 
 
 def test_event_without_artifact_has_no_link(page, dashboard_fleet):
@@ -895,10 +1000,15 @@ def test_timeline_makes_no_artifact_requests_until_link_followed(page, dashboard
 
         payload["events"].append(
             {"event": "draft_submitted", "ts": "2026-09-22T10:06:00Z", "round": 2,
-             "role": "draftor", "artifact_path": "plan.round-2.md"})
+             "role": "draftor", "artifact_path": "plan.round-2.md",
+             "executive_summary": "Round two plan, from the event."})
         page.wait_for_selector(
             '.loop-event[data-artifact="plan.round-2.md"] .loop-timeline-artifact-link',
             timeout=10000)
+        # #62: the appended card's summary comes from the event, not a fetch.
+        assert page.evaluate("""() => document.querySelector(
+            '.loop-event[data-artifact="plan.round-2.md"] .loop-event-executive'
+            ).textContent""") == "Round two plan, from the event."
         page.wait_for_timeout(1000)
         assert not [u for u in requests() if "plan.round-2.md" in u], \
             "appending a timeline event must not fetch its artifact"
