@@ -3194,8 +3194,11 @@ textarea.loop-ctrl-input {
   font-size: 12px;
   cursor: pointer;
 }
-/* L1 focused intervention dialogs (native <dialog>, showModal). */
+/* L1 focused intervention dialogs (native <dialog>, showModal).
+   margin: auto restores the user-agent centring of a modal dialog, which
+   the global `* { margin: 0 }` reset removes (it opened top-left). */
 .loop-dialog {
+  margin: auto;
   line-height: var(--leading-ui);   /* compact-leading owner */
   width: min(560px, calc(100vw - 2 * var(--space-4)));
   max-height: calc(100vh - 2 * var(--space-6));

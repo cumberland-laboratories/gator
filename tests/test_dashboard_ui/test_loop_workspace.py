@@ -2969,6 +2969,23 @@ def test_decisions_disclosure(page, dashboard_fleet):
     page.unroute("**/loops/*/status")
 
 
+@pytest.mark.parametrize("viewport", [(1440, 900), (375, 700)])
+def test_loop_dialog_is_centred(page, dashboard_fleet, viewport):
+    """The modal dialog is centred in the viewport (the global margin reset
+    used to pin it top-left) and fits inside it."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    _open_sole_active(page, dashboard_fleet, "blocked-feature")
+    _open_decision_dialog(page)
+    box = page.evaluate("""() => {
+        const r = document.querySelector('dialog.loop-dialog').getBoundingClientRect();
+        return {left: r.left, right: innerWidth - r.right,
+                top: r.top, bottom: innerHeight - r.bottom};
+    }""")
+    assert min(box.values()) >= 0, box
+    assert abs(box["left"] - box["right"]) <= 1, box
+    assert abs(box["top"] - box["bottom"]) <= 1, box
+
+
 def test_decision_dialog_flow(page, dashboard_fleet):
     """L1: the compact alert's Respond opens one focused dialog holding the
     full request and its link. Escape sends nothing and returns focus; a

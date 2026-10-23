@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard Paper: Fleet, Loop and the 16px reading baseline",
+  "change_type": "feature",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "dashboard",
+    "paper",
+    "typography",
+    "fleet",
+    "loop"
+  ],
+  "commit": "48694add902eceb814b93e87f7b8b4a2b34cbc70",
+  "short_commit": "48694ad",
+  "snippet_id": "snippet-48694add902ec",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "bd0f7c66b7d1ceddfc885089382fb72f82070f80",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-23T17:41:12Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-23-gator-09fdc026268eb.json",
+    ".gator/session-snippets/2026-10-23-gator-bd0f7c66b7d1c.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/fleet.js",
+    "tests/test_dashboard_ui/test_fleet_layout.py",
+    "tests/test_dashboard_ui/test_loop_coding_ui.py",
+    "tests/test_dashboard_ui/test_loop_workspace.py",
+    "tests/test_dashboard_ui/test_paper_shell.py"
+  ],
+  "notes": [
+    "Every Dashboard text role is now explicit. A new `--text-ui` token names section and action text, compact surfaces declare their own line height, and the few elements that inherited the page's root size are pinned to a named role. A guard test fails if any visible text takes its size or line height from the page root again. This was checkpoint 1 of the approved plan, and it makes no visible change except the Fleet modal titles, which now use the section size.",
+    "Fleet is now a quiet Paper inventory: the title, one Add Repository action and one table, with readable repository names and compact branch, version and enforcement values. Any column can be sorted, one at a time, in either direction, with an arrow and bold text marking the sorted column. Enforcement sorts by the level that was actually saved. Sorting is for the current page only and never changes the registry. Row menus stay usable on phone-width screens and after a sort. This was checkpoint 2.",
+    "Loop's human-facing text now reads as prose: the Now line, each turn's executive paragraph and the dialog explanations use the reading size and line spacing, with a little more room around summary cards. Timestamps, labels, the checkpoint rail and the controls stay compact, and artifact rows use plain sans labels. This is a styling-only change, and the Loop view loads and updates exactly as before. This was checkpoint 3.",
+    "The Dashboard's reading baseline is now 16px with 1.6 line spacing, as the Paper design intended. Because every compact surface already has its own explicit size and spacing, only the reading prose grows: Loop's Now line, turn summaries and dialog explanations, and Fleet's repository names and help text. Tables, trees, navigation, metadata and code keep their sizes. The only extra fix keeps narrow Fleet repository names on one line. This was checkpoint 4, the last one."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}
