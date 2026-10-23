@@ -4,6 +4,41 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.30.0] — 2026-10-23
+
+Feature release. **Every Loop turn now tells the Architect what happened, in one paragraph on the Timeline.** In new loops, each Draftor and Reviewer turn ends with a short plain-English summary that the Timeline shows on that turn's card, so you can follow a loop without opening its artifacts. Sandbox Git permission denials are also reported as what they are, not as Git contention.
+
+### Added
+
+- **Executive summaries on Timeline turns (#62).** In loops created with this release, every Draftor and Reviewer submission (plan, review, implementation and implementation review) must contain exactly one `## Executive Summary` section holding one prose paragraph of at most 1,200 characters.
+  - The CLI checks the form when the turn is submitted and refuses a missing, duplicate, list-shaped, multi-paragraph, placeholder or over-long section before anything is written. A summary that appears only inside an HTML comment or a fenced example does not count.
+  - The paragraph is copied onto the turn's existing event as `executive_summary`, from the same bytes as the stored artifact. A review event always carries the Reviewer's own paragraph.
+  - The Timeline shows it as plain text between the turn details and "View full artifact", read from the event only; it never fetches the artifact. Older turns, and any stored summary that is blank, the wrong type or too long, show "Executive summary unavailable for this artifact."
+  - Participant turn cards show the role instead of technical detail such as tree IDs. Architect cards (pause, interjection, escalation) keep their full text.
+  - The loop protocol, the artifact templates and `/loop-join` teach the paragraph instead of "four bullets or ~120 words".
+
+### Changed
+
+- **New planning loops store a review's exact submitted bytes (#62).** A planning review is read once and those bytes are saved, as plan drafts already were, so the Timeline summary always matches the stored file. In new loops a planning review must therefore be UTF-8 text; older loops still accept other encodings.
+- **New sessions carry `contract.executive_summary: 1`.** Existing loops are unchanged and are never back-filled. Events gain the additive `executive_summary` field; no schema identifier changes.
+
+### Fixed
+
+- **A sandbox Git permission denial is no longer reported as `git_busy` (#67).** When a runtime sandbox denies write access to `.git/index.lock`, the coding-loop snapshot now reports `git_permission_denied` after one attempt, with no retry. `git_busy` means only real lock contention. The approval, implementation and coding-start refusals, the CLI `[??] UNKNOWN` status and the Dashboard's Unknown banner (an additive `live.guidance` field) all give the same explanation: approve the host prompt or use a supported participant profile. Approval stays blocked while the candidate cannot be verified. Both copies of the Codex routine-profile note describe the new code.
+
+Pinned by:
+- `tests/test_loop_executive_summary.py`: the parser, every participant event, atomic rejection, capture-once planning reviews, legacy loops and the display bound;
+- `tests/test_dashboard_ui/test_loop_workspace.py`: summary rendering, projection validity, the absence rule and no artifact fetch;
+- `tests/test_loop_context_evidence.py` and `tests/test_loop.py`: template and producer drift guards;
+- `tests/test_loop_gitsnap.py`, `tests/test_loop_coding_review.py`, `tests/test_dashboard_loop_coding.py` and `tests/test_dashboard_ui/test_loop_coding_ui.py`: the permission classification and guidance.
+
+See `executive_summary_problems()` and `snapshot()` / `failure_text()` in `scripts-loop.md`, the Timeline TRIPWIRE in `scripts-dashboard-ui.md`, and the #62 and #67 notes in `scripts-cross-cutting.md`.
+
+### Changed (repository only)
+
+- The README's install section ends with `gator dashboard`; the Quick Start and "Upgrade the Gator CLI" sections are removed.
+- The repository's runtime pin is 2.29.0.
+
 ## [2.29.0] — 2026-10-22
 
 Feature release. **The Loop workspace is calmer and says what it can do.** A selected loop reads as a short story: a quiet header, a **Now** line, the newest-first timeline and, for checkpoint coding loops, a checkpoint rail. The Loop view's first tab is **Create** when no loop is active and **Active** when one is, and the active loop opens at full width. Approved coding loops also stay **Committed** after later commits land.
