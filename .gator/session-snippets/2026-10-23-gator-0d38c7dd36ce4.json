@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.30.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "0d38c7dd36ce494437276946a54c845dae39742e",
+  "short_commit": "0d38c7d",
+  "snippet_id": "snippet-0d38c7dd36ce4",
+  "session_group_key": "anthropic:1e4ad5c6-abf5-4857-88d7-39eea7483c97",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "c6628ad6794edd19af38421b4b917ac44d014d00",
+  "started_at": "2026-10-22T23:31:40Z",
+  "ended_at": "2026-10-23T10:55:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-23-gator-c6628ad6794ed.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.30.0: executive summaries on Loop Timeline turns (#62), and a sandbox",
+    "Git permission denial reported as `git_permission_denied` instead of `git_busy`",
+    "(#67). `VERSION`, `pyproject.toml`, the CHANGELOG and the version note in the",
+    "core-library charter move together."
+  ],
+  "transcript_session_id": "1e4ad5c6-abf5-4857-88d7-39eea7483c97",
+  "transcript_ref": null
+}

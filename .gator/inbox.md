@@ -78,7 +78,6 @@ against the code 2026-10-21). Issue `#N` is
 **Loop:**
 - **#49** Interjection for one role is consumed by the other role's turn
 - **#60** Transient reviewer nonce mismatch after a failed approval retry
-- **#67** Sandbox Git denial reported as `git_busy`
 - **#68** `wait`/`status` result lost when the runtime drops exit codes
 - **#83** Dashboard loop tests leave ~70 watcher threads running
 - **#84** `gator loop codex` daemon locks its CODEX_HOME on Windows
@@ -91,7 +90,6 @@ against the code 2026-10-21). Issue `#N` is
 - #48 Advisory charter-map warning on `submit-draft`
 - #59 Codex-compatible participant liveness
 - #37 Command-approval profiles (Phase 1 shipped) and permission queue
-- #62 Executive summaries on timeline turns
 - #7 Loop card on Repo overview
 - #42 / #50 / #63 / #64 Provenance, external notices, Observer role, token usage
 - #5 Loop polish (umbrella)

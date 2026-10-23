@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-22._ Current strategy, priorities, and planned work.
+_Updated 2026-10-23._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,14 +11,14 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.29.0 (2026-10-22) — the calm Loop
-workspace (Now line, checkpoint rail, focused dialogs), the Loop view's
-Active tab with live reconciliation, approved coding loops that stay
-Committed (#85), and the #70 listing/search seam. v2.28.0 (2026-10-20): a
-readable Commits view. Next: the approved #67 plan (sandbox Git permission
-classification, `loop-sandbox-git-permission-2026-10-22T00-43-29Z`) goes to
-a coding loop; then the Fleet Paper redesign and the 16px text size. Release
-detail lives in `CHANGELOG.md` and the GitHub Releases.
+**Latest released version**: v2.30.0 (2026-10-23) — executive summaries on
+Loop Timeline turns (#62): each Draftor and Reviewer turn in a new loop ends
+with one plain-English paragraph, captured on its event and shown on the
+Timeline; and a sandbox Git permission denial reported as
+`git_permission_denied` instead of `git_busy` (#67). v2.29.0 (2026-10-22):
+the calm Loop workspace and the Active tab. Next: the Fleet Paper redesign
+and the 16px text size. Release detail lives in `CHANGELOG.md` and the GitHub
+Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
