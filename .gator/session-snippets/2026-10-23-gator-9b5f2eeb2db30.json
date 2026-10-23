@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "CI: give the Dashboard UI job 30 minutes",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "ci",
+    "release"
+  ],
+  "commit": "9b5f2eeb2db30f1e37f41ce9862938dfcaa8e438",
+  "short_commit": "9b5f2ee",
+  "snippet_id": "snippet-9b5f2eeb2db30",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "3542d9f71c86ca406495d4cc8410ed66e01efdba",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-23T23:11:35Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/release-pipeline.md",
+    ".gator/session-snippets/2026-10-23-gator-3542d9f71c86c.json",
+    ".github/workflows/source-ci.yml",
+    "CHANGELOG.md"
+  ],
+  "notes": [
+    "The Source CI Dashboard UI job may now run for 30 minutes instead of 20. On the 2.31.0 `main` push, a slow Ubuntu package mirror stretched Playwright's system-package install from about 25 seconds to about 10 minutes, and three healthy attempts were cancelled at about half the suite with no test failures. The full suite itself takes 12–14 minutes. The release-pipeline charter and the 2.31.0 changelog record the new limit."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}

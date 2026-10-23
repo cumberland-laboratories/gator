@@ -422,6 +422,19 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     page.goto(origin + "?repo=alpha", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
 
+    # Diagnostics for an intermittent CI failure (2026-10-23: 3 requests
+    # after the departed mount, on Windows and Ubuntu, never reproduced
+    # locally). Every repo-by-key request is logged with its time and the
+    # test phase, so a failure shows what was called and when.
+    import time
+    t0 = time.monotonic()
+    phase = ["mount"]
+    trace = []
+    page.on("request", lambda req: trace.append(
+        f"{time.monotonic() - t0:6.2f}s [{phase[0]}] {req.method} "
+        f"{req.url.split('/api/repo-by-key/', 1)[-1]}")
+        if "/api/repo-by-key/" in req.url else None)
+
     gate = threading.Event()
 
     def _hold(route):
@@ -441,6 +454,7 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     # The Loop view has mounted. Do not wait for data-loaded here: the held
     # /loops response can only land after the hold, which races the wait.
     page.wait_for_selector("#loop-sidebar-nav", state="attached", timeout=10000)
+    phase[0] = "left-loop"
 
     page.evaluate(
         "() => document.querySelector("
@@ -448,10 +462,12 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     )
     page.wait_for_selector(".repo-file-item", timeout=15000)
 
+    phase[0] = "gate-released"
     gate.set()
     page.wait_for_timeout(1500)
 
     page.unroute("**/api/repo-by-key/*/loops")
+    phase[0] = "counting"
 
     assert page.locator(".loop-workspace").count() == 0, (
         "Loop workspace should not exist after navigating away")
@@ -465,9 +481,14 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     page.route("**/api/repo-by-key/*/loops**", _count)
     page.wait_for_timeout(4000)
     page.unroute("**/api/repo-by-key/*/loops**")
+    state = page.evaluate("""() => ({
+        view: document.getElementById('topbar-title').textContent,
+        loopWorkspace: document.querySelectorAll('.loop-workspace').length,
+        teardown: typeof window._gatorRepoTeardown})""")
     assert poll_count[0] == 0, (
         f"Expected zero poll requests after departed mount, "
-        f"but {poll_count[0]} observed")
+        f"but {poll_count[0]} observed. Page state: {state}. "
+        f"Request trace:\n  " + "\n  ".join(trace))
 
 
 # ── duplicate-name fleet identity ───────────────────────────────────────────
