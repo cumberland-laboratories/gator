@@ -4,6 +4,46 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.31.0] — 2026-10-23
+
+Feature release. **The Dashboard reads like Paper: a quiet, sortable Fleet, readable Loop prose, and a 16px reading baseline.** Ordinary reading text grows to 16px with 1.6 line spacing, while tables, trees, navigation, metadata and code keep their compact sizes. Fleet becomes a title-only inventory you can sort by any column, and Loop dialogs now open in the centre of the window.
+
+### Added
+
+- **Fleet sorting.** Repo, Branch, Enforcement and Version sort one column at a time, from a click or Enter/Space on the header. A new column sorts ascending; the same column toggles to descending. The sorted header shows ▲/▼, weight 600 and `aria-sort`, never colour alone.
+  - The default is registry order.
+  - The sort lasts for the page load only. It is never stored or put in the URL, and it survives a Fleet refresh.
+  - A missing value sorts last in both directions, and ties keep registry order.
+  - Rows are moved in place, so each ⋮ menu still acts on its own repository.
+  - Enforcement sorts by the **saved** level: a successful change re-sorts an active Enforcement sort at once, and a failed one never changes the order.
+
+### Changed
+
+- **The 16px / 1.6 reading baseline (Paper final typography).** `html, body` are now 16px / 1.6.
+  - **Explicit roles:** every visible text element takes its size from an explicit role. `--text-base` (16px) is reading prose and the new `--text-ui` (14px) is section and action text.
+  - **Compact owners:** dense surfaces declare their own line height: the strip, the sidebar, tables, the Repo and Docs browser, Commits, Loop, dialogs and the legacy Updates/Settings components.
+  - **What grows:** only the reading prose: the Loop Now line, turn summaries and dialog explanations, and Fleet repository names and help text.
+  - **Unaffected:** Welcome and Docs documents, which own their typography.
+- **Fleet is a calm Paper inventory.** It shows the title, one Add Repository action and one quiet table. Repository names are the readable value; branch and version are compact mono values. The "!" unavailable marker also carries the words "Not accessible" for screen readers. At phone width the table scrolls sideways as before, and names stay on one line.
+- **Loop reading hierarchy.**
+  - The Now line, each turn's executive paragraph, and the request and explanation in the intervention dialogs are reading prose.
+  - Timeline metadata, the checkpoint rail and the controls stay compact.
+  - Artifact rows use sans labels, because many labels are prose.
+  - This is CSS only: Loop loading, polling and incremental rendering are unchanged.
+- **Gator doc.** The shipped constitution and HTML authoring procedure name a **Gator doc** (alias `gatordoc`) as the request for a standalone narrative HTML document. They route it to the Cumberland master template, and Blueprints keep their own path.
+
+### Fixed
+
+- **Loop dialogs open centred.** The Respond, Resume, Interject, Pause and End dialogs opened at the top-left, because the global margin reset removed the browser's centring for modal dialogs. `.loop-dialog` now restores it.
+
+Pinned by:
+- `tests/test_dashboard_ui/test_paper_shell.py`: `test_no_text_inherits_root_type` (11 surfaces; no visible text inherits the root) and `test_root_reading_baseline`;
+- `tests/test_dashboard_ui/test_fleet_layout.py`: the title-only inventory, one-column sorting, saved-level enforcement sorting, and the row menu at 375px and after a sort;
+- `tests/test_dashboard_ui/test_loop_workspace.py`: `test_loop_reading_hierarchy` and `test_loop_dialog_is_centred`;
+- `tests/test_dashboard_ui/test_loop_coding_ui.py`: the compact rail.
+
+See the Paper tokens "Final reading baseline" and "No text inherits the root type" tripwires, the Fleet "Paper inventory" and "Sorting" tripwires, and the Loop dialog "Placement" note in `scripts-dashboard-ui.md`.
+
 ## [2.30.0] — 2026-10-23
 
 Feature release. **Every Loop turn now tells the Architect what happened, in one paragraph on the Timeline.** In new loops, each Draftor and Reviewer turn ends with a short plain-English summary that the Timeline shows on that turn's card, so you can follow a loop without opening its artifacts. Sandbox Git permission denials are also reported as what they are, not as Git contention.

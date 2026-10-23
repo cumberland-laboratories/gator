@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard: Loop dialogs open centred",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "loop",
+    "dialog"
+  ],
+  "commit": "574dd8c33d9ffecd1989396c4464e9a5562eaf03",
+  "short_commit": "574dd8c",
+  "snippet_id": "snippet-574dd8c33d9ff",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "48694add902eceb814b93e87f7b8b4a2b34cbc70",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-23T17:53:25Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-23-gator-48694add902ec.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "The Loop intervention dialogs (Respond, Resume, Interject, Pause, End) now open in the centre of the window instead of the top-left corner. The stylesheet's global margin reset had removed the browser's own centring for modal dialogs; the dialog now restores it. A new test checks the position at desktop and phone width."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}
