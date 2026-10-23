@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.31.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "3542d9f71c86ca406495d4cc8410ed66e01efdba",
+  "short_commit": "3542d9f",
+  "snippet_id": "snippet-3542d9f71c86c",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "574dd8c33d9ffecd1989396c4464e9a5562eaf03",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-23T19:38:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-23-gator-574dd8c33d9ff.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Release 2.31.0: the Paper Dashboard. Ordinary reading text moves to a 16px baseline with compact surfaces unchanged, Fleet becomes a quiet sortable inventory, Loop prose becomes readable, and Loop dialogs open centred. `VERSION`, `pyproject.toml`, `CHANGELOG.md` and the core-library version note are updated together."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}

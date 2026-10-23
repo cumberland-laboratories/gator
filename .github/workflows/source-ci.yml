@@ -101,7 +101,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     # Windows needs ~4 min setup (Playwright + Chromium) plus ~8 min for
     # the 332-test suite at 2.19.0; 10 min cancelled the job at 79%.
-    timeout-minutes: 20
+    # 2.31.0: the ~650-test suite takes 12-14 min, and a slow Ubuntu apt
+    # mirror stretched `playwright install --with-deps` to ~10 min, so 20
+    # min cancelled healthy runs at about 50%.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

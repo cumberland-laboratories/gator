@@ -44,6 +44,10 @@ Pinned by:
 
 See the Paper tokens "Final reading baseline" and "No text inherits the root type" tripwires, the Fleet "Paper inventory" and "Sorting" tripwires, and the Loop dialog "Placement" note in `scripts-dashboard-ui.md`.
 
+### Changed (repository only)
+
+- The Source CI `dashboard-ui` job's time limit is 30 minutes (was 20). A slow Ubuntu package mirror stretched setup to about 10 minutes and cancelled healthy runs partway through the suite.
+
 ## [2.30.0] — 2026-10-23
 
 Feature release. **Every Loop turn now tells the Architect what happened, in one paragraph on the Timeline.** In new loops, each Draftor and Reviewer turn ends with a short plain-English summary that the Timeline shows on that turn's card, so you can follow a loop without opening its artifacts. Sandbox Git permission denials are also reported as what they are, not as Git contention.
