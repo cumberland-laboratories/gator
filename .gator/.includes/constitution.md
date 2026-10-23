@@ -158,7 +158,17 @@ See [`procedures/knowledge-capture.md`](procedures/knowledge-capture.md) for the
 
 ## HTML Documents
 
-When the Architect asks for an HTML document ("I want an HTML that says…", "make me an HTML report on…", "write this up as HTML"), start from the Cumberland master template at [`reference-notes/cumberland-html-document-template.html`](reference-notes/cumberland-html-document-template.html). Fill the `==TODO==` placeholders and save at the path that matches the piece's role — `artifacts/YYYY-MM-DD-<slug>.html` for deep records, `procedures/<slug>.html` for procedures, `reference-notes/<slug>.html` for reference-explainers, `threads/<slug>.html` for lightweight notes.
+A **Gator doc** is Gator's canonical name for a standalone, narrative HTML
+document for the Architect. Treat `gatordoc` as an alias, but present and
+write the name as **Gator doc**. When the Architect asks for a Gator doc
+("I'd like a Gator doc on…"), a gatordoc, or an HTML document ("I want an
+HTML that says…", "make me an HTML report on…", "write this up as HTML"),
+start from the Cumberland master template at
+[`reference-notes/cumberland-html-document-template.html`](reference-notes/cumberland-html-document-template.html).
+Fill the `==TODO==` placeholders and save at the path that matches the
+piece's role — `artifacts/YYYY-MM-DD-<slug>.html` for deep records,
+`procedures/<slug>.html` for procedures, `reference-notes/<slug>.html` for
+reference-explainers, `threads/<slug>.html` for lightweight notes.
 
 Exception: if the piece is a **Blueprint** (`charter-map`, `feature-blueprint`, `procedure-visual`, or `reference-explainer` conforming to the `gator-blueprint-html-v1` protocol), use [`blueprints/_template.html`](blueprints/_template.html) (interactive) or [`blueprints/_template-narrative.html`](blueprints/_template-narrative.html) (narrative) — those specialize the same Cumberland visual grammar with Blueprint-protocol metadata. See [`procedures/authoring-html-artifacts.md`](procedures/authoring-html-artifacts.md) for the medium-first triage that picks between master and Blueprint templates.
 

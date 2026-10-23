@@ -5,10 +5,13 @@
 Reach for this procedure when you're about to create — or being asked to
 create — an HTML artifact. Two entry points:
 
-**The Architect explicitly asks for HTML.** "I want an HTML that says…",
-"make me an HTML report on…", "write this up as HTML." Every governed
-model defaults to the same Cumberland master template — see the
-constitution's "HTML Documents" section for the routing rule.
+**The Architect asks for a Gator doc.** A **Gator doc** is a standalone,
+narrative HTML document for the Architect. Treat `gatordoc` as an alias, but
+present and write the name as **Gator doc**. "I'd like a Gator doc on…",
+"I want an HTML that says…", "make me an HTML report on…", and "write this
+up as HTML" all request the same Cumberland-master document. Every governed
+model defaults to that template — see the constitution's "HTML Documents"
+section for the routing rule.
 
 **The content is a Blueprint.** Feature flow map, charter map, procedure
 visual, or reference explainer conforming to the `gator-blueprint-html-v1`
