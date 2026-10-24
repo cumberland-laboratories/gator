@@ -48,6 +48,7 @@ WELCOME_FORMAT = {
     "start-a-session.html": '<section id="prompt">',
     "gator-docs.html": '<p class="lede">',
     "gator-loop.html": '<p class="lede">',
+    "gator-loop-extras.html": '<p class="lede">',
     "charter-formation-process.html": '<p class="lede">',
     "charter-schema-v1.html": '<p class="lede">',
     "code-migrations.html": '<p class="lede">',
@@ -57,6 +58,7 @@ WELCOME_FORMAT = {
 # documents). All are Cumberland master copies in the Welcome format and
 # are delivered by gatorize and gator update.
 GATOR_DOCS = NAMES + [
+    "gator-loop-extras.html",
     "charter-formation-process.html",
     "charter-schema-v1.html",
     "code-migrations.html",
@@ -71,6 +73,20 @@ REGION_RE = re.compile(
 )
 META_CSP_RE = re.compile(
     r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">')
+
+
+# Documents whose copy button asks the Dashboard to copy a fixed prompt.
+COPY_DOCS = {"start-a-session.html", "gator-loop-extras.html"}
+LOOP_JS = SCRIPTS_DIR / "dashboard" / "views" / "loop.js"
+
+
+def _codex_goal_prompt_from_dashboard():
+    """CODEX_GOAL_PROMPT as loop.js defines it. The text contains a
+    semicolon, so the match ends at a closing quote plus semicolon."""
+    src = LOOP_JS.read_text(encoding="utf-8")
+    m = re.search(r'var CODEX_GOAL_PROMPT =(.*?)";\s*\n', src, re.DOTALL)
+    assert m, "CODEX_GOAL_PROMPT not found in loop.js"
+    return "".join(re.findall(r'"([^"]*)"', m.group(1) + '"'))
 
 
 def _read(name):
@@ -110,10 +126,10 @@ def test_document_is_a_cumberland_master_copy(name):
         assert marker in text, marker
     policies = META_CSP_RE.findall(text)
     assert len(policies) == 1
-    # Only the Start-a-session document runs a script (its copy action),
-    # and only its script-src directive differs from the master's.
-    script_src = ("'unsafe-inline'" if name == "start-a-session.html"
-                  else "'none'")
+    # Only the Start-a-session and Loop extras documents run a script (their
+    # copy actions), and only their script-src directive differs from the
+    # master's.
+    script_src = ("'unsafe-inline'" if name in COPY_DOCS else "'none'")
     master_policy = META_CSP_RE.findall(MASTER.read_text(encoding="utf-8"))[0]
     assert policies[0] == master_policy.replace(
         "script-src 'none'", "script-src " + script_src)
@@ -189,3 +205,16 @@ def test_gatorize_page_prompt_matches_dashboard():
     """Gatorize a repo repeats the session-opening prompt for the first
     session; it must be the Dashboard's exact SESSION_PROMPT."""
     assert _session_prompt_from_dashboard() in _read("gatorize-a-repo.html")
+
+
+def test_extras_document_shows_the_dashboard_goal_prompt():
+    """The visible goal prompt is exactly the Dashboard's one-line constant
+    (HTML-escaped), and the copy request is the exact three-key message
+    that never carries the prompt."""
+    import html
+    text = _read("gator-loop-extras.html")
+    prompt = _codex_goal_prompt_from_dashboard()
+    assert "\n" not in prompt and prompt.startswith("/goal ")
+    assert f'<pre id="codex-goal">{html.escape(prompt, quote=False)}</pre>' in text
+    assert '{ type: TYPE, v: 1, action: "copy-codex-goal" }' in text
+    assert text.count(html.escape(prompt, quote=False)) == 1

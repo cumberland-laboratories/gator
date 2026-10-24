@@ -3700,7 +3700,8 @@ def test_loop_subnav_tabs(page, dashboard_fleet):
     st = _tab_state(page)
     assert st["tablist"]
     assert st["bodyRole"] == "tabpanel"
-    assert st["controls"] == ["loop-tabpanel", "loop-tabpanel", "loop-help-panel"]
+    assert st["controls"] == ["loop-tabpanel", "loop-tabpanel", "loop-help-panel",
+                              "loop-extras-panel"]
     assert st["create"] == {"selected": "true", "tabindex": "0",
                             "text": "Active", "primary": "active"}
     assert st["history"] == {"selected": "false", "tabindex": "-1",
@@ -3720,8 +3721,8 @@ def test_loop_subnav_tabs(page, dashboard_fleet):
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
     page.keyboard.press("Home")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
-    page.keyboard.press("End")  # Help is last
-    assert page.evaluate("() => document.activeElement.id") == "loop-tab-help"
+    page.keyboard.press("End")  # Extras is last
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-extras"
     page.keyboard.press("ArrowRight")  # wraps
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
     st = _tab_state(page)
@@ -3916,9 +3917,12 @@ def test_loop_help_tab_shows_shared_document(page, dashboard_fleet):
         header)
     _wait_header(page, "widget-refactor")
 
-    # Keyboard: End selects Help; ArrowLeft returns to History.
+    # Keyboard: End selects Extras, ArrowLeft selects Help, and ArrowLeft
+    # again returns to History.
     page.focus("#loop-tab-create")
     page.keyboard.press("End")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-extras"
+    page.keyboard.press("ArrowLeft")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-help"
     assert _help_state(page)["helpHidden"] is False
     page.keyboard.press("ArrowLeft")
@@ -4784,3 +4788,149 @@ def test_recovery_poll_mutation_free(page, dashboard_fleet):
         assert page.evaluate("() => window._m56rNode.isConnected")
     finally:
         page.unroute("**/loops/*/liveness")
+
+
+# ── Extras tab (2026-10-24) ──────────────────────────────────────────────────
+
+_LOOP_JS = (Path(__file__).resolve().parents[2] / "src" / "gator_command" / "scripts"
+            / "dashboard" / "views" / "loop.js")
+
+
+def _codex_goal_prompt():
+    """CODEX_GOAL_PROMPT as loop.js defines it (concatenated literals; the
+    text itself contains a semicolon, so the match ends at the closing
+    quote followed by a semicolon)."""
+    src = _LOOP_JS.read_text(encoding="utf-8")
+    m = re.search(r'var CODEX_GOAL_PROMPT =(.*?)";\s*\n', src, re.DOTALL)
+    assert m, "CODEX_GOAL_PROMPT not found in loop.js"
+    return "".join(re.findall(r'"([^"]*)"', m.group(1) + '"'))
+
+
+_EXTRAS_COPY_REQUEST = {"type": "gator-loop", "v": 1, "action": "copy-codex-goal"}
+
+
+def _open_extras(page, fleet):
+    _navigate_to_loop(page, fleet)
+    page.click("#loop-tab-extras")
+    page.wait_for_function(
+        "() => document.querySelector('#loop-extras-panel iframe')", timeout=5000)
+    page.wait_for_load_state("load")
+    frame = page.locator("#loop-extras-panel iframe").element_handle().content_frame()
+    frame.wait_for_selector("#copy-codex-goal", timeout=5000)
+    return frame
+
+
+def test_loop_extras_tab_shows_model_notes(page, dashboard_fleet):
+    """Extras shows the shipped gator-loop-extras.html in a frame sandboxed
+    exactly allow-scripts, with the Codex and Opus sections. It hides the
+    body and Help without removing them and adds no history entry."""
+    _navigate_to_loop(page, dashboard_fleet)
+    length = page.evaluate("() => history.length")
+    panel = page.evaluate("""() => {
+        var p = document.getElementById('loop-extras-panel');
+        return {role: p.getAttribute('role'), labelledBy: p.getAttribute('aria-labelledby'),
+                hidden: p.hidden, frames: p.querySelectorAll('iframe').length};
+    }""")
+    assert panel == {"role": "tabpanel", "labelledBy": "loop-tab-extras",
+                     "hidden": True, "frames": 0}
+
+    page.click("#loop-tab-extras")
+    st = _tab_state(page)
+    assert st["extras"]["selected"] == "true" and st["extras"]["text"] == "Extras"
+    assert st["help"]["selected"] == "false" and st["create"]["selected"] == "false"
+    view = page.evaluate("""() => {
+        var p = document.getElementById('loop-extras-panel');
+        var f = p.querySelector('iframe');
+        return {hidden: p.hidden, display: getComputedStyle(p).display,
+                bodyHidden: document.getElementById('loop-tabpanel').hidden,
+                helpHidden: document.getElementById('loop-help-panel').hidden,
+                cls: f.className, sandbox: f.getAttribute('sandbox'),
+                src: f.getAttribute('src'), title: f.title};
+    }""")
+    assert view["hidden"] is False and view["display"] != "none"
+    assert view["bodyHidden"] is True and view["helpHidden"] is True
+    assert view["cls"] == "loop-extras-frame"
+    assert view["sandbox"] == "allow-scripts"
+    assert view["src"] == "/api/welcome/docs/gator-loop-extras.html"
+    assert view["title"] == "Gator loop extras"
+    doc = page.frame_locator("#loop-extras-panel iframe")
+    assert doc.locator("#codex h2").inner_text(timeout=10000) == "Codex (OpenAI)"
+    assert doc.locator("#opus h2").inner_text() == "Opus (Anthropic)"
+    assert "gator loop codex" in doc.locator("#codex").inner_text()
+
+    # Help and Extras switch between each other; each keeps its own frame.
+    page.click("#loop-tab-help")
+    both = page.evaluate("""() => ({
+        extrasHidden: document.getElementById('loop-extras-panel').hidden,
+        helpHidden: document.getElementById('loop-help-panel').hidden,
+        frames: document.querySelectorAll('#loop-extras-panel iframe, #loop-help-panel iframe').length})""")
+    assert both == {"extrasHidden": True, "helpHidden": False, "frames": 2}
+    page.click("#loop-tab-create")
+    assert page.evaluate("() => document.getElementById('loop-tabpanel').hidden") is False
+    assert page.evaluate("() => history.length") == length
+
+
+def test_loop_extras_copy_success(page, dashboard_fleet):
+    """The in-document button copies exactly the Dashboard's one-line goal
+    prompt and the document announces "Copied"."""
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    frame = _open_extras(page, dashboard_fleet)
+    frame.click("#copy-codex-goal")
+    frame.wait_for_function(
+        "() => document.getElementById('copy-status').textContent === 'Copied'",
+        timeout=5000)
+    copied = page.evaluate("() => navigator.clipboard.readText()")
+    assert copied == _codex_goal_prompt()
+    assert copied.startswith("/goal ") and "\n" not in copied
+    assert "--max-seconds <seconds>" in copied and "--token <token>" in copied
+
+
+_EXTRAS_IGNORED = {
+    "page": ("page", _EXTRAS_COPY_REQUEST),
+    "help-frame": ("help", _EXTRAS_COPY_REQUEST),
+    "version-2": ("extras", {**_EXTRAS_COPY_REQUEST, "v": 2}),
+    "welcome-action": ("extras", {"type": "gator-welcome", "v": 1,
+                                  "action": "copy-session-prompt"}),
+    "extra-key": ("extras", {**_EXTRAS_COPY_REQUEST, "text": "x"}),
+    "array": ("extras", ["gator-loop", 1, "copy-codex-goal"]),
+    "string": ("extras", "copy-codex-goal"),
+}
+
+
+@pytest.mark.parametrize("case", ["control", *_EXTRAS_IGNORED])
+def test_loop_extras_copy_ignores_everything_else(page, dashboard_fleet, case):
+    """Only the exact request from this mount's Extras frame causes a
+    clipboard write and a reply; every other sender or shape causes none."""
+    page.add_init_script("""if (window === window.top) {
+        window.__writes = [];
+        Object.defineProperty(navigator, 'clipboard', {configurable: true,
+            value: {writeText: t => { window.__writes.push(t); return Promise.resolve(); }}});
+    }""")
+    _open_extras(page, dashboard_fleet)
+    sender, data = ("extras", _EXTRAS_COPY_REQUEST) if case == "control" else _EXTRAS_IGNORED[case]
+    if sender == "help":
+        page.click("#loop-tab-help")
+        page.wait_for_function(
+            "() => document.querySelector('#loop-help-panel iframe')", timeout=5000)
+        page.wait_for_load_state("load")
+    if sender == "page":
+        page.evaluate("(d) => window.postMessage(d, '*')", data)
+        replies = []
+    else:
+        selector = {"extras": "#loop-extras-panel iframe", "help": "#loop-help-panel iframe"}[sender]
+        target = page.locator(selector).element_handle().content_frame()
+        target.evaluate("""(d) => {
+            window.__replies = [];
+            window.addEventListener('message', e => window.__replies.push(e.data));
+            window.parent.postMessage(d, '*');
+        }""", data)
+        page.wait_for_timeout(400)
+        replies = target.evaluate("() => window.__replies")
+    page.wait_for_timeout(100)
+    writes = page.evaluate("() => window.__writes")
+    if case == "control":
+        assert writes == [_codex_goal_prompt()]
+        assert replies == [{"type": "gator-loop", "v": 1,
+                            "action": "copy-codex-goal-result", "ok": True}]
+    else:
+        assert writes == [] and replies == []

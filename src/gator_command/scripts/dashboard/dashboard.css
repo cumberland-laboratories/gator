@@ -2425,9 +2425,10 @@ mark.search-hit {
   min-height: 0;
 }
 
-/* Help tab (2026-10-24): the body is hidden, not removed, while Help shows.
-   The explicit [hidden] rule is required because display:flex above would
-   otherwise override the hidden attribute. */
+/* Help and Extras tabs (2026-10-24): the body is hidden, not removed, while
+   either shows. Both panels carry .loop-help-panel for layout. The explicit
+   [hidden] rule is required because display:flex above would otherwise
+   override the hidden attribute. */
 .loop-workspace-body[hidden],
 .loop-help-panel[hidden] { display: none; }
 .loop-help-panel {
@@ -2441,7 +2442,8 @@ mark.search-hit {
   outline: 2px solid var(--color-link);
   outline-offset: 4px;
 }
-.loop-help-frame {
+.loop-help-frame,
+.loop-extras-frame {
   display: block;
   width: 100%;
   flex: 1;

@@ -17,6 +17,7 @@ EXPECTED = [
     ("start-a-session.html", "Start a session"),
     ("gator-docs.html", "Asking for a Gator doc"),
     ("gator-loop.html", "Gator loop"),
+    ("gator-loop-extras.html", "Gator loop extras"),
     ("charter-formation-process.html", "Charter formation process"),
     ("charter-schema-v1.html", "Charter schema"),
     ("code-migrations.html", "Code migrations"),

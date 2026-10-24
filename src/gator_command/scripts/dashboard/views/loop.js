@@ -167,7 +167,8 @@
     promptEpoch: 0,        // incremented on terminal — invalidates in-flight copies
     loops: [],             // cached loop list
     render: null,          // incremental-render snapshot for the selected loop (#38)
-    help: false,           // Help tab shown over the body (never persisted)
+    aux: null,             // "help" | "extras" shown over the body (never persisted)
+    extrasFrame: null,     // this mount's Extras iframe (copy-channel source)
   };
 
   // ── teardown ───────────────────────────────────────────────────────────────
@@ -188,7 +189,12 @@
     _state.landing = false;
     _state.loops = [];
     _state.render = null;
-    _state.help = false;
+    _state.aux = null;
+    _state.extrasFrame = null;
+    if (_extrasCopyListener) {
+      window.removeEventListener("message", _extrasCopyListener);
+      _extrasCopyListener = null;
+    }
     var ws = _state.container && _state.container.querySelector(".loop-workspace");
     if (ws) ws.dataset.polling = "0";
     window._gatorRepoTeardown = null;
@@ -685,16 +691,44 @@
   // the main pane takes the full width. Selection is shown by
   // aria-selected plus weight and underline, never colour alone.
 
-  var LOOP_TABS = ["create", "history", "help"];
+  var LOOP_TABS = ["create", "history", "help", "extras"];
 
-  // Help (2026-10-24) shows the shipped Welcome "Gator loop" document. It is
-  // static: no loop state, no messages, no effect on polling. It is not a
+  // Help and Extras (2026-10-24) are static panels over the body: shipped
+  // documents with no loop state and no effect on polling. Neither is a
   // view in the persisted sub-state (`view` stays create|history), so a
-  // Help visit never enters shell history.
+  // visit never enters shell history. Help shows the Welcome "Gator loop"
+  // document; Extras shows per-model notes.
   var LOOP_HELP_DOC = "gator-loop.html";
+  var LOOP_EXTRAS_DOC = "gator-loop-extras.html";
+  var AUX_TABS = {
+    help: { doc: LOOP_HELP_DOC, panel: "loop-help-panel",
+            frameClass: "loop-help-frame", title: "Gator loop help",
+            missing: "The Gator loop help is not included in this snapshot." },
+    extras: { doc: LOOP_EXTRAS_DOC, panel: "loop-extras-panel",
+              frameClass: "loop-extras-frame", title: "Gator loop extras",
+              missing: "The Gator loop extras are not included in this snapshot." },
+  };
+
+  // The Extras document's one cross-frame message: it asks the Dashboard
+  // to copy CODEX_GOAL_PROMPT. The Dashboard owns the text; it is never
+  // received from, or sent to, the document. One line (a pasted newline
+  // can submit early in terminal agent UIs). The <token> and <seconds>
+  // placeholders are part of the text by Architect direction (2026-10-24).
+  var CODEX_GOAL_PROMPT =
+    "/goal Remain an active participant in the Gator loop I just joined until it reaches "
+    + "a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use "
+    + "the existing role token and reissue `gator loop wait --token <token> --max-seconds "
+    + "<seconds>` whenever it returns exit code 3. Stay connected through paused and blocked "
+    + "states. When my turn arrives, perform the required governed review or submission "
+    + "through the CLI. Stop only on terminal exit code 2; do not edit loop files directly "
+    + "or submit without completing the required work.";
+  var EXTRAS_MSG_TYPE = "gator-loop";
+  var EXTRAS_COPY_REQUEST = "copy-codex-goal";
+  var EXTRAS_COPY_RESULT = "copy-codex-goal-result";
+  var _extrasCopyListener = null;
 
   function currentTab() {
-    return _state.help ? "help" : _state.view;
+    return _state.aux || _state.view;
   }
 
   function buildLoopTabs(container) {
@@ -713,6 +747,9 @@
       + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-help" '
       +   'data-tab="help" aria-selected="false" tabindex="-1" '
       +   'aria-controls="loop-help-panel">Help</button>'
+      + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-extras" '
+      +   'data-tab="extras" aria-selected="false" tabindex="-1" '
+      +   'aria-controls="loop-extras-panel">Extras</button>'
       + '</div>';
     var tablist = bar.querySelector(".loop-subnav");
     tablist.addEventListener("click", function (e) {
@@ -765,36 +802,97 @@
     var side = root.querySelector("#loop-sidebar-nav");
     var hide = _state.view !== "history";
     if (side && side.hidden !== hide) side.hidden = hide;
-    // Help hides the body without removing it, so the Create form, a
-    // selected loop and its regions survive the visit.
-    if (body && body.hidden !== _state.help) body.hidden = _state.help;
-    var help = root.querySelector("#loop-help-panel");
-    if (help && help.hidden !== !_state.help) help.hidden = !_state.help;
+    // Help and Extras hide the body without removing it, so the Create
+    // form, a selected loop and its regions survive the visit.
+    var auxShown = !!_state.aux;
+    if (body && body.hidden !== auxShown) body.hidden = auxShown;
+    Object.keys(AUX_TABS).forEach(function (name) {
+      var panel = root.querySelector("#" + AUX_TABS[name].panel);
+      var hidden = _state.aux !== name;
+      if (panel && panel.hidden !== hidden) panel.hidden = hidden;
+    });
   }
 
-  // Creates the Help frame once per mount (the panel is rebuilt per mount).
-  // Same document, route and sandbox as Welcome's "Gator loop" topic.
-  function ensureHelpFrame(container) {
-    var panel = container.querySelector("#loop-help-panel");
+  // Creates a Help or Extras frame once per mount (the panels are rebuilt
+  // per mount). Same route and sandbox as the Welcome frames.
+  function ensureAuxFrame(container, name) {
+    var cfg = AUX_TABS[name];
+    var panel = container.querySelector("#" + cfg.panel);
     if (!panel || panel.firstChild) return;
     var text = null;
     if (window.GATOR_SNAPSHOT) {
-      text = (window.GATOR_WELCOME_DOCS || {})[LOOP_HELP_DOC];
+      text = (window.GATOR_WELCOME_DOCS || {})[cfg.doc];
       if (typeof text !== "string") {
         var note = document.createElement("p");
         note.className = "loop-help-status";
-        note.textContent = "The Gator loop help is not included in this snapshot.";
+        note.textContent = cfg.missing;
         panel.appendChild(note);
         return;
       }
     }
     var frame = document.createElement("iframe");
-    frame.className = "loop-help-frame";
+    frame.className = cfg.frameClass;
     frame.setAttribute("sandbox", "allow-scripts");
-    frame.title = "Gator loop help";
+    frame.title = cfg.title;
     if (window.GATOR_SNAPSHOT) frame.srcdoc = text;
-    else frame.src = "/api/welcome/docs/" + LOOP_HELP_DOC;
+    else frame.src = "/api/welcome/docs/" + cfg.doc;
     panel.appendChild(frame);
+    if (name === "extras") _state.extrasFrame = frame;
+  }
+
+  // ── Extras copy action (the Loop view's only cross-frame message) ──────
+
+  // A structured-clone plain object with exactly {type, v, action}.
+  function isGoalCopyRequest(d) {
+    if (d === null || typeof d !== "object"
+        || Object.getPrototypeOf(d) !== Object.prototype) return false;
+    return Object.keys(d).length === 3
+      && d.type === EXTRAS_MSG_TYPE && d.v === 1 && d.action === EXTRAS_COPY_REQUEST;
+  }
+
+  // Replies only to the requesting frame; never carries the prompt. An
+  // opaque origin cannot be named, so the target origin is "*".
+  function replyGoalCopy(source, ok, reason) {
+    var msg = { type: EXTRAS_MSG_TYPE, v: 1, action: EXTRAS_COPY_RESULT, ok: ok };
+    if (!ok) msg.reason = reason;
+    try { source.postMessage(msg, "*"); } catch (e) { /* frame gone */ }
+  }
+
+  async function handleGoalCopy(source) {
+    if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+      replyGoalCopy(source, false, "unavailable");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(CODEX_GOAL_PROMPT);
+    } catch (e) {
+      replyGoalCopy(source, false, "denied");
+      return;
+    }
+    replyGoalCopy(source, true);
+  }
+
+  // One listener per mount. It acts only for this mount's connected Extras
+  // frame, an opaque ("null") origin, and the exact request shape;
+  // anything else returns before any side effect.
+  function bindExtrasCopyListener(mountRoot) {
+    if (_extrasCopyListener) window.removeEventListener("message", _extrasCopyListener);
+    var listener = function (event) {
+      if (!mountRoot || !mountRoot.isConnected) {
+        window.removeEventListener("message", listener);
+        if (_extrasCopyListener === listener) _extrasCopyListener = null;
+        return;
+      }
+      var frame = _state.extrasFrame;
+      if (!frame || frame.tagName !== "IFRAME" || !frame.isConnected
+          || !mountRoot.contains(frame)) return;
+      if (!event.source || event.source !== frame.contentWindow) return;
+      if (event.origin !== "null") return;
+      if (!isGoalCopyRequest(event.data)) return;
+      handleGoalCopy(event.source);
+    };
+    _extrasCopyListener = listener;
+    window.addEventListener("message", listener);
   }
 
   function isLoaded(container) {
@@ -808,22 +906,23 @@
   function switchTab(name, fromKeyboard) {
     var container = _state.container;
     if (!container || LOOP_TABS.indexOf(name) === -1) return;
-    // Help needs no loop list and never pushes, so it works before the
-    // first list has landed and leaves view, selection and polling alone.
-    if (name === "help") {
-      if (!_state.help) {
-        _state.help = true;
-        ensureHelpFrame(container);
+    // Help and Extras need no loop list and never push, so they work
+    // before the first list has landed and leave view, selection and
+    // polling alone.
+    if (AUX_TABS[name]) {
+      if (_state.aux !== name) {
+        _state.aux = name;
+        ensureAuxFrame(container, name);
         applyTabState(container);
       }
       if (fromKeyboard) {
-        var helpTab = container.querySelector("#loop-tab-help");
-        if (helpTab) helpTab.focus();
+        var auxTab = container.querySelector("#loop-tab-" + name);
+        if (auxTab) auxTab.focus();
       }
       return;
     }
-    var leftHelp = _state.help;
-    _state.help = false;
+    var leftHelp = !!_state.aux;
+    _state.aux = null;
     // #72: the bar exists from mount, but the tabs stay inert until the
     // first /loops response has landed; before that, _state may still
     // hold the previous mount's selection and a push would land ahead of
@@ -4439,8 +4538,11 @@
       + '</div>'
       + '<div class="loop-help-panel" id="loop-help-panel" role="tabpanel" '
       +   'aria-labelledby="loop-tab-help" tabindex="0" hidden></div>'
+      + '<div class="loop-help-panel loop-extras-panel" id="loop-extras-panel" role="tabpanel" '
+      +   'aria-labelledby="loop-tab-extras" tabindex="0" hidden></div>'
       + '</div>';
     buildLoopTabs(container);
+    bindExtrasCopyListener(container.querySelector(".loop-workspace"));
     // Installed BEFORE the first list is awaited (#97): leaving Loop while
     // that list is in flight must run this teardown, which bumps mountId so
     // the late list is dropped below and no poll timer starts.
@@ -4474,8 +4576,8 @@
       _state.pendingSub = sub || null;
       return;
     }
-    // Back/Forward shows the recorded tab, so it leaves Help.
-    _state.help = false;
+    // Back/Forward shows the recorded tab, so it leaves Help or Extras.
+    _state.aux = null;
     if (!applySub(sub, _state.loops)) applyDefaultSelection(_state.loops);
     applyTabState(container);
     _state.generation++;

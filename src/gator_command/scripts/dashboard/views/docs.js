@@ -31,6 +31,7 @@
     // not mistaken for a description of this Docs library.
     { doc: "gator-docs.html",                 label: "Asking for a Gator doc" },
     { doc: "gator-loop.html",                 label: "Gator loop" },
+    { doc: "gator-loop-extras.html",          label: "Gator loop extras" },
     { doc: "charter-formation-process.html",  label: "Charter formation process" },
     { doc: "charter-schema-v1.html",          label: "Charter schema" },
     { doc: "code-migrations.html",            label: "Code migrations" },
