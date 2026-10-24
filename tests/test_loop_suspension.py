@@ -288,7 +288,7 @@ def test_status_and_wait_keep_participant_in_loop(loop_env, kind):  # noqa: F811
                       json=False)
     assert code == 1
     assert "You are still a loop participant" in text
-    assert "--max-seconds 45" in text
+    assert "--max-seconds 360" in text
 
     # bounded wait: still_waiting (3) through the suspension, never 2.
     code, out = _run(loop_cli._cmd_wait, token=e["reviewer_token"], json=True,

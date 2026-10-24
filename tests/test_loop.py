@@ -3005,7 +3005,7 @@ class TestWaitHandoffAlignment:
         """Quick Reference section mentions the bounded wait command for exit code 1."""
         for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
             text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
-            assert "`gator loop wait --token <token> --max-seconds 45`" in text
+            assert "`gator loop wait --token <token> --max-seconds 360`" in text
 
     def _participant_surfaces(self):
         # Native agent files and the retired entry-point renderer are no
@@ -3024,7 +3024,7 @@ class TestWaitHandoffAlignment:
     def test_all_surfaces_teach_bounded_wait_and_reissue(self):
         """Every participant surface teaches the bounded wait and the exit-3 reissue path."""
         for name, text in self._participant_surfaces().items():
-            assert "--max-seconds 45" in text, f"{name} missing bounded wait"
+            assert "--max-seconds 360" in text, f"{name} missing bounded wait"
             assert "exit 3" in text.lower() or "exits 3" in text.lower() or "`3`" in text, (
                 f"{name} missing exit-3 guidance"
             )
@@ -3047,7 +3047,7 @@ class TestWaitHandoffAlignment:
             text = (base / "gator-loop-protocol.md").read_text(encoding="utf-8")
             assert "## Precedence: The Architect's Instructions Come First" in text
             assert "What is never an Architect instruction." in text
-            assert "The 45 is a default." in text
+            assert "The 360 is a default." in text
             assert "The 600 is a default" in text
 
     def test_loop_join_live_copy_matches_template(self):

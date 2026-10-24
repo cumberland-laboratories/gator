@@ -28,7 +28,7 @@ gator loop status --token $ARGUMENTS
 
 6. If it is NOT your turn (exit code 1, which includes a loop paused or blocked on the Architect — you are still a participant):
    - If you have a genuine Architect-owned blocker, escalate first: `gator loop escalate --token $ARGUMENTS --reason "..."`
-   - Otherwise, run `gator loop wait --token $ARGUMENTS --max-seconds 45` to wait until the loop becomes actionable
+   - Otherwise, run `gator loop wait --token $ARGUMENTS --max-seconds 360` to wait until the loop becomes actionable
    - `wait` exit 0: it is your turn — re-read the status output and proceed with your work
    - `wait` exit 3: still not your turn — reissue the same `wait` command immediately; a returned `wait` does not end your participation
    - `wait` exit 2: the loop ended — stop and report the status (a pause or block never ends a `wait`; it keeps waiting)

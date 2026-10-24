@@ -546,7 +546,7 @@ def _print_suspension(session, token=None):
     print("  This is not the end of the loop. You are still a loop participant.")
     if token:
         print("  Keep waiting with:")
-        print(f"    gator loop wait --token {token} --max-seconds 45")
+        print(f"    gator loop wait --token {token} --max-seconds 360")
 
 
 def _message_json(session, role, loop_dir):

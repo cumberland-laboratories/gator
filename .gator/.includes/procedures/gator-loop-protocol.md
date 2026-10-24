@@ -59,11 +59,11 @@ Read the output. It tells you:
 
 **Exit codes matter:**
 - `0` — it IS your turn. Proceed with your submission.
-- `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45` to wait until the loop becomes actionable.
+- `1` — it is NOT your turn. If you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 360` to wait until the loop becomes actionable.
 - `1` also applies while the loop is **paused or blocked on the Architect**: nobody's turn, so wait. Suspension is not the end of the loop (see "Suspension Is Not Departure" below).
 - `2` — the loop ended. Stop.
 
-**Waiting is bounded and resumable.** `gator loop wait --max-seconds 45` returns within about 45 seconds so that it fits inside agent tool-call limits. The 45 is a default. If the Architect gives you a different interval (see "Precedence"), use that value for every `wait`, and allow your tool call to run longer than the interval (for example, raise its time limit). Its exit codes:
+**Waiting is bounded and resumable.** `gator loop wait --max-seconds 360` checks the loop every 2 seconds and returns as soon as it is your turn, so the limit never delays your turn. If your turn does not come, it returns after about 360 seconds (6 minutes). Run it with a tool-call time limit longer than the interval (for example 400 seconds; in Claude Code, set the Bash tool's time limit, because its default is 2 minutes). The 360 is a default. If the Architect gives you a different interval (see "Precedence"), use that value for every `wait`, and allow your tool call to run longer than the interval (for example, raise its time limit). Its exit codes:
 - `0` — it is now your turn. Act immediately.
 - `3` — still not your turn. **Reissue the same `wait` command right away.** A completed `wait` call does not end your participation in the loop.
 - `2` — the loop ended. Stop and report the status.
@@ -175,7 +175,7 @@ After you submit, your turn is over. The other model's turn begins.
 
 ### Rule 1: Only submit on your turn (but you can always escalate)
 
-Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 45` (or the Architect's interval), and reissue it each time it exits `3`, until the loop becomes actionable. A paused or blocked loop also exits `1`: keep waiting. If exit code is `2`, the loop is over — stop.
+Check `gator loop status` before doing anything. If exit code is `0`, proceed with your submission. If exit code is `1`, you cannot submit — if you have a genuine Architect-owned blocker, escalate first (see Rule 6); otherwise run `gator loop wait --token <your-token> --max-seconds 360` (or the Architect's interval), and reissue it each time it exits `3`, until the loop becomes actionable. A paused or blocked loop also exits `1`: keep waiting. If exit code is `2`, the loop is over — stop.
 
 ### Rule 2: Submit through the CLI only
 
@@ -436,7 +436,7 @@ gator loop status --token <token>
 ## Summary For Quick Reference
 
 1. `gator loop status --token <token>` — am I up?
-2. Exit 0: proceed. Exit 1 (including paused or blocked): escalate first if blocked on an Architect-owned decision, otherwise `gator loop wait --token <token> --max-seconds 45` (45 is the default; an interval the Architect gives you wins — see "Precedence"). Exit 2: the loop ended; stop.
+2. Exit 0: proceed. Exit 1 (including paused or blocked): escalate first if blocked on an Architect-owned decision, otherwise `gator loop wait --token <token> --max-seconds 360` (45 is the default; an interval the Architect gives you wins — see "Precedence"). Exit 2: the loop ended; stop.
 3. `wait` exit 0: act. Exit 3: reissue the same `wait` (also through a pause or block). Exit 2: the loop ended; stop.
    (Optional, runtimes that re-invoke you when a background command exits, such as Claude Code: `gator loop participant watch --token <token> --max-seconds 600 --json` in the background instead; see Step 1.)
 4. Read the Architect brief(s) status lists, then the relevant files (sketch, plan, or findings) and the charters they touch

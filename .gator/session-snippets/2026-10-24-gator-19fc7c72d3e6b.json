@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator docs shows a PCI network diagram with data flows and security boundaries",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard"
+  ],
+  "commit": "19fc7c72d3e6b77fb42a89bcf51e68fa386d60d1",
+  "short_commit": "19fc7c7",
+  "snippet_id": "snippet-19fc7c72d3e6b",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "bd7f8bc0e50d399aca06fb05249fcaa309fe761d",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:42:22Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-bd7f8bc0e50d3.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "Example 6 in the Gator docs Welcome topic is now a full network diagram for",
+    "a PCI DSS audit at the imaginary online store. It shows sixteen resources",
+    "inside their security boundaries (the internet, the production network and",
+    "its subnets, the PCI zone for card data, a separate security account, and",
+    "the payment provider), with solid arrows for data and dashed arrows for",
+    "keys, secrets, logs and engineer access. The picture answers the auditor's",
+    "first question: card numbers enter only the PCI zone, only tokens leave it,",
+    "and the only way out is the egress firewall to the payment provider."
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
