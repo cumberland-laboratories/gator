@@ -572,10 +572,11 @@
       margin-bottom: 0.2rem;
     }
     .example h3 {
-      font-size: 1.2rem;
+      font-size: 1.12rem;
+      line-height: 1.45;
       color: var(--gray-900);
-      font-weight: 600;
-      margin: 0 0 0.6rem;
+      font-weight: 500;
+      margin: 0 0 0.7rem;
     }
     .example .request {
       font-family: 'Consolas', 'Monaco', monospace;
@@ -696,12 +697,12 @@
     </svg>
     <div class="caption">Figure 1 — from a one-line request to a document you can read, review and keep.</div>
   </div>
-  <p>The examples below show seven requests and the kind of document each one gives you. Except for the first, which shows Gator itself, they describe an imaginary online store, so you can see how one team could use Gator docs across its work.</p>
+  <p>The examples below show seven situations, the request a person makes, and the kind of document they get. The first shows Gator itself. The others take place at an imaginary online store, so you can see how one team could use Gator docs across its work.</p>
 
   <!-- Example 1: a feature flow ─────────────────────────────── -->
   <div class="example" id="ex-feature">
     <div class="ex-label">Example 1 · Map a feature</div>
-    <h3>How a commit is checked</h3>
+    <h3>Suppose a new team member wants to see how Gator checks a commit before it lands.</h3>
     <div class="request">Create me a Gator doc for how a commit is checked.</div>
     <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -762,7 +763,7 @@
   <!-- Example 2: code behaviour ─────────────────────────────── -->
   <div class="example" id="ex-retry">
     <div class="ex-label">Example 2 · Explain code</div>
-    <h3>The payment service's retry logic</h3>
+    <h3>Suppose an engineer at an online store must explain why a customer's card was charged a few seconds late.</h3>
     <div class="request">Create me a Gator doc for the payment service's retry logic.</div>
     <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -813,14 +814,14 @@
       <text x="548" y="216" font-size="10.5" fill="#4b5563" text-anchor="middle">if all 5 attempts fail</text>
       <line x1="548" y1="206" x2="548" y2="170" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
     </svg>
-    <p>A new engineer asks why a customer was charged four seconds late. The document answers in one picture: which code decides to retry, how long it waits, how many times it tries, and where a charge goes when every attempt fails. The text names the settings and the tests that pin them.</p>
+    <p>The document answers in one picture: which code decides to retry, how long it waits, how many times it tries, and where a charge goes when every attempt fails. The text names the settings and the tests that pin them.</p>
     <div class="trait"><strong>Reviewed and versioned in Git.</strong> The document is committed like any other change. When someone changes the retry limit, the same commit updates the document, and Git shows who changed it, when, and why.</div>
   </div>
 
   <!-- Example 3: a procedure ───────────────────────────────── -->
   <div class="example" id="ex-release">
     <div class="ex-label">Example 3 · Explain a procedure</div>
-    <h3>Our release procedure</h3>
+    <h3>Suppose the store's release manager is asked for a visual of the release procedure, for the engineer who will run the next release.</h3>
     <div class="request">Create me a Gator doc for our release procedure.</div>
     <svg viewBox="0 0 760 180" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -867,7 +868,7 @@
   <!-- Example 4: a decision ────────────────────────────────── -->
   <div class="example" id="ex-decision">
     <div class="ex-label">Example 4 · Record a decision</div>
-    <h3>Why we chose Postgres for the event store</h3>
+    <h3>Suppose someone at the store asks, a year later, why the team chose Postgres for its event store.</h3>
     <div class="request">Create me a Gator doc for why we chose Postgres for the event store.</div>
     <div class="table-wrap">
       <table class="table-blue">
@@ -879,14 +880,14 @@
         </tbody>
       </table>
     </div>
-    <p>A year later, someone asks why the team did not use a managed key-value store. The document shows the options, the trade-offs and the choice, and gives the reason in words: the team already runs Postgres well, and reporting needs real queries. It also says what would make the team decide again.</p>
+    <p>The document shows the options, the trade-offs and the choice, and gives the reason in words: the team already runs Postgres well, and reporting needs real queries. It also says what would make the team decide again.</p>
     <div class="trait"><strong>The reason lives with the code.</strong> A decision made in a meeting or a chat thread is soon lost. A Gator doc is a file in the repository, beside the code it explains, so the next person finds the reason where they look for it.</div>
   </div>
 
   <!-- Example 5: a proposal ────────────────────────────────── -->
   <div class="example" id="ex-proposal">
     <div class="ex-label">Example 5 · Discuss a feature before it exists</div>
-    <h3>How a bulk-export feature could work</h3>
+    <h3>Suppose an architect at the store wants to propose a bulk-export feature and review it with the platform team.</h3>
     <div class="request">Create me a Gator doc for how a bulk-export feature could work, for review with the platform team.</div>
     <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -939,7 +940,7 @@
   <!-- Example 6: the whole system ──────────────────────────── -->
   <div class="example" id="ex-system">
     <div class="ex-label">Example 6 · Draw the whole system</div>
-    <h3>Our whole system, code and infrastructure</h3>
+    <h3>Suppose the store's engineering lead needs one picture of the whole system, code and infrastructure, for a security review.</h3>
     <div class="request">Create me a Gator doc for our whole system, code and infrastructure.</div>
     <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -999,7 +1000,7 @@
   <!-- Example 7: project view ──────────────────────────────── -->
   <div class="example" id="ex-progress">
     <div class="ex-label">Example 7 · Report progress</div>
-    <h3>This month's progress, for the leadership team</h3>
+    <h3>Suppose the store's engineering lead must report this month's progress to the leadership team.</h3>
     <div class="request">Create me a Gator doc for this month's progress, for the leadership team.</div>
     <p class="summary-line">Two of five goals are done. Bulk export is on schedule. The event-store upgrade is at risk, and the second region needs a decision this week.</p>
     <div class="charts">

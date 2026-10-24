@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: the Gator docs progress example gains two bar charts",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard"
+  ],
+  "commit": "52a0d5d68c734ee8738ff00050c3c0beedda937b",
+  "short_commit": "52a0d5d",
+  "snippet_id": "snippet-52a0d5d68c734",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "e5b77124bbc60db08a05cc2c362ffd65db02502c",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:22:53Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-e5b77124bbc60.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "The executive progress example in the Gator docs Welcome topic now shows",
+    "two bar charts above its status table: failed card charges by month, with a",
+    "marker where the new retry logic shipped, and the share of work done for",
+    "each goal. They show at a glance what the table says in words. Each bar",
+    "gives its value on hover, and the colour was checked with the palette",
+    "validator.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
