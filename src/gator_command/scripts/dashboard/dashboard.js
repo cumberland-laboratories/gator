@@ -168,7 +168,11 @@
     const repos = fleetRepos();
     const rec = (state.activeRepoKey && repos.find(r => r.repo_key === state.activeRepoKey))
       || repos.find(r => r.name === state.activeRepo) || {};
-    sidebarContext.appendChild(contextEl("div", "ctx-name", state.activeRepo));
+    // Both lines are cut off with an ellipsis; `title` gives the full text
+    // on hover (a property, so it stays plain text).
+    const nameEl = contextEl("div", "ctx-name", state.activeRepo);
+    nameEl.title = state.activeRepo;
+    sidebarContext.appendChild(nameEl);
     const meta = document.createElement("div");
     meta.className = "ctx-meta";
     if (rec.branch) meta.appendChild(contextEl("span", "ctx-branch", String(rec.branch)));
@@ -177,7 +181,10 @@
       meta.appendChild(document.createTextNode("Gator "));
       meta.appendChild(contextEl("span", "ctx-version", String(rec.cli_version)));
     }
-    if (meta.firstChild) sidebarContext.appendChild(meta);
+    if (meta.firstChild) {
+      meta.title = meta.textContent;
+      sidebarContext.appendChild(meta);
+    }
   }
 
   // Repo/Commits/Loop need a repository. A dimmed item also carries

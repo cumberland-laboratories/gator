@@ -110,6 +110,8 @@ _CARD_JS = """() => {
         meta: q('.ctx-meta') && q('.ctx-meta').textContent,
         branch: q('.ctx-branch') && q('.ctx-branch').textContent,
         version: q('.ctx-version') && q('.ctx-version').textContent,
+        nameTitle: q('.ctx-name') && q('.ctx-name').getAttribute('title'),
+        metaTitle: q('.ctx-meta') && q('.ctx-meta').getAttribute('title'),
         elements: Array.from(c.querySelectorAll('*')).map(e => e.tagName + '.' + e.className),
         shown: c.getBoundingClientRect().height > 0,
     };
@@ -130,6 +132,7 @@ def test_context_card_shows_repository_and_empty_state(page, dashboard_fleet):
     card = page.evaluate(_CARD_JS)
     assert card["name"] == "None selected" and card["empty"] is True
     assert card["meta"] == "Choose one in Fleet" and card["shown"] is True
+    assert card["nameTitle"] is None and card["metaTitle"] is None
 
     rec = _fleet_record(page, dashboard_fleet, "alpha")
     assert rec.get("branch"), "the seeded repository is a Git repository with a branch"
@@ -143,6 +146,9 @@ def test_context_card_shows_repository_and_empty_state(page, dashboard_fleet):
         p for p in [rec.get("branch") or "",
                     ("Gator " + rec["cli_version"]) if rec.get("cli_version") else ""] if p)
     assert (card["meta"] or "") == expected_meta
+    # Truncated lines show their full text on hover.
+    assert card["nameTitle"] == "alpha"
+    assert card["metaTitle"] == (expected_meta or None)
 
 
 def test_context_card_renders_text_literally(page, dashboard_fleet):
