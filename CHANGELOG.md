@@ -6,9 +6,16 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [2.31.0] — 2026-10-23
 
-Feature release. **The Dashboard reads like Paper: a quiet, sortable Fleet, readable Loop prose, and a 16px reading baseline.** Ordinary reading text grows to 16px with 1.6 line spacing, while tables, trees, navigation, metadata and code keep their compact sizes. Fleet becomes a title-only inventory you can sort by any column, and Loop dialogs now open in the centre of the window.
+Feature release. **The Dashboard reads like Paper: a quiet, sortable Fleet, readable Loop prose, and a 16px reading baseline.** Ordinary reading text grows to 16px with 1.6 line spacing, while tables, trees, navigation, metadata and code keep their compact sizes. Fleet becomes a title-only inventory you can sort by any column, and Loop dialogs now open in the centre of the window. Welcome gains two beginner topics, Gator docs and Gator loop. The Loop workspace gains a Help tab, and leaving Loop while it loads no longer leaves a hidden poller running.
 
 ### Added
+
+- **Welcome: Gator docs and Gator loop topics.**
+  - **Gator docs** shows the request pattern ("Create me a Gator doc for …") and a small gallery of the visuals a Gator doc uses.
+  - **Gator loop** explains Loops in plain language: when to use one, the three roles, the planning and coding paths, and the Architect's controls.
+  - Both are shipped HTML documents (`gator-docs.html`, `gator-loop.html`), and both are listed in the Docs library and included in snapshots.
+- **Loop Help tab.** The Loop workspace has a **Help** tab that shows the same Gator loop document, so Welcome and Loop help cannot drift apart. Help hides the workspace without replacing it: a half-filled Create form, the selected loop and polling are all kept, and Help never enters browser history.
+- **Blueprints are visual Gator docs.** The shipped constitution and HTML authoring procedure add `blueprints/` as a Gator doc destination and set its standard: a labelled diagram for each major part, large readable type, code paths and charters rather than functions, and no meaning carried by colour alone. The starter no longer ships `blueprints/_template.md`.
 
 - **Fleet sorting.** Repo, Branch, Enforcement and Version sort one column at a time, from a click or Enter/Space on the header. A new column sorts ascending; the same column toggles to descending. The sorted header shows ▲/▼, weight 600 and `aria-sort`, never colour alone.
   - The default is registry order.

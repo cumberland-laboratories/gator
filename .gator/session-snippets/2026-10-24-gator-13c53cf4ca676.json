@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop: leaving the view while it loads no longer leaves a hidden poller (#97)",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "dashboard",
+    "loop",
+    "polling",
+    "tests",
+    "ci-flake"
+  ],
+  "commit": "13c53cf4ca676c4b9c24fb2456e383a8a0de0d73",
+  "short_commit": "13c53cf",
+  "snippet_id": "snippet-13c53cf4ca676",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 11,
+  "previous_commit_in_session": "86e2dd55cc82413b76fb6f4dbcd5985f86012956",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-24T01:11:08Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/session-snippets/2026-10-24-gator-86e2dd55cc824.json",
+    "CHANGELOG.md"
+  ],
+  "notes": [
+    "Leaving the Loop view before its first loop list arrived left a hidden 3-second poll running until the page was reloaded. The Loop view cleared the shell's teardown at mount and only re-installed it after that list returned, so the late list landed in the detached view and started polling. The teardown is now installed before the wait, so leaving cancels the mount and nothing starts. The bug dates from the first Loop workspace (2026-09-23) and shipped through 2.30.0.",
+    "The departed-mount test now holds the list without blocking Playwright and answers it after leaving Loop, so it really tests this race. It fails every time without the fix and prints a request trace on failure. Its old blocking hold answered the list first except under CI load, which is how the leak surfaced as an intermittent CI failure on 2026-10-23. Closes #97."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}
