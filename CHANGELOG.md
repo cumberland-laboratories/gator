@@ -35,6 +35,9 @@ Feature release. **The Dashboard reads like Paper: a quiet, sortable Fleet, read
 ### Fixed
 
 - **Loop dialogs open centred.** The Respond, Resume, Interject, Pause and End dialogs opened at the top-left, because the global margin reset removed the browser's centring for modal dialogs. `.loop-dialog` now restores it.
+- **Leaving Loop while it loads no longer leaves a hidden poller (#97).** If you left the Loop view before its first loop list arrived, the late list landed in the hidden view and started a 3-second poll (list, status and events) that ran until the page was reloaded. The Loop view now installs its teardown before it waits for that list, so leaving cancels the mount. The bug dates from the first Loop workspace and shipped through 2.30.0.
+  - The departed-mount test now holds the list without blocking Playwright, so it really leaves Loop while the list is pending, and fails every time without the fix. It also prints a request trace on failure.
+  - Before this change, the test answered the list before leaving, except under CI load. That is how the leak surfaced, as an intermittent CI failure on Windows and Ubuntu.
 
 Pinned by:
 - `tests/test_dashboard_ui/test_paper_shell.py`: `test_no_text_inherits_root_type` (11 surfaces; no visible text inherits the root) and `test_root_reading_baseline`;
