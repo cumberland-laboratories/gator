@@ -712,13 +712,14 @@
   // The Extras document's one cross-frame message: it asks the Dashboard
   // to copy CODEX_GOAL_PROMPT. The Dashboard owns the text; it is never
   // received from, or sent to, the document. One line (a pasted newline
-  // can submit early in terminal agent UIs). The <token> and <seconds>
-  // placeholders are part of the text by Architect direction (2026-10-24).
+  // can submit early in terminal agent UIs). The <token> placeholder is
+  // part of the text (Codex reuses the token from its join); the wait is
+  // the protocol default, 360 (Architect direction, 2026-10-24).
   var CODEX_GOAL_PROMPT =
     "/goal Remain an active participant in the Gator loop I just joined until it reaches "
     + "a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use "
     + "the existing role token and reissue `gator loop wait --token <token> --max-seconds "
-    + "<seconds>` whenever it returns exit code 3. Stay connected through paused and blocked "
+    + "360` whenever it returns exit code 3. Stay connected through paused and blocked "
     + "states. When my turn arrives, perform the required governed review or submission "
     + "through the CLI. Stop only on terminal exit code 2; do not edit loop files directly "
     + "or submit without completing the required work.";

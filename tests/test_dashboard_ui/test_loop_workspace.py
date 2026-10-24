@@ -4882,7 +4882,7 @@ def test_loop_extras_copy_success(page, dashboard_fleet):
     copied = page.evaluate("() => navigator.clipboard.readText()")
     assert copied == _codex_goal_prompt()
     assert copied.startswith("/goal ") and "\n" not in copied
-    assert "--max-seconds <seconds>" in copied and "--token <token>" in copied
+    assert "--max-seconds 360`" in copied and "--token <token>" in copied
 
 
 _EXTRAS_IGNORED = {

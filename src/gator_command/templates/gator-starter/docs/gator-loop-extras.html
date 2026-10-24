@@ -593,16 +593,15 @@
 
   <h3>Keep Codex in the loop with <code>/goal</code></h3>
   <p>Paste this into the Codex session after it has joined the loop.</p>
-  <pre id="codex-goal">/goal Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use the existing role token and reissue `gator loop wait --token &lt;token&gt; --max-seconds &lt;seconds&gt;` whenever it returns exit code 3. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Stop only on terminal exit code 2; do not edit loop files directly or submit without completing the required work.</pre>
+  <pre id="codex-goal">/goal Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use the existing role token and reissue `gator loop wait --token &lt;token&gt; --max-seconds 360` whenever it returns exit code 3. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Stop only on terminal exit code 2; do not edit loop files directly or submit without completing the required work.</pre>
   <div class="copy-row">
     <button type="button" id="copy-codex-goal">Copy goal prompt</button>
     <div id="copy-status" role="status" aria-live="polite"></div>
   </div>
   <p id="copy-manual" hidden>Copy did not work here. Select the prompt above and copy it.</p>
   <ul class="caps">
-    <li><strong>Replace <code>&lt;seconds&gt;</code> with the wait interval.</strong> The protocol default is 360. The wait returns as soon as it is Codex's turn, so a long interval does not delay the loop.</li>
     <li><strong>Leave <code>&lt;token&gt;</code> as it is.</strong> Codex uses the role token from its join. Do not paste the token into the prompt.</li>
-    <li><strong>Why the interval matters.</strong> Each wait that ends without a turn costs Codex a model turn. A long interval keeps that cost low.</li>
+    <li><strong>Why the wait is 360 seconds.</strong> 360 is the protocol default. Each wait that ends without a turn costs Codex a model turn, and a long interval keeps that cost low. The wait returns as soon as it is Codex's turn, so it does not delay the loop.</li>
   </ul>
 </section>
 
