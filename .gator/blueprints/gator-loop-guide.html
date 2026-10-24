@@ -1,23 +1,34 @@
 <!DOCTYPE html>
+<!-- Gator doc · gator-blueprint-html-v1 (narrative template, procedure-visual). -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- gator-blueprint-html-v1 protocol metadata -->
   <meta name="gator-schema" content="gator-blueprint-html-v1">
-  <meta name="gator-title" content="Gator Loop — Architect Guide">
+  <meta name="gator-title" content="Gator Loop Architect Guide">
   <meta name="gator-repo" content="gator">
   <meta name="gator-doc-class" content="procedure-visual">
   <meta name="gator-status" content="current">
-  <meta name="gator-updated-at" content="2026-09-03T20:30:00Z">
-  <meta name="gator-generated-by" content="claude-opus-4-7">
-  <meta name="gator-question" content="How does the Architect actually run a gator loop end-to-end — start it, orient the models, watch it, unblock stalls, and read the residue?">
+  <meta name="gator-updated-at" content="2026-10-24T01:00:00Z">
+  <meta name="gator-generated-by" content="claude-opus-5-5">
+  <meta name="gator-question" content="How does the Architect run a Gator Loop, from creating it to a committed result?">
 
-  <title>Gator Loop — Architect Guide</title>
+  <title>Gator Loop Architect Guide</title>
 
   <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
     :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
       --teal:        #19aeb8;
       --teal-dark:   #148a92;
       --teal-light:  rgba(25, 174, 184, 0.08);
@@ -30,7 +41,10 @@
       --amber-light: rgba(212, 139, 10, 0.08);
       --green:       #2d8a4e;
       --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
 
+      /* Neutral scale — 9-step Tailwind-style ramp. */
       --gray-50:  #f9fafb;
       --gray-100: #f3f4f6;
       --gray-200: #e5e7eb;
@@ -52,20 +66,28 @@
       margin: 0 auto;
     }
 
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
     header.doc-head {
       border-bottom: 3px solid var(--teal);
       padding-bottom: 1.5rem;
       margin-bottom: 2rem;
     }
     header.doc-head h1 {
-      font-size: 1.75rem;
+      font-size: 1.85rem;
       color: var(--gray-900);
       font-weight: 700;
       margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
     }
     header.doc-head .subtitle {
       color: var(--gray-600);
-      font-size: 0.95rem;
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
     }
     header.doc-head .metaline {
       margin-top: 0.75rem;
@@ -88,6 +110,12 @@
       font-size: 0.72rem;
       margin-right: 0.4rem;
     }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
     .status-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -99,7 +127,15 @@
       background: var(--green-light);
       color: var(--green);
     }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
 
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
     section { margin-bottom: 2.5rem; }
     section > h2 {
       font-size: 1.35rem;
@@ -115,18 +151,34 @@
       font-weight: 600;
       margin: 1.5rem 0 0.5rem;
     }
-    p { margin-bottom: 0.8rem; }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
     ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
     li { margin-bottom: 0.3rem; }
+
     a { color: var(--blue-dark); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
     code {
       font-family: 'Consolas', 'Monaco', monospace;
       background: var(--gray-100);
       padding: 0.1em 0.4em;
       border-radius: 3px;
-      font-size: 0.9em;
+      font-size: 0.88em;
       color: var(--gray-900);
     }
     pre {
@@ -142,8 +194,22 @@
       overflow-x: auto;
       margin: 0.7rem 0 1rem;
     }
-    pre code { background: none; padding: 0; border-radius: 0; font-size: 1em; }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
 
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
     .callout {
       background: var(--teal-light);
       border-left: 4px solid var(--teal);
@@ -151,10 +217,11 @@
       border-radius: 4px;
       margin: 1rem 0;
     }
-    .callout.warn { background: var(--red-light);   border-left-color: var(--red); }
-    .callout.info { background: var(--amber-light); border-left-color: var(--amber); }
-    .callout.ok   { background: var(--green-light); border-left-color: var(--green); }
-    .callout.note { background: var(--blue-light);  border-left-color: var(--blue); }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
     .callout .label {
       font-size: 0.75rem;
       font-weight: 700;
@@ -168,7 +235,13 @@
     .callout.info .label { color: var(--amber); }
     .callout.ok   .label { color: var(--green); }
     .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
 
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
     table {
       width: 100%;
       border-collapse: collapse;
@@ -196,10 +269,39 @@
     }
     tr:last-child td { border-bottom: none; }
     tbody tr:hover { background: var(--gray-50); }
-    table.table-blue th { background: var(--blue-light); color: var(--blue-dark); border-bottom-color: var(--blue); }
-    table.table-red  th { background: var(--red-light);  color: var(--red);       border-bottom-color: var(--red); }
-    table.table-teal th { background: var(--teal-light); color: var(--teal-dark); border-bottom-color: var(--teal); }
 
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
     .pill {
       display: inline-block;
       padding: 0.15rem 0.55rem;
@@ -210,12 +312,16 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    .pill.ok   { background: var(--green-light); color: var(--green); }
-    .pill.info { background: var(--blue-light);  color: var(--blue-dark); }
-    .pill.warn { background: var(--red-light);   color: var(--red); }
-    .pill.alt  { background: var(--teal-light);  color: var(--teal-dark); }
-    .pill.na   { background: var(--gray-100);    color: var(--gray-600); }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
 
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
     .toc {
       background: white;
       border: 1px solid var(--gray-200);
@@ -237,6 +343,40 @@
     .toc a { color: var(--gray-700); }
     .toc a:hover { color: var(--blue-dark); }
 
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
     .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
     .steps > li {
       counter-increment: step;
@@ -264,15 +404,11 @@
     .steps > li.step-alt::before  { background: var(--blue); }
     .steps > li.step-warn::before { background: var(--red); }
     .steps > li.step-done::before { background: var(--green); }
-    .steps > li h4 {
-      display: inline;
-      font-size: 1.02rem;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
-    .steps > li p { margin: 0.35rem 0 0.5rem; }
-    .steps > li pre { margin: 0.5rem 0; }
 
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
     .diagram {
       background: white;
       border: 1px solid var(--gray-200);
@@ -306,10 +442,11 @@
       text-align: center;
       flex: 0 0 auto;
     }
-    .diagram-node.blue { border-color: var(--blue); background: var(--blue-light); color: var(--blue-dark); }
-    .diagram-node.red  { border-color: var(--red);  background: var(--red-light);  color: var(--red); }
-    .diagram-node.amber{ border-color: var(--amber);background: var(--amber-light);color: var(--amber); }
-    .diagram-node.green{ border-color: var(--green);background: var(--green-light);color: var(--green); }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
     .diagram-node .kind {
       display: block;
       font-size: 0.7rem;
@@ -320,6 +457,9 @@
       margin-top: 0.2rem;
     }
     .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
       flex: 1 1 auto;
       min-width: 2rem;
       height: 2px;
@@ -339,8 +479,8 @@
     }
     .diagram-edge.blue { background: var(--blue); }
     .diagram-edge.blue::after { border-left-color: var(--blue); }
-    .diagram-edge.red { background: var(--red); }
-    .diagram-edge.red::after { border-left-color: var(--red); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
     .diagram-edge-label {
       position: absolute;
       top: -1.1rem;
@@ -351,393 +491,495 @@
       white-space: nowrap;
     }
 
+    /* Footer — small centered muted text with top-border. */
     footer.doc-foot {
       margin-top: 3rem;
       padding-top: 1.5rem;
       border-top: 1px solid var(--gray-200);
       font-size: 0.82rem;
-      color: var(--gray-400);
+      color: var(--gray-600);
       text-align: center;
     }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+  </style>
+  <style>
+    /* Local additions for this document (outside the shared Cumberland region). */
+    .figure svg.wide { min-width: 780px; }
+    svg text { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    svg .t  { font-size: 15px; font-weight: 600; fill: var(--gray-900); }
+    svg .s  { font-size: 12px; fill: var(--gray-600); }
+    svg .c  { font-family: 'Consolas', 'Monaco', monospace; font-size: 11.5px; fill: var(--gray-700); }
+    svg .el { font-size: 12px; fill: var(--gray-600); }
+    svg .b-core  { fill: var(--teal-light);  stroke: var(--teal);  stroke-width: 1.5; }
+    svg .b-repo  { fill: var(--blue-light);  stroke: var(--blue);  stroke-width: 1.5; }
+    svg .b-state { fill: var(--gray-100);    stroke: var(--gray-400); stroke-width: 1.5; }
+    svg .b-ok    { fill: var(--green-light); stroke: var(--green); stroke-width: 2.5; }
+    svg .b-wait  { fill: var(--amber-light); stroke: var(--amber); stroke-width: 2.5; stroke-dasharray: 8 4; }
+    svg .edge    { stroke: var(--gray-600); stroke-width: 1.6; fill: none; }
+    .legend { font-size: 0.82rem; color: var(--gray-600); margin-top: 0.6rem; }
+    .legend span { margin-right: 1.2rem; white-space: nowrap; }
+    .key { display: inline-block; width: 1.6rem; height: 0.85rem; vertical-align: -0.1rem; margin-right: 0.35rem; border-radius: 2px; }
+    .key.core  { background: var(--teal-light);  border: 1.5px solid var(--teal); }
+    .key.repo  { background: var(--blue-light);  border: 1.5px solid var(--blue); }
+    .key.state { background: var(--gray-100);    border: 1.5px solid var(--gray-400); }
+    .key.ok    { background: var(--green-light); border: 2.5px solid var(--green); }
+    .key.wait  { background: var(--amber-light); border: 2.5px dashed var(--amber); }
+    .diagram-node { max-width: 10.5rem; }
+    .diagram-node .kind { white-space: normal; line-height: 1.35; }
   </style>
 </head>
 <body>
 
 <header class="doc-head">
   <h1>Gator Loop — Architect Guide</h1>
-  <div class="subtitle">How to run a governed planning debate between two AI models: setup, launch, orientation, monitoring, unblock, and reading the residue.</div>
+  <div class="subtitle">How to run a governed loop between two AI agents: start it, bring the agents in, watch it, steer it, and turn an approved plan into committed code.</div>
   <div class="meta-grid">
-    <div><span class="label">Doc class:</span> Procedure visual</div>
+    <div><span class="label">Doc class:</span> procedure-visual</div>
     <div><span class="label">Repo:</span> gator</div>
-    <div><span class="label">Status:</span> <span class="status-badge">Current</span></div>
-    <div><span class="label">Updated:</span> 2026-09-03</div>
-    <div><span class="label">Question:</span> How do I run a loop?</div>
+    <div><span class="label">Status:</span> <span class="status-badge">current</span></div>
+    <div><span class="label">Updated:</span> 2026-10-24 (v2.30.0)</div>
+    <div><span class="label">Question:</span> How does the Architect run a loop, from creation to a committed result?</div>
     <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
   </div>
-  <div class="metaline">Companion to <code>gator-loop.html</code> (interactive blueprint of the state machine) — this document is the architect-facing operations guide.</div>
+  <div class="metaline">Gator doc · audience: the Architect · sources: <code>scripts/loop/</code>, <code>scripts-loop.md</code>, and the loop protocol · see also <code>gator-architecture-overview.html</code></div>
 </header>
 
 <nav class="toc">
   <h3>Contents</h3>
   <ol>
     <li><a href="#summary">Summary</a></li>
-    <li><a href="#before">Before you start</a></li>
-    <li><a href="#launch">Launching the loop</a></li>
-    <li><a href="#orient">Orienting the models</a></li>
-    <li><a href="#watch">Watching the loop run</a></li>
-    <li><a href="#control">Architect controls (pause, interject, unblock, end)</a></li>
-    <li><a href="#end">When the loop ends</a></li>
-    <li><a href="#trouble">What can go wrong</a></li>
-    <li><a href="#references">References</a></li>
+    <li><a href="#who">Who takes part</a></li>
+    <li><a href="#chain">From idea to commit: planning loops and coding loops</a></li>
+    <li><a href="#start">Start a loop</a></li>
+    <li><a href="#join">Bring the agents in</a></li>
+    <li><a href="#round">One round, and how the Architect steps in</a></li>
+    <li><a href="#watch">Watch the loop</a></li>
+    <li><a href="#controls">Architect controls</a></li>
+    <li><a href="#coding">Coding loops in detail</a></li>
+    <li><a href="#endings">How a loop ends</a></li>
+    <li><a href="#folder">The loop folder</a></li>
+    <li><a href="#wrong">What can go wrong</a></li>
+    <li><a href="#refs">References</a></li>
   </ol>
 </nav>
 
 <section id="summary">
   <div class="callout">
     <span class="label">Summary</span>
-    <p>Gator loop is a CLI-mediated debate between two AI models under human oversight. You write a short sketch, run <code>gator loop start</code>, hand each model its role token, and watch. The loop runs on file-based handoffs — models submit artifacts through the CLI, never talk to each other directly. The Architect can watch, pause, interject a message without pausing, unblock stalls, or stop a loop cold. Every event is durable in <code>.gator/loops/&lt;loop-id&gt;/</code>; nothing gets Git-committed automatically.</p>
+    <p>A Gator Loop is a structured exchange between two AI agents. The <strong>Draftor</strong> writes; the <strong>Reviewer</strong> checks and approves or asks for changes. You, the <strong>Architect</strong>, start the loop, watch it, and can pause, redirect or end it at any time. The agents never talk to each other directly. Every step goes through the <code>gator loop</code> CLI, which checks each agent's token, role and turn, and records the step in <code>.gator/loops/&lt;loop-id&gt;/</code>.</p>
+    <p>Loops come in two kinds. A <strong>planning loop</strong> turns your sketch into an approved plan. A <strong>coding loop</strong> implements that plan, checkpoint by checkpoint, and the Reviewer approves the exact staged code. The loop never commits. You make one normal commit at the end, and the loop then shows <strong>Committed</strong>.</p>
   </div>
 </section>
 
-<section id="before">
-  <h2>Before you start</h2>
-  <p>Four things you need before the loop is worth starting:</p>
+<section id="who">
+  <h2>Who takes part</h2>
+  <p>Three roles, three tokens. A token is the only key to a role. Gator prints all three when the loop starts. The Dashboard keeps them for you and builds the join prompt for each agent.</p>
 
-  <ol class="steps">
-    <li>
-      <h4>A feature slug</h4>
-      <p>Short identifier, kebab-case. Example: <code>dashboard-html-preview</code>, <code>session-block-recovery</code>. Used in the loop ID and directory name.</p>
-    </li>
-    <li class="step-alt">
-      <h4>A sketch file</h4>
-      <p>Markdown file describing what you want built. This is the scope contract — models cannot exceed what the sketch describes. Can be brief (a few paragraphs) or detailed (a full design sketch); the draftor expands it into a plan. Save it anywhere in the repo.</p>
-    </li>
-    <li>
-      <h4>Two AI sessions</h4>
-      <p>One for the draftor, one for the reviewer. Claude Code, Codex CLI, Gemini CLI — anything that can run <code>gator</code> subcommands works. Different models are fine (often better — you want independent perspectives, not two copies of the same voice).</p>
-    </li>
-    <li>
-      <h4>A monitoring terminal</h4>
-      <p>The <code>gator loop start</code> process blocks until the loop is terminal. That terminal is your primary event stream. Leave it open for the duration.</p>
-    </li>
-  </ol>
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 370" role="img" aria-labelledby="g1-title">
+      <title id="g1-title">Roles, entry points, loop core and loop folder</title>
+      <defs>
+        <marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
 
-  <div class="callout note">
-    <span class="label">Note</span>
-    <p>You do <em>not</em> need to prep the models in advance. Each model reads its role, the protocol, and the sketch as soon as it joins. The Architect's job is scope + supervision, not model briefing.</p>
+      <rect class="b-state" x="20" y="40" width="200" height="90" rx="6"/>
+      <text class="t" x="120" y="72" text-anchor="middle">Architect</text>
+      <text class="s" x="120" y="92" text-anchor="middle">you</text>
+      <text class="c" x="120" y="111" text-anchor="middle">architect token</text>
+
+      <rect class="b-state" x="20" y="150" width="200" height="90" rx="6"/>
+      <text class="t" x="120" y="182" text-anchor="middle">Draftor</text>
+      <text class="s" x="120" y="202" text-anchor="middle">AI agent, any vendor</text>
+      <text class="c" x="120" y="221" text-anchor="middle">draftor token</text>
+
+      <rect class="b-state" x="20" y="260" width="200" height="90" rx="6"/>
+      <text class="t" x="120" y="292" text-anchor="middle">Reviewer</text>
+      <text class="s" x="120" y="312" text-anchor="middle">AI agent, ideally another vendor</text>
+      <text class="c" x="120" y="331" text-anchor="middle">reviewer token</text>
+
+      <rect class="b-core" x="300" y="40" width="200" height="90" rx="6"/>
+      <text class="t" x="400" y="72" text-anchor="middle">Dashboard</text>
+      <text class="s" x="400" y="92" text-anchor="middle">Loop workspace</text>
+      <text class="s" x="400" y="111" text-anchor="middle">Create · History · controls</text>
+
+      <rect class="b-core" x="300" y="150" width="200" height="200" rx="6"/>
+      <text class="t" x="400" y="232" text-anchor="middle">gator loop CLI</text>
+      <text class="c" x="400" y="254" text-anchor="middle">status · wait</text>
+      <text class="c" x="400" y="273" text-anchor="middle">submit-draft</text>
+      <text class="c" x="400" y="292" text-anchor="middle">submit-implementation</text>
+      <text class="c" x="400" y="311" text-anchor="middle">submit-review · escalate</text>
+
+      <rect class="b-core" x="620" y="40" width="220" height="310" rx="6"/>
+      <text class="t" x="730" y="160" text-anchor="middle">Loop core</text>
+      <text class="c" x="730" y="182" text-anchor="middle">scripts/loop/</text>
+      <text class="s" x="730" y="206" text-anchor="middle">checks token, role, turn</text>
+      <text class="s" x="730" y="224" text-anchor="middle">one change at a time</text>
+      <text class="s" x="730" y="242" text-anchor="middle">(file locks)</text>
+
+      <rect class="b-repo" x="900" y="120" width="180" height="150" rx="6"/>
+      <text class="t" x="990" y="148" text-anchor="middle">Loop folder</text>
+      <text class="c" x="990" y="170" text-anchor="middle">.gator/loops/&lt;id&gt;/</text>
+      <text class="c" x="990" y="194" text-anchor="middle">session.json</text>
+      <text class="c" x="990" y="213" text-anchor="middle">events.jsonl</text>
+      <text class="c" x="990" y="232" text-anchor="middle">plans · findings</text>
+      <text class="c" x="990" y="251" text-anchor="middle">implementations</text>
+
+      <path class="edge" d="M220,85 L298,85" marker-end="url(#g1)"/>
+      <text class="el" x="259" y="77" text-anchor="middle">browser</text>
+      <path class="edge" d="M220,195 L298,195" marker-end="url(#g1)"/>
+      <text class="el" x="259" y="187" text-anchor="middle">CLI</text>
+      <path class="edge" d="M220,305 L298,305" marker-end="url(#g1)"/>
+      <text class="el" x="259" y="297" text-anchor="middle">CLI</text>
+      <path class="edge" d="M500,85 L618,85" marker-end="url(#g1)"/>
+      <path class="edge" d="M500,250 L618,250" marker-end="url(#g1)"/>
+      <path class="edge" d="M840,195 L898,195" marker-end="url(#g1)"/>
+      <text class="el" x="869" y="187" text-anchor="middle">writes</text>
+    </svg>
+    <div class="legend">
+      <span><i class="key state"></i>Person or AI agent</span>
+      <span><i class="key core"></i>Gator component</span>
+      <span><i class="key repo"></i>Files in the repository</span>
+    </div>
+    <div class="caption">Figure 1. The agents reach the loop only through the CLI. The Architect can use the Dashboard or the CLI with the architect token.</div>
   </div>
-</section>
-
-<section id="launch">
-  <h2>Launching the loop</h2>
-
-  <p>From the repo root, in your monitoring terminal:</p>
-
-  <pre>gator loop start --feature dashboard-html-preview --sketch path/to/sketch.md</pre>
-
-  <p>Common options:</p>
-
-  <table class="table-blue">
-    <thead>
-      <tr>
-        <th>Flag</th>
-        <th>Default</th>
-        <th>Purpose</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>--max-rounds N</code></td>
-        <td>3</td>
-        <td>Revision cycles before the loop stops with <code>max_rounds_exceeded</code>. Increase for complex plans; decrease for tight sketches.</td>
-      </tr>
-      <tr>
-        <td><code>--turn-timeout SECONDS</code></td>
-        <td>300</td>
-        <td>Seconds a model has to submit before the host fires <code>turn_timed_out</code>. Bump higher if models are slow to respond.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>The host prints a banner with three tokens (draftor, reviewer, architect) and enters watch mode:</p>
-
-  <pre>  gator loop
-
-  Loop: dashboard-html-preview-2026-09-03T14-30-00Z
-  Feature: dashboard-html-preview
-  Max rounds: 3
-  Turn timeout: 5m
-
-  -- Tokens ------------------------------------------------
-
-  DRAFTOR:
-    gator loop status --token glp_ZGFzaGJv...
-
-  REVIEWER:
-    gator loop status --token glp_ZGFzaGJv...
-
-  ARCHITECT:
-    gator loop status --token glp_ZGFzaGJv...
-
-  -- Watching -----------------------------------------------
-
-  [14:30:01] loop started
-  next: draftor (plan_drafting)
-  waiting...</pre>
 
   <div class="callout warn">
-    <span class="label">Warning</span>
-    <p>The three tokens are the entire access-control system. The architect token in particular is what gates <code>pause</code>, <code>interject</code>, <code>unblock</code>, and <code>end</code>. Never paste the architect token into a model session — that's the whole point of role separation. Keep it in a separate terminal or a note.</p>
+    <span class="label">Keep the architect token to yourself</span>
+    <p>The architect token is the only key to pause, interject, unblock, extend, reopen and end. Never paste it into an agent session. An agent with only its own token cannot change another role's work or skip a turn.</p>
   </div>
 </section>
 
-<section id="orient">
-  <h2>Orienting the models</h2>
+<section id="chain">
+  <h2>From idea to commit: planning loops and coding loops</h2>
+  <p>The usual path has two loops in a row. Each one ends with a Reviewer approval. Only you make the commit.</p>
 
-  <p>Open a second (draftor) and third (reviewer) terminal. Give each model its role token. Two entry points:</p>
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 300" role="img" aria-labelledby="g2-title">
+      <title id="g2-title">Sketch to planning loop to approved plan to coding loop to commit</title>
+      <defs>
+        <marker id="g2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
 
-  <h3>Claude Code — slash command</h3>
-  <pre>/loop-join glp_ZGFzaGJv...</pre>
+      <rect class="b-state" x="20" y="40" width="190" height="100" rx="6"/>
+      <text class="t" x="115" y="72" text-anchor="middle">Your input</text>
+      <text class="s" x="115" y="94" text-anchor="middle">a sketch, or your own</text>
+      <text class="s" x="115" y="111" text-anchor="middle">plan, or a revision</text>
+      <text class="s" x="115" y="128" text-anchor="middle">of an approved plan</text>
 
-  <h3>Any other AI (Codex, Gemini, etc.) — orientation prompt</h3>
-  <pre>I'm giving you a gator loop token. Follow the "gator loop join" instructions
-in your entry point. Your token is: glp_ZGFzaGJv...</pre>
+      <rect class="b-core" x="270" y="40" width="200" height="100" rx="6"/>
+      <text class="t" x="370" y="72" text-anchor="middle">Planning loop</text>
+      <text class="s" x="370" y="94" text-anchor="middle">Draftor plans,</text>
+      <text class="s" x="370" y="111" text-anchor="middle">Reviewer approves</text>
+      <text class="c" x="370" y="129" text-anchor="middle">--mode planning</text>
 
-  <p>Each model then:</p>
+      <rect class="b-ok" x="530" y="40" width="200" height="100" rx="6"/>
+      <text class="t" x="630" y="72" text-anchor="middle">Approved plan ✓</text>
+      <text class="s" x="630" y="94" text-anchor="middle">with a Coding</text>
+      <text class="s" x="630" y="111" text-anchor="middle">Checkpoints section</text>
+      <text class="c" x="630" y="129" text-anchor="middle">plan_approved</text>
 
-  <ol>
-    <li>Reads <code>procedures/gator-loop-protocol.md</code> — the behavioral contract.</li>
-    <li>Runs <code>gator loop status --token &lt;token&gt;</code> — sees its role and whether it's its turn.</li>
-    <li>Reads the sketch and any prior turn artifact (draftor reads <code>sketch.md</code>; reviewer also reads <code>plan.current.md</code>).</li>
-    <li>Writes a submission and submits via <code>gator loop submit-draft</code> or <code>gator loop submit-review</code>.</li>
-  </ol>
+      <rect class="b-core" x="790" y="40" width="290" height="100" rx="6"/>
+      <text class="t" x="935" y="72" text-anchor="middle">Coding loop</text>
+      <text class="s" x="935" y="94" text-anchor="middle">Draftor implements one checkpoint</text>
+      <text class="s" x="935" y="111" text-anchor="middle">at a time; Reviewer approves the code</text>
+      <text class="c" x="935" y="129" text-anchor="middle">--mode coding --from-loop &lt;id&gt;</text>
 
-  <div class="callout ok">
-    <span class="label">Confirmed shape</span>
-    <p>The entire orientation is in the vendor entry-point file (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>). If a model reads its entry point, it knows exactly what to do with the token. If it doesn't, the token is inert — the model can't accidentally do damage because every write goes through <code>gator loop</code>.</p>
+      <rect class="b-ok" x="790" y="200" width="290" height="80" rx="6"/>
+      <text class="t" x="935" y="230" text-anchor="middle">Committed ✓</text>
+      <text class="s" x="935" y="252" text-anchor="middle">you make one normal commit</text>
+      <text class="s" x="935" y="269" text-anchor="middle">of the approved tree</text>
+
+      <rect class="b-state" x="270" y="200" width="460" height="80" rx="6"/>
+      <text class="t" x="500" y="230" text-anchor="middle">Optional: an Architect brief for both agents</text>
+      <text class="c" x="500" y="252" text-anchor="middle">--brief &lt;file&gt;  ·  coding: --source-brief keep | drop</text>
+      <text class="s" x="500" y="269" text-anchor="middle">stored unchanged as architect-brief.md</text>
+
+      <path class="edge" d="M210,90 L268,90" marker-end="url(#g2)"/>
+      <path class="edge" d="M470,90 L528,90" marker-end="url(#g2)"/>
+      <text class="el" x="499" y="82" text-anchor="middle">approve</text>
+      <path class="edge" d="M730,90 L788,90" marker-end="url(#g2)"/>
+      <path class="edge" d="M935,140 L935,198" marker-end="url(#g2)"/>
+      <text class="el" x="943" y="174">final approval</text>
+    </svg>
+    <div class="legend">
+      <span><i class="key state"></i>Your input</span>
+      <span><i class="key core"></i>Loop</span>
+      <span><i class="key ok"></i>Approved result (thick border, ✓)</span>
+    </div>
+    <div class="caption">Figure 2. The two-loop path. Each coding loop implements exactly one approved planning loop.</div>
   </div>
 </section>
 
-<section id="watch">
-  <h2>Watching the loop run</h2>
-
-  <p>Five surfaces, all read-only from the Architect's perspective. Pick the one that fits what you're trying to see.</p>
-
-  <table class="table-teal">
-    <thead>
-      <tr>
-        <th>Surface</th>
-        <th>Best for</th>
-        <th>Kind</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>The host terminal (<code>gator loop start</code>'s stdout)</td>
-        <td>Real-time event stream while the loop runs. Primary monitoring surface.</td>
-        <td><span class="pill alt">Stream</span></td>
-      </tr>
-      <tr>
-        <td><code>gator loop tail --loop &lt;id&gt;</code></td>
-        <td>Same event stream in a different terminal — useful when the host is backgrounded or you're on another machine.</td>
-        <td><span class="pill alt">Stream</span></td>
-      </tr>
-      <tr>
-        <td><code>gator loop status --token &lt;architect-token&gt;</code></td>
-        <td>Snapshot: current state, both models' join status, turn history, allowed commands. <code>--json</code> for machine reads.</td>
-        <td><span class="pill info">Snapshot</span></td>
-      </tr>
-      <tr>
-        <td><code>gator loop list</code></td>
-        <td>Every loop this machine knows about — stage, round, whether blocked. For "which of my loops need attention?"</td>
-        <td><span class="pill info">Snapshot</span></td>
-      </tr>
-      <tr>
-        <td>Reading files in <code>.gator/loops/&lt;id&gt;/</code> directly</td>
-        <td>Any editor, <code>cat</code>, <code>tail -f</code>. All state is on disk — no hidden API.</td>
-        <td><span class="pill na">Direct</span></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="callout note">
-    <span class="label">Why this works</span>
-    <p>The host is a <em>reader</em> of <code>events.jsonl</code> (with one write exception: timeout enforcement, protected by an exclusive file lock). There's no privileged "host view" vs. "Architect view" — they see the same event stream, observed at different times. Anything you build around the file surface stays in sync automatically.</p>
+<section id="start">
+  <h2>Start a loop</h2>
+  <p>Use the Dashboard (<strong>Loop → Create</strong>) or the CLI. Both take the same options. Only one loop can be active in a repository at a time; a second start is refused until the first one ends.</p>
+  <div class="table-wrap">
+    <table class="table-blue">
+      <thead><tr><th>What you want</th><th>CLI</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Plan from a sketch</td><td><code>gator loop start --feature &lt;slug&gt; --sketch &lt;file&gt;</code></td><td>The usual start. The Draftor goes first.</td></tr>
+        <tr><td>Have your own plan reviewed</td><td><code>… --plan-file &lt;file&gt;</code></td><td>The Reviewer goes first. Your plan is not approved until the Reviewer approves it.</td></tr>
+        <tr><td>Revise an approved plan</td><td><code>… --revise-from &lt;loop-id&gt; --sketch &lt;file&gt;</code></td><td>The old plan and its approval are copied as fixed baselines. The source loop does not change.</td></tr>
+        <tr><td>Implement an approved plan</td><td><code>… --mode coding --from-loop &lt;loop-id&gt;</code></td><td>The source must be an approved planning loop.</td></tr>
+        <tr><td>Give both agents guidance</td><td><code>… --brief &lt;file&gt;</code></td><td>Markdown, 32 KiB or less. Coding loops can keep or drop the plan's brief with <code>--source-brief</code>.</td></tr>
+        <tr><td>Change the round limit</td><td><code>… --max-rounds N</code></td><td>Default 3. You can add rounds later with <code>extend</code>.</td></tr>
+        <tr><td>Change the attention interval</td><td><code>… --attention-interval SECONDS</code></td><td>Default 300. See <a href="#watch">Watch the loop</a>. <code>--turn-timeout</code> is an older alias.</td></tr>
+      </tbody>
+    </table>
   </div>
-
-  <h3>What the loop directory contains</h3>
-
-  <table>
-    <thead>
-      <tr>
-        <th>File</th>
-        <th>Contents</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td><code>session.json</code></td><td>Full session state: stage, round, turn history, deadlines, resume state.</td></tr>
-      <tr><td><code>events.jsonl</code></td><td>Append-only event log. One JSON line per event.</td></tr>
-      <tr><td><code>sketch.md</code></td><td>The original scope document (copied at <code>gator loop start</code>).</td></tr>
-      <tr><td><code>plan.current.md</code></td><td>Latest draftor submission — the plan under review.</td></tr>
-      <tr><td><code>findings.current.md</code></td><td>Latest reviewer submission — findings or approval body.</td></tr>
-      <tr><td><code>.tokens.json</code></td><td>Gitignored. Holds the secret nonces used to validate role tokens.</td></tr>
-    </tbody>
-  </table>
+  <p>A sketch is your scope. Write what you want, what is out of scope, and any decisions already made. With charters in place, a Draftor needs only a few minutes of research. If research takes much longer, the sketch is probably too broad or the code has no usable charter.</p>
 </section>
 
-<section id="control">
-  <h2>Architect controls</h2>
-
-  <p>Four Architect-only commands. All require the architect token.</p>
+<section id="join">
+  <h2>Bring the agents in</h2>
+  <p>Open one AI session for each agent. In the Dashboard, copy the join prompt for the role and paste it into that session. In the CLI, copy the role's <code>gator loop status --token …</code> line from the start banner.</p>
 
   <div class="diagram">
     <div class="diagram-flow">
-      <div class="diagram-node blue">
-        Active state
-        <span class="kind">running</span>
-      </div>
-      <div class="diagram-edge blue"><span class="diagram-edge-label">pause</span></div>
-      <div class="diagram-node amber">
-        paused_by_architect
-        <span class="kind">deadline frozen</span>
-      </div>
-      <div class="diagram-edge"><span class="diagram-edge-label">unblock</span></div>
-      <div class="diagram-node green">
-        Active state
-        <span class="kind">resumed</span>
-      </div>
+      <div class="diagram-node" style="border-color:var(--gray-400);background:var(--gray-100);color:var(--gray-800)">Paste the join prompt<span class="kind">one role per session</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">gator init<span class="kind">if the agent is new to the repo</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Loop protocol<span class="kind">named by GATOR_INIT.md</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">gator loop status<span class="kind">role, stage, whose turn</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">wait · act · submit<span class="kind">repeat until the loop ends</span></div>
     </div>
   </div>
 
-  <h3>pause</h3>
-  <p>Freeze a running loop from any active state. Deadline stops counting. Saves the resume state so you can pick up exactly where you left off.</p>
-  <pre>gator loop pause --token &lt;architect-token&gt; --message "Stopping for the day"</pre>
-
-  <h3>interject</h3>
-  <p>Inject guidance without pausing. Message shown in the next <code>gator loop status</code> the active model runs; cleared when they submit. No state change, no deadline change.</p>
-  <pre>gator loop interject --token &lt;architect-token&gt; --message "Prefer the pandas approach over pyreadstat"</pre>
-
-  <h3>unblock</h3>
-  <p>Move the loop out of a paused state (<code>blocked_on_architect</code> or <code>paused_by_architect</code>) back to active. By default resumes the saved stage; override with <code>--stage</code> and <code>--next-role</code> if the situation changed.</p>
-  <pre>gator loop unblock --loop &lt;id&gt; --message "Yes, check the v2 API docs, that's the right source"</pre>
-
-  <h3>end</h3>
-  <p>Stop the loop cold from any non-terminal state. Records a reason. Different from <code>plan_approved</code> — there's no plan blessing, just a deliberate stop.</p>
-  <pre>gator loop end --token &lt;architect-token&gt; --reason "Scope changed, starting over with a new sketch"</pre>
-
-  <div class="callout info">
-    <span class="label">Distinction worth knowing</span>
-    <p><code>blocked_on_architect</code> and <code>paused_by_architect</code> both land you at "waiting for architect unblock," but the origin differs — the first is a model calling <code>escalate</code> because it's stuck; the second is the Architect calling <code>pause</code> deliberately. The residue tells you which happened, so you can debrief accordingly.</p>
-  </div>
-</section>
-
-<section id="end">
-  <h2>When the loop ends</h2>
-
-  <p>Four ways a loop can terminate. The residue directory persists in every case — reading it is how you learn what happened.</p>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Terminal state</th>
-        <th>What it means</th>
-        <th>What to do</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code>plan_approved</code></td>
-        <td>Reviewer approved with <code>--approve</code>. Plan is signed off.</td>
-        <td>Use <code>plan.current.md</code> to guide implementation. Optionally commit the loop directory as governance residue.</td>
-      </tr>
-      <tr>
-        <td><code>max_rounds_exceeded</code></td>
-        <td>Revision ceiling hit without approval.</td>
-        <td>Read final plan + findings. Either accept as-is, or start a new loop with <code>--max-rounds</code> bumped and the current plan as the new sketch.</td>
-      </tr>
-      <tr>
-        <td><code>turn_timed_out</code></td>
-        <td>A model didn't submit within <code>--turn-timeout</code>.</td>
-        <td>Start a new loop with a longer timeout, or check whether the model actually joined.</td>
-      </tr>
-      <tr>
-        <td><code>ended_by_architect</code></td>
-        <td>You called <code>gator loop end</code>.</td>
-        <td>Reason is in the session record. Do whatever comes next based on why you stopped.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="callout ok">
-    <span class="label">No autonomous commits</span>
-    <p>The loop never commits anything to Git on its own. The residue directory is tracked-safe (session state + events are non-secret), but the <code>.tokens.json</code> file is gitignored. When and whether to commit the loop residue is entirely the Architect's call.</p>
-  </div>
-</section>
-
-<section id="trouble">
-  <h2>What can go wrong</h2>
-
-  <table class="table-red">
-    <thead>
-      <tr>
-        <th>Symptom</th>
-        <th>What's actually happening</th>
-        <th>Fix</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Model submits garbage or edits loop files directly</td>
-        <td>Model didn't read the protocol; skipped <code>gator loop status</code>.</td>
-        <td>Re-orient the model. Protocol lives at <code>procedures/gator-loop-protocol.md</code>. Rule 2: the CLI is the only authorized writer.</td>
-      </tr>
-      <tr>
-        <td>"requires role 'draftor', got 'reviewer'" (or similar)</td>
-        <td>You gave a model the wrong token.</td>
-        <td>Check the banner. Draftor token to the draftor session, reviewer token to the reviewer session. Architect token stays with the Architect.</td>
-      </tr>
-      <tr>
-        <td>Model claims to have submitted but nothing shows in the host</td>
-        <td>Model called something other than <code>submit-draft</code>/<code>submit-review</code>.</td>
-        <td>Have the model re-run <code>gator loop status</code>. It'll show the actual state; the model can retry with the right command.</td>
-      </tr>
-      <tr>
-        <td>Timeout fires but the model was mid-response</td>
-        <td><code>--turn-timeout</code> is too short for how slowly the model is responding.</td>
-        <td>Loop ended in <code>turn_timed_out</code> — start a new one with a bigger timeout. Model latency varies a lot by vendor and load.</td>
-      </tr>
-      <tr>
-        <td>Two loops in flight, mixed up which is which</td>
-        <td>Multiple loops running concurrently, tokens got confused.</td>
-        <td><code>gator loop list</code> to see them all. Loop IDs are date-stamped; the banner from <code>gator loop start</code> shows the ID clearly.</td>
-      </tr>
-      <tr>
-        <td>Model escalates repeatedly</td>
-        <td>Sketch is genuinely ambiguous, or the model doesn't have enough context.</td>
-        <td>Unblock with a <code>--message</code> that resolves the ambiguity. If it keeps happening, <code>end</code> the loop and rewrite the sketch.</td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-
-<section id="references">
-  <h2>References</h2>
   <ul>
-    <li><code>.gator/blueprints/gator-loop.html</code> — interactive state-machine map (roles, states, transitions). Complementary to this guide.</li>
-    <li><code>.gator/charters/scripts-loop.md</code> — module ownership, function map, TRIPWIREs.</li>
-    <li><code>.gator/blueprints/gator-loop.md</code> — legacy markdown walkthrough (predates the HTML pair, retained per D2 coexist).</li>
-    <li><code>procedures/gator-loop-protocol.md</code> — the behavioral contract every model reads when joining.</li>
-    <li><code>src/gator_command/scripts/loop/</code> — the seven module files (<code>session.py</code>, <code>state_machine.py</code>, <code>events.py</code>, <code>submit.py</code>, <code>host.py</code>, <code>cli.py</code>, <code>__init__.py</code>).</li>
+    <li><strong>Claude Code:</strong> <code>/loop-join &lt;token&gt;</code> does the same in one step.</li>
+    <li><strong>Codex:</strong> <code>gator loop codex</code> opens Codex in an isolated profile that allows only the routine loop commands without a prompt. It never handles the token; you still paste the join prompt.</li>
+    <li><strong>Any other agent:</strong> the join prompt works on its own, because it tells the agent to run <code>gator init</code> first.</li>
+  </ul>
+
+  <h3>How an agent waits for its turn</h3>
+  <p>Agents call <code>gator loop wait --token &lt;token&gt; --max-seconds 45</code> in a cycle. The exit code tells the agent what to do:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Exit code</th><th>Meaning</th><th>Agent action</th></tr></thead>
+      <tbody>
+        <tr><td><code>0</code></td><td>It is your turn.</td><td><span class="pill ok">Act</span> and submit.</td></tr>
+        <tr><td><code>3</code></td><td>Still not your turn (also while the loop is paused or waiting for the Architect).</td><td><span class="pill info">Wait again</span> with the same command.</td></tr>
+        <tr><td><code>2</code></td><td>The loop has ended.</td><td><span class="pill na">Stop</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="round">
+  <h2>One round, and how the Architect steps in</h2>
+  <p>Planning loops use <code>plan_*</code> stages and coding loops use <code>implementation_*</code> stages. The shape is the same.</p>
+
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 330" role="img" aria-labelledby="g3-title">
+      <title id="g3-title">Loop stages with the Architect waiting state</title>
+      <defs>
+        <marker id="g3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
+
+      <rect class="b-core" x="20" y="40" width="190" height="90" rx="6"/>
+      <text class="t" x="115" y="70" text-anchor="middle">Drafting</text>
+      <text class="s" x="115" y="90" text-anchor="middle">Draftor writes</text>
+      <text class="c" x="115" y="110" text-anchor="middle">*_drafting</text>
+
+      <rect class="b-core" x="320" y="40" width="190" height="90" rx="6"/>
+      <text class="t" x="415" y="70" text-anchor="middle">Review</text>
+      <text class="s" x="415" y="90" text-anchor="middle">Reviewer checks</text>
+      <text class="c" x="415" y="110" text-anchor="middle">*_review</text>
+
+      <rect class="b-ok" x="630" y="40" width="200" height="90" rx="6"/>
+      <text class="t" x="730" y="70" text-anchor="middle">Approved ✓</text>
+      <text class="s" x="730" y="90" text-anchor="middle">plan or code accepted</text>
+      <text class="c" x="730" y="110" text-anchor="middle">*_approved</text>
+
+      <rect class="b-core" x="320" y="210" width="190" height="90" rx="6"/>
+      <text class="t" x="415" y="240" text-anchor="middle">Revision</text>
+      <text class="s" x="415" y="260" text-anchor="middle">Draftor revises</text>
+      <text class="c" x="415" y="280" text-anchor="middle">*_revision</text>
+
+      <rect class="b-wait" x="630" y="210" width="200" height="90" rx="6"/>
+      <text class="t" x="730" y="240" text-anchor="middle">Waiting for you ⏸</text>
+      <text class="c" x="730" y="260" text-anchor="middle">blocked_on_architect</text>
+      <text class="c" x="730" y="279" text-anchor="middle">paused_by_architect</text>
+
+      <rect class="b-state" x="880" y="20" width="200" height="290" rx="6"/>
+      <text class="t" x="896" y="48">Other endings</text>
+      <text class="s" x="896" y="76">Round limit reached:</text>
+      <text class="c" x="896" y="96">max_rounds_exceeded</text>
+      <text class="s" x="896" y="114">→ you can extend</text>
+      <text class="s" x="896" y="146">You end it:</text>
+      <text class="c" x="896" y="166">ended_by_architect</text>
+      <text class="s" x="896" y="198">Older loops only:</text>
+      <text class="c" x="896" y="218">turn_timed_out</text>
+      <text class="s" x="896" y="250">Approved coding loop:</text>
+      <text class="s" x="896" y="268">→ you can reopen</text>
+
+      <path class="edge" d="M210,85 L318,85" marker-end="url(#g3)"/>
+      <text class="el" x="264" y="77" text-anchor="middle">submit</text>
+      <path class="edge" d="M510,85 L628,85" marker-end="url(#g3)"/>
+      <text class="el" x="569" y="77" text-anchor="middle">approve</text>
+      <path class="edge" d="M380,130 L380,208" marker-end="url(#g3)"/>
+      <text class="el" x="372" y="174" text-anchor="end">changes requested</text>
+      <path class="edge" d="M450,208 L450,132" marker-end="url(#g3)"/>
+      <text class="el" x="458" y="174">resubmit</text>
+      <path class="edge" d="M510,240 L628,240" marker-end="url(#g3)"/>
+      <text class="el" x="569" y="232" text-anchor="middle">escalate · pause</text>
+      <path class="edge" d="M628,275 L512,275" marker-end="url(#g3)"/>
+      <text class="el" x="569" y="293" text-anchor="middle">unblock</text>
+    </svg>
+    <div class="legend">
+      <span><i class="key core"></i>Active stage</span>
+      <span><i class="key ok"></i>Approved (thick border, ✓)</span>
+      <span><i class="key wait"></i>Waiting for the Architect (dashed border, ⏸)</span>
+    </div>
+    <div class="caption">Figure 3. An agent can escalate, and you can pause, from any active stage. Unblock returns the loop to the stage it left.</div>
+  </div>
+
+  <ul>
+    <li><strong>Escalation.</strong> An agent that needs a decision runs <code>gator loop escalate --reason …</code>, optionally with <code>--file</code> for a written decision request. The loop waits for you.</li>
+    <li><strong>Your answer.</strong> <code>unblock --message …</code> or <code>unblock --file …</code> sends your answer to the agent that resumes. The other agent does not see it. <code>--no-response</code> closes the request on purpose without an answer.</li>
+    <li><strong>Executive summaries.</strong> In new loops, every Draftor and Reviewer turn ends with one plain-English paragraph. The Dashboard timeline shows it on the turn.</li>
   </ul>
 </section>
 
-<section id="protocol">
-  <h2>Protocol notes</h2>
-  <p>This document conforms to the <code>gator-blueprint-html-v1</code> protocol (narrative template, <code>procedure-visual</code> doc class). See <code>.gator/procedures/authoring-html-artifacts.md</code> for the required metadata, doc classes, and status vocabulary.</p>
+<section id="watch">
+  <h2>Watch the loop</h2>
+  <p>The Dashboard Loop workspace is the main view. It shows the timeline of turns, the checkpoint list for coding loops, the artifacts, and the controls.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Surface</th><th>Use it for</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard → Loop</td><td>Everything: timeline, checkpoints, artifacts, controls, join prompts, History.</td></tr>
+        <tr><td><code>gator loop status --token &lt;architect-token&gt;</code></td><td>A snapshot in the terminal. Add <code>--json</code> for tools.</td></tr>
+        <tr><td><code>gator loop tail --loop &lt;id&gt;</code></td><td>The live event stream in a terminal.</td></tr>
+        <tr><td><code>gator loop list</code></td><td>Every loop in this repository, with stage and round.</td></tr>
+        <tr><td><code>.gator/loops/&lt;id&gt;/</code></td><td>The raw files. Everything is on disk; there is no hidden state.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout note">
+    <span class="label">Attention notices replace timeouts</span>
+    <p>If an agent's turn lasts longer than the attention interval (default 5 minutes), Gator records one notice for you on that turn. The agents never see it, and the loop keeps running. A slow agent no longer ends the loop.</p>
+  </div>
+</section>
+
+<section id="controls">
+  <h2>Architect controls</h2>
+  <p>Every control needs the architect token. The Dashboard offers the same controls as buttons and fills in the token for you.</p>
+  <div class="table-wrap">
+    <table class="table-teal">
+      <thead><tr><th>Command</th><th>When</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>pause --message …</code></td><td>Any active stage</td><td>Stops the loop and saves the stage. Agents see your message.</td></tr>
+        <tr><td><code>interject --message …</code></td><td>Any active stage</td><td>Sends guidance without stopping. The agent whose turn it is sees it; it clears when that agent submits.</td></tr>
+        <tr><td><code>unblock --message … | --file … | --no-response</code></td><td>Paused or waiting for you</td><td>Resumes at the saved stage. <code>--stage</code> and <code>--next-role</code> override it.</td></tr>
+        <tr><td><code>extend --rounds N --message …</code></td><td>After the round limit</td><td>Adds 1–20 rounds and resumes the Draftor.</td></tr>
+        <tr><td><code>reopen --message …</code></td><td>After an approved coding loop</td><td>Sends the code back to the Draftor for revision, for example when the result is Stale.</td></tr>
+        <tr><td><code>end --reason …</code></td><td>Any time before the end</td><td>Stops the loop for good. Nothing is approved.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>All commands take the form <code>gator loop &lt;command&gt; --token &lt;architect-token&gt; …</code>.</p>
+</section>
+
+<section id="coding">
+  <h2>Coding loops in detail</h2>
+  <ol class="steps">
+    <li><strong>Checkpoints come from the plan.</strong> The approved plan's <code>## Coding Checkpoints</code> section lists numbered checkpoints, each with a <code>Verify:</code> line. The Dashboard lists them with a mark and a word for each state: ✓ approved, ● active, ○ not started.</li>
+    <li><strong>The Draftor stages, then submits.</strong> The Draftor makes the changes, stages them with <code>git add</code>, writes an implementation note, and runs <code>submit-implementation --checkpoint cpN</code>. Gator records a Git snapshot of the staged tree and HEAD.</li>
+    <li class="step-alt"><strong>The Reviewer approves exact code.</strong> The review is bound to the snapshot. If the staged tree changes after submission, the approval does not cover the new code.</li>
+    <li><strong>Next checkpoint.</strong> An approval of a checkpoint that is not the last moves the loop to the next checkpoint. The approval of the last checkpoint approves the loop.</li>
+    <li class="step-done"><strong>You commit.</strong> Make one normal commit of the approved tree. The loop then reports Committed.</li>
+  </ol>
+
+  <h3>After approval: does the commit match?</h3>
+  <p>The loop compares the approved tree with Git. It checks only the first commit after the approved HEAD on the current branch.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Result</th><th>Marker</th><th>Meaning</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill info">Pending</span></td><td><code>[..]</code></td><td>Not committed yet; the staged tree is still the approved tree.</td><td>Commit.</td></tr>
+        <tr><td><span class="pill ok">Committed</span></td><td><code>[OK]</code></td><td>The first commit after the approved HEAD carries the approved tree.</td><td>Done.</td></tr>
+        <tr><td><span class="pill warn">Stale</span></td><td><code>[!!]</code></td><td>The staged tree changed, a different tree was committed, the history diverged, or HEAD is detached.</td><td>Check what changed. Use <code>reopen</code> if the code needs another review.</td></tr>
+        <tr><td><span class="pill na">Unknown</span></td><td><code>[??]</code></td><td>Git could not answer (for example, a permission error).</td><td>Fix the Git problem and check again.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout info">
+    <span class="label">Caution</span>
+    <p>A commit hook that changes files makes the commit differ from the approved tree, so the loop reads Stale. That is by design: the loop proves that the reviewed code is the committed code.</p>
+  </div>
+</section>
+
+<section id="endings">
+  <h2>How a loop ends</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Ending</th><th>What it means</th><th>What to do next</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill ok">plan_approved</span></td><td>The Reviewer approved the plan.</td><td>Start a coding loop from it, or revise it with <code>--revise-from</code>.</td></tr>
+        <tr><td><span class="pill ok">implementation_approved</span></td><td>The Reviewer approved the last checkpoint.</td><td>Commit the approved tree. Use <code>reopen</code> if it reads Stale.</td></tr>
+        <tr><td><span class="pill info">max_rounds_exceeded</span></td><td>The round limit was reached without approval.</td><td>Read the last plan and findings. <code>extend</code> to continue, or end it.</td></tr>
+        <tr><td><span class="pill na">ended_by_architect</span></td><td>You ended the loop.</td><td>Your reason is in the session record.</td></tr>
+        <tr><td><span class="pill na">turn_timed_out</span></td><td>Older loops only: an agent missed a turn deadline.</td><td>Start a new loop. New loops use attention notices instead.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout ok">
+    <span class="label">The loop never commits</span>
+    <p>Nothing in a loop writes to Git history. The loop folder is safe to commit as evidence; the token secrets (<code>.tokens.json</code>) and the lock files are ignored by Git.</p>
+  </div>
+</section>
+
+<section id="folder">
+  <h2>The loop folder</h2>
+  <pre>.gator/loops/&lt;feature&gt;-&lt;timestamp&gt;/
+  session.json              current state: stage, round, turns, roles
+  events.jsonl              append-only event log (one JSON line per event)
+  sketch.md                 your sketch (planning loops)
+  architect-plan.md         your plan (--plan-file loops)
+  architect-brief.md        your brief (--brief)
+  plan.round-N.md           each Draftor plan; plan.current.md is the latest
+  findings.round-N.md       each Reviewer response; findings.current.md is the latest
+  approved-plan.md          the plan a coding loop implements
+  implementation.round-N.md each implementation note; implementation.current.md is the latest
+  decision-request.*.md     escalations with a written request
+  .tokens.json              token secrets (ignored by Git)
+  session.lock, host.lock   file locks (ignored by Git)</pre>
+</section>
+
+<section id="wrong">
+  <h2>What can go wrong</h2>
+  <div class="table-wrap">
+    <table class="table-red">
+      <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Start is refused: another loop is active</td><td>Only one active loop per repository.</td><td>Finish or end the other loop first (<code>gator loop list</code>).</td></tr>
+        <tr><td>"requires role 'draftor', got 'reviewer'"</td><td>An agent has the wrong token.</td><td>Give each session its own role's join prompt.</td></tr>
+        <tr><td>An agent edits loop files directly</td><td>It skipped the protocol.</td><td>Re-paste the join prompt. Only the CLI may write loop files.</td></tr>
+        <tr><td>An agent keeps escalating</td><td>The sketch is ambiguous, or the code it touches has no usable charter.</td><td>Answer with <code>unblock --file</code>. If it repeats, end the loop and sharpen the sketch.</td></tr>
+        <tr><td>Approved coding loop reads Stale</td><td>The code changed after approval, or a hook altered the commit.</td><td>Inspect the difference; <code>reopen</code> if it needs review again.</td></tr>
+        <tr><td><code>gator loop codex</code> refuses to launch</td><td>Codex saved a "don't ask again" approval into the Gator rule file.</td><td>Remove the added line from <code>rules/default.rules</code>. Issue #87 tracks a fix.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="refs">
+  <h2>References</h2>
+  <ul>
+    <li><a href="gator-architecture-overview.html#loop">gator-architecture-overview.html</a> — how the Loop fits into Gator, and how its modules are layered.</li>
+    <li><code>.gator/charters/scripts-loop.md</code> — the Loop charter: modules, functions, tripwires.</li>
+    <li><code>.gator/.includes/procedures/gator-loop-protocol.md</code> — the rules every agent follows in a loop.</li>
+    <li><code>.gator/.includes/reference-notes/loop-artifact-formats.md</code> — the formats for plans, findings and implementation notes.</li>
+    <li><code>src/gator_command/scripts/loop/</code> — the code: <code>session</code>, <code>events</code>, <code>state_machine</code>, <code>submit</code>, <code>liveness</code>, <code>gitsnap</code>, <code>host</code>, <code>cli</code>, <code>codex_launcher</code>.</li>
+  </ul>
 </section>
 
 <footer class="doc-foot">
-  Gator · procedure-visual · Architect's guide to running the loop · 2026-09-03
+  gator · procedure-visual · Gator Loop Architect guide · 2026-10-24
 </footer>
 
 </body>

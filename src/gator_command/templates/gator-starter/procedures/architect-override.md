@@ -72,5 +72,5 @@ After approval, retry `git commit`.
 
 ## Connections
 
--> [Commit Pipeline](../../blueprints/commit-pipeline.md) — the full commit flow, including the override path
+-> [Gator Architecture Overview](../../blueprints/gator-architecture-overview.html#commit) — the commit gate, including the block and approval path (Gator source repository)
 -> [Constitution](../constitution.md) — the rules on who can approve overrides

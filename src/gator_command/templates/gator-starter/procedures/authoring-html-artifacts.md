@@ -11,7 +11,9 @@ present and write the name as **Gator doc**. "I'd like a Gator doc on…",
 "I want an HTML that says…", "make me an HTML report on…", and "write this
 up as HTML" all request the same Cumberland-master document. Every governed
 model defaults to that template — see the constitution's "HTML Documents"
-section for the routing rule.
+section for the routing rule. A Gator doc that explains how the system or a
+feature works is a **blueprint**: save it under `.gator/blueprints/` and
+follow "Blueprints are visual first" below.
 
 **The content is a Blueprint.** Feature flow map, charter map, procedure
 visual, or reference explainer conforming to the `gator-blueprint-html-v1`
@@ -99,9 +101,13 @@ metadata, required for Blueprints only.
 
 Storage follows the artifact's role, not its rendering format:
 
-- **`.gator/blueprints/`** (tracked): durable repo-wide Blueprint artifacts.
+- **`.gator/blueprints/`** (tracked): the collection of visual Gator docs
+  that explain the system — architecture overviews, feature walkthroughs,
+  flow maps.
   - `charter-map.html` — exact filename, one per repo.
-  - `<slug>.html` — other durable Blueprints.
+  - `<slug>.html` — other durable Blueprints. Start from
+    `_template-narrative.html` (or `_template.html` for an interactive
+    map), because every file here must carry the Blueprint metadata.
 
 - **`.gator/artifacts/`** (tracked): deep records, design docs, research
   writeups. Default for non-Blueprint HTML documents that deserve
@@ -225,6 +231,33 @@ official writing rules and controlled dictionary.
 - The `.diagram` slot is optional — use for static ASCII/SVG diagrams, or
   delete the block.
 
+### Blueprints are visual first
+
+The reader of a blueprint is the Architect, who may be far from the code.
+Explain the system with pictures first and prose second.
+
+- **One diagram per major part.** Show where the code lives and how the
+  parts work together. Use hand-authored inline SVG for topology and the
+  `.diagram` flow for short sequences.
+- **Label everything.** Every box and every arrow carries text. Do not
+  encode meaning by color alone: pair color with a label, a border style
+  (for example, dashed for optional parts), a border weight, or a symbol
+  (✓ for done, BLOCKED for a failure).
+- **Large, readable type.** Keep diagram text at about 12–15 px at the
+  rendered width. Give wide SVGs a minimum width so they scroll inside
+  their figure instead of shrinking on a phone.
+- **Code paths, not functions.** Name the directories and files for each
+  part, and the charter that documents them. Leave function-level detail
+  to the charters.
+- **Each section answers one question:** what the part is, where its code
+  is, how it works, and what can go wrong.
+- **Check the render.** Open the file in a browser. Confirm that no
+  diagram overlaps or is cut off, and that the page does not scroll
+  sideways at phone width.
+
+In the Gator source repository, `blueprints/gator-architecture-overview.html`
+is the reference example.
+
 ### 6. Save + announce
 
 Save to the location chosen in step 2. Announce the path to the Architect
@@ -273,13 +306,19 @@ checkpoints — those apply only to files under `.gator/blueprints/`.
   charter map for me" procedure — charter maps are repo-wide and change on
   architecture shifts. Hand-author (or one-off AI assist) using
   `_template.html`.
-- **The Gator source repo's own `charter-map.html`** at `.gator/blueprints/charter-map.html`
-  is the reference implementation. It only lives in the Gator source repo
-  (not shipped to fleet repos) — same "no wrong data at per-repo seam"
-  invariant as v2.11.0's D3 refinement. Fleet repos author their own.
-- **Do NOT create new `.md` blueprints under `.gator/blueprints/`.** The 9
-  existing legacy markdown blueprints stay (D2 coexist), but new blueprint
-  content is HTML.
+- **The Gator source repo retired its first-pass `charter-map.html`**
+  (v2.12.0) to `.gator/vault/blueprints/` on 2026-10-23. A node graph of
+  charters did not help the Architect understand the system. The visual
+  architecture overview (`blueprints/gator-architecture-overview.html`)
+  replaced it. Charter maps are still a legal doc class; fleet repos that
+  want one author their own.
+- **Do NOT create new `.md` blueprints under `.gator/blueprints/`.** New
+  blueprint content is HTML. When an older Markdown blueprint is retired,
+  move it to `.gator/vault/blueprints/` (gitignored) and re-author the
+  content it still needs as an HTML blueprint.
+- **Meta values must not contain quote characters.** The compat check reads
+  `content="…"` up to the first `"` or `'`, so an apostrophe (for example
+  "Gator's") hides the tag. Rephrase, or write `&#39;`.
 
 ## Connections
 

@@ -81,6 +81,7 @@ against the code 2026-10-21). Issue `#N` is
 - **#68** `wait`/`status` result lost when the runtime drops exit codes
 - **#83** Dashboard loop tests leave ~70 watcher threads running
 - **#84** `gator loop codex` daemon locks its CODEX_HOME on Windows
+- **#87** `gator loop codex` refuses to launch after Codex saves an approval (e.g. pytest)
 - #82 `gator loop codex` home holds a second ~1.2 GB Codex runtime
 - #79 One active loop per repository (in place; cross-repo test missing)
 - #54 Clean working tree before a coding loop
@@ -92,6 +93,7 @@ against the code 2026-10-21). Issue `#N` is
 - #37 Command-approval profiles (Phase 1 shipped) and permission queue
 - #7 Loop card on Repo overview
 - #42 / #50 / #63 / #64 Provenance, external notices, Observer role, token usage
+- #92 / #93 Private cross-module imports; split the largest Loop modules
 - #5 Loop polish (umbrella)
 
 **Dashboard:**
@@ -102,12 +104,13 @@ against the code 2026-10-21). Issue `#N` is
 - #76 Pre-commit blocks and approvals in the Dashboard
 - #20 Stale-Dashboard-in-browser detection
 - #26 Deferred responsive-shell test pins
-- #31 Clickable functions in `charter-map.html`
+- #89 / #90 Split `gator-dashboard.py` and `views/loop.js`
 
 **Hooks and governance:**
 - **#18** INDEX route requires every listed charter (UI-only overrides)
 - **#16** `stale-charter-refs` false positive on compound headings
 - **#17** `new-functions-undocumented` fires on tests
+- **#88** Charter verifier ignores Covers globs (mostly false coverage gaps)
 - **#78** `gator update` leaves hook files tracked
 - #75 Separate charter enforcement from dangerous-pattern blocks
 - #23 Session-opening hardening (mostly done)
@@ -119,12 +122,16 @@ against the code 2026-10-21). Issue `#N` is
 - **#3** RC retry vs byte-identical promotion (decision needed)
 - #58 Graceful discovery and runtime compatibility
 - #25 `product-source.json` authority after the runtime split
+- #91 Sync strategy per shipped script copy; fix unexplained drift
+- **#95** Enterprise `repo init` writes CLAUDE.md/AGENTS.md and the v1 scripts path
 
 **Documentation:**
 - #73 Commit-draft writing guidance (procedure shipped; gaps remain)
 - #27 Charter line-locator sweep (two historical references left)
 - #29 Rewrite pre-monorepo install/upgrade/getting-started docs
 - #30 Decide `scripts-command-post.md` charter fate
+- #94 Compact the always-read cross-cutting charter
+- #96 Move the blueprint HTML templates out of user-visible `blueprints/`
 
 ## Non-issue operational context
 

@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<!-- Gator doc · gator-blueprint-html-v1 (narrative template, reference-explainer). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta name="gator-schema" content="gator-blueprint-html-v1">
+  <meta name="gator-title" content="Gator Architecture Overview">
+  <meta name="gator-repo" content="gator">
+  <meta name="gator-doc-class" content="reference-explainer">
+  <meta name="gator-status" content="current">
+  <meta name="gator-updated-at" content="2026-10-23T23:46:18Z">
+  <meta name="gator-generated-by" content="claude-opus-5-5">
+  <meta name="gator-question" content="What are the major features of Gator, where does each one live in the code, and how do the parts work together?">
+
+  <title>Gator Architecture Overview</title>
+
+  <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
+    :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
+
+      /* Neutral scale — 9-step Tailwind-style ramp. */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.85rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
+
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
+
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
+
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* Footer — small centered muted text with top-border. */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: center;
+    }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+  </style>
+  <style>
+    /* Local additions for this document (outside the shared Cumberland region). */
+    .figure svg.wide { min-width: 780px; }
+    svg text { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    svg .t  { font-size: 15px; font-weight: 600; fill: var(--gray-900); }
+    svg .s  { font-size: 12px; fill: var(--gray-600); }
+    svg .c  { font-family: 'Consolas', 'Monaco', monospace; font-size: 11.5px; fill: var(--gray-700); }
+    svg .el { font-size: 12px; fill: var(--gray-600); }
+    svg .zl { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; fill: var(--gray-600); }
+    svg .zone      { fill: white; stroke: var(--gray-300); stroke-width: 1.5; }
+    svg .zone-repo { fill: var(--gray-50); stroke: var(--gray-300); stroke-width: 1.5; }
+    svg .b-core  { fill: var(--teal-light);  stroke: var(--teal);  stroke-width: 1.5; }
+    svg .b-repo  { fill: var(--blue-light);  stroke: var(--blue);  stroke-width: 1.5; }
+    svg .b-state { fill: var(--gray-100);    stroke: var(--gray-400); stroke-width: 1.5; }
+    svg .b-ent   { fill: var(--amber-light); stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 7 4; }
+    svg .b-ok    { fill: var(--green-light); stroke: var(--green); stroke-width: 2.5; }
+    svg .b-warn  { fill: var(--red-light);   stroke: var(--red);   stroke-width: 2.5; }
+    svg .edge    { stroke: var(--gray-600); stroke-width: 1.6; fill: none; }
+    svg .bar     { fill: var(--teal); }
+    svg .bar-ent { fill: var(--amber-light); stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 5 3; }
+    .diagram-node { max-width: 10.5rem; }
+    .diagram-node .kind { white-space: normal; line-height: 1.35; }
+    .legend { font-size: 0.82rem; color: var(--gray-600); margin-top: 0.6rem; }
+    .legend span { margin-right: 1.2rem; white-space: nowrap; }
+    .key { display: inline-block; width: 1.6rem; height: 0.85rem; vertical-align: -0.1rem; margin-right: 0.35rem; border-radius: 2px; }
+    .key.core  { background: var(--teal-light);  border: 1.5px solid var(--teal); }
+    .key.repo  { background: var(--blue-light);  border: 1.5px solid var(--blue); }
+    .key.state { background: var(--gray-100);    border: 1.5px solid var(--gray-400); }
+    .key.ent   { background: var(--amber-light); border: 1.5px dashed var(--amber); }
+    .key.ok    { background: var(--green-light); border: 2.5px solid var(--green); }
+    .key.warn  { background: var(--red-light);   border: 2.5px solid var(--red); }
+  </style>
+</head>
+<body>
+
+<header class="doc-head">
+  <h1>Gator Architecture Overview</h1>
+  <div class="subtitle">What Gator is made of, where each part lives in the code, and how the parts work together. Written for a technical reader who needs the architecture, not the implementation.</div>
+  <div class="meta-grid">
+    <div><span class="label">Doc class:</span> reference-explainer</div>
+    <div><span class="label">Repo:</span> gator</div>
+    <div><span class="label">Status:</span> <span class="status-badge">current</span></div>
+    <div><span class="label">Updated:</span> 2026-10-23 (v2.30.0)</div>
+    <div><span class="label">Question:</span> What are Gator's major features, where is their code, and how do they work?</div>
+    <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
+  </div>
+  <div class="metaline">Gator doc · audience: engineering leadership (technical) · sources: the charters in <code>.gator/charters/</code> and the code on <code>dev</code></div>
+</header>
+
+<nav class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#context">The system on one page</a></li>
+    <li><a href="#code">Where the code lives</a></li>
+    <li><a href="#sessions">Feature 1 — Governed sessions</a></li>
+    <li><a href="#commit">Feature 2 — The commit gate</a></li>
+    <li><a href="#runtime">Feature 3 — Install, update and runtime selection</a></li>
+    <li><a href="#dashboard">Feature 4 — The Dashboard</a></li>
+    <li><a href="#loop">Feature 5 — Gator Loop</a></li>
+    <li><a href="#evidence">Feature 6 — Evidence, audit and fleet</a></li>
+    <li><a href="#enterprise">Feature 7 — Enterprise (optional)</a></li>
+    <li><a href="#trust">Trust boundaries and failure policy</a></li>
+    <li><a href="#health">Architecture health</a></li>
+    <li><a href="#refs">References</a></li>
+  </ol>
+</nav>
+
+<section id="summary">
+  <div class="callout">
+    <span class="label">Summary</span>
+    <p>Gator is a local, Git-native governance layer for AI-assisted engineering. It runs as one Python command (<code>gator</code>, installed with pipx, standard library only). It keeps its knowledge layer in each repository's <code>.gator/</code> folder. It enforces its rules through Git hooks at commit time. The central idea is the <strong>charter</strong>: a committed map of a module's functions, callers and invariants. The agent reads the charter before it changes code and updates it with every change. The commit gate blocks a code change that has no charter change.</p>
+    <p>Around that core, Gator adds a local Dashboard for people, Gator Loop for governed multi-agent planning and coding, and an evidence trail (commit trailers and session snippets) for audit. Enterprise is an optional server that collects that evidence across machines. Git is the system of record. No hosted service is needed for the core product.</p>
+  </div>
+</section>
+
+<section id="context">
+  <h2>The system on one page</h2>
+  <p>Gator has three places where it runs and stores data: the developer machine, each governed repository, and (optionally) an Enterprise server. The AI coding tool is not part of Gator. Gator works with Claude Code, Codex CLI and Gemini CLI through their hook interfaces and through the files that the agent reads.</p>
+
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 580" role="img" aria-labelledby="fig1-title">
+      <title id="fig1-title">System context: developer machine, governed repository and optional Enterprise server</title>
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
+
+      <rect class="zone" x="20" y="20" width="770" height="540" rx="8"/>
+      <text class="zl" x="36" y="44">DEVELOPER MACHINE</text>
+
+      <rect class="b-state" x="40" y="60" width="220" height="90" rx="6"/>
+      <text class="t" x="150" y="90" text-anchor="middle">AI coding CLI</text>
+      <text class="s" x="150" y="110" text-anchor="middle">Claude Code · Codex · Gemini</text>
+      <text class="s" x="150" y="128" text-anchor="middle">(vendor tools, not Gator)</text>
+
+      <rect class="b-core" x="300" y="60" width="200" height="90" rx="6"/>
+      <text class="t" x="400" y="90" text-anchor="middle">gator CLI</text>
+      <text class="s" x="400" y="110" text-anchor="middle">pipx wheel · stdlib only</text>
+      <text class="c" x="400" y="128" text-anchor="middle">cli.py → scripts/</text>
+
+      <rect class="b-core" x="540" y="60" width="230" height="90" rx="6"/>
+      <text class="t" x="655" y="90" text-anchor="middle">Dashboard</text>
+      <text class="s" x="655" y="110" text-anchor="middle">127.0.0.1:8420 · browser UI</text>
+      <text class="c" x="655" y="128" text-anchor="middle">gator-dashboard.py</text>
+
+      <rect class="b-state" x="540" y="180" width="170" height="80" rx="6"/>
+      <text class="t" x="625" y="206" text-anchor="middle">Machine state</text>
+      <text class="c" x="625" y="226" text-anchor="middle">~/.gator/</text>
+      <text class="s" x="625" y="244" text-anchor="middle">registry · caches · id</text>
+
+      <rect class="zone-repo" x="40" y="300" width="730" height="240" rx="8"/>
+      <text class="zl" x="56" y="322">GOVERNED REPOSITORY</text>
+
+      <rect class="b-repo" x="60" y="340" width="300" height="180" rx="6"/>
+      <text class="t" x="76" y="366">.gator/ knowledge layer</text>
+      <text class="c" x="76" y="390">constitution · GATOR_INIT.md</text>
+      <text class="c" x="76" y="410">charters/ + INDEX.md</text>
+      <text class="c" x="76" y="430">mission · roadmap · inbox</text>
+      <text class="c" x="76" y="450">loops/ · session-snippets/</text>
+      <text class="c" x="76" y="470">commit_draft.md</text>
+      <text class="c" x="76" y="490">vault/  (gitignored)</text>
+
+      <rect class="b-core" x="400" y="340" width="350" height="70" rx="6"/>
+      <text class="t" x="575" y="364" text-anchor="middle">Git hooks</text>
+      <text class="c" x="575" y="383" text-anchor="middle">.git/gator-hooks/  (core.hooksPath)</text>
+      <text class="s" x="575" y="400" text-anchor="middle">pre-commit · commit-msg · post-commit</text>
+
+      <rect class="b-repo" x="400" y="440" width="350" height="80" rx="6"/>
+      <text class="t" x="575" y="466" text-anchor="middle">Git history</text>
+      <text class="s" x="575" y="486" text-anchor="middle">commits + Gator-* trailers</text>
+      <text class="s" x="575" y="504" text-anchor="middle">the durable evidence record</text>
+
+      <rect class="b-ent" x="830" y="180" width="250" height="100" rx="6"/>
+      <text class="t" x="955" y="208" text-anchor="middle">Enterprise server</text>
+      <text class="s" x="955" y="228" text-anchor="middle">optional · separate install</text>
+      <text class="s" x="955" y="246" text-anchor="middle">transcripts · evidence · policy</text>
+      <text class="c" x="955" y="264" text-anchor="middle">via enterprise-cli</text>
+
+      <path class="edge" d="M260,105 L298,105" marker-end="url(#a1)"/>
+      <text class="el" x="279" y="97" text-anchor="middle">runs</text>
+
+      <path class="edge" d="M150,150 L150,338" marker-end="url(#a1)"/>
+      <text class="el" x="160" y="230">reads charters;</text>
+      <text class="el" x="160" y="246">edits code</text>
+      <text class="el" x="160" y="262">and charters</text>
+
+      <path class="edge" d="M400,150 L400,298" marker-end="url(#a1)"/>
+      <text class="el" x="408" y="230">gatorize · update</text>
+      <text class="el" x="408" y="246">init · loop</text>
+
+      <path class="edge" d="M500,130 L528,130 L528,220 L538,220" marker-end="url(#a1)"/>
+      <path class="edge" d="M625,150 L625,178" marker-end="url(#a1)"/>
+
+      <path class="edge" d="M760,150 L760,298" marker-end="url(#a1)"/>
+      <text class="el" x="752" y="290" text-anchor="end">reads files + Git</text>
+
+      <path class="edge" d="M575,410 L575,438" marker-end="url(#a1)"/>
+      <text class="el" x="585" y="429">writes the commit</text>
+
+      <path class="edge" d="M792,230 L828,230" marker-start="url(#a1)" marker-end="url(#a1)"/>
+    </svg>
+    <div class="legend">
+      <span><i class="key core"></i>Gator component</span>
+      <span><i class="key repo"></i>Data in the repository</span>
+      <span><i class="key state"></i>External tool or machine state</span>
+      <span><i class="key ent"></i>Optional (dashed border)</span>
+    </div>
+    <div class="caption">Figure 1. Gator's three locations. Every arrow is labeled or connects two named boxes. The Architect (the human owner) works through the AI CLI and the Dashboard.</div>
+  </div>
+
+  <h3>Design decisions behind this shape</h3>
+  <ul>
+    <li><strong>Git is the database.</strong> Governance state is files and commit trailers in the repository. It travels with every clone and needs no server.</li>
+    <li><strong>No runtime dependencies.</strong> The base wheel uses only the Python standard library (Python 3.9–3.13). Only the Enterprise server needs FastAPI, SQLAlchemy and PostgreSQL.</li>
+    <li><strong>Local enforcement.</strong> The commit gate is a Git hook. It is deterministic and runs no model.</li>
+    <li><strong>Vendor-neutral.</strong> Gator never edits <code>CLAUDE.md</code>, <code>AGENTS.md</code> or <code>GEMINI.md</code>. The agent enters through <code>gator init</code>, which works with every vendor.</li>
+  </ul>
+</section>
+
+<section id="code">
+  <h2>Where the code lives</h2>
+  <p>The core product is one package, <code>src/gator_command/</code>. The CLI router (<code>cli.py</code>) maps each <code>gator</code> subcommand to one script in <code>src/gator_command/scripts/</code>. The scripts that run inside a governed repository at commit time are in <code>src/gator_command/templates/gator-starter/scripts/</code>. Enterprise is separate, under <code>enterprise/</code>.</p>
+
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1000 510" role="img" aria-labelledby="fig2-title">
+      <title id="fig2-title">Lines of code by subsystem</title>
+      <g>
+        <text class="t" x="10" y="36" style="font-size:14px">Dashboard — browser UI</text>
+        <text class="c" x="10" y="51">dashboard/*.js · views/ · *.css</text>
+        <rect class="bar" x="330" y="28" width="544" height="20" rx="2"/>
+        <text class="el" x="882" y="43">13.6k</text>
+
+        <text class="t" x="10" y="74" style="font-size:14px">Enterprise server (optional)</text>
+        <text class="c" x="10" y="89">enterprise/app/ · migrations/</text>
+        <rect class="bar-ent" x="330" y="66" width="436" height="20" rx="2"/>
+        <text class="el" x="774" y="81">10.9k</text>
+
+        <text class="t" x="10" y="112" style="font-size:14px">Gator Loop</text>
+        <text class="c" x="10" y="127">scripts/loop/ · gator-loop.py</text>
+        <rect class="bar" x="330" y="104" width="388" height="20" rx="2"/>
+        <text class="el" x="726" y="119">9.7k</text>
+
+        <text class="t" x="10" y="150" style="font-size:14px">Dashboard — server</text>
+        <text class="c" x="10" y="165">gator-dashboard.py · dashboard/*.py</text>
+        <rect class="bar" x="330" y="142" width="244" height="20" rx="2"/>
+        <text class="el" x="582" y="157">6.1k</text>
+
+        <text class="t" x="10" y="188" style="font-size:14px">Enterprise CLI (optional)</text>
+        <text class="c" x="10" y="203">enterprise/enterprise-cli/</text>
+        <rect class="bar-ent" x="330" y="180" width="184" height="20" rx="2"/>
+        <text class="el" x="522" y="195">4.6k</text>
+
+        <text class="t" x="10" y="226" style="font-size:14px">Fleet, audit, sessions, pulse</text>
+        <text class="c" x="10" y="241">gator-fleet-* · gator-audit* · …</text>
+        <rect class="bar" x="330" y="218" width="180" height="20" rx="2"/>
+        <text class="el" x="518" y="233">4.5k</text>
+
+        <text class="t" x="10" y="264" style="font-size:14px">Install, update, layout</text>
+        <text class="c" x="10" y="279">gatorize* · gator-update.py · gator_layout.py</text>
+        <rect class="bar" x="330" y="256" width="180" height="20" rx="2"/>
+        <text class="el" x="518" y="271">4.5k</text>
+
+        <text class="t" x="10" y="302" style="font-size:14px">Commit gate</text>
+        <text class="c" x="10" y="317">starter: gator-pre-commit · precommit_*</text>
+        <rect class="bar" x="330" y="294" width="164" height="20" rx="2"/>
+        <text class="el" x="502" y="309">4.1k</text>
+
+        <text class="t" x="10" y="340" style="font-size:14px">Core library + CLI router</text>
+        <text class="c" x="10" y="355">gator_core.py · gator_runtime.py · cli.py</text>
+        <rect class="bar" x="330" y="332" width="88" height="20" rx="2"/>
+        <text class="el" x="426" y="347">2.2k</text>
+
+        <text class="t" x="10" y="378" style="font-size:14px">Charter tooling</text>
+        <text class="c" x="10" y="393">gator-charter-{lint,draft,verify}.py</text>
+        <rect class="bar" x="330" y="370" width="80" height="20" rx="2"/>
+        <text class="el" x="418" y="385">2.0k</text>
+
+        <text class="t" x="10" y="416" style="font-size:14px">Enforcer review</text>
+        <text class="c" x="10" y="431">starter: enforcer-review.py</text>
+        <rect class="bar" x="330" y="408" width="64" height="20" rx="2"/>
+        <text class="el" x="402" y="423">1.6k</text>
+
+        <text class="t" x="10" y="454" style="font-size:14px">Session boot + hook dispatch</text>
+        <text class="c" x="10" y="469">gator-init.py · gator-hook.py · session-*</text>
+        <rect class="bar" x="330" y="446" width="56" height="20" rx="2"/>
+        <text class="el" x="394" y="461">1.4k</text>
+
+        <text class="s" x="330" y="500">thousand lines (Python, JavaScript and CSS) · tests not shown: about 48k lines core, 6k Enterprise</text>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><i class="key core" style="background:var(--teal)"></i>Core product (solid bar)</span>
+      <span><i class="key ent"></i>Optional Enterprise (dashed bar, labeled "optional")</span>
+    </div>
+    <div class="caption">Figure 2. Size by subsystem, measured on 2026-10-23. The Dashboard and Gator Loop hold almost half of the core code.</div>
+  </div>
+
+  <h3>Feature-to-code map</h3>
+  <p>Each row names the charter that documents the code. Read the charter before you read the code.</p>
+  <div class="table-wrap">
+    <table class="table-blue">
+      <thead>
+        <tr><th>Feature</th><th>Main code</th><th>Charter</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Governed sessions</td><td><code>gator-init.py</code>, <code>gator-hook.py</code>, starter <code>gator-session-open.py</code> / <code>gator-session-start.py</code></td><td><code>scripts-repo-lifecycle.md</code>, <code>scripts-session-capture.md</code></td></tr>
+        <tr><td>Commit gate</td><td>starter <code>gator-pre-commit.py</code>, <code>precommit_*.py</code>, <code>gator-approve.py</code></td><td><code>scripts-precommit.md</code></td></tr>
+        <tr><td>Install, update, runtime</td><td><code>gatorize.py</code> + <code>gatorize/</code>, <code>gator-update.py</code>, <code>gator_layout.py</code>, <code>gator_core.py</code></td><td><code>scripts-installer.md</code>, <code>scripts-repo-update.md</code>, <code>scripts-layout.md</code>, <code>scripts-core-library.md</code></td></tr>
+        <tr><td>Charters</td><td><code>gator-charter-lint.py</code>, <code>-draft.py</code>, <code>-verify.py</code></td><td><code>scripts-charter-tooling.md</code></td></tr>
+        <tr><td>Dashboard</td><td><code>gator-dashboard.py</code>, <code>dashboard/*.py</code>, <code>dashboard/*.js</code>, <code>views/</code></td><td><code>scripts-dashboard.md</code>, <code>scripts-dashboard-ui.md</code></td></tr>
+        <tr><td>Gator Loop</td><td><code>scripts/loop/</code>, <code>gator-loop.py</code></td><td><code>scripts-loop.md</code></td></tr>
+        <tr><td>Evidence, audit, fleet</td><td><code>gator-audit.py</code>, <code>gator-session-aggregator.py</code>, <code>gator-fleet-report.py</code>, <code>gator-drift.py</code>, <code>gator-pulse.py</code></td><td><code>scripts-audit-intelligence.md</code>, <code>scripts-session-archaeology.md</code>, <code>scripts-fleet-intelligence.md</code>, <code>scripts-pulse.md</code></td></tr>
+        <tr><td>Enterprise</td><td><code>gator-enterprise.py</code> (dispatcher), <code>enterprise/enterprise-cli/</code>, <code>enterprise/app/</code></td><td><code>scripts-enterprise.md</code>, <code>scripts-enterprise-cli.md</code>, <code>scripts-enterprise-server.md</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout note">
+    <span class="label">Why scripts, not a normal package</span>
+    <p>Most modules are standalone scripts loaded by file path, not imports inside one package. This is deliberate: copies of the commit-time scripts run inside governed repositories, where the installed package may be missing. The cost is extra copies of some files (package, starter template, Enterprise bundle). Byte-identity tests keep most copies in step. Issue #91 tracks the copies that have drifted.</p>
+  </div>
+</section>
+
+<section id="sessions">
+  <h2>Feature 1 — Governed sessions</h2>
+  <p>A governed session starts when an AI agent opens in a governed repository. Gator records the session and gives the agent a fixed reading order. The agent then works charter-first.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node" style="border-style:solid;border-color:var(--gray-400);background:var(--gray-100);color:var(--gray-800)">AI CLI starts<span class="kind">vendor tool</span></div>
+      <div class="diagram-edge"><span class="diagram-edge-label">hook</span></div>
+      <div class="diagram-node">Session hook<span class="kind">records the session</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">gator init<span class="kind">checks hooks · registers repo</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Opening reads<span class="kind">GATOR_INIT · constitution · mission</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Charters<span class="kind">via INDEX.md</span></div>
+    </div>
+  </div>
+
+  <ol class="steps">
+    <li><strong>Session capture.</strong> The vendor's SessionStart hook calls <code>gator hook session-start</code>. It records which vendor, model and session are active, so later commits can name them. It never blocks the session.</li>
+    <li><strong>Boot check.</strong> <code>gator init</code> checks and repairs the Git hooks, registers the repository with the Dashboard, and prints the files to read in order.</li>
+    <li><strong>Orientation.</strong> The agent reads <code>GATOR_INIT.md</code>, the constitution (the rules), then mission, roadmap and inbox.</li>
+    <li class="step-done"><strong>Charter-first work.</strong> Before a code change, the agent finds the charter through <code>charters/INDEX.md</code>. After each edited file, the agent updates that charter.</li>
+  </ol>
+</section>
+
+<section id="commit">
+  <h2>Feature 2 — The commit gate</h2>
+  <p>The commit gate is Gator's enforcement point. Three Git hooks run one script, <code>gator-pre-commit.py</code>, in three phases. The gate is deterministic and makes no model calls.</p>
+
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 310" role="img" aria-labelledby="fig3-title">
+      <title id="fig3-title">Commit gate flow with block and approval path</title>
+      <defs>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
+
+      <rect class="b-state" x="20" y="40" width="170" height="90" rx="6"/>
+      <text class="t" x="105" y="72" text-anchor="middle">git commit</text>
+      <text class="s" x="105" y="94" text-anchor="middle">by the agent or</text>
+      <text class="s" x="105" y="111" text-anchor="middle">a person</text>
+
+      <rect class="b-core" x="235" y="40" width="180" height="90" rx="6"/>
+      <text class="t" x="325" y="72" text-anchor="middle">Hook shim</text>
+      <text class="c" x="325" y="94" text-anchor="middle">.git/gator-hooks/</text>
+      <text class="s" x="325" y="111" text-anchor="middle">finds the runtime</text>
+
+      <rect class="b-core" x="460" y="40" width="180" height="90" rx="6"/>
+      <text class="t" x="550" y="72" text-anchor="middle">Runtime resolver</text>
+      <text class="c" x="550" y="94" text-anchor="middle">gator-hook.py</text>
+      <text class="s" x="550" y="111" text-anchor="middle">reads runtime-pin.json</text>
+
+      <rect class="b-core" x="685" y="40" width="180" height="90" rx="6"/>
+      <text class="t" x="775" y="72" text-anchor="middle">1 · Validate</text>
+      <text class="c" x="775" y="94" text-anchor="middle">pre-commit</text>
+      <text class="s" x="775" y="111" text-anchor="middle">charters · lint · draft</text>
+
+      <rect class="b-core" x="910" y="40" width="170" height="90" rx="6"/>
+      <text class="t" x="995" y="72" text-anchor="middle">2 · Trailers</text>
+      <text class="c" x="995" y="94" text-anchor="middle">commit-msg</text>
+      <text class="s" x="995" y="111" text-anchor="middle">message + Gator-*</text>
+
+      <rect class="b-warn" x="685" y="200" width="180" height="90" rx="6"/>
+      <text class="t" x="775" y="230" text-anchor="middle">BLOCKED</text>
+      <text class="s" x="775" y="251" text-anchor="middle">reason written to</text>
+      <text class="c" x="775" y="269" text-anchor="middle">whiteboard.md</text>
+
+      <rect class="b-core" x="460" y="200" width="180" height="90" rx="6"/>
+      <text class="t" x="550" y="230" text-anchor="middle">Architect approval</text>
+      <text class="c" x="550" y="251" text-anchor="middle">gator hook approve</text>
+      <text class="s" x="550" y="269" text-anchor="middle">bound to the staged tree</text>
+
+      <rect class="b-ok" x="910" y="200" width="170" height="90" rx="6"/>
+      <text class="t" x="995" y="230" text-anchor="middle">3 · Cleanup ✓</text>
+      <text class="c" x="995" y="251" text-anchor="middle">post-commit</text>
+      <text class="s" x="995" y="269" text-anchor="middle">reset draft · snippet</text>
+
+      <path class="edge" d="M190,85 L233,85" marker-end="url(#a3)"/>
+      <path class="edge" d="M415,85 L458,85" marker-end="url(#a3)"/>
+      <path class="edge" d="M640,85 L683,85" marker-end="url(#a3)"/>
+      <path class="edge" d="M865,85 L908,85" marker-end="url(#a3)"/>
+      <text class="el" x="887" y="77" text-anchor="middle">pass</text>
+      <path class="edge" d="M775,130 L775,198" marker-end="url(#a3)"/>
+      <text class="el" x="783" y="170">block</text>
+      <path class="edge" d="M685,245 L642,245" marker-end="url(#a3)"/>
+      <path class="edge" d="M550,200 L550,165 L730,165 L730,132" marker-end="url(#a3)"/>
+      <text class="el" x="640" y="158" text-anchor="middle">retry</text>
+      <path class="edge" d="M995,130 L995,198" marker-end="url(#a3)"/>
+      <text class="el" x="987" y="170" text-anchor="end">commit exists</text>
+    </svg>
+    <div class="legend">
+      <span><i class="key core"></i>Gator step</span>
+      <span><i class="key warn"></i>Blocked (thick border, labeled BLOCKED)</span>
+      <span><i class="key ok"></i>Done (thick border, ✓)</span>
+    </div>
+    <div class="caption">Figure 3. One commit through the gate. Phases 1–3 are the same script with <code>--phase validate</code>, <code>trailers</code> and <code>cleanup</code>.</div>
+  </div>
+
+  <h3>What each phase does</h3>
+  <ol class="steps">
+    <li><strong>Validate (pre-commit).</strong> Blocks when code changed but no charter changed, when <code>commit_draft.md</code> is not filled in, or when a blocking lint rule fires. It writes the reason to <code>whiteboard.md</code> and the state to <code>status.json</code>.</li>
+    <li class="step-alt"><strong>Approval path.</strong> Only the Architect can approve a blocked commit. The approval is bound to a SHA-256 hash of the exact staged change. Any restage makes the approval invalid. It is consumed only after the commit exists.</li>
+    <li><strong>Trailers (commit-msg).</strong> Builds the message from <code>commit_draft.md</code> and appends <code>Gator-*</code> trailers: change type, significance, agent, Architect, charter-changed flag, and any override.</li>
+    <li class="step-done"><strong>Cleanup (post-commit).</strong> Resets the draft, retires the approval, and writes one session snippet (<code>.gator/session-snippets/*.json</code>) for the evidence trail.</li>
+  </ol>
+</section>
+
+<section id="runtime">
+  <h2>Feature 3 — Install, update and runtime selection</h2>
+  <p>Gator ships as one wheel (<code>pipx install gator-command</code>). Three commands put it into a repository and keep it current. A runtime pin decides which copy of the commit-time scripts runs.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>What it does</th><th>Main code</th></tr></thead>
+      <tbody>
+        <tr><td><code>gator gatorize &lt;repo&gt;</code></td><td>First install: detects the scenario, copies the starter templates into <code>.gator/</code>, installs hooks, sets ignore rules, registers the repository with the Dashboard.</td><td><code>gatorize.py</code>, <code>gatorize/</code></td></tr>
+        <tr><td><code>gator update</code></td><td>Plans first (read-only), then refreshes templates and hooks. Migrates older layouts only when asked.</td><td><code>gator-update.py</code>, <code>gator_layout.py</code></td></tr>
+        <tr><td><code>gator init</code></td><td>Session boot. Repairs stale hooks without blocking.</td><td><code>gator-init.py</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Runtime pin.</strong> <code>.gator/runtime-pin.json</code> records the Gator version and a SHA-256 manifest of the commit-time scripts. At commit time, <code>gator_core.resolve_governed_runtime()</code> compares the pin with the installed CLI:</p>
+  <div class="table-wrap">
+    <table class="table-teal">
+      <thead><tr><th>Situation</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Pin matches the installed CLI</td><td><span class="pill ok">Runs</span> the machine runtime</td></tr>
+        <tr><td>Installed CLI is newer than the pin</td><td><span class="pill info">Runs</span> and advises <code>gator update</code></td></tr>
+        <tr><td>Installed CLI is too old for the pin</td><td><span class="pill warn">Refuses</span> and tells the user to upgrade</td></tr>
+        <tr><td>Pin is corrupt or unreadable</td><td><span class="pill alt">Falls back</span> to the repository's own scripts. A broken pin never blocks commits.</td></tr>
+        <tr><td>Branch has no <code>.gator/</code></td><td><span class="pill na">Warns</span> and allows the commit</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="dashboard">
+  <h2>Feature 4 — The Dashboard</h2>
+  <p>The Dashboard is the human view of Gator. <code>gator dashboard</code> starts a local HTTP server that listens only on <code>127.0.0.1</code>. It serves a plain JavaScript single-page app (no framework, no build step). It reads the registered repositories and their Git history. It writes only through specific actions: Loop commands, update and gatorize.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node">Browser views<span class="kind">Welcome · Fleet · Repo · Commits · Loop · Docs</span></div>
+      <div class="diagram-edge"><span class="diagram-edge-label">HTTP (loopback)</span></div>
+      <div class="diagram-node">Routes<span class="kind">gator-dashboard.py</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">Adapters + content policy<span class="kind">dashboard/data.py · content_policy.py</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Repositories + Loop<span class="kind">files · git · loop/host.py</span></div>
+    </div>
+  </div>
+
+  <ul>
+    <li><strong>Containment.</strong> Every file request is checked against the repository root. The check rejects symbolic links and Windows directory junctions. Served HTML gets a strict Content-Security-Policy.</li>
+    <li><strong>Concurrency.</strong> The server is threaded, so a slow listing does not block other requests. Dashboard locks are never held while a Loop lock is taken. The Loop locks stay the only authority for Loop state.</li>
+    <li><strong>Offline snapshot.</strong> <code>dashboard/snapshot.py</code> builds one self-contained HTML file that needs no server. It holds the summary data only; the Repo view is off in a snapshot.</li>
+  </ul>
+</section>
+
+<section id="loop">
+  <h2>Feature 5 — Gator Loop</h2>
+  <p>Gator Loop runs a governed exchange between two AI agents: a <strong>Draftor</strong> writes, and a <strong>Reviewer</strong> checks. The Architect controls the loop. The agents can be from different vendors, for example Claude as Draftor and Codex as Reviewer. Each agent joins with its own token. Gator checks the token, the role and whose turn it is on every command.</p>
+
+  <div class="figure">
+    <svg class="wide" viewBox="0 0 1100 310" role="img" aria-labelledby="fig4-title">
+      <title id="fig4-title">Gator Loop stage machine</title>
+      <defs>
+        <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker>
+      </defs>
+
+      <rect class="b-core" x="20" y="50" width="190" height="90" rx="6"/>
+      <text class="t" x="115" y="80" text-anchor="middle">Drafting</text>
+      <text class="s" x="115" y="100" text-anchor="middle">Draftor writes</text>
+      <text class="c" x="115" y="120" text-anchor="middle">*_drafting</text>
+
+      <rect class="b-core" x="320" y="50" width="190" height="90" rx="6"/>
+      <text class="t" x="415" y="80" text-anchor="middle">Review</text>
+      <text class="s" x="415" y="100" text-anchor="middle">Reviewer checks</text>
+      <text class="c" x="415" y="120" text-anchor="middle">*_review</text>
+
+      <rect class="b-ok" x="630" y="50" width="190" height="90" rx="6"/>
+      <text class="t" x="725" y="80" text-anchor="middle">Approved ✓</text>
+      <text class="s" x="725" y="100" text-anchor="middle">plan or code accepted</text>
+      <text class="c" x="725" y="120" text-anchor="middle">*_approved</text>
+
+      <rect class="b-core" x="320" y="200" width="190" height="90" rx="6"/>
+      <text class="t" x="415" y="230" text-anchor="middle">Revision</text>
+      <text class="s" x="415" y="250" text-anchor="middle">Draftor revises</text>
+      <text class="c" x="415" y="270" text-anchor="middle">*_revision</text>
+
+      <text class="s" x="630" y="170">Other endings: round limit (can be</text>
+      <text class="s" x="630" y="186">extended), timeout, ended by Architect</text>
+
+      <rect class="b-state" x="870" y="30" width="210" height="260" rx="6"/>
+      <text class="t" x="886" y="58">Architect controls</text>
+      <text class="s" x="886" y="84">at any stage:</text>
+      <text class="c" x="886" y="108">pause · interject</text>
+      <text class="c" x="886" y="130">escalation → unblock</text>
+      <text class="c" x="886" y="152">end</text>
+      <text class="s" x="886" y="184">after the round limit:</text>
+      <text class="c" x="886" y="206">extend</text>
+      <text class="s" x="886" y="238">after approved coding:</text>
+      <text class="c" x="886" y="260">reopen</text>
+
+      <path class="edge" d="M210,95 L318,95" marker-end="url(#a4)"/>
+      <text class="el" x="264" y="87" text-anchor="middle">submit</text>
+      <path class="edge" d="M510,95 L628,95" marker-end="url(#a4)"/>
+      <text class="el" x="569" y="87" text-anchor="middle">approve</text>
+      <path class="edge" d="M380,140 L380,198" marker-end="url(#a4)"/>
+      <text class="el" x="372" y="174" text-anchor="end">changes requested</text>
+      <path class="edge" d="M450,198 L450,142" marker-end="url(#a4)"/>
+      <text class="el" x="458" y="174">resubmit</text>
+    </svg>
+    <div class="legend">
+      <span><i class="key core"></i>Active stage</span>
+      <span><i class="key ok"></i>Approved (thick border, ✓)</span>
+      <span><i class="key state"></i>Human control</span>
+    </div>
+    <div class="caption">Figure 4. One loop round. Planning mode uses <code>plan_*</code> stages; coding mode uses <code>implementation_*</code> stages.</div>
+  </div>
+
+  <h3>Two modes</h3>
+  <ul>
+    <li><strong>Planning loop.</strong> The Draftor writes a plan from the Architect's sketch. The Reviewer approves it or requests changes. The output is an approved plan.</li>
+    <li><strong>Coding loop.</strong> The Draftor implements an approved plan, one checkpoint at a time. At each submission, Gator records a Git snapshot (tree and HEAD) of the candidate, so the Reviewer approves exact code. After approval, the loop reports whether that tree was committed.</li>
+  </ul>
+
+  <h3>How it is built</h3>
+  <p>All loop state is in <code>.gator/loops/&lt;loop-id&gt;/</code>: <code>session.json</code> (the current state), <code>events.jsonl</code> (an append-only log), and round-numbered artifacts (plans, findings, approvals). Operating-system file locks serialize every change. The modules form a strict layering with no import cycles:</p>
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node blue">session<span class="kind">state · tokens · locks</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">events · state_machine<span class="kind">log · legal transitions</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">submit · liveness · gitsnap<span class="kind">turns · waiting · Git snapshot</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">host<span class="kind">start · watch · extend</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">cli<span class="kind">gator loop …</span></div>
+    </div>
+  </div>
+  <p>Each module depends only on the modules to its left. The Dashboard reads loop state through <code>session</code> and <code>events</code>, and changes it only through <code>host</code>. <code>gator loop codex</code> is an opt-in launcher. It prepares an isolated Codex profile that allows only the routine loop commands.</p>
+</section>
+
+<section id="evidence">
+  <h2>Feature 6 — Evidence, audit and fleet</h2>
+  <p>Gator produces evidence as a side effect of normal work. All of it is in Git, so every clone carries it.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node blue">Commit trailers<span class="kind">Gator-* on every commit</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node blue">Session snippets<span class="kind">.gator/session-snippets/*.json</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">Aggregation<span class="kind">gator-session-aggregator · gator-audit</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node">Views<span class="kind">Commits · Audit · pulse · fleet report</span></div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Question</th><th>Answered by</th></tr></thead>
+      <tbody>
+        <tr><td>Which agent and model made this change, and under which Architect?</td><td>Commit trailers (<code>Gator-Agent</code>, <code>Gator-Architect</code>, …), shown in the Dashboard Commits view</td></tr>
+        <tr><td>Was the charter updated with the code? Was the gate overridden, and why?</td><td><code>Gator-Charter-Changed</code> and <code>Gator-Override-*</code> trailers</td></tr>
+        <tr><td>What happened in a session?</td><td>Session snippets, aggregated per session (cached in <code>~/.gator/sessions/</code>)</td></tr>
+        <tr><td>Which repositories are stale or out of policy?</td><td><code>gator-fleet-report.py</code>, <code>gator-drift.py</code> (local or remote repositories)</td></tr>
+        <tr><td>What is the strategic state of this repository?</td><td><code>gator pulse</code> (generates <code>.gator/pulse.md</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Enforcer review</strong> is a separate, optional check. On the Architect's request, <code>gator hook enforcer-review</code> sends the diff and the matching charters to a different model. The findings go to <code>whiteboard.md</code> for the Architect to decide. The enforcer never edits code.</p>
+</section>
+
+<section id="enterprise">
+  <h2>Feature 7 — Enterprise (optional)</h2>
+  <p>Enterprise collects governance evidence across many machines and repositories. It is a separate install. The base wheel contains only a small dispatcher (<code>gator enterprise</code>) and does not import Enterprise code.</p>
+
+  <div class="diagram">
+    <div class="diagram-flow">
+      <div class="diagram-node amber" style="border-style:dashed">enterprise-cli<span class="kind">activate · sync · transcripts pull</span></div>
+      <div class="diagram-edge"><span class="diagram-edge-label">HTTPS + token</span></div>
+      <div class="diagram-node amber" style="border-style:dashed">Enterprise API<span class="kind">FastAPI · auth · tenants</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node amber" style="border-style:dashed">PostgreSQL + blob store<span class="kind">evidence · policy · raw transcripts</span></div>
+      <div class="diagram-edge"></div>
+      <div class="diagram-node amber" style="border-style:dashed">Audit answers<span class="kind">which transcripts made this commit</span></div>
+    </div>
+  </div>
+
+  <ul>
+    <li><strong>Transcript custody.</strong> The CLI uploads Claude, Codex and Gemini session transcripts. The server keeps the raw transcript as the source of truth and links it to commits and machines.</li>
+    <li><strong>Policy.</strong> The organization publishes hook policy and standards. Machines pull them with <code>gator enterprise sync</code>.</li>
+    <li><strong>Current limit.</strong> The Enterprise CLI installs only from a source checkout. A single pipx install path is the open blocker for a public Enterprise release.</li>
+  </ul>
+</section>
+
+<section id="trust">
+  <h2>Trust boundaries and failure policy</h2>
+  <p>Gator chooses deliberately between failing open (allow and warn) and failing closed (refuse). The rule: never let a Gator fault stop normal Git work, and never silently weaken a control that a person set.</p>
+  <div class="table-wrap">
+    <table class="table-red">
+      <thead><tr><th>Condition</th><th>Behavior</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Code change without a charter change</td><td><span class="pill warn">Block</span></td><td>Core rule. Only an Architect approval of the exact staged tree releases it.</td></tr>
+        <tr><td>Corrupt runtime pin</td><td><span class="pill ok">Allow</span> with the repository's scripts</td><td>A broken pin must not stop commits.</td></tr>
+        <tr><td>Malformed user preference file</td><td><span class="pill warn">Refuse</span></td><td>A fallback would silently override what the user set.</td></tr>
+        <tr><td>Invalid Enterprise activation</td><td><span class="pill warn">Not activated</span></td><td>Refusing a feature is safe; refusing a commit is not.</td></tr>
+        <tr><td>Session hooks fail</td><td><span class="pill ok">Session continues</span></td><td>Capture is best effort; it never blocks the agent.</td></tr>
+        <tr><td>Dashboard request outside a repository root</td><td><span class="pill warn">Reject</span></td><td>Containment checks symlinks and junctions.</td></tr>
+        <tr><td>Loop command with the wrong token, role or turn</td><td><span class="pill warn">Reject</span></td><td>Only the Architect token can pause, end, extend or reopen.</td></tr>
+        <tr><td>Unknown permission rule in the Codex loop profile</td><td><span class="pill warn">Refuse to launch</span></td><td>Gator does not overwrite a rule it did not write (see #87).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="health">
+  <h2>Architecture health</h2>
+  <p>A code assessment on 2026-10-23 found clean module boundaries in the Loop package and a narrow seam between the Dashboard and the Loop. It also found these maintenance risks. Each one has an issue.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Risk</th><th>Impact</th><th>Issue</th></tr></thead>
+      <tbody>
+        <tr><td>The charter verifier ignores globs in charter coverage lines, so most of its 157 coverage warnings are false.</td><td>Real charter drift is hidden in noise. Drift detection is the core product claim.</td><td>#88</td></tr>
+        <tr><td><code>gator-dashboard.py</code> is 4,600 lines; one handler class is 2,600.</td><td>Every Dashboard change touches one large file.</td><td>#89</td></tr>
+        <tr><td><code>views/loop.js</code> is 4,400 lines.</td><td>Slow to change; the Paper redesign is the time to split it.</td><td>#90</td></tr>
+        <tr><td>Some copied scripts have drifted (for example <code>gator_core.py</code> in the Enterprise bundle).</td><td>Enterprise-provisioned repositories may miss newer commit-gate rules.</td><td>#91</td></tr>
+        <tr><td>Modules import each other's private names; several Loop modules are 1,100–1,900 lines.</td><td>Hidden coupling; refactors break in unexpected places.</td><td>#92, #93</td></tr>
+        <tr><td>Charters are about 8.6% of source against a 3–6% target.</td><td>The always-read charter costs every session more context.</td><td>#94</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout data">
+    <span class="label">Key point</span>
+    <p>Test code is about the same size as product code (about 48k lines), and contract tests pin the shared formats. Most risk is in the size of a few files, not in the design. The highest-value fix is #88, because it makes charter drift visible again.</p>
+  </div>
+</section>
+
+<section id="refs">
+  <h2>References</h2>
+  <ul>
+    <li><code>.gator/charters/INDEX.md</code> — maps every code path to its charter.</li>
+    <li><code>.gator/charters/scripts-cross-cutting.md</code> — contracts that cross modules (runtime, hooks, schemas, shipped copies).</li>
+    <li><a href="gator-loop-guide.html">gator-loop-guide.html</a> — how to run Gator Loop.</li>
+    <li><code>.gator/.includes/constitution.md</code> — the working rules for agents.</li>
+    <li><code>src/gator_command/cli.py</code> — the subcommand router (<code>COMMANDS</code>).</li>
+  </ul>
+</section>
+
+<footer class="doc-foot">
+  gator · reference-explainer · 2026-10-23 · Cumberland Laboratories
+</footer>
+
+</body>
+</html>

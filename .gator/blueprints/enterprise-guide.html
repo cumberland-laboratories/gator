@@ -10,7 +10,7 @@
   <meta name="gator-repo" content="gator">
   <meta name="gator-doc-class" content="reference-explainer">
   <meta name="gator-status" content="current">
-  <meta name="gator-updated-at" content="2026-09-03T21:00:00Z">
+  <meta name="gator-updated-at" content="2026-10-24T00:30:00Z">
   <meta name="gator-generated-by" content="claude-opus-4-7">
   <meta name="gator-question" content="What is Enterprise, what are its three scopes, how does an Architect activate and use it, what are the hook modes, and where does base Gator end and Enterprise begin?">
 
@@ -360,6 +360,12 @@
       text-align: center;
     }
   </style>
+  <style>
+    /* Local phone-width fixes (outside the shared Cumberland region). */
+    table { display: block; overflow-x: auto; }
+    code { overflow-wrap: anywhere; }
+    .diagram { overflow-x: auto; }
+  </style>
 </head>
 <body>
 
@@ -370,11 +376,11 @@
     <div><span class="label">Doc class:</span> Reference explainer</div>
     <div><span class="label">Repo:</span> gator</div>
     <div><span class="label">Status:</span> <span class="status-badge">Current</span></div>
-    <div><span class="label">Updated:</span> 2026-09-03</div>
+    <div><span class="label">Updated:</span> 2026-10-24 (corrected against the code)</div>
     <div><span class="label">Question:</span> What is Enterprise, how do I use it?</div>
     <div><span class="label">Protocol:</span> gator-blueprint-html-v1</div>
   </div>
-  <div class="metaline">Supersedes the historical <code>enterprise-configuration.md</code> for the current transcripts-first architecture. That doc is retained for legacy code-path tracing; this doc is for what to do today.</div>
+  <div class="metaline">Supersedes the historical <code>enterprise-configuration.md</code> (now in <code>.gator/vault/blueprints/</code>) for the current transcripts-first architecture.</div>
 </header>
 
 <nav class="toc">
@@ -396,7 +402,7 @@
 <section id="summary">
   <div class="callout">
     <span class="label">Summary</span>
-    <p>Enterprise is an <em>optional</em> layer on top of base Gator. Base Gator works standalone on a single machine with one developer; Enterprise adds cross-machine and cross-repo governance: a control plane that owns policy, credentials it can revoke, hook modes an operator can dial per repo, and evidence custody (transcripts) that lives in Enterprise-managed storage rather than in Git. The base install (<code>pipx install gator-command</code>) ships only a thin <code>gator enterprise</code> dispatcher; the real command bodies live in the source-checkout <code>enterprise/enterprise-cli/</code> package and the FastAPI service under <code>enterprise/app/</code>. Both are explicitly aspirational — the Architect direction is <em>"the enterprise portions do not need to work right now"</em> — so most fleet-scale features are wired but not required for base-wheel releases.</p>
+    <p>Enterprise is an <em>optional</em> layer on top of base Gator. Base Gator works standalone on a single machine with one developer; Enterprise adds cross-machine and cross-repo governance: a control plane that owns policy, credentials it can revoke, hook modes an operator can dial per repo, and evidence custody (transcripts) that lives in Enterprise-managed storage rather than in Git. The base install (<code>pipx install gator-command</code>) ships only a thin <code>gator enterprise</code> dispatcher; the real command bodies live in the source-checkout <code>enterprise/enterprise-cli/</code> package and the FastAPI service under <code>enterprise/app/</code>. Enterprise at a polished-demo level is part of the current top priority (see <code>roadmap.md</code>). The five canonical audit questions are answered. The open blocker for a public Enterprise release is a single pipx install path.</p>
   </div>
 </section>
 
@@ -445,7 +451,7 @@
       </tr>
       <tr>
         <td><strong>Repo</strong><br><code>.gator/</code></td>
-        <td>Repo identity (<code>repo-id</code>), org-policy pointer, bundled repo-local scripts, evidence landing zones, agent entry files (<code>CLAUDE.md</code> / <code>AGENTS.md</code>).</td>
+        <td>Repo identity (<code>repo-id</code>), org-policy pointer, bundled repo-local scripts, evidence landing zones. (<code>repo init</code> also creates <code>CLAUDE.md</code> / <code>AGENTS.md</code>; see issue #95.)</td>
         <td>Credentials, machine private keys, hook-policy authority &mdash; those stay off-repo permanently.</td>
       </tr>
     </tbody>
@@ -475,12 +481,12 @@
     </li>
     <li>
       <h4>gator enterprise repo init &lt;path&gt;</h4>
-      <p>Provision a specific repo. Writes <code>.gator/repo-id</code> (derived from <code>git remote origin</code> if not supplied), copies the bundled hook + session scripts into <code>.gator/scripts/</code>, creates evidence landing zones, creates agent entry files, and writes the requested hook mode locally so the wrapper honors it even if the server hasn&rsquo;t heard of the repo yet.</p>
+      <p>Provision a specific repo. Writes <code>.gator/repo-id</code> (derived from <code>git remote origin</code> if not supplied), copies the bundled hook + session scripts into <code>.gator/scripts/</code> (the v1 layout), creates evidence landing zones, creates <code>CLAUDE.md</code> / <code>AGENTS.md</code> if they are absent, and writes the requested hook mode locally so the wrapper honors it even if the server hasn&rsquo;t heard of the repo yet.</p>
       <pre>gator enterprise repo init . --mode strict</pre>
     </li>
     <li class="step-done">
       <h4>Everything after that is normal git</h4>
-      <p>Commit as usual. The global hook wrapper fires, reads the repo&rsquo;s canonical id, looks up the hook mode in the local policy cache, and dispatches to the repo-local <code>.gator/scripts/gator-pre-commit.py</code>. Nothing else operator-facing changes.</p>
+      <p>Commit as usual. The global hook wrapper fires, reads the repo&rsquo;s canonical id, looks up the hook mode in the local policy cache, and dispatches to the repo-local <code>gator-pre-commit.py</code>: <code>.gator/.includes/scripts/</code> (v2 layout) first, then <code>.gator/scripts/</code> (v1). Nothing else operator-facing changes.</p>
     </li>
   </ol>
 
@@ -573,7 +579,7 @@
     <li><strong>Per-commit session-block generation retired</strong> from the post-commit hook (2026-08-09). The hook no longer runs a block generator on every commit; it just cleans up.</li>
     <li><strong>Evidence flows on operator schedule</strong>, not commit schedule. The operator (or a scheduled job) runs <code>gator enterprise transcripts pull</code>, which discovers vendor session files (Claude Code, Codex, etc.), uploads them to the server via <code>POST /api/v1/transcripts/ingest</code>, and records the machine attribution trailer.</li>
     <li><strong><code>.gator/session-blocks/</code> stays gitignored globally.</strong> The historical design committed evidence to Git; the current design keeps evidence in Enterprise-managed storage and Git in the repo.</li>
-    <li><strong>Session snippets still flow at commit time</strong> — the base-Gator pre-commit hook writes a <code>.gator/session-snippets/&lt;date&gt;.json</code> entry per commit. Snippets are lightweight commit-time evidence; transcripts are the fuller after-the-fact record.</li>
+    <li><strong>Session snippets still flow at commit time</strong> — the base-Gator post-commit hook (the <code>cleanup</code> phase) writes one <code>.gator/session-snippets/*.json</code> entry per commit. Snippets are lightweight commit-time evidence; transcripts are the fuller after-the-fact record.</li>
   </ul>
 
   <div class="callout note">
@@ -664,8 +670,12 @@
     ...
   session-snippets/                      # commit-time snippets (tracked)
   session-blocks/                        # gitignored under transcripts-first
-CLAUDE.md                                # agent entry file (Claude Code)
-AGENTS.md                                # agent entry file (Codex, Gemini, ...)</pre>
+CLAUDE.md                                # created if absent (see issue #95)
+AGENTS.md                                # created if absent (see issue #95)</pre>
+  <div class="callout info">
+    <span class="label">Known inconsistency</span>
+    <p><code>repo init</code> writes the v1 <code>.gator/scripts/</code> layout and creates vendor files. Base Gator uses <code>.gator/.includes/scripts/</code> and never writes <code>CLAUDE.md</code> / <code>AGENTS.md</code> (since 2026-10-08). Issue #95 tracks the fix.</p>
+  </div>
 
   <div class="callout ok">
     <span class="label">Clean separation</span>
@@ -718,8 +728,8 @@ AGENTS.md                                # agent entry file (Codex, Gemini, ...)
   <h2>Integration status &amp; what&rsquo;s deferred</h2>
 
   <div class="callout info">
-    <span class="label">Aspirational-by-Architect-direction</span>
-    <p>Per the Architect: <em>"the enterprise portions do not need to work right now ... we are not requiring it to work out of the gate."</em> Base-wheel releases don&rsquo;t wait on Enterprise green tests. <code>enterprise/tests/</code> can be red without blocking a ship. Base CI (<code>tests/</code> + <code>contracts/compatibility/</code>) is the release gate; Enterprise CI is scoped independently.</p>
+    <span class="label">Release gating</span>
+    <p>Base-wheel releases don&rsquo;t wait on Enterprise green tests. <code>enterprise/tests/</code> can be red without blocking a ship. Base CI (<code>tests/</code> + <code>contracts/compatibility/</code>) is the release gate; Enterprise CI is scoped independently.</p>
   </div>
 
   <p>Concretely deferred:</p>
@@ -728,7 +738,8 @@ AGENTS.md                                # agent entry file (Codex, Gemini, ...)
     <li><strong>Server deployment</strong> &mdash; the FastAPI service is source-checkout only. No hosted instance today.</li>
     <li><strong>Dashboard integration</strong> &mdash; the base-Gator Dashboard doesn&rsquo;t surface Enterprise state (per-repo mode, transcript ingest status, etc.). Blueprints 2.0 Release C-adjacent territory.</li>
     <li><strong>Encryption roundtrip</strong> &mdash; migration 007 shipped the key columns; the client-side encryption path was scoped down when transcripts-first replaced the block-first design. Envelope-encryption code lives in <code>enterprise/app/routes/crypto.py</code> and is exercised by <code>enterprise/tests/</code> but isn&rsquo;t on the base-wheel release path.</li>
-    <li><strong>Full audit surface</strong> &mdash; five canonical audit questions all technically answerable via the current CLI + API pair, but the fleet-scale reporting shape is still evolving (2026-08-14 Phase 2 tranche extended it; more coming).</li>
+    <li><strong>Single pipx install</strong> &mdash; the Enterprise CLI installs only from a source checkout (<code>pip install ./enterprise/enterprise-cli/</code>). This blocks a public Enterprise announcement.</li>
+    <li><strong>Cross-OS defaults</strong> &mdash; the blob-store default path is POSIX-only; on Windows, set <code>BLOB_STORE_ROOT</code>.</li>
   </ul>
 
   <p>Concretely working (per current release):</p>
@@ -738,7 +749,8 @@ AGENTS.md                                # agent entry file (Codex, Gemini, ...)
     <li>Machine activation with hook install, keypair generation, machine-key registration, config write.</li>
     <li>Local hook-policy cache with the merge-preserves-local rule.</li>
     <li>All four hook modes with the strict-default + fail-safe-strict semantics.</li>
-    <li>Bundled scripts stay byte-identical with the shipped and template copies (regression pin: <code>tests/test_multi_session.py::TestByteIdentityAcrossThreeCopies</code>).</li>
+    <li>Most bundled scripts are byte-identical with the starter template copies (pin: <code>tests/test_multi_session.py::TestByteIdentityAcrossThreeCopies</code>). <strong>Exceptions:</strong> <code>gator-pre-commit.py</code> and <code>gator_core.py</code> have drifted and are not pinned (issue #91).</li>
+    <li>The five audit questions: <code>commits transcripts &lt;sha&gt;</code> (Q1), <code>commits list --repo &lt;id&gt;</code> (Q2), <code>transcripts list --unlinked</code> (Q3), <code>commits provenance &lt;sha&gt;</code> (Q4), <code>repos transcripts &lt;id&gt;</code> (Q5).</li>
     <li>Windows-safe python resolver + mode lookup (2026-08-06 fix arc, regression pins in <code>test_activate_hooks.py</code>).</li>
     <li>Transcripts-first pull path (client-side <code>transcripts pull</code>, server-side ingest endpoint, DB schema).</li>
   </ul>
@@ -751,7 +763,7 @@ AGENTS.md                                # agent entry file (Codex, Gemini, ...)
     <li><code>src/gator_command/scripts/gator-enterprise.py</code> &mdash; the base-wheel dispatcher. Only file base install ships for the Enterprise surface.</li>
     <li><code>enterprise/enterprise-cli/gator_enterprise_cli/</code> &mdash; real command bodies. Read <code>main.py</code> for the argparse root, <code>commands/activate.py</code> for the machine setup logic, <code>commands/repo_init.py</code> for repo provisioning.</li>
     <li><code>enterprise/app/</code> &mdash; FastAPI service. Routes under <code>app/routes/</code>, services under <code>app/services/</code>, migrations under <code>enterprise/migrations/versions/</code>.</li>
-    <li><code>.gator/blueprints/enterprise-configuration.md</code> &mdash; historical pre-transcripts-first configuration document. Useful for tracing legacy code paths; do not use as guidance for new work.</li>
+    <li><code>.gator/vault/blueprints/enterprise-configuration.md</code> (not tracked) &mdash; historical pre-transcripts-first configuration document. Useful for tracing legacy code paths; do not use as guidance for new work.</li>
     <li><code>.gator/vault/artifacts/2026-08-08-enterprise-transcripts-first-adr.md</code> &mdash; the ADR that pivoted the evidence path.</li>
     <li><code>.gator/vault/artifacts/2026-08-06-enterprise-local-bringup-implementation-plan.md</code> &mdash; the bring-up arc where the Windows-safe fixes landed.</li>
   </ul>

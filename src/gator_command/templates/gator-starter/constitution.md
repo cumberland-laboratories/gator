@@ -166,9 +166,21 @@ HTML that says…", "make me an HTML report on…", "write this up as HTML"),
 start from the Cumberland master template at
 [`reference-notes/cumberland-html-document-template.html`](reference-notes/cumberland-html-document-template.html).
 Fill the `==TODO==` placeholders and save at the path that matches the
-piece's role — `artifacts/YYYY-MM-DD-<slug>.html` for deep records,
-`procedures/<slug>.html` for procedures, `reference-notes/<slug>.html` for
-reference-explainers, `threads/<slug>.html` for lightweight notes.
+piece's role — `blueprints/<slug>.html` for durable explanations of how the
+system or a feature works, `artifacts/YYYY-MM-DD-<slug>.html` for deep
+records, `procedures/<slug>.html` for procedures, `reference-notes/<slug>.html`
+for reference-explainers, `threads/<slug>.html` for lightweight notes.
+
+**Blueprints are Gator docs.** `.gator/blueprints/` is the collection of
+visual Gator docs that explain the system to the Architect, who may be far
+from the code. A blueprint is visual first: a diagram for each major part,
+showing where the code lives and how it works, with large readable type.
+Every box and arrow carries a text label, and no meaning depends on color
+alone. A blueprint names the code paths and the charter for each part, but
+does not go down to individual functions. Start a blueprint from
+[`blueprints/_template-narrative.html`](blueprints/_template-narrative.html),
+which has the same Cumberland style plus the Blueprint metadata that
+`blueprints/` requires. Do not create new Markdown blueprints.
 
 Exception: if the piece is a **Blueprint** (`charter-map`, `feature-blueprint`, `procedure-visual`, or `reference-explainer` conforming to the `gator-blueprint-html-v1` protocol), use [`blueprints/_template.html`](blueprints/_template.html) (interactive) or [`blueprints/_template-narrative.html`](blueprints/_template-narrative.html) (narrative) — those specialize the same Cumberland visual grammar with Blueprint-protocol metadata. See [`procedures/authoring-html-artifacts.md`](procedures/authoring-html-artifacts.md) for the medium-first triage that picks between master and Blueprint templates.
 

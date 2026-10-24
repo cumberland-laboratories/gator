@@ -1,8 +1,14 @@
 # Blueprints
 
-Architect-facing inspection artifacts that explain how features, subsystems,
-or workflows work end-to-end. Blueprints are optional — create one when a
-region of the system benefits from a dedicated, browsable explanation.
+The collection of visual Gator docs that explain how this system works —
+architecture overviews, feature walkthroughs, and flow maps — for an
+Architect who may be far from the code. Blueprints are optional; create one
+when a part of the system benefits from a dedicated, visual explanation.
+
+Blueprints are visual first: one labeled diagram per major part, large
+readable type, the code paths and charter for each part, and no meaning
+carried by color alone. See "Blueprints are visual first" in the
+[authoring procedure](../procedures/authoring-html-artifacts.md).
 
 ## HTML is the medium for new blueprints (as of v2.12.0)
 
@@ -31,9 +37,9 @@ is not shipped to fleet repos.
 
 ## Where blueprints live
 
-- **`.gator/blueprints/`** (tracked): durable repo-wide artifacts.
-  `charter-map.html` is the canonical inhabitant if this repo has one. Other
-  long-lived blueprints or reference explainers may live here.
+- **`.gator/blueprints/`** (tracked): durable blueprints — the visual Gator
+  docs for this repo. `charter-map.html` is the canonical inhabitant if this
+  repo has one.
 - **`.gator/vault/artifacts/`** (gitignored): exploratory or question-specific
   HTML — the default landing zone for `feature-blueprint` doc-class artifacts
   generated on demand.
@@ -51,32 +57,9 @@ file-browser approach).
 
 ## Legacy markdown blueprints
 
-Blueprints authored before v2.12.0 as `.md` files stay put — no bulk
-conversion. If those documents grow enough to benefit from an interactive
-map or a richer narrative shell, they can be re-authored in HTML using one
-of the two templates above.
-
-For reference, the legacy markdown structure was:
-
-```markdown
-# Blueprint: <Feature Name>
-
-## What It Does
-[1-2 sentences]
-
-## Flow
-1. **<Module>** → `function_name()` — what happens
-   → [charter-name](../charters/charter-name.md)
-
-## Key Charters
-[Charters involved]
-
-## Invariants
-[What must be true for this to work]
-```
-
-The [`_template.md`](_template.md) scaffold survives as reference for that
-legacy shape. New blueprints should use one of the HTML templates instead.
+Do not create new `.md` blueprints. When an older Markdown blueprint is
+retired, move it to `.gator/vault/blueprints/` (gitignored) and re-author
+the content it still needs in HTML with one of the templates above.
 
 ## See also
 
