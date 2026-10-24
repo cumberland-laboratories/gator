@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: each Gator docs example opens with the situation that calls for it",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard"
+  ],
+  "commit": "7046ad9e01265f94aedfa992b106a4ae578e2060",
+  "short_commit": "7046ad9",
+  "snippet_id": "snippet-7046ad9e01265",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "52a0d5d68c734ee8738ff00050c3c0beedda937b",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:26:11Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-52a0d5d68c734.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "Each example in the Gator docs Welcome topic now opens with a short",
+    "scenario (\"Suppose the store's release manager is asked for …\") instead of",
+    "a title such as \"Our release procedure\". Readers no longer take \"our\" to",
+    "mean Cumberland Laboratories, and each example shows who needs the document",
+    "and why before it shows the result.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
