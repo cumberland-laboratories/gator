@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<!--
+  Gator docs - Welcome topic shipped with Gator.
+  Built from the Cumberland master template
+  (reference-notes/cumberland-html-document-template.html).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none'; img-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Gator docs</title>
+
+  <style>
+    /* CUMBERLAND-NARRATIVE-STYLE:BEGIN ────────────────────────
+       Shared core. Byte-identical in this master AND the
+       narrative-Blueprint specialization. Parity-checked at
+       release time by contracts/compatibility/. Do not
+       introduce local edits inside this region. ─────────────── */
+    :root {
+      /* Primary palette — teal + red + blue for structure,
+         amber + green for status, purple for "insight" /
+         data emphasis. Each hue: base + dark anchor + 8%-
+         alpha wash. Colorblind-legible pairs: red/green
+         separate on lightness, blue/purple on saturation. */
+      --teal:        #19aeb8;
+      --teal-dark:   #148a92;
+      --teal-light:  rgba(25, 174, 184, 0.08);
+      --red:         #d94040;
+      --red-light:   rgba(217, 64, 64, 0.07);
+      --blue:        #4a72b0;
+      --blue-dark:   #385a90;
+      --blue-light:  rgba(74, 114, 176, 0.08);
+      --amber:       #d48b0a;
+      --amber-light: rgba(212, 139, 10, 0.08);
+      --green:       #2d8a4e;
+      --green-light: rgba(45, 138, 78, 0.08);
+      --purple:      #6b46c1;
+      --purple-light: rgba(107, 70, 193, 0.08);
+
+      /* Neutral scale — 9-step Tailwind-style ramp. */
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      color: var(--gray-800);
+      background: var(--gray-50);
+      line-height: 1.6;
+      padding: 2rem 1.25rem;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Header — h1 at 1.85rem with -0.01em tracking; subtitle
+       justified + hyphenated (the reference-file typographic
+       decision that shifts the read from "wiki page" to
+       "document"). */
+    header.doc-head {
+      border-bottom: 3px solid var(--teal);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    header.doc-head h1 {
+      font-size: 1.85rem;
+      color: var(--gray-900);
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      letter-spacing: -0.01em;
+    }
+    header.doc-head .subtitle {
+      color: var(--gray-600);
+      font-size: 1rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    header.doc-head .metaline {
+      margin-top: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      letter-spacing: 0.02em;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 8px 20px;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: var(--gray-600);
+    }
+    .meta-grid .label {
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.72rem;
+      margin-right: 0.4rem;
+    }
+
+    /* Status badges — one variant per Blueprint status value.
+       Default is `current` (green). Kept in the master so
+       author has the vocabulary even when the doc is not a
+       Blueprint (a general artifact can still be `historical`
+       or `exploratory`). */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--green-light);
+      color: var(--green);
+    }
+    .status-badge.exploratory { background: var(--amber-light); color: var(--amber); }
+    .status-badge.generated   { background: var(--blue-light);  color: var(--blue-dark); }
+    .status-badge.historical  { background: var(--gray-100);    color: var(--gray-600); }
+
+    /* Sections + prose — justified body with hyphens. Narrow
+       contexts (figure captions, footer, TOC entries) opt out
+       via a single override rule; .figure .caption re-overrides
+       to `center` so figure captions stay centered inside the
+       card. */
+    section { margin-bottom: 2.5rem; }
+    section > h2 {
+      font-size: 1.35rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    section > h3 {
+      font-size: 1.05rem;
+      color: var(--gray-800);
+      font-weight: 600;
+      margin: 1.5rem 0 0.5rem;
+    }
+    p {
+      margin-bottom: 0.8rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .figure .caption,
+    footer.doc-foot p,
+    .toc p {
+      text-align: left;
+      hyphens: manual;
+    }
+    ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+
+    a { color: var(--blue-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Code — inline + block. Block gets a teal left-border.
+       Nested <code> inside <pre> is reset so it does not
+       re-inherit the inline pill styling and render as
+       double-boxed code. */
+    code {
+      font-family: 'Consolas', 'Monaco', monospace;
+      background: var(--gray-100);
+      padding: 0.1em 0.4em;
+      border-radius: 3px;
+      font-size: 0.88em;
+      color: var(--gray-900);
+    }
+    pre {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.1rem;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--gray-800);
+      overflow-x: auto;
+      margin: 0.7rem 0 1rem;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: 1em;
+    }
+
+    /* Callouts — six variants:
+         default (teal)   summary / neutral highlight
+         .note   (blue)   cross-refs, historical context
+         .info   (amber)  soft caution, subtle constraint
+         .warn   (red)    hard failure mode
+         .ok     (green)  verified outcome, done state
+         .data   (purple) high-signal insight — use SPARINGLY
+                          (one or two per doc) or its weight
+                          dilutes. */
+    .callout {
+      background: var(--teal-light);
+      border-left: 4px solid var(--teal);
+      padding: 1rem 1.25rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+    }
+    .callout.warn { background: var(--red-light);    border-left-color: var(--red); }
+    .callout.info { background: var(--amber-light);  border-left-color: var(--amber); }
+    .callout.ok   { background: var(--green-light);  border-left-color: var(--green); }
+    .callout.note { background: var(--blue-light);   border-left-color: var(--blue); }
+    .callout.data { background: var(--purple-light); border-left-color: var(--purple); }
+    .callout .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--teal-dark);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .callout.warn .label { color: var(--red); }
+    .callout.info .label { color: var(--amber); }
+    .callout.ok   .label { color: var(--green); }
+    .callout.note .label { color: var(--blue-dark); }
+    .callout.data .label { color: var(--purple); }
+
+    /* Tables — neutral gray default header, colored variants
+       for scannability.
+         .table-blue: informational, comparative
+         .table-red:  failure modes, warnings
+         .table-teal: verified, positive baseline */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+      vertical-align: top;
+    }
+    th {
+      background: var(--gray-100);
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      border-bottom: 2px solid var(--gray-300);
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+
+    table.table-blue th {
+      background: var(--blue-light);
+      color: var(--blue-dark);
+      border-bottom-color: var(--blue);
+    }
+    table.table-red th {
+      background: var(--red-light);
+      color: var(--red);
+      border-bottom-color: var(--red);
+    }
+    table.table-teal th {
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      border-bottom-color: var(--teal);
+    }
+
+    /* .table-wrap — narrow-viewport safety net. Tables wider than the
+       content box would otherwise force the whole page to scroll
+       horizontally (measured: at 375px viewport the sample .table-blue
+       is ~471px inside a ~335px content box). Wrapping the table in
+       .table-wrap gives it its own overflow-x scroll container so
+       tables stay usable via local scroll and documentElement never
+       exceeds innerWidth. `.table-wrap table` resets margin so the
+       wrap contributes the spacing above/below. */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .table-wrap table { margin: 0; }
+
+    /* Pills — inline status/verdict chips for table cells.
+       Six variants matching the callout palette. */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill.ok    { background: var(--green-light);  color: var(--green); }
+    .pill.info  { background: var(--blue-light);   color: var(--blue-dark); }
+    .pill.warn  { background: var(--red-light);    color: var(--red); }
+    .pill.alt   { background: var(--teal-light);   color: var(--teal-dark); }
+    .pill.data  { background: var(--purple-light); color: var(--purple); }
+    .pill.na    { background: var(--gray-100);     color: var(--gray-600); }
+
+    /* Table of contents — white card, blue left-border,
+       compact type. Delete the whole .toc if the doc has
+       fewer than four sections. */
+    .toc {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 0.9rem 1.4rem;
+      margin: 1rem 0 2rem;
+      font-size: 0.88rem;
+    }
+    .toc h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--blue-dark);
+      font-weight: 700;
+    }
+    .toc ol { margin: 0; padding-left: 1.25rem; line-height: 1.75; }
+    .toc a { color: var(--gray-700); }
+    .toc a:hover { color: var(--blue-dark); }
+
+    /* Figure — hand-authored SVG (or image) wrapped in a
+       white card with a centered italic caption. Reach for
+       .figure when the visual is non-linear (a diagram
+       with topology, an image, a two-panel comparison).
+       For a linear stage-sequence, prefer the .diagram
+       component below. */
+    .figure {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+    .figure svg {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+    }
+    .figure .caption {
+      font-size: 0.78rem;
+      color: var(--gray-600);
+      margin-top: 0.75rem;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Steps — CSS counter numbered list. Four variants:
+         default (teal)   routine step
+         .step-alt   (blue)   branch / alt path
+         .step-warn  (red)    warning / rollback step
+         .step-done  (green)  terminal / done state */
+    .steps { counter-reset: step; padding-left: 0; list-style: none; margin-left: 0; }
+    .steps > li {
+      counter-increment: step;
+      padding-left: 3rem;
+      position: relative;
+      margin-bottom: 1rem;
+      min-height: 2rem;
+    }
+    .steps > li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .steps > li.step-alt::before  { background: var(--blue); }
+    .steps > li.step-warn::before { background: var(--red); }
+    .steps > li.step-done::before { background: var(--green); }
+
+    /* Diagram — CSS-flexbox flowchart for stage sequences
+       that do not need hand-authored SVG. Node colors match
+       the callout palette; edges consume slack so nodes
+       distribute evenly. Overflow scrolls horizontally. */
+    .diagram {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+      min-width: min-content;
+    }
+    .diagram-node {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 8rem;
+      min-height: 3.5rem;
+      padding: 0.6rem 1rem;
+      border: 2px solid var(--teal);
+      border-radius: 6px;
+      background: var(--teal-light);
+      color: var(--teal-dark);
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .diagram-node.blue   { border-color: var(--blue);   background: var(--blue-light);   color: var(--blue-dark); }
+    .diagram-node.red    { border-color: var(--red);    background: var(--red-light);    color: var(--red); }
+    .diagram-node.amber  { border-color: var(--amber);  background: var(--amber-light);  color: var(--amber); }
+    .diagram-node.green  { border-color: var(--green);  background: var(--green-light);  color: var(--green); }
+    .diagram-node.purple { border-color: var(--purple); background: var(--purple-light); color: var(--purple); }
+    .diagram-node .kind {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray-600);
+      margin-top: 0.2rem;
+    }
+    .diagram-edge {
+      /* flex: 1 1 auto lets edges consume slack so nodes
+         distribute evenly; min-width keeps the arrow
+         legible when overflow scrolls. */
+      flex: 1 1 auto;
+      min-width: 2rem;
+      height: 2px;
+      background: var(--gray-400);
+      position: relative;
+      margin: 0 0.25rem;
+    }
+    .diagram-edge::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 6px solid var(--gray-400);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+    }
+    .diagram-edge.blue { background: var(--blue); }
+    .diagram-edge.blue::after { border-left-color: var(--blue); }
+    .diagram-edge.red  { background: var(--red); }
+    .diagram-edge.red::after  { border-left-color: var(--red); }
+    .diagram-edge-label {
+      position: absolute;
+      top: -1.1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      color: var(--gray-600);
+      white-space: nowrap;
+    }
+
+    /* Footer — small centered muted text with top-border. */
+    footer.doc-foot {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: center;
+    }
+    /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
+    /* Page-local: lead sentence, capability cards, a prompt card, and a
+       gallery of example visuals. */
+    .lede {
+      font-size: 1.3rem;
+      line-height: 1.5;
+      font-weight: 500;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      margin: 0.5rem 0 2.25rem;
+      max-width: 52rem;
+    }
+    .caps {
+      list-style: none;
+      margin: 1.25rem 0 0;
+      padding: 0;
+    }
+    .caps > li {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.9rem 1.15rem;
+      margin-bottom: 0.75rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .caps > li strong {
+      display: block;
+      color: var(--gray-900);
+      margin-bottom: 0.2rem;
+    }
+    .principle {
+      font-size: 1.15rem;
+      line-height: 1.5;
+      font-weight: 600;
+      color: var(--gray-900);
+      text-align: left;
+      hyphens: manual;
+      border-left: 4px solid var(--teal);
+      padding: 0.15rem 0 0.15rem 1rem;
+      margin: 0.25rem 0 1.25rem;
+      max-width: 52rem;
+    }
+    .ask {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-left: 4px solid var(--blue);
+      border-radius: 4px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .ask .pattern {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 0.6rem;
+    }
+    .ask ul { margin: 0.4rem 0 0 1.25rem; }
+    .ask li { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .sample {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 1rem 1.1rem 0.9rem;
+    }
+    .sample .q {
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 0.6rem;
+    }
+    .sample svg { display: block; width: 100%; height: auto; }
+    .sample .note {
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      margin: 0.6rem 0 0;
+      text-align: left;
+      hyphens: manual;
+    }
+    .sample table { margin: 0; font-size: 0.85rem; }
+    .sample th, .sample td { padding: 0.45rem 0.6rem; }
+  </style>
+</head>
+<body>
+
+<p class="lede">Gator can turn its understanding of your codebase into a clear, visual document for the people who decide what happens to it.</p>
+
+<section id="ask">
+  <h2>Ask for one</h2>
+  <p>Ask your agent for a Gator doc in plain words. Name the thing you want to understand.</p>
+  <div class="ask">
+    <div class="pattern">Create me a Gator doc for …</div>
+    <ul>
+      <li>Create me a Gator doc for how a commit is checked.</li>
+      <li>Create me a Gator doc for the payment service's retry logic.</li>
+      <li>Create me a Gator doc for our release procedure.</li>
+      <li>Create me a Gator doc for why we chose Postgres for the event store.</li>
+    </ul>
+  </div>
+  <p>The agent reads the repository's charters and the code, then writes one standalone HTML document. It is not a chat answer and not a dump of source code. It is an explanation written for a person, with pictures.</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="flow-title flow-desc">
+      <title id="flow-title">How a Gator doc is made</title>
+      <desc id="flow-desc">Four boxes from left to right, joined by arrows. "You ask: Create me a Gator doc for …". "The agent reads the charters and the code". "The agent writes one HTML document". "You review it in the Dashboard and in Git".</desc>
+      <rect x="10" y="30" width="150" height="84" rx="8" fill="white" stroke="#9ca3af" stroke-width="1.5"/>
+      <text x="85" y="62" font-size="14" fill="#111827" font-weight="700" text-anchor="middle">You ask</text>
+      <text x="85" y="84" font-size="11" fill="#4b5563" text-anchor="middle">“Create me a</text>
+      <text x="85" y="99" font-size="11" fill="#4b5563" text-anchor="middle">Gator doc for …”</text>
+      <rect x="195" y="30" width="150" height="84" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="270" y="62" font-size="14" fill="#148a92" font-weight="700" text-anchor="middle">Agent reads</text>
+      <text x="270" y="84" font-size="11" fill="#374151" text-anchor="middle">the charters</text>
+      <text x="270" y="99" font-size="11" fill="#374151" text-anchor="middle">and the code</text>
+      <rect x="380" y="30" width="150" height="84" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="1.8"/>
+      <text x="455" y="62" font-size="14" fill="#148a92" font-weight="700" text-anchor="middle">Agent writes</text>
+      <text x="455" y="84" font-size="11" fill="#374151" text-anchor="middle">one HTML document</text>
+      <text x="455" y="99" font-size="11" fill="#374151" text-anchor="middle">with diagrams</text>
+      <rect x="565" y="30" width="150" height="84" rx="8" fill="white" stroke="#2d8a4e" stroke-width="2.4"/>
+      <text x="640" y="62" font-size="14" fill="#2d8a4e" font-weight="700" text-anchor="middle">You review ✓</text>
+      <text x="640" y="84" font-size="11" fill="#374151" text-anchor="middle">in the Dashboard</text>
+      <text x="640" y="99" font-size="11" fill="#374151" text-anchor="middle">and in Git</text>
+      <line x1="162" y1="72" x2="186" y2="72" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="194,72 186,67 186,77" fill="#4b5563"/>
+      <line x1="347" y1="72" x2="371" y2="72" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="379,72 371,67 371,77" fill="#4b5563"/>
+      <line x1="532" y1="72" x2="556" y2="72" stroke="#4b5563" stroke-width="1.5"/>
+      <polygon points="564,72 556,67 556,77" fill="#4b5563"/>
+    </svg>
+    <div class="caption">Figure 1 — from a one-line request to a document you can read, review and keep.</div>
+  </div>
+</section>
+
+<section id="looks">
+  <h2>What a Gator doc looks like</h2>
+  <p class="principle">Pictures first, prose second. Every diagram is labelled, so it reads without relying on colour.</p>
+  <p>These are small examples of the visuals a Gator doc uses. A real document draws them from your own code.</p>
+
+  <div class="gallery">
+    <div class="sample">
+      <div class="q">How does a feature work?</div>
+      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg"
+           font-family="'Segoe UI', system-ui, sans-serif"
+           role="img" aria-labelledby="ex1-title">
+        <title id="ex1-title">Example flow: a commit is checked, then passes or is blocked</title>
+        <rect x="6" y="20" width="84" height="44" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+        <text x="48" y="47" font-size="12" fill="#1f2937" font-weight="600" text-anchor="middle">commit</text>
+        <rect x="118" y="20" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+        <text x="160" y="47" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">check</text>
+        <rect x="230" y="20" width="84" height="44" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.4"/>
+        <text x="272" y="47" font-size="12" fill="#2d8a4e" font-weight="700" text-anchor="middle">pass ✓</text>
+        <rect x="118" y="108" width="84" height="44" rx="6" fill="#fef2f2" stroke="#d94040" stroke-width="2.4"/>
+        <text x="160" y="135" font-size="12" fill="#d94040" font-weight="700" text-anchor="middle">BLOCKED</text>
+        <line x1="90" y1="42" x2="110" y2="42" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="117,42 110,38 110,46" fill="#4b5563"/>
+        <line x1="202" y1="42" x2="222" y2="42" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="229,42 222,38 222,46" fill="#4b5563"/>
+        <line x1="160" y1="64" x2="160" y2="100" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="160,107 156,100 164,100" fill="#4b5563"/>
+        <text x="168" y="88" font-size="10.5" fill="#4b5563">rule fails</text>
+      </svg>
+      <p class="note">A flow diagram: the steps, the branches, and what each one does.</p>
+    </div>
+
+    <div class="sample">
+      <div class="q">Where does the code live?</div>
+      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg"
+           font-family="'Segoe UI', system-ui, sans-serif"
+           role="img" aria-labelledby="ex2-title">
+        <title id="ex2-title">Example bar chart: lines of code by part of the system</title>
+        <text x="6" y="30" font-size="11.5" fill="#1f2937">Browser UI</text>
+        <rect x="104" y="18" width="170" height="16" rx="2" fill="#19aeb8"/>
+        <text x="280" y="31" font-size="10.5" fill="#4b5563">13.6k</text>
+        <text x="6" y="64" font-size="11.5" fill="#1f2937">Loop</text>
+        <rect x="104" y="52" width="121" height="16" rx="2" fill="#19aeb8"/>
+        <text x="231" y="65" font-size="10.5" fill="#4b5563">9.7k</text>
+        <text x="6" y="98" font-size="11.5" fill="#1f2937">Commit gate</text>
+        <rect x="104" y="86" width="51" height="16" rx="2" fill="#19aeb8"/>
+        <text x="161" y="99" font-size="10.5" fill="#4b5563">4.1k</text>
+        <text x="6" y="132" font-size="11.5" fill="#1f2937">Core library</text>
+        <rect x="104" y="120" width="27" height="16" rx="2" fill="#19aeb8"/>
+        <text x="137" y="133" font-size="10.5" fill="#4b5563">2.2k</text>
+        <text x="104" y="160" font-size="10" fill="#6b7280">thousand lines</text>
+      </svg>
+      <p class="note">A chart: the size and shape of the system, labelled with the real paths.</p>
+    </div>
+
+    <div class="sample">
+      <div class="q">What does this process do?</div>
+      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg"
+           font-family="'Segoe UI', system-ui, sans-serif"
+           role="img" aria-labelledby="ex3-title">
+        <title id="ex3-title">Example stage diagram: draft, review, approved, with a revision loop</title>
+        <rect x="6" y="20" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+        <text x="48" y="47" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Draft</text>
+        <rect x="118" y="20" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+        <text x="160" y="47" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Review</text>
+        <rect x="230" y="20" width="84" height="44" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.4"/>
+        <text x="272" y="47" font-size="12" fill="#2d8a4e" font-weight="700" text-anchor="middle">Approved ✓</text>
+        <rect x="118" y="108" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+        <text x="160" y="135" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Revise</text>
+        <line x1="90" y1="42" x2="110" y2="42" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="117,42 110,38 110,46" fill="#4b5563"/>
+        <line x1="202" y1="42" x2="222" y2="42" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="229,42 222,38 222,46" fill="#4b5563"/>
+        <line x1="145" y1="64" x2="145" y2="100" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="145,107 141,100 149,100" fill="#4b5563"/>
+        <line x1="175" y1="107" x2="175" y2="71" stroke="#4b5563" stroke-width="1.4"/>
+        <polygon points="175,64 171,71 179,71" fill="#4b5563"/>
+        <text x="138" y="88" font-size="10.5" fill="#4b5563" text-anchor="end">changes</text>
+        <text x="183" y="88" font-size="10.5" fill="#4b5563">again</text>
+      </svg>
+      <p class="note">A stage diagram: the states a process moves through, and why.</p>
+    </div>
+
+    <div class="sample">
+      <div class="q">Why was this decided?</div>
+      <div class="table-wrap">
+        <table class="table-blue">
+          <thead><tr><th>Option</th><th>Trade-off</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>Postgres</td><td>One store we already run</td><td><span class="pill ok">Chosen</span></td></tr>
+            <tr><td>DynamoDB</td><td>New service to operate</td><td><span class="pill na">Rejected</span></td></tr>
+            <tr><td>Files in Git</td><td>No query support</td><td><span class="pill na">Rejected</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">A comparison: the options, the trade-offs, and the choice, with the reason in words.</p>
+    </div>
+  </div>
+
+  <ul class="caps">
+    <li><strong>Diagrams with labelled relationships.</strong> Every box and every arrow says what it is. Meaning never depends on colour alone.</li>
+    <li><strong>Readable prose.</strong> Short, direct sentences explain what the pictures show and why it matters.</li>
+    <li><strong>Linked to the source.</strong> The document names the files, folders and charters behind each part, so a reader can check it against the code.</li>
+  </ul>
+</section>
+
+<section id="keep">
+  <h2>It lives with the code</h2>
+  <p class="principle">A Gator doc is a file in your repository, not a message that scrolls away.</p>
+  <ul class="caps">
+    <li><strong>Reviewed and versioned in Git.</strong> The document is committed like any other change. You can see who changed it, when, and why.</li>
+    <li><strong>Opens in the Dashboard.</strong> Select the file in the repository view to read it. It is a standalone page, so you can also share it with a colleague.</li>
+    <li><strong>Kept beside what it explains.</strong> When the code changes, ask the agent to update the document in the same piece of work.</li>
+  </ul>
+</section>
+
+<footer class="doc-foot">
+  &copy; 2026 Cumberland Laboratories, Inc.
+</footer>
+
+</body>
+</html>

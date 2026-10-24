@@ -1,18 +1,18 @@
 """Welcome workspace Playwright pins (#72; Welcome HTML documents).
 
-The Gator logo opens a repository-independent Welcome view with four
+The Gator logo opens a repository-independent Welcome view with six
 ARIA topics in the shared main-pane tab bar. Each topic body is a shipped
 standalone HTML document in an iframe sandboxed exactly "allow-scripts".
 
 Each test proves a distinct risk:
 
 - routing from Fleet / Repo / Loop without touching repository context,
-  with only the four allowlisted document GETs as requests;
+  with only the six allowlisted document GETs as requests;
 - the ARIA tab contract, keyboard, selected-state styling and the
   full-width bar;
 - frames that are lazy, persistent (no reload on revisit) and exactly
   sandboxed, with no document markup in the Dashboard DOM;
-- the closed four-name route: exact headers and bodies, everything else
+- the closed route: exact headers and bodies, everything else
   404;
 - snapshot frames: srcdoc, the same sandbox, the injected CSP meta;
 - the narrow-width layout;
@@ -37,17 +37,21 @@ SESSION_PROMPT = (
     "those reads are complete."
 )
 
-TOPICS = ["session", "overview", "can", "gatorize"]
+TOPICS = ["session", "overview", "can", "docs", "loop", "gatorize"]
 DEFAULT = TOPICS[0]  # the first tab is the default (2026-10-15)
 LABELS = {
     "overview": "Gator overview",
     "can": "What Gator can do",
+    "docs": "Gator docs",
+    "loop": "Gator loop",
     "gatorize": "Gatorize a repo",
     "session": "Start a session with Gator",
 }
 DOC_NAMES = {
     "overview": "gator-overview.html",
     "can": "what-gator-can-do.html",
+    "docs": "gator-docs.html",
+    "loop": "gator-loop.html",
     "gatorize": "gatorize-a-repo.html",
     "session": "start-a-session.html",
 }
@@ -148,7 +152,7 @@ def test_navigation_before_data_load_is_not_replaced_by_welcome(
 @pytest.mark.parametrize("start", ["fleet", "repo", "loop"])
 def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     """The logo opens Welcome from any view; repository context is
-    untouched, and visiting every topic requests only the four allowlisted
+    untouched, and visiting every topic requests only the six allowlisted
     documents, once each, all GET."""
     origin = _origin(dashboard_fleet)
     if start == "fleet":
@@ -173,14 +177,15 @@ def test_logo_opens_welcome_without_repo_mutation(page, dashboard_fleet, start):
     for topic in TOPICS:
         page.click("#welcome-tab-" + topic)
     page.wait_for_function(
-        "() => document.querySelectorAll('iframe.welcome-frame').length === 4",
+        "(n) => document.querySelectorAll('iframe.welcome-frame').length === n",
+        arg=len(TOPICS),
         timeout=5000)
     page.wait_for_load_state("load")
 
     assert _repo_context(page) == before
     api = [u for _, u in requests if "/api/" in u]
     assert sorted(_doc_requests(api)) == sorted(DOC_NAMES.values())
-    assert len(api) == 4
+    assert len(api) == len(TOPICS)
     assert all(m == "GET" for m, _ in requests)
 
 
@@ -200,8 +205,8 @@ def test_welcome_tabs_aria_and_keyboard(page, dashboard_fleet):
         assert t["tabindex"] == ("0" if selected else "-1")
         assert t["panelHidden"] is (not selected)
 
-    page.click("#welcome-tab-can")
-    assert _selected(page) == ["can"]
+    page.click("#welcome-tab-loop")
+    assert _selected(page) == ["loop"]
     page.keyboard.press("ArrowRight")
     assert _selected(page) == ["gatorize"]
     assert page.evaluate("() => document.activeElement.id") == "welcome-tab-gatorize"
@@ -260,7 +265,7 @@ def test_welcome_narrow_width(page, dashboard_fleet):
                     size: getComputedStyle(t).fontSize};
         })""")
     width = page.evaluate("() => document.documentElement.clientWidth")
-    assert len(rects) == 4
+    assert len(rects) == len(TOPICS)
     for r in rects:
         assert r["left"] >= 0 and r["right"] <= width + 0.5
         assert r["scroll"] <= r["client"] + 1  # label not clipped
@@ -388,7 +393,7 @@ def test_welcome_frame_fills_to_bottom_padding(page, dashboard_fleet, viewport):
 
 
 @pytest.mark.parametrize("key", TOPICS)
-def test_welcome_route_serves_the_four(page, dashboard_fleet, key):
+def test_welcome_route_serves_each_topic(page, dashboard_fleet, key):
     """Each allowlisted name returns its shipped document as HTML with the
     fixed sandboxing CSP and nosniff; a query string selects nothing."""
     base = _origin(dashboard_fleet).rstrip("/")

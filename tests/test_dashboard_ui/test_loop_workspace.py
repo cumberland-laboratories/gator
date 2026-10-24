@@ -415,17 +415,19 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     """Navigating away while the Loop entry point's initial fetch is
     in flight must not resurrect the timer or _gatorRepoTeardown.
     Hold the loops list response, navigate to Repo, release it, then
-    verify no Loop API polling occurs afterward."""
-    import threading
+    verify no Loop API polling occurs afterward.
 
+    #97: the hold does not block. The handler only keeps the route, and the
+    test answers it after leaving Loop, so the departure really happens
+    while the first list is pending. (The old handler blocked on
+    gate.wait(timeout=10), which also blocked Playwright's dispatch, so the
+    list was answered before the departure except under CI load.)"""
     origin = dashboard_fleet["url"].rstrip("/") + "/"
     page.goto(origin + "?repo=alpha", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
 
-    # Diagnostics for an intermittent CI failure (2026-10-23: 3 requests
-    # after the departed mount, on Windows and Ubuntu, never reproduced
-    # locally). Every repo-by-key request is logged with its time and the
-    # test phase, so a failure shows what was called and when.
+    # Every repo-by-key request is logged with its time and the test phase,
+    # so a failure shows what was called and when (#97).
     import time
     t0 = time.monotonic()
     phase = ["mount"]
@@ -435,25 +437,17 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
         f"{req.url.split('/api/repo-by-key/', 1)[-1]}")
         if "/api/repo-by-key/" in req.url else None)
 
-    gate = threading.Event()
-
-    def _hold(route):
-        gate.wait(timeout=10)
-        route.fulfill(
-            status=200,
-            content_type="application/json",
-            body='{"loops":[]}',
-        )
-
-    page.route("**/api/repo-by-key/*/loops", _hold)
+    held = []
+    page.route("**/api/repo-by-key/*/loops", lambda route: held.append(route))
 
     page.evaluate(
         "() => document.querySelector("
         "'.sidebar-item[data-view=\"loop\"]').click()"
     )
-    # The Loop view has mounted. Do not wait for data-loaded here: the held
-    # /loops response can only land after the hold, which races the wait.
+    # The Loop view has mounted and its first list is held (unanswered).
     page.wait_for_selector("#loop-sidebar-nav", state="attached", timeout=10000)
+    page.wait_for_function("() => true")      # let the held route arrive
+    assert len(held) == 1, f"expected the first list to be held: {trace}"
     phase[0] = "left-loop"
 
     page.evaluate(
@@ -462,8 +456,9 @@ def test_departed_mount_does_not_resurrect_polling(page, dashboard_fleet):
     )
     page.wait_for_selector(".repo-file-item", timeout=15000)
 
-    phase[0] = "gate-released"
-    gate.set()
+    phase[0] = "list-answered"
+    held[0].fulfill(status=200, content_type="application/json",
+                    body='{"loops":[]}')
     page.wait_for_timeout(1500)
 
     page.unroute("**/api/repo-by-key/*/loops")
@@ -3705,7 +3700,7 @@ def test_loop_subnav_tabs(page, dashboard_fleet):
     st = _tab_state(page)
     assert st["tablist"]
     assert st["bodyRole"] == "tabpanel"
-    assert st["controls"] == ["loop-tabpanel", "loop-tabpanel"]
+    assert st["controls"] == ["loop-tabpanel", "loop-tabpanel", "loop-help-panel"]
     assert st["create"] == {"selected": "true", "tabindex": "0",
                             "text": "Active", "primary": "active"}
     assert st["history"] == {"selected": "false", "tabindex": "-1",
@@ -3725,8 +3720,8 @@ def test_loop_subnav_tabs(page, dashboard_fleet):
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
     page.keyboard.press("Home")
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
-    page.keyboard.press("End")
-    assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
+    page.keyboard.press("End")  # Help is last
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-help"
     page.keyboard.press("ArrowRight")  # wraps
     assert page.evaluate("() => document.activeElement.id") == "loop-tab-create"
     st = _tab_state(page)
@@ -3849,6 +3844,107 @@ def test_loop_tabs_inert_until_loops_load(page, dashboard_fleet):
     st = _tab_state(page)
     assert st["create"]["selected"] == "true" and st["create"]["text"] == "Active"
     assert st["history"]["selected"] == "false"
+    assert page.evaluate("() => history.length") == length
+
+
+def _help_state(page):
+    return page.evaluate("""() => {
+        var help = document.getElementById('loop-help-panel');
+        var body = document.getElementById('loop-tabpanel');
+        var frames = help ? help.querySelectorAll('iframe') : [];
+        var f = frames[0];
+        var ws = document.querySelector('.loop-workspace');
+        return {
+            role: help && help.getAttribute('role'),
+            labelledBy: help && help.getAttribute('aria-labelledby'),
+            helpHidden: help ? help.hidden : null,
+            helpDisplay: help ? getComputedStyle(help).display : null,
+            bodyHidden: body ? body.hidden : null,
+            bodyDisplay: body ? getComputedStyle(body).display : null,
+            frames: frames.length,
+            sandbox: f ? f.getAttribute('sandbox') : null,
+            src: f ? f.getAttribute('src') : null,
+            title: f ? f.title : null,
+            polling: ws ? ws.dataset.polling : null,
+            historyLength: history.length,
+        };
+    }""")
+
+
+def test_loop_help_tab_shows_shared_document(page, dashboard_fleet):
+    """Help (2026-10-24) shows the shipped gator-loop.html, the same
+    document as Welcome's "Gator loop" topic, in a frame sandboxed exactly
+    allow-scripts. The workspace body is hidden, not removed: the live loop,
+    polling and shell history are untouched, and returning to Active shows
+    the same workspace without a reload or a history entry."""
+    _navigate_to_loop(page, dashboard_fleet)
+    _wait_header(page, "widget-refactor")
+    before = _help_state(page)
+    assert before["role"] == "tabpanel" and before["labelledBy"] == "loop-tab-help"
+    assert before["helpHidden"] is True and before["helpDisplay"] == "none"
+    assert before["frames"] == 0  # created lazily on first selection
+    header = page.evaluate_handle("() => document.querySelector('.loop-status-header')")
+
+    page.click("#loop-tab-help")
+    st = _tab_state(page)
+    assert st["help"]["selected"] == "true" and st["help"]["tabindex"] == "0"
+    assert st["create"]["selected"] == "false" and st["history"]["selected"] == "false"
+    h = _help_state(page)
+    assert h["helpHidden"] is False and h["helpDisplay"] != "none"
+    assert h["bodyHidden"] is True and h["bodyDisplay"] == "none"
+    assert h["frames"] == 1
+    assert h["sandbox"] == "allow-scripts"
+    assert h["src"] == "/api/welcome/docs/gator-loop.html"
+    assert h["title"] == "Gator loop help"
+    assert h["polling"] == before["polling"]
+    assert h["historyLength"] == before["historyLength"]
+    lede = page.frame_locator(".loop-help-frame").locator("p.lede")
+    assert "A Loop gives you" in lede.inner_text(timeout=10000)
+
+    page.click("#loop-tab-help")  # re-selecting keeps the one frame
+    assert _help_state(page)["frames"] == 1
+
+    page.click("#loop-tab-create")
+    st = _tab_state(page)
+    assert st["create"]["selected"] == "true" and st["help"]["selected"] == "false"
+    back = _help_state(page)
+    assert back["helpHidden"] is True and back["bodyHidden"] is False
+    assert back["frames"] == 1  # kept for the rest of the mount
+    assert back["historyLength"] == before["historyLength"]
+    assert page.evaluate(
+        "(h) => h.isConnected && h === document.querySelector('.loop-status-header')",
+        header)
+    _wait_header(page, "widget-refactor")
+
+    # Keyboard: End selects Help; ArrowLeft returns to History.
+    page.focus("#loop-tab-create")
+    page.keyboard.press("End")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-help"
+    assert _help_state(page)["helpHidden"] is False
+    page.keyboard.press("ArrowLeft")
+    assert page.evaluate("() => document.activeElement.id") == "loop-tab-history"
+    st = _tab_state(page)
+    assert st["history"]["selected"] == "true" and st["sidebarHidden"] is False
+    assert _help_state(page)["bodyHidden"] is False
+
+
+def test_loop_help_keeps_half_filled_form(page, dashboard_fleet):
+    """With no active loop, a Help visit keeps a half-filled Create form and
+    adds no history entry."""
+    origin = dashboard_fleet["url"].rstrip("/") + "/"
+    page.goto(origin + "?repo=beta", wait_until="load")
+    page.wait_for_selector(".repo-file-item", timeout=15000)
+    _click_nav(page, "loop")
+    page.wait_for_selector("#loop-feature-input", timeout=10000)
+    page.fill("#loop-feature-input", "half-filled-feature")
+    length = page.evaluate("() => history.length")
+    page.click("#loop-tab-help")
+    assert _help_state(page)["bodyHidden"] is True
+    assert "A Loop gives you" in page.frame_locator(".loop-help-frame").locator(
+        "p.lede").inner_text(timeout=10000)
+    page.click("#loop-tab-create")
+    assert _tab_state(page)["create"]["selected"] == "true"
+    assert page.input_value("#loop-feature-input") == "half-filled-feature"
     assert page.evaluate("() => history.length") == length
 
 

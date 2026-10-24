@@ -2425,6 +2425,35 @@ mark.search-hit {
   min-height: 0;
 }
 
+/* Help tab (2026-10-24): the body is hidden, not removed, while Help shows.
+   The explicit [hidden] rule is required because display:flex above would
+   otherwise override the hidden attribute. */
+.loop-workspace-body[hidden],
+.loop-help-panel[hidden] { display: none; }
+.loop-help-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 0 0;
+}
+.loop-help-panel:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 4px;
+}
+.loop-help-frame {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  border: 0;
+  background: #fff;
+}
+.loop-help-status {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 /* The list pane holds History only; it is hidden on the Primary tab
    (Create / Active), so .loop-main fills the body with no blank column. */
 .loop-sidebar[hidden] { display: none; }

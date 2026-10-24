@@ -29,6 +29,8 @@ WELCOME_DOC_NAMES = frozenset({
     "what-gator-can-do.html",
     "gatorize-a-repo.html",
     "start-a-session.html",
+    "gator-docs.html",
+    "gator-loop.html",
     "charter-formation-process.html",
     "charter-schema-v1.html",
     "code-migrations.html",

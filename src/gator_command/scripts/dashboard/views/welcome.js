@@ -5,7 +5,7 @@
  * body is a shipped, standalone HTML document shown in an iframe.
  *
  * Contract:
- *   - Requests: only GET /api/welcome/docs/<name> for the four allowlisted
+ *   - Requests: only GET /api/welcome/docs/<name> for the six allowlisted
  *     documents, each loaded lazily on its topic's first selection in a
  *     mount (a snapshot assigns window.GATOR_WELCOME_DOCS[name] to
  *     iframe.srcdoc instead). No storage, no console output, no history
@@ -37,6 +37,9 @@
     { key: "session",  label: "Start a session with Gator", doc: "start-a-session.html" },
     { key: "overview", label: "Gator overview",             doc: "gator-overview.html" },
     { key: "can",      label: "What Gator can do",          doc: "what-gator-can-do.html" },
+    { key: "docs",     label: "Gator docs",                 doc: "gator-docs.html" },
+    // Also the Loop workspace's Help tab (views/loop.js LOOP_HELP_DOC).
+    { key: "loop",     label: "Gator loop",                 doc: "gator-loop.html" },
     { key: "gatorize", label: "Gatorize a repo",            doc: "gatorize-a-repo.html" },
   ];
 

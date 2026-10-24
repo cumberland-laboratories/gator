@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Tests: trace requests in the departed-mount polling test",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "tests",
+    "dashboard",
+    "loop",
+    "ci-flake"
+  ],
+  "commit": "2a62ba8215eddd7f44a2b0f89763ef8219c01873",
+  "short_commit": "2a62ba8",
+  "snippet_id": "snippet-2a62ba8215edd",
+  "session_group_key": "anthropic:5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "9b5f2eeb2db30f1e37f41ce9862938dfcaa8e438",
+  "started_at": "2026-10-23T16:16:38Z",
+  "ended_at": "2026-10-23T23:54:36Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-10-23-gator-9b5f2eeb2db30.json",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "The departed-mount polling test now records every repository Loop request with its time and the test phase (mount, left Loop, gate released, counting), and prints that trace and the page state when it fails. It failed intermittently in CI on 2026-10-23, on Windows and Ubuntu, with 3 unexpected requests, and could not be reproduced locally. The behaviour it checks is unchanged; this only makes the next failure explain itself. A local trace already shows that the test's blocking 10-second hold resolves the Loop list before the test leaves the Loop view, so the test may not exercise the race it describes."
+  ],
+  "transcript_session_id": "5fda966c-49ee-4850-9f3c-e7ae368f3d63",
+  "transcript_ref": null
+}

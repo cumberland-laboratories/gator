@@ -167,6 +167,7 @@
     promptEpoch: 0,        // incremented on terminal — invalidates in-flight copies
     loops: [],             // cached loop list
     render: null,          // incremental-render snapshot for the selected loop (#38)
+    help: false,           // Help tab shown over the body (never persisted)
   };
 
   // ── teardown ───────────────────────────────────────────────────────────────
@@ -187,6 +188,7 @@
     _state.landing = false;
     _state.loops = [];
     _state.render = null;
+    _state.help = false;
     var ws = _state.container && _state.container.querySelector(".loop-workspace");
     if (ws) ws.dataset.polling = "0";
     window._gatorRepoTeardown = null;
@@ -683,7 +685,17 @@
   // the main pane takes the full width. Selection is shown by
   // aria-selected plus weight and underline, never colour alone.
 
-  var LOOP_TABS = ["create", "history"];
+  var LOOP_TABS = ["create", "history", "help"];
+
+  // Help (2026-10-24) shows the shipped Welcome "Gator loop" document. It is
+  // static: no loop state, no messages, no effect on polling. It is not a
+  // view in the persisted sub-state (`view` stays create|history), so a
+  // Help visit never enters shell history.
+  var LOOP_HELP_DOC = "gator-loop.html";
+
+  function currentTab() {
+    return _state.help ? "help" : _state.view;
+  }
 
   function buildLoopTabs(container) {
     var bar = container.querySelector("#loop-tabbar");
@@ -698,6 +710,9 @@
       + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-history" '
       +   'data-tab="history" aria-selected="false" tabindex="-1" '
       +   'aria-controls="loop-tabpanel">History</button>'
+      + '<button type="button" class="gator-tab loop-subnav-tab" role="tab" id="loop-tab-help" '
+      +   'data-tab="help" aria-selected="false" tabindex="-1" '
+      +   'aria-controls="loop-help-panel">Help</button>'
       + '</div>';
     var tablist = bar.querySelector(".loop-subnav");
     tablist.addEventListener("click", function (e) {
@@ -705,7 +720,7 @@
       if (tab) switchTab(tab.dataset.tab, false);
     });
     tablist.addEventListener("keydown", function (e) {
-      var idx = LOOP_TABS.indexOf(_state.view);
+      var idx = LOOP_TABS.indexOf(currentTab());
       var next = null;
       if (e.key === "ArrowRight") next = LOOP_TABS[(idx + 1) % LOOP_TABS.length];
       else if (e.key === "ArrowLeft") next = LOOP_TABS[(idx - 1 + LOOP_TABS.length) % LOOP_TABS.length];
@@ -732,8 +747,9 @@
   // Attributes are written only when they differ (polls stay quiet).
   function applyTabState(root) {
     if (!root) return;
+    var current = currentTab();
     LOOP_TABS.forEach(function (name) {
-      var selected = name === _state.view;
+      var selected = name === current;
       var tab = root.querySelector("#loop-tab-" + name);
       if (!tab) return;
       var sel = selected ? "true" : "false";
@@ -749,6 +765,36 @@
     var side = root.querySelector("#loop-sidebar-nav");
     var hide = _state.view !== "history";
     if (side && side.hidden !== hide) side.hidden = hide;
+    // Help hides the body without removing it, so the Create form, a
+    // selected loop and its regions survive the visit.
+    if (body && body.hidden !== _state.help) body.hidden = _state.help;
+    var help = root.querySelector("#loop-help-panel");
+    if (help && help.hidden !== !_state.help) help.hidden = !_state.help;
+  }
+
+  // Creates the Help frame once per mount (the panel is rebuilt per mount).
+  // Same document, route and sandbox as Welcome's "Gator loop" topic.
+  function ensureHelpFrame(container) {
+    var panel = container.querySelector("#loop-help-panel");
+    if (!panel || panel.firstChild) return;
+    var text = null;
+    if (window.GATOR_SNAPSHOT) {
+      text = (window.GATOR_WELCOME_DOCS || {})[LOOP_HELP_DOC];
+      if (typeof text !== "string") {
+        var note = document.createElement("p");
+        note.className = "loop-help-status";
+        note.textContent = "The Gator loop help is not included in this snapshot.";
+        panel.appendChild(note);
+        return;
+      }
+    }
+    var frame = document.createElement("iframe");
+    frame.className = "loop-help-frame";
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.title = "Gator loop help";
+    if (window.GATOR_SNAPSHOT) frame.srcdoc = text;
+    else frame.src = "/api/welcome/docs/" + LOOP_HELP_DOC;
+    panel.appendChild(frame);
   }
 
   function isLoaded(container) {
@@ -762,11 +808,30 @@
   function switchTab(name, fromKeyboard) {
     var container = _state.container;
     if (!container || LOOP_TABS.indexOf(name) === -1) return;
+    // Help needs no loop list and never pushes, so it works before the
+    // first list has landed and leaves view, selection and polling alone.
+    if (name === "help") {
+      if (!_state.help) {
+        _state.help = true;
+        ensureHelpFrame(container);
+        applyTabState(container);
+      }
+      if (fromKeyboard) {
+        var helpTab = container.querySelector("#loop-tab-help");
+        if (helpTab) helpTab.focus();
+      }
+      return;
+    }
+    var leftHelp = _state.help;
+    _state.help = false;
     // #72: the bar exists from mount, but the tabs stay inert until the
     // first /loops response has landed; before that, _state may still
     // hold the previous mount's selection and a push would land ahead of
     // the mount's landing shellReplace().
-    if (!isLoaded(container)) return;
+    if (!isLoaded(container)) {
+      if (leftHelp) applyTabState(container);
+      return;
+    }
     var changed = name !== _state.view;
     _state.view = name;
     var decision = name === "create"
@@ -4372,12 +4437,17 @@
       +   '<div class="muted" style="padding:24px;text-align:center;">Loading…</div>'
       + '</div>'
       + '</div>'
+      + '<div class="loop-help-panel" id="loop-help-panel" role="tabpanel" '
+      +   'aria-labelledby="loop-tab-help" tabindex="0" hidden></div>'
       + '</div>';
     buildLoopTabs(container);
+    // Installed BEFORE the first list is awaited (#97): leaving Loop while
+    // that list is in flight must run this teardown, which bumps mountId so
+    // the late list is dropped below and no poll timer starts.
+    window._gatorRepoTeardown = teardownLoopView;
 
     var loops = await fetchLoops();
     if (myMount !== _state.mountId) return;
-    window._gatorRepoTeardown = teardownLoopView;
 
     if (loops === null) {
       // pollLoop() retries the landing (retryLanding) with this sub-state.
@@ -4404,7 +4474,10 @@
       _state.pendingSub = sub || null;
       return;
     }
+    // Back/Forward shows the recorded tab, so it leaves Help.
+    _state.help = false;
     if (!applySub(sub, _state.loops)) applyDefaultSelection(_state.loops);
+    applyTabState(container);
     _state.generation++;
     renderHistoryList(_state.loops, container);
     if (_state.mode === "inspect") {

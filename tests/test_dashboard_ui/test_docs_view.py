@@ -15,6 +15,8 @@ EXPECTED = [
     ("what-gator-can-do.html", "What Gator can do"),
     ("gatorize-a-repo.html", "Gatorize a repo"),
     ("start-a-session.html", "Start a session"),
+    ("gator-docs.html", "Asking for a Gator doc"),
+    ("gator-loop.html", "Gator loop"),
     ("charter-formation-process.html", "Charter formation process"),
     ("charter-schema-v1.html", "Charter schema"),
     ("code-migrations.html", "Code migrations"),

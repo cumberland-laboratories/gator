@@ -36,6 +36,8 @@ NAMES = [
     "what-gator-can-do.html",
     "gatorize-a-repo.html",
     "start-a-session.html",
+    "gator-docs.html",
+    "gator-loop.html",
 ]
 
 # Documents already in the Welcome format, with the element that opens each.
@@ -44,6 +46,8 @@ WELCOME_FORMAT = {
     "what-gator-can-do.html": '<p class="lede">',
     "gatorize-a-repo.html": '<p class="lede">',
     "start-a-session.html": '<section id="prompt">',
+    "gator-docs.html": '<p class="lede">',
+    "gator-loop.html": '<p class="lede">',
     "charter-formation-process.html": '<p class="lede">',
     "charter-schema-v1.html": '<p class="lede">',
     "code-migrations.html": '<p class="lede">',

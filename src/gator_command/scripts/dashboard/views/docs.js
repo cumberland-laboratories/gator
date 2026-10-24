@@ -27,6 +27,10 @@
     { doc: "what-gator-can-do.html",          label: "What Gator can do" },
     { doc: "gatorize-a-repo.html",            label: "Gatorize a repo" },
     { doc: "start-a-session.html",            label: "Start a session" },
+    // Labelled as the capability (asking an agent for a Gator doc), so it is
+    // not mistaken for a description of this Docs library.
+    { doc: "gator-docs.html",                 label: "Asking for a Gator doc" },
+    { doc: "gator-loop.html",                 label: "Gator loop" },
     { doc: "charter-formation-process.html",  label: "Charter formation process" },
     { doc: "charter-schema-v1.html",          label: "Charter schema" },
     { doc: "code-migrations.html",            label: "Code migrations" },
