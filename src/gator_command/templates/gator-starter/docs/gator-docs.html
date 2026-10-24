@@ -627,6 +627,15 @@
       hyphens: manual;
       margin: 0;
     }
+    .wide-figure {
+      overflow-x: auto;
+      margin: 0 0 1rem;
+    }
+    .example .wide-figure svg {
+      max-width: none;
+      min-width: 860px;
+      margin: 0;
+    }
     .trait {
       background: var(--teal-light);
       border-left: 3px solid var(--teal);
@@ -956,64 +965,136 @@
     <div class="trait"><strong>Made for working with other architects.</strong> The proposal is a standalone page. Open it in the Dashboard, or send it to the platform team before the meeting. Their comments go back to the agent, which revises the document. When the team agrees, the document becomes the plan.</div>
   </div>
 
-  <!-- Example 6: the whole system ──────────────────────────── -->
+  <!-- Example 6: network and security boundaries ──────────────────────────── -->
   <div class="example" id="ex-system">
-    <div class="ex-label">Example 6 · Draw the whole system</div>
-    <h3>Suppose the store's engineering lead needs one picture of the whole system, code and infrastructure, for a security review.</h3>
-    <div class="request">Create me a Gator doc for our whole system, code and infrastructure.</div>
-    <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg"
+    <div class="ex-label">Example 6 · Draw the network and its security boundaries</div>
+    <h3>Suppose the store's security team must show a PCI DSS auditor how card data moves through the system, and where every security boundary is.</h3>
+    <div class="request">Create me a Gator doc for how card data flows through our network, with every security boundary, for the PCI audit.</div>
+    <div class="wide-figure">
+    <svg viewBox="0 0 1000 585" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
          role="img" aria-labelledby="ex6-title ex6-desc">
-      <title id="ex6-title">System diagram: browsers, the production network, services, data stores and the code behind each</title>
-      <desc id="ex6-desc">Customers' browsers, outside the production network, load pages from the "CDN" and send API calls to the "Load balancer". Inside the dashed boundary "Production network": the load balancer sends requests to the "API service"; the API service reads and writes "Postgres" and puts jobs on the "Job queue"; "Workers" take jobs from the queue. Each box names the folder or file that defines it.</desc>
-      <rect x="160" y="8" width="592" height="314" rx="10" fill="none" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="8 5"/>
-      <text x="176" y="30" font-size="12" fill="#1f2937" font-weight="700">Production network</text>
-      <text x="320" y="30" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace">infra/network.tf</text>
-
-      <rect x="10" y="128" width="125" height="70" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
-      <text x="72" y="158" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Customers'</text>
-      <text x="72" y="176" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">browsers</text>
-
-      <rect x="185" y="50" width="140" height="66" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
-      <text x="255" y="77" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">CDN</text>
-      <text x="255" y="97" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">web/ (static build)</text>
-      <rect x="185" y="215" width="140" height="66" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
-      <text x="255" y="242" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Load balancer</text>
-      <text x="255" y="262" font-size="11" fill="#4b5563" text-anchor="middle">HTTPS ends here</text>
-
-      <rect x="365" y="215" width="150" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-      <text x="440" y="242" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">API service</text>
-      <text x="440" y="262" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">services/api/</text>
-
-      <rect x="570" y="45" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-      <text x="652" y="72" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Postgres</text>
-      <text x="652" y="92" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">infra/db.tf</text>
-      <rect x="570" y="140" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-      <text x="652" y="167" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Job queue</text>
-      <text x="652" y="187" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">infra/queue.tf</text>
-      <rect x="570" y="240" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-      <text x="652" y="267" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Workers</text>
-      <text x="652" y="287" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">workers/</text>
-
-      <polyline points="135,150 160,150 160,83 177,83" fill="none" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="184,83 177,79 177,87" fill="#4b5563"/>
-      <text x="166" y="140" font-size="10.5" fill="#4b5563">pages</text>
-      <polyline points="135,178 160,178 160,248 177,248" fill="none" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="184,248 177,244 177,252" fill="#4b5563"/>
-      <text x="166" y="200" font-size="10.5" fill="#4b5563">API calls</text>
-      <line x1="325" y1="248" x2="357" y2="248" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="364,248 357,244 357,252" fill="#4b5563"/>
-      <polyline points="515,232 540,232 540,78 562,78" fill="none" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="569,78 562,74 562,82" fill="#4b5563"/>
-      <text x="546" y="128" font-size="10.5" fill="#4b5563">reads, writes</text>
-      <line x1="540" y1="173" x2="562" y2="173" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="569,173 562,169 562,177" fill="#4b5563"/>
-      <text x="546" y="166" font-size="10.5" fill="#4b5563">jobs</text>
-      <line x1="652" y1="206" x2="652" y2="232" stroke="#4b5563" stroke-width="1.4"/>
-      <polygon points="652,239 648,232 656,232" fill="#4b5563"/>
+      <title id="ex6-title">Network diagram: data flows and security boundaries for card payments</title>
+      <desc id="ex6-desc">Boundaries: the untrusted internet; the production VPC with a public subnet, a private app subnet, a private data subnet and the PCI zone for card data; a separate security account; and the payment provider on the internet. Data flows, drawn solid: shoppers reach the CDN and web application firewall, then the load balancer in the public subnet. Orders go to the API service, which sends order events to the order worker and reads and writes the orders database. Card details go from the load balancer straight to the payment service in the PCI zone. The payment service stores card numbers in the token vault, returns only tokens and status to the orders database, and reaches the payment provider only through the egress firewall over mutual TLS. The orders database is backed up nightly to the backup vault. Security flows, drawn dashed: the token vault gets encryption keys from key management in the security account; the order worker reads secrets from the secrets manager; flow and audit logs go to the log archive in the security account; engineers sign in through the access proxy with single sign-on and multi-factor authentication, and have read-only access to the orders database.</desc>
+      <rect x="8" y="40" width="152" height="532" rx="8" fill="none" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="6 4"/>
+      <text x="16" y="56" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="start">INTERNET · UNTRUSTED</text>
+      <rect x="322" y="10" width="480" height="480" rx="8" fill="none" stroke="#4b5563" stroke-width="1.6"/>
+      <text x="330" y="27" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="start">PRODUCTION VPC</text>
+      <text x="436" y="27" font-size="10" fill="#374151" font-family="Consolas, Monaco, monospace">infra/network.tf</text>
+      <rect x="334" y="38" width="166" height="112" rx="8" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="492" y="54" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="end">PUBLIC SUBNET</text>
+      <rect x="334" y="163" width="456" height="112" rx="8" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="782" y="179" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="end">APP SUBNET · PRIVATE</text>
+      <rect x="334" y="290" width="205" height="190" rx="8" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="531" y="474" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="end">DATA SUBNET · PRIVATE</text>
+      <rect x="552" y="290" width="238" height="190" rx="8" fill="#fff7f7" stroke="#d94040" stroke-width="2.6"/>
+      <text x="782" y="306" font-size="10" fill="#b91c1c" font-weight="700" letter-spacing="0.05em" text-anchor="end">PCI ZONE · CARD DATA</text>
+      <rect x="818" y="10" width="174" height="262" rx="8" fill="none" stroke="#6b46c1" stroke-width="1.6" stroke-dasharray="8 4"/>
+      <text x="826" y="27" font-size="10" fill="#5b3aa8" font-weight="700" letter-spacing="0.05em" text-anchor="start">SECURITY ACCOUNT</text>
+      <rect x="818" y="288" width="174" height="192" rx="8" fill="none" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="6 4"/>
+      <text x="826" y="305" font-size="10" fill="#374151" font-weight="700" letter-spacing="0.05em" text-anchor="start">PARTNER · INTERNET</text>
+      <rect x="20" y="72" width="128" height="60" rx="5" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="84" y="94" font-size="12.5" fill="#1f2937" font-weight="700" text-anchor="middle">Shoppers</text>
+      <text x="84" y="110" font-size="10" fill="#374151" text-anchor="middle">browsers and app</text>
+      <rect x="20" y="500" width="128" height="60" rx="5" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="84" y="522" font-size="12.5" fill="#1f2937" font-weight="700" text-anchor="middle">Engineers</text>
+      <text x="84" y="538" font-size="10" fill="#374151" text-anchor="middle">on laptops</text>
+      <rect x="175" y="72" width="130" height="60" rx="5" fill="#fffbeb" stroke="#b45309" stroke-width="1.6"/>
+      <text x="240" y="94" font-size="12.5" fill="#92400e" font-weight="700" text-anchor="middle">CDN + WAF</text>
+      <text x="240" y="110" font-size="10" fill="#374151" text-anchor="middle">blocks attacks</text>
+      <rect x="175" y="500" width="130" height="60" rx="5" fill="#fffbeb" stroke="#b45309" stroke-width="1.6"/>
+      <text x="240" y="522" font-size="12.5" fill="#92400e" font-weight="700" text-anchor="middle">Access proxy</text>
+      <text x="240" y="538" font-size="10" fill="#374151" text-anchor="middle">SSO + MFA</text>
+      <rect x="350" y="72" width="130" height="60" rx="5" fill="#fffbeb" stroke="#b45309" stroke-width="1.6"/>
+      <text x="415" y="94" font-size="12.5" fill="#92400e" font-weight="700" text-anchor="middle">Load balancer</text>
+      <text x="415" y="110" font-size="10" fill="#374151" text-anchor="middle">TLS ends here</text>
+      <rect x="350" y="197" width="130" height="60" rx="5" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="415" y="219" font-size="12.5" fill="#0f6f76" font-weight="700" text-anchor="middle">API service</text>
+      <text x="415" y="235" font-size="10" fill="#374151" text-anchor="middle">orders, accounts</text>
+      <rect x="640" y="197" width="135" height="60" rx="5" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="707.5" y="219" font-size="12.5" fill="#0f6f76" font-weight="700" text-anchor="middle">Order worker</text>
+      <text x="707.5" y="235" font-size="10" fill="#374151" text-anchor="middle">writes orders</text>
+      <rect x="360" y="322" width="140" height="60" rx="5" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="430" y="344" font-size="12.5" fill="#385a90" font-weight="700" text-anchor="middle">Orders database</text>
+      <text x="430" y="360" font-size="10" fill="#374151" text-anchor="middle">Postgres, encrypted</text>
+      <rect x="360" y="402" width="140" height="60" rx="5" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="430" y="424" font-size="12.5" fill="#385a90" font-weight="700" text-anchor="middle">Backup vault</text>
+      <text x="430" y="440" font-size="10" fill="#374151" text-anchor="middle">nightly, encrypted</text>
+      <rect x="566" y="322" width="125" height="60" rx="5" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="628.5" y="344" font-size="12.5" fill="#0f6f76" font-weight="700" text-anchor="middle">Payment service</text>
+      <text x="628.5" y="360" font-size="10" fill="#374151" text-anchor="middle">returns tokens only</text>
+      <rect x="566" y="402" width="125" height="60" rx="5" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="628.5" y="424" font-size="12.5" fill="#385a90" font-weight="700" text-anchor="middle">Token vault</text>
+      <text x="628.5" y="440" font-size="10" fill="#374151" text-anchor="middle">card → token</text>
+      <rect x="705" y="380" width="75" height="60" rx="5" fill="#fffbeb" stroke="#b45309" stroke-width="1.6"/>
+      <text x="742.5" y="402" font-size="12.5" fill="#92400e" font-weight="700" text-anchor="middle">Egress</text>
+      <text x="742.5" y="418" font-size="10" fill="#374151" text-anchor="middle">firewall</text>
+      <text x="742.5" y="431" font-size="10" fill="#374151" text-anchor="middle">allow-list</text>
+      <rect x="832" y="40" width="146" height="60" rx="5" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="905" y="62" font-size="12.5" fill="#5b3aa8" font-weight="700" text-anchor="middle">Key management</text>
+      <text x="905" y="78" font-size="10" fill="#374151" text-anchor="middle">HSM, keys stay here</text>
+      <rect x="832" y="120" width="146" height="60" rx="5" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="905" y="142" font-size="12.5" fill="#5b3aa8" font-weight="700" text-anchor="middle">Log archive</text>
+      <text x="905" y="158" font-size="10" fill="#374151" text-anchor="middle">flow and audit logs</text>
+      <rect x="832" y="196" width="146" height="60" rx="5" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.6"/>
+      <text x="905" y="218" font-size="12.5" fill="#5b3aa8" font-weight="700" text-anchor="middle">Secrets manager</text>
+      <text x="905" y="234" font-size="10" fill="#374151" text-anchor="middle">read at start-up</text>
+      <rect x="832" y="380" width="146" height="60" rx="5" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="905" y="402" font-size="12.5" fill="#1f2937" font-weight="700" text-anchor="middle">Payment provider</text>
+      <text x="905" y="418" font-size="10" fill="#374151" text-anchor="middle">mTLS, allow-listed</text>
+      <polyline points="148,102 168,102" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="175,102 168,98 168,106" fill="#374151"/>
+      <polyline points="305,102 343,102" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="350,102 343,98 343,106" fill="#374151"/>
+      <polyline points="415,132 415,190" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="415,197 411,190 419,190" fill="#374151"/>
+      <text x="421" y="146" font-size="10" fill="#1f2937" text-anchor="start">orders</text>
+      <polyline points="480,100 600,100 600,315" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="600,322 596,315 604,315" fill="#374151"/>
+      <text x="606" y="140" font-size="10" fill="#1f2937" text-anchor="start">card details</text>
+      <text x="606" y="153" font-size="10" fill="#1f2937" text-anchor="start">(TLS)</text>
+      <polyline points="480,215 633,215" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="640,215 633,211 633,219" fill="#374151"/>
+      <text x="540" y="209" font-size="10" fill="#1f2937" text-anchor="middle">order events</text>
+      <polyline points="430,257 430,315" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="430,322 426,315 434,315" fill="#374151"/>
+      <polyline points="740,257 740,280 470,280 470,315" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="470,322 466,315 474,315" fill="#374151"/>
+      <polyline points="566,352 507,352" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="500,352 507,348 507,356" fill="#374151"/>
+      <polyline points="628,382 628,395" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="628,402 624,395 632,395" fill="#374151"/>
+      <polyline points="691,345 742,345 742,373" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="742,380 738,373 746,373" fill="#374151"/>
+      <polyline points="780,410 825,410" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="832,410 825,406 825,414" fill="#374151"/>
+      <polyline points="430,382 430,395" fill="none" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="430,402 426,395 434,395" fill="#374151"/>
+      <polyline points="628,462 628,474 810,474 810,70 825,70" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="832,70 825,66 825,74" fill="#6b7280"/>
+      <text x="745" y="466" font-size="10" fill="#1f2937" text-anchor="middle">encryption keys</text>
+      <polyline points="775,226 825,226" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="832,226 825,222 825,230" fill="#6b7280"/>
+      <polyline points="802,150 825,150" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="832,150 825,146 825,154" fill="#6b7280"/>
+      <polyline points="148,530 168,530" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="175,530 168,526 168,534" fill="#6b7280"/>
+      <polyline points="305,530 342,530 342,352 353,352" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <polygon points="360,352 353,348 353,356" fill="#6b7280"/>
+      <text x="309" y="546" font-size="10" fill="#1f2937" text-anchor="start">read-only</text>
+      <line x1="370" y1="515" x2="410" y2="515" stroke="#374151" stroke-width="1.5"/>
+      <text x="418" y="519" font-size="10" fill="#1f2937" text-anchor="start">Data flow. Every connection uses TLS.</text>
+      <line x1="370" y1="540" x2="410" y2="540" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="418" y="544" font-size="10" fill="#1f2937" text-anchor="start">Security flow: keys, secrets, logs, admin access.</text>
+      <rect x="370" y="556" width="40" height="18" rx="3" fill="#fff7f7" stroke="#d94040" stroke-width="2.6"/>
+      <text x="418" y="569" font-size="10" fill="#1f2937" text-anchor="start">PCI zone. Card numbers never leave it.</text>
+      <rect x="690" y="506" width="40" height="18" rx="3" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="738" y="519" font-size="10" fill="#1f2937" text-anchor="start">Network or account boundary.</text>
     </svg>
-    <p>One page shows the whole system: what customers reach, where the network boundary is, which services run inside it, and where the data lives. The agent draws it from the application code and the infrastructure files together, because the charters describe both.</p>
-    <div class="trait"><strong>Every box names its source.</strong> The CDN comes from <code>web/</code>, the database from <code>infra/db.tf</code>, the workers from <code>workers/</code>. A reader can check any part of the picture against the file that defines it, and see at once if the diagram and the system disagree.</div>
+    </div>
+    <p>The auditor's first question is where card numbers can go. The picture answers it: card details enter the PCI zone directly from the load balancer, the token vault keeps them, and only tokens cross back out to the orders database. The only way out to the internet is the egress firewall, and it allows one destination, the payment provider. The keys and the logs live in a separate security account, so a person with access to production cannot read the keys or delete the evidence.</p>
+    <p>Solid arrows carry data. Dashed arrows carry keys, secrets, logs and access, which is what auditors and security reviewers check next. The text under the diagram lists each boundary with the rule that enforces it: the route table, the security group, or the account policy.</p>
+    <div class="trait"><strong>Drawn from the code, not from memory.</strong> The agent builds the diagram from the infrastructure files and the application code that the charters describe. Each boundary in the picture is a real boundary in the code: a subnet, a route table, a security group, or a separate account. When the network changes, the same request brings the diagram up to date.</div>
   </div>
 
   <!-- Example 7: project view ──────────────────────────────── -->

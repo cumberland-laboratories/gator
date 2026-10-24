@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator docs opens with a code-and-infrastructure feature and ends with the Cumberland style",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard",
+    "cumberland"
+  ],
+  "commit": "bd7f8bc0e50d399aca06fb05249fcaa309fe761d",
+  "short_commit": "bd7f8bc",
+  "snippet_id": "snippet-bd7f8bc0e50d3",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "7046ad9e01265f94aedfa992b106a4ae578e2060",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:32:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-7046ad9e01265.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "Example 1 in the Gator docs Welcome topic no longer describes a Gator",
+    "feature. It now explains a feature at the imaginary online store that spans",
+    "code and infrastructure: product photo uploads, from the upload API through",
+    "a private bucket, a resize function and the CDN to the product page. Each",
+    "box says in words whether it is code or infrastructure and names its file,",
+    "and numbered arrows match the step list.",
+    "A closing addendum, \"Cumberland style HTML communication\", says that every",
+    "Gator doc uses the design template built into Gator, and what it provides:"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
