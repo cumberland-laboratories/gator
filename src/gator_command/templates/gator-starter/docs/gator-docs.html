@@ -496,8 +496,8 @@
       text-align: center;
     }
     /* CUMBERLAND-NARRATIVE-STYLE:END ──────────────────────── */
-    /* Page-local: lead sentence, capability cards, a prompt card, and a
-       gallery of example visuals. */
+    /* Page-local: lead sentence, capability cards, request cards, and
+       example cards with a request, a visual and one trait. */
     .lede {
       font-size: 1.3rem;
       line-height: 1.5;
@@ -556,36 +556,66 @@
       color: var(--gray-900);
       margin-bottom: 0.6rem;
     }
-    .ask ul { margin: 0.4rem 0 0 1.25rem; }
-    .ask li { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; }
-    .gallery {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
-      gap: 1rem;
-      margin: 1rem 0 1.5rem;
-    }
-    .sample {
+    .example {
       background: white;
       border: 1px solid var(--gray-200);
       border-radius: 6px;
-      padding: 1rem 1.1rem 0.9rem;
+      padding: 1.25rem 1.4rem 1.1rem;
+      margin: 1.5rem 0 2rem;
     }
-    .sample.wide { grid-column: 1 / -1; }
-    .sample .q {
+    .example .ex-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--teal-dark);
+      margin-bottom: 0.2rem;
+    }
+    .example h3 {
+      font-size: 1.2rem;
+      color: var(--gray-900);
+      font-weight: 600;
+      margin: 0 0 0.6rem;
+    }
+    .example .request {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.92rem;
+      color: var(--gray-900);
+      background: var(--gray-50);
+      border-left: 3px solid var(--blue);
+      border-radius: 3px;
+      padding: 0.55rem 0.85rem;
+      margin: 0 0 1.1rem;
+    }
+    .example svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 760px;
+      margin: 0 auto 1rem;
+    }
+    .example .summary-line {
+      font-size: 1.05rem;
       font-weight: 600;
       color: var(--gray-900);
-      margin-bottom: 0.6rem;
-    }
-    .sample svg { display: block; width: 100%; height: auto; }
-    .sample .note {
-      font-size: 0.82rem;
-      color: var(--gray-600);
-      margin: 0.6rem 0 0;
       text-align: left;
       hyphens: manual;
     }
-    .sample table { margin: 0; font-size: 0.85rem; }
-    .sample th, .sample td { padding: 0.45rem 0.6rem; }
+    .trait {
+      background: var(--teal-light);
+      border-left: 3px solid var(--teal);
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      margin: 0.9rem 0 0.2rem;
+      text-align: justify;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+    .trait strong {
+      display: block;
+      color: var(--gray-900);
+      margin-bottom: 0.15rem;
+    }
   </style>
 </head>
 <body>
@@ -603,23 +633,13 @@
   </ul>
 </section>
 
-<section id="ask">
-  <h2>Ask for one</h2>
-  <p>Ask your agent for a Gator doc in plain words. Name the thing you want to understand.</p>
+<section id="examples">
+  <h2>Examples</h2>
+  <p>Ask your agent for a Gator doc in plain words. Name the thing you want to understand, and say who will read it.</p>
   <div class="ask">
     <div class="pattern">Create me a Gator doc for …</div>
-    <ul>
-      <li>Create me a Gator doc for how a commit is checked.</li>
-      <li>Create me a Gator doc for the payment service's retry logic.</li>
-      <li>Create me a Gator doc for our release procedure.</li>
-      <li>Create me a Gator doc for why we chose Postgres for the event store.</li>
-      <li>Create me a Gator doc for how a bulk-export feature could work, for review with the platform team.</li>
-      <li>Create me a Gator doc for our whole system, code and infrastructure.</li>
-      <li>Create me a Gator doc for this month's progress, for the leadership team.</li>
-    </ul>
   </div>
   <p>The agent reads the repository's charters and the code, then writes one standalone HTML document. It is not a chat answer and not a dump of source code. It is an explanation written for a person, with pictures.</p>
-
   <div class="figure">
     <svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg"
          font-family="'Segoe UI', system-ui, sans-serif"
@@ -651,154 +671,337 @@
     </svg>
     <div class="caption">Figure 1 — from a one-line request to a document you can read, review and keep.</div>
   </div>
-</section>
+  <p>The examples below show seven requests and the kind of document each one gives you. Except for the first, which shows Gator itself, they describe an imaginary online store, so you can see how one team could use Gator docs across its work.</p>
 
-<section id="looks">
-  <h2>What a Gator doc looks like</h2>
-  <p class="principle">Pictures first, prose second. Every diagram is labelled, so it reads without relying on colour.</p>
-  <p>These are small examples of the visuals a Gator doc uses. A real document draws them from your own code.</p>
-
-  <div class="gallery">
-    <div class="sample wide">
-      <div class="q">How does a feature work?</div>
-      <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg"
-           font-family="'Segoe UI', system-ui, sans-serif"
-           role="img" aria-labelledby="ex1-title ex1-desc">
-        <title id="ex1-title">Example feature flow: a commit goes through the commit gate</title>
-        <desc id="ex1-desc">Top row, left to right: "git commit", "Hook shim", "1 Validate", "2 Trailers", "3 Cleanup, done". Validate passes to Trailers. If a rule fails, Validate goes down to "BLOCKED". BLOCKED goes left to "Architect approves". An arrow labelled "retry" goes from the approval back up to Validate.</desc>
-        <rect x="10" y="30" width="130" height="78" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
-        <text x="75" y="60" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">git commit</text>
-        <text x="75" y="80" font-size="11" fill="#4b5563" text-anchor="middle">by the agent</text>
-        <text x="75" y="95" font-size="11" fill="#4b5563" text-anchor="middle">or a person</text>
-        <rect x="162" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="227" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Hook shim</text>
-        <text x="227" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">.git/gator-hooks/</text>
-        <text x="227" y="95" font-size="11" fill="#4b5563" text-anchor="middle">finds the runtime</text>
-        <rect x="314" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="379" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">1 · Validate</text>
-        <text x="379" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">pre-commit</text>
-        <text x="379" y="95" font-size="11" fill="#4b5563" text-anchor="middle">charters · lint · draft</text>
-        <rect x="466" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="531" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">2 · Trailers</text>
-        <text x="531" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">commit-msg</text>
-        <text x="531" y="95" font-size="11" fill="#4b5563" text-anchor="middle">message + Gator-*</text>
-        <rect x="618" y="30" width="130" height="78" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.6"/>
-        <text x="683" y="60" font-size="13" fill="#2d8a4e" font-weight="700" text-anchor="middle">3 · Cleanup ✓</text>
-        <text x="683" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">post-commit</text>
-        <text x="683" y="95" font-size="11" fill="#4b5563" text-anchor="middle">reset draft · snippet</text>
-        <rect x="314" y="160" width="130" height="78" rx="6" fill="#fef2f2" stroke="#d94040" stroke-width="2.6"/>
-        <text x="379" y="190" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">BLOCKED</text>
-        <text x="379" y="209" font-size="11" fill="#4b5563" text-anchor="middle">reason written to</text>
-        <text x="379" y="225" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">whiteboard.md</text>
-        <rect x="140" y="160" width="152" height="78" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
-        <text x="216" y="190" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Architect approves</text>
-        <text x="216" y="209" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">gator hook approve</text>
-        <text x="216" y="225" font-size="11" fill="#4b5563" text-anchor="middle">bound to the staged change</text>
-        <line x1="140" y1="69" x2="154" y2="69" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="161,69 154,65 154,73" fill="#4b5563"/>
-        <line x1="292" y1="69" x2="306" y2="69" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="313,69 306,65 306,73" fill="#4b5563"/>
-        <line x1="444" y1="69" x2="458" y2="69" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="465,69 458,65 458,73" fill="#4b5563"/>
-        <text x="455" y="22" font-size="10.5" fill="#4b5563" text-anchor="middle">pass</text>
-        <line x1="455" y1="26" x2="455" y2="64" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
-        <line x1="596" y1="69" x2="610" y2="69" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="617,69 610,65 610,73" fill="#4b5563"/>
-        <line x1="400" y1="108" x2="400" y2="152" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="400,159 396,152 404,152" fill="#4b5563"/>
-        <text x="408" y="138" font-size="10.5" fill="#4b5563">rule fails</text>
-        <line x1="314" y1="199" x2="300" y2="199" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="293,199 300,195 300,203" fill="#4b5563"/>
-        <polyline points="216,160 216,134 352,134 352,116" fill="none" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="352,109 348,116 356,116" fill="#4b5563"/>
-        <text x="284" y="127" font-size="10.5" fill="#4b5563" text-anchor="middle">retry the commit</text>
-      </svg>
-      <p class="note">A feature flow: each step, the code that runs it, and what happens when a rule fails. This one shows Gator's own commit gate.</p>
-    </div>
-
-    <div class="sample">
-      <div class="q">Where does the code live?</div>
-      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg"
-           font-family="'Segoe UI', system-ui, sans-serif"
-           role="img" aria-labelledby="ex2-title">
-        <title id="ex2-title">Example bar chart: lines of code by part of the system</title>
-        <text x="6" y="30" font-size="11.5" fill="#1f2937">Browser UI</text>
-        <rect x="104" y="18" width="170" height="16" rx="2" fill="#19aeb8"/>
-        <text x="280" y="31" font-size="10.5" fill="#4b5563">13.6k</text>
-        <text x="6" y="64" font-size="11.5" fill="#1f2937">Loop</text>
-        <rect x="104" y="52" width="121" height="16" rx="2" fill="#19aeb8"/>
-        <text x="231" y="65" font-size="10.5" fill="#4b5563">9.7k</text>
-        <text x="6" y="98" font-size="11.5" fill="#1f2937">Commit gate</text>
-        <rect x="104" y="86" width="51" height="16" rx="2" fill="#19aeb8"/>
-        <text x="161" y="99" font-size="10.5" fill="#4b5563">4.1k</text>
-        <text x="6" y="132" font-size="11.5" fill="#1f2937">Core library</text>
-        <rect x="104" y="120" width="27" height="16" rx="2" fill="#19aeb8"/>
-        <text x="137" y="133" font-size="10.5" fill="#4b5563">2.2k</text>
-        <text x="104" y="160" font-size="10" fill="#6b7280">thousand lines</text>
-      </svg>
-      <p class="note">A chart: the size and shape of the system, labelled with the real paths.</p>
-    </div>
-
-    <div class="sample">
-      <div class="q">What does this process do?</div>
-      <svg viewBox="0 0 320 170" xmlns="http://www.w3.org/2000/svg"
-           font-family="'Segoe UI', system-ui, sans-serif"
-           role="img" aria-labelledby="ex3-title">
-        <title id="ex3-title">Example stage diagram: draft, review, approved, with a revision loop</title>
-        <rect x="6" y="20" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="48" y="47" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Draft</text>
-        <rect x="118" y="20" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="160" y="47" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Review</text>
-        <rect x="230" y="20" width="84" height="44" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.4"/>
-        <text x="272" y="47" font-size="12" fill="#2d8a4e" font-weight="700" text-anchor="middle">Approved ✓</text>
-        <rect x="118" y="108" width="84" height="44" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
-        <text x="160" y="135" font-size="12" fill="#148a92" font-weight="700" text-anchor="middle">Revise</text>
-        <line x1="90" y1="42" x2="110" y2="42" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="117,42 110,38 110,46" fill="#4b5563"/>
-        <line x1="202" y1="42" x2="222" y2="42" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="229,42 222,38 222,46" fill="#4b5563"/>
-        <line x1="145" y1="64" x2="145" y2="100" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="145,107 141,100 149,100" fill="#4b5563"/>
-        <line x1="175" y1="107" x2="175" y2="71" stroke="#4b5563" stroke-width="1.4"/>
-        <polygon points="175,64 171,71 179,71" fill="#4b5563"/>
-        <text x="138" y="88" font-size="10.5" fill="#4b5563" text-anchor="end">changes</text>
-        <text x="183" y="88" font-size="10.5" fill="#4b5563">again</text>
-      </svg>
-      <p class="note">A stage diagram: the states a process moves through, and why.</p>
-    </div>
-
-    <div class="sample">
-      <div class="q">Why was this decided?</div>
-      <div class="table-wrap">
-        <table class="table-blue">
-          <thead><tr><th>Option</th><th>Trade-off</th><th>Decision</th></tr></thead>
-          <tbody>
-            <tr><td>Postgres</td><td>One store we already run</td><td><span class="pill ok">Chosen</span></td></tr>
-            <tr><td>DynamoDB</td><td>New service to operate</td><td><span class="pill na">Rejected</span></td></tr>
-            <tr><td>Files in Git</td><td>No query support</td><td><span class="pill na">Rejected</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note">A comparison: the options, the trade-offs, and the choice, with the reason in words.</p>
-    </div>
+  <!-- Example 1: a feature flow ─────────────────────────────── -->
+  <div class="example" id="ex-feature">
+    <div class="ex-label">Example 1 · Map a feature</div>
+    <h3>How a commit is checked</h3>
+    <div class="request">Create me a Gator doc for how a commit is checked.</div>
+    <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="ex1-title ex1-desc">
+      <title id="ex1-title">Feature flow: a commit goes through the commit gate</title>
+      <desc id="ex1-desc">Top row, left to right: "git commit", "Hook shim", "1 Validate", "2 Trailers", "3 Cleanup, done". Validate passes to Trailers. If a rule fails, Validate goes down to "BLOCKED". BLOCKED goes left to "Architect approves". An arrow labelled "retry the commit" goes from the approval back up to Validate.</desc>
+      <rect x="10" y="30" width="130" height="78" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="75" y="60" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">git commit</text>
+      <text x="75" y="80" font-size="11" fill="#4b5563" text-anchor="middle">by the agent</text>
+      <text x="75" y="95" font-size="11" fill="#4b5563" text-anchor="middle">or a person</text>
+      <rect x="162" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="227" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Hook shim</text>
+      <text x="227" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">.git/gator-hooks/</text>
+      <text x="227" y="95" font-size="11" fill="#4b5563" text-anchor="middle">finds the runtime</text>
+      <rect x="314" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="379" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">1 · Validate</text>
+      <text x="379" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">pre-commit</text>
+      <text x="379" y="95" font-size="11" fill="#4b5563" text-anchor="middle">charters · lint · draft</text>
+      <rect x="466" y="30" width="130" height="78" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="531" y="60" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">2 · Trailers</text>
+      <text x="531" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">commit-msg</text>
+      <text x="531" y="95" font-size="11" fill="#4b5563" text-anchor="middle">message + Gator-*</text>
+      <rect x="618" y="30" width="130" height="78" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.6"/>
+      <text x="683" y="60" font-size="13" fill="#2d8a4e" font-weight="700" text-anchor="middle">3 · Cleanup ✓</text>
+      <text x="683" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">post-commit</text>
+      <text x="683" y="95" font-size="11" fill="#4b5563" text-anchor="middle">reset draft · snippet</text>
+      <rect x="314" y="160" width="130" height="78" rx="6" fill="#fef2f2" stroke="#d94040" stroke-width="2.6"/>
+      <text x="379" y="190" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">BLOCKED</text>
+      <text x="379" y="209" font-size="11" fill="#4b5563" text-anchor="middle">reason written to</text>
+      <text x="379" y="225" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">whiteboard.md</text>
+      <rect x="140" y="160" width="152" height="78" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="216" y="190" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Architect approves</text>
+      <text x="216" y="209" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">gator hook approve</text>
+      <text x="216" y="225" font-size="11" fill="#4b5563" text-anchor="middle">bound to the staged change</text>
+      <line x1="140" y1="69" x2="154" y2="69" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="161,69 154,65 154,73" fill="#4b5563"/>
+      <line x1="292" y1="69" x2="306" y2="69" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="313,69 306,65 306,73" fill="#4b5563"/>
+      <line x1="444" y1="69" x2="458" y2="69" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="465,69 458,65 458,73" fill="#4b5563"/>
+      <text x="455" y="22" font-size="10.5" fill="#4b5563" text-anchor="middle">pass</text>
+      <line x1="455" y1="26" x2="455" y2="64" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
+      <line x1="596" y1="69" x2="610" y2="69" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="617,69 610,65 610,73" fill="#4b5563"/>
+      <line x1="400" y1="108" x2="400" y2="152" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="400,159 396,152 404,152" fill="#4b5563"/>
+      <text x="408" y="138" font-size="10.5" fill="#4b5563">rule fails</text>
+      <line x1="314" y1="199" x2="300" y2="199" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="293,199 300,195 300,203" fill="#4b5563"/>
+      <polyline points="216,160 216,134 352,134 352,116" fill="none" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="352,109 348,116 356,116" fill="#4b5563"/>
+      <text x="284" y="127" font-size="10.5" fill="#4b5563" text-anchor="middle">retry the commit</text>
+    </svg>
+    <p>This example is Gator's own commit gate. The document follows one commit from start to finish: the steps, the branch where a rule fails, and the way back after the Architect approves. The prose under the diagram explains each phase in a few sentences.</p>
+    <div class="trait"><strong>Labelled diagrams, linked to the source.</strong> Every box and every arrow says what it is. "BLOCKED" and "✓" are shown in words, symbols and border weight, so the meaning never depends on colour alone. Each box names the file or command that runs it, so a reader can check the picture against the code.</div>
   </div>
 
-  <ul class="caps">
-    <li><strong>Diagrams with labelled relationships.</strong> Every box and every arrow says what it is. Meaning never depends on colour alone.</li>
-    <li><strong>Readable prose.</strong> Short, direct sentences explain what the pictures show and why it matters.</li>
-    <li><strong>Linked to the source.</strong> The document names the files, folders and charters behind each part, so a reader can check it against the code.</li>
-  </ul>
+  <!-- Example 2: code behaviour ─────────────────────────────── -->
+  <div class="example" id="ex-retry">
+    <div class="ex-label">Example 2 · Explain code</div>
+    <h3>The payment service's retry logic</h3>
+    <div class="request">Create me a Gator doc for the payment service's retry logic.</div>
+    <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="ex2-title ex2-desc">
+      <title id="ex2-title">Retry logic: a charge is retried with growing waits, then sent to a dead-letter queue</title>
+      <desc id="ex2-desc">Top row: "Checkout" sends a charge to "Retry policy", which makes an attempt at "Payment provider". Below, a timeline: attempt 1 fails at 0 seconds, attempt 2 fails after 1 second, attempt 3 fails after 2 seconds, attempt 4 succeeds after 4 seconds. If all 5 attempts fail, the charge goes to the "Dead-letter queue" and the on-call engineer is alerted.</desc>
+      <rect x="10" y="14" width="160" height="64" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="90" y="40" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Checkout</text>
+      <text x="90" y="60" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">orders/checkout.py</text>
+      <rect x="250" y="14" width="180" height="64" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="340" y="40" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Retry policy</text>
+      <text x="340" y="60" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">payments/retry.py</text>
+      <rect x="510" y="14" width="170" height="64" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="595" y="40" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Payment provider</text>
+      <text x="595" y="60" font-size="11" fill="#4b5563" text-anchor="middle">external API</text>
+      <line x1="170" y1="46" x2="242" y2="46" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="249,46 242,42 242,50" fill="#4b5563"/>
+      <text x="208" y="38" font-size="10.5" fill="#4b5563" text-anchor="middle">charge</text>
+      <line x1="430" y1="46" x2="502" y2="46" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="509,46 502,42 502,50" fill="#4b5563"/>
+      <text x="468" y="38" font-size="10.5" fill="#4b5563" text-anchor="middle">attempt</text>
+
+      <text x="30" y="122" font-size="11.5" fill="#1f2937" font-weight="600">The wait doubles after each failure</text>
+      <line x1="40" y1="164" x2="520" y2="164" stroke="#9ca3af" stroke-width="1.4"/>
+      <circle cx="70" cy="164" r="13" fill="#fef2f2" stroke="#d94040" stroke-width="2"/>
+      <text x="70" y="169" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">✗</text>
+      <text x="70" y="144" font-size="11" fill="#1f2937" text-anchor="middle">attempt 1</text>
+      <text x="70" y="196" font-size="10.5" fill="#4b5563" text-anchor="middle">0 s</text>
+      <circle cx="190" cy="164" r="13" fill="#fef2f2" stroke="#d94040" stroke-width="2"/>
+      <text x="190" y="169" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">✗</text>
+      <text x="190" y="144" font-size="11" fill="#1f2937" text-anchor="middle">attempt 2</text>
+      <text x="190" y="196" font-size="10.5" fill="#4b5563" text-anchor="middle">wait 1 s</text>
+      <circle cx="310" cy="164" r="13" fill="#fef2f2" stroke="#d94040" stroke-width="2"/>
+      <text x="310" y="169" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">✗</text>
+      <text x="310" y="144" font-size="11" fill="#1f2937" text-anchor="middle">attempt 3</text>
+      <text x="310" y="196" font-size="10.5" fill="#4b5563" text-anchor="middle">wait 2 s</text>
+      <circle cx="430" cy="164" r="14" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="3"/>
+      <text x="430" y="169" font-size="13" fill="#2d8a4e" font-weight="700" text-anchor="middle">✓</text>
+      <text x="430" y="144" font-size="11" fill="#1f2937" text-anchor="middle">attempt 4: charged</text>
+      <text x="430" y="196" font-size="10.5" fill="#4b5563" text-anchor="middle">wait 4 s</text>
+
+      <rect x="580" y="124" width="170" height="80" rx="6" fill="#fef2f2" stroke="#d94040" stroke-width="2.6"/>
+      <text x="665" y="150" font-size="13" fill="#d94040" font-weight="700" text-anchor="middle">Dead-letter queue</text>
+      <text x="665" y="169" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">payments-dlq</text>
+      <text x="665" y="187" font-size="11" fill="#4b5563" text-anchor="middle">on-call is alerted</text>
+      <line x1="520" y1="164" x2="572" y2="164" stroke="#4b5563" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <polygon points="579,164 572,160 572,168" fill="#4b5563"/>
+      <text x="548" y="216" font-size="10.5" fill="#4b5563" text-anchor="middle">if all 5 attempts fail</text>
+      <line x1="548" y1="206" x2="548" y2="170" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
+    </svg>
+    <p>A new engineer asks why a customer was charged four seconds late. The document answers in one picture: which code decides to retry, how long it waits, how many times it tries, and where a charge goes when every attempt fails. The text names the settings and the tests that pin them.</p>
+    <div class="trait"><strong>Reviewed and versioned in Git.</strong> The document is committed like any other change. When someone changes the retry limit, the same commit updates the document, and Git shows who changed it, when, and why.</div>
+  </div>
+
+  <!-- Example 3: a procedure ───────────────────────────────── -->
+  <div class="example" id="ex-release">
+    <div class="ex-label">Example 3 · Explain a procedure</div>
+    <h3>Our release procedure</h3>
+    <div class="request">Create me a Gator doc for our release procedure.</div>
+    <svg viewBox="0 0 760 180" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="ex3-title ex3-desc">
+      <title id="ex3-title">Release procedure: branch, build, test, promote, tag</title>
+      <desc id="ex3-desc">Five boxes from left to right: "Release branch", "Build candidate", "Smoke tests", "Promote", "Release, done: tag v2.4.0 and announce". If the smoke tests fail, an arrow labelled "tests fail: fix, then rebuild" goes back to "Build candidate".</desc>
+      <rect x="10" y="20" width="130" height="70" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="75" y="50" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Release branch</text>
+      <text x="75" y="70" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">release/2.4</text>
+      <rect x="162" y="20" width="130" height="70" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="227" y="50" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Build candidate</text>
+      <text x="227" y="70" font-size="11" fill="#4b5563" text-anchor="middle">CI builds 2.4.0-rc1</text>
+      <rect x="314" y="20" width="130" height="70" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="379" y="50" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Smoke tests</text>
+      <text x="379" y="70" font-size="11" fill="#4b5563" text-anchor="middle">on staging</text>
+      <rect x="466" y="20" width="130" height="70" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="531" y="50" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Promote</text>
+      <text x="531" y="70" font-size="11" fill="#4b5563" text-anchor="middle">same build, no rebuild</text>
+      <rect x="618" y="20" width="130" height="70" rx="6" fill="#f0fdf4" stroke="#2d8a4e" stroke-width="2.6"/>
+      <text x="683" y="50" font-size="13" fill="#2d8a4e" font-weight="700" text-anchor="middle">Release ✓</text>
+      <text x="683" y="70" font-size="11" fill="#4b5563" text-anchor="middle">tag v2.4.0, announce</text>
+      <line x1="140" y1="55" x2="154" y2="55" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="161,55 154,51 154,59" fill="#4b5563"/>
+      <line x1="292" y1="55" x2="306" y2="55" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="313,55 306,51 306,59" fill="#4b5563"/>
+      <line x1="444" y1="55" x2="458" y2="55" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="465,55 458,51 458,59" fill="#4b5563"/>
+      <line x1="596" y1="55" x2="610" y2="55" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="617,55 610,51 610,59" fill="#4b5563"/>
+      <polyline points="379,90 379,130 227,130 227,98" fill="none" stroke="#d94040" stroke-width="1.6"/>
+      <polygon points="227,91 223,98 231,98" fill="#d94040"/>
+      <text x="303" y="150" font-size="11" fill="#1f2937" text-anchor="middle">tests fail: fix, then rebuild</text>
+    </svg>
+    <ol class="steps">
+      <li><strong>Cut the release branch.</strong> Create <code>release/2.4</code> from <code>main</code>. From now on, only fixes go to this branch.</li>
+      <li><strong>Build a candidate.</strong> CI builds <code>2.4.0-rc1</code> and stores it. A failed smoke test means a new candidate, never a patched one.</li>
+      <li><strong>Run the smoke tests on staging.</strong> If one fails, fix it on the branch and build the next candidate.</li>
+      <li><strong>Promote the tested build.</strong> Production gets the same files that passed the tests. Nothing is rebuilt.</li>
+      <li class="step-done"><strong>Tag and announce.</strong> Tag <code>v2.4.0</code> and post the release notes.</li>
+    </ol>
+    <div class="trait"><strong>Readable prose.</strong> Short, direct sentences explain what each step does and why. A person who has never released the product can follow it on the first try.</div>
+  </div>
+
+  <!-- Example 4: a decision ────────────────────────────────── -->
+  <div class="example" id="ex-decision">
+    <div class="ex-label">Example 4 · Record a decision</div>
+    <h3>Why we chose Postgres for the event store</h3>
+    <div class="request">Create me a Gator doc for why we chose Postgres for the event store.</div>
+    <div class="table-wrap">
+      <table class="table-blue">
+        <thead><tr><th>Option</th><th>Operations</th><th>Queries</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><td>Postgres</td><td>A database we already run and back up</td><td>Full SQL over events</td><td><span class="pill ok">✓ Chosen</span></td></tr>
+          <tr><td>DynamoDB</td><td>A new service to learn, monitor and pay for</td><td>Key lookups only</td><td><span class="pill na">Rejected</span></td></tr>
+          <tr><td>Files in Git</td><td>Nothing to run</td><td>No queries</td><td><span class="pill na">Rejected</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A year later, someone asks why the team did not use a managed key-value store. The document shows the options, the trade-offs and the choice, and gives the reason in words: the team already runs Postgres well, and reporting needs real queries. It also says what would make the team decide again.</p>
+    <div class="trait"><strong>The reason lives with the code.</strong> A decision made in a meeting or a chat thread is soon lost. A Gator doc is a file in the repository, beside the code it explains, so the next person finds the reason where they look for it.</div>
+  </div>
+
+  <!-- Example 5: a proposal ────────────────────────────────── -->
+  <div class="example" id="ex-proposal">
+    <div class="ex-label">Example 5 · Discuss a feature before it exists</div>
+    <h3>How a bulk-export feature could work</h3>
+    <div class="request">Create me a Gator doc for how a bulk-export feature could work, for review with the platform team.</div>
+    <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="ex5-title ex5-desc">
+      <title id="ex5-title">Proposed bulk export: new parts marked NEW, beside parts that exist today</title>
+      <desc id="ex5-desc">Top row: "Admin page" (exists) goes to "Export API" (NEW), then "Job queue" (exists), then "Export worker" (NEW), then "Object storage" (exists). Object storage goes down to "Email with download link" (NEW). Below the Export API, an open question: "How large can one export be?", to decide with the platform team.</desc>
+      <rect x="10" y="30" width="130" height="70" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="75" y="60" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Admin page</text>
+      <text x="75" y="80" font-size="11" fill="#4b5563" text-anchor="middle">exists today</text>
+      <rect x="162" y="30" width="130" height="70" rx="6" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="227" y="24" font-size="10" fill="#6b46c1" font-weight="700" text-anchor="middle">NEW</text>
+      <text x="227" y="60" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">Export API</text>
+      <text x="227" y="80" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">POST /exports</text>
+      <rect x="314" y="30" width="130" height="70" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="379" y="60" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Job queue</text>
+      <text x="379" y="80" font-size="11" fill="#4b5563" text-anchor="middle">exists today</text>
+      <rect x="466" y="30" width="130" height="70" rx="6" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="531" y="24" font-size="10" fill="#6b46c1" font-weight="700" text-anchor="middle">NEW</text>
+      <text x="531" y="60" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">Export worker</text>
+      <text x="531" y="80" font-size="11" fill="#4b5563" text-anchor="middle">writes a CSV file</text>
+      <rect x="618" y="30" width="130" height="70" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="683" y="60" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Object storage</text>
+      <text x="683" y="80" font-size="11" fill="#4b5563" text-anchor="middle">exists today</text>
+      <rect x="618" y="150" width="130" height="70" rx="6" fill="#f5f3ff" stroke="#6b46c1" stroke-width="1.8" stroke-dasharray="6 4"/>
+      <text x="683" y="168" font-size="10" fill="#6b46c1" font-weight="700" text-anchor="middle">NEW</text>
+      <text x="683" y="187" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">Email with</text>
+      <text x="683" y="205" font-size="13" fill="#6b46c1" font-weight="700" text-anchor="middle">download link</text>
+      <rect x="140" y="150" width="200" height="70" rx="6" fill="#fffbeb" stroke="#d48b0a" stroke-width="1.6"/>
+      <text x="240" y="176" font-size="12.5" fill="#92400e" font-weight="700" text-anchor="middle">? Open question</text>
+      <text x="240" y="196" font-size="11" fill="#1f2937" text-anchor="middle">How large can one export be?</text>
+      <text x="240" y="211" font-size="10.5" fill="#4b5563" text-anchor="middle">decide with the platform team</text>
+      <line x1="227" y1="100" x2="227" y2="144" stroke="#9ca3af" stroke-width="1" stroke-dasharray="2 2"/>
+      <line x1="140" y1="65" x2="154" y2="65" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="161,65 154,61 154,69" fill="#4b5563"/>
+      <line x1="292" y1="65" x2="306" y2="65" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="313,65 306,61 306,69" fill="#4b5563"/>
+      <line x1="444" y1="65" x2="458" y2="65" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="465,65 458,61 458,69" fill="#4b5563"/>
+      <line x1="596" y1="65" x2="610" y2="65" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="617,65 610,61 610,69" fill="#4b5563"/>
+      <line x1="683" y1="100" x2="683" y2="134" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="683,141 679,134 687,134" fill="#4b5563"/>
+      <text x="420" y="196" font-size="10.5" fill="#4b5563">Dashed border and NEW: proposed.</text>
+      <text x="420" y="212" font-size="10.5" fill="#4b5563">Solid border: exists today.</text>
+    </svg>
+    <p>Nothing is built yet. The agent knows the parts that exist from the charters, so the proposal reuses the job queue and the object storage, and shows only three new parts. It lists the options it considered, what each one would change, and the questions the team must answer first.</p>
+    <div class="trait"><strong>Made for working with other architects.</strong> The proposal is a standalone page. Open it in the Dashboard, or send it to the platform team before the meeting. Their comments go back to the agent, which revises the document. When the team agrees, the document becomes the plan.</div>
+  </div>
+
+  <!-- Example 6: the whole system ──────────────────────────── -->
+  <div class="example" id="ex-system">
+    <div class="ex-label">Example 6 · Draw the whole system</div>
+    <h3>Our whole system, code and infrastructure</h3>
+    <div class="request">Create me a Gator doc for our whole system, code and infrastructure.</div>
+    <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg"
+         font-family="'Segoe UI', system-ui, sans-serif"
+         role="img" aria-labelledby="ex6-title ex6-desc">
+      <title id="ex6-title">System diagram: browsers, the production network, services, data stores and the code behind each</title>
+      <desc id="ex6-desc">Customers' browsers, outside the production network, load pages from the "CDN" and send API calls to the "Load balancer". Inside the dashed boundary "Production network": the load balancer sends requests to the "API service"; the API service reads and writes "Postgres" and puts jobs on the "Job queue"; "Workers" take jobs from the queue. Each box names the folder or file that defines it.</desc>
+      <rect x="160" y="8" width="592" height="314" rx="10" fill="none" stroke="#6b7280" stroke-width="1.4" stroke-dasharray="8 5"/>
+      <text x="176" y="30" font-size="12" fill="#1f2937" font-weight="700">Production network</text>
+      <text x="320" y="30" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace">infra/network.tf</text>
+
+      <rect x="10" y="128" width="125" height="70" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.4"/>
+      <text x="72" y="158" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">Customers'</text>
+      <text x="72" y="176" font-size="13" fill="#1f2937" font-weight="700" text-anchor="middle">browsers</text>
+
+      <rect x="185" y="50" width="140" height="66" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="255" y="77" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">CDN</text>
+      <text x="255" y="97" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">web/ (static build)</text>
+      <rect x="185" y="215" width="140" height="66" rx="6" fill="#eef3fa" stroke="#4a72b0" stroke-width="1.6"/>
+      <text x="255" y="242" font-size="13" fill="#385a90" font-weight="700" text-anchor="middle">Load balancer</text>
+      <text x="255" y="262" font-size="11" fill="#4b5563" text-anchor="middle">HTTPS ends here</text>
+
+      <rect x="365" y="215" width="150" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="440" y="242" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">API service</text>
+      <text x="440" y="262" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">services/api/</text>
+
+      <rect x="570" y="45" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="652" y="72" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Postgres</text>
+      <text x="652" y="92" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">infra/db.tf</text>
+      <rect x="570" y="140" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="652" y="167" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Job queue</text>
+      <text x="652" y="187" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">infra/queue.tf</text>
+      <rect x="570" y="240" width="165" height="66" rx="6" fill="#f0fafb" stroke="#148a92" stroke-width="1.6"/>
+      <text x="652" y="267" font-size="13" fill="#148a92" font-weight="700" text-anchor="middle">Workers</text>
+      <text x="652" y="287" font-size="10.5" fill="#374151" font-family="Consolas, Monaco, monospace" text-anchor="middle">workers/</text>
+
+      <polyline points="135,150 160,150 160,83 177,83" fill="none" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="184,83 177,79 177,87" fill="#4b5563"/>
+      <text x="166" y="140" font-size="10.5" fill="#4b5563">pages</text>
+      <polyline points="135,178 160,178 160,248 177,248" fill="none" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="184,248 177,244 177,252" fill="#4b5563"/>
+      <text x="166" y="200" font-size="10.5" fill="#4b5563">API calls</text>
+      <line x1="325" y1="248" x2="357" y2="248" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="364,248 357,244 357,252" fill="#4b5563"/>
+      <polyline points="515,232 540,232 540,78 562,78" fill="none" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="569,78 562,74 562,82" fill="#4b5563"/>
+      <text x="546" y="128" font-size="10.5" fill="#4b5563">reads, writes</text>
+      <line x1="540" y1="173" x2="562" y2="173" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="569,173 562,169 562,177" fill="#4b5563"/>
+      <text x="546" y="166" font-size="10.5" fill="#4b5563">jobs</text>
+      <line x1="652" y1="206" x2="652" y2="232" stroke="#4b5563" stroke-width="1.4"/>
+      <polygon points="652,239 648,232 656,232" fill="#4b5563"/>
+    </svg>
+    <p>One page shows the whole system: what customers reach, where the network boundary is, which services run inside it, and where the data lives. The agent draws it from the application code and the infrastructure files together, because the charters describe both.</p>
+    <div class="trait"><strong>Every box names its source.</strong> The CDN comes from <code>web/</code>, the database from <code>infra/db.tf</code>, the workers from <code>workers/</code>. A reader can check any part of the picture against the file that defines it, and see at once if the diagram and the system disagree.</div>
+  </div>
+
+  <!-- Example 7: project view ──────────────────────────────── -->
+  <div class="example" id="ex-progress">
+    <div class="ex-label">Example 7 · Report progress</div>
+    <h3>This month's progress, for the leadership team</h3>
+    <div class="request">Create me a Gator doc for this month's progress, for the leadership team.</div>
+    <p class="summary-line">Two of five goals are done. Bulk export is on schedule. The event-store upgrade is at risk, and the second region needs a decision this week.</p>
+    <div class="table-wrap">
+      <table class="table-teal">
+        <thead><tr><th>Goal</th><th>Status</th><th>What it means</th></tr></thead>
+        <tbody>
+          <tr><td>Safer card payments</td><td><span class="pill ok">✓ Done</span></td><td>Failed charges fell from 2.1% to 0.4% after the new retry logic.</td></tr>
+          <tr><td>Faster checkout page</td><td><span class="pill ok">✓ Done</span></td><td>The page loads in 1.2 s, down from 2.8 s.</td></tr>
+          <tr><td>Bulk export for customers</td><td><span class="pill info">◐ In progress</span></td><td>Design approved. About 60% built. On schedule for next month.</td></tr>
+          <tr><td>Event-store upgrade</td><td><span class="pill warn">⚑ At risk</span></td><td>Waiting for a maintenance window from the database team.</td></tr>
+          <tr><td>Second region</td><td><span class="pill data">? Decision</span></td><td>Approve the hosting budget so work can start next quarter.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The agent reads the commits, the charters and the open work in the repository, then writes for people who will not read code: goals instead of file names, outcomes instead of changes. Each status is a word and a symbol, not only a colour.</p>
+    <div class="trait"><strong>Easy to share.</strong> A Gator doc is one self-contained HTML file. Attach it in Microsoft Teams, email or chat, and it opens in any browser exactly as it looks in the Dashboard. Nothing is lost on the way.</div>
+  </div>
 </section>
 
-<section id="keep">
-  <h2>It lives with the code</h2>
-  <p class="principle">A Gator doc is a file in your repository, not a message that scrolls away.</p>
-  <ul class="caps">
-    <li><strong>Reviewed and versioned in Git.</strong> The document is committed like any other change. You can see who changed it, when, and why.</li>
-    <li><strong>Opens in the Dashboard.</strong> Select the file in the repository view to read it. It is a standalone page, so you can also share it with a colleague.</li>
-    <li><strong>Easy to share.</strong> A Gator doc is one self-contained HTML file. Attach it in Microsoft Teams, email or chat, and it opens in any browser exactly as it looks in the Dashboard.</li>
-    <li><strong>Kept beside what it explains.</strong> When the code changes, ask the agent to update the document in the same piece of work.</li>
-  </ul>
+<section id="current">
+  <h2>Keep it up to date</h2>
+  <p class="principle">A Gator doc stays beside what it explains, so it is easy to check.</p>
+  <p>When the code changes, or whenever you are not sure, ask the agent:</p>
+  <div class="ask">
+    <div class="pattern">Is this document up to date? If not, please update it.</div>
+  </div>
+  <p>The agent compares the document with the charters and the code, tells you what has changed, and updates the document. The update is a commit like any other, so you can see exactly what changed in the document and why.</p>
 </section>
 
 <footer class="doc-foot">

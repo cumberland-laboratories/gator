@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator docs explains what the documents are for, with a fuller feature example",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard"
+  ],
+  "commit": "0ce24f512f5c47b4bec708d43a5af6c80cf31ac9",
+  "short_commit": "0ce24f5",
+  "snippet_id": "snippet-0ce24f512f5c4",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "ccdb141a067db9ad3a3c22c9142045f995d2cadf",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:05:50Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-ccdb141a067db.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "The Gator docs Welcome topic now says what Gator docs are for: mapping",
+    "systems and flows, discussing proposed features with other architects,",
+    "drawing the whole system including its infrastructure, and project views",
+    "that executives can read. It credits the charters for the depth of",
+    "understanding behind them. The \"How does a feature work?\" example is now a",
+    "full-width commit-gate flow, modelled on the architecture overview",
+    "blueprint, and the page notes that a Gator doc is one HTML file that can be",
+    "shared as is, for example in Microsoft Teams."
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
