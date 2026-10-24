@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Welcome: Gator docs shows seven worked examples and how to keep a document current",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "welcome",
+    "gator-docs",
+    "dashboard"
+  ],
+  "commit": "e5b77124bbc60db08a05cc2c362ffd65db02502c",
+  "short_commit": "e5b7712",
+  "snippet_id": "snippet-e5b77124bbc60",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "0ce24f512f5c47b4bec708d43a5af6c80cf31ac9",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T19:18:05Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-0ce24f512f5c4.json",
+    "src/gator_command/templates/gator-starter/docs/gator-docs.html"
+  ],
+  "notes": [
+    "The Gator docs Welcome topic now teaches by example. \"Ask for one\" becomes",
+    "\"Examples\": seven requests, each with a realistic visual and one message",
+    "about Gator docs — a feature flow (labelled, linked to the source), retry",
+    "logic (versioned in Git), a release procedure (readable prose), a decision",
+    "record (the reason lives with the code), a feature proposal (shared with",
+    "other architects), the whole system with its infrastructure (every box",
+    "names its source), and a progress report for leadership (easy to share in",
+    "Teams). The separate \"looks like\" and \"lives with the code\" sections are"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}

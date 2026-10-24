@@ -601,6 +601,31 @@
       text-align: left;
       hyphens: manual;
     }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 1rem;
+      margin: 0.5rem 0 1rem;
+    }
+    .chart {
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 0.8rem 0.9rem 0.6rem;
+    }
+    .chart .chart-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 0.4rem;
+    }
+    .example .chart svg { margin: 0 auto 0.3rem; }
+    .chart .chart-note {
+      font-size: 0.82rem;
+      color: var(--gray-600);
+      text-align: left;
+      hyphens: manual;
+      margin: 0;
+    }
     .trait {
       background: var(--teal-light);
       border-left: 3px solid var(--teal);
@@ -977,6 +1002,70 @@
     <h3>This month's progress, for the leadership team</h3>
     <div class="request">Create me a Gator doc for this month's progress, for the leadership team.</div>
     <p class="summary-line">Two of five goals are done. Bulk export is on schedule. The event-store upgrade is at risk, and the second region needs a decision this week.</p>
+    <div class="charts">
+      <div class="chart">
+        <div class="chart-title">Failed card charges, % of all charges</div>
+        <svg viewBox="0 0 360 210" xmlns="http://www.w3.org/2000/svg"
+             font-family="'Segoe UI', system-ui, sans-serif"
+             role="img" aria-labelledby="ch1-title ch1-desc">
+        <title id="ch1-title">Failed card charges by month</title>
+        <desc id="ch1-desc">May 2.1%, June 2.2%, July 2.0%, August 2.1%. The new retry logic shipped at the start of September. September 0.9%, October 0.4%.</desc>
+        <line x1="40" y1="180" x2="350" y2="180" stroke="#9ca3af" stroke-width="1"/>
+        <text x="34" y="184" font-size="10.5" fill="#4b5563" text-anchor="end">0%</text>
+        <line x1="40" y1="120" x2="350" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="34" y="124" font-size="10.5" fill="#4b5563" text-anchor="end">1%</text>
+        <line x1="40" y1="60" x2="350" y2="60" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="34" y="64" font-size="10.5" fill="#4b5563" text-anchor="end">2%</text>
+        <path d="M53.8,180 V58.0 Q53.8,54.0 57.8,54.0 H73.8 Q77.8,54.0 77.8,58.0 V180 Z" fill="#0e9aa6"><title>May: 2.1% of charges failed</title></path>
+        <text x="65.8" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">May</text>
+        <path d="M105.5,180 V52.0 Q105.5,48.0 109.5,48.0 H125.5 Q129.5,48.0 129.5,52.0 V180 Z" fill="#0e9aa6"><title>Jun: 2.2% of charges failed</title></path>
+        <text x="117.5" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">Jun</text>
+        <path d="M157.2,180 V64.0 Q157.2,60.0 161.2,60.0 H177.2 Q181.2,60.0 181.2,64.0 V180 Z" fill="#0e9aa6"><title>Jul: 2.0% of charges failed</title></path>
+        <text x="169.2" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">Jul</text>
+        <path d="M208.8,180 V58.0 Q208.8,54.0 212.8,54.0 H228.8 Q232.8,54.0 232.8,58.0 V180 Z" fill="#0e9aa6"><title>Aug: 2.1% of charges failed</title></path>
+        <text x="220.8" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">Aug</text>
+        <path d="M260.5,180 V130.0 Q260.5,126.0 264.5,126.0 H280.5 Q284.5,126.0 284.5,130.0 V180 Z" fill="#0e9aa6"><title>Sep: 0.9% of charges failed</title></path>
+        <text x="272.5" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">Sep</text>
+        <path d="M312.2,180 V160.0 Q312.2,156.0 316.2,156.0 H332.2 Q336.2,156.0 336.2,160.0 V180 Z" fill="#0e9aa6"><title>Oct: 0.4% of charges failed</title></path>
+        <text x="324.2" y="197" font-size="10.5" fill="#4b5563" text-anchor="middle">Oct</text>
+        <text x="65.8" y="49" font-size="11" fill="#1f2937" font-weight="600" text-anchor="middle">2.1%</text>
+        <text x="324.2" y="151" font-size="11" fill="#1f2937" font-weight="600" text-anchor="middle">0.4%</text>
+        <line x1="246.6" y1="26" x2="246.6" y2="180" stroke="#4b5563" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="251" y="22" font-size="10.5" fill="#1f2937">new retry logic</text>
+        </svg>
+        <p class="chart-note">After the retry logic shipped, failed charges fell by four fifths.</p>
+      </div>
+      <div class="chart">
+        <div class="chart-title">Work done per goal</div>
+        <svg viewBox="0 0 360 210" xmlns="http://www.w3.org/2000/svg"
+             font-family="'Segoe UI', system-ui, sans-serif"
+             role="img" aria-labelledby="ch2-title ch2-desc">
+        <title id="ch2-title">Share of work done for each goal</title>
+        <desc id="ch2-desc">Safer card payments 100%. Faster checkout page 100%. Bulk export 60%. Event-store upgrade 35%. Second region not started.</desc>
+        <line x1="150" y1="22" x2="150" y2="190" stroke="#9ca3af" stroke-width="1"/>
+        <text x="150" y="204" font-size="10" fill="#4b5563" text-anchor="middle">0</text>
+        <line x1="235" y1="22" x2="235" y2="190" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="235" y="204" font-size="10" fill="#4b5563" text-anchor="middle">50%</text>
+        <line x1="320" y1="22" x2="320" y2="190" stroke="#e5e7eb" stroke-width="1"/>
+        <text x="320" y="204" font-size="10" fill="#4b5563" text-anchor="middle">100%</text>
+        <text x="142" y="44" font-size="11.5" fill="#1f2937" text-anchor="end">Safer card payments</text>
+        <path d="M150,31 H316.0 Q320.0,31 320.0,35 V45 Q320.0,49 316.0,49 H150 Z" fill="#0e9aa6"><title>Safer card payments: 100% done</title></path>
+        <text x="325.0" y="44" font-size="11" fill="#1f2937" font-weight="600">100%</text>
+        <text x="142" y="79" font-size="11.5" fill="#1f2937" text-anchor="end">Faster checkout page</text>
+        <path d="M150,66 H316.0 Q320.0,66 320.0,70 V80 Q320.0,84 316.0,84 H150 Z" fill="#0e9aa6"><title>Faster checkout page: 100% done</title></path>
+        <text x="325.0" y="79" font-size="11" fill="#1f2937" font-weight="600">100%</text>
+        <text x="142" y="114" font-size="11.5" fill="#1f2937" text-anchor="end">Bulk export</text>
+        <path d="M150,101 H248.0 Q252.0,101 252.0,105 V115 Q252.0,119 248.0,119 H150 Z" fill="#0e9aa6"><title>Bulk export: 60% done</title></path>
+        <text x="257.0" y="114" font-size="11" fill="#1f2937" font-weight="600">60%</text>
+        <text x="142" y="149" font-size="11.5" fill="#1f2937" text-anchor="end">Event-store upgrade</text>
+        <path d="M150,136 H205.5 Q209.5,136 209.5,140 V150 Q209.5,154 205.5,154 H150 Z" fill="#0e9aa6"><title>Event-store upgrade: 35% done</title></path>
+        <text x="214.5" y="149" font-size="11" fill="#1f2937" font-weight="600">35%</text>
+        <text x="142" y="184" font-size="11.5" fill="#1f2937" text-anchor="end">Second region</text>
+        <text x="155" y="184" font-size="11" fill="#4b5563" font-style="italic">not started</text>
+        </svg>
+        <p class="chart-note">Bars show progress only. The table below gives each goal's status in words.</p>
+      </div>
+    </div>
     <div class="table-wrap">
       <table class="table-teal">
         <thead><tr><th>Goal</th><th>Status</th><th>What it means</th></tr></thead>
@@ -989,7 +1078,7 @@
         </tbody>
       </table>
     </div>
-    <p>The agent reads the commits, the charters and the open work in the repository, then writes for people who will not read code: goals instead of file names, outcomes instead of changes. Each status is a word and a symbol, not only a colour.</p>
+    <p>The agent reads the commits, the charters and the open work in the repository, then writes for people who will not read code: goals instead of file names, outcomes instead of changes. The charts show the trend and the progress at a glance; hover a bar to see its value. Each status in the table is a word and a symbol, not only a colour.</p>
     <div class="trait"><strong>Easy to share.</strong> A Gator doc is one self-contained HTML file. Attach it in Microsoft Teams, email or chat, and it opens in any browser exactly as it looks in the Dashboard. Nothing is lost on the way.</div>
   </div>
 </section>
