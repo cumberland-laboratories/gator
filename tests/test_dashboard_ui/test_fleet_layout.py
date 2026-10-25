@@ -457,7 +457,8 @@ def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
     })""")
     assert out["selects"] == 0
     assert out["categories"] == [
-        ["Charter integrity", "Block", "Code needs its required charter update."],
+        ["Charter integrity", "Block", "Code needs its required charter update. When no "
+         "charter edit is warranted, only the Architect may approve the exact staged change."],
         ["Dangerous patterns", "Warn",
          "HIGH/CRITICAL findings require Architect attention in the session."],
     ]

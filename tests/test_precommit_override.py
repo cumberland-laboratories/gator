@@ -9,12 +9,14 @@ runs gator-approve.py only inside those temp repos (never against this
 repo) — the constitution forbids the agent approving real governance blocks.
 
 #75 policy under test:
-  - charter integrity and correctness rules are `fix-required`; nothing
-    approves them;
+  - a missing charter update blocks as `external-approval`: the Architect
+    may approve the exact staged change when no charter edit is warranted
+    (the escape hatch); correctness rules are `fix-required`;
   - a HIGH/CRITICAL dangerous pattern is a `[warning]` under the default
     (strict) policy: the commit passes and no override state is created;
-  - only Enterprise `evidence_only` makes it `[external-approval]`, so the
-    envelope lifecycle (#34, #35) is exercised through that path;
+  - only Enterprise `evidence_only` makes a dangerous pattern
+    `[external-approval]`; the envelope lifecycle (#34, #35) is exercised
+    through both the charter and the evidence_only paths;
   - a block or approval recorded by an earlier runtime for the same staged
     tree is cancelled and retried, never reinterpreted.
 """
@@ -43,7 +45,7 @@ import precommit_policy as policy  # noqa: E402
 # receive the real statement.
 SQL_DROP_USERS = "DROP " + "TABLE users;\n"
 SQL_DROP_ORDERS = "DROP " + "TABLE orders;\n"
-SQL_MATCH = "DROP " + "TABLE users"  # the source text (the rule message names "DROP TABLE")
+SQL_MATCH = "DROP " + "TABLE users"  # the source text; the rule message only names the statement type
 
 
 DRAFT = """---
@@ -195,53 +197,120 @@ def _head_json(repo, path):
 
 
 # ---------------------------------------------------------------------------
-# #75: charter integrity is fix-required
+# #75: a missing charter update blocks; the Architect may approve it
 # ---------------------------------------------------------------------------
 
-class TestCharterIsFixRequired:
-    def test_missing_charter_blocks_and_cannot_be_approved(self, any_repo):
+class TestCharterEscapeHatch:
+    def test_missing_charter_blocks_and_the_architect_may_approve(self, any_repo):
         repo = any_repo
+        approve = APPROVE if (repo.parent / "hooks" / "pre-commit").read_text(
+            encoding="utf-8").find("bundled_scripts") < 0 else APPROVE_BUNDLED
         _stage_code(repo)
         rc, out = _commit(repo)
         assert rc != 0
-        assert "charter-alongside-code [fix-required]" in out
-        assert "STOP. Do not override this yourself." not in out
-        assert "gator hook approve" not in out
+        assert "charter-alongside-code [external-approval]" in out
+        assert "STOP. Do not override this yourself." in out
+        assert "gator hook approve" in out
         block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
         assert {f["rule"]: f["resolution"] for f in block["failures"]} == {
-            "charter-alongside-code": "fix-required"}
+            "charter-alongside-code": "external-approval"}
 
         _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A")
-        assert rc == 1
-        assert "nothing in this block can be approved" in out
-        assert "charter-alongside-code" in out
-        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-
-    def test_hand_written_approval_does_not_clear_it(self, repo):
-        _stage_code(repo)
-        _commit(repo)
-        block = _backdate_block(repo)
-        _write_approval(repo, block, ["charter-alongside-code"])
+        rc, out = _approve(repo, "approve", "--reason", "typo fix; no charter change",
+                           "--name", "Architect", script=approve)
+        assert rc == 0, out
         rc, out = _commit(repo)
-        assert rc != 0
-        assert "charter-alongside-code [fix-required]" in out
-        assert "OVERRIDE" not in out
+        assert rc == 0, out
+        assert "OVERRIDE (charter-alongside-code) approved by Architect" in out
+        msg = _last_message(repo)
+        assert "Gator-Charter-Changed: override-skip" in msg
+        assert "Gator-Override-Rules: charter-alongside-code" in msg
+        assert "Gator-Override-Reason: typo fix; no charter change" in msg
+        assert _head_json(repo, ".gator/status.json")["charter_changed"] == "override-skip"
+        assert _state_files(repo) == []
 
-    def test_second_block_is_diagnosable(self, repo):
-        """#35 diagnosis survives: every failure is recorded with its
-        resolution, and `override status` names them."""
+    def test_second_block_keeps_the_approval(self, repo):
+        """#35 headline: after the Architect approves the charter finding,
+        a retry blocked by a fix-required rule keeps the approval, `override
+        status` diagnoses it, and the fixed retry lands with the override
+        trailers and no leftover state."""
         _stage_code(repo)
         _draft(repo, "bogus")
         rc, out = _commit(repo)
         assert rc != 0
-        assert "charter-alongside-code [fix-required]" in out
+        assert "charter-alongside-code [external-approval]" in out
         assert "invalid-change-type [fix-required]" in out
+        block1 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "docs-only refactor", "--name", "Architect")
+        assert rc == 0, out
+        assert "Still fix-required (not approvable): invalid-change-type" in out
+
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "invalid-change-type [fix-required]" in out
+        assert "✗ charter-alongside-code" not in out, "approved rule must not block again"
+        assert "is kept for the retry" in out
+        assert "legacy-override-record" not in out, "a current approval is not legacy"
+        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+        block2 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert block2["block_id"] == block1["block_id"]
+
         rc, out = _approve(repo, "status")
-        assert rc == 0
-        assert "charter-alongside-code (fix-required)" in out
-        assert "invalid-change-type (fix-required)" in out
-        assert "No blocked commit attempt" not in out
+        assert rc == 0 and "invalid-change-type (fix-required)" in out
+
+        _draft(repo, "fix")
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        msg = _last_message(repo)
+        assert "Gator-Charter-Changed: override-skip" in msg
+        assert f"Gator-Override-Block: {block1['block_id']}" in msg
+        assert _state_files(repo) == []
+
+    def test_charter_approval_with_a_dangerous_warning(self, any_repo):
+        """A commit with a missing charter update AND a HIGH dangerous
+        pattern: the charter rule blocks and is approved; the retry passes,
+        only the charter rule is recorded as overridden, and the dangerous
+        pattern stays a warning (never approved, never acknowledged)."""
+        repo = any_repo
+        _stage_code(repo)
+        _stage_sql(repo, name="migrate.txt")
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "charter-alongside-code [external-approval]" in out
+        assert "SQL-001 [warning]" in out
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
+
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "no charter content changes",
+                           "--name", "Architect")
+        assert rc == 0, out
+        assert "Approving for this exact staged change: charter-alongside-code" in out
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "OVERRIDE (charter-alongside-code) approved by Architect" in out
+        assert "ARCHITECT ATTENTION REQUIRED" in out and "SQL-001 [warning]" in out
+
+        trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
+        assert "Gator-Override-Rules: charter-alongside-code" in trailers
+        assert "Gator-Charter-Changed: override-skip" in trailers
+        assert not any(l.startswith("Gator-Dangerous") for l in trailers)
+        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        assert checks["overridden_rules"] == ["charter-alongside-code"]
+        assert checks["dangerous_pattern_warnings"] == ["SQL-001@migrate.txt:1"]
+        assert checks["dangerous_pattern_acknowledged"] == []
+        assert _state_files(repo) == []
+
+    def test_correctness_rules_stay_fix_required(self, repo):
+        (repo / "notes.md").write_text("docs\n", encoding="utf-8")
+        _git(repo, "add", "notes.md")
+        _draft(repo, "bogus")
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "invalid-change-type [fix-required]" in out
+        assert "STOP. Do not override this yourself." not in out
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +349,9 @@ class TestDangerousPatternWarning:
         _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
         assert rc != 0
-        assert "charter-alongside-code [fix-required]" in out
+        assert "charter-alongside-code [external-approval]" in out
         assert "SQL-001 [warning]" in out
-        assert "STOP. Do not override this yourself." not in out
+        assert "STOP. Do not override this yourself." in out, "the charter rule is approvable"
         block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
         assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
 
@@ -520,7 +589,7 @@ class TestLegacyMigration:
         rc, out = _commit(repo)
         assert "legacy-override-record" not in out
         if case == "charter-approved":
-            assert rc != 0 and "charter-alongside-code [fix-required]" in out
+            assert rc != 0 and "charter-alongside-code [external-approval]" in out
         else:
             assert rc == 0, out
             assert "SQL-001 [warning]" in out
@@ -864,7 +933,7 @@ class TestDiagnosis:
         sub = repo / "pkg"
         sub.mkdir()
         rc, out = _approve(repo, "status", cwd=sub)
-        assert rc == 0 and "charter-alongside-code (fix-required)" in out
+        assert rc == 0 and "charter-alongside-code (external-approval)" in out
 
     def test_outside_git_is_a_clear_error(self, tmp_path):
         # pytest's basetemp may live inside a checkout (e.g. --basetemp .tmp/...),
@@ -963,7 +1032,7 @@ class TestCleanupAndLegacy:
         rc, out = _commit(repo)
         assert rc != 0
         assert "legacy-override-file [fix-required]" in out
-        assert "charter-alongside-code [fix-required]" in out
+        assert "charter-alongside-code [external-approval]" in out
 
 
 class TestWorktrees:
@@ -991,7 +1060,11 @@ class TestUnits:
         assert ovr.classify("SQL-001") == ovr.FIX_REQUIRED
         assert ovr.classify("charter-alongside-code", EXT) == ovr.FIX_REQUIRED
         assert ovr.classify("something-new") == ovr.FIX_REQUIRED  # fail closed
-        assert "charter-alongside-code" in ovr.FIX_REQUIRED_RULES
+        assert "charter-alongside-code" not in ovr.FIX_REQUIRED_RULES
+        assert "charter-alongside-code" in ovr.CHARTER_OVERRIDE_RULES
+        assert policy.charter_resolutions(
+            [("charter-alongside-code", "m"), ("invalid-change-type", "m")]) == {
+            "charter-alongside-code": ovr.EXTERNAL_APPROVAL}
         assert ovr.LEGACY_RECORD_RULE in ovr.FIX_REQUIRED_RULES
         for legacy in ("approvable", "lint"):
             assert not ovr.is_approvable(legacy)
@@ -1043,7 +1116,7 @@ class TestUnits:
         assert (sdir / ovr.APPROVAL_FILE).exists()
         remaining, handoff, _ = ovr.apply_approval(sdir, tree, [("SQL-001", "m")], EXT)
         assert remaining == [] and handoff["overridden_rules"] == ["SQL-001"]
-        assert "charter_override" not in handoff
+        assert handoff["charter_override"] is False
 
     def test_legacy_records(self, repo):
         sdir, tree = _sdir(repo), ovr.index_tree(repo)
@@ -1057,6 +1130,12 @@ class TestUnits:
         assert ovr.legacy_records(sdir, tree) is None
         _write_approval(repo, ovr.read_block(sdir)[1], ["SQL-001"])
         assert "was not written for the current policy" in ovr.legacy_records(sdir, tree)
+        # An approval this runtime writes carries the policy marker: not legacy.
+        block = ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], [],
+                                {"charter-alongside-code": ovr.EXTERNAL_APPROVAL})
+        approval = ovr.write_approval(sdir, block, "A", "r")
+        assert approval["resolution_policy"] == ovr.RESOLUTION_POLICY
+        assert ovr.legacy_records(sdir, tree) is None
 
     def test_sanitize(self):
         assert ovr.sanitize_trailer_value("a\r\nb\n  c", 50) == "a b c"

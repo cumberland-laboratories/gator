@@ -170,8 +170,7 @@ def cmd_approve(args):
     if not rules:
         print("  Refused: nothing in this block can be approved.")
         print(f"  Fix these findings and retry the commit: {', '.join(fix_required)}")
-        print("  Charter updates are fix-required, and dangerous-pattern warnings")
-        print("  do not block, so neither uses this command.")
+        print("  Dangerous-pattern warnings do not block and never use this command.")
         print()
         return 1
 

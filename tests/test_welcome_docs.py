@@ -234,5 +234,7 @@ def test_precommit_document_keeps_warning_and_approval_apart():
     approve_lines = [l for l in text.splitlines() if "gator hook approve" in l]
     assert len(approve_lines) == 1 and "External approval." in approve_lines[0], approve_lines
     assert "Gator-Dangerous-Pattern-Acknowledged-By" in text
+    # The charter escape hatch: a missing charter update is approvable.
+    assert "Code changed, but its charter did not. The commit stops." in approve_lines[0]
     assert "An acknowledgement never produces them." in text
     assert "DROP" not in text.upper().replace("DROPS", "")

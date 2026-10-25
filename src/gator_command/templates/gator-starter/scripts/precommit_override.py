@@ -53,9 +53,10 @@ APPROVAL_FILE = "approval.json"
 HANDOFF_FILE = "handoff.json"
 
 # Resolution classes for failed rules (#75). The caller passes an explicit
-# {rule: EXTERNAL_APPROVAL} map (precommit_policy.resolution_map()); every
-# rule the map does not name is fix-required. Nothing is approvable by rule
-# name alone any more.
+# {rule: EXTERNAL_APPROVAL} map (precommit_policy: charter rules, plus
+# HIGH/CRITICAL lint in a mode that requires external approval); every rule
+# the map does not name is fix-required. Nothing is approvable by rule name
+# alone.
 EXTERNAL_APPROVAL = "external-approval"  # the Architect may approve this exact tree
 FIX_REQUIRED = "fix-required"            # fix and retry; never approvable
 
@@ -63,6 +64,10 @@ FIX_REQUIRED = "fix-required"            # fix and retry; never approvable
 # approvable now: a same-tree block that carries one is cancelled and
 # retried (legacy_records()), never reinterpreted.
 LEGACY_RESOLUTIONS = frozenset({"approvable", "lint"})
+
+# Every approval this runtime writes carries this marker. A same-tree
+# approval without it was written by an earlier runtime (legacy_records()).
+RESOLUTION_POLICY = "explicit-map-v1"
 
 CHARTER_RULES = frozenset({
     "charter-alongside-code",
@@ -80,7 +85,10 @@ FIX_REQUIRED_RULES = frozenset({
     "unmerged-index",
     LEGACY_RECORD_RULE,
     "invalid-dangerous-pattern-acknowledgement",  # precommit_policy.ACK_RULE
-}) | CHARTER_RULES
+})
+# Charter rules block, and the Architect may approve an exact staged change
+# when no charter edit is warranted (precommit_policy.charter_resolutions()).
+CHARTER_OVERRIDE_RULES = CHARTER_RULES
 
 # Legacy v1 files in .gator/ — detected and retired, never interpreted.
 LEGACY_FILES = (
@@ -401,9 +409,8 @@ def legacy_records(sdir, tree, now=None):
       - a block whose failures carry a legacy resolution (approvable/lint);
       - a block that already records the guard's own legacy-override-record
         failure, so the guard survives its first write_block();
-      - a well-formed approval, whatever it names: the strict path never
-        writes an approvable block, so any such approval came from an
-        earlier runtime or another mode.
+      - a well-formed approval without the RESOLUTION_POLICY marker, which
+        every approval this runtime writes carries.
     A record for another tree, or an expired or malformed one, is not in
     flight: normal retirement handles it.
     """
@@ -422,7 +429,8 @@ def legacy_records(sdir, tree, now=None):
                     "earlier Gator runtime")
     a_state, approval = read_approval(sdir)
     if (a_state == "ok" and approval["index_tree"] == tree
-            and approval["expires_epoch"] > now):
+            and approval["expires_epoch"] > now
+            and approval.get("resolution_policy") != RESOLUTION_POLICY):
         return (f"approval {approval['approval_id']} "
                 f"({', '.join(approval['approved_rules']) or 'no rules'}) "
                 "was not written for the current policy")
@@ -469,6 +477,7 @@ def write_approval(sdir, block, approved_by, reason, now=None):
         "approved_at": _iso(now),
         "expires_epoch": block["expires_epoch"],
         "expires_at": block["expires_at"],
+        "resolution_policy": RESOLUTION_POLICY,
     }
     _write_json(Path(sdir) / APPROVAL_FILE, approval)
     return approval
@@ -522,6 +531,7 @@ def write_handoff(sdir, approval, overridden_rules, now=None):
         "approval_id": approval["approval_id"],
         "index_tree": approval["index_tree"],
         "overridden_rules": rules,
+        "charter_override": any(r in CHARTER_OVERRIDE_RULES for r in rules),
         "approved_by": sanitize_trailer_value(approval["approved_by"], TRAILER_MAX["approved_by"]),
         "reason": sanitize_trailer_value(approval["reason"], TRAILER_MAX["reason"]),
         "written_at": _iso(now),

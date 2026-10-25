@@ -24,7 +24,8 @@
 
   // The fixed first-pass policy (precommit_policy.py). Read-only.
   const CATEGORIES = [
-    ["Charter integrity", "Block", "Code needs its required charter update."],
+    ["Charter integrity", "Block",
+     "Code needs its required charter update. When no charter edit is warranted, only the Architect may approve the exact staged change."],
     ["Dangerous patterns", "Warn",
      "HIGH/CRITICAL findings require Architect attention in the session."],
   ];

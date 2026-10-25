@@ -31,15 +31,15 @@ An approval authorizes one staged-change identity (`index_tree()`: SHA-256 over 
 
 A block always writes `block.json` with every failed rule and its resolution class (`fix-required` or `external-approval`) — including attempts with no approvable rule. `gator hook approve` / `override status` must never answer "no pending request" while the last attempt was blocked; they name each rule and what resolves it. Pre-#75 values (`approvable`, `lint`, `LEGACY_RESOLUTIONS`) are shown as recorded by an earlier runtime and are never approvable.
 
-## TRIPWIRE: Charter Integrity Is Never Approvable; Warnings Never Reach the Envelope (#75)
+## TRIPWIRE: Charter Integrity Blocks With an Architect-Only Escape Hatch; Warnings Never Reach the Envelope (#75)
 
-Charter rules (`CHARTER_RULES`) and every correctness rule are `fix-required`. Only a rule that the caller's explicit resolution map (`precommit_policy.resolution_map()`) names as `external-approval` is approvable, and only Enterprise `evidence_only` produces such a map today. Under the default policy a HIGH/CRITICAL dangerous finding is a `[warning]`: it is reported (hook output, whiteboard, `status.json` `commit_checks`) but never written to `block.json`, never approvable, and never creates override state. Do not infer a resolution from rule-name membership again, and do not add a configuration knob for the category policy as a side effect: that is a separate, explicit feature.
+Every correctness rule is `fix-required`. Only a rule that the caller's explicit resolution map names as `external-approval` is approvable: the charter rules (`CHARTER_RULES`, via `precommit_policy.charter_resolutions()`), in every validate path that evaluates them, and HIGH/CRITICAL lint where the mode requires it (`resolution_map()`; Enterprise `evidence_only`). A missing charter update therefore always blocks; the agent updates the charter, and only the Architect may approve the exact staged change when no charter edit is warranted (the escape hatch the #76 Commits approval button relies on). The approval produces `Gator-Charter-Changed: override-skip` plus the `Gator-Override-*` trailers. Under the default policy a HIGH/CRITICAL dangerous finding is a `[warning]`: it is reported (hook output, whiteboard, `status.json` `commit_checks`) but never written to `block.json`, never approvable, and never creates override state. Do not infer a resolution from rule-name membership again, and do not add a configuration knob for the category policy as a side effect: that is a separate, explicit feature.
 
 ! Matched source text (a finding's `match`) goes only to stdout and the gitignored `commit_issues.md`. The whiteboard and `status.json` are staged on a passing commit, so they carry rule names, `file:line — message` and finding keys only.
 
 ## TRIPWIRE: In-Flight Legacy Records Are Cancelled, Never Reinterpreted (#75)
 
-When the strict path sees, for THIS staged tree and unexpired, a block with a legacy resolution, a block that already records `legacy-override-record`, or any well-formed approval (`precommit_override.legacy_records()`), it adds the fix-required `legacy-override-record` failure, skips `apply_approval()` (only `clear_handoff()`), and blocks. The guard's own block keeps the marker, so every unchanged retry blocks until `gator hook override cancel` or a tree change. It never applies, retires, or deletes the legacy approval. Other-tree, expired, and malformed state keeps normal retirement. `evidence_only` does not run the guard: its blocks complete under the unchanged envelope.
+When the strict path sees, for THIS staged tree and unexpired, a block with a legacy resolution, a block that already records `legacy-override-record`, or a well-formed approval without the `RESOLUTION_POLICY` marker (`precommit_override.legacy_records()`), it adds the fix-required `legacy-override-record` failure, skips `apply_approval()` (only `clear_handoff()`), and blocks. The guard's own block keeps the marker, so every unchanged retry blocks until `gator hook override cancel` or a tree change. It never applies, retires, or deletes the legacy approval. Other-tree, expired, and malformed state keeps normal retirement. `evidence_only` does not run the guard: its blocks complete under the unchanged envelope.
 
 ## TRIPWIRE: Acknowledgement Evidence Binds to Current Warnings and Is Never an Override (#75)
 
@@ -74,13 +74,13 @@ Filesystem: none (git subprocess)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
 Resolution classes from the caller's explicit map (#75): a rule mapped to `EXTERNAL_APPROVAL` → `external-approval`; every other rule → `fix-required`. `is_approvable()` is true only for `external-approval`. `legacy_rules()` names a block's failures recorded with a `LEGACY_RESOLUTIONS` value.
 <- `write_block()`, `apply_approval()`, `render_block_report()`, `gator-approve.py`
-! Unknown rules fail closed to `fix-required`. `FIX_REQUIRED_RULES` lists the known rules for documentation and tests: the correctness rules (frontmatter-parse, invalid-change-type, invalid-significance, empty-commit-draft, missing-message, legacy-override-file, unmerged-index), `legacy-override-record`, and `CHARTER_RULES` (charter-alongside-code, cross-cutting-missing, charter-index-gap). `APPROVABLE_RULES` and `CHARTER_OVERRIDE_RULES` were removed.
+! Unknown rules fail closed to `fix-required`. `FIX_REQUIRED_RULES` lists the known rules for documentation and tests: the correctness rules (frontmatter-parse, invalid-change-type, invalid-significance, empty-commit-draft, missing-message, legacy-override-file, unmerged-index), `legacy-override-record`, and `invalid-dangerous-pattern-acknowledgement`. `CHARTER_RULES` (charter-alongside-code, cross-cutting-missing, charter-index-gap; alias `CHARTER_OVERRIDE_RULES`) are not in it: they are approvable through the caller's map. `APPROVABLE_RULES` was removed.
 
 ### legacy_records(sdir, tree, now=None)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
-Read-only #75 migration guard: the reason string when an unexpired same-tree block carries a legacy resolution or the `legacy-override-record` marker, or an unexpired well-formed same-tree approval exists; else `None` (also when `sdir`/`tree` is None).
+Read-only #75 migration guard: the reason string when an unexpired same-tree block carries a legacy resolution or the `legacy-override-record` marker, or an unexpired well-formed same-tree approval lacks `resolution_policy == RESOLUTION_POLICY`; else `None` (also when `sdir`/`tree` is None).
 <- `gator-pre-commit.phase_validate()` (strict path, both copies)
-! See the In-Flight Legacy Records tripwire. The strict path never writes an approvable block, so any same-tree approval it sees came from an earlier runtime or another mode.
+! See the In-Flight Legacy Records tripwire. The approval test uses the marker, not the current failures, so a current charter approval is never mistaken for a legacy one (pinned by `test_second_block_keeps_the_approval` and `test_legacy_records`).
 
 ### write_block(sdir, tree, failures, files, resolutions=None, now=None) / read_block(sdir)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
@@ -91,7 +91,7 @@ Filesystem: `<git-path>/gator-override/block.json` (RW)
 
 ### write_approval(sdir, block, approved_by, reason, now=None) / read_approval(sdir) / retire_approval(sdir)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
-Immutable approval snapshot `{approval_id, block_id, index_tree, approved_rules, approved_by, reason, approved_epoch, expires_epoch}` covering every approvable rule of the block. `read_approval` rejects wrong schema or missing fields as `malformed`.
+Immutable approval snapshot `{approval_id, block_id, index_tree, approved_rules, approved_by, reason, approved_epoch, expires_epoch, resolution_policy}` covering every approvable rule of the block. `resolution_policy` (`RESOLUTION_POLICY`, #75) is additive and not a required read field; `legacy_records()` uses it to tell this runtime's approvals from earlier ones. `read_approval` rejects wrong schema or missing fields as `malformed`.
 Filesystem: `<git-path>/gator-override/approval.json` (W by approve, R by validate)
 <- `gator-approve.py` (write), `inspect()` (read), `phase_validate()` (retire on invalid states)
 ! Requires non-blank name and reason and at least one approvable rule (`ValueError`). Validate never rewrites it.
@@ -104,7 +104,7 @@ Read-only discriminated result: `absent`, `malformed`, `expired`, `mismatch` (di
 
 ### write_handoff(sdir, approval, overridden_rules, now=None) / read_handoff(sdir, tree=None) / clear_handoff(sdir) / override_trailers(handoff)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_override.py`
-Validate→commit-msg handoff for a pass that used an approval: block/approval ids, tree, `overridden_rules`, and sanitized approver/reason (`charter_override` was dropped in #75; it was never a required field). `read_handoff(tree=...)` ignores a handoff for a different tree. `override_trailers()` renders `Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`.
+Validate→commit-msg handoff for a pass that used an approval: block/approval ids, tree, `overridden_rules`, `charter_override` (any overridden rule in `CHARTER_OVERRIDE_RULES`), and sanitized approver/reason. `read_handoff(tree=...)` ignores a handoff for a different tree. `override_trailers()` renders `Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`.
 Filesystem: `<git-path>/gator-override/handoff.json` (RW)
 <- `phase_validate()` (write/clear), `phase_trailers()` / `assemble_trailers()` (read)
 ! Values pass through `sanitize_trailer_value()` (CR/LF collapsed, whitespace normalized, approver ≤ 80, reason ≤ 200 chars) so Architect input cannot inject extra trailers.
@@ -133,13 +133,13 @@ PASS output for HIGH/CRITICAL dangerous-pattern warnings: each finding tagged `[
 
 ### phase_trailers(msg_file_path) / assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None, handoff=None, acknowledged=None)
 File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
-`commit-msg` hook. Reads the handoff for the **current** tree (`read_handoff(tree=index_tree())`) without consuming it. It reruns Layer 1 lint and `validate_acknowledgements()` for the effective mode (template: `_read_enforcement_level()`; bundled: `GATOR_HOOK_MODE` first) and passes `acknowledged=(keys, architect)` only when there are no problems; an exception here leaves `acknowledged=None` so trailers never fail on evidence. `assemble_trailers()` appends `policy.acknowledgement_trailers()` after the override trailers. `assemble_trailers()` emits `Gator-Charter-Changed: yes|no` (never `override-skip` since #75; readers keep accepting it), then `override_state.override_trailers(handoff)` (`Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`, sanitized).
+`commit-msg` hook. Reads the handoff for the **current** tree (`read_handoff(tree=index_tree())`) without consuming it. It reruns Layer 1 lint and `validate_acknowledgements()` for the effective mode (template: `_read_enforcement_level()`; bundled: `GATOR_HOOK_MODE` first) and passes `acknowledged=(keys, architect)` only when there are no problems; an exception here leaves `acknowledged=None` so trailers never fail on evidence. `assemble_trailers()` appends `policy.acknowledgement_trailers()` after the override trailers. `assemble_trailers()` emits `Gator-Charter-Changed: override-skip` when the handoff overrode a charter rule (else yes/no), then `override_state.override_trailers(handoff)` (`Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`, sanitized).
 <- `commit-msg` hook
 ! `override` parameter is retained for signature compatibility and ignored. No `.override-meta.json` side file exists any more.
 
 ### build_status(gator_dir, staged_files, frontmatter, body, handoff=None, checks=None) / empty_commit_checks() / write_whiteboard(gator_dir, failures, warnings, handoff, enforcement_level, resolutions=None, attention=())
 File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
-Status snapshot and whiteboard. `status.json` gains the additive `commit_checks` object (#75): `integrity_failures`, `dangerous_pattern_warnings` (finding keys), `dangerous_pattern_acknowledged`, `acknowledged_by`, `external_approval_required`, `overridden_rules` (from the handoff). `charter_changed` is the plain boolean. The whiteboard has separate sections: `## Blocked — fix required`, `## External approval required` (split by `policy.report_categories()`), `## Dangerous-pattern warnings — Architect attention`, `## Warnings`, `## Architect acknowledgements` (acknowledged keys and the Architect; `acknowledged=`, `acknowledged_by=`), and `## Overrides` (rules, approver, reason, block id from the handoff).
+Status snapshot and whiteboard. `status.json` gains the additive `commit_checks` object (#75): `integrity_failures`, `dangerous_pattern_warnings` (finding keys), `dangerous_pattern_acknowledged`, `acknowledged_by`, `external_approval_required`, `overridden_rules` (from the handoff). `charter_changed` is `"override-skip"` when the handoff overrode a charter rule, else the boolean. The whiteboard has separate sections: `## Blocked — fix required`, `## External approval required` (split by `policy.report_categories()`), `## Dangerous-pattern warnings — Architect attention`, `## Warnings`, `## Architect acknowledgements` (acknowledged keys and the Architect; `acknowledged=`, `acknowledged_by=`), and `## Overrides` (rules, approver, reason, block id from the handoff).
 <- `phase_validate()` (strict and bundled `evidence_only`)
 
 ### phase_cleanup()
@@ -160,9 +160,9 @@ Filesystem: git diff (R), staged files (R), `.gator/lint-allow.json` (R)
 File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
 Lint findings file (gitignored; the only file that carries the matched text). Guidance: HIGH/CRITICAL findings need the Architect's attention (fix, remove, or keep); they do not block and have no approval command, except where an Enterprise mode requires external approval.
 
-### dangerous_resolution(mode) / split_lint(findings, mode) / resolution_map(external_findings) / report_categories(failures, resolutions) / finding_key(finding) / finding_keys(findings) / finding_text(finding)
+### dangerous_resolution(mode) / split_lint(findings, mode) / resolution_map(external_findings) / charter_resolutions(failures) / report_categories(failures, resolutions) / finding_key(finding) / finding_keys(findings) / finding_text(finding)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_policy.py`
-The closed #75 policy table (pure functions, no I/O). `dangerous_resolution`: `evidence_only` → `external-approval`; `strict`/`warn`/`off`/unknown → `warning`. `split_lint` → `(dangerous, external, advisory)`, keeping each finding's fields. `report_categories` → `(fix_required, external_approval)` rule lists; a rule the map does not name is fix-required. `finding_key` = `RULE@path:line` (forward slashes; line 0 for a dangerous filename), never the matched text.
+The closed #75 policy table (pure functions, no I/O). `dangerous_resolution`: `evidence_only` → `external-approval`; `strict`/`warn`/`off`/unknown → `warning`. `split_lint` → `(dangerous, external, advisory)`, keeping each finding's fields. `charter_resolutions` → `{rule: external-approval}` for the `CHARTER_RULES` among the failures; validate merges it into the lint map. `report_categories` → `(fix_required, external_approval)` rule lists; a rule the map does not name is fix-required. `finding_key` = `RULE@path:line` (forward slashes; line 0 for a dangerous filename), never the matched text.
 <- both `gator-pre-commit.py` copies
 ! Byte-identical with the Enterprise bundled copy (`TestByteIdentityAcrossThreeCopies`). The table has no configuration input on purpose.
 
@@ -177,7 +177,7 @@ Architect acknowledgement evidence (#75). `ACK_FIELD` = `dangerous-pattern-ackno
 File: `src/gator_command/templates/gator-starter/scripts/gator-approve.py`
 Architect override CLI. argparse runs before any prompt (#14). No subcommand, or leading flags (v1 `--reason/--name` usage), normalizes to `approve`; unknown subcommands are argparse usage errors (exit 2). Root/state/tree come from `precommit_override` (`resolve_repo_root()` works from a governed subdirectory or a linked worktree; errors exit 1).
 - `status`: `describe()` of the last block + approval state from `inspect()` + any legacy v1 files. Exit 0.
-- `approve`: never says "no pending request" for a recorded block. Refuses (exit 1) with a specific reason when: no block recorded (tells the Architect to retry the commit), block malformed (cancel + retry), staged tree changed since the block (retry to refresh), block expired, the block carries legacy resolutions (`legacy_rules()`: cancel and retry), nothing approvable (names the fix-required rules; charter updates and warnings never use this command), or block younger than `MIN_APPROVAL_DELAY_SECONDS`. Otherwise prompts only for a missing `--reason` / `--name`, writes the immutable snapshot via `write_approval()`, and states any remaining fix-required findings.
+- `approve`: never says "no pending request" for a recorded block. Refuses (exit 1) with a specific reason when: no block recorded (tells the Architect to retry the commit), block malformed (cancel + retry), staged tree changed since the block (retry to refresh), block expired, the block carries legacy resolutions (`legacy_rules()`: cancel and retry), nothing approvable (names the fix-required rules; dangerous-pattern warnings never use this command), or block younger than `MIN_APPROVAL_DELAY_SECONDS`. Otherwise prompts only for a missing `--reason` / `--name`, writes the immutable snapshot via `write_approval()`, and states any remaining fix-required findings.
 - `cancel`: `precommit_override.cancel()`; reports what was removed. Exit 0.
 Filesystem: override state dir via `precommit_override` only
 <- `gator-hook.py` (`override`, alias `approve`)
@@ -212,7 +212,7 @@ Commit-time session attribution: walk this process's parent chain as `(pid, star
 - Hook scripts must be written with LF line endings (`sh` on Windows rejects CRLF), using `open(path, "w", newline="\n")` — not `Path.write_text(newline=...)`, which requires Python 3.10+.
 - Test code and fixtures must run on Python 3.9, the lowest version in the CI matrix (`source-ci` fast lanes on Ubuntu and Windows). A 3.10+ API in a fixture errors every test in the file on those lanes.
 
-Approval in these tests runs `gator-approve.py approve` only inside the temp repos — never against this repository's own blocks. Since #75 the strict path produces nothing approvable, so the envelope lifecycle tests (supersede, expiry, retry safety, trailer injection) run through the bundled copy with `GATOR_HOOK_MODE=evidence_only` and a staged SQL-001 finding. Strict-mode warning tests stage `migrate.txt`, because `.txt` is charter-exempt while `.sql` is code. Legacy-migration fixtures write pre-#75 `block.json` / `approval.json` / `handoff.json` records by hand.
+Approval in these tests runs `gator-approve.py approve` only inside the temp repos — never against this repository's own blocks. The charter escape hatch (`TestCharterEscapeHatch`, both copies) and the #35 second-block headline exercise the envelope in strict mode; the supersede, expiry, retry-safety and trailer-injection tests run through the bundled copy with `GATOR_HOOK_MODE=evidence_only` and a staged SQL-001 finding. Strict-mode warning tests stage `migrate.txt`, because `.txt` is charter-exempt while `.sql` is code. Legacy-migration fixtures write pre-#75 `block.json` / `approval.json` / `handoff.json` records by hand.
 
 ## Delivery (where these scripts run)
 

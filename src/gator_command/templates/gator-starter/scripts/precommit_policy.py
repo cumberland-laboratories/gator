@@ -4,15 +4,18 @@ precommit_policy.py — the pre-commit resolution policy (#75).
 
 Every finding the pre-commit hook reports has exactly one resolution:
 
-  fix-required       charter integrity and every correctness rule. Fix and
-                     retry; nothing approves it.
+  fix-required       every correctness rule (invalid commit draft, broken
+                     acknowledgement evidence, a legacy record, ...). Fix
+                     and retry; nothing approves it.
   warning            a HIGH/CRITICAL dangerous pattern under the default
                      policy. The commit is not blocked; the agent presents
                      the finding to the Architect in the session.
-  external-approval  a HIGH/CRITICAL dangerous pattern where the mode
-                     requires the tree-bound approval envelope
-                     (precommit_override). Today only Enterprise
-                     `evidence_only` does.
+  external-approval  the tree-bound approval envelope (precommit_override):
+                     a missing charter update (the Architect may approve
+                     the exact staged change when no charter edit is
+                     warranted), and a HIGH/CRITICAL dangerous pattern
+                     where the mode requires it (Enterprise
+                     `evidence_only`).
 
 The table is fixed and closed: there is no repository policy schema in
 the first pass. Both gator-pre-commit.py copies (wheel template and
@@ -85,6 +88,15 @@ def resolution_map(external_findings):
     """The explicit map passed to the override envelope: only these rules
     are ``external-approval``; every other rule is ``fix-required``."""
     return {f["rule"]: EXTERNAL_APPROVAL for f in external_findings}
+
+
+def charter_resolutions(failures):
+    """``external-approval`` for the charter rules among ``failures``: a
+    missing charter update blocks, and the Architect may approve the exact
+    staged change when the charter check misfires or no charter edit is
+    warranted."""
+    return {rule: EXTERNAL_APPROVAL for rule, _ in failures
+            if rule in _override.CHARTER_RULES}
 
 
 def report_categories(failures, resolutions):

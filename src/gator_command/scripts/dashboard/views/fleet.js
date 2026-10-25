@@ -23,8 +23,8 @@
   // ── commit policy posture (#75) ──────────────────────────────────────────
   //
   // Read-only. The strict/warn/off selector was retired: one broad switch
-  // misdescribes the two categories (charter integrity always blocks;
-  // dangerous patterns warn). Shared with views/settings.js through
+  // misdescribes the two categories (charter integrity blocks, with an
+  // Architect approval as the escape hatch; dangerous patterns warn). Shared with views/settings.js through
   // window.GatorCommitPolicy (fleet.js loads first).
 
   // `active` is false for the two states with no effective policy to

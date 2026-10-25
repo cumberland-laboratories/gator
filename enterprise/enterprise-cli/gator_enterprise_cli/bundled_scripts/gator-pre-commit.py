@@ -716,10 +716,12 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
     if issue_count > 0:
         trailers.append(f"Gator-Issues: {issue_count}")
 
-    # Charter changed (from git diff --cached — deterministic). Charter rules
-    # are fix-required (#75), so no approval produces `override-skip` any
-    # more; readers keep accepting it on historical commits.
-    trailers.append(f"Gator-Charter-Changed: {'yes' if has_charter else 'no'}")
+    # Charter changed (from git diff --cached — deterministic), unless an
+    # Architect approval for this exact tree overrode a charter rule.
+    if handoff and handoff.get("charter_override"):
+        trailers.append("Gator-Charter-Changed: override-skip")
+    else:
+        trailers.append(f"Gator-Charter-Changed: {'yes' if has_charter else 'no'}")
     # Durable, sanitized audit of any approval used (#34 Phase F). The
     # handoff is only read here — it is consumed in post-commit.
     trailers.extend(override_state.override_trailers(handoff))
@@ -831,6 +833,9 @@ def build_status(gator_dir, staged_files, frontmatter, body, handoff=None,
     commit_checks = dict(empty_commit_checks(), **(checks or {}))
     if handoff:
         commit_checks["overridden_rules"] = list(handoff.get("overridden_rules", []))
+    charter_changed = ("override-skip"
+                       if handoff and handoff.get("charter_override")
+                       else has_charter)
 
     return {
         "repo": gator_dir.parent.name,
@@ -842,7 +847,7 @@ def build_status(gator_dir, staged_files, frontmatter, body, handoff=None,
         "generation": generation,
         "policy_version": policy_version,
         "issues": issue_count,
-        "charter_changed": has_charter,
+        "charter_changed": charter_changed,
         "change_type": change_type,
         "significance": significance,
         "decision_tags": tags,
@@ -1201,6 +1206,9 @@ def phase_validate():
     lint_findings = run_layer1_lint(staged_files, repo_root)
     dangerous, external, advisory = policy.split_lint(lint_findings, enforcement)
     resolutions = policy.resolution_map(external)
+    # A missing charter update blocks; the Architect may approve the exact
+    # staged change when no charter edit is warranted (the escape hatch).
+    resolutions.update(policy.charter_resolutions(failures))
     for finding in external:
         failures.append((
             finding["rule"],

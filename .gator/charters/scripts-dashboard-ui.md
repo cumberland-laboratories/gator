@@ -712,7 +712,7 @@ The Welcome workspace: six topics (Start a session with Gator · Gator overview 
 
 ### GatorViews.settings() — Settings view
 File: src/gator_command/scripts/dashboard/views/settings.js
-Read-only commit policy (#75): a `table.settings-policy-table` with the two fixed categories (Charter integrity: Block; Dangerous patterns: Warn, each with its meaning), then `table.settings-repo-table` with one row per repository (`tr[data-repo]`, `td.settings-policy`, `td.settings-policy-note`) from `window.GatorCommitPolicy.posture()` over the Fleet payload, so an inaccessible repository shows "Unknown" and a not-gatorized one "Not gatorized", exactly as in Fleet. No `select`, no request.
+Read-only commit policy (#75): a `table.settings-policy-table` with the two fixed categories (Charter integrity: Block, with the Architect-only exact-change approval as the escape hatch; Dangerous patterns: Warn, each with its meaning), then `table.settings-repo-table` with one row per repository (`tr[data-repo]`, `td.settings-policy`, `td.settings-policy-note`) from `window.GatorCommitPolicy.posture()` over the Fleet payload, so an inaccessible repository shows "Unknown" and a not-gatorized one "Not gatorized", exactly as in Fleet. No `select`, no request.
 <- settings route
 ! Depends on `views/fleet.js` loading first (live `dashboard.html` and the snapshot both load it first); without it every row falls back to "Default". A future Commit policy surface must keep the categories closed and must not offer a weakening control where Enterprise manages the repository. Pinned by `test_settings_commit_policy_is_read_only` (`test_fleet_layout.py`).
 
