@@ -550,7 +550,7 @@
 </head>
 <body>
 
-<p class="lede">Before a commit lands, Gator checks it. Each finding gets one of three outcomes. Two of them stop the commit; one only asks for your attention.</p>
+<p class="lede">Before a commit lands, Gator checks it. Each finding gets one of three outcomes, and each one stops the commit until it is resolved.</p>
 
 <section id="why">
   <h2>Why Gator checks a commit</h2>
@@ -568,7 +568,7 @@
          font-family="'Segoe UI', system-ui, sans-serif"
          role="img" aria-labelledby="outcomes-title outcomes-desc">
       <title id="outcomes-title">The three outcomes of the pre-commit checks</title>
-      <desc id="outcomes-desc">On the left, a box labelled "git commit: the hook checks the staged change". Three arrows lead to three boxes on the right. The top box is "Fix required: a broken commit draft. The commit stops. Fix it and retry." The middle box is "Warning: a dangerous pattern. The commit goes ahead. Present it to the Architect, who decides." The bottom box, drawn with a dashed border, is "Architect approval: a missing charter update, or a pattern an organization flags. The commit stops. Fix it, or the Architect approves this exact change."</desc>
+      <desc id="outcomes-desc">On the left, a box labelled "git commit: the hook checks the staged change". Three arrows lead to three boxes on the right. The top box is "Fix required: a broken commit draft. The commit stops. Fix it and retry." The middle box is "Pause: a dangerous pattern. The commit pauses until the Architect's decision is recorded." The bottom box, drawn with a dashed border, is "Architect approval: a missing charter update, or a pattern an organization flags. The commit stops. Fix it, or the Architect approves this exact change."</desc>
       <rect x="10" y="90" width="190" height="70" rx="8" fill="white" stroke="#4a72b0" stroke-width="1.8"/>
       <text x="105" y="119" font-size="14" fill="#385a90" font-weight="700" text-anchor="middle">git commit</text>
       <text x="105" y="139" font-size="11.5" fill="#374151" text-anchor="middle">the hook checks the change</text>
@@ -576,8 +576,8 @@
       <text x="278" y="36" font-size="14" fill="#111827" font-weight="700">✗ Fix required — the commit stops</text>
       <text x="278" y="58" font-size="11.5" fill="#374151">A broken commit draft, such as a misspelled change type. Fix it and retry.</text>
       <rect x="260" y="92" width="450" height="66" rx="8" fill="#f0fafb" stroke="#148a92" stroke-width="2.2"/>
-      <text x="278" y="118" font-size="14" fill="#148a92" font-weight="700">⚠ Warning — the commit goes ahead</text>
-      <text x="278" y="140" font-size="11.5" fill="#374151">A dangerous pattern. Present it to the Architect, who decides.</text>
+      <text x="278" y="118" font-size="14" fill="#148a92" font-weight="700">⏸ Pause — the commit waits for you</text>
+      <text x="278" y="140" font-size="11.5" fill="#374151">A dangerous pattern. The agent asks you; your decision is recorded.</text>
       <rect x="260" y="174" width="450" height="66" rx="8" fill="white" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="6 4"/>
       <text x="278" y="200" font-size="14" fill="#111827" font-weight="700">⚑ Architect approval — the commit stops</text>
       <text x="278" y="222" font-size="11.5" fill="#374151">A missing charter update. Update it, or the Architect approves the exact change.</text>
@@ -592,19 +592,20 @@
   </div>
   <ul class="caps">
     <li><strong>Fix required.</strong> The commit draft is invalid, for example a misspelled change type. The commit stops, and nothing can approve it away. The agent fixes the problem and commits again.</li>
-    <li><strong>Warning.</strong> The change contains a dangerous pattern, such as a possible secret or a SQL statement that deletes a whole table. The commit is not blocked. The hook prints <strong>Architect attention required</strong>, and the agent brings the finding to you. A warning is not an approval and has no approval command.</li>
+    <li><strong>Pause.</strong> The change contains a dangerous pattern, such as a possible secret or a SQL statement that deletes a whole table. The commit pauses with <strong>PAUSE. Architect attention required</strong>, and the agent brings the finding to you. The pause clears when your decision is recorded in the commit draft. A warning is not an approval and has no approval command.</li>
     <li><strong>External approval.</strong> Code changed, but its charter did not. The commit stops. Usually the agent updates the charter and commits again. Sometimes no charter edit is warranted: the check misfired, or the change is too small to describe. Then only you can let it through, by approving that exact staged change with <code>gator hook approve</code>. An organization can also require this for dangerous patterns, for example in an Enterprise repository. If anything in the change moves, the approval stops working.</li>
   </ul>
 </section>
 
 <section id="warning">
-  <h2>When a warning appears</h2>
+  <h2>When a commit pauses</h2>
   <ol class="steps">
     <li><strong>The agent shows you the finding.</strong> It tells you the rule, the file and line, and what the pattern means in this change.</li>
     <li><strong>You decide.</strong> Fix it, remove it, or keep it.</li>
     <li class="step-done"><strong>A decision to keep it is recorded.</strong> The agent writes your decision in the commit draft, in your words, and names you as the Architect. The agent never records a decision on its own.</li>
   </ol>
-  <p>The best time is before the pattern is written. A good agent tells you when it is about to write or run something dangerous. Then your decision is in the commit draft before the commit, and the commit carries it.</p>
+  <p>The best time is before the pattern is written. A good agent tells you when it is about to write or run something dangerous. Then your decision is in the commit draft before the first attempt, and the commit does not pause.</p>
+  <p>An agent can choose not to ask. It can only go ahead by recording a skip. The commit then carries <code>Gator-Dangerous-Patterns-Unacknowledged</code>, and the Commits view shows <strong>! Unacknowledged</strong>, so the choice is always visible.</p>
 </section>
 
 <section id="record">
@@ -623,6 +624,7 @@
   <ul class="caps">
     <li><strong>It is not a secret scanner or a static analyzer.</strong> Its pattern list is short on purpose. Dedicated security and quality tools stay responsible for their own analysis and fixes.</li>
     <li><strong>It does not fix findings.</strong> It makes them visible in the session, so that you and the agent can discuss them while the change is fresh.</li>
+    <li><strong>The pause is a prompt, not a lock.</strong> It stops the commit so that the agent asks you, and it records every skip. It cannot force an agent to ask, so it does not enforce your approval.</li>
   </ul>
 </section>
 

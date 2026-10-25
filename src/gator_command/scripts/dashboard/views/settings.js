@@ -26,8 +26,8 @@
   const CATEGORIES = [
     ["Charter integrity", "Block",
      "Code needs its required charter update. When no charter edit is warranted, only the Architect may approve the exact staged change."],
-    ["Dangerous patterns", "Warn",
-     "HIGH/CRITICAL findings require Architect attention in the session."],
+    ["Dangerous patterns", "Pause",
+     "HIGH/CRITICAL findings pause the commit until the Architect's decision is recorded; a skip without one is recorded as unacknowledged."],
   ];
 
   function posture(repo) {

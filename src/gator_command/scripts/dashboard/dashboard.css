@@ -2156,6 +2156,13 @@ mark.search-hit {
   border-color: var(--gray-400);
 }
 
+/* A recorded skip: the "!" and the word carry the meaning; bold weight is
+   the second cue (never colour alone). */
+.commit-flag-unacknowledged {
+  border-color: var(--gray-500);
+  font-weight: var(--weight-emphasis);
+}
+
 .commit-chev {
   width: 14px;
   font-size: var(--text-ui);
@@ -2244,6 +2251,18 @@ mark.search-hit {
   grid-column: 1 / -1;
   padding: 10px 14px;
   border-left: 4px solid var(--gray-400);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: var(--gray-50);
+  color: var(--gray-800);
+  font-size: var(--text-sm);
+}
+
+/* Unacknowledged note (#75): a dashed gray rule plus the
+   "! Unacknowledged dangerous pattern" words. */
+.commit-unacknowledged {
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+  border-left: 4px dashed var(--gray-500);
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
   background: var(--gray-50);
   color: var(--gray-800);

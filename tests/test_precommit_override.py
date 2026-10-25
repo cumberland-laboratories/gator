@@ -13,7 +13,10 @@ repo) — the constitution forbids the agent approving real governance blocks.
     may approve the exact staged change when no charter edit is warranted
     (the escape hatch); correctness rules are `fix-required`;
   - a HIGH/CRITICAL dangerous pattern is a `[warning]` under the default
-    (strict) policy: the commit passes and no override state is created;
+    (strict) policy and is never approvable; while any warning has no
+    recorded decision the commit PAUSES (`dangerous-pattern-pause`) until
+    the draft records the Architect's acknowledgement or an explicit,
+    visible skip;
   - only Enterprise `evidence_only` makes a dangerous pattern
     `[external-approval]`; the envelope lifecycle (#34, #35) is exercised
     through both the charter and the evidence_only paths;
@@ -183,6 +186,16 @@ def _stage_sql(repo, name="migrate.sql", text=SQL_DROP_USERS):
     _git(repo, "add", name)
 
 
+def _skip_draft(repo, keys):
+    """A draft that records a skip: the agent proceeds without an Architect
+    decision, and the commit records the keys as unacknowledged."""
+    text = DRAFT.format(change_type="feature").replace(
+        "architect: Test Architect\n",
+        "architect: Test Architect\n"
+        f"dangerous-pattern-skips: [{', '.join(keys)}]\n")
+    (repo / ".gator" / "commit_draft.md").write_text(text, encoding="utf-8")
+
+
 def _last_message(repo):
     return _git(repo, "log", "-1", "--format=%B").stdout
 
@@ -280,27 +293,38 @@ class TestCharterEscapeHatch:
         assert rc != 0
         assert "charter-alongside-code [external-approval]" in out
         assert "SQL-001 [warning]" in out
+        assert "dangerous-pattern-pause [pause]" in out
         block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
-        assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
+        assert {f["rule"]: f["resolution"] for f in block["failures"]} == {
+            "charter-alongside-code": "external-approval", "dangerous-pattern-pause": "pause"}
 
         _backdate_block(repo)
         rc, out = _approve(repo, "approve", "--reason", "no charter content changes",
                            "--name", "Architect")
         assert rc == 0, out
         assert "Approving for this exact staged change: charter-alongside-code" in out
+        assert "Still paused" in out and "dangerous-pattern-pause" in out
+
+        # The approval covers only the charter rule; the pause remains until
+        # the Architect's decision on the pattern is recorded.
+        rc, out = _commit(repo)
+        assert rc != 0 and "dangerous-pattern-pause [pause]" in out
+        assert "is kept for the retry" in out
+        _ack_draft(repo)
         rc, out = _commit(repo)
         assert rc == 0, out
         assert "OVERRIDE (charter-alongside-code) approved by Architect" in out
-        assert "ARCHITECT ATTENTION REQUIRED" in out and "SQL-001 [warning]" in out
 
         trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
         assert "Gator-Override-Rules: charter-alongside-code" in trailers
         assert "Gator-Charter-Changed: override-skip" in trailers
-        assert not any(l.startswith("Gator-Dangerous") for l in trailers)
+        assert f"Gator-Dangerous-Patterns: {KEY}" in trailers
+        assert not any(l.startswith("Gator-Dangerous-Patterns-Unacknowledged") for l in trailers)
         checks = _head_json(repo, ".gator/status.json")["commit_checks"]
         assert checks["overridden_rules"] == ["charter-alongside-code"]
-        assert checks["dangerous_pattern_warnings"] == ["SQL-001@migrate.txt:1"]
-        assert checks["dangerous_pattern_acknowledged"] == []
+        assert checks["dangerous_pattern_warnings"] == [KEY]
+        assert checks["dangerous_pattern_acknowledged"] == [KEY]
+        assert checks["dangerous_pattern_pause"] == []
         assert _state_files(repo) == []
 
     def test_correctness_rules_stay_fix_required(self, repo):
@@ -317,43 +341,126 @@ class TestCharterEscapeHatch:
 # #75: dangerous patterns warn under the default policy
 # ---------------------------------------------------------------------------
 
-class TestDangerousPatternWarning:
-    def test_high_finding_passes_with_warning_and_no_override_state(self, any_repo):
+class TestDangerousPatternPause:
+    def test_unrecorded_finding_pauses_without_an_approval_path(self, any_repo):
         repo = any_repo
         _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
-        assert rc == 0, out
-        assert "PASS — Architect attention required" in out
+        assert rc != 0, out
         assert "SQL-001 [warning]" in out
-        assert "ARCHITECT ATTENTION REQUIRED" in out
+        assert "dangerous-pattern-pause [pause]" in out
+        assert "PAUSE. Architect attention required." in out
+        assert "STOP. Do not override this yourself." not in out
         assert "gator hook approve" not in out
-        assert _state_files(repo) == []
-        msg = _last_message(repo)
-        assert "Gator-Override" not in msg
-        assert "Gator-Dangerous" not in msg, "no evidence, no acknowledgement trailers"
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert {f["rule"]: f["resolution"] for f in block["failures"]} == {
+            "dangerous-pattern-pause": "pause"}
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A")
+        assert rc == 1 and "never by this command" in out
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
 
-        # The committed evidence names the finding but never its source text.
+        checks = json.loads((repo / ".gator" / "status.json").read_text(
+            encoding="utf-8"))["commit_checks"]
+        assert checks["dangerous_pattern_pause"] == ["SQL-001@migrate.txt:1"]
+        assert checks["integrity_failures"] == [] and checks["external_approval_required"] == []
+        wb = (repo / ".gator" / "whiteboard.md").read_text(encoding="utf-8")
+        assert "## Paused — Architect decision required" in wb
+        assert SQL_MATCH not in wb
+
+    def test_recorded_skip_passes_and_is_visible_in_git(self, any_repo):
+        repo = any_repo
+        _stage_sql(repo, name="migrate.txt")
+        _skip_draft(repo, ["SQL-001@migrate.txt:1"])
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "Committed without an Architect decision" in out
+        assert _state_files(repo) == []
+        trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
+        assert "Gator-Dangerous-Patterns-Unacknowledged: SQL-001@migrate.txt:1" in trailers
+        assert not any(l.startswith("Gator-Dangerous-Patterns:") for l in trailers)
+        assert not any(l.startswith("Gator-Override") for l in trailers)
+        assert not any(SQL_MATCH in l for l in trailers)
+
         status = _head_json(repo, ".gator/status.json")
         checks = status["commit_checks"]
-        assert checks["dangerous_pattern_warnings"] == ["SQL-001@migrate.txt:1"]
-        assert checks["integrity_failures"] == []
-        assert checks["external_approval_required"] == []
+        assert checks["dangerous_pattern_skipped"] == ["SQL-001@migrate.txt:1"]
+        assert checks["dangerous_pattern_acknowledged"] == []
+        assert checks["dangerous_pattern_pause"] == []
         wb = _git(repo, "show", "HEAD:.gator/whiteboard.md").stdout
-        assert "## Dangerous-pattern warnings — Architect attention" in wb
-        assert "SQL-001" in wb
-        assert SQL_MATCH not in wb
-        assert SQL_MATCH not in json.dumps(status)
+        assert "## Unacknowledged dangerous patterns (recorded skip)" in wb
+        assert SQL_MATCH not in wb and SQL_MATCH not in json.dumps(status)
 
-    def test_charter_failure_still_blocks_alongside_a_warning(self, repo):
+    @pytest.mark.parametrize("how", ["acknowledge", "skip"])
+    def test_comma_filename_can_clear_the_pause(self, repo, how):
+        """Codex finding 1: a path the flat list cannot hold is
+        percent-encoded in its key, so the pause can always be cleared."""
+        key = "SQL-001@migrate%2Cfixture.txt:1"
+        _stage_sql(repo, name="migrate,fixture.txt")
+        rc, out = _commit(repo)
+        assert rc != 0 and key in out, out
+        if how == "acknowledge":
+            _ack_draft(repo, keys=(key,))
+            trailer = f"Gator-Dangerous-Patterns: {key}"
+        else:
+            _skip_draft(repo, [key])
+            trailer = f"Gator-Dangerous-Patterns-Unacknowledged: {key}"
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert trailer in _last_message(repo).splitlines()
+
+    @pytest.mark.parametrize("evidence", [True, False])
+    def test_commit_msg_fails_closed_when_evidence_cannot_be_revalidated(
+            self, repo, monkeypatch, tmp_path, evidence):
+        """Codex finding 2: required skip/acknowledgement evidence that the
+        commit-msg phase cannot revalidate aborts the commit instead of
+        landing it without its trailers. With no evidence, the same error
+        leaves the commit alone."""
+        import importlib.util
+        _stage_sql(repo, name="migrate.txt")
+        if evidence:
+            _skip_draft(repo, ["SQL-001@migrate.txt:1"])
+        spec = importlib.util.spec_from_file_location("gpc_failclosed", PRE_COMMIT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        def broken_lint(*_a, **_k):
+            raise OSError("simulated lint read failure")
+
+        monkeypatch.setattr(mod, "run_layer1_lint", broken_lint)
+        monkeypatch.chdir(repo)
+        msg = tmp_path / "COMMIT_EDITMSG"
+        msg.write_text("fallback\n", encoding="utf-8")
+        with pytest.raises(SystemExit) as exc:
+            mod.phase_trailers(str(msg))
+        assert exc.value.code == (1 if evidence else 0)
+
+    @pytest.mark.parametrize("case", ["stale", "acknowledged-and-skipped"])
+    def test_invalid_skip_fails_closed(self, repo, case):
+        _stage_sql(repo, name="migrate.txt")
+        if case == "stale":
+            _skip_draft(repo, ["SQL-001@migrate.txt:9"])
+        else:
+            _ack_draft(repo)
+            draft = repo / ".gator" / "commit_draft.md"
+            draft.write_text(draft.read_text(encoding="utf-8").replace(
+                "architect: Test Architect\n",
+                f"architect: Test Architect\ndangerous-pattern-skips: [{KEY}]\n"),
+                encoding="utf-8")
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "invalid-dangerous-pattern-acknowledgement [fix-required]" in out
+        assert "Gator-Dangerous" not in _last_message(repo)
+
+    def test_charter_failure_and_pause_together(self, repo):
         _stage_code(repo)
         _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
         assert rc != 0
         assert "charter-alongside-code [external-approval]" in out
-        assert "SQL-001 [warning]" in out
+        assert "dangerous-pattern-pause [pause]" in out
         assert "STOP. Do not override this yourself." in out, "the charter rule is approvable"
-        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
-        assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
+        assert "PAUSE. Architect attention required." in out
 
 
 # ---------------------------------------------------------------------------
@@ -591,8 +698,12 @@ class TestLegacyMigration:
         if case == "charter-approved":
             assert rc != 0 and "charter-alongside-code [external-approval]" in out
         else:
-            assert rc == 0, out
+            # The current policy: the pattern pauses for a recorded decision.
+            assert rc != 0 and "dangerous-pattern-pause [pause]" in out
             assert "SQL-001 [warning]" in out
+            _skip_draft(repo, ["SQL-001@migrate.txt:1"])
+            rc, out = _commit(repo)
+            assert rc == 0, out
             assert "Gator-Override" not in _last_message(repo)
 
     @pytest.mark.parametrize("which", ["expired", "other-tree"])
@@ -602,6 +713,7 @@ class TestLegacyMigration:
             _write_legacy_block(repo, [("SQL-001", "lint")], expires_in=-10)
         else:
             _write_legacy_block(repo, [("SQL-001", "lint")], tree="another-tree")
+        _skip_draft(repo, ["SQL-001@migrate.txt:1"])
         rc, out = _commit(repo)
         assert rc == 0, out
         assert "legacy-override-record" not in out
@@ -955,8 +1067,8 @@ class TestLintAllowDeprecated:
             json.dumps([{"rule": "SQL-001", "file": "migrate.txt"}]), encoding="utf-8")
         _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
-        assert rc == 0, out
-        assert "SQL-001 [warning]" in out
+        assert rc != 0, "the allowlist never clears the pause"
+        assert "SQL-001 [warning]" in out and "dangerous-pattern-pause [pause]" in out
         assert "lint-allow-deprecated" in out
         assert "Still reported despite being listed: SQL-001 in migrate.txt" in out
 
@@ -1092,6 +1204,26 @@ class TestUnits:
         fix, ext = policy.report_categories(
             [("SQL-001", "m"), ("unmerged-index", "m")], EXT)
         assert fix == ["unmerged-index"] and ext == ["SQL-001"]
+
+    def test_pause_and_skip_units(self):
+        dangerous = [{"rule": "SQL-001", "severity": "HIGH", "file": "a b.txt", "line": 1,
+                      "message": "m"}]
+        key = "SQL-001@a b.txt:1"
+        assert policy.pause_failure([]) is None
+        rule, msg = policy.pause_failure([key])
+        assert rule == policy.PAUSE_RULE and key in msg and policy.SKIP_FIELD in msg
+        assert ovr.classify(rule, {rule: policy.PAUSE}) == ovr.PAUSE
+        assert not ovr.is_approvable(ovr.PAUSE)
+        assert policy.report_categories([(rule, msg)], {rule: policy.PAUSE}) == ([], [])
+        assert policy.validate_skips({}, dangerous) == ([], [])
+        assert policy.validate_skips({policy.SKIP_FIELD: [key]}, dangerous) == ([key], [])
+        for raw in (["SQL-001@a b.txt:2"], [key, key], "nope"):
+            keys, problems = policy.validate_skips({policy.SKIP_FIELD: raw}, dangerous)
+            assert keys == [] and problems, raw
+        keys, problems = policy.validate_skips({policy.SKIP_FIELD: [key]}, dangerous, [key])
+        assert keys == [] and "both acknowledged and skipped" in problems[0]
+        assert policy.skip_trailers([key]) == [f"Gator-Dangerous-Patterns-Unacknowledged: {key}"]
+        assert policy.skip_trailers([]) == []
 
     def test_render_block_report_stop_box_only_for_external_approval(self):
         out = "\n".join(ovr.render_block_report(

@@ -459,8 +459,9 @@ def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
     assert out["categories"] == [
         ["Charter integrity", "Block", "Code needs its required charter update. When no "
          "charter edit is warranted, only the Architect may approve the exact staged change."],
-        ["Dangerous patterns", "Warn",
-         "HIGH/CRITICAL findings require Architect attention in the session."],
+        ["Dangerous patterns", "Pause",
+         "HIGH/CRITICAL findings pause the commit until the Architect's decision is "
+         "recorded; a skip without one is recorded as unacknowledged."],
     ]
     for name, label in expected.items():
         assert out["repos"][name][0] == label, (name, out["repos"][name])

@@ -44,7 +44,10 @@ optional `dangerous-pattern-acknowledgements: [RULE@path:line]` field, and
 explain each key in an `## Architect acknowledgement` body section. The
 `architect` field must name the Architect. Write this only on the Architect's
 direction, never on your own. The hook validates the evidence against the
-staged change and records it as `Gator-Dangerous-Pattern-*` trailers. See
+staged change and records it as `Gator-Dangerous-Pattern-*` trailers. Until
+each flagged pattern has a recorded decision, the commit pauses. To proceed
+without the Architect, list the keys in `dangerous-pattern-skips`; the commit
+records them as unacknowledged. See
 [`dangerous-pattern-warnings.md`](dangerous-pattern-warnings.md).
 
 ## 2. Stage the change, not the draft runtime state

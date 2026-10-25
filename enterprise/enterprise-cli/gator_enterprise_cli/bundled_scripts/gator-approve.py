@@ -166,11 +166,16 @@ def cmd_approve(args):
 
     rules = ovr.approvable_rules(block)
     fix_required = sorted({f["rule"] for f in block.get("failures", [])
-                           if not ovr.is_approvable(f.get("resolution"))})
+                           if f.get("resolution") == ovr.FIX_REQUIRED})
+    paused = sorted({f["rule"] for f in block.get("failures", [])
+                     if f.get("resolution") == ovr.PAUSE})
     if not rules:
         print("  Refused: nothing in this block can be approved.")
-        print(f"  Fix these findings and retry the commit: {', '.join(fix_required)}")
-        print("  Dangerous-pattern warnings do not block and never use this command.")
+        if fix_required:
+            print(f"  Fix these findings and retry the commit: {', '.join(fix_required)}")
+        if paused:
+            print("  A dangerous-pattern pause is resolved by recording the Architect's")
+            print("  decision in commit_draft.md, never by this command.")
         print()
         return 1
 
@@ -184,6 +189,9 @@ def cmd_approve(args):
     print(f"  Approving for this exact staged change: {', '.join(rules)}")
     if fix_required:
         print(f"  Still fix-required (not approvable): {', '.join(fix_required)}")
+    if paused:
+        print(f"  Still paused (record the Architect's decision in commit_draft.md): "
+              f"{', '.join(paused)}")
     print()
 
     reason = (args.reason or "").strip() or _prompt("  Reason for override (required): ")

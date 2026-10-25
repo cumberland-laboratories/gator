@@ -59,6 +59,7 @@ HANDOFF_FILE = "handoff.json"
 # alone.
 EXTERNAL_APPROVAL = "external-approval"  # the Architect may approve this exact tree
 FIX_REQUIRED = "fix-required"            # fix and retry; never approvable
+PAUSE = "pause"                          # record the Architect's decision in the draft; never approvable
 
 # Resolution values written by earlier runtimes (before #75). They are never
 # approvable now: a same-tree block that carries one is cancelled and
@@ -210,8 +211,9 @@ def classify(rule, resolutions=None):
     Only a rule the map names as external-approval is approvable; every
     other rule (charter rules and unknown rules included) is fix-required.
     """
-    if resolutions and resolutions.get(rule) == EXTERNAL_APPROVAL:
-        return EXTERNAL_APPROVAL
+    value = (resolutions or {}).get(rule)
+    if value in (EXTERNAL_APPROVAL, PAUSE):
+        return value
     return FIX_REQUIRED
 
 
@@ -665,6 +667,8 @@ def render_block_report(header, failures, warnings, resolutions, notes, block,
     def res(rule):
         return classify(rule, resolutions)
 
+    paused = [(r, m) for r, m in failures if res(r) == PAUSE]
+
     out = ["", f"  {header}", ""]
     for rule, msg in failures:
         out.append(f"  ✗ {rule} [{res(rule)}]: {msg}")
@@ -684,14 +688,17 @@ def render_block_report(header, failures, warnings, resolutions, notes, block,
     out.extend(info_lines)
 
     needs_approval = sorted({r for r, _ in failures if is_approvable(res(r))})
-    fix_required = sorted({r for r, _ in failures if not is_approvable(res(r))})
+    fix_required = sorted({r for r, _ in failures if res(r) == FIX_REQUIRED})
     out += ["", "  Resolution:"]
     if fix_required:
         out.append(f"    [fix-required] fix and retry; cannot be approved: "
                    f"{', '.join(fix_required)}")
-    if attention:
+    if paused:
+        out.append("    [pause] ask the Architect about each dangerous pattern and "
+                   "record the decision in commit_draft.md; no approval command")
+    elif attention:
         out.append("    [warning] present to the Architect, who decides to fix, "
-                   "remove, or keep it; does not block: "
+                   "remove, or keep it: "
                    + ", ".join(sorted({r for r, _ in attention})))
     if needs_approval:
         out.append(f"    [external-approval] fix, or the Architect may approve this "
@@ -712,6 +719,25 @@ def render_block_report(header, failures, warnings, resolutions, notes, block,
         ]
         if fix_required:
             out.append("  The fix-required findings must be fixed either way.")
+    if paused:
+        out += [
+            "",
+            "  ┌─────────────────────────────────────────────────────────┐",
+            "  │ PAUSE. Architect attention required.                   │",
+            "  │                                                        │",
+            "  │ This commit contains dangerous patterns. Stop and ask  │",
+            "  │ the Architect about each one: fix, remove, or keep it. │",
+            "  │                                                        │",
+            "  │ Keep: record the Architect's decision in commit_draft  │",
+            "  │   dangerous-pattern-acknowledgements: [KEY]            │",
+            "  │   plus an '## Architect acknowledgement' section.      │",
+            "  │ Proceed without asking (recorded as unacknowledged):   │",
+            "  │   dangerous-pattern-skips: [KEY]                       │",
+            "  │                                                        │",
+            "  │ Never write the Architect's decision yourself.         │",
+            "  │ There is no approval command for this pause.           │",
+            "  └─────────────────────────────────────────────────────────┘",
+        ]
     if block is not None:
         out += ["", f"  Block ID: {block['block_id']}   "
                     "(details: gator hook override status)"]

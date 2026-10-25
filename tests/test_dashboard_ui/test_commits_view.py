@@ -190,6 +190,34 @@ def test_acknowledgement_note_is_distinct_from_override(page, dashboard_fleet):
                           "The decision is in the description.")
 
 
+def test_unacknowledged_note_is_distinct(page, dashboard_fleet):
+    """#75: a recorded skip renders as "! Unacknowledged", never as an
+    acknowledgement or an override."""
+    now = datetime.now().astimezone()
+    trailers = [
+        {"key": "Gator-Change-Type", "value": "feature"},
+        {"key": "Gator-Dangerous-Patterns-Unacknowledged", "value": "SQL-001@one  space.txt:1"},
+    ]
+    data = {"commits": [_commit(1, now, "Skip", "Skipped.", trailers)], "repo": "alpha"}
+    page.route("**/api/repo/alpha/history*",
+               lambda route: route.fulfill(status=200, content_type="application/json",
+                                           body=json.dumps(data)))
+    page.goto(_origin(dashboard_fleet) + "?repo=alpha&view=history", wait_until="load")
+    page.wait_for_selector(".commit-row", timeout=15000)
+    flags = page.text_content(".commit-row .commit-flags")
+    assert "! Unacknowledged" in flags
+    assert "✓ Acknowledged" not in flags and "⚑ Override" not in flags
+    page.click(".commit-row >> summary")
+    out = page.evaluate("""() => ({
+        note: document.querySelector('.commit-unacknowledged').textContent,
+        ack: document.querySelectorAll('.commit-acknowledgement').length,
+        override: document.querySelectorAll('.commit-override').length,
+    })""")
+    assert out == {"note": "! Unacknowledged dangerous pattern. Committed without an "
+                           "Architect decision: SQL-001@one  space.txt:1.",
+                   "ack": 0, "override": 0}
+
+
 def test_hostile_commit_text_renders_as_text(commits_page):
     page = commits_page
     page.click(".commit-row >> nth=3 >> summary")

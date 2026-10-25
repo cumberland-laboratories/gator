@@ -745,7 +745,7 @@ def validate_soft_rules(staged_files, frontmatter, body, gator_dir):
 # ---------------------------------------------------------------------------
 
 def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
-                      handoff=None, acknowledged=None):
+                      handoff=None, acknowledged=None, skipped=None):
     """Build Gator-* trailer lines from all available sources.
 
     ``handoff`` is the validate->commit-msg override handoff (read via
@@ -789,6 +789,8 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
     # only keys validated against this staged change; never matched text.
     if acknowledged:
         trailers.extend(policy.acknowledgement_trailers(*acknowledged))
+    # A recorded skip: committed without an Architect decision.
+    trailers.extend(policy.skip_trailers(skipped))
 
     # Change type (frontmatter preferred, fallback to inference)
     change_type = frontmatter.get("change-type") or infer_change_type(body, has_code)
@@ -854,6 +856,8 @@ def empty_commit_checks():
         "dangerous_pattern_warnings": [],
         "dangerous_pattern_acknowledged": [],
         "acknowledged_by": "",
+        "dangerous_pattern_skipped": [],
+        "dangerous_pattern_pause": [],
         "external_approval_required": [],
         "overridden_rules": [],
     }
@@ -935,7 +939,8 @@ def write_status_json(gator_dir, status):
 
 def write_whiteboard(gator_dir, failures, warnings, handoff,
                      enforcement_level="strict", resolutions=None,
-                     attention=(), acknowledged=(), acknowledged_by=""):
+                     attention=(), acknowledged=(), acknowledged_by="",
+                     skipped=()):
     """Write findings to .gator/whiteboard.md.
 
     ``failures`` are split by resolution (#75): fix-required and
@@ -977,6 +982,9 @@ def write_whiteboard(gator_dir, failures, warnings, handoff,
             [(r, m) for r, m in failures if r in fix_rules])
     section("## External approval required",
             [(r, m) for r, m in failures if r in external_rules])
+    section("## Paused — Architect decision required",
+            [(r, m) for r, m in failures
+             if (resolutions or {}).get(r) == policy.PAUSE])
     section("## Dangerous-pattern warnings — Architect attention", list(attention))
     section("## Warnings", warnings)
 
@@ -986,6 +994,13 @@ def write_whiteboard(gator_dir, failures, warnings, handoff,
         for key in acknowledged:
             lines.append(f"- **{key}**: kept on the Architect's direction"
                          f" ({acknowledged_by or '?'}); see the commit body")
+        lines.append("")
+
+    if skipped:
+        lines.append("## Unacknowledged dangerous patterns (recorded skip)")
+        lines.append("")
+        for key in skipped:
+            lines.append(f"- **{key}**: committed without an Architect decision")
         lines.append("")
 
     if handoff:
@@ -999,7 +1014,8 @@ def write_whiteboard(gator_dir, failures, warnings, handoff,
             f" — block: {handoff.get('block_id', '?')}")
         lines.append("")
 
-    if not failures and not warnings and not attention and not acknowledged and not handoff:
+    if (not failures and not warnings and not attention and not acknowledged
+            and not skipped and not handoff):
         lines.append("No findings.")
         lines.append("")
 
@@ -1064,37 +1080,6 @@ def _read_enforcement_level(gator_dir):
         except (json.JSONDecodeError, OSError):
             pass
     return "strict"
-
-
-def render_attention_report(attention, warnings):
-    """Lines for a PASS with HIGH/CRITICAL dangerous-pattern warnings (#75).
-
-    The commit is not blocked. The box tells the agent to present each
-    finding to the Architect; a warning has no approval command."""
-    out = ["", "  gator pre-commit: PASS — Architect attention required", ""]
-    for rule, msg in attention:
-        out.append(f"  ⚠ {rule} [warning]: {msg}")
-    if warnings:
-        out.append("")
-        for rule, msg in warnings:
-            out.append(f"  ⚠ {rule}: {msg}")
-    out += [
-        "",
-        "  ┌─────────────────────────────────────────────────────────┐",
-        "  │ ARCHITECT ATTENTION REQUIRED                           │",
-        "  │                                                        │",
-        "  │ This commit was not blocked. Present each finding to   │",
-        "  │ the Architect, who decides to fix, remove, or keep it. │",
-        "  │ A finding the Architect keeps is recorded in           │",
-        "  │ commit_draft.md only on the Architect's direction.     │",
-        "  │ Never acknowledge a finding yourself.                  │",
-        "  │ A warning has no approval command.                     │",
-        "  └─────────────────────────────────────────────────────────┘",
-        "",
-        "  Findings written to .gator/commit_issues.md and .gator/whiteboard.md",
-        "",
-    ]
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1208,11 +1193,14 @@ def phase_validate():
     # An acknowledged finding leaves the attention list; it never touches
     # the override envelope.
     ack_keys, ack_problems = policy.validate_acknowledgements(frontmatter, body, dangerous)
-    if ack_problems:
+    # A recorded skip: the agent proceeds without an Architect decision;
+    # the commit records the keys as unacknowledged.
+    skip_keys, skip_problems = policy.validate_skips(frontmatter, dangerous, ack_keys)
+    if ack_problems or skip_problems:
         failures.append((
             policy.ACK_RULE,
             "Architect acknowledgement evidence in commit_draft.md is invalid: "
-            + "; ".join(ack_problems)
+            + "; ".join(ack_problems + skip_problems)
             + ". Current dangerous-pattern warning keys: "
             + (", ".join(policy.finding_keys(dangerous)) or "none")
             + ". Fix or remove the evidence and retry."
@@ -1220,10 +1208,18 @@ def phase_validate():
     acknowledged_by = override_state.sanitize_trailer_value(
         frontmatter.get("architect"), override_state.TRAILER_MAX["approved_by"]
     ) if ack_keys else ""
+    decided = set(ack_keys) | set(skip_keys)
     attention = [(r, m) for (r, m), f in zip(attention, dangerous)
-                 if policy.finding_key(f) not in ack_keys]
+                 if policy.finding_key(f) not in decided]
     attention_out = [(r, m) for (r, m), f in zip(attention_out, dangerous)
-                     if policy.finding_key(f) not in ack_keys]
+                     if policy.finding_key(f) not in decided]
+    # The pause: a warning finding without a recorded decision stops the
+    # commit so the agent asks the Architect. Never approvable.
+    unresolved = [k for k in policy.finding_keys(dangerous) if k not in decided]
+    pause = policy.pause_failure(unresolved)
+    if pause:
+        failures.append(pause)
+        resolutions[policy.PAUSE_RULE] = policy.PAUSE
 
     # Deprecated lint-allow.json (#34): it no longer suppresses findings.
     if load_lint_allowlist(gator_dir):
@@ -1267,6 +1263,8 @@ def phase_validate():
         "dangerous_pattern_warnings": policy.finding_keys(dangerous),
         "dangerous_pattern_acknowledged": list(ack_keys),
         "acknowledged_by": acknowledged_by,
+        "dangerous_pattern_skipped": list(skip_keys),
+        "dangerous_pattern_pause": list(unresolved),
         "external_approval_required": external_rules,
     }
 
@@ -1288,7 +1286,8 @@ def phase_validate():
     wb_file = write_whiteboard(gator_dir, failures, warnings, handoff,
                                enforcement_level=enforcement,
                                resolutions=resolutions, attention=attention,
-                               acknowledged=ack_keys, acknowledged_by=acknowledged_by)
+                               acknowledged=ack_keys, acknowledged_by=acknowledged_by,
+                               skipped=skip_keys)
     stage_file(wb_file, repo_root)
 
     # Output
@@ -1323,10 +1322,13 @@ def phase_validate():
               f"{', '.join(ack_keys)}")
         print("    Recorded in the commit body and Gator-Dangerous-Pattern trailers.")
         print()
-    if attention_out:
-        for line in render_attention_report(attention_out, warnings):
-            print(line)
-    elif warnings:
+    if skip_keys and enforcement != "warn":
+        print()
+        print("  ⚠ Committed without an Architect decision (recorded as unacknowledged): "
+              + ", ".join(skip_keys))
+        print("    Recorded in the Gator-Dangerous-Patterns-Unacknowledged trailer.")
+        print()
+    if warnings:
         print()
         if enforcement == "warn":
             print("  gator pre-commit: PASS (enforcement: warn — findings are advisory)")
@@ -1376,8 +1378,16 @@ def phase_trailers(msg_file_path):
 
     # Architect acknowledgement evidence (#75): recompute from the same
     # staged index, so only evidence that validates now becomes a trailer
-    # (warn mode can let invalid evidence through as a warning).
+    # (warn mode can let invalid evidence through as a warning). In the
+    # strict path the evidence is required to clear the pause, so it fails
+    # closed: evidence that cannot be revalidated aborts the commit rather
+    # than landing it without its trailers.
     acknowledged = None
+    skipped = None
+    evidence_present = bool(frontmatter.get(policy.ACK_FIELD)
+                            or frontmatter.get(policy.SKIP_FIELD))
+    mode = None
+    evidence_error = None
     try:
         mode = _read_enforcement_level(gator_dir)
         mode = "warn" if mode == "warning" else mode
@@ -1386,12 +1396,28 @@ def phase_trailers(msg_file_path):
             frontmatter, body, dangerous)
         if ack_keys and not ack_problems:
             acknowledged = (ack_keys, frontmatter.get("architect"))
-    except Exception:  # noqa: BLE001 — trailers must not fail on evidence
-        acknowledged = None
+        skip_keys, skip_problems = policy.validate_skips(
+            frontmatter, dangerous, ack_keys if not ack_problems else ())
+        if skip_keys and not skip_problems:
+            skipped = skip_keys
+        if ack_problems or skip_problems:
+            evidence_error = "; ".join(ack_problems + skip_problems)
+    except Exception as exc:  # noqa: BLE001 — classified below
+        acknowledged = skipped = None
+        evidence_error = f"{type(exc).__name__}: {exc}"
+    if (evidence_present and evidence_error
+            and mode not in ("warn", "off", "evidence_only")):
+        print("\n  gator commit-msg: BLOCKED — dangerous-pattern evidence could not "
+              "be revalidated", file=sys.stderr)
+        print(f"  {evidence_error}", file=sys.stderr)
+        print("  The commit was not created, so it cannot land without its "
+              "Gator-Dangerous-Pattern* trailers. Retry the commit.\n", file=sys.stderr)
+        sys.exit(1)
 
     # Build trailers
     trailers = assemble_trailers(frontmatter, body, gator_dir, staged_files,
-                                 handoff=handoff, acknowledged=acknowledged)
+                                 handoff=handoff, acknowledged=acknowledged,
+                                 skipped=skipped)
 
     # Read current message (the -m message the agent provided, if any)
     msg_path = Path(msg_file_path)

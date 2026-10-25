@@ -24,7 +24,7 @@
   //
   // Read-only. The strict/warn/off selector was retired: one broad switch
   // misdescribes the two categories (charter integrity blocks, with an
-  // Architect approval as the escape hatch; dangerous patterns warn). Shared with views/settings.js through
+  // Architect approval as the escape hatch; dangerous patterns pause). Shared with views/settings.js through
   // window.GatorCommitPolicy (fleet.js loads first).
 
   // `active` is false for the two states with no effective policy to
@@ -53,7 +53,7 @@
                note: "Legacy broad mode: pre-commit checks are skipped." };
     }
     return { key: "default", label: "Default", active: true,
-             note: "Charter updates block; dangerous patterns warn." };
+             note: "Charter updates block; dangerous patterns pause for an Architect decision." };
   }
 
   window.GatorCommitPolicy = { posture: commitPolicy };

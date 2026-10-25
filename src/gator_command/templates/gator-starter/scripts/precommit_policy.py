@@ -8,8 +8,14 @@ Every finding the pre-commit hook reports has exactly one resolution:
                      acknowledgement evidence, a legacy record, ...). Fix
                      and retry; nothing approves it.
   warning            a HIGH/CRITICAL dangerous pattern under the default
-                     policy. The commit is not blocked; the agent presents
-                     the finding to the Architect in the session.
+                     policy. It is never approvable and never reaches the
+                     override envelope.
+  pause              the commit-level `dangerous-pattern-pause` rule: while
+                     any warning finding has no recorded decision, the
+                     commit pauses so the agent asks the Architect. A
+                     recorded acknowledgement (the Architect's decision) or
+                     a recorded skip (the agent proceeds without one,
+                     shown in Git) clears it. No approval command.
   external-approval  the tree-bound approval envelope (precommit_override):
                      a missing charter update (the Architect may approve
                      the exact staged change when no charter edit is
@@ -42,6 +48,8 @@ import precommit_override as _override
 FIX_REQUIRED = "fix-required"
 WARNING = "warning"
 EXTERNAL_APPROVAL = "external-approval"
+PAUSE = "pause"
+PAUSE_RULE = "dangerous-pattern-pause"
 
 DANGEROUS_SEVERITIES = frozenset({"CRITICAL", "HIGH"})
 
@@ -102,21 +110,63 @@ def charter_resolutions(failures):
 def report_categories(failures, resolutions):
     """Split (rule, message) failures into (fix_required, external_approval)
     rule lists using the explicit map. A rule the map does not name is
-    fix-required, so a correctness failure is never reported as approvable."""
+    fix-required, so a correctness failure is never reported as approvable.
+    The pause rule is in neither list: it is reported on its own."""
     resolutions = resolutions or {}
     fix_required, external = [], []
     for rule, _ in failures:
-        target = external if resolutions.get(rule) == EXTERNAL_APPROVAL else fix_required
+        res = resolutions.get(rule)
+        if res == PAUSE:
+            continue
+        target = external if res == EXTERNAL_APPROVAL else fix_required
         if rule not in target:
             target.append(rule)
     return fix_required, external
 
 
+def pause_failure(unresolved_keys):
+    """The commit-level pause: (PAUSE_RULE, message), or None when every
+    warning finding has a recorded decision."""
+    if not unresolved_keys:
+        return None
+    return (PAUSE_RULE,
+            "Dangerous pattern(s) without a recorded decision: "
+            + ", ".join(unresolved_keys)
+            + ". Ask the Architect about each one (fix, remove, or keep), then "
+            f"record the decision in commit_draft.md ({ACK_FIELD} + the "
+            f"`{ACK_HEADING}` section) and retry. To proceed without asking, "
+            f"list the keys in {SKIP_FIELD}; the commit then records them as "
+            "unacknowledged.")
+
+
+# Path characters the flat frontmatter list, the body bullet or the
+# comma-joined trailer cannot hold. They are percent-encoded, so every key
+# fits all three unambiguously; other characters (including inner spaces)
+# stay byte-for-byte.
+_KEY_ESCAPES = {"%": "%25", ",": "%2C", "[": "%5B", "]": "%5D",
+                '"': "%22", "'": "%27", "`": "%60"}
+
+
+def _encode_key_path(path):
+    out = "".join(
+        _KEY_ESCAPES.get(c) or (c if " " <= c != "\x7f" else "%{:02X}".format(ord(c)))
+        for c in path)
+    core = out.strip(" ")
+    if not core:
+        return "%20" * len(out)
+    lead = len(out) - len(out.lstrip(" "))
+    trail = len(out) - len(out.rstrip(" "))
+    # The flat list parser strips item ends, so edge spaces are encoded.
+    return "%20" * lead + core + "%20" * trail
+
+
 def finding_key(finding):
     """Stable, readable key ``RULE@path:line`` for a finding. The path uses
-    forward slashes; a dangerous filename finding has line 0. It never
-    contains the matched source text."""
-    path = str(finding["file"]).replace("\\", "/")
+    forward slashes and is percent-encoded only where the flat list, the
+    body bullet or the trailer could not hold it (``,`` -> ``%2C``, see
+    ``_KEY_ESCAPES``; control characters; edge spaces). A dangerous filename
+    finding has line 0. It never contains the matched source text."""
+    path = _encode_key_path(str(finding["file"]).replace("\\", "/"))
     return f"{finding['rule']}@{path}:{int(finding['line'])}"
 
 
@@ -140,6 +190,7 @@ def finding_text(finding):
 # ---------------------------------------------------------------------------
 
 ACK_FIELD = "dangerous-pattern-acknowledgements"
+SKIP_FIELD = "dangerous-pattern-skips"
 ACK_RULE = "invalid-dangerous-pattern-acknowledgement"
 ACK_HEADING = "## Architect acknowledgement"
 KEY_PATTERN = re.compile(r"^[A-Z]+-[0-9]+@.+:[0-9]+$")
@@ -244,3 +295,46 @@ def acknowledgement_trailers(keys, architect):
     if by:
         lines.append(f"Gator-Dangerous-Pattern-Acknowledged-By: {by}")
     return lines
+
+
+def validate_skips(frontmatter, dangerous, acknowledged=()):
+    """Bind a recorded skip (the agent proceeds without an Architect
+    decision) to the current warning findings.
+
+    Returns ``(skipped_keys, problems)``. An absent or empty
+    ``dangerous-pattern-skips`` field is valid. Present keys must be current
+    HIGH/CRITICAL warning findings, listed once, and not also acknowledged.
+    No Architect name is required: a skip is, by definition, not the
+    Architect's decision. Any problem skips nothing.
+    """
+    raw = frontmatter.get(SKIP_FIELD)
+    if raw is None or raw == "" or raw == []:
+        return [], []
+    if not isinstance(raw, list):
+        return [], [f"`{SKIP_FIELD}` must be a [list] of finding keys"]
+    current = set(finding_keys(dangerous))
+    acknowledged = set(acknowledged)
+    problems, seen = [], set()
+    for key in raw:
+        if not KEY_PATTERN.match(key):
+            problems.append(f"`{key}` in `{SKIP_FIELD}` is not a RULE@path:line key")
+        elif key in seen:
+            problems.append(f"`{key}` is listed twice in `{SKIP_FIELD}`")
+        elif key not in current:
+            problems.append(f"`{key}` in `{SKIP_FIELD}` names no current "
+                            "dangerous-pattern warning")
+        elif key in acknowledged:
+            problems.append(f"`{key}` is both acknowledged and skipped")
+        seen.add(key)
+    if problems:
+        return [], problems
+    return list(raw), []
+
+
+def skip_trailers(keys):
+    """``Gator-Dangerous-Patterns-Unacknowledged`` for recorded skips; keys
+    byte-for-byte except CR/LF, like acknowledgement_trailers()."""
+    if not keys:
+        return []
+    joined = ",".join(k.replace("\r", " ").replace("\n", " ") for k in keys)
+    return [f"Gator-Dangerous-Patterns-Unacknowledged: {joined}"]

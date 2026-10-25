@@ -93,6 +93,11 @@
           .map(function (s) { return s.trim(); }).filter(Boolean),
         by: t["Gator-Dangerous-Pattern-Acknowledged-By"] || "",
       } : null,
+      // A recorded skip: committed without an Architect decision.
+      unacknowledged: t["Gator-Dangerous-Patterns-Unacknowledged"]
+        ? t["Gator-Dangerous-Patterns-Unacknowledged"].split(",")
+            .map(function (s) { return s.trim(); }).filter(Boolean)
+        : null,
     };
   }
 
@@ -177,6 +182,13 @@
       note.appendChild(document.createTextNode(
         " Kept on the Architect's direction: " + a.patterns.join(", ")
         + ". The decision is in the description."));
+      record.appendChild(note);
+    }
+    if (rec.unacknowledged) {
+      const note = el("div", "commit-unacknowledged");
+      note.appendChild(el("strong", null, "! Unacknowledged dangerous pattern."));
+      note.appendChild(document.createTextNode(
+        " Committed without an Architect decision: " + rec.unacknowledged.join(", ") + "."));
       record.appendChild(note);
     }
 
@@ -281,6 +293,11 @@
     if (rec.acknowledgement) {
       const f = el("span", "commit-tag commit-flag-acknowledged", "✓ Acknowledged");
       f.title = "Dangerous-pattern warning kept on the Architect's direction";
+      flags.appendChild(f);
+    }
+    if (rec.unacknowledged) {
+      const f = el("span", "commit-tag commit-flag-unacknowledged", "! Unacknowledged");
+      f.title = "Dangerous pattern committed without an Architect decision";
       flags.appendChild(f);
     }
     flags.appendChild(el("span", "commit-chev", "▸"));
