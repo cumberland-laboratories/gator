@@ -14,7 +14,8 @@ worktree (with its own index) has its own state.
   block.json     every blocked attempt: the staged-change identity
                  (index_tree(): a digest of `git ls-files --stage` minus
                  hook-managed .gator files), every failed rule
-                 and its resolution class. block_id is stable for the life
+                 and its resolution class (fix-required or
+                 external-approval, from the caller's explicit map, #75). block_id is stable for the life
                  of one index tree and does not depend on the failure set.
   approval.json  immutable Architect snapshot bound to one exact tree and a
                  set of approved rules. Validate never rewrites it.
@@ -51,16 +52,24 @@ BLOCK_FILE = "block.json"
 APPROVAL_FILE = "approval.json"
 HANDOFF_FILE = "handoff.json"
 
-# Resolution classes for failed rules.
-APPROVABLE = "approvable"      # Architect may authorize this exact tree
-LINT = "lint"                  # HIGH/CRITICAL Layer 1 lint; approvable via the envelope
-FIX_REQUIRED = "fix-required"  # correctness failures; never approvable
+# Resolution classes for failed rules (#75). The caller passes an explicit
+# {rule: EXTERNAL_APPROVAL} map (precommit_policy.resolution_map()); every
+# rule the map does not name is fix-required. Nothing is approvable by rule
+# name alone any more.
+EXTERNAL_APPROVAL = "external-approval"  # the Architect may approve this exact tree
+FIX_REQUIRED = "fix-required"            # fix and retry; never approvable
 
-APPROVABLE_RULES = frozenset({
+# Resolution values written by earlier runtimes (before #75). They are never
+# approvable now: a same-tree block that carries one is cancelled and
+# retried (legacy_records()), never reinterpreted.
+LEGACY_RESOLUTIONS = frozenset({"approvable", "lint"})
+
+CHARTER_RULES = frozenset({
     "charter-alongside-code",
     "cross-cutting-missing",
     "charter-index-gap",
 })
+LEGACY_RECORD_RULE = "legacy-override-record"
 FIX_REQUIRED_RULES = frozenset({
     "frontmatter-parse",
     "invalid-change-type",
@@ -69,8 +78,9 @@ FIX_REQUIRED_RULES = frozenset({
     "missing-message",
     "legacy-override-file",
     "unmerged-index",
-})
-CHARTER_OVERRIDE_RULES = APPROVABLE_RULES
+    LEGACY_RECORD_RULE,
+    "invalid-dangerous-pattern-acknowledgement",  # precommit_policy.ACK_RULE
+}) | CHARTER_RULES
 
 # Legacy v1 files in .gator/ — detected and retired, never interpreted.
 LEGACY_FILES = (
@@ -186,17 +196,20 @@ def index_tree(repo_root):
 # Classification + sanitization
 # ---------------------------------------------------------------------------
 
-def classify(rule, lint_rules=()):
-    """Resolution class for a failed rule. Unknown rules fail closed."""
-    if rule in APPROVABLE_RULES:
-        return APPROVABLE
-    if rule in lint_rules:
-        return LINT
+def classify(rule, resolutions=None):
+    """Resolution class for a failed rule from the caller's explicit map.
+
+    Only a rule the map names as external-approval is approvable; every
+    other rule (charter rules and unknown rules included) is fix-required.
+    """
+    if resolutions and resolutions.get(rule) == EXTERNAL_APPROVAL:
+        return EXTERNAL_APPROVAL
     return FIX_REQUIRED
 
 
 def is_approvable(resolution):
-    return resolution in (APPROVABLE, LINT)
+    """Only external-approval is approvable; legacy values are not."""
+    return resolution == EXTERNAL_APPROVAL
 
 
 def sanitize_trailer_value(value, max_len):
@@ -327,7 +340,7 @@ def read_block(sdir):
     return state, data
 
 
-def write_block(sdir, tree, failures, files, lint_rules=(), now=None):
+def write_block(sdir, tree, failures, files, resolutions=None, now=None):
     """Write or refresh block.json for this attempt.
 
     ``failures`` is a list of (rule, message). block_id is kept while the
@@ -349,7 +362,7 @@ def write_block(sdir, tree, failures, files, lint_rules=(), now=None):
     for rule, message in failures:
         records.append({
             "rule": rule,
-            "resolution": classify(rule, lint_rules),
+            "resolution": classify(rule, resolutions),
             "message": message,
         })
         seen.add(rule)
@@ -372,6 +385,48 @@ def write_block(sdir, tree, failures, files, lint_rules=(), now=None):
 def approvable_rules(block):
     return sorted({f["rule"] for f in block.get("failures", [])
                    if is_approvable(f.get("resolution"))})
+
+
+def legacy_rules(block):
+    """Rules of ``block`` recorded with a pre-#75 resolution value."""
+    return sorted({f["rule"] for f in (block or {}).get("failures", [])
+                   if f.get("resolution") in LEGACY_RESOLUTIONS})
+
+
+def legacy_records(sdir, tree, now=None):
+    """Why an in-flight record the current strict path does not produce is
+    pending for THIS staged tree, or None. Read-only (#75 migration guard).
+
+    Any of these counts, when unexpired and for the same ``index_tree``:
+      - a block whose failures carry a legacy resolution (approvable/lint);
+      - a block that already records the guard's own legacy-override-record
+        failure, so the guard survives its first write_block();
+      - a well-formed approval, whatever it names: the strict path never
+        writes an approvable block, so any such approval came from an
+        earlier runtime or another mode.
+    A record for another tree, or an expired or malformed one, is not in
+    flight: normal retirement handles it.
+    """
+    if sdir is None or tree is None:
+        return None
+    now = _now() if now is None else now
+    b_state, block = read_block(sdir)
+    if (b_state == "ok" and block["index_tree"] == tree
+            and block["expires_epoch"] > now):
+        legacy = legacy_rules(block)
+        if legacy:
+            return (f"block {block['block_id']} was recorded by an earlier Gator "
+                    f"runtime ({', '.join(legacy)})")
+        if any(f.get("rule") == LEGACY_RECORD_RULE for f in block["failures"]):
+            return (f"block {block['block_id']} still holds a record from an "
+                    "earlier Gator runtime")
+    a_state, approval = read_approval(sdir)
+    if (a_state == "ok" and approval["index_tree"] == tree
+            and approval["expires_epoch"] > now):
+        return (f"approval {approval['approval_id']} "
+                f"({', '.join(approval['approved_rules']) or 'no rules'}) "
+                "was not written for the current policy")
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +522,6 @@ def write_handoff(sdir, approval, overridden_rules, now=None):
         "approval_id": approval["approval_id"],
         "index_tree": approval["index_tree"],
         "overridden_rules": rules,
-        "charter_override": any(r in CHARTER_OVERRIDE_RULES for r in rules),
         "approved_by": sanitize_trailer_value(approval["approved_by"], TRAILER_MAX["approved_by"]),
         "reason": sanitize_trailer_value(approval["reason"], TRAILER_MAX["reason"]),
         "written_at": _iso(now),
@@ -546,7 +600,7 @@ def block_age_seconds(block, now=None):
     return max(0.0, now - block.get("created_epoch", now))
 
 
-def apply_approval(sdir, tree, failures, lint_rules=()):
+def apply_approval(sdir, tree, failures, resolutions=None):
     """Apply a stored approval to this attempt's failures. The one approval
     decision shared by every validate path (strict and Enterprise
     evidence_only), so they cannot diverge.
@@ -554,8 +608,10 @@ def apply_approval(sdir, tree, failures, lint_rules=()):
     ``failures`` is a list of (rule, message). Clears any stale handoff,
     retires an approval that is expired / mismatched / malformed /
     premature, and removes only failures whose rule the valid approval
-    names AND that classify approvable or lint. Writes the handoff when an
-    approval clears every remaining failure. Never deletes a valid approval.
+    names AND that classify external-approval under ``resolutions`` (the
+    current attempt's explicit map). It never removes a fix-required
+    finding. Writes the handoff when an approval clears every remaining
+    failure. Never deletes a valid approval.
 
     Returns (remaining_failures, handoff_or_None, notes).
     """
@@ -573,7 +629,7 @@ def apply_approval(sdir, tree, failures, lint_rules=()):
     approval = insp["approval"]
     approved = set(approval["approved_rules"])
     covered_rules = {r for r, _ in failures
-                     if r in approved and is_approvable(classify(r, lint_rules))}
+                     if r in approved and is_approvable(classify(r, resolutions))}
     if not covered_rules:
         return list(failures), None, notes
     remaining = [(r, m) for r, m in failures if r not in covered_rules]
@@ -586,17 +642,26 @@ def apply_approval(sdir, tree, failures, lint_rules=()):
     return remaining, None, notes
 
 
-def render_block_report(header, failures, warnings, lint_rules, notes, block,
-                        info_lines=()):
-    """Lines for a blocked attempt: tagged failures, warnings, notes, a
-    fix-required vs approvable resolution summary, the Architect STOP box
-    (only when something is approvable), and the block id pointer."""
+def render_block_report(header, failures, warnings, resolutions, notes, block,
+                        info_lines=(), attention=()):
+    """Lines for a blocked attempt: tagged failures, Architect-attention
+    warnings, other warnings, notes, a three-way resolution summary, the
+    Architect STOP box (only when something needs external approval), and
+    the block id pointer.
+
+    ``failures`` and ``warnings`` are (rule, message) lists; ``attention``
+    is (rule, message) for HIGH/CRITICAL dangerous findings under the
+    warning policy (#75): reported, never approvable."""
     def res(rule):
-        return classify(rule, lint_rules)
+        return classify(rule, resolutions)
 
     out = ["", f"  {header}", ""]
     for rule, msg in failures:
         out.append(f"  ✗ {rule} [{res(rule)}]: {msg}")
+    if attention:
+        out += ["", "  Dangerous-pattern warnings (Architect attention; no approval command):"]
+        for rule, msg in attention:
+            out.append(f"  ⚠ {rule} [warning]: {msg}")
     if warnings:
         out.append("")
         for rule, msg in warnings:
@@ -612,12 +677,15 @@ def render_block_report(header, failures, warnings, lint_rules, notes, block,
     fix_required = sorted({r for r, _ in failures if not is_approvable(res(r))})
     out += ["", "  Resolution:"]
     if fix_required:
-        out.append(f"    fix-required (fix and retry; cannot be approved): "
+        out.append(f"    [fix-required] fix and retry; cannot be approved: "
                    f"{', '.join(fix_required)}")
+    if attention:
+        out.append("    [warning] present to the Architect, who decides to fix, "
+                   "remove, or keep it; does not block: "
+                   + ", ".join(sorted({r for r, _ in attention})))
     if needs_approval:
-        out.append(f"    approvable (fix, or the Architect may approve this exact "
-                   f"staged change): {', '.join(needs_approval)}")
-    if needs_approval:
+        out.append(f"    [external-approval] fix, or the Architect may approve this "
+                   f"exact staged change: {', '.join(needs_approval)}")
         out += [
             "",
             "  ┌─────────────────────────────────────────────────────────┐",
@@ -625,7 +693,7 @@ def render_block_report(header, failures, warnings, lint_rules, notes, block,
             "  │                                                        │",
             "  │ Present these findings to the Architect, who decides:  │",
             "  │   1. Fix the findings and retry the commit, or         │",
-            "  │   2. Approve the approvable findings:                  │",
+            "  │   2. Approve the external-approval findings:           │",
             "  │        gator hook approve                              │",
             "  │                                                        │",
             "  │ You may NOT run gator hook approve yourself.           │",
@@ -656,7 +724,9 @@ def describe(block, approval, tree, now=None):
     lines.append(f"    Staged tree:  {'matches the current index' if matches else 'CHANGED since the block — retry the commit to refresh it'}")
     lines.append("    Failures:")
     for f in block.get("failures", []):
-        lines.append(f"      - {f['rule']} ({f['resolution']})")
+        legacy = (" - recorded by an earlier Gator runtime"
+                  if f["resolution"] in LEGACY_RESOLUTIONS else "")
+        lines.append(f"      - {f['rule']} ({f['resolution']}){legacy}")
     files = block.get("files", [])
     if files:
         shown = ", ".join(files[:8])

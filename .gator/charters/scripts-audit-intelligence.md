@@ -61,8 +61,9 @@ Load cached or refreshed session summaries for one repo or the fleet.
 File: src/gator_command/scripts/gator-repo-status.py
 Assemble per-repository health from charters, trailers, hooks, sessions, and current Git state.
 <- repo-status CLI and dashboard
--> coverage/trailer/hook/session helpers
+-> coverage/trailer/hook/session helpers, `gator_core.is_enterprise_active()`
 ! Every field is scoped to the resolved requested repository.
+! Additive `enterprise_managed` (#75): `is_enterprise_active(.gator/)` (fail closed; False when the helper cannot be imported). The Dashboard shows "Managed by Enterprise" for such a repository, because its Enterprise hook mode, not `config.json`, decides the commit checks. Pinned by `tests/test_repo_status_commit_policy.py`.
 
 ### get_charter_coverage(repo_path)
 File: src/gator_command/scripts/gator-repo-status.py

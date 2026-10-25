@@ -1,21 +1,28 @@
 """
-#34 / #35 — tree-bound, retry-safe pre-commit override approval.
+#34 / #35 / #75 — pre-commit resolution policy and the tree-bound,
+retry-safe override envelope.
 
 Integration tests drive REAL git commits in throwaway temp repos whose
-pre-commit / commit-msg / post-commit hooks run the starter-template
-gator-pre-commit.py phases. The Architect approval step runs
-gator-approve.py only inside those temp repos (never against this repo) —
-the constitution forbids the agent approving real governance blocks.
+pre-commit / commit-msg / post-commit hooks run the starter-template (or
+Enterprise bundled) gator-pre-commit.py phases. The Architect approval step
+runs gator-approve.py only inside those temp repos (never against this
+repo) — the constitution forbids the agent approving real governance blocks.
 
-The headline regression (#35): a charter block + a second, different block
-(invalid change-type). After the Architect approves the charter finding, the
-retry is blocked only by the fix-required finding, the approval SURVIVES,
-`override status` diagnoses the remaining rule, and after fixing it the
-commit lands with durable override trailers and no leftover state.
+#75 policy under test:
+  - charter integrity and correctness rules are `fix-required`; nothing
+    approves them;
+  - a HIGH/CRITICAL dangerous pattern is a `[warning]` under the default
+    (strict) policy: the commit passes and no override state is created;
+  - only Enterprise `evidence_only` makes it `[external-approval]`, so the
+    envelope lifecycle (#34, #35) is exercised through that path;
+  - a block or approval recorded by an earlier runtime for the same staged
+    tree is cancelled and retried, never reinterpreted.
 """
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -28,6 +35,7 @@ APPROVE = SCRIPTS / "gator-approve.py"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import precommit_override as ovr  # noqa: E402
+import precommit_policy as policy  # noqa: E402
 
 
 # Lint-triggering SQL fixtures (rule SQL-001). Built by concatenation so
@@ -35,6 +43,7 @@ import precommit_override as ovr  # noqa: E402
 # receive the real statement.
 SQL_DROP_USERS = "DROP " + "TABLE users;\n"
 SQL_DROP_ORDERS = "DROP " + "TABLE orders;\n"
+SQL_MATCH = "DROP " + "TABLE users"  # the source text (the rule message names "DROP TABLE")
 
 
 DRAFT = """---
@@ -50,6 +59,12 @@ architect: Test Architect
 
 - Added foo.
 """
+
+EV = {"GATOR_HOOK_MODE": "evidence_only"}
+
+BUNDLED_SCRIPTS = (Path(__file__).resolve().parent.parent / "enterprise" / "enterprise-cli"
+                   / "gator_enterprise_cli" / "bundled_scripts")
+APPROVE_BUNDLED = BUNDLED_SCRIPTS / "gator-approve.py"
 
 
 def _git(repo, *args, check=True):
@@ -69,10 +84,6 @@ def _write_hook(hooks, name, body):
     p.chmod(0o755)
 
 
-BUNDLED_SCRIPTS = (Path(__file__).resolve().parent.parent / "enterprise" / "enterprise-cli"
-                   / "gator_enterprise_cli" / "bundled_scripts")
-
-
 @pytest.fixture
 def repo(tmp_path):
     return _make_repo(tmp_path, SCRIPTS)
@@ -85,7 +96,14 @@ def bundled_repo(tmp_path):
     return _make_repo(tmp_path, BUNDLED_SCRIPTS)
 
 
-def _make_repo(tmp_path, scripts_dir):
+@pytest.fixture(params=["template", "bundled"])
+def any_repo(request, tmp_path):
+    """Strict-mode behavior must match in both hook copies."""
+    scripts = SCRIPTS if request.param == "template" else BUNDLED_SCRIPTS
+    return _make_repo(tmp_path, scripts)
+
+
+def _make_repo(tmp_path, scripts_dir, level="strict"):
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
@@ -105,7 +123,8 @@ def _make_repo(tmp_path, scripts_dir):
 
     gator = root / ".gator"
     gator.mkdir()
-    (gator / "config.json").write_text('{"enforcement_level": "strict"}\n', encoding="utf-8")
+    (gator / "config.json").write_text(
+        json.dumps({"enforcement_level": level}) + "\n", encoding="utf-8")
     (gator / "commit_draft.md").write_text(DRAFT.format(change_type="feature"), encoding="utf-8")
     (root / "README.md").write_text("# test\n", encoding="utf-8")
     (root / "old.py").write_text("x = 0\n", encoding="utf-8")
@@ -123,7 +142,6 @@ def _draft(repo, change_type):
 
 
 def _commit(repo, env=None):
-    import os
     full_env = dict(os.environ, **env) if env else None
     r = subprocess.run(["git", "commit", "-m", "fallback message"], cwd=str(repo),
                        capture_output=True, text=True, encoding="utf-8",
@@ -156,72 +174,421 @@ def _stage_code(repo, name="foo.py", text="x = 1\n"):
     _git(repo, "add", name)
 
 
+def _stage_sql(repo, name="migrate.sql", text=SQL_DROP_USERS):
+    """A HIGH SQL-001 finding. `.sql` is code (charter rule applies);
+    `.txt` is charter-exempt, so strict tests use `migrate.txt`."""
+    (repo / name).write_text(text, encoding="utf-8")
+    _git(repo, "add", name)
+
+
 def _last_message(repo):
     return _git(repo, "log", "-1", "--format=%B").stdout
 
 
+def _state_files(repo):
+    return [n for n in (ovr.BLOCK_FILE, ovr.APPROVAL_FILE, ovr.HANDOFF_FILE)
+            if (_sdir(repo) / n).exists()]
+
+
+def _head_json(repo, path):
+    return json.loads(_git(repo, "show", f"HEAD:{path}").stdout)
+
+
 # ---------------------------------------------------------------------------
-# #35 headline regression
+# #75: charter integrity is fix-required
 # ---------------------------------------------------------------------------
 
-class TestSecondBlockIsApprovableAndDiagnosable:
-    def test_full_lifecycle(self, repo):
+class TestCharterIsFixRequired:
+    def test_missing_charter_blocks_and_cannot_be_approved(self, any_repo):
+        repo = any_repo
         _stage_code(repo)
-        _draft(repo, "bogus")
-
         rc, out = _commit(repo)
         assert rc != 0
-        assert "charter-alongside-code [approvable]" in out
-        assert "invalid-change-type [fix-required]" in out
-        assert "gator hook approve" in out
-        block1 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
-        assert {f["rule"]: f["resolution"] for f in block1["failures"]} == {
-            "charter-alongside-code": "approvable",
-            "invalid-change-type": "fix-required",
-        }
+        assert "charter-alongside-code [fix-required]" in out
+        assert "STOP. Do not override this yourself." not in out
+        assert "gator hook approve" not in out
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert {f["rule"]: f["resolution"] for f in block["failures"]} == {
+            "charter-alongside-code": "fix-required"}
 
         _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "docs-only refactor", "--name", "Architect")
-        assert rc == 0, out
-        assert "Still fix-required (not approvable): invalid-change-type" in out
-        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A")
+        assert rc == 1
+        assert "nothing in this block can be approved" in out
+        assert "charter-alongside-code" in out
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
 
-        # The #35 moment: a second, different block after approval.
+    def test_hand_written_approval_does_not_clear_it(self, repo):
+        _stage_code(repo)
+        _commit(repo)
+        block = _backdate_block(repo)
+        _write_approval(repo, block, ["charter-alongside-code"])
         rc, out = _commit(repo)
         assert rc != 0
-        assert "invalid-change-type [fix-required]" in out
-        assert "✗ charter-alongside-code" not in out, "approved rule must not block again"
-        assert "is kept for the retry" in out
-        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists(), "approval must survive the retry"
-        block2 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
-        assert block2["block_id"] == block1["block_id"], "same tree -> same block id"
+        assert "charter-alongside-code [fix-required]" in out
+        assert "OVERRIDE" not in out
 
-        # Diagnosable, never "no pending request".
+    def test_second_block_is_diagnosable(self, repo):
+        """#35 diagnosis survives: every failure is recorded with its
+        resolution, and `override status` names them."""
+        _stage_code(repo)
+        _draft(repo, "bogus")
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "charter-alongside-code [fix-required]" in out
+        assert "invalid-change-type [fix-required]" in out
         rc, out = _approve(repo, "status")
         assert rc == 0
+        assert "charter-alongside-code (fix-required)" in out
         assert "invalid-change-type (fix-required)" in out
         assert "No blocked commit attempt" not in out
 
-        _draft(repo, "fix")
+
+# ---------------------------------------------------------------------------
+# #75: dangerous patterns warn under the default policy
+# ---------------------------------------------------------------------------
+
+class TestDangerousPatternWarning:
+    def test_high_finding_passes_with_warning_and_no_override_state(self, any_repo):
+        repo = any_repo
+        _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
         assert rc == 0, out
-        assert "OVERRIDE (charter-alongside-code) approved by Architect" in out
-
+        assert "PASS — Architect attention required" in out
+        assert "SQL-001 [warning]" in out
+        assert "ARCHITECT ATTENTION REQUIRED" in out
+        assert "gator hook approve" not in out
+        assert _state_files(repo) == []
         msg = _last_message(repo)
-        assert "Gator-Charter-Changed: override-skip" in msg
+        assert "Gator-Override" not in msg
+        assert "Gator-Dangerous" not in msg, "no evidence, no acknowledgement trailers"
+
+        # The committed evidence names the finding but never its source text.
+        status = _head_json(repo, ".gator/status.json")
+        checks = status["commit_checks"]
+        assert checks["dangerous_pattern_warnings"] == ["SQL-001@migrate.txt:1"]
+        assert checks["integrity_failures"] == []
+        assert checks["external_approval_required"] == []
+        wb = _git(repo, "show", "HEAD:.gator/whiteboard.md").stdout
+        assert "## Dangerous-pattern warnings — Architect attention" in wb
+        assert "SQL-001" in wb
+        assert SQL_MATCH not in wb
+        assert SQL_MATCH not in json.dumps(status)
+
+    def test_charter_failure_still_blocks_alongside_a_warning(self, repo):
+        _stage_code(repo)
+        _stage_sql(repo, name="migrate.txt")
+        rc, out = _commit(repo)
+        assert rc != 0
+        assert "charter-alongside-code [fix-required]" in out
+        assert "SQL-001 [warning]" in out
+        assert "STOP. Do not override this yourself." not in out
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
+
+
+# ---------------------------------------------------------------------------
+# #75: Architect acknowledgement evidence
+# ---------------------------------------------------------------------------
+
+KEY = "SQL-001@migrate.txt:1"
+# SQL-004 (MEDIUM) on line 2, built by concatenation like the SQL fixtures.
+SQL_MEDIUM_LINE = "cursor." + "execute(\"x\" + y)\n"
+
+
+def _ack_draft(repo, keys=(KEY,), bullets=None, architect="architect: Test Architect",
+               section=True):
+    if bullets is None:
+        bullets = [f"- `{k}`: Keep this migration fixture; the Architect confirmed it."
+                   for k in keys]
+    text = (
+        "---\n"
+        'message: "Keep the migration fixture"\n'
+        "change-type: feature\n"
+        "significance: routine\n"
+        "decision-tags: [test]\n"
+        "agent: test-agent\n"
+        f"{architect}\n"
+        f"dangerous-pattern-acknowledgements: [{', '.join(keys)}]\n"
+        "---\n\n"
+        "# Session Change Log\n\n"
+        "- Added a migration fixture.\n"
+    )
+    if section:
+        text += "\n## Architect acknowledgement\n\n" + "\n".join(bullets) + "\n"
+    (repo / ".gator" / "commit_draft.md").write_text(text, encoding="utf-8")
+
+
+class TestAcknowledgement:
+    def test_valid_acknowledgement_emits_trailers_without_source_text(self, any_repo):
+        repo = any_repo
+        _stage_sql(repo, name="migrate.txt")
+        _ack_draft(repo)
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "Kept on the Architect's direction (Test Architect): " + KEY in out
+        assert "ARCHITECT ATTENTION REQUIRED" not in out
+        msg = _last_message(repo)
+        trailers = [l for l in msg.splitlines() if l.startswith("Gator-")]
+        assert f"Gator-Dangerous-Patterns: {KEY}" in trailers
+        assert "Gator-Dangerous-Pattern-Acknowledged-By: Test Architect" in trailers
+        assert not any(SQL_MATCH in l for l in trailers)
+        assert not any(l.startswith("Gator-Override") for l in trailers)
+        assert "## Architect acknowledgement" in msg
+        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        assert checks["dangerous_pattern_acknowledged"] == [KEY]
+        assert checks["acknowledged_by"] == "Test Architect"
+        wb = _git(repo, "show", "HEAD:.gator/whiteboard.md").stdout
+        assert "## Architect acknowledgements" in wb
+        assert "## Dangerous-pattern warnings" not in wb
+        assert _state_files(repo) == []
+
+    def test_key_with_spaces_in_path_is_kept_byte_for_byte(self, repo):
+        """A staged path may contain repeated spaces: the trailer key must
+        name exactly that file."""
+        key = "SQL-001@two  spaces.txt:1"
+        _stage_sql(repo, name="two  spaces.txt")
+        _ack_draft(repo, keys=(key,))
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
+        assert f"Gator-Dangerous-Patterns: {key}" in trailers
+        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        assert checks["dangerous_pattern_acknowledged"] == [key]
+
+    def test_acknowledgement_trailers_only_neutralize_line_breaks(self):
+        lines = policy.acknowledgement_trailers(
+            ["SQL-001@a  b.txt:1", "HYG-002@x\ny.env:0"], "Alan\nGator-Evil: 1")
+        assert lines[0] == "Gator-Dangerous-Patterns: SQL-001@a  b.txt:1,HYG-002@x y.env:0"
+        assert lines[1] == "Gator-Dangerous-Pattern-Acknowledged-By: Alan Gator-Evil: 1"
+        assert len(lines) == 2
+
+    @pytest.mark.parametrize("case", [
+        "stale-line", "fabricated", "duplicate", "medium-key", "missing-architect",
+        "pi-only", "missing-section", "unlisted-bullet", "section-without-field",
+        "empty-bullet",
+    ])
+    def test_malformed_evidence_fails_closed(self, repo, case):
+        _stage_sql(repo, name="migrate.txt", text=SQL_DROP_USERS + SQL_MEDIUM_LINE)
+        kwargs = {
+            "stale-line": dict(keys=("SQL-001@migrate.txt:7",)),
+            "fabricated": dict(keys=("SEC-001@other.py:3",)),
+            "duplicate": dict(keys=(KEY, KEY), bullets=[f"- `{KEY}`: keep"]),
+            "medium-key": dict(keys=("SQL-004@migrate.txt:2",)),
+            "missing-architect": dict(architect="architect:"),
+            "pi-only": dict(architect="pi: Test Architect"),
+            "missing-section": dict(section=False),
+            "unlisted-bullet": dict(bullets=[f"- `{KEY}`: keep", "- `SQL-002@x.sql:1`: also"]),
+            "section-without-field": dict(keys=(), bullets=[f"- `{KEY}`: keep"]),
+            "empty-bullet": dict(bullets=[f"- `{KEY}`:"]),
+        }[case]
+        _ack_draft(repo, **kwargs)
+        rc, out = _commit(repo)
+        assert rc != 0, out
+        assert "invalid-dangerous-pattern-acknowledgement [fix-required]" in out
+        assert "Current dangerous-pattern warning keys: " + KEY in out
+        assert SQL_MATCH not in out.split("invalid-dangerous-pattern-acknowledgement", 1)[1] \
+            .split("\n", 1)[0], "the failure message never carries source text"
+
+    def test_only_the_charter_failure_remains_with_valid_evidence(self, repo):
+        _stage_code(repo)
+        _stage_sql(repo, name="migrate.txt")
+        _ack_draft(repo)
+        rc, out = _commit(repo)
+        assert rc != 0
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert [f["rule"] for f in block["failures"]] == ["charter-alongside-code"]
+        assert "invalid-dangerous-pattern-acknowledgement" not in out
+
+    def test_acknowledgement_never_touches_the_envelope(self, bundled_repo):
+        """In evidence_only the finding is external-approval: listing it as
+        acknowledged neither clears the block nor yields acknowledgement
+        trailers, and the approval lifecycle is unchanged."""
+        repo = bundled_repo
+        _stage_sql(repo)
+        _ack_draft(repo, keys=("SQL-001@migrate.sql:1",))
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0 and "SQL-001 [external-approval]" in out
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "ok", "--name", "Architect",
+                           script=APPROVE_BUNDLED)
+        assert rc == 0, out
+        rc, out = _commit(repo, env=EV)
+        assert rc == 0, out
+        msg = _last_message(repo)
+        assert "Gator-Override-Rules: SQL-001" in msg
+        assert "Gator-Dangerous" not in msg
+        assert _state_files(repo) == []
+
+    def test_warn_mode_never_records_invalid_evidence(self, tmp_path):
+        repo = _make_repo(tmp_path, SCRIPTS, level="warn")
+        _stage_sql(repo, name="migrate.txt")
+        _ack_draft(repo, keys=("SQL-001@migrate.txt:9",))
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "invalid-dangerous-pattern-acknowledgement" in out
+        assert "Gator-Dangerous" not in _last_message(repo)
+
+
+@pytest.mark.parametrize("level", ["warn", "off"])
+def test_legacy_broad_modes_keep_their_behavior(tmp_path, level):
+    """`warn` and `off` pass a missing charter update and a HIGH finding,
+    as before #75."""
+    repo = _make_repo(tmp_path, SCRIPTS, level=level)
+    _stage_code(repo)
+    _stage_sql(repo, name="migrate.txt")
+    rc, out = _commit(repo)
+    assert rc == 0, out
+    if level == "warn":
+        assert "PASS (enforcement: warn" in out
+        assert "charter-alongside-code" in out and "SQL-001" in out
+    else:
+        assert "enforcement OFF" in out
+    assert _state_files(repo) == []
+
+
+# ---------------------------------------------------------------------------
+# #75 migration: in-flight records from an earlier runtime
+# ---------------------------------------------------------------------------
+
+def _write_legacy_block(repo, failures, tree=None, expires_in=3600):
+    sdir = _sdir(repo)
+    sdir.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    block = {
+        "schema": ovr.SCHEMA, "block_id": "legacy01",
+        "created_epoch": now - 120, "created_at": "x", "updated_at": "x",
+        "expires_epoch": now + expires_in, "expires_at": "x",
+        "index_tree": tree or ovr.index_tree(repo),
+        "failures": [{"rule": r, "resolution": res, "message": "m"} for r, res in failures],
+        "files": [],
+    }
+    (sdir / ovr.BLOCK_FILE).write_text(json.dumps(block), encoding="utf-8")
+    return block
+
+
+def _write_approval(repo, block, rules):
+    approval = {
+        "schema": ovr.SCHEMA, "approval_id": "legacyap", "block_id": block["block_id"],
+        "index_tree": block["index_tree"], "approved_rules": rules,
+        "approved_by": "Architect", "reason": "earlier runtime",
+        "approved_epoch": block["created_epoch"] + 60, "approved_at": "x",
+        "expires_epoch": block["expires_epoch"], "expires_at": "x",
+    }
+    (_sdir(repo) / ovr.APPROVAL_FILE).write_text(json.dumps(approval), encoding="utf-8")
+    return approval
+
+
+def _write_handoff(repo, approval):
+    handoff = {
+        "schema": ovr.SCHEMA, "block_id": approval["block_id"],
+        "approval_id": approval["approval_id"], "index_tree": approval["index_tree"],
+        "overridden_rules": approval["approved_rules"], "charter_override": False,
+        "approved_by": "Architect", "reason": "earlier runtime", "written_at": "x",
+    }
+    (_sdir(repo) / ovr.HANDOFF_FILE).write_text(json.dumps(handoff), encoding="utf-8")
+
+
+class TestLegacyMigration:
+    @pytest.mark.parametrize("case", ["lint", "lint-approved", "charter-approved"])
+    def test_guard_persists_until_cancel(self, repo, case):
+        if case == "charter-approved":
+            _stage_code(repo)
+            block = _write_legacy_block(repo, [("charter-alongside-code", "approvable")])
+            _write_approval(repo, block, ["charter-alongside-code"])
+        else:
+            _stage_sql(repo, name="migrate.txt")
+            block = _write_legacy_block(repo, [("SQL-001", "lint")])
+            if case == "lint-approved":
+                _write_handoff(repo, _write_approval(repo, block, ["SQL-001"]))
+            else:
+                rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A")
+                assert rc == 1 and "earlier Gator runtime" in out
+                assert "gator hook override cancel" in out
+
+        for attempt in (1, 2):
+            rc, out = _commit(repo)
+            assert rc != 0, f"attempt {attempt} must block:\n{out}"
+            assert "legacy-override-record [fix-required]" in out
+            assert "OVERRIDE" not in out
+            assert not (_sdir(repo) / ovr.HANDOFF_FILE).exists()
+            if case != "lint":
+                assert (_sdir(repo) / ovr.APPROVAL_FILE).exists(), "legacy approval kept"
+
+        rc, out = _approve(repo, "cancel")
+        assert rc == 0
+        rc, out = _commit(repo)
+        assert "legacy-override-record" not in out
+        if case == "charter-approved":
+            assert rc != 0 and "charter-alongside-code [fix-required]" in out
+        else:
+            assert rc == 0, out
+            assert "SQL-001 [warning]" in out
+            assert "Gator-Override" not in _last_message(repo)
+
+    @pytest.mark.parametrize("which", ["expired", "other-tree"])
+    def test_stale_legacy_records_do_not_block(self, repo, which):
+        _stage_sql(repo, name="migrate.txt")
+        if which == "expired":
+            _write_legacy_block(repo, [("SQL-001", "lint")], expires_in=-10)
+        else:
+            _write_legacy_block(repo, [("SQL-001", "lint")], tree="another-tree")
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "legacy-override-record" not in out
+        assert _state_files(repo) == [], "retired by post-commit cleanup"
+
+
+# ---------------------------------------------------------------------------
+# Enterprise evidence_only: the external-approval envelope (#34, #35)
+# ---------------------------------------------------------------------------
+
+def _ev_block_and_approve(repo):
+    _stage_sql(repo)
+    rc, _ = _commit(repo, env=EV)
+    assert rc != 0
+    _backdate_block(repo)
+    rc, out = _approve(repo, "approve", "--reason", "ok", "--name", "Architect",
+                       script=APPROVE_BUNDLED)
+    assert rc == 0, out
+
+
+class TestEnterpriseEvidenceOnly:
+    """Enterprise `evidence_only` (GATOR_HOOK_MODE) lint goes through the
+    tree-bound envelope — block recorded, Architect approval of the exact
+    change, retry, consumed post-commit."""
+
+    def test_block_approve_retry(self, bundled_repo):
+        repo = bundled_repo
+        _stage_sql(repo)
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0
+        assert "BLOCKED (evidence_only" in out
+        assert "SQL-001 [external-approval]" in out
+        assert "gator hook approve" in out
+        assert "charter-alongside-code" not in out, "evidence_only skips charter rules"
+        block = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert block["failures"][0]["resolution"] == "external-approval"
+
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "intentional migration",
+                           "--name", "Architect", script=APPROVE_BUNDLED)
+        assert rc == 0, out
+
+        rc, out = _commit(repo, env=EV)
+        assert rc == 0, out
+        assert "OVERRIDE (SQL-001) approved by Architect (evidence_only)" in out
+        msg = _last_message(repo)
+        assert "Gator-Override-Rules: SQL-001" in msg
         assert "Gator-Override-Approved-By: Architect" in msg
-        assert f"Gator-Override-Block: {block1['block_id']}" in msg
-        assert "Gator-Override-Reason: docs-only refactor" in msg
-        assert "Gator-Override-Rules: charter-alongside-code" in msg
+        assert "Gator-Override-Reason: intentional migration" in msg
+        assert "Gator-Charter-Changed: override-skip" not in msg
+        assert _state_files(repo) == []
 
-        # Consumed only now, by post-commit.
-        for name in (ovr.BLOCK_FILE, ovr.APPROVAL_FILE, ovr.HANDOFF_FILE):
-            assert not (_sdir(repo) / name).exists(), f"{name} left behind"
-
-        # Trailer readers (change 10) surface the override from real history.
-        # Run in a clean interpreter: this module puts the starter-template
-        # scripts dir first on sys.path, whose gator_core.py is a different
-        # file from the package copy repo-status imports in production.
+        # Trailer readers surface the override from real history. Run in a
+        # clean interpreter: this module puts the starter-template scripts
+        # dir first on sys.path, whose gator_core.py is a different file
+        # from the package copy repo-status imports in production.
         pkg_scripts = SCRIPTS.parent.parent.parent / "scripts"
         probe = (
             "import sys, json, importlib.util; sys.path.insert(0, sys.argv[1]);"
@@ -237,101 +604,72 @@ class TestSecondBlockIsApprovableAndDiagnosable:
         assert data["override"] is True
         ev = data["events"][0]
         assert ev["approver"] == "Architect"
-        assert ev["reason"] == "docs-only refactor"
-        assert ev["rules"] == ["charter-alongside-code"]
-        assert ev["block_id"] == block1["block_id"]
+        assert ev["rules"] == ["SQL-001"]
+        assert ev["block_id"] == block["block_id"]
 
-
-class TestEnterpriseBundledRuntime:
-    """The #35 headline flow through the Enterprise bundled copies."""
-
-    def test_second_block_keeps_approval_with_bundled_scripts(self, bundled_repo):
-        # The bundled copy predates the change-type enum gate (known drift,
-        # roadmap "bundled gator-pre-commit.py sync"), so the second,
-        # fix-required block here is `missing-message` — shared by both copies.
+    def test_reporting_separates_categories(self, bundled_repo):
         repo = bundled_repo
-        approve = BUNDLED_SCRIPTS / "gator-approve.py"
-        _stage_code(repo)
-        (repo / ".gator" / "commit_draft.md").write_text(
-            "---\nmessage: \"\"\nchange-type: feature\n---\n\n# Session Change Log\n",
-            encoding="utf-8")
-        rc, out = _commit(repo)
-        assert rc != 0 and "charter-alongside-code [approvable]" in out
-        assert "missing-message [fix-required]" in out
-        _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "ok", "--name", "Architect", script=approve)
-        assert rc == 0, out
-        rc, out = _commit(repo)
-        assert rc != 0 and "is kept for the retry" in out
-        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-        rc, out = _approve(repo, "status", script=approve)
-        assert "missing-message (fix-required)" in out
-        _draft(repo, "fix")
-        rc, out = _commit(repo)
-        assert rc == 0, out
-        msg = _last_message(repo)
-        assert "Gator-Charter-Changed: override-skip" in msg
-        assert "Gator-Override-Approved-By: Architect" in msg
-        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-
-
-class TestEnterpriseEvidenceOnly:
-    """Whiteboard Phase 2 P1: Enterprise `evidence_only` (GATOR_HOOK_MODE)
-    lint must go through the same tree-bound envelope — block recorded,
-    Architect approval of the exact change, retry, consumed post-commit."""
-
-    ENV = {"GATOR_HOOK_MODE": "evidence_only"}
-    APPROVE_BUNDLED = BUNDLED_SCRIPTS / "gator-approve.py"
-
-    def _stage_sql(self, repo):
-        (repo / "migrate.sql").write_text(SQL_DROP_USERS, encoding="utf-8")
-        _git(repo, "add", "migrate.sql")
-
-    def test_block_approve_retry(self, bundled_repo):
-        repo = bundled_repo
-        self._stage_sql(repo)
-        rc, out = _commit(repo, env=self.ENV)
+        _stage_sql(repo)
+        rc, out = _commit(repo, env=EV)
         assert rc != 0
-        assert "BLOCKED (evidence_only" in out
-        assert "SQL-001 [lint]" in out
-        assert "gator hook approve" in out
-        assert "charter-alongside-code" not in out, "evidence_only skips charter rules"
-        assert (_sdir(repo) / ovr.BLOCK_FILE).exists()
+        status = json.loads((repo / ".gator" / "status.json").read_text(encoding="utf-8"))
+        checks = status["commit_checks"]
+        assert checks["external_approval_required"] == ["SQL-001"]
+        assert checks["integrity_failures"] == []
+        assert checks["dangerous_pattern_acknowledged"] == []
+        wb = (repo / ".gator" / "whiteboard.md").read_text(encoding="utf-8")
+        assert "## External approval required" in wb
+        assert "## Blocked — fix required" not in wb
+        assert _git(repo, "ls-files", ".gator/whiteboard.md").stdout.strip() == "", \
+            "an untracked whiteboard is not staged in evidence_only"
 
         _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "intentional migration",
-                           "--name", "Architect", script=self.APPROVE_BUNDLED)
+        rc, out = _approve(repo, "approve", "--reason", "ok", "--name", "Architect",
+                           script=APPROVE_BUNDLED)
         assert rc == 0, out
-
-        rc, out = _commit(repo, env=self.ENV)
+        rc, out = _commit(repo, env=EV)
         assert rc == 0, out
-        assert "OVERRIDE (SQL-001) approved by Architect (evidence_only)" in out
-        msg = _last_message(repo)
-        assert "Gator-Override-Rules: SQL-001" in msg
-        assert "Gator-Override-Approved-By: Architect" in msg
-        for name in (ovr.BLOCK_FILE, ovr.APPROVAL_FILE, ovr.HANDOFF_FILE):
-            assert not (_sdir(repo) / name).exists()
+        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        assert checks["overridden_rules"] == ["SQL-001"]
+        assert checks["external_approval_required"] == []
+        assert checks["dangerous_pattern_acknowledged"] == []
+        assert "## Overrides" in (repo / ".gator" / "whiteboard.md").read_text(encoding="utf-8")
+        assert "Gator-Dangerous" not in _last_message(repo)
+        assert ".gator/whiteboard.md" not in _git(
+            repo, "show", "--name-only", "--format=", "HEAD").stdout
 
-    def test_changed_content_needs_new_approval(self, bundled_repo):
+    def test_unmerged_index_is_fix_required_not_approvable(self, bundled_repo):
         repo = bundled_repo
-        self._stage_sql(repo)
-        _commit(repo, env=self.ENV)
-        _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A",
-                           script=self.APPROVE_BUNDLED)
-        assert rc == 0, out
-        (repo / "migrate.sql").write_text(SQL_DROP_USERS + SQL_DROP_ORDERS,
-                                          encoding="utf-8")
-        _git(repo, "add", "migrate.sql")
-        rc, out = _commit(repo, env=self.ENV)
-        assert rc != 0 and "Previous approval retired" in out
+        _git(repo, "config", "core.hooksPath", (repo / ".no-hooks").as_posix())
+        _git(repo, "checkout", "-q", "-b", "other")
+        (repo / "old.py").write_text("x = 'other'\n", encoding="utf-8")
+        _git(repo, "commit", "-q", "--no-verify", "-am", "other")
+        _git(repo, "checkout", "-q", "main")
+        (repo / "old.py").write_text("x = 'main'\n", encoding="utf-8")
+        _git(repo, "commit", "-q", "--no-verify", "-am", "main")
+        _git(repo, "merge", "other", check=False)
+        _stage_sql(repo)
+        r = subprocess.run(
+            [sys.executable, str(BUNDLED_SCRIPTS / "gator-pre-commit.py"), "--phase", "validate"],
+            cwd=str(repo), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", env=dict(os.environ, **EV))
+        out = r.stdout + r.stderr
+        assert r.returncode == 1, out
+        assert "unmerged-index [fix-required]" in out
+        checks = json.loads(
+            (repo / ".gator" / "status.json").read_text(encoding="utf-8"))["commit_checks"]
+        assert "unmerged-index" in checks["integrity_failures"]
+        assert "unmerged-index" not in checks["external_approval_required"]
+        wb = (repo / ".gator" / "whiteboard.md").read_text(encoding="utf-8")
+        fix_section = wb.split("## Blocked — fix required", 1)[1].split("##", 1)[0]
+        assert "unmerged-index" in fix_section
 
     def test_lint_allow_is_explained_not_honored(self, bundled_repo):
         repo = bundled_repo
         (repo / ".gator" / "lint-allow.json").write_text(
             json.dumps([{"rule": "SQL-001", "file": "migrate.sql"}]), encoding="utf-8")
-        self._stage_sql(repo)
-        rc, out = _commit(repo, env=self.ENV)
+        _stage_sql(repo)
+        rc, out = _commit(repo, env=EV)
         assert rc != 0
         assert "no longer authorizes lint findings" in out
         assert "SQL-001 in migrate.sql" in out
@@ -340,8 +678,143 @@ class TestEnterpriseEvidenceOnly:
         repo = bundled_repo
         (repo / "notes.sql").write_text("SELECT 1;\n", encoding="utf-8")
         _git(repo, "add", "notes.sql")
-        rc, out = _commit(repo, env=self.ENV)
+        rc, out = _commit(repo, env=EV)
         assert rc == 0, out
+
+
+class TestSupersede:
+    @pytest.mark.parametrize("change", ["modify", "add", "delete", "rename"])
+    def test_staged_change_invalidates_approval(self, bundled_repo, change):
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        if change == "modify":
+            _stage_sql(repo, text=SQL_DROP_USERS + SQL_DROP_ORDERS)
+        elif change == "add":
+            _stage_code(repo, name="bar.py", text="y = 1\n")
+        elif change == "delete":
+            _git(repo, "rm", "-q", "old.py")
+        elif change == "rename":
+            _git(repo, "mv", "old.py", "old2.py")
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0
+        assert "Previous approval retired" in out and "different staged tree" in out
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+        assert "SQL-001 [external-approval]" in out
+
+    def test_expired_approval_is_retired(self, bundled_repo):
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        path = _sdir(repo) / ovr.APPROVAL_FILE
+        approval = json.loads(path.read_text(encoding="utf-8"))
+        approval["expires_epoch"] = 1
+        path.write_text(json.dumps(approval), encoding="utf-8")
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0 and "expired" in out
+        assert not path.exists()
+
+    @pytest.mark.parametrize("corrupt", ["block_missing_fields", "approval_missing_id",
+                                         "approval_bad_epochs"])
+    def test_schema_valid_partial_state_fails_closed_without_traceback(self, bundled_repo,
+                                                                         corrupt):
+        """Valid JSON with the right schema but missing or mistyped fields
+        must never crash the hook."""
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        sdir = _sdir(repo)
+        if corrupt == "block_missing_fields":
+            block = json.loads((sdir / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+            del block["block_id"], block["created_epoch"]
+            (sdir / ovr.BLOCK_FILE).write_text(json.dumps(block), encoding="utf-8")
+        else:
+            approval = json.loads((sdir / ovr.APPROVAL_FILE).read_text(encoding="utf-8"))
+            if corrupt == "approval_missing_id":
+                del approval["approval_id"]
+            else:
+                approval["approved_epoch"] = "later"
+                approval["expires_epoch"] = "never"
+            (sdir / ovr.APPROVAL_FILE).write_text(json.dumps(approval), encoding="utf-8")
+
+        rc, out = _commit(repo, env=EV)
+        assert "Traceback" not in out, out
+        if corrupt == "block_missing_fields":
+            # The approval is intact and valid for this tree: commit passes.
+            assert rc == 0, out
+        else:
+            assert rc != 0
+            assert "Previous approval retired" in out
+            assert "SQL-001 [external-approval]" in out
+            assert not (sdir / ovr.APPROVAL_FILE).exists()
+        for args in (("status",), ("approve", "--reason", "r", "--name", "A")):
+            rc2, out2 = _approve(repo, *args, script=APPROVE_BUNDLED)
+            assert "Traceback" not in out2, out2
+
+    def test_malformed_approval_fails_closed(self, bundled_repo):
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        (_sdir(repo) / ovr.APPROVAL_FILE).write_text("{not json", encoding="utf-8")
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0 and "SQL-001 [external-approval]" in out
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+
+    def test_approval_for_other_rule_keeps_it_and_reports_new_rule(self, bundled_repo):
+        """An approval snapshot that does not name this attempt's rule is
+        kept, and the rule still needs approval."""
+        repo = bundled_repo
+        _stage_sql(repo)
+        _commit(repo, env=EV)
+        block = _backdate_block(repo)
+        block["failures"] = [{"rule": "SQL-003", "resolution": "external-approval",
+                              "message": "m"}]
+        ovr.write_approval(_sdir(repo), block, "Architect", "earlier rule")
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0
+        assert "SQL-001 [external-approval]" in out
+        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+
+    def test_cancel_retires_block_and_approval(self, bundled_repo):
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        rc, out = _approve(repo, "cancel", script=APPROVE_BUNDLED)
+        assert rc == 0 and "Cancelled" in out
+        assert _state_files(repo) == []
+        rc, out = _approve(repo, "status", script=APPROVE_BUNDLED)
+        assert "No blocked commit attempt" in out
+
+
+class TestRetrySafety:
+    def test_commit_msg_failure_keeps_approval_for_retry(self, bundled_repo):
+        repo = bundled_repo
+        _ev_block_and_approve(repo)
+        marker = Path(_git(repo, "rev-parse", "--git-dir").stdout.strip())
+        marker = marker if marker.is_absolute() else repo / marker
+        (marker / "fail-commit-msg").write_text("1", encoding="utf-8")
+        rc, out = _commit(repo, env=EV)
+        assert rc != 0
+        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists(), out
+        assert (_sdir(repo) / ovr.HANDOFF_FILE).exists(), out
+
+        (marker / "fail-commit-msg").unlink()
+        rc, out = _commit(repo, env=EV)
+        assert rc == 0, out
+        assert "Gator-Override-Approved-By: Architect" in _last_message(repo)
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+
+    def test_trailer_values_cannot_inject(self, bundled_repo):
+        repo = bundled_repo
+        _stage_sql(repo)
+        _commit(repo, env=EV)
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason",
+                           "ok\nGator-Architect: mallory\r\nGator-Fake: 1",
+                           "--name", "Arch\nGator-Evil: x", script=APPROVE_BUNDLED)
+        assert rc == 0, out
+        rc, out = _commit(repo, env=EV)
+        assert rc == 0, out
+        lines = _last_message(repo).splitlines()
+        assert not any(l.startswith("Gator-Architect: mallory") for l in lines)
+        assert not any(l.startswith("Gator-Fake") or l.startswith("Gator-Evil") for l in lines)
+        reason = [l for l in lines if l.startswith("Gator-Override-Reason:")]
+        assert reason == ["Gator-Override-Reason: ok Gator-Architect: mallory Gator-Fake: 1"]
 
 
 class TestDiagnosis:
@@ -368,10 +841,12 @@ class TestDiagnosis:
         assert "No blocked commit attempt is recorded" in out
         assert "Retry `git commit`" in out
 
-    def test_approve_refuses_premature_approval(self, repo):
-        _stage_code(repo)
-        _commit(repo)
-        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A")
+    def test_approve_refuses_premature_approval(self, bundled_repo):
+        repo = bundled_repo
+        _stage_sql(repo)
+        _commit(repo, env=EV)
+        rc, out = _approve(repo, "approve", "--reason", "r", "--name", "A",
+                           script=APPROVE_BUNDLED)
         assert rc == 1 and "too recent" in out
         assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
 
@@ -389,13 +864,12 @@ class TestDiagnosis:
         sub = repo / "pkg"
         sub.mkdir()
         rc, out = _approve(repo, "status", cwd=sub)
-        assert rc == 0 and "charter-alongside-code (approvable)" in out
+        assert rc == 0 and "charter-alongside-code (fix-required)" in out
 
     def test_outside_git_is_a_clear_error(self, tmp_path):
         # pytest's basetemp may live inside a checkout (e.g. --basetemp .tmp/...),
         # so stop git's upward discovery at this directory rather than relying
         # on where the temp dir happens to be.
-        import os
         outside = tmp_path / "outside"
         outside.mkdir()
         env = dict(os.environ, GIT_CEILING_DIRECTORIES=str(tmp_path))
@@ -403,176 +877,19 @@ class TestDiagnosis:
         assert rc == 1 and "not inside a git worktree" in out
 
 
-# ---------------------------------------------------------------------------
-# Supersede matrix and fail-closed states
-# ---------------------------------------------------------------------------
+class TestLintAllowDeprecated:
+    """The deprecated lint-allow.json neither suppresses nor approves
+    findings, and the hook never rewrites it."""
 
-def _block_and_approve(repo):
-    _stage_code(repo)
-    rc, _ = _commit(repo)
-    assert rc != 0
-    _backdate_block(repo)
-    rc, out = _approve(repo, "approve", "--reason", "ok", "--name", "Architect")
-    assert rc == 0, out
-
-
-class TestSupersede:
-    @pytest.mark.parametrize("change", ["modify", "add", "delete", "rename"])
-    def test_staged_change_invalidates_approval(self, repo, change):
-        _block_and_approve(repo)
-        if change == "modify":
-            _stage_code(repo, text="x = 2\n")
-        elif change == "add":
-            _stage_code(repo, name="bar.py", text="y = 1\n")
-        elif change == "delete":
-            _git(repo, "rm", "-q", "old.py")
-        elif change == "rename":
-            _git(repo, "mv", "old.py", "old2.py")
-        rc, out = _commit(repo)
-        assert rc != 0
-        assert "Previous approval retired" in out and "different staged tree" in out
-        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-        assert "charter-alongside-code [approvable]" in out
-
-    def test_expired_approval_is_retired(self, repo):
-        _block_and_approve(repo)
-        path = _sdir(repo) / ovr.APPROVAL_FILE
-        approval = json.loads(path.read_text(encoding="utf-8"))
-        approval["expires_epoch"] = 1
-        path.write_text(json.dumps(approval), encoding="utf-8")
-        rc, out = _commit(repo)
-        assert rc != 0 and "expired" in out
-        assert not path.exists()
-
-    @pytest.mark.parametrize("corrupt", ["block_missing_fields", "approval_missing_id",
-                                         "approval_bad_epochs"])
-    def test_schema_valid_partial_state_fails_closed_without_traceback(self, repo, corrupt):
-        """Whiteboard P2: valid JSON with the right schema but missing or
-        mistyped fields must never crash the hook."""
-        _block_and_approve(repo)
-        sdir = _sdir(repo)
-        if corrupt == "block_missing_fields":
-            block = json.loads((sdir / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
-            del block["block_id"], block["created_epoch"]
-            (sdir / ovr.BLOCK_FILE).write_text(json.dumps(block), encoding="utf-8")
-        else:
-            approval = json.loads((sdir / ovr.APPROVAL_FILE).read_text(encoding="utf-8"))
-            if corrupt == "approval_missing_id":
-                del approval["approval_id"]
-            else:
-                approval["approved_epoch"] = "later"
-                approval["expires_epoch"] = "never"
-            (sdir / ovr.APPROVAL_FILE).write_text(json.dumps(approval), encoding="utf-8")
-
-        rc, out = _commit(repo)
-        assert "Traceback" not in out, out
-        if corrupt == "block_missing_fields":
-            # The approval is intact and valid for this tree: commit passes.
-            assert rc == 0, out
-        else:
-            assert rc != 0
-            assert "Previous approval retired" in out
-            assert "charter-alongside-code [approvable]" in out
-            assert not (sdir / ovr.APPROVAL_FILE).exists()
-        for args in (("status",), ("approve", "--reason", "r", "--name", "A")):
-            rc2, out2 = _approve(repo, *args)
-            assert "Traceback" not in out2, out2
-
-    def test_malformed_approval_fails_closed(self, repo):
-        _block_and_approve(repo)
-        (_sdir(repo) / ovr.APPROVAL_FILE).write_text("{not json", encoding="utf-8")
-        rc, out = _commit(repo)
-        assert rc != 0 and "charter-alongside-code [approvable]" in out
-        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-
-    def test_approval_for_other_rule_keeps_it_and_reports_new_rule(self, repo):
-        """A newly introduced approvable rule is not covered by an older
-        snapshot: the approval is kept, the new rule still needs approval."""
-        _stage_code(repo)
-        _commit(repo)
-        block = _backdate_block(repo)
-        block["failures"] = [{"rule": "charter-index-gap", "resolution": "approvable", "message": "m"}]
-        ovr.write_approval(_sdir(repo), block, "Architect", "earlier rule")
-        rc, out = _commit(repo)
-        assert rc != 0
-        assert "charter-alongside-code [approvable]" in out
-        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-
-    def test_cancel_retires_block_and_approval(self, repo):
-        _block_and_approve(repo)
-        rc, out = _approve(repo, "cancel")
-        assert rc == 0 and "Cancelled" in out
-        assert not any((_sdir(repo) / n).exists()
-                       for n in (ovr.BLOCK_FILE, ovr.APPROVAL_FILE, ovr.HANDOFF_FILE))
-        rc, out = _approve(repo, "status")
-        assert "No blocked commit attempt" in out
-
-
-class TestRetrySafety:
-    def test_commit_msg_failure_keeps_approval_for_retry(self, repo):
-        _block_and_approve(repo)
-        marker = Path(_git(repo, "rev-parse", "--git-dir").stdout.strip())
-        marker = marker if marker.is_absolute() else repo / marker
-        (marker / "fail-commit-msg").write_text("1", encoding="utf-8")
-        rc, out = _commit(repo)
-        assert rc != 0
-        assert (_sdir(repo) / ovr.APPROVAL_FILE).exists(), out
-        assert (_sdir(repo) / ovr.HANDOFF_FILE).exists(), out
-
-        (marker / "fail-commit-msg").unlink()
-        rc, out = _commit(repo)
-        assert rc == 0, out
-        assert "Gator-Override-Approved-By: Architect" in _last_message(repo)
-        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
-
-    def test_trailer_values_cannot_inject(self, repo):
-        _stage_code(repo)
-        _commit(repo)
-        _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason",
-                           "ok\nGator-Architect: mallory\r\nGator-Fake: 1",
-                           "--name", "Arch\nGator-Evil: x")
-        assert rc == 0, out
-        rc, out = _commit(repo)
-        assert rc == 0, out
-        lines = _last_message(repo).splitlines()
-        assert not any(l.startswith("Gator-Architect: mallory") for l in lines)
-        assert not any(l.startswith("Gator-Fake") or l.startswith("Gator-Evil") for l in lines)
-        reason = [l for l in lines if l.startswith("Gator-Override-Reason:")]
-        assert reason == ["Gator-Override-Reason: ok Gator-Architect: mallory Gator-Fake: 1"]
-
-
-class TestLintEnvelope:
-    """#34 change 5 — HIGH/CRITICAL lint joins the envelope; the deprecated
-    lint-allow.json no longer suppresses findings on its own."""
-
-    def _stage_sql(self, repo):
-        (repo / "migrate.sql").write_text(SQL_DROP_USERS, encoding="utf-8")
-        _git(repo, "add", "migrate.sql")
-
-    def test_lint_finding_is_approvable_for_the_exact_change(self, repo):
-        self._stage_sql(repo)
-        rc, out = _commit(repo)
-        assert rc != 0
-        assert "SQL-001 [lint]" in out
-        block = _backdate_block(repo)
-        assert "SQL-001" in ovr.approvable_rules(block)
-        rc, out = _approve(repo, "approve", "--reason", "intentional migration", "--name", "Architect")
-        assert rc == 0, out
-        rc, out = _commit(repo)
-        assert rc == 0, out
-        rules = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-Override-Rules:")]
-        assert rules and "SQL-001" in rules[0]
-
-    def test_lint_allow_json_no_longer_suppresses(self, repo):
+    def test_lint_allow_json_does_not_change_handling(self, repo):
         (repo / ".gator" / "lint-allow.json").write_text(
-            json.dumps([{"rule": "SQL-001", "file": "migrate.sql"}]), encoding="utf-8")
-        self._stage_sql(repo)
+            json.dumps([{"rule": "SQL-001", "file": "migrate.txt"}]), encoding="utf-8")
+        _stage_sql(repo, name="migrate.txt")
         rc, out = _commit(repo)
-        assert rc != 0, "an unscoped allowlist entry must not authorize the commit"
-        assert "SQL-001 [lint]" in out
+        assert rc == 0, out
+        assert "SQL-001 [warning]" in out
         assert "lint-allow-deprecated" in out
-        assert "Still blocking despite being listed: SQL-001 in migrate.sql" in out
+        assert "Still reported despite being listed: SQL-001 in migrate.txt" in out
 
     def _track_allowlist(self, repo):
         content = json.dumps([{"rule": "SQL-001", "file": "migrate.sql"}]) + "\n"
@@ -591,8 +908,8 @@ class TestLintEnvelope:
         assert _git(repo, "status", "--porcelain", "--", ".gator/lint-allow.json").stdout == ""
 
     def test_lint_allow_json_is_never_rewritten_or_staged(self, repo):
-        """Phase 3 review P2: the deprecated allowlist is read-only — an
-        unrelated clean commit must not reset or stage it."""
+        """The deprecated allowlist is read-only — an unrelated clean commit
+        must not reset or stage it."""
         path, original = self._track_allowlist(repo)
         (repo / "notes.md").write_text("docs\n", encoding="utf-8")
         _git(repo, "add", "notes.md")
@@ -603,15 +920,17 @@ class TestLintEnvelope:
         assert ".gator/lint-allow.json" not in _git(
             repo, "show", "--name-only", "--format=", "HEAD").stdout
 
-    def test_lint_allow_json_survives_envelope_approved_lint_commit(self, repo):
+    def test_lint_allow_json_survives_envelope_approved_lint_commit(self, bundled_repo):
+        repo = bundled_repo
         path, original = self._track_allowlist(repo)
-        self._stage_sql(repo)
-        rc, _ = _commit(repo)
+        _stage_sql(repo)
+        rc, _ = _commit(repo, env=EV)
         assert rc != 0
         _backdate_block(repo)
-        rc, out = _approve(repo, "approve", "--reason", "migration", "--name", "Architect")
+        rc, out = _approve(repo, "approve", "--reason", "migration", "--name", "Architect",
+                           script=APPROVE_BUNDLED)
         assert rc == 0, out
-        rc, out = _commit(repo)
+        rc, out = _commit(repo, env=EV)
         assert rc == 0, out
         self._assert_allowlist_untouched(repo, path, original)
 
@@ -619,7 +938,7 @@ class TestLintEnvelope:
         import precommit_lint
         (repo / ".gator" / "lint-allow.json").write_text(
             json.dumps([{"rule": "SQL-001", "file": "migrate.sql"}]), encoding="utf-8")
-        self._stage_sql(repo)
+        _stage_sql(repo)
         findings = precommit_lint.run_layer1_lint(["migrate.sql"], repo)
         sql = [f for f in findings if f["rule"] == "SQL-001"]
         assert sql and sql[0]["allowlisted"] is True
@@ -644,7 +963,7 @@ class TestCleanupAndLegacy:
         rc, out = _commit(repo)
         assert rc != 0
         assert "legacy-override-file [fix-required]" in out
-        assert "charter-alongside-code [approvable]" in out
+        assert "charter-alongside-code [fix-required]" in out
 
 
 class TestWorktrees:
@@ -663,12 +982,81 @@ class TestWorktrees:
 # Unit tests
 # ---------------------------------------------------------------------------
 
+EXT = {"SQL-001": ovr.EXTERNAL_APPROVAL}
+
+
 class TestUnits:
-    def test_classify(self):
-        assert ovr.classify("charter-alongside-code") == ovr.APPROVABLE
-        assert ovr.classify("dangerous-eval", lint_rules={"dangerous-eval"}) == ovr.LINT
-        assert ovr.classify("invalid-change-type") == ovr.FIX_REQUIRED
+    def test_classify_uses_the_explicit_map(self):
+        assert ovr.classify("SQL-001", EXT) == ovr.EXTERNAL_APPROVAL
+        assert ovr.classify("SQL-001") == ovr.FIX_REQUIRED
+        assert ovr.classify("charter-alongside-code", EXT) == ovr.FIX_REQUIRED
         assert ovr.classify("something-new") == ovr.FIX_REQUIRED  # fail closed
+        assert "charter-alongside-code" in ovr.FIX_REQUIRED_RULES
+        assert ovr.LEGACY_RECORD_RULE in ovr.FIX_REQUIRED_RULES
+        for legacy in ("approvable", "lint"):
+            assert not ovr.is_approvable(legacy)
+
+    @pytest.mark.parametrize("mode,expected", [
+        ("strict", policy.WARNING), ("warn", policy.WARNING), ("off", policy.WARNING),
+        ("evidence_only", policy.EXTERNAL_APPROVAL), ("bogus", policy.WARNING),
+    ])
+    def test_dangerous_resolution_table(self, mode, expected):
+        assert policy.dangerous_resolution(mode) == expected
+
+    def test_split_lint_and_categories(self):
+        findings = [
+            {"rule": "SQL-001", "severity": "HIGH", "file": "a", "line": 1, "message": "m"},
+            {"rule": "SEC-003", "severity": "CRITICAL", "file": "b\\c", "line": 0, "message": "m"},
+            {"rule": "PY-001", "severity": "MEDIUM", "file": "a", "line": 2, "message": "m"},
+        ]
+        dangerous, external, advisory = policy.split_lint(findings, "strict")
+        assert [f["rule"] for f in dangerous] == ["SQL-001", "SEC-003"]
+        assert external == [] and [f["rule"] for f in advisory] == ["PY-001"]
+        assert policy.finding_keys(dangerous) == ["SQL-001@a:1", "SEC-003@b/c:0"]
+        dangerous, external, _ = policy.split_lint(findings, "evidence_only")
+        assert dangerous == [] and policy.resolution_map(external) == {
+            "SQL-001": policy.EXTERNAL_APPROVAL, "SEC-003": policy.EXTERNAL_APPROVAL}
+        fix, ext = policy.report_categories(
+            [("SQL-001", "m"), ("unmerged-index", "m")], EXT)
+        assert fix == ["unmerged-index"] and ext == ["SQL-001"]
+
+    def test_render_block_report_stop_box_only_for_external_approval(self):
+        out = "\n".join(ovr.render_block_report(
+            "H", [("charter-alongside-code", "m")], [], {}, [], None,
+            attention=[("SQL-001", "a:1 — m")]))
+        assert "[fix-required]" in out and "SQL-001 [warning]" in out
+        assert "STOP" not in out and "gator hook approve" not in out
+        out = "\n".join(ovr.render_block_report("H", [("SQL-001", "m")], [], EXT, [], None))
+        assert "SQL-001 [external-approval]" in out and "gator hook approve" in out
+
+    def test_apply_approval_keeps_approval_when_fix_required_remains(self, repo):
+        """#35 at unit level: a valid approval covers its external-approval
+        rule, is kept for the retry, and never clears a fix-required rule."""
+        sdir, tree = _sdir(repo), ovr.index_tree(repo)
+        block = ovr.write_block(sdir, tree, [("SQL-001", "m"), ("invalid-change-type", "m")],
+                                [], EXT, now=time.time() - 60)
+        ovr.write_approval(sdir, block, "A", "r")
+        remaining, handoff, notes = ovr.apply_approval(
+            sdir, tree, [("SQL-001", "m"), ("invalid-change-type", "m")], EXT)
+        assert remaining == [("invalid-change-type", "m")]
+        assert handoff is None and "is kept for the retry" in notes[0]
+        assert (sdir / ovr.APPROVAL_FILE).exists()
+        remaining, handoff, _ = ovr.apply_approval(sdir, tree, [("SQL-001", "m")], EXT)
+        assert remaining == [] and handoff["overridden_rules"] == ["SQL-001"]
+        assert "charter_override" not in handoff
+
+    def test_legacy_records(self, repo):
+        sdir, tree = _sdir(repo), ovr.index_tree(repo)
+        assert ovr.legacy_records(sdir, tree) is None
+        _write_legacy_block(repo, [("SQL-001", "lint")])
+        assert "earlier Gator runtime" in ovr.legacy_records(sdir, tree)
+        assert ovr.legacy_records(sdir, "other-tree") is None
+        ovr.write_block(sdir, tree, [(ovr.LEGACY_RECORD_RULE, "m")], [])
+        assert ovr.legacy_records(sdir, tree), "the guard's own marker persists"
+        ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], [])
+        assert ovr.legacy_records(sdir, tree) is None
+        _write_approval(repo, ovr.read_block(sdir)[1], ["SQL-001"])
+        assert "was not written for the current policy" in ovr.legacy_records(sdir, tree)
 
     def test_sanitize(self):
         assert ovr.sanitize_trailer_value("a\r\nb\n  c", 50) == "a b c"
@@ -677,8 +1065,7 @@ class TestUnits:
     def test_inspect_states(self, repo):
         sdir, tree = _sdir(repo), ovr.index_tree(repo)
         assert ovr.inspect(sdir, tree)["state"] == "absent"
-        block = ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], ["a.py"],
-                                now=1000.0)
+        block = ovr.write_block(sdir, tree, [("SQL-001", "m")], ["a.py"], EXT, now=1000.0)
         ovr.write_approval(sdir, block, "A", "r", now=1005.0)
         assert ovr.inspect(sdir, tree, now=1006.0)["state"] == "premature"
         ovr.write_approval(sdir, block, "A", "r", now=1020.0)
@@ -739,13 +1126,13 @@ class TestUnits:
         lambda a: a.pop("approval_id"),
         lambda a: a.update(approved_epoch="yesterday"),
         lambda a: a.update(expires_epoch=None),
-        lambda a: a.update(approved_rules="charter-alongside-code"),
+        lambda a: a.update(approved_rules="SQL-001"),
         lambda a: a.update(approved_rules=[1]),
         lambda a: a.update(approved_by=""),
     ])
     def test_partial_approval_is_malformed(self, repo, mutate):
         sdir, tree = _sdir(repo), ovr.index_tree(repo)
-        block = ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], [], now=1000.0)
+        block = ovr.write_block(sdir, tree, [("SQL-001", "m")], [], EXT, now=1000.0)
         approval = ovr.write_approval(sdir, block, "A", "r", now=1020.0)
         mutate(approval)
         (sdir / ovr.APPROVAL_FILE).write_text(json.dumps(approval), encoding="utf-8")
@@ -761,10 +1148,10 @@ class TestUnits:
 
     def test_write_approval_requires_name_reason_and_rules(self, repo):
         sdir = _sdir(repo)
-        block = ovr.write_block(sdir, "t", [("invalid-change-type", "m")], [])
+        block = ovr.write_block(sdir, "t", [("charter-alongside-code", "m")], [])
         with pytest.raises(ValueError, match="no approvable"):
             ovr.write_approval(sdir, block, "A", "r")
-        block = ovr.write_block(sdir, "t", [("charter-alongside-code", "m")], [])
+        block = ovr.write_block(sdir, "t", [("SQL-001", "m")], [], EXT)
         with pytest.raises(ValueError, match="name"):
             ovr.write_approval(sdir, block, "  ", "r")
         with pytest.raises(ValueError, match="reason"):

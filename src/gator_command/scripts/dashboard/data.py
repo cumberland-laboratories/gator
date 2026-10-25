@@ -463,6 +463,7 @@ def collect_standalone_data(registry_repos):
                     "charter_coverage_pct": status.get("charter_coverage_pct", 0),
                     "hook_status": status.get("hook_status", "unknown"),
                     "config": status.get("config", {}),
+                    "enterprise_managed": bool(status.get("enterprise_managed", False)),
                     "topology": status.get("topology", "standalone"),
                     "last_governed_commit": status.get("last_governed_commit"),
                     "session_summary_count": status.get("session_summary_count", 0),

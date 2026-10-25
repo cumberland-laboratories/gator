@@ -85,6 +85,14 @@
         rules: t["Gator-Override-Rules"] || "",
         reason: t["Gator-Override-Reason"] || "",
       } : null,
+      // #75: an Architect kept a dangerous-pattern warning. Not an override.
+      // Keys are comma-delimited; a key's path may contain spaces, so never
+      // split on whitespace here (unlike tags and issues).
+      acknowledgement: t["Gator-Dangerous-Patterns"] ? {
+        patterns: t["Gator-Dangerous-Patterns"].split(",")
+          .map(function (s) { return s.trim(); }).filter(Boolean),
+        by: t["Gator-Dangerous-Pattern-Acknowledged-By"] || "",
+      } : null,
     };
   }
 
@@ -160,6 +168,15 @@
       if (o.block) parts.push("block " + o.block);
       if (o.reason) parts.push("reason: " + o.reason);
       if (parts.length) note.appendChild(document.createTextNode(" " + parts.join("; ") + "."));
+      record.appendChild(note);
+    }
+    if (rec.acknowledgement) {
+      const a = rec.acknowledgement;
+      const note = el("div", "commit-acknowledgement");
+      note.appendChild(el("strong", null, "✓ Architect acknowledgement" + (a.by ? " by " + a.by : "") + "."));
+      note.appendChild(document.createTextNode(
+        " Kept on the Architect's direction: " + a.patterns.join(", ")
+        + ". The decision is in the description."));
       record.appendChild(note);
     }
 
@@ -259,6 +276,11 @@
     if (rec.override) {
       const f = el("span", "commit-tag commit-flag-override", "⚑ Override");
       f.title = "Pre-commit block overridden";
+      flags.appendChild(f);
+    }
+    if (rec.acknowledgement) {
+      const f = el("span", "commit-tag commit-flag-acknowledged", "✓ Acknowledged");
+      f.title = "Dangerous-pattern warning kept on the Architect's direction";
       flags.appendChild(f);
     }
     flags.appendChild(el("span", "commit-chev", "▸"));

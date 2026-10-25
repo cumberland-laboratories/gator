@@ -20,6 +20,44 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ── commit policy posture (#75) ──────────────────────────────────────────
+  //
+  // Read-only. The strict/warn/off selector was retired: one broad switch
+  // misdescribes the two categories (charter integrity always blocks;
+  // dangerous patterns warn). Shared with views/settings.js through
+  // window.GatorCommitPolicy (fleet.js loads first).
+
+  // `active` is false for the two states with no effective policy to
+  // report (unreadable, or not gatorized): they never claim the default
+  // checks, and they carry no sort value (missing sorts last).
+  function commitPolicy(repo) {
+    if (repo && repo.accessible === false) {
+      return { key: "unknown", label: "Unknown", active: false,
+               note: "Not accessible: the commit policy cannot be read." };
+    }
+    if (repo && repo.gatorized === false) {
+      return { key: "not-gatorized", label: "Not gatorized", active: false,
+               note: "No Gator pre-commit checks run in this repository." };
+    }
+    if (repo && repo.enterprise_managed) {
+      return { key: "enterprise", label: "Managed by Enterprise", active: true,
+               note: "The Enterprise hook mode decides this repository's checks." };
+    }
+    const level = (repo && repo.config && repo.config.enforcement_level) || "strict";
+    if (level === "warn") {
+      return { key: "legacy-warn", label: "Legacy warn", active: true,
+               note: "Legacy broad mode: every finding is advisory, including missing charter updates." };
+    }
+    if (level === "off") {
+      return { key: "legacy-off", label: "Legacy off", active: true,
+               note: "Legacy broad mode: pre-commit checks are skipped." };
+    }
+    return { key: "default", label: "Default", active: true,
+             note: "Charter updates block; dangerous patterns warn." };
+  }
+
+  window.GatorCommitPolicy = { posture: commitPolicy };
+
   // ── sorting (Paper inventory) ────────────────────────────────────────────
   //
   // One column at a time, client-only. `fleetSort` lives for the page
@@ -31,17 +69,15 @@
   const SORT_COLUMNS = [
     { key: "name", label: "Repo" },
     { key: "branch", label: "Branch" },
-    { key: "enforcement", label: "Enforcement" },
+    { key: "policy", label: "Commit policy" },
     { key: "version", label: "Version" },
   ];
   const SORT_ATTR = {
     name: "sortName", branch: "sortBranch",
-    enforcement: "enforcement", version: "sortVersion",
+    policy: "sortPolicy", version: "sortVersion",
   };
   const fleetSort = { key: null, dir: "asc" };
 
-  // Enforcement reads the SAVED level (data-enforcement), which changes
-  // only after a successful save, never an unsaved select value.
   function sortValue(row, key) {
     return row.dataset[SORT_ATTR[key]] || "";
   }
@@ -75,8 +111,7 @@
   }
 
   // Reorder the existing rows in place (tbody.append moves them), then
-  // mark the headers. Shared by the render, header activation and a
-  // successful enforcement save.
+  // mark the headers. Shared by the render and header activation.
   function applySort(table) {
     if (!table || !table.tBodies[0]) return;
     const tbody = table.tBodies[0];
@@ -132,15 +167,8 @@
       const isGatorized = repo.gatorized !== false;
       const needsUpdate = isGatorized && !isCurrent && repo.accessible;
 
-      const enfLevel = (repo.config && repo.config.enforcement_level) || "strict";
-      const enfId = `enf-${escHtml(repo.name)}`;
-      const enfDropdown = isGatorized
-        ? `<select id="${enfId}" data-repo="${escHtml(repo.name)}" class="enforcement-select" ${repo.accessible ? "" : "disabled"}>
-            <option value="strict"${enfLevel === "strict" ? " selected" : ""}>strict</option>
-            <option value="warn"${enfLevel === "warn" ? " selected" : ""}>warn</option>
-            <option value="off"${enfLevel === "off" ? " selected" : ""}>off</option>
-          </select>`
-        : '<span class="muted">-</span>';
+      const policy = commitPolicy(repo);
+      const policyHtml = `<span class="fleet-policy${policy.active ? "" : " muted"}" title="${escHtml(policy.note)}">${escHtml(policy.label)}</span>`;
 
       // Overflow menu replaces the direct action button.
       // Carries both data-repo-name (for Update/Gatorize) and
@@ -180,13 +208,13 @@
             data-sort-name="${escHtml(repo.name)}"
             data-sort-branch="${escHtml(repo.branch || "")}"
             data-sort-version="${cliVersion}"
-            data-enforcement="${isGatorized ? escHtml(enfLevel) : ""}">
+            data-sort-policy="${policy.active ? escHtml(policy.label) : ""}">
           <td>
             <button class="link-btn fleet-repo-name" onclick="window.gatorNavToRepo('${escHtml(repo.name)}', '${escHtml(repo.repo_key || "")}')">${escHtml(repo.name)}</button>
             ${accIcon}
           </td>
           <td class="fleet-branch">${branch}</td>
-          <td>${enfDropdown}</td>
+          <td class="fleet-policy-cell">${policyHtml}</td>
           <td class="fleet-version">${cliVersion || '<span class="muted">-</span>'}</td>
           <td class="status-cell">${menuHtml}</td>
           <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
@@ -207,7 +235,6 @@
     applySort(container.querySelector(".fleet-table"));
     bindSortHeaders(container);
     bindOverflowMenus(container);
-    bindEnforcementDropdowns(container);
 
     // Add Repository button
     const addBtn = container.querySelector("#add-repo-btn");
@@ -462,45 +489,6 @@
         confirmBtn.disabled = false;
         confirmBtn.textContent = "Remove";
       }
-    });
-  }
-
-  function bindEnforcementDropdowns(container) {
-    container.querySelectorAll(".enforcement-select").forEach(select => {
-      select.addEventListener("change", async function () {
-        const repoName = this.dataset.repo;
-        const level = this.value;
-        try {
-          const resp = await fetch(`/api/repo/${encodeURIComponent(repoName)}/config`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Gator-Dashboard": "1" },
-            body: JSON.stringify({ enforcement_level: level }),
-          });
-          const result = await resp.json();
-          if (result.status === "ok") {
-            // The saved level is the one this request sent. An active
-            // Enforcement sort follows it at once; moving the row blurs
-            // the select, so focus returns to it.
-            const row = this.closest("tr");
-            if (row) row.dataset.enforcement = level;
-            if (row && fleetSort.key === "enforcement") {
-              applySort(row.closest("table"));
-              this.focus();
-            }
-            const check = document.createElement("span");
-            check.className = "save-check";
-            check.textContent = " \u2713";
-            this.parentNode.appendChild(check);
-            setTimeout(() => check.remove(), 1200);
-          } else {
-            this.style.outline = "2px solid var(--color-critical)";
-            setTimeout(() => { this.style.outline = ""; }, 2000);
-          }
-        } catch (err) {
-          this.style.outline = "2px solid var(--color-critical)";
-          setTimeout(() => { this.style.outline = ""; }, 2000);
-        }
-      });
     });
   }
 

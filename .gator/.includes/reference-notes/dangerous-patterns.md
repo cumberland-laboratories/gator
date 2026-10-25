@@ -83,6 +83,7 @@ The agent cannot prevent the exposure (it happens before the agent responds), bu
    ```
    - Architect approved DELETE FROM in tests/cleanup.py — test fixture teardown [#security] [#decision] — AG
    ```
+   When the pre-commit hook reports the pattern as a HIGH or CRITICAL `[warning]`, also record the decision as acknowledgement evidence (the `dangerous-pattern-acknowledgements` field and an `## Architect acknowledgement` section), so the commit carries it. See [`procedures/dangerous-pattern-warnings.md`](../procedures/dangerous-pattern-warnings.md).
 
 4. **When in doubt**: Surface it. A false pause costs seconds. A missed destructive action costs hours, data, or reputation.
 

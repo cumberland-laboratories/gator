@@ -32,6 +32,7 @@ WELCOME_DOC_NAMES = frozenset({
     "gator-docs.html",
     "gator-loop.html",
     "gator-loop-extras.html",
+    "pre-commit-checks.html",
     "charter-formation-process.html",
     "charter-schema-v1.html",
     "code-migrations.html",

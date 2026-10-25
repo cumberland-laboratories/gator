@@ -255,7 +255,7 @@ def test_sorted_last_row_menu_targets_its_row(page, dashboard_fleet):
 
 _ROWS = """() => Array.from(document.querySelectorAll('.fleet-table tbody tr[data-row-index]'))
     .map(tr => ({name: tr.querySelector('.fleet-repo-name').textContent.trim(),
-                 branch: tr.dataset.sortBranch, enforcement: tr.dataset.enforcement,
+                 branch: tr.dataset.sortBranch, policy: tr.dataset.sortPolicy,
                  menuRepo: tr.querySelector('.menu-lifecycle').dataset.repoName}))"""
 
 _HEADERS = """() => Array.from(document.querySelectorAll('.fleet-table th[data-sort-key]'))
@@ -288,7 +288,7 @@ def _assert_header(page, key, direction):
 def test_fleet_title_only_inventory(page, dashboard_fleet, viewport):
     """Fleet is the title, one Add action and one table: no summary text
     and no cards. The repository name is reading-size; branch, version and
-    the enforcement select stay compact. The page never scrolls."""
+    the read-only commit policy stay compact. The page never scrolls."""
     page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
     page.goto(dashboard_fleet["url"], wait_until="load")
     open_fleet(page)
@@ -308,7 +308,8 @@ def test_fleet_title_only_inventory(page, dashboard_fleet, viewport):
             name: px(slot.querySelector('.fleet-repo-name')),
             branch: px(slot.querySelector('td.fleet-branch')),
             version: px(slot.querySelector('td.fleet-version')),
-            select: px(slot.querySelector('.enforcement-select')),
+            policy: px(slot.querySelector('.fleet-policy')),
+            selects: slot.querySelectorAll('.fleet-table select').length,
             pageScrolled: se.scrollTop !== 0 || se.scrollHeight > window.innerHeight,
         };
     }""")
@@ -316,7 +317,8 @@ def test_fleet_title_only_inventory(page, dashboard_fleet, viewport):
     assert shape["headerKids"] == ["add-repo-btn"], shape
     assert shape["tables"] == 1 and shape["cards"] == 0 and shape["prose"] == 0, shape
     assert shape["name"] == shape["base"], shape
-    assert max(shape["branch"], shape["version"], shape["select"]) <= 13, shape
+    assert max(shape["branch"], shape["version"], shape["policy"]) <= 13, shape
+    assert shape["selects"] == 0, shape
     assert not shape["pageScrolled"], shape
 
 
@@ -363,40 +365,107 @@ def test_fleet_sort_one_column(page, dashboard_fleet):
     assert all(r["menuRepo"] == r["name"] for r in before)
 
 
-@pytest.mark.parametrize("case", ["edit_then_sort", "edit_during_sort", "failed_edit"])
-def test_fleet_sort_follows_saved_enforcement(page, dashboard_fleet, case):
-    """Enforcement sorts by the SAVED level. A successful save (the level
-    that request sent) re-sorts an active Enforcement sort at once and
-    keeps focus on the select; a failed save never changes the order."""
-    ok = case != "failed_edit"
-    body = {"status": "ok"} if ok else {"status": "error", "error": "denied"}
-    page.route("**/api/repo/*/config", lambda route: route.fulfill(json=body))
+def _route_policies(page):
+    """Rewrite /api/data so four repositories show the four postures, one
+    is not gatorized and one is unreadable (#75). Returns {name: label}."""
+    expected = {}
+
+    def handle(route):
+        resp = route.fetch()
+        data = resp.json()
+        repos = data.get("repos") or (data.get("fleet") or {}).get("repos", [])
+        # The first four rows become gatorized, accessible repositories with
+        # one posture each; later rows keep their fixture state (some are
+        # not gatorized, so the sort's missing-last rule stays exercised).
+        settings = [({"enforcement_level": "warn"}, False, "Legacy warn"),
+                    ({"enforcement_level": "off"}, False, "Legacy off"),
+                    ({"enforcement_level": "warn"}, True, "Managed by Enterprise"),
+                    ({"enforcement_level": "strict"}, False, "Default")]
+        for repo, (config, enterprise, label) in zip(repos, settings):
+            repo.update(gatorized=True, accessible=True, config=config,
+                        enterprise_managed=enterprise)
+            expected[repo["name"]] = label
+        # Two states with no effective policy: added but not gatorized
+        # (accessible), and unreadable (inaccessible, gatorized unknown).
+        not_gatorized, unreadable = repos[4], repos[5]
+        not_gatorized.update(gatorized=False, accessible=True, config={})
+        unreadable.update(accessible=False, config={})
+        unreadable.pop("gatorized", None)
+        expected[not_gatorized["name"]] = "Not gatorized"
+        expected[unreadable["name"]] = "Unknown"
+        route.fulfill(response=resp, json=data)
+
+    page.route("**/api/data", handle)
+    return expected
+
+
+def test_fleet_commit_policy_is_read_only(page, dashboard_fleet):
+    """#75: no enforcement control; each gatorized row shows its read-only
+    posture (Default, Legacy warn/off, or Managed by Enterprise, which wins
+    over config), with the meaning in the title; Commit policy sorts like
+    any other column."""
+    expected = _route_policies(page)
     page.set_viewport_size({"width": 1440, "height": 900})
     page.goto(dashboard_fleet["url"], wait_until="load")
     open_fleet(page)
     _wait_for_fleet_render(page)
-    beta = 'select.enforcement-select[data-repo="beta"]'
-    beta_row = "tr:has(" + beta + ")"
-    assert page.get_attribute(beta_row, "data-enforcement") == "strict"
+    cells = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '.fleet-table tbody tr[data-row-index]')).map(tr => ({
+            name: tr.querySelector('.fleet-repo-name').textContent.trim(),
+            text: tr.querySelector('.fleet-policy-cell').textContent.trim(),
+            title: tr.querySelector('.fleet-policy') && tr.querySelector('.fleet-policy').title}))""")
+    assert page.evaluate("() => document.querySelectorAll('.fleet-table select').length") == 0
+    seen = {c["name"]: c for c in cells if c["name"] in expected}
+    assert {n: c["text"] for n, c in seen.items()} == expected
+    labels = set(expected.values())
+    assert {"Legacy warn", "Legacy off", "Managed by Enterprise", "Default",
+            "Not gatorized", "Unknown"} <= labels
+    for c in seen.values():
+        if c["text"] == "Legacy warn":
+            assert "including missing charter updates" in c["title"]
+        if c["text"] == "Managed by Enterprise":
+            assert "Enterprise hook mode" in c["title"]
 
-    if case != "edit_then_sort":
-        page.click('.fleet-sort[data-sort-key="enforcement"]')
-        assert page.evaluate(_ROWS)[0]["name"] != "beta"
-    page.select_option(beta, "off")
-    page.wait_for_function(
-        "s => document.querySelector('.save-check') || document.querySelector(s).style.outline",
-        arg=beta, timeout=5000)
-    if case == "edit_then_sort":
-        page.click('.fleet-sort[data-sort-key="enforcement"]')
+    inactive = {n for n, label in expected.items() if label in ("Not gatorized", "Unknown")}
+    for name in inactive:
+        assert "Default" not in seen[name]["title"] and seen[name]["title"], seen[name]
 
+    page.click('.fleet-sort[data-sort-key="policy"]')
+    _assert_header(page, "policy", "ascending")
     rows = page.evaluate(_ROWS)
-    if ok:
-        assert page.get_attribute(beta_row, "data-enforcement") == "off"
-        assert rows[0]["name"] == "beta" and rows[0]["enforcement"] == "off", rows[:3]
-    else:
-        assert page.get_attribute(beta_row, "data-enforcement") == "strict"
-        assert rows[0]["name"] != "beta", rows[:3]
-    if case == "edit_during_sort":
-        assert page.evaluate("() => document.activeElement.dataset.repo") == "beta"
-    _assert_header(page, "enforcement", "ascending")
-    assert all(r["menuRepo"] == r["name"] for r in rows)
+    assert all(r["policy"] == "" for r in rows if r["name"] in inactive), rows
+    policies = [r["policy"] for r in rows]
+    present = [v for v in policies if v]
+    assert policies[:len(present)] == present, policies    # missing last
+    assert present == _natural(present), present
+
+
+def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
+    """#75: Settings shows the two-category policy and each repository's
+    read-only posture with its note; there is no selector."""
+    expected = _route_policies(page)
+    page.goto(dashboard_fleet["url"].rstrip("/") + "/?view=settings", wait_until="load")
+    page.wait_for_selector(".settings-repo-table", timeout=15000)
+    out = page.evaluate("""() => ({
+        selects: document.querySelectorAll('#view-slot select').length,
+        categories: Array.from(document.querySelectorAll('.settings-policy-table tbody tr'))
+            .map(tr => Array.from(tr.cells).map(td => td.textContent.trim())),
+        repos: Object.fromEntries(Array.from(document.querySelectorAll(
+            '.settings-repo-table tbody tr')).map(tr => [tr.dataset.repo,
+            [tr.querySelector('.settings-policy').textContent.trim(),
+             tr.querySelector('.settings-policy-note').textContent.trim()]])),
+    })""")
+    assert out["selects"] == 0
+    assert out["categories"] == [
+        ["Charter integrity", "Block", "Code needs its required charter update."],
+        ["Dangerous patterns", "Warn",
+         "HIGH/CRITICAL findings require Architect attention in the session."],
+    ]
+    for name, label in expected.items():
+        assert out["repos"][name][0] == label, (name, out["repos"][name])
+    notes = {out["repos"][n][0]: out["repos"][n][1] for n in expected}
+    assert "including missing charter updates" in notes["Legacy warn"]
+    assert notes["Legacy off"] == "Legacy broad mode: pre-commit checks are skipped."
+    assert "Enterprise hook mode" in notes["Managed by Enterprise"]
+    assert notes["Not gatorized"] == "No Gator pre-commit checks run in this repository."
+    assert notes["Unknown"] == "Not accessible: the commit policy cannot be read."

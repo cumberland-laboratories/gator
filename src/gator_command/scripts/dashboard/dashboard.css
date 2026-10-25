@@ -2151,6 +2151,11 @@ mark.search-hit {
   border-color: var(--gray-400);
 }
 
+/* #75: label and glyph, not colour, separate it from Override. */
+.commit-flag-acknowledged {
+  border-color: var(--gray-400);
+}
+
 .commit-chev {
   width: 14px;
   font-size: var(--text-ui);
@@ -2229,6 +2234,19 @@ mark.search-hit {
   border-radius: 4px;
   background: var(--gray-100);
   color: var(--gray-700);
+  font-size: var(--text-sm);
+}
+
+/* Acknowledgement note (#75): a neutral left border plus the
+   "✓ Architect acknowledgement" words; distinct from the amber Override note
+   by its label, glyph and border colour together. */
+.commit-acknowledgement {
+  grid-column: 1 / -1;
+  padding: 10px 14px;
+  border-left: 4px solid var(--gray-400);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: var(--gray-50);
+  color: var(--gray-800);
   font-size: var(--text-sm);
 }
 
@@ -2340,33 +2358,11 @@ mark.search-hit {
   min-width: 20px;
 }
 
-/* Save confirmation checkmark */
-.save-check {
-  color: var(--color-healthy, #28a745);
-  font-size: 13px;
-  animation: save-check-fade 1.2s ease-out forwards;
-}
-@keyframes save-check-fade {
-  0%   { opacity: 1; }
-  70%  { opacity: 1; }
-  100% { opacity: 0; }
+/* Commit policy posture (#75): read-only text, no control. */
+.fleet-policy {
+  white-space: nowrap;
 }
 
-/* Inline enforcement dropdown in fleet table */
-.enforcement-select {
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-}
-.enforcement-select:focus {
-  outline: 2px solid var(--color-link);
-  outline-offset: -1px;
-}
 
 /* ── mobile Repo/Docs (Plan C Slice 1 R1) ─────────────────────────────── */
 /* End-of-file placement is LOAD-BEARING: the .repo-* base rules

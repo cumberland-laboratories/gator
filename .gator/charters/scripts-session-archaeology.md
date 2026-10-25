@@ -18,6 +18,7 @@ Snippet-based session pipeline — the entire surviving surface.
 - Fleet-level decision assembly for the audit dashboard — that is `gator-audit.py::assemble_audit_data()`.
 - Override intelligence. Session snippets do not carry override data; `gator-audit.py` and `gator-repo-status.py` classify Architect overrides from commit trailers via `gator_core.override_event_fields()` (#34, #35 — v1, v2, and legacy trailer shapes). See [`scripts-core-library.md`](scripts-core-library.md) and [`scripts-audit-intelligence.md`](scripts-audit-intelligence.md).
 - The committed summary read path in the audit — `gator-audit.py` calls `gator_session_reader.read_committed_summaries()`.
+- Repo-status fields that are not session data, such as `config` and the #75 `enterprise_managed` posture input; see [`scripts-audit-intelligence.md`](scripts-audit-intelligence.md).
 - The committed summary read path in repo-status — `gator-repo-status.py::get_session_summaries()` calls `gator_session_reader.read_committed_summaries()` via `import_sibling("gator_session_reader")`.
 
 ---

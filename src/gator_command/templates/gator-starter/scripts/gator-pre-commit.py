@@ -80,6 +80,7 @@ from precommit_session import (  # noqa: E402
     record_commit_and_emit_snippet as _record_commit_and_emit_snippet,
 )
 import precommit_override as override_state  # noqa: E402  (#34, #35)
+import precommit_policy as policy  # noqa: E402  (#75)
 
 
 # ---------------------------------------------------------------------------
@@ -744,12 +745,14 @@ def validate_soft_rules(staged_files, frontmatter, body, gator_dir):
 # ---------------------------------------------------------------------------
 
 def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
-                      handoff=None):
+                      handoff=None, acknowledged=None):
     """Build Gator-* trailer lines from all available sources.
 
     ``handoff`` is the validate->commit-msg override handoff (read via
     ``override_state.read_handoff`` for the current tree). ``override`` is
-    retained for signature compatibility and is ignored.
+    retained for signature compatibility and is ignored. ``acknowledged`` is
+    ``(keys, architect)`` for validated Architect acknowledgement evidence
+    (#75), or None.
     """
     charter_count, func_count = count_charters(gator_dir)
     thread_count = count_threads(gator_dir)
@@ -773,15 +776,17 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
     if issue_count > 0:
         trailers.append(f"Gator-Issues: {issue_count}")
 
-    # Charter changed (from git diff --cached — deterministic), unless an
-    # Architect approval for this exact tree overrode a charter rule.
-    if handoff and handoff.get("charter_override"):
-        trailers.append("Gator-Charter-Changed: override-skip")
-    else:
-        trailers.append(f"Gator-Charter-Changed: {'yes' if has_charter else 'no'}")
+    # Charter changed (from git diff --cached — deterministic). Charter rules
+    # are fix-required (#75), so no approval produces `override-skip` any
+    # more; readers keep accepting it on historical commits.
+    trailers.append(f"Gator-Charter-Changed: {'yes' if has_charter else 'no'}")
     # Durable, sanitized audit of any approval used (#34 Phase F). The
     # handoff is only read here — it is consumed in post-commit.
     trailers.extend(override_state.override_trailers(handoff))
+    # Architect acknowledgement of kept dangerous-pattern warnings (#75):
+    # only keys validated against this staged change; never matched text.
+    if acknowledged:
+        trailers.extend(policy.acknowledgement_trailers(*acknowledged))
 
     # Change type (frontmatter preferred, fallback to inference)
     change_type = frontmatter.get("change-type") or infer_change_type(body, has_code)
@@ -840,11 +845,25 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
 # Status snapshot
 # ---------------------------------------------------------------------------
 
-def build_status(gator_dir, staged_files, frontmatter, body, handoff=None):
+def empty_commit_checks():
+    """The `commit_checks` status object with no findings (#75)."""
+    return {
+        "integrity_failures": [],
+        "dangerous_pattern_warnings": [],
+        "dangerous_pattern_acknowledged": [],
+        "acknowledged_by": "",
+        "external_approval_required": [],
+        "overridden_rules": [],
+    }
+
+
+def build_status(gator_dir, staged_files, frontmatter, body, handoff=None,
+                 checks=None):
     """Build the status.json content.
 
     ``handoff`` is the override handoff for this attempt (None when no
-    approval was used); a charter override records ``override-skip``.
+    approval was used). ``checks`` is the attempt's `commit_checks` object
+    (#75): rule names and finding keys only, never matched source text.
     """
     charter_count, func_count = count_charters(gator_dir)
     thread_count = count_threads(gator_dir)
@@ -869,9 +888,9 @@ def build_status(gator_dir, staged_files, frontmatter, body, handoff=None):
     agent = frontmatter.get("agent") or detect_agent_from_body(body)
     architect = frontmatter.get("architect") or frontmatter.get("pi") or detect_architect_from_body(body)
 
-    charter_changed = ("override-skip"
-                       if handoff and handoff.get("charter_override")
-                       else has_charter)
+    commit_checks = dict(empty_commit_checks(), **(checks or {}))
+    if handoff:
+        commit_checks["overridden_rules"] = list(handoff.get("overridden_rules", []))
 
     return {
         "repo": gator_dir.parent.name,
@@ -883,7 +902,7 @@ def build_status(gator_dir, staged_files, frontmatter, body, handoff=None):
         "generation": generation,
         "policy_version": policy_version,
         "issues": issue_count,
-        "charter_changed": charter_changed,
+        "charter_changed": has_charter,
         "change_type": change_type,
         "significance": significance,
         "decision_tags": tags,
@@ -891,6 +910,7 @@ def build_status(gator_dir, staged_files, frontmatter, body, handoff=None):
         "architect": architect,
         "draft_body": body.strip(),
         "files_touched": [str(f) for f in staged_files],
+        "commit_checks": commit_checks,
     }
 
 
@@ -909,9 +929,14 @@ def write_status_json(gator_dir, status):
 # ---------------------------------------------------------------------------
 
 def write_whiteboard(gator_dir, failures, warnings, handoff,
-                     enforcement_level="strict"):
+                     enforcement_level="strict", resolutions=None,
+                     attention=(), acknowledged=(), acknowledged_by=""):
     """Write findings to .gator/whiteboard.md.
 
+    ``failures`` are split by resolution (#75): fix-required and
+    external-approval get separate sections. ``attention`` holds the
+    HIGH/CRITICAL dangerous-pattern warnings as (rule, text) without the
+    matched source text, because a passing commit stages this file.
     ``handoff`` is the override handoff used by this attempt, or None.
     """
     whiteboard = gator_dir / "whiteboard.md"
@@ -932,18 +957,30 @@ def write_whiteboard(gator_dir, failures, warnings, handoff,
                       "commit was not blocked.")
         lines.append("")
 
-    if failures:
-        lines.append("## Blocked")
+    fix_rules, external_rules = policy.report_categories(failures, resolutions)
+
+    def section(title, items):
+        if not items:
+            return
+        lines.append(title)
         lines.append("")
-        for rule, msg in failures:
+        for rule, msg in items:
             lines.append(f"- **{rule}**: {msg}")
         lines.append("")
 
-    if warnings:
-        lines.append("## Warnings")
+    section("## Blocked — fix required",
+            [(r, m) for r, m in failures if r in fix_rules])
+    section("## External approval required",
+            [(r, m) for r, m in failures if r in external_rules])
+    section("## Dangerous-pattern warnings — Architect attention", list(attention))
+    section("## Warnings", warnings)
+
+    if acknowledged:
+        lines.append("## Architect acknowledgements")
         lines.append("")
-        for rule, msg in warnings:
-            lines.append(f"- **{rule}**: {msg}")
+        for key in acknowledged:
+            lines.append(f"- **{key}**: kept on the Architect's direction"
+                         f" ({acknowledged_by or '?'}); see the commit body")
         lines.append("")
 
     if handoff:
@@ -957,7 +994,7 @@ def write_whiteboard(gator_dir, failures, warnings, handoff,
             f" — block: {handoff.get('block_id', '?')}")
         lines.append("")
 
-    if not failures and not warnings and not handoff:
+    if not failures and not warnings and not attention and not acknowledged and not handoff:
         lines.append("No findings.")
         lines.append("")
 
@@ -975,9 +1012,11 @@ def write_commit_issues(gator_dir, findings):
         "",
         f"Lint findings from pre-commit hook — {timestamp}",
         "",
-        "Review each finding. HIGH/CRITICAL findings block the commit: fix them,",
-        "or the Architect approves this exact staged change with `gator hook approve`.",
-        "The agent must not approve its own findings.",
+        "Review each finding. HIGH/CRITICAL findings need the Architect's attention:",
+        "present each one, and the Architect decides to fix, remove, or keep it.",
+        "They do not block the commit and have no approval command. Where an",
+        "Enterprise mode requires external approval, the hook blocks instead and",
+        "names `gator hook approve`. The agent must not approve its own findings.",
         "",
     ]
 
@@ -1020,6 +1059,37 @@ def _read_enforcement_level(gator_dir):
         except (json.JSONDecodeError, OSError):
             pass
     return "strict"
+
+
+def render_attention_report(attention, warnings):
+    """Lines for a PASS with HIGH/CRITICAL dangerous-pattern warnings (#75).
+
+    The commit is not blocked. The box tells the agent to present each
+    finding to the Architect; a warning has no approval command."""
+    out = ["", "  gator pre-commit: PASS — Architect attention required", ""]
+    for rule, msg in attention:
+        out.append(f"  ⚠ {rule} [warning]: {msg}")
+    if warnings:
+        out.append("")
+        for rule, msg in warnings:
+            out.append(f"  ⚠ {rule}: {msg}")
+    out += [
+        "",
+        "  ┌─────────────────────────────────────────────────────────┐",
+        "  │ ARCHITECT ATTENTION REQUIRED                           │",
+        "  │                                                        │",
+        "  │ This commit was not blocked. Present each finding to   │",
+        "  │ the Architect, who decides to fix, remove, or keep it. │",
+        "  │ A finding the Architect keeps is recorded in           │",
+        "  │ commit_draft.md only on the Architect's direction.     │",
+        "  │ Never acknowledge a finding yourself.                  │",
+        "  │ A warning has no approval command.                     │",
+        "  └─────────────────────────────────────────────────────────┘",
+        "",
+        "  Findings written to .gator/commit_issues.md and .gator/whiteboard.md",
+        "",
+    ]
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1091,25 +1161,61 @@ def phase_validate():
             "`gator hook approve` for the exact staged change."
         ))
 
-    # Run Layer 1 mechanical lint on staged files (dangerous code patterns)
+    # #75 migration guard: a block or approval recorded by an earlier
+    # runtime for THIS staged tree is never reinterpreted. Cancel and retry.
+    legacy_reason = override_state.legacy_records(sdir, tree)
+    if legacy_reason:
+        failures.append((
+            override_state.LEGACY_RECORD_RULE,
+            f"An override block or approval recorded by an earlier Gator runtime "
+            f"is pending for this staged change ({legacy_reason}). Gator no longer "
+            f"evaluates it. Run `gator hook override cancel`, then retry the "
+            f"commit; the retry uses the current policy."
+        ))
+
+    # Run Layer 1 mechanical lint on staged files (dangerous code patterns).
+    # #75: under the default policy a HIGH/CRITICAL finding is an
+    # Architect-attention warning, not a failure; only a mode that requires
+    # external approval puts it in the override envelope.
     lint_findings = run_layer1_lint(staged_files, repo_root)
-    lint_failures = []
-    lint_warnings = []
-    for finding in lint_findings:
-        if finding["severity"] in ("CRITICAL", "HIGH"):
-            lint_failures.append(finding)
-            failures.append((
-                finding["rule"],
-                f"{finding['file']}:{finding['line']} — {finding['message']}"
-                + (f"\n       > {finding['match']}" if finding.get("match") else ""),
-            ))
-        else:
-            lint_warnings.append(finding)
-            warnings.append((
-                finding["rule"],
-                f"{finding['file']}:{finding['line']} — {finding['message']}",
-            ))
-    lint_rules = {f["rule"] for f in lint_failures}
+    dangerous, external, advisory = policy.split_lint(lint_findings, enforcement)
+    resolutions = policy.resolution_map(external)
+    for finding in external:
+        failures.append((
+            finding["rule"],
+            policy.finding_text(finding)
+            + (f"\n       > {finding['match']}" if finding.get("match") else ""),
+        ))
+    for finding in advisory:
+        warnings.append((finding["rule"], policy.finding_text(finding)))
+    # Whiteboard / status text never carries the matched source text: a
+    # passing commit stages the whiteboard.
+    attention = [(f["rule"], policy.finding_text(f)) for f in dangerous]
+    attention_out = [(f["rule"], policy.finding_text(f)
+                      + (f"\n       > {f['match']}" if f.get("match") else ""))
+                     for f in dangerous]
+
+    # Architect acknowledgement evidence (#75): optional; when present it
+    # must bind exactly to current warning findings, or it is fix-required.
+    # An acknowledged finding leaves the attention list; it never touches
+    # the override envelope.
+    ack_keys, ack_problems = policy.validate_acknowledgements(frontmatter, body, dangerous)
+    if ack_problems:
+        failures.append((
+            policy.ACK_RULE,
+            "Architect acknowledgement evidence in commit_draft.md is invalid: "
+            + "; ".join(ack_problems)
+            + ". Current dangerous-pattern warning keys: "
+            + (", ".join(policy.finding_keys(dangerous)) or "none")
+            + ". Fix or remove the evidence and retry."
+        ))
+    acknowledged_by = override_state.sanitize_trailer_value(
+        frontmatter.get("architect"), override_state.TRAILER_MAX["approved_by"]
+    ) if ack_keys else ""
+    attention = [(r, m) for (r, m), f in zip(attention, dangerous)
+                 if policy.finding_key(f) not in ack_keys]
+    attention_out = [(r, m) for (r, m), f in zip(attention_out, dangerous)
+                     if policy.finding_key(f) not in ack_keys]
 
     # Deprecated lint-allow.json (#34): it no longer suppresses findings.
     if load_lint_allowlist(gator_dir):
@@ -1117,42 +1223,64 @@ def phase_validate():
                          if f.get("allowlisted")})
         warnings.append((
             "lint-allow-deprecated",
-            ".gator/lint-allow.json no longer authorizes lint findings on its "
-            "own. HIGH/CRITICAL findings block until fixed or the Architect "
-            "approves this exact staged change with `gator hook approve`."
-            + (f" Still blocking despite being listed: {', '.join(listed)}."
+            ".gator/lint-allow.json no longer changes how lint findings are "
+            "handled. HIGH/CRITICAL findings are Architect-attention warnings "
+            "(or need external approval where an Enterprise mode requires it)."
+            + (f" Still reported despite being listed: {', '.join(listed)}."
                if listed else "")
         ))
 
     # Write lint findings to commit_issues.md (Architect reviews these)
     # commit_issues.md is hook-transient and gitignored (#34): written for
     # the Architect to read, never staged or committed.
-    if lint_failures or lint_warnings:
-        write_commit_issues(gator_dir, lint_failures + lint_warnings)
+    if lint_findings:
+        write_commit_issues(gator_dir, dangerous + external + advisory)
     else:
         # Clear any stale commit_issues from a previous blocked attempt
         clear_commit_issues(gator_dir)
 
     # Apply an Architect approval — only for this exact tree, only for the
-    # rules it names, and never for fix-required rules (shared with the
-    # Enterprise evidence_only path via precommit_override).
+    # rules it names, and only for external-approval rules (shared with the
+    # Enterprise evidence_only path via precommit_override). While the #75
+    # migration guard fires, no approval is applied or retired: the legacy
+    # record stays until `gator hook override cancel`.
     all_failures = list(failures)
-    failures, handoff, approval_notes = override_state.apply_approval(
-        sdir, tree, failures, lint_rules)
+    if legacy_reason:
+        if sdir is not None:
+            override_state.clear_handoff(sdir)
+        handoff, approval_notes = None, []
+    else:
+        failures, handoff, approval_notes = override_state.apply_approval(
+            sdir, tree, failures, resolutions)
 
-    # Warn mode: move failures to warnings (still report, but don't block)
-    if enforcement == "warn" and failures:
+    fix_rules, external_rules = policy.report_categories(failures, resolutions)
+    checks = {
+        "integrity_failures": fix_rules,
+        "dangerous_pattern_warnings": policy.finding_keys(dangerous),
+        "dangerous_pattern_acknowledged": list(ack_keys),
+        "acknowledged_by": acknowledged_by,
+        "external_approval_required": external_rules,
+    }
+
+    # Warn mode: move failures and dangerous-pattern warnings to warnings
+    # (still report, but don't block) — the legacy broad mode, unchanged.
+    if enforcement == "warn":
         warnings.extend(failures)
+        warnings.extend(attention)
         failures = []
+        attention, attention_out = [], []
 
     # Write status.json (even on failure — captures the state at attempt time)
-    status = build_status(gator_dir, staged_files, frontmatter, body, handoff)
+    status = build_status(gator_dir, staged_files, frontmatter, body, handoff,
+                          checks=checks)
     status_file = write_status_json(gator_dir, status)
     stage_file(status_file, repo_root)
 
     # Write whiteboard (always — clears stale findings on clean pass)
     wb_file = write_whiteboard(gator_dir, failures, warnings, handoff,
-                               enforcement_level=enforcement)
+                               enforcement_level=enforcement,
+                               resolutions=resolutions, attention=attention,
+                               acknowledged=ack_keys, acknowledged_by=acknowledged_by)
     stage_file(wb_file, repo_root)
 
     # Output
@@ -1165,15 +1293,15 @@ def phase_validate():
         if sdir is not None and tree is not None:
             try:
                 block = override_state.write_block(
-                    sdir, tree, all_failures, staged_files, lint_rules)
+                    sdir, tree, all_failures, staged_files, resolutions)
             except OSError as exc:
                 approval_notes.append(f"Could not record the block: {exc}")
 
-        info = ["  Lint findings written to .gator/commit_issues.md"] if lint_failures else []
+        info = ["  Lint findings written to .gator/commit_issues.md"] if lint_findings else []
         info.append("  Findings written to .gator/whiteboard.md")
         for line in override_state.render_block_report(
-                "gator pre-commit: BLOCKED", failures, warnings, lint_rules,
-                approval_notes, block, info):
+                "gator pre-commit: BLOCKED", failures, warnings, resolutions,
+                approval_notes, block, info, attention=attention_out):
             print(line)
         sys.exit(1)
 
@@ -1181,7 +1309,16 @@ def phase_validate():
     # it no longer authorizes anything, so the hook never rewrites or
     # stages it.
 
-    if warnings:
+    if ack_keys and enforcement != "warn":
+        print()
+        print(f"  ✓ Kept on the Architect's direction ({acknowledged_by}): "
+              f"{', '.join(ack_keys)}")
+        print("    Recorded in the commit body and Gator-Dangerous-Pattern trailers.")
+        print()
+    if attention_out:
+        for line in render_attention_report(attention_out, warnings):
+            print(line)
+    elif warnings:
         print()
         if enforcement == "warn":
             print("  gator pre-commit: PASS (enforcement: warn — findings are advisory)")
@@ -1229,9 +1366,24 @@ def phase_trailers(msg_file_path):
     except override_state.OverrideStateError:
         handoff = None
 
+    # Architect acknowledgement evidence (#75): recompute from the same
+    # staged index, so only evidence that validates now becomes a trailer
+    # (warn mode can let invalid evidence through as a warning).
+    acknowledged = None
+    try:
+        mode = _read_enforcement_level(gator_dir)
+        mode = "warn" if mode == "warning" else mode
+        dangerous, _, _ = policy.split_lint(run_layer1_lint(staged_files, repo_root), mode)
+        ack_keys, ack_problems = policy.validate_acknowledgements(
+            frontmatter, body, dangerous)
+        if ack_keys and not ack_problems:
+            acknowledged = (ack_keys, frontmatter.get("architect"))
+    except Exception:  # noqa: BLE001 — trailers must not fail on evidence
+        acknowledged = None
+
     # Build trailers
     trailers = assemble_trailers(frontmatter, body, gator_dir, staged_files,
-                                 handoff=handoff)
+                                 handoff=handoff, acknowledged=acknowledged)
 
     # Read current message (the -m message the agent provided, if any)
     msg_path = Path(msg_file_path)

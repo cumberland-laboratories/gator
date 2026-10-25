@@ -137,6 +137,10 @@ def parse_diff_added_lines(repo_root):
         # New file header: +++ b/path/to/file
         if line.startswith("+++ b/"):
             current_file = line[6:]
+            # Git appends one TAB to a header path that contains a space;
+            # it is not part of the path (#75: finding keys name the file).
+            if current_file.endswith("\t"):
+                current_file = current_file[:-1]
             added.setdefault(current_file, [])
             continue
 

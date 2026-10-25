@@ -501,6 +501,15 @@ def scan_repo_status(repo_path, repo_name=None):
     except ImportError:
         data["topology"] = "unknown"
 
+    # Enterprise marker (#75): when Enterprise manages the repository, its
+    # hook mode, not config.json, decides the commit checks, so the
+    # Dashboard shows "Managed by Enterprise" instead of a local posture.
+    try:
+        from gator_core import is_enterprise_active
+        data["enterprise_managed"] = bool(is_enterprise_active(repo_path / ".gator"))
+    except ImportError:
+        data["enterprise_managed"] = False
+
     # CLI version from .gator-version (tracks which gator version gatorized this repo)
     gator_version_file = repo_path / ".gator" / ".gator-version"
     if gator_version_file.exists():

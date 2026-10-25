@@ -36,6 +36,17 @@ and full significance steelmen. Preserve that detail in a charter, loop record,
 or artifact, then link or summarize it only when a reader needs the decision to
 understand the commit.
 
+### Optional: Architect acknowledgement of a dangerous pattern
+
+When the Architect decides to keep a HIGH or CRITICAL dangerous-pattern
+`[warning]`, the draft carries that decision. Add the finding keys to the
+optional `dangerous-pattern-acknowledgements: [RULE@path:line]` field, and
+explain each key in an `## Architect acknowledgement` body section. The
+`architect` field must name the Architect. Write this only on the Architect's
+direction, never on your own. The hook validates the evidence against the
+staged change and records it as `Gator-Dangerous-Pattern-*` trailers. See
+[`dangerous-pattern-warnings.md`](dangerous-pattern-warnings.md).
+
 ## 2. Stage the change, not the draft runtime state
 
 Stage the code, tracked documentation, and charter updates that belong to the

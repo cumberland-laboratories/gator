@@ -156,12 +156,22 @@ def cmd_approve(args):
         print()
         return 1
 
+    legacy = ovr.legacy_rules(block)
+    if legacy:
+        print(f"  Refused: {', '.join(legacy)} was recorded by an earlier Gator runtime.")
+        print("  Gator no longer evaluates it. Run `gator hook override cancel` and")
+        print("  retry the commit; the retry uses the current policy.")
+        print()
+        return 1
+
     rules = ovr.approvable_rules(block)
     fix_required = sorted({f["rule"] for f in block.get("failures", [])
                            if not ovr.is_approvable(f.get("resolution"))})
     if not rules:
         print("  Refused: nothing in this block can be approved.")
         print(f"  Fix these findings and retry the commit: {', '.join(fix_required)}")
+        print("  Charter updates are fix-required, and dangerous-pattern warnings")
+        print("  do not block, so neither uses this command.")
         print()
         return 1
 

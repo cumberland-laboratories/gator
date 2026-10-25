@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Inbox: index #98, participant join detection",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "loop",
+    "inbox"
+  ],
+  "commit": "daf767272566ed2e2ca8025b568abd8f13cf2c8f",
+  "short_commit": "daf7672",
+  "snippet_id": "snippet-daf767272566e",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 14,
+  "previous_commit_in_session": "a6a5c4d877d126ea53f2190e5e555513d3c28127",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-25T00:28:31Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/inbox.md",
+    ".gator/session-snippets/2026-10-24-gator-a6a5c4d877d12.json"
+  ],
+  "notes": [
+    "Adds #98 to the inbox's open-backlog index: Participant recovery shows",
+    "\"Has not joined yet\" until a role first submits, because the session's",
+    "`joined` flag is only set on a submission.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}

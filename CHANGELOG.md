@@ -4,6 +4,23 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+
+- **Pre-commit: charter updates and dangerous patterns are separate (#75).** Every finding now has one resolution:
+  - **`[fix-required]`:** a missing charter update and every correctness rule. They block, and nothing approves them. Charter rules were approvable before.
+  - **`[warning]`:** a HIGH or CRITICAL dangerous pattern under the default policy. The commit passes with **Architect attention required**. The agent presents the finding, and the Architect decides to fix, remove, or keep it. There is no approval command and no override state.
+  - **`[external-approval]`:** the same finding where Enterprise `evidence_only` requires it. It uses the unchanged tree-bound approval (`gator hook approve`).
+- **Architect acknowledgement evidence.** A kept warning can be recorded in `commit_draft.md`: the `dangerous-pattern-acknowledgements: [RULE@path:line]` field plus an `## Architect acknowledgement` section, with the `architect` field set. The hook validates the evidence against the staged change and fails closed. A valid acknowledgement adds `Gator-Dangerous-Patterns` and `Gator-Dangerous-Pattern-Acknowledged-By` trailers, which never contain the matched source text. See `procedures/dangerous-pattern-warnings.md`.
+- **Dashboard: read-only commit policy.** Fleet and Settings no longer offer the strict/warn/off selector, because one broad switch misdescribed the two categories. Fleet's **Commit policy** column and the Settings table show `Default`, `Legacy warn`, `Legacy off`, or `Managed by Enterprise` as text, with each one's meaning. Settings also shows the fixed category policy: charter integrity blocks; dangerous patterns warn.
+- **Docs: The Gator pre-commit checks.** A new Docs library document explains the three outcomes, what an agent does when a warning appears, what lands in Git, and where Gator's checks stop and dedicated security tools take over.
+- **Reports by category.** `status.json` gains an additive `commit_checks` object. The whiteboard has separate fix-required, external-approval, warning and acknowledgement sections. The matched source text stays out of both, because a passing commit stages them.
+
+### Compatibility
+
+- New commits never carry `Gator-Charter-Changed: override-skip`. Readers keep accepting it, and the other `Gator-Override-*` trailers, on historical commits.
+- A block or approval recorded by an earlier runtime for the same staged change is not reinterpreted. The commit blocks on `legacy-override-record` until `gator hook override cancel`, then the retry uses the current policy. Enterprise `evidence_only` blocks finish under the same envelope.
+- The legacy `warn` and `off` enforcement levels keep their behavior.
+
 ## [2.31.0] — 2026-10-23
 
 Feature release. **The Dashboard reads like Paper: a quiet, sortable Fleet, readable Loop prose, and a 16px reading baseline.** Ordinary reading text grows to 16px with 1.6 line spacing, while tables, trees, navigation, metadata and code keep their compact sizes. Fleet becomes a title-only inventory you can sort by any column, and Loop dialogs now open in the centre of the window. Welcome gains two beginner topics, Gator docs and Gator loop. The Loop workspace gains a Help tab, and leaving Loop while it loads no longer leaves a hidden poller running.

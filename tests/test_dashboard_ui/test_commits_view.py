@@ -158,6 +158,38 @@ def test_record_description_and_override(commits_page):
                                   "blocked the commit; block 332e9562; reason: routine.")
 
 
+def test_acknowledgement_note_is_distinct_from_override(page, dashboard_fleet):
+    """#75: `Gator-Dangerous-Pattern-*` trailers render as an Architect
+    acknowledgement (label and glyph), never as an override."""
+    now = datetime.now().astimezone()
+    trailers = [
+        {"key": "Gator-Change-Type", "value": "feature"},
+        {"key": "Gator-Charter-Changed", "value": "no"},
+        {"key": "Gator-Dangerous-Patterns",
+         "value": "SQL-001@migrate.txt:1,HYG-002@.env:0,SQL-001@one  space.txt:3"},
+        {"key": "Gator-Dangerous-Pattern-Acknowledged-By", "value": "Alan Gillette"},
+    ]
+    data = {"commits": [_commit(1, now, "Keep fixture", "Kept.", trailers)], "repo": "alpha"}
+    page.route("**/api/repo/alpha/history*",
+               lambda route: route.fulfill(status=200, content_type="application/json",
+                                           body=json.dumps(data)))
+    page.goto(_origin(dashboard_fleet) + "?repo=alpha&view=history", wait_until="load")
+    page.wait_for_selector(".commit-row", timeout=15000)
+    flags = page.text_content(".commit-row .commit-flags")
+    assert "✓ Acknowledged" in flags and "⚑ Override" not in flags
+    page.click(".commit-row >> summary")
+    out = page.evaluate("""() => ({
+        ack: document.querySelector('.commit-acknowledgement')
+            && document.querySelector('.commit-acknowledgement').textContent,
+        override: document.querySelectorAll('.commit-override').length,
+    })""")
+    assert out["override"] == 0
+    assert out["ack"] == ("✓ Architect acknowledgement by Alan Gillette. Kept on the "
+                          "Architect's direction: SQL-001@migrate.txt:1, HYG-002@.env:0, "
+                          "SQL-001@one  space.txt:3. "
+                          "The decision is in the description.")
+
+
 def test_hostile_commit_text_renders_as_text(commits_page):
     page = commits_page
     page.click(".commit-row >> nth=3 >> summary")

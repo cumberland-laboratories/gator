@@ -49,6 +49,7 @@ WELCOME_FORMAT = {
     "gator-docs.html": '<p class="lede">',
     "gator-loop.html": '<p class="lede">',
     "gator-loop-extras.html": '<p class="lede">',
+    "pre-commit-checks.html": '<p class="lede">',
     "charter-formation-process.html": '<p class="lede">',
     "charter-schema-v1.html": '<p class="lede">',
     "code-migrations.html": '<p class="lede">',
@@ -59,6 +60,7 @@ WELCOME_FORMAT = {
 # are delivered by gatorize and gator update.
 GATOR_DOCS = NAMES + [
     "gator-loop-extras.html",
+    "pre-commit-checks.html",
     "charter-formation-process.html",
     "charter-schema-v1.html",
     "code-migrations.html",
@@ -218,3 +220,19 @@ def test_extras_document_shows_the_dashboard_goal_prompt():
     assert f'<pre id="codex-goal">{html.escape(prompt, quote=False)}</pre>' in text
     assert '{ type: TYPE, v: 1, action: "copy-codex-goal" }' in text
     assert text.count(html.escape(prompt, quote=False)) == 1
+
+
+def test_precommit_document_keeps_warning_and_approval_apart():
+    """#75: the pre-commit checks document explains the default (charter
+    problems stop the commit; dangerous patterns warn) and never presents a
+    warning as an external approval. The approval command appears only in
+    the external-approval explanation, and the page names no lint-triggering
+    source text, so committing it raises no dangerous-pattern finding."""
+    text = _read("pre-commit-checks.html")
+    assert "Charter problems stop the commit. Dangerous patterns call for your attention." in text
+    assert "A warning is not an approval and has no approval command." in text
+    approve_lines = [l for l in text.splitlines() if "gator hook approve" in l]
+    assert len(approve_lines) == 1 and "External approval." in approve_lines[0], approve_lines
+    assert "Gator-Dangerous-Pattern-Acknowledged-By" in text
+    assert "An acknowledgement never produces them." in text
+    assert "DROP" not in text.upper().replace("DROPS", "")

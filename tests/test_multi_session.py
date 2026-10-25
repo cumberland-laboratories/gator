@@ -724,6 +724,8 @@ class TestByteIdentityAcrossThreeCopies:
         "precommit_override.py",
         "gator-approve.py",
         "precommit_lint.py",
+        # #75: the shared resolution policy both pre-commit copies call.
+        "precommit_policy.py",
         # `gator-pre-commit.py` is DELIBERATELY NOT included here — the
         # three copies of that file drifted pre-2026-08-08 for reasons
         # unrelated to the transcripts-first MVP work, and reconciling
@@ -769,6 +771,7 @@ class TestByteIdentityAcrossThreeCopies:
                 (installed / item.name).write_text(
                     item.read_text(encoding="utf-8"), encoding="utf-8")
         assert (installed / "precommit_override.py").is_file()
+        assert (installed / "precommit_policy.py").is_file()  # #75
         assert (installed / "gator-approve.py").is_file()
         for script in ("gator-pre-commit.py", "gator-approve.py"):
             r = subprocess.run([_sys.executable, str(installed / script), "--help"],
@@ -776,6 +779,7 @@ class TestByteIdentityAcrossThreeCopies:
             assert r.returncode == 0, f"{script} failed to import: {r.stderr}"
         src = (installed / "gator-pre-commit.py").read_text(encoding="utf-8")
         assert "import precommit_override as override_state" in src
+        assert "import precommit_policy as policy" in src
         assert "def check_override(" not in src, "v1 override flow must be gone"
 
     @pytest.mark.parametrize("filename", [
