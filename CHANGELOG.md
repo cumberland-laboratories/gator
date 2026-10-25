@@ -4,6 +4,17 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.32.0] — 2026-10-25
+
+Feature release. **The pre-commit hook now treats charter problems and dangerous patterns as different things.** A missing charter update still stops the commit, and only the Architect can approve an exact change when no charter edit is warranted. A dangerous pattern, such as a possible secret, now pauses the commit until the agent asks the Architect and records the decision; an agent that goes ahead without asking leaves a visible "Unacknowledged" record in Git. The Dashboard shows the commit policy as plain text instead of a strict/warn/off switch, and a new Docs page explains the checks. The Loop workspace gains an Extras tab with model notes, participants wait longer per call, and the Welcome Gator docs topic teaches with seven worked examples.
+
+### Added
+
+- **Docs: The Gator pre-commit checks.** A new Docs library document (`pre-commit-checks.html`) explains the three outcomes, what an agent does when a commit pauses, what lands in Git, and where Gator's checks stop and dedicated security tools take over.
+- **Loop Extras tab.** The Loop workspace gains an Extras tab after Help with notes for specific models (`gator-loop-extras.html`, also in Docs). The Codex section explains `gator loop codex`, notes that Codex works well as the Reviewer, and offers the `/goal` prompt with a copy button. The Opus section notes that Opus works well as the Draftor and joins by pasting the participant prompt.
+- **Welcome: Gator docs by example.** The Gator docs topic explains what Gator docs are for and shows seven worked examples, each opening with the situation that calls for it: a code-and-infrastructure feature flow, retry logic, a release procedure, a decision record, a feature proposal, a PCI network diagram with data flows and security boundaries, and an executive progress report with two bar charts.
+- **Dashboard: full sidebar names on hover.** A truncated repository name, branch or version in the sidebar card shows its full text as a tooltip.
+
 ### Changed
 
 - **Pre-commit: charter updates and dangerous patterns are separate (#75).** Every finding now has one resolution:
@@ -13,11 +24,12 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
   - **`[external-approval]` for dangerous patterns:** only where Enterprise `evidence_only` requires it. It uses the unchanged tree-bound approval (`gator hook approve`).
 - **Architect acknowledgement evidence.** A kept warning can be recorded in `commit_draft.md`: the `dangerous-pattern-acknowledgements: [RULE@path:line]` field plus an `## Architect acknowledgement` section, with the `architect` field set. The hook validates the evidence against the staged change and fails closed. A valid acknowledgement adds `Gator-Dangerous-Patterns` and `Gator-Dangerous-Pattern-Acknowledged-By` trailers, which never contain the matched source text. See `procedures/dangerous-pattern-warnings.md`.
 - **Dashboard: read-only commit policy.** Fleet and Settings no longer offer the strict/warn/off selector, because one broad switch misdescribed the two categories. Fleet's **Commit policy** column and the Settings table show `Default`, `Legacy warn`, `Legacy off`, or `Managed by Enterprise` as text, with each one's meaning. Settings also shows the fixed category policy: charter integrity blocks (the Architect may approve an exact change); dangerous patterns pause for the Architect's decision.
-- **Docs: The Gator pre-commit checks.** A new Docs library document explains the three outcomes, what an agent does when a warning appears, what lands in Git, and where Gator's checks stop and dedicated security tools take over.
+- **Loop: participants wait up to 360 seconds per call (was 45).** `gator loop wait` still returns as soon as the turn arrives, so the longer limit never delays a turn; it only cuts the number of reissued `wait` calls. The protocol, `/loop-join`, the Codex note and the CLI hint changed together.
 - **Reports by category.** `status.json` gains an additive `commit_checks` object. The whiteboard has separate fix-required, external-approval, warning and acknowledgement sections. The matched source text stays out of both, because a passing commit stages them.
 
 ### Compatibility
 
+- **A lone HIGH or CRITICAL dangerous pattern no longer offers `gator hook approve`.** In 2.31.0 it blocked until approved; it now pauses until the decision is recorded in `commit_draft.md` (or a skip is recorded). Enterprise `evidence_only` keeps the approval path.
 - A block or approval recorded by an earlier runtime for the same staged change is not reinterpreted. The commit blocks on `legacy-override-record` until `gator hook override cancel`, then the retry uses the current policy. Enterprise `evidence_only` blocks finish under the same envelope.
 - The legacy `warn` and `off` enforcement levels keep their behavior.
 
