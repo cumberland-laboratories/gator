@@ -82,6 +82,7 @@ against the code 2026-10-21). Issue `#N` is
 - **#83** Dashboard loop tests leave ~70 watcher threads running
 - **#84** `gator loop codex` daemon locks its CODEX_HOME on Windows
 - **#87** `gator loop codex` refuses to launch after Codex saves an approval (e.g. pytest)
+- **#98** Participant recovery shows "Has not joined yet" until a role first submits
 - #82 `gator loop codex` home holds a second ~1.2 GB Codex runtime
 - #79 One active loop per repository (in place; cross-repo test missing)
 - #54 Clean working tree before a coding loop

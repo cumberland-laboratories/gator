@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop Extras: Codex works well as the Reviewer",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "loop",
+    "dashboard",
+    "codex"
+  ],
+  "commit": "a6a5c4d877d126ea53f2190e5e555513d3c28127",
+  "short_commit": "a6a5c4d",
+  "snippet_id": "snippet-a6a5c4d877d12",
+  "session_group_key": "anthropic:42266feb-f8a0-4812-b987-9e071cca7f22",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 13,
+  "previous_commit_in_session": "c6720e4e6b906c13da2c2462d66ad6d38b01aebf",
+  "started_at": "2026-10-24T18:27:38Z",
+  "ended_at": "2026-10-24T22:20:05Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-10-24-gator-c6720e4e6b906.json",
+    "src/gator_command/templates/gator-starter/docs/gator-loop-extras.html"
+  ],
+  "notes": [
+    "The Codex section of the Loop Extras tab now opens by saying that Codex",
+    "works well in the Reviewer role, matching the Opus section's note that",
+    "Opus works well as the Draftor.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "42266feb-f8a0-4812-b987-9e071cca7f22",
+  "transcript_ref": null
+}
