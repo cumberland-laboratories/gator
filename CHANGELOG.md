@@ -4,6 +4,37 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.33.0] — 2026-10-26
+
+Feature release. **A blocked commit can now be resolved from the Dashboard (#76).** While a commit is blocked, the Commits view shows one quiet alert. It opens a dialog that lists the findings under External approval, Architect decision required and Fix required. The Architect can approve the findings that need an external approval there, with a name, a reason and the existing ten-second delay. Pauses and fix-required findings are explained but can never be approved from the Dashboard, and nothing in the dialog implies that a commit happened. The repository's own approval command still makes every decision; the Dashboard adds no authority.
+
+### Added
+
+- **Commits: blocked-commit alert and dialog (#76).** The alert appears only while the worktree has a recorded block, also on a repository whose first commit is blocked:
+  - **Labels:** "⚑ Commit blocked", "⚑ Architect decision needed", "⚑ Commit fix needed", "✓ Approved — retry commit", "⚑ Commit block needs refresh" and "⚑ Commit status unavailable".
+  - **What the dialog shows:** each approvable finding is marked "✓ Approved by …" or "Needs approval", so a partial approval never looks complete.
+  - **Before acting:** Approve and **Discard block…** re-read the state first. They stop, and show the new state, if anything changed after it was shown. Discard asks for confirmation.
+  - **While a request is in flight,** the dialog cannot be dismissed.
+  - Pinned by `tests/test_dashboard_ui/test_commits_block_ui.py`.
+- **Machine-readable override command.** `gator hook override status|approve|cancel --json` prints one JSON object (`gator-override-status-v1`, `gator-override-approve-v1`, `gator-override-cancel-v1`) and never prompts:
+  - **Guards:** approve and cancel accept `--expect-block` and `--expect-revision`. The revision covers the findings and any approval, not only the block ID, and is also defined for unreadable records, so a damaged block can still be discarded safely.
+  - **Coverage:** status reports which approvable findings an earlier approval already covers, using the same rule the hook applies (`approval_coverage()`).
+  - Pinned by `TestOverrideJson` in `tests/test_precommit_override.py`.
+- **Dashboard override routes.** `GET /api/repo/<name>/override`, plus `POST /api/repo/<name>/override/approve` and `/override/cancel`:
+  - **Trust boundary:** the server runs the repository's own command through its governed runtime. It never reads the Git-private override state, and it serves only an allowlisted projection.
+  - **Request handling:** every request is validated before the command runs, and posts keep the Dashboard header check and same-repository exclusion.
+  - **Read-only states:** an older repository runtime gets an honest "unsupported" answer. A block with more findings than the Dashboard can show in full is read-only there, with terminal guidance.
+  - Pinned by `tests/test_dashboard_override.py`.
+
+### Changed
+
+- **Hook dispatcher:** `gator hook override … --json` prints the runtime advisory (for example "run `gator update` to advance the pin") to stderr, so stdout stays one JSON object. Every other hook output is unchanged.
+
+### Compatibility
+
+- All additions are additive. The human `gator hook override` and `gator hook approve` output is unchanged, and approval stays Architect-only. A Dashboard approval writes the same tree-bound approval and the same `Gator-Override-*` trailers as the terminal command.
+- The Enterprise bundled `gator-approve.py` and `precommit_override.py` change with the wheel copies (byte-identical).
+
 ## [2.32.0] — 2026-10-25
 
 Feature release. **The pre-commit hook now treats charter problems and dangerous patterns as different things.** A missing charter update still stops the commit, and only the Architect can approve an exact change when no charter edit is warranted. A dangerous pattern, such as a possible secret, now pauses the commit until the agent asks the Architect and records the decision; an agent that goes ahead without asking leaves a visible "Unacknowledged" record in Git. The Dashboard shows the commit policy as plain text instead of a strict/warn/off switch, and a new Docs page explains the checks. The Loop workspace gains an Extras tab with model notes, participants wait longer per call, and the Welcome Gator docs topic teaches with seven worked examples.
