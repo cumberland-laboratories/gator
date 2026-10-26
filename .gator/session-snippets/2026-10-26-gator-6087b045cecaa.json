@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.33.0",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "6087b045cecaa52972dea42d2d68a955549aaa42",
+  "short_commit": "6087b04",
+  "snippet_id": "snippet-6087b045cecaa",
+  "session_group_key": "anthropic:8b2c236d-d25c-454c-a4be-647a73d510dc",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-25T20:25:12Z",
+  "ended_at": "2026-10-26T09:54:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-26-gator-661b524042699.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Releases 2.33.0: a blocked commit can be resolved from the Dashboard Commits view (#76), with the machine-readable override command and the Dashboard override routes behind it.",
+    "`pyproject.toml` and `VERSION` move to 2.33.0 together; the CHANGELOG gains the 2.33.0 section.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "8b2c236d-d25c-454c-a4be-647a73d510dc",
+  "transcript_ref": null
+}

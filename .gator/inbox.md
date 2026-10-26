@@ -102,7 +102,6 @@ against the code 2026-10-21). Issue `#N` is
 - **#15** `gator kill dashboard` bare command only lists
 - #80 Workspace tabs (shipped; tab loop indicator remaining)
 - #81 Charter health view
-- #76 Pre-commit blocks and approvals in the Dashboard
 - #20 Stale-Dashboard-in-browser detection
 - #26 Deferred responsive-shell test pins
 - #89 / #90 Split `gator-dashboard.py` and `views/loop.js`

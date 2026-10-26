@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-24._ Current strategy, priorities, and planned work.
+_Updated 2026-10-26._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,14 +11,11 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.31.0 (2026-10-24, changelog dated 2026-10-23).
-- **Paper Dashboard:** the 16px / 1.6 reading baseline with explicit compact roles, Fleet as a title-only inventory with one-column sorting, and Loop reading prose.
-- **Welcome:** Gator docs and Gator loop topics.
-- **Loop:** a Help tab.
-- **Blueprints:** visual Gator docs.
-- **Fixed:** Loop dialogs open centred, and leaving Loop while it loads no longer leaves a hidden poller (#97).
+**Latest released version**: v2.33.0 (2026-10-26).
+- **Commits:** resolve a blocked commit from the Dashboard (#76). A quiet alert opens a dialog that groups findings as external approval, Architect decision and fix required; Approve appears only for findings that still need an approval, and every approve or discard re-reads the state first.
+- **CLI:** `gator hook override status|approve|cancel --json` with `--expect-block` / `--expect-revision` guards.
 
-v2.30.0 (2026-10-23): executive summaries on Loop Timeline turns (#62). Release detail lives in `CHANGELOG.md` and the GitHub Releases.
+v2.32.0 (2026-10-25): the #75 pre-commit policy (charter updates block with an Architect-only approval; dangerous patterns pause for a recorded decision). v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
