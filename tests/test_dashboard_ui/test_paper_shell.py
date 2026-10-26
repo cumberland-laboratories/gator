@@ -14,6 +14,8 @@ Each test proves a distinct risk:
   non-colour cue (aria-disabled and an explanatory title).
 """
 
+import json
+
 import pytest
 
 from ._harness import sole_active_loop_list
@@ -436,6 +438,41 @@ def _surface_commits(page, fleet):
     page.click("details.commit-row summary")
 
 
+def _surface_commits_block(page, fleet):
+    """#76: the blocked-commit dialog with every group, the fields and the
+    file disclosure, from a stubbed override status."""
+    rule = lambda r, res, cov=False: {"rule": r, "resolution": res, "message": "Rule message.",
+                                      "covered": cov, "legacy": False}
+    status = {
+        "schema": "gator-override-status-v1", "state": "blocked", "revision": "0" * 16,
+        "malformed": [], "block": {"block_id": "a1b2c3d4", "created_at": "t",
+                                   "created_epoch": 1, "expires_at": "t",
+                                   "expires_epoch": 4102444800, "age_seconds": 42,
+                                   "tree_matches": True,
+                                   "files": [f"f{i}.py" for i in range(10)],
+                                   "files_total": 10},
+        "findings": [rule("charter-alongside-code", "external-approval", True),
+                     rule("charter-index-gap", "external-approval"),
+                     rule("dangerous-pattern-pause", "pause"),
+                     rule("invalid-change-type", "fix-required")],
+        "approval": {"state": "valid", "detail": "", "approval_id": "ap01",
+                     "approved_by": "Alan", "approved_at": "t",
+                     "approved_rules": ["charter-alongside-code"]},
+        "approvable_rules": ["charter-alongside-code", "charter-index-gap"],
+        "covered_rules": ["charter-alongside-code"],
+        "uncovered_external_rules": ["charter-index-gap"], "can_approve": True,
+        "approve_refusal": None, "approve_wait_seconds": 0,
+        "min_approval_delay_seconds": 10, "architect_default": "Test Architect",
+    }
+    page.route("**/api/repo/alpha/override", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps(status)))
+    _surface_commits(page, fleet)
+    page.wait_for_selector(".commit-block-alert", timeout=10000)
+    page.click(".commit-block-alert")
+    page.wait_for_selector("dialog.commit-block-dialog[open]", timeout=5000)
+    page.click(".commit-block-more-toggle")
+
+
 def _surface_updates(page, fleet):
     # The version check reaches PyPI; a fixed answer makes the settled
     # state (both versions and the status text) deterministic offline.
@@ -491,6 +528,7 @@ _TYPE_SURFACES = {
     "fleet-add-modal": _surface_fleet_modal,
     "repo-markdown": _surface_repo,
     "commits-expanded": _surface_commits,
+    "commits-block-dialog": _surface_commits_block,
     "updates": _surface_updates,
     "settings": _surface_settings,
     "docs": _surface_docs,

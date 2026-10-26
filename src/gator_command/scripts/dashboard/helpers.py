@@ -100,6 +100,27 @@ def run_text(script_name, *extra_args, timeout=60):
         return "", str(e), 1
 
 
+def run_override_cli(repo_path, *args, timeout=30):
+    """Run `gator-hook.py override <args>` in ``repo_path`` (#76).
+
+    The dispatcher resolves the repository's governed runtime, so the
+    repository's own pinned `gator-approve.py` answers; the Dashboard never
+    imports it or reads its state files. ``args`` are separate argv values
+    (no shell). Returns (stdout, stderr, exit_code).
+    """
+    cmd = [sys.executable, str(SCRIPTS_DIR / "gator-hook.py"), "override"] + list(args)
+    try:
+        result = subprocess.run(
+            cmd, cwd=str(repo_path), capture_output=True, encoding="utf-8",
+            errors="replace", timeout=timeout, stdin=subprocess.DEVNULL,
+        )
+        return result.stdout, result.stderr, result.returncode
+    except subprocess.TimeoutExpired:
+        return "", f"timed out after {timeout}s", 1
+    except Exception as e:
+        return "", str(e), 1
+
+
 # ── git helper ────────────────────────────────────────────────────────────────
 
 def git_run(*args, cwd=None):

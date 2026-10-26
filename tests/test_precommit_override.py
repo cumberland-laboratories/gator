@@ -1367,3 +1367,302 @@ class TestUnits:
             ovr.write_approval(sdir, block, "  ", "r")
         with pytest.raises(ValueError, match="reason"):
             ovr.write_approval(sdir, block, "A", "")
+
+
+# ---------------------------------------------------------------------------
+# #76: machine-readable override CLI (status / approve / cancel --json)
+# ---------------------------------------------------------------------------
+
+def _cli_json(repo, *args, script=APPROVE):
+    """Run gator-approve.py; stdout must be exactly one JSON object."""
+    r = subprocess.run([sys.executable, str(script), *args], cwd=str(repo),
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", stdin=subprocess.DEVNULL)
+    return r.returncode, json.loads(r.stdout)
+
+
+def _status_json(repo, script=APPROVE):
+    rc, data = _cli_json(repo, "status", "--json", script=script)
+    assert rc == 0 and data["schema"] == "gator-override-status-v1"
+    return data
+
+
+def _garbage(repo, name):
+    sdir = _sdir(repo)
+    sdir.mkdir(parents=True, exist_ok=True)
+    (sdir / name).write_text("{not json", encoding="utf-8")
+
+
+def _charter_block(repo, backdate=True):
+    _stage_code(repo)
+    rc, _ = _commit(repo)
+    assert rc != 0
+    if backdate:
+        _backdate_block(repo)
+
+
+def _setup_none(repo):
+    pass
+
+
+def _setup_external(repo):
+    _charter_block(repo)
+
+
+def _setup_pause(repo):
+    _stage_sql(repo, name="migrate.txt")
+    assert _commit(repo)[0] != 0
+
+
+def _setup_fix(repo):
+    _draft(repo, "bogus")
+    (repo / "notes.txt").write_text("n\n", encoding="utf-8")
+    _git(repo, "add", "notes.txt")
+    assert _commit(repo)[0] != 0
+
+
+def _setup_mixed(repo):
+    _stage_code(repo)
+    _stage_sql(repo, name="migrate.txt")
+    assert _commit(repo)[0] != 0
+    _backdate_block(repo)
+
+
+def _setup_approved(repo):
+    _charter_block(repo)
+    assert _approve(repo, "approve", "--reason", "r", "--name", "A")[0] == 0
+
+
+def _setup_stale(repo):
+    _charter_block(repo)
+    _stage_code(repo, name="bar.py")
+
+
+def _setup_expired(repo):
+    _charter_block(repo)
+    path = _sdir(repo) / ovr.BLOCK_FILE
+    block = json.loads(path.read_text(encoding="utf-8"))
+    block["expires_epoch"] = time.time() - 1
+    path.write_text(json.dumps(block), encoding="utf-8")
+
+
+def _setup_malformed(repo):
+    _garbage(repo, ovr.BLOCK_FILE)
+
+
+def _setup_legacy(repo):
+    _write_legacy_block(repo, [("charter-alongside-code", "approvable")])
+
+
+STATUS_CASES = {
+    # case: (setup, state, {rule: resolution}, can_approve, approve_refusal)
+    "none": (_setup_none, "none", {}, False, "no-block"),
+    "external": (_setup_external, "blocked",
+                 {"charter-alongside-code": "external-approval"}, True, None),
+    "pause": (_setup_pause, "blocked",
+              {"dangerous-pattern-pause": "pause"}, False, "nothing-approvable"),
+    "fix": (_setup_fix, "blocked",
+            {"invalid-change-type": "fix-required"}, False, "nothing-approvable"),
+    "mixed": (_setup_mixed, "blocked",
+              {"charter-alongside-code": "external-approval",
+               "dangerous-pattern-pause": "pause"}, True, None),
+    "approved": (_setup_approved, "approved",
+                 {"charter-alongside-code": "external-approval"}, False, None),
+    "stale": (_setup_stale, "stale",
+              {"charter-alongside-code": "external-approval"}, False, "tree-changed"),
+    "expired": (_setup_expired, "expired",
+                {"charter-alongside-code": "external-approval"}, False, "expired"),
+    "malformed": (_setup_malformed, "malformed", {}, False, "malformed"),
+    "legacy": (_setup_legacy, "legacy",
+               {"charter-alongside-code": "fix-required"}, False, "legacy"),
+}
+
+
+class TestOverrideJson:
+    @pytest.mark.parametrize("case", list(STATUS_CASES))
+    def test_status_json_states(self, repo, case):
+        setup, state, rules, can_approve, refusal = STATUS_CASES[case]
+        setup(repo)
+        data = _status_json(repo)
+        assert data["state"] == state
+        assert {f["rule"]: f["resolution"] for f in data["findings"]} == rules
+        assert data["can_approve"] is can_approve
+        assert data["approve_refusal"] == refusal
+        assert data["architect_default"] == "Test"
+        assert (data["revision"] is None) is (case == "none")
+        if case == "malformed":
+            assert data["block"] is None and data["malformed"] == ["block"]
+        if case == "legacy":
+            assert data["findings"][0]["legacy"] is True
+        if case == "approved":
+            assert data["covered_rules"] == ["charter-alongside-code"]
+            assert data["uncovered_external_rules"] == []
+            assert data["findings"][0]["covered"] is True
+            assert "reason" not in data["approval"]
+
+    def test_status_reports_the_delay(self, repo):
+        _charter_block(repo, backdate=False)
+        data = _status_json(repo)
+        assert data["approve_refusal"] == "too-recent" and not data["can_approve"]
+        assert 0 < data["approve_wait_seconds"] <= ovr.MIN_APPROVAL_DELAY_SECONDS
+
+    @pytest.mark.parametrize("case", ["block-changed", "findings-changed", "too-recent",
+                                      "nothing-approvable", "invalid-input", "tree-changed"])
+    def test_approve_json_refusals(self, repo, case):
+        if case == "nothing-approvable":
+            _setup_pause(repo)
+            _backdate_block(repo)
+        else:
+            _charter_block(repo, backdate=(case != "too-recent"))
+        status = _status_json(repo)
+        args = ["approve", "--json", "--name", "A", "--reason", "r",
+                "--expect-block", status["block"]["block_id"],
+                "--expect-revision", status["revision"]]
+        if case == "block-changed":
+            args[args.index("--expect-block") + 1] = "deadbeef"
+        elif case == "findings-changed":
+            args[args.index("--expect-revision") + 1] = "0" * 16
+        elif case == "invalid-input":
+            args[args.index("--name") + 1] = "x" * 81
+        elif case == "tree-changed":
+            _stage_code(repo, name="bar.py")
+        rc, data = _cli_json(repo, *args)
+        assert rc == 1 and data["ok"] is False and data["refusal"] == case
+        assert data["schema"] == "gator-override-approve-v1"
+        if case == "too-recent":
+            assert data["retry_after_seconds"] >= 1
+        assert not (_sdir(repo) / ovr.APPROVAL_FILE).exists()
+
+    def test_approve_json_records_approval_and_commit_carries_trailers(self, repo):
+        _charter_block(repo)
+        status = _status_json(repo)
+        rc, data = _cli_json(repo, "approve", "--json", "--name", "Dash Architect",
+                             "--reason", "no charter edit needed",
+                             "--expect-block", status["block"]["block_id"],
+                             "--expect-revision", status["revision"])
+        assert rc == 0 and data["ok"] is True, data
+        assert data["approval"]["approved_rules"] == ["charter-alongside-code"]
+        assert data["remaining"] == {"fix_required": [], "paused": []}
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        msg = _last_message(repo)
+        assert "Gator-Override-Approved-By: Dash Architect" in msg
+        assert "Gator-Override-Reason: no charter edit needed" in msg
+        assert _status_json(repo)["state"] == "none"
+
+    def test_approve_refuses_changed_findings_under_same_block_id(self, repo):
+        sdir, tree = _sdir(repo), ovr.index_tree(repo)
+        ext = {"charter-alongside-code": ovr.EXTERNAL_APPROVAL,
+               "charter-index-gap": ovr.EXTERNAL_APPROVAL}
+        first = ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], [], ext,
+                                now=time.time() - 60)
+        seen = _status_json(repo)
+        second = ovr.write_block(sdir, tree, [("charter-alongside-code", "m"),
+                                              ("charter-index-gap", "m")], [], ext)
+        assert second["block_id"] == first["block_id"], "the real stable-ID path"
+        rc, data = _cli_json(repo, "approve", "--json", "--name", "A", "--reason", "r",
+                             "--expect-block", seen["block"]["block_id"],
+                             "--expect-revision", seen["revision"])
+        assert rc == 1 and data["refusal"] == "findings-changed"
+        assert not (sdir / ovr.APPROVAL_FILE).exists()
+
+    def test_status_reports_uncovered_rule_after_supersede(self, repo):
+        sdir, tree = _sdir(repo), ovr.index_tree(repo)
+        ext = {"charter-alongside-code": ovr.EXTERNAL_APPROVAL,
+               "charter-index-gap": ovr.EXTERNAL_APPROVAL}
+        ovr.write_block(sdir, tree, [("charter-alongside-code", "m")], [], ext,
+                        now=time.time() - 60)
+        seen = _status_json(repo)
+        rc, _ = _cli_json(repo, "approve", "--json", "--name", "A", "--reason", "r",
+                          "--expect-block", seen["block"]["block_id"],
+                          "--expect-revision", seen["revision"])
+        assert rc == 0
+        ovr.write_block(sdir, tree, [("charter-alongside-code", "m"),
+                                     ("charter-index-gap", "m")], [], ext)
+        data = _status_json(repo)
+        assert data["state"] == "blocked"
+        assert data["covered_rules"] == ["charter-alongside-code"]
+        assert data["uncovered_external_rules"] == ["charter-index-gap"]
+        assert {f["rule"]: f["covered"] for f in data["findings"]} == {
+            "charter-alongside-code": True, "charter-index-gap": False}
+        assert data["can_approve"] is True
+
+    def test_approval_plus_pause_stays_paused(self, repo):
+        _setup_mixed(repo)
+        assert _approve(repo, "approve", "--reason", "r", "--name", "A")[0] == 0
+        rc, out = _commit(repo)
+        assert rc != 0 and "dangerous-pattern-pause [pause]" in out
+        data = _status_json(repo)
+        assert data["state"] == "approved"
+        assert data["uncovered_external_rules"] == []
+        assert "dangerous-pattern-pause" in {f["rule"] for f in data["findings"]}
+
+    def test_evidence_only_dangerous_finding_is_external_approval(self, bundled_repo):
+        _stage_sql(bundled_repo)
+        assert _commit(bundled_repo, env=EV)[0] != 0
+        data = _status_json(bundled_repo, script=APPROVE_BUNDLED)
+        resolutions = {f["rule"]: f["resolution"] for f in data["findings"]}
+        assert resolutions["SQL-001"] == "external-approval"
+
+    @pytest.mark.parametrize("case", ["match", "changed", "vanished", "malformed-block",
+                                      "malformed-approval", "replaced"])
+    def test_cancel_json_guard(self, repo, case):
+        if case in ("malformed-block", "replaced"):
+            _garbage(repo, ovr.BLOCK_FILE)
+        else:
+            _charter_block(repo)
+        if case == "malformed-approval":
+            readable_rev = _status_json(repo)["revision"]
+            _garbage(repo, ovr.APPROVAL_FILE)
+        status = _status_json(repo)
+        args = ["cancel", "--json", "--expect-revision", status["revision"]]
+        if status["block"]:
+            args += ["--expect-block", status["block"]["block_id"]]
+        if case == "changed":
+            args[3] = "0" * 16
+        elif case == "vanished":
+            assert _cli_json(repo, "cancel", "--json")[0] == 0
+        elif case == "replaced":
+            _stage_code(repo)
+            assert _commit(repo)[0] != 0  # a later attempt writes a readable block
+        rc, data = _cli_json(repo, *args)
+        assert data["schema"] == "gator-override-cancel-v1"
+        if case in ("changed", "vanished", "replaced"):
+            # The block-ID guard runs first: a vanished block that was shown
+            # with an ID is block-changed; a revision-only guard (malformed
+            # block replaced) is findings-changed.
+            expected = "block-changed" if case == "vanished" else "findings-changed"
+            assert rc == 1 and data["refusal"] == expected
+            assert data["removed"] == []
+            if case != "vanished":
+                assert (_sdir(repo) / ovr.BLOCK_FILE).exists()
+            return
+        assert rc == 0 and data["ok"] is True
+        assert _status_json(repo)["state"] == "none"
+        if case == "malformed-block":
+            assert status["state"] == "malformed" and status["malformed"] == ["block"]
+        if case == "malformed-approval":
+            assert status["malformed"] == ["approval"]
+            assert status["revision"] != readable_rev
+
+    def test_unreadable_record_has_no_revision(self, repo, monkeypatch):
+        """If a malformed record's raw bytes cannot be read, nothing can
+        match it, so a guarded action fails safe."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("gator_approve_mod", APPROVE)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _garbage(repo, ovr.BLOCK_FILE)
+
+        def boom(path):
+            raise mod._Unreadable("locked")
+        monkeypatch.setattr(mod, "_raw_digest", boom)
+        snap = mod._snapshot(_sdir(repo))
+        assert snap["revision"] is None and snap["unreadable"] is True
+        assert mod._guard_refusal(snap, None, "a" * 16)[0] == "unavailable"
+
+    def test_json_outside_git_is_unavailable(self, tmp_path):
+        rc, data = _cli_json(tmp_path, "status", "--json")
+        assert rc == 1 and data["state"] == "unavailable"
+        rc, data = _cli_json(tmp_path, "approve", "--json")
+        assert rc == 1 and data["refusal"] == "unavailable"

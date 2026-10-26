@@ -24,6 +24,7 @@ Run sibling scripts and Git with bounded timeouts and normalized results.
 <- server and dashboard data modules
 -> subprocess
 ! Dashboard failures become structured unavailable/error payloads; never substitute another repository's data.
+! `run_override_cli(repo_path, *args, timeout=30)` (#76) runs the wheel's `gator-hook.py override <args>` with `cwd=repo_path` and stdin closed, and returns `(stdout, stderr, exit_code)`. The dispatcher selects the repository's governed runtime. This is the only way the Dashboard reaches override state; see `resolve_repo_override()` below.
 
 ### read_welcome_html(name) / WELCOME_DOC_NAMES / WELCOME_DOCS_DIR / _send_welcome_doc(name) / GET /api/welcome/docs/<name>
 File: src/gator_command/scripts/dashboard/helpers.py
@@ -83,6 +84,18 @@ Resolve a registered repo and invoke the explicit lifecycle action requested by 
 <- authenticated POST routes
 -> `gator update`, `gator gatorize`
 ! Actions are scoped to the selected registered path and return captured output; path/name input never becomes shell syntax.
+
+### resolve_repo_override(action, repo_path, body=None, run_fn=None) / shape_override_status() / shape_override_result() / override_cli_args() — blocked-commit override relay (#76)
+File: src/gator_command/scripts/dashboard/data.py
+Relay the repository's own override CLI (`run_override_cli`, so `gator hook override … --json` in the governed runtime) for the Commits view. `action` is `status`, `approve` or `cancel`; the result is `{"data", "status"}`.
+- **Shaping.** `shape_override_status()` serves only an allowlisted, type-checked projection of `gator-override-status-v1`. Strings are capped at 2,000 characters, `files` at 500, findings at 200, names at 80, and unknown keys are dropped. A finding is kept only with one of the three #75 resolution values, and `revision` only when it is 16 hex characters. Exit 0 with empty stdout (a dispatcher skip) is `state: ungoverned`. Output that is not one status object (an older runtime's argparse exit 2, text, another schema) is `state: unsupported` with `OVERRIDE_UNSUPPORTED_MESSAGE` and the headless `command`. Human CLI text is never parsed.
+- **Complete findings or nothing approvable (round 1 review).** Every finding must reach the Architect before anything is approvable. When the CLI reports more than 200 findings, or a finding cannot be represented, a `blocked`/`approved` status becomes the Dashboard-only state `incomplete`: `findings_total`, `can_approve: false`, `approve_refusal: "too-many-findings"`, `uncovered_external_rules: []`, `OVERRIDE_INCOMPLETE_MESSAGE` and the terminal `command`. `revision` and `block` stay, so Discard still works. This is a transport limit, not a policy decision. An over-length message is cut with a visible "… (truncated; see `gator hook override status`)" suffix, never silently. `block.files_total` reports the uncapped file count.
+- **Server-side enforcement.** `resolve_repo_override("approve", …)` first re-runs status and refuses `too-many-findings` (409) for an `incomplete` block, so a direct POST cannot approve findings the Dashboard never showed. The CLI's guards then run as usual.
+- **Results.** `shape_override_result()` maps a CLI answer to HTTP: success → 200 (`approval` or `removed`, plus `remaining`). A CLI refusal → 409 with `refusal` (closed set, else `refused`), `message`, `retry_after_seconds` and `remaining`. An unsupported runtime → 409 `unsupported-runtime` + `command`. A dispatcher skip → 409 `unavailable`.
+- **Validation before any subprocess.** `override_cli_args()` turns a POST body into argv, else 400. `revision` (16 hex) is always required. `block_id` (8 hex) is required for approve and may be `null` only for cancel (malformed recovery: `--expect-block` is then omitted). Approve also requires `name` ≤ 80 and `reason` ≤ 200, stripped, non-empty and without control characters. Values become separate argv items, never shell text.
+<- `GET /api/repo/<name>/override`, `POST /api/repo/<name>/override/{approve,cancel}`
+-> `helpers.run_override_cli()`
+! TRIPWIRE (#76 trust boundary): the relay never reads `.git/gator-override/`, never imports repository modules, and never decides approvability or coverage. `can_approve`, `covered_rules` and `uncovered_external_rules` come from the CLI, whose write path re-runs the whole refusal sequence. Approval stays Architect-only; the Dashboard is an alternate UI for the existing lifecycle and adds no authority.
 
 ### parse_logical_path(logical)
 File: src/gator_command/scripts/gator-dashboard.py
@@ -160,10 +173,18 @@ Same-repository mutation exclusion (threaded-server plan, checkpoint 2). Registe
 - `_resolve_action_target` repeats `data.resolve_repo_update()`'s lookup (registry by name, else an accessible Fleet entry) in the route, so the key is known before any work.
 - `_with_repo_action` takes the lock and re-checks with `_still_targeted` against fresh snapshots. If the repository was removed since the route's snapshot, it returns 404 `repo '<name>' not found` with no side effect. Otherwise it runs the body and writes the response while the lock is still held.
 - `_lifecycle_action` calls `resolve_repo_update` / `resolve_repo_gatorize` with a one-entry registry holding exactly the locked path, so the subprocess can only touch that repository. With no target, it calls them on the route's snapshots for their usual 400/404 error.
-<- `do_POST` register, remove, `/api/repo/<name>/{update,gatorize,config,topology}`
+<- `do_POST` register, remove, `/api/repo/<name>/{update,gatorize,config,topology}`, `/api/repo/<name>/override/{approve,cancel}` (#76, `_handle_override_post()`)
 ! TRIPWIRE: a same-repository mutation is ordered strictly against remove. It either finishes before the removal, or it is rejected: 409 while one is running, 404 afterwards. No success for a same-path action can be reported after a later remove. Pinned by `TestRemoveVersusSamePath`.
 ! Lock order: `_repo_action` comes first. `_STATE_WRITE_LOCK` / `_STATE_LOCK` may be taken inside it (register, remove, config publish), never the reverse. `_repo_action` may be held across the update/gatorize subprocess; that is its purpose, and only same-path requests contend.
 ! Loop routes do not take `_repo_action`. Their authority is the Loop OS locks. Remove is registry-only and never touches `.gator/loops/`.
+
+### _handle_override_post(repo_name, action) / GET `/api/repo/<name>/override` (#76)
+File: src/gator_command/scripts/gator-dashboard.py
+- **GET `/api/repo/<name>/override`** runs inside `_heavy_work()`, because it spawns a subprocess. It resolves the repository like `/history` (`_resolve_repo_path` over the registry snapshot), with 400 when the repository is not accessible. It answers `resolve_repo_override("status", …)` with `Cache-Control: no-store`.
+- **POST `/api/repo/<name>/override/approve` and `/override/cancel`** are dispatched at the top of `_post_routes()`, after the Loop routes. Their suffixes cannot collide with the `/update`, `/gatorize`, `/config` or `/topology` `endswith` checks. The body is capped at 4 KiB (413 closes the connection); invalid JSON or a bad `Content-Length` gives 400. The target comes from `_resolve_action_target` (404 unknown, 400 not a directory). The action then runs under `_with_repo_action`, so another same-repository mutation gives 409 and a removal in between gives 404. Responses are `no-store`.
+<- `views/history.js` Commits block alert and dialog
+-> `data.resolve_repo_override()`
+! `_check_post_auth()` and the `_LifecycleGate` wrap these POSTs like every other. Body validation (`override_cli_args()`) runs before any subprocess. Pinned by `tests/test_dashboard_override.py`.
 
 ### _AUDIT_LOCK
 File: src/gator_command/scripts/gator-dashboard.py

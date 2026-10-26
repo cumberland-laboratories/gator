@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.32.0",
+  "change_type": "release",
+  "significance": "notable",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "62e7bc0083adb12e3315f173744d91a6d6fdef25",
+  "short_commit": "62e7bc0",
+  "snippet_id": "snippet-62e7bc0083adb",
+  "session_group_key": "anthropic:f20eb594-1972-4749-a209-90a935c86150",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "c86fd73f7a6c32575bbee74c6bf999f23d73be8b",
+  "started_at": "2026-10-25T00:19:45Z",
+  "ended_at": "2026-10-25T16:50:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-25-gator-c86fd73f7a6c3.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Releases 2.32.0: the #75 pre-commit policy (charter updates block with an Architect-only approval; dangerous patterns pause for a recorded decision), the read-only Dashboard commit policy, the pre-commit checks Docs page, the Loop Extras tab and longer participant waits, and the Welcome Gator docs examples.",
+    "`pyproject.toml` and `VERSION` move to 2.32.0 together; the CHANGELOG gains the 2.32.0 section.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "f20eb594-1972-4749-a209-90a935c86150",
+  "transcript_ref": null
+}

@@ -2324,6 +2324,116 @@ mark.search-hit {
   padding: 20px;
 }
 
+/* Blocked commit alert and dialog (#76). The label and glyph carry the
+   meaning (⚑ / ✓, "Needs approval" / "Approved by"); the left border colour
+   is only a second cue. The dialog reuses .loop-dialog (compact leading). */
+.commit-block-alert {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--gray-300);
+  border-left: 3px solid var(--color-drifted);   /* the override amber */
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--gray-900);
+  font: inherit;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-emphasis);
+  line-height: var(--leading-ui);
+  cursor: pointer;
+}
+.commit-block-alert[data-kind="approved"] { border-left-color: var(--teal-dark); }
+.commit-block-alert:hover { border-color: var(--gray-400); }
+.commit-block-alert:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.commit-block-scope { margin: 0 0 var(--space-3); }
+.commit-block-scope-line,
+.commit-block-files {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--gray-600);
+  overflow-wrap: anywhere;
+}
+.commit-block-more-toggle {
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.commit-block-group { margin: 0 0 var(--space-3); }
+.commit-block-group-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-ui);
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.commit-block-list { margin: 0; padding: 0; list-style: none; }
+.commit-block-finding {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--gray-100);
+}
+.commit-block-finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.commit-block-rule {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--gray-900);
+  overflow-wrap: anywhere;
+}
+.commit-block-tag {
+  padding: 0 6px;
+  border: 1px solid var(--gray-300);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  color: var(--gray-700);
+}
+.commit-block-needs { font-weight: var(--weight-emphasis); color: var(--gray-900); }
+.commit-block-msg {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.commit-block-notice,
+.commit-block-success {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--gray-400);
+  background: var(--gray-50);
+  font-size: var(--text-base);
+  line-height: var(--leading-prose);
+  color: var(--gray-900);
+}
+.commit-block-count {
+  align-self: flex-end;
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+}
+.commit-block-command {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+}
+.commit-block-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.commit-block-confirm { flex-basis: 100%; }
+
+@media (max-width: 600px) {
+  .commit-toolbar { flex-direction: column; align-items: stretch; }
+  .commit-block-alert { margin-left: 0; justify-content: center; }
+  .commit-search { width: 100%; }
+}
+
 @media (max-width: 1100px) {
   .commit-summary {
     grid-template-columns: minmax(0, 1fr) auto;

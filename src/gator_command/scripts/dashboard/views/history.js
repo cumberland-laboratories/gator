@@ -13,6 +13,8 @@
  *
  * Pure git — no session dependency, no aggregator, no snippets.
  * Data source: GET /api/repo/<name>/history?limit=30
+ * Blocked commit (#76): GET /api/repo/<name>/override once per mount, and
+ * POST .../override/{approve,cancel} from the dialog (see below).
  */
 
 (function () {
@@ -387,6 +389,506 @@
     renderList();
     container.textContent = "";
     container.appendChild(root);
+    return { toolbar: toolbar, search: search };
+  }
+
+  // ── Blocked commit (#76) ──────────────────────────────────────────────────
+  //
+  // A quiet toolbar alert and a native <dialog> over the repository's own
+  // override CLI, relayed by GET /api/repo/<name>/override and
+  // POST .../override/{approve,cancel}. The CLI decides everything: what is
+  // covered, what is approvable, and whether a guarded action still matches
+  // the state the Architect saw (`revision`). This view only maps the CLI's
+  // answer to a label and never classifies a rule. Every CLI-derived string
+  // reaches the DOM as text.
+
+  const BLOCK_REFRESH_STATES = ["malformed", "expired", "stale", "legacy", "incomplete"];
+  const BLOCK_GROUPS = [
+    ["external-approval", "⚑", "External approval"],
+    ["pause", "⏸", "Architect decision required"],
+    ["fix-required", "✚", "Fix required"],
+  ];
+  const BLOCK_NAME_MAX = 80;
+  const BLOCK_REASON_MAX = 200;
+  const BLOCK_FILES_SHOWN = 8;
+  const BLOCK_CHANGED_NOTICE = "The blocked commit changed. Review it again before approving.";
+  const DISCARD_CHANGED_NOTICE = "The blocked commit changed. Review it, then confirm again.";
+  const REFRESH_TEXT = {
+    stale: "The staged change differs from the blocked attempt. Retry the commit to "
+      + "record a fresh block, or discard this one.",
+    expired: "This blocked attempt has expired. Retry the commit, or discard it.",
+    malformed: "The recorded block cannot be read. Discard it, then retry the commit.",
+    legacy: "This block was recorded by an earlier Gator runtime. Discard it, then "
+      + "retry the commit.",
+  };
+
+  function overrideUrl(repoName, suffix) {
+    return "/api/repo/" + encodeURIComponent(repoName) + "/override" + (suffix || "");
+  }
+
+  function fetchOverrideStatus(repoName) {
+    return fetch(overrideUrl(repoName), { cache: "no-store" }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok || !d || typeof d !== "object" || !d.state) {
+          throw new Error((d && d.error) || ("HTTP " + r.status));
+        }
+        return d;
+      });
+    });
+  }
+
+  function postOverride(repoName, action, body) {
+    return fetch(overrideUrl(repoName, "/" + action), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Gator-Dashboard": "1" },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { status: r.status, data: d || {} }; });
+    });
+  }
+
+  function findingsOf(status, resolution) {
+    return (status.findings || []).filter(function (f) { return f.resolution === resolution; });
+  }
+
+  // {label, kind} for the toolbar alert, or null for no alert. Approve is
+  // offered only for `uncovered_external_rules`, never from approval.state.
+  function alertState(status) {
+    if (!status || typeof status !== "object" || !status.state) return null;
+    const st = status.state;
+    if (st === "none" || st === "ungoverned") return null;
+    if (BLOCK_REFRESH_STATES.indexOf(st) >= 0) {
+      return { label: "⚑ Commit block needs refresh", kind: "refresh" };
+    }
+    if (st !== "blocked" && st !== "approved") {
+      return { label: "⚑ Commit status unavailable", kind: "unavailable" };
+    }
+    const ext = status.uncovered_external_rules || [];
+    const pause = findingsOf(status, "pause").length > 0;
+    const fix = findingsOf(status, "fix-required").length > 0;
+    if (ext.length) return { label: "⚑ Commit blocked", kind: "blocked" };
+    if (pause && !fix) return { label: "⚑ Architect decision needed", kind: "pause" };
+    if (fix && !pause) return { label: "⚑ Commit fix needed", kind: "fix" };
+    if (pause && fix) return { label: "⚑ Commit blocked", kind: "mixed" };
+    return { label: "✓ Approved — retry commit", kind: "approved" };
+  }
+
+  function approvableHere(status) {
+    return status.state === "blocked"
+      && (status.uncovered_external_rules || []).length > 0
+      && (status.approve_refusal === null || status.approve_refusal === "too-recent");
+  }
+
+  function ageText(seconds) {
+    const s = Math.max(0, Math.round(Number(seconds) || 0));
+    if (s < 60) return s + " s ago";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    return Math.round(s / 3600) + " h ago";
+  }
+
+  function mountBlockAlert(repoName, toolbar, search, statusPromise) {
+    const ctl = { repoName: repoName, toolbar: toolbar, search: search, status: null, button: null };
+
+    ctl.update = function (status) {
+      ctl.status = status;
+      if (ctl.button && ctl.button.parentNode) ctl.button.parentNode.removeChild(ctl.button);
+      ctl.button = null;
+      const a = alertState(status);
+      if (!a || !toolbar.isConnected) return;
+      const b = el("button", "commit-block-alert", a.label);
+      b.type = "button";
+      b.dataset.kind = a.kind;
+      b.setAttribute("aria-haspopup", "dialog");
+      b.addEventListener("click", function () { openBlockDialog(ctl, b); });
+      toolbar.insertBefore(b, search || null);
+      ctl.button = b;
+    };
+
+    statusPromise.then(function (status) {
+      if (status && toolbar.isConnected) ctl.update(status);
+    });
+    return ctl;
+  }
+
+  function openBlockDialog(ctl, invoker) {
+    const dlg = el("dialog", "loop-dialog commit-block-dialog");
+    dlg.setAttribute("aria-labelledby", "commit-block-title");
+    const st = {
+      status: ctl.status,
+      fetchedAt: Date.now(),
+      name: ctl.status.architect_default || "",
+      reason: "",
+      notice: "",
+      error: "",
+      success: "",
+      confirmDiscard: false,
+      sending: false,
+      timer: null,
+    };
+
+    function waitLeft() {
+      const wait = Number(st.status.approve_wait_seconds) || 0;
+      return Math.max(0, Math.ceil((st.fetchedAt + wait * 1000 - Date.now()) / 1000));
+    }
+
+    function fieldsValid() {
+      const n = st.name.trim();
+      const r = st.reason.trim();
+      return n.length > 0 && n.length <= BLOCK_NAME_MAX
+        && r.length > 0 && r.length <= BLOCK_REASON_MAX;
+    }
+
+    function setStatus(fresh, notice) {
+      st.status = fresh;
+      st.fetchedAt = Date.now();
+      if (notice !== undefined) st.notice = notice;
+      ctl.update(fresh);
+    }
+
+    function changed(fresh) {
+      const a = st.status;
+      const blockId = function (s) { return s.block ? s.block.block_id : null; };
+      return fresh.revision !== a.revision || fresh.state !== a.state
+        || blockId(fresh) !== blockId(a);
+    }
+
+    function scopeLine(status) {
+      const b = status.block;
+      const box = el("div", "commit-block-scope");
+      if (!b) return box;
+      const parts = ["Block " + b.block_id, "recorded " + ageText(b.age_seconds)];
+      if (b.expires_epoch) {
+        const exp = new Date(b.expires_epoch * 1000);
+        if (!isNaN(exp)) parts.push("expires " + exp.toLocaleString());
+      }
+      parts.push(b.tree_matches ? "Staged change matches" : "Staged change differs");
+      box.appendChild(el("p", "commit-block-scope-line", parts.join(" · ")));
+      const files = b.files || [];
+      const total = Number(b.files_total) || files.length;
+      if (files.length) {
+        box.appendChild(el("p", "commit-block-files",
+                           "Staged: " + files.slice(0, BLOCK_FILES_SHOWN).join(", ")));
+        if (total > BLOCK_FILES_SHOWN) {
+          const more = el("details", "commit-block-more");
+          more.appendChild(el("summary", "commit-block-more-toggle",
+                              "+" + (total - BLOCK_FILES_SHOWN) + " more"));
+          let rest = files.slice(BLOCK_FILES_SHOWN).join(", ");
+          if (total > files.length) rest += " (and " + (total - files.length) + " not listed)";
+          more.appendChild(el("p", "commit-block-files", rest));
+          box.appendChild(more);
+        }
+      }
+      return box;
+    }
+
+    function groups(status) {
+      const box = el("div", "commit-block-groups");
+      const approvedBy = (status.approval && status.approval.approved_by) || "";
+      BLOCK_GROUPS.forEach(function (g) {
+        const items = findingsOf(status, g[0]);
+        if (!items.length) return;
+        const sec = el("section", "commit-block-group");
+        sec.dataset.resolution = g[0];
+        sec.appendChild(el("h3", "commit-block-group-title", g[1] + " " + g[2]));
+        const list = el("ul", "commit-block-list");
+        items.forEach(function (f) {
+          const li = el("li", "commit-block-finding");
+          li.dataset.rule = f.rule;
+          const head = el("div", "commit-block-finding-head");
+          head.appendChild(el("span", "commit-block-rule", f.rule));
+          if (g[0] === "external-approval") {
+            const tag = f.covered
+              ? el("span", "commit-block-tag commit-block-covered",
+                   "✓ Approved" + (approvedBy ? " by " + approvedBy : ""))
+              : el("span", "commit-block-tag commit-block-needs", "Needs approval");
+            head.appendChild(tag);
+          }
+          li.appendChild(head);
+          if (f.message) li.appendChild(el("p", "commit-block-msg", f.message));
+          list.appendChild(li);
+        });
+        sec.appendChild(list);
+        box.appendChild(sec);
+      });
+      return box;
+    }
+
+    function guidance(status, body) {
+      const note = function (text) { body.appendChild(el("p", "loop-dialog-note", text)); };
+      const st0 = status.state;
+      if (st0 === "unsupported" || st0 === "unavailable" || st0 === "incomplete") {
+        note(status.message || "This repository cannot report a blocked commit to the Dashboard.");
+        if (status.command) {
+          const p = el("p", "commit-block-command");
+          p.appendChild(document.createTextNode("In a terminal: "));
+          p.appendChild(el("code", "commit-block-code", status.command));
+          body.appendChild(p);
+        }
+        return;
+      }
+      if (REFRESH_TEXT[st0]) note(REFRESH_TEXT[st0]);
+      const covered = status.covered_rules || [];
+      const uncovered = status.uncovered_external_rules || [];
+      if (covered.length) {
+        const by = (status.approval && status.approval.approved_by) || "the Architect";
+        note("External approval recorded by " + by + " for " + covered.join(", ") + ".");
+        if (uncovered.length) note("Still needs approval: " + uncovered.join(", ") + ".");
+      }
+      if (findingsOf(status, "external-approval").length) {
+        note("An approval covers only this exact staged change. Changing what is "
+             + "staged needs a new blocked attempt.");
+      }
+      if (findingsOf(status, "pause").length) {
+        note("A pause is resolved in the active agent session: the Architect's decision "
+             + "is recorded in commit_draft.md. It cannot be approved here.");
+      }
+      if (findingsOf(status, "fix-required").length) {
+        note("Fix-required findings must be corrected, then the commit retried.");
+      }
+    }
+
+    function fields(body) {
+      const area = el("div", "loop-ctrl-input-area commit-block-fields");
+      const nameLabel = el("label", "loop-ctrl-label", "Architect name");
+      nameLabel.htmlFor = "commit-block-name";
+      const name = el("input", "loop-ctrl-input");
+      name.id = "commit-block-name";
+      name.type = "text";
+      name.maxLength = BLOCK_NAME_MAX;
+      name.value = st.name;
+      name.disabled = st.sending;
+      const reasonLabel = el("label", "loop-ctrl-label", "Reason (required)");
+      reasonLabel.htmlFor = "commit-block-reason";
+      const reason = el("textarea", "loop-ctrl-input");
+      reason.id = "commit-block-reason";
+      reason.rows = 3;
+      reason.maxLength = BLOCK_REASON_MAX;
+      reason.value = st.reason;
+      reason.disabled = st.sending;
+      const count = el("span", "commit-block-count", st.reason.length + " / " + BLOCK_REASON_MAX);
+      count.setAttribute("aria-live", "polite");
+      name.addEventListener("input", function () { st.name = name.value; syncApprove(); });
+      reason.addEventListener("input", function () {
+        st.reason = reason.value;
+        count.textContent = st.reason.length + " / " + BLOCK_REASON_MAX;
+        syncApprove();
+      });
+      area.appendChild(nameLabel);
+      area.appendChild(name);
+      area.appendChild(reasonLabel);
+      area.appendChild(reason);
+      area.appendChild(count);
+      body.appendChild(area);
+    }
+
+    function syncApprove() {
+      const btn = dlg.querySelector(".commit-block-approve");
+      if (!btn) return;
+      if (st.sending) {
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        return;
+      }
+      const left = waitLeft();
+      btn.textContent = left > 0 ? "Approve (available in " + left + "s)" : "Approve";
+      btn.disabled = left > 0 || !fieldsValid();
+      if (left > 0 && !st.timer) {
+        st.timer = setTimeout(function () { st.timer = null; syncApprove(); }, 1000);
+      }
+    }
+
+    function button(cls, text, onClick) {
+      const b = el("button", cls, text);
+      b.type = "button";
+      b.disabled = st.sending;
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function render() {
+      dlg.textContent = "";
+      const status = st.status;
+      const unavailable = ["unsupported", "unavailable"].indexOf(status.state) >= 0;
+      dlg.appendChild(el("h2", "loop-dialog-title",
+                         unavailable ? "Commit status unavailable" : "Commit blocked"))
+        .id = "commit-block-title";
+      if (st.notice) {
+        const n = el("p", "commit-block-notice", st.notice);
+        n.setAttribute("role", "status");
+        dlg.appendChild(n);
+      }
+      if (st.success) {
+        const s = el("p", "commit-block-success", st.success);
+        s.setAttribute("role", "status");
+        dlg.appendChild(s);
+        const actions = el("div", "loop-dialog-actions");
+        actions.appendChild(button("loop-ctrl-cancel commit-block-close", "Close", close));
+        dlg.appendChild(actions);
+        return;
+      }
+      dlg.appendChild(scopeLine(status));
+      if (status.state === "incomplete" && status.findings_total) {
+        dlg.appendChild(el("p", "commit-block-scope-line",
+                           "Showing " + (status.findings || []).length + " of "
+                           + status.findings_total + " findings."));
+      }
+      dlg.appendChild(groups(status));
+      guidance(status, dlg);
+      const canApprove = approvableHere(status) && !st.confirmDiscard;
+      if (canApprove) fields(dlg);
+
+      const err = el("p", "loop-ctrl-error commit-block-error", st.error);
+      err.setAttribute("role", "alert");
+      err.hidden = !st.error;
+      dlg.appendChild(err);
+
+      const actions = el("div", "loop-dialog-actions");
+      if (st.confirmDiscard) {
+        actions.appendChild(el("p", "loop-dialog-note commit-block-confirm",
+          "Discard this blocked attempt and any approval? Nothing is committed. "
+          + "The next commit attempt records a fresh block."));
+        actions.appendChild(button("loop-ctrl-cancel commit-block-keep", "Keep", function () {
+          st.confirmDiscard = false;
+          render();
+        }));
+        actions.appendChild(button("loop-ctrl-confirm commit-block-discard-confirm", "Discard",
+                                   discard));
+      } else {
+        if (status.revision) {
+          actions.appendChild(button("loop-dialog-end-instead commit-block-discard",
+                                     "Discard block…", function () {
+            st.confirmDiscard = true;
+            st.error = "";
+            render();
+          }));
+        }
+        actions.appendChild(button("loop-ctrl-cancel commit-block-close", "Close", close));
+        if (canApprove) {
+          actions.appendChild(button("loop-ctrl-confirm commit-block-approve", "Approve", approve));
+        }
+      }
+      dlg.appendChild(actions);
+      syncApprove();
+    }
+
+    function setSending(on) {
+      st.sending = on;
+      if (on) dlg.dataset.sending = "1"; else delete dlg.dataset.sending;
+    }
+
+    function finish(error) {
+      setSending(false);
+      if (error !== undefined) st.error = error;
+      if (dlg.isConnected) render();
+    }
+
+    // Re-read the state; resolve with the fresh status, or null when it
+    // changed (the dialog then shows it with `notice`) or the read failed.
+    function preflight(notice) {
+      return fetchOverrideStatus(ctl.repoName).then(function (fresh) {
+        if (changed(fresh)) {
+          setStatus(fresh, notice);
+          st.confirmDiscard = false;
+          finish("");
+          return null;
+        }
+        return fresh;
+      }, function (e) {
+        finish("Could not refresh the blocked commit: " + e.message + ". Nothing was sent.");
+        return null;
+      });
+    }
+
+    function afterRefusal(res, notice) {
+      const refusal = res.data.refusal;
+      const message = res.data.message || res.data.error || ("Request failed (HTTP " + res.status + ")");
+      if (refusal === "block-changed" || refusal === "findings-changed") {
+        return fetchOverrideStatus(ctl.repoName).then(function (fresh) {
+          setStatus(fresh, notice);
+          st.confirmDiscard = false;
+          finish(message);
+        }, function () { finish(message); });
+      }
+      finish(message);
+      return null;
+    }
+
+    function approve() {
+      if (st.sending || !fieldsValid() || waitLeft() > 0) return;
+      st.error = "";
+      st.notice = "";
+      setSending(true);
+      render();
+      preflight(BLOCK_CHANGED_NOTICE).then(function (fresh) {
+        if (!fresh) return null;
+        const body = { block_id: st.status.block.block_id, revision: st.status.revision,
+                       name: st.name.trim(), reason: st.reason.trim() };
+        return postOverride(ctl.repoName, "approve", body).then(function (res) {
+          if (res.status !== 200 || !res.data.ok) return afterRefusal(res, BLOCK_CHANGED_NOTICE);
+          const rem = res.data.remaining || {};
+          const remaining = (rem.fix_required || []).length + (rem.paused || []).length;
+          st.success = remaining
+            ? "External approval recorded. This commit is still blocked until the "
+              + "remaining findings are resolved."
+            : "External approval recorded. Retry the commit in your Git client or agent session.";
+          finish("");
+          return fetchOverrideStatus(ctl.repoName).then(function (s) { ctl.update(s); },
+                                                        function () {});
+        });
+      }).catch(function (e) { finish("Not sent: " + e.message); });
+    }
+
+    function discard() {
+      if (st.sending) return;
+      st.error = "";
+      st.notice = "";
+      setSending(true);
+      render();
+      preflight(DISCARD_CHANGED_NOTICE).then(function (fresh) {
+        if (!fresh) return null;
+        const body = { block_id: st.status.block ? st.status.block.block_id : null,
+                       revision: st.status.revision };
+        return postOverride(ctl.repoName, "cancel", body).then(function (res) {
+          if (res.status !== 200 || !res.data.ok) return afterRefusal(res, DISCARD_CHANGED_NOTICE);
+          st.confirmDiscard = false;
+          st.success = "Discarded. Nothing was committed. The next commit attempt "
+            + "records a fresh block.";
+          finish("");
+          return fetchOverrideStatus(ctl.repoName).then(function (s) { ctl.update(s); },
+                                                        function () {});
+        });
+      }).catch(function (e) { finish("Not sent: " + e.message); });
+    }
+
+    function close() {
+      if (st.sending) return;
+      dlg.close();
+    }
+
+    dlg.addEventListener("cancel", function (e) {
+      if (st.sending) e.preventDefault();
+    });
+    dlg.addEventListener("close", function () {
+      if (st.timer) clearTimeout(st.timer);
+      if (dlg.parentNode) dlg.parentNode.removeChild(dlg);
+      const target = (ctl.button && ctl.button.isConnected) ? ctl.button : ctl.search;
+      if (target && target.isConnected) {
+        target.focus();
+        return;
+      }
+      // No alert and no search box (empty or failed history): the page title.
+      const title = document.getElementById("topbar-title");
+      if (title) {
+        if (title.getAttribute("tabindex") !== "-1") title.setAttribute("tabindex", "-1");
+        title.focus();
+      }
+    });
+
+    render();
+    (ctl.toolbar.parentNode || document.body).appendChild(dlg);
+    dlg.showModal();
+    return dlg;
   }
 
   window.GatorViews.history = function (data, container, repoName) {
@@ -403,30 +905,47 @@
     // time the fetch resolves; a detached loading node means drop the result.
     function stale() { return !loadingEl.isConnected; }
 
+    // #76: the blocked-commit status is fetched once, beside the history
+    // (no poller). A failure (or the offline snapshot) means no alert.
+    const overridePromise = fetchOverrideStatus(repoName).catch(function () { return null; });
+
+    // A history that is empty or failed still gets the block alert: a new
+    // repository can block its very first commit, and a history error must
+    // not hide a recorded block. The message keeps its own region.
+    function showMessage(cls, text) {
+      container.textContent = "";
+      const root = el("div", "commits-view");
+      const toolbar = el("div", "commit-toolbar commit-toolbar-bare");
+      root.appendChild(toolbar);
+      root.appendChild(el("p", cls, text));
+      container.appendChild(root);
+      mountBlockAlert(repoName, toolbar, null, overridePromise);
+    }
+
     fetch("/api/repo/" + encodeURIComponent(repoName) + "/history?limit=30")
       .then(function (r) { return r.json(); })
       .then(function (result) {
         if (stale()) return;
         if (result.error) {
-          container.textContent = "";
-          container.appendChild(el("p", "muted", result.error));
+          showMessage("muted commit-history-message", result.error);
           return;
         }
         const commits = result.commits || [];
         if (commits.length === 0) {
-          container.textContent = "";
-          container.appendChild(el("p", "muted commit-placeholder", "No commits found."));
+          showMessage("muted commit-placeholder", "No commits found.");
           return;
         }
-        buildView(container, commits);
+        const view = buildView(container, commits);
+        mountBlockAlert(repoName, view.toolbar, view.search, overridePromise);
       })
       .catch(function (err) {
         if (stale()) return;
-        container.textContent = "";
-        container.appendChild(el("p", "muted", "Error loading history: " + err.message));
+        showMessage("muted commit-history-message", "Error loading history: " + err.message);
       });
   };
 
   // Read-only: the change types this view labels (pinned against the producer).
   window.GatorViews.history.changeTypes = Object.keys(KINDS);
+  // Read-only: the blocked-commit alert mapping (pinned by the block UI test).
+  window.GatorViews.history.alertState = alertState;
 })();

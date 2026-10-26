@@ -229,7 +229,34 @@ Render Git-native commit history as collapsed rows with a readable Gator record 
   - **Filter chips:** `div.commit-filters[role=group]` buttons with `aria-pressed` and a count: All, Features, Fixes, Docs, Housekeeping, Releases. "Other" commits show only under All.
   - **Search:** `input.commit-search[type=search]` matches subject, full or short hash, and decision tags, case-insensitive.
   - **Scope and state:** both work over the loaded commits only (30). The filter, query and set of open rows live in the mount's closure. A re-render keeps open rows open, and nothing is stored or put in history.
-- **CSS:** `commit-*` rules under "Commits view (Paper)" in `dashboard.css`, built from tokens. The 120px type column folds above the subject at ≤1100px.
+- **Blocked commit (#76) — `alertState()` / `mountBlockAlert()` / `openBlockDialog()` / `fetchOverrideStatus()` / `postOverride()`:**
+  - **Fetch.** The mount fetches `GET /api/repo/<name>/override` once, beside `/history` (`overridePromise`). There is no poller, timer or Fleet/sidebar mark. A failed fetch (including the offline snapshot) means no alert. The result is applied only while the toolbar is still connected, the same stale guard as #56.
+  - **Alert.** `button.commit-block-alert[data-kind]`, inserted between `.commit-filters` and `.commit-search`, exists only when `alertState(status)` is non-null. `alertState` is exposed read-only as `GatorViews.history.alertState`.
+    - `none` / `ungoverned` → no alert.
+    - `malformed` / `expired` / `stale` / `legacy` / `incomplete` → "⚑ Commit block needs refresh" (`refresh`).
+    - `unsupported` / `unavailable` / an unknown state → "⚑ Commit status unavailable".
+    - Otherwise, from the CLI's `uncovered_external_rules`, never from `approval.state`: uncovered rules → "⚑ Commit blocked" (`blocked`); pause only → "⚑ Architect decision needed"; fix only → "⚑ Commit fix needed"; pause + fix → "⚑ Commit blocked" (`mixed`, no Approve); else "✓ Approved — retry commit".
+    - The label and glyph carry the meaning; the border colour is only a second cue.
+  - **Dialog.** A native `<dialog class="loop-dialog commit-block-dialog">` opened with `showModal()`, so it gets the Loop dialog styling, centring and compact leading. Contents:
+    - the title (`h2#commit-block-title`), with an optional `p.commit-block-notice[role=status]`;
+    - the scope (`.commit-block-scope-line`: block id, age, local expiry, "Staged change matches/differs"; `.commit-block-files`, the first 8, with a `details.commit-block-more` "+N more" using `files_total`);
+    - labelled groups `section.commit-block-group[data-resolution]`: ⚑ External approval, ⏸ Architect decision required, ✚ Fix required. An external finding's tag reads "✓ Approved by <name>" (`covered`) or "Needs approval";
+    - `.loop-dialog-note` guidance per state and group (covered/still-needed lines, exact-change, pause → the agent session and `commit_draft.md`, fix → retry);
+    - the unsupported, unavailable and incomplete message, with `code.commit-block-command`.
+  - **Approve.** It appears only when `approvableHere()` holds: state `blocked`, uncovered external rules, and `approve_refusal` null or `too-recent`.
+    - Fields: "Architect name" (prefilled from `architect_default`, max 80) and "Reason (required)" (max 200, live "n / 200").
+    - It stays disabled until both are valid and `approve_wait_seconds` (from fetch time) has passed. The label reads "Approve (available in Ns)", ticking with one-second `setTimeout`s while the dialog is open; this is not a server poll.
+  - **Every mutation re-reads first (`preflight()`).** A changed `revision`, state or block id re-renders from the fresh status with "The blocked commit changed. Review it again before approving." (Discard: "… Review it, then confirm again."), keeps the fields, and posts nothing. A failed re-read shows the error and posts nothing.
+    - The POST carries the `block_id` and `revision` the dialog was rendered from (Discard sends `block_id: null` for an unreadable block).
+    - A `block-changed` / `findings-changed` refusal re-fetches and re-renders the same way. Any other refusal keeps the fields and shows the server `message` in `p.loop-ctrl-error[role=alert]`.
+  - **Discard block…** swaps in an inline confirmation ("Discard this blocked attempt and any approval? Nothing is committed…") with Keep and Discard.
+  - **In flight:** `data-sending`, every button and field disabled, Approve reads "Sending…", and the native `cancel` (Escape) is prevented.
+  - **Honesty strings.** Success shows "External approval recorded. Retry the commit in your Git client or agent session.", or, with remaining findings, "External approval recorded. This commit is still blocked until the remaining findings are resolved." Discard shows "Discarded. Nothing was committed…". No string implies a commit happened. The alert is re-fetched after a success.
+  - **Focus.** Closing removes the dialog and returns focus to the alert, or to the search when the alert is gone.
+  - ! TRIPWIRE: the view never classifies a rule or decides coverage; it maps the CLI's answer only. Every CLI-derived string is set with `textContent` (no `innerHTML`, as for commit text).
+  - ! The alert does not depend on the history. With commits it sits in `buildView()`'s toolbar. When the history is empty (a blocked first commit), returns an error, or the request fails, `showMessage()` renders a bare `div.commit-toolbar.commit-toolbar-bare` plus the history's own message (`.commit-placeholder` / `.commit-history-message`), and mounts the same alert there. A history failure never hides a recorded block. With no alert and no search box to return to, closing the dialog focuses `#topbar-title`.
+  - Pinned by `tests/test_dashboard_ui/test_commits_block_ui.py`; the text roles by the `commits-block-dialog` surface of `test_no_text_inherits_root_type`.
+- **CSS:** `commit-*` rules under "Commits view (Paper)" in `dashboard.css`, built from tokens. The 120px type column folds above the subject at ≤1100px. The `commit-block-*` rules (alert, scope, groups, findings, tags, notice/success, count, command) are scoped additions with explicit text roles. At ≤600px the toolbar stacks and the alert takes its own full-width row.
   - The old commit-list classes (`.history-commit`, `-header`, `-subject`, `-meta`, `-badge`, `-body`) are gone.
   - ! The `.history-toggle-btn`, `.history-dropdown`, `.history-item`, `.history-active`, `.history-hash`, `.history-date` and `.history-msg` rules belong to the **Repo branch-history dropdown** (`#topbar-repo-tools`) and stay.
   - The old view's second `.history-hash` rule used to restyle that dropdown through the cascade; its properties were folded into the dropdown's own rule, so the dropdown looks the same.

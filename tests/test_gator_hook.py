@@ -484,3 +484,30 @@ class TestMainSeamWiring:
             f"main() with cwd={subdir} and hook='pre-commit' passed "
             f"{captured[0]!r} instead of the subdirectory. Commit "
             f"hooks must NOT walk to git top-level.")
+
+
+@pytest.mark.parametrize("argv, to_stderr", [
+    (["override", "status", "--json"], True),
+    (["approve", "--json", "--name", "A", "--reason", "r"], True),
+    (["override", "status"], False),
+    (["session-open"], False),
+])
+def test_json_override_advisory_goes_to_stderr(tmp_path, monkeypatch, capsys,
+                                               argv, to_stderr):
+    """#76: the Dashboard parses `override ... --json` stdout as one JSON
+    object, so the dispatcher's runtime advisory goes to stderr there;
+    every other call keeps it on stdout."""
+    _git_init(tmp_path)
+    (tmp_path / ".gator").mkdir()
+    monkeypatch.chdir(tmp_path)
+    # The real call rewraps sys.stdout, which would bypass capsys.
+    monkeypatch.setattr(hook, "ensure_utf8_stdout", lambda: None)
+    monkeypatch.setattr(hook, "resolve_governed_runtime", lambda rr: {
+        "mode": "ungoverned", "pin_version": None, "cli_version": "9.9.9",
+        "reason": "test-mock"})
+
+    assert hook.main(argv) == 0
+    out, err = capsys.readouterr()
+    advisory = "governance hooks are installed"
+    assert (advisory in err) is to_stderr
+    assert (advisory in out) is (not to_stderr)

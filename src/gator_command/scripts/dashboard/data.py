@@ -4,12 +4,13 @@ Handles registry loading, standalone data collection, repo path
 resolution, search, history, and repo key injection.
 """
 
+import json
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dashboard.helpers import run_json, run_text, git_run
+from dashboard.helpers import run_json, run_text, git_run, run_override_cli
 
 from gator_core import (
     import_sibling,
@@ -311,6 +312,276 @@ def resolve_repo_gatorize(repo_name, registry_repos=None, fleet_data=None,
         },
         "status": 200,
     }
+
+
+# ── blocked-commit override relay (#76) ───────────────────────────────────────
+#
+# The Dashboard relays the repository's own override CLI
+# (`gator hook override ... --json`, via helpers.run_override_cli) and
+# serves only an allowlisted projection of its answer. It never reads the
+# Git-private override state, never imports repository modules, and never
+# decides approvability: the CLI's refusal sequence does.
+
+OVERRIDE_STATUS_SCHEMA = "gator-override-status-v1"
+OVERRIDE_APPROVE_SCHEMA = "gator-override-approve-v1"
+OVERRIDE_CANCEL_SCHEMA = "gator-override-cancel-v1"
+_OVERRIDE_STATES = frozenset({
+    "none", "blocked", "approved", "stale", "expired", "malformed", "legacy",
+    "unavailable",
+})
+_OVERRIDE_RESOLUTIONS = frozenset({"external-approval", "pause", "fix-required"})
+_OVERRIDE_REFUSALS = frozenset({
+    "no-block", "malformed", "block-changed", "findings-changed", "unavailable",
+    "tree-changed", "expired", "legacy", "nothing-approvable", "too-recent",
+    "invalid-input", "write-failed", "too-many-findings",
+})
+_OVERRIDE_TEXT_MAX = 2000
+_OVERRIDE_FILES_MAX = 500
+_OVERRIDE_FINDINGS_MAX = 200
+_OVERRIDE_NAME_MAX = 80
+_OVERRIDE_REASON_MAX = 200
+_BLOCK_ID_RE = re.compile(r"^[0-9a-f]{8}$")
+_REVISION_RE = re.compile(r"^[0-9a-f]{16}$")
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+_OVERRIDE_TRUNCATED = " … (truncated; see `gator hook override status`)"
+OVERRIDE_INCOMPLETE_MESSAGE = (
+    "This blocked commit has {total} findings, more than the Dashboard can "
+    "show in full, so it cannot be approved here. Review and approve it with "
+    "`gator hook override status` and `gator hook override approve` in a "
+    "terminal, or discard it.")
+OVERRIDE_UNSUPPORTED_MESSAGE = (
+    "This repository's Gator runtime cannot report blocked commits to the "
+    "Dashboard. Run `gator update` in the repository, or use "
+    "`gator hook override status` in a terminal.")
+
+
+def _ov_text(value, cap=_OVERRIDE_TEXT_MAX):
+    return value[:cap] if isinstance(value, str) else None
+
+
+def _ov_num(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def _ov_list(value, cap):
+    if not isinstance(value, list):
+        return []
+    return [v[:_OVERRIDE_TEXT_MAX] for v in value[:cap] if isinstance(v, str)]
+
+
+def _ov_parse(stdout, schema):
+    try:
+        obj = json.loads((stdout or "").strip())
+    except ValueError:
+        return None
+    if not isinstance(obj, dict) or obj.get("schema") != schema:
+        return None
+    return obj
+
+
+def shape_override_status(stdout, stderr, exit_code):
+    """Allowlisted gator-override-status-v1 projection of the CLI's output.
+
+    Exit 0 with no stdout is a dispatcher skip (ungoverned branch, no
+    runtime): ``state: ungoverned``. Output that is not one status object
+    (an older runtime's argparse exit 2, text, another schema) is
+    ``state: unsupported``. Human CLI text is never parsed.
+    """
+    if exit_code == 0 and not (stdout or "").strip():
+        return {"schema": OVERRIDE_STATUS_SCHEMA, "state": "ungoverned"}
+    obj = _ov_parse(stdout, OVERRIDE_STATUS_SCHEMA)
+    if obj is None or obj.get("state") not in _OVERRIDE_STATES:
+        return {"schema": OVERRIDE_STATUS_SCHEMA, "state": "unsupported",
+                "message": OVERRIDE_UNSUPPORTED_MESSAGE,
+                "command": "gator hook override status"}
+    block = obj.get("block")
+    block_view = None
+    if isinstance(block, dict) and _ov_text(block.get("block_id")):
+        block_view = {
+            "block_id": _ov_text(block.get("block_id"), 64),
+            "created_at": _ov_text(block.get("created_at"), 64),
+            "created_epoch": _ov_num(block.get("created_epoch")),
+            "expires_at": _ov_text(block.get("expires_at"), 64),
+            "expires_epoch": _ov_num(block.get("expires_epoch")),
+            "age_seconds": _ov_num(block.get("age_seconds")),
+            "tree_matches": block.get("tree_matches") is True,
+            "files": _ov_list(block.get("files"), _OVERRIDE_FILES_MAX),
+            "files_total": (len(block["files"]) if isinstance(block.get("files"), list)
+                            else 0),
+        }
+    findings = []
+    raw_findings = obj.get("findings") if isinstance(obj.get("findings"), list) else []
+    # Every finding must reach the Architect before anything is approvable:
+    # if any finding is over the cap or cannot be represented, the status
+    # becomes the read-only `incomplete` state below (never silently cut).
+    complete = len(raw_findings) <= _OVERRIDE_FINDINGS_MAX
+    for f in raw_findings[:_OVERRIDE_FINDINGS_MAX]:
+        if (not isinstance(f, dict) or not _ov_text(f.get("rule"))
+                or f.get("resolution") not in _OVERRIDE_RESOLUTIONS):
+            complete = False
+            continue
+        message = f.get("message") if isinstance(f.get("message"), str) else ""
+        if len(message) > _OVERRIDE_TEXT_MAX:
+            message = message[:_OVERRIDE_TEXT_MAX] + _OVERRIDE_TRUNCATED
+        findings.append({
+            "rule": _ov_text(f.get("rule"), 120),
+            "resolution": f["resolution"],
+            "message": message,
+            "covered": f.get("covered") is True,
+            "legacy": f.get("legacy") is True,
+        })
+    approval = obj.get("approval") if isinstance(obj.get("approval"), dict) else {}
+    approval_view = {
+        "state": _ov_text(approval.get("state"), 32),
+        "detail": _ov_text(approval.get("detail")),
+        "approval_id": _ov_text(approval.get("approval_id"), 64),
+        "approved_by": _ov_text(approval.get("approved_by"), _OVERRIDE_NAME_MAX),
+        "approved_at": _ov_text(approval.get("approved_at"), 64),
+        "approved_rules": _ov_list(approval.get("approved_rules"), _OVERRIDE_FINDINGS_MAX),
+    }
+    revision = obj.get("revision")
+    refusal = obj.get("approve_refusal")
+    wait = _ov_num(obj.get("approve_wait_seconds"))
+    delay = _ov_num(obj.get("min_approval_delay_seconds"))
+    shaped = {
+        "schema": OVERRIDE_STATUS_SCHEMA,
+        "state": obj["state"],
+        "revision": revision if isinstance(revision, str) and _REVISION_RE.match(revision) else None,
+        "malformed": [m for m in _ov_list(obj.get("malformed"), 2) if m in ("block", "approval")],
+        "block": block_view,
+        "findings": findings,
+        "approval": approval_view,
+        "approvable_rules": _ov_list(obj.get("approvable_rules"), _OVERRIDE_FINDINGS_MAX),
+        "covered_rules": _ov_list(obj.get("covered_rules"), _OVERRIDE_FINDINGS_MAX),
+        "uncovered_external_rules": _ov_list(obj.get("uncovered_external_rules"),
+                                             _OVERRIDE_FINDINGS_MAX),
+        "can_approve": obj.get("can_approve") is True,
+        "approve_refusal": refusal if refusal in _OVERRIDE_REFUSALS else None,
+        "approve_wait_seconds": max(0, min(int(wait), 3600)) if wait is not None else 0,
+        "min_approval_delay_seconds": int(delay) if delay is not None else None,
+        "architect_default": _ov_text(obj.get("architect_default"), _OVERRIDE_NAME_MAX),
+    }
+    if obj["state"] == "unavailable":
+        shaped["message"] = _ov_text(obj.get("message")) or ""
+    if not complete and obj["state"] in ("blocked", "approved"):
+        # A transport limit, not a policy decision: nothing is approvable
+        # from the Dashboard, and the terminal shows every finding.
+        shaped.update({
+            "state": "incomplete",
+            "findings_total": len(raw_findings),
+            "can_approve": False,
+            "approve_refusal": "too-many-findings",
+            "uncovered_external_rules": [],
+            "message": OVERRIDE_INCOMPLETE_MESSAGE.format(total=len(raw_findings)),
+            "command": "gator hook override status",
+        })
+    return shaped
+
+
+def shape_override_result(stdout, stderr, exit_code, action):
+    """(data, http_status) for an approve/cancel CLI answer.
+
+    200 on success; 409 on a CLI refusal, an unsupported runtime or a
+    dispatcher skip (each with a ``refusal`` code and ``message``).
+    """
+    schema = OVERRIDE_APPROVE_SCHEMA if action == "approve" else OVERRIDE_CANCEL_SCHEMA
+    command = f"gator hook override {action}"
+    if exit_code == 0 and not (stdout or "").strip():
+        return ({"ok": False, "refusal": "unavailable", "command": command,
+                 "message": "Gator did not run for this repository; the current "
+                            "branch may not be governed."}, 409)
+    obj = _ov_parse(stdout, schema)
+    if obj is None:
+        return ({"ok": False, "refusal": "unsupported-runtime", "command": command,
+                 "message": OVERRIDE_UNSUPPORTED_MESSAGE}, 409)
+    remaining = obj.get("remaining") if isinstance(obj.get("remaining"), dict) else {}
+    data = {
+        "ok": obj.get("ok") is True,
+        "message": _ov_text(obj.get("message")) or "",
+        "remaining": {
+            "fix_required": _ov_list(remaining.get("fix_required"), _OVERRIDE_FINDINGS_MAX),
+            "paused": _ov_list(remaining.get("paused"), _OVERRIDE_FINDINGS_MAX),
+        },
+    }
+    if data["ok"]:
+        if action == "approve" and isinstance(obj.get("approval"), dict):
+            a = obj["approval"]
+            data["approval"] = {
+                "approval_id": _ov_text(a.get("approval_id"), 64),
+                "block_id": _ov_text(a.get("block_id"), 64),
+                "approved_rules": _ov_list(a.get("approved_rules"), _OVERRIDE_FINDINGS_MAX),
+                "approved_by": _ov_text(a.get("approved_by"), _OVERRIDE_NAME_MAX),
+                "expires_at": _ov_text(a.get("expires_at"), 64),
+            }
+        if action == "cancel":
+            data["removed"] = _ov_list(obj.get("removed"), 10)
+        return data, 200
+    refusal = obj.get("refusal")
+    data["refusal"] = refusal if refusal in _OVERRIDE_REFUSALS else "refused"
+    retry = _ov_num(obj.get("retry_after_seconds"))
+    data["retry_after_seconds"] = int(retry) if retry is not None else None
+    return data, 409
+
+
+def override_cli_args(action, body):
+    """(argv, error) for an approve/cancel POST body. Validates before any
+    subprocess; request text only ever becomes separate argv values."""
+    if not isinstance(body, dict):
+        return None, "request body must be a JSON object"
+    revision = body.get("revision")
+    if not isinstance(revision, str) or not _REVISION_RE.match(revision):
+        return None, "revision must be 16 lowercase hex characters"
+    block_id = body.get("block_id")
+    if block_id is None and action == "cancel":
+        args = ["cancel", "--json", "--expect-revision", revision]
+        return args, None
+    if not isinstance(block_id, str) or not _BLOCK_ID_RE.match(block_id):
+        return None, "block_id must be 8 lowercase hex characters"
+    args = [action, "--json", "--expect-block", block_id, "--expect-revision", revision]
+    if action == "cancel":
+        return args, None
+    fields = {}
+    for key, cap in (("name", _OVERRIDE_NAME_MAX), ("reason", _OVERRIDE_REASON_MAX)):
+        value = body.get(key)
+        if not isinstance(value, str) or not value.strip():
+            return None, f"{key} is required"
+        value = value.strip()
+        if len(value) > cap:
+            return None, f"{key} is limited to {cap} characters"
+        if _CONTROL_RE.search(value):
+            return None, f"{key} must not contain control characters"
+        fields[key] = value
+    return args + ["--name", fields["name"], "--reason", fields["reason"]], None
+
+
+def resolve_repo_override(action, repo_path, body=None, run_fn=None):
+    """Run one override action for a resolved repository path.
+
+    ``action`` is "status", "approve" or "cancel". Returns
+    {"data": ..., "status": ...}. Testable without HTTP (inject run_fn).
+    """
+    runner = run_fn or run_override_cli
+    if action == "status":
+        return {"data": shape_override_status(*runner(repo_path, "status", "--json")),
+                "status": 200}
+    args, error = override_cli_args(action, body)
+    if error:
+        return {"data": {"error": error}, "status": 400}
+    if action == "approve":
+        # Enforce the incomplete-findings rule on the server too, so a
+        # direct POST cannot approve findings the Dashboard never showed.
+        current = shape_override_status(*runner(repo_path, "status", "--json"))
+        if current.get("state") == "incomplete":
+            return {"data": {"ok": False, "refusal": "too-many-findings",
+                             "message": current["message"],
+                             "command": "gator hook override approve",
+                             "retry_after_seconds": None,
+                             "remaining": {"fix_required": [], "paused": []}},
+                    "status": 409}
+    data, status = shape_override_result(*runner(repo_path, *args), action)
+    return {"data": data, "status": status}
 
 
 # ── data injection ────────────────────────────────────────────────────────────

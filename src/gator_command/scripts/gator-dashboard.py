@@ -69,6 +69,7 @@ from dashboard.data import (  # noqa: E402
     resolve_audit_sessions as _resolve_audit_sessions,
     resolve_repo_update as _resolve_repo_update,
     resolve_repo_gatorize as _resolve_repo_gatorize,
+    resolve_repo_override as _resolve_repo_override,
     resolve_discovery_roots as _resolve_discovery_roots,
     inject_repo_keys as _inject_repo_keys,
     parse_search_query as _parse_search_query,
@@ -2509,6 +2510,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._handle_audit_sessions()
                 return
 
+        # Blocked-commit override status (#76) — relays the repository's
+        # own `gator hook override status --json`; never reads the state.
+        if path.startswith("/api/repo/") and path.endswith("/override"):
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy("no-store")
+                    return
+                repo_name = path[len("/api/repo/"):-len("/override")]
+                if not repo_name:
+                    self._send_json({"error": "repo name required"}, 400)
+                    return
+                repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+                if not repo_path or not Path(repo_path).is_dir():
+                    self._send_json({"error": "repo not accessible"}, 400)
+                    return
+                result = _resolve_repo_override("status", repo_path)
+                self._send_json(result["data"], result["status"],
+                                cache_control="no-store")
+                return
+
         # Commit history — git log based, no session dependency
         if path.startswith("/api/repo/") and path.endswith("/history"):
             with _heavy_work() as admitted:
@@ -4205,6 +4226,45 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self._with_repo_action(repo_name, target, source, run)
 
+    _OVERRIDE_BODY_MAX = 4096
+
+    def _handle_override_post(self, repo_name, action):
+        """Approve or cancel a blocked commit through the repository's own
+        override CLI (#76). Same-repository exclusion as lifecycle actions;
+        `_check_post_auth()` and the drain gate already ran in `do_POST`."""
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            self._send_json({"error": "invalid Content-Length"}, 400)
+            return
+        if length > self._OVERRIDE_BODY_MAX:
+            self.close_connection = True
+            self._send_json({"error": "request body too large"}, 413)
+            return
+        body = self.rfile.read(length) if length > 0 else b""
+        try:
+            req = json.loads(body) if body else {}
+        except ValueError:
+            self._send_json({"error": "request body must be JSON"}, 400)
+            return
+        if not repo_name:
+            self._send_json({"error": "repo name required"}, 400)
+            return
+        target, source = _resolve_action_target(
+            repo_name, _registry_snapshot(), _fleet_snapshot())
+        if target is None:
+            self._send_json({"error": f"repo '{repo_name}' not found"}, 404)
+            return
+        if not Path(target).is_dir():
+            self._send_json({"error": "repo not accessible"}, 400)
+            return
+
+        def run():
+            result = _resolve_repo_override(action, target, req)
+            self._send_json(result["data"], result["status"], cache_control="no-store")
+
+        self._with_repo_action(repo_name, target, source, run)
+
     def _config_owned(self, repo_name, repo_path, req):
         """Config POST body; the caller owns `_repo_action(repo_path)`."""
         config_path = Path(repo_path) / ".gator" / "config.json"
@@ -4307,6 +4367,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/repo-by-key/"):
             self._dispatch_loop_post(path)
             return
+
+        # POST /api/repo/<name>/override/{approve,cancel} (#76)
+        for action in ("approve", "cancel"):
+            suffix = "/override/" + action
+            if path.startswith("/api/repo/") and path.endswith(suffix):
+                self._handle_override_post(path[len("/api/repo/"):-len(suffix)], action)
+                return
 
         # POST /api/repos/register — add a repo to the dashboard registry
         if path == "/api/repos/register":

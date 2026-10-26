@@ -96,6 +96,7 @@ Resolve the correct repo, choose the governed runtime, and invoke the selected h
 <- managed Git wrappers and vendor settings
 -> `_resolve_repo_root()`, `resolve_governed_runtime()`, `plan_dispatch()`
 ! Child cwd and governance lookup use the same resolved repo root.
+! The runtime advisory (for example `cli-newer`) is printed to stdout, except for an `override` / `approve` call whose passthrough contains `--json` (#76): there it goes to stderr, so stdout is exactly the child's JSON object for the Dashboard override relay. Pinned by `test_json_override_advisory_goes_to_stderr`.
 ! Do not broaden Git-root resolution to commit hooks without a separate compatibility decision.
 
 ## Before Changing This Module

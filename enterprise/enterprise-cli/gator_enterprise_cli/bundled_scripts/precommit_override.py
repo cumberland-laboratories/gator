@@ -612,6 +612,20 @@ def block_age_seconds(block, now=None):
     return max(0.0, now - block.get("created_epoch", now))
 
 
+def approval_coverage(approval, rule_resolutions):
+    """Rules a valid ``approval`` removes from an attempt. Read-only.
+
+    ``rule_resolutions`` is an iterable of (rule, resolution). A rule is
+    covered only when the approval names it AND it is external-approval.
+    The one coverage definition: apply_approval() uses it for the hook, and
+    `gator hook override status --json` for its covered/uncovered report.
+    The caller decides validity (inspect() == "valid") first.
+    """
+    approved = set(approval.get("approved_rules", []))
+    return {rule for rule, resolution in rule_resolutions
+            if rule in approved and is_approvable(resolution)}
+
+
 def apply_approval(sdir, tree, failures, resolutions=None):
     """Apply a stored approval to this attempt's failures. The one approval
     decision shared by every validate path (strict and Enterprise
@@ -639,9 +653,8 @@ def apply_approval(sdir, tree, failures, resolutions=None):
     if insp["state"] != "valid":
         return list(failures), None, notes
     approval = insp["approval"]
-    approved = set(approval["approved_rules"])
-    covered_rules = {r for r, _ in failures
-                     if r in approved and is_approvable(classify(r, resolutions))}
+    covered_rules = approval_coverage(
+        approval, [(r, classify(r, resolutions)) for r, _ in failures])
     if not covered_rules:
         return list(failures), None, notes
     remaining = [(r, m) for r, m in failures if r not in covered_rules]

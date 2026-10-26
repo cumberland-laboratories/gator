@@ -249,7 +249,11 @@ def main(argv=None):
     plan = plan_dispatch(hook_name, repo_root, decision)
 
     if plan["advisory"]:
-        print(plan["advisory"])
+        # #76: a JSON override call's stdout must be exactly the child's
+        # JSON object (the Dashboard parses it), so the advisory goes to
+        # stderr there. Every other hook keeps its stdout output.
+        json_call = hook_name in ("override", "approve") and "--json" in passthrough
+        print(plan["advisory"], file=sys.stderr if json_call else sys.stdout)
     if plan["action"] != "run":
         return plan["exit_code"]
 
