@@ -67,9 +67,20 @@ It does this on every run:
 2. Writes `rules\default.rules` with exactly the rule in Setup step 3, and a
    Gator-owned block at the end of `config.toml` with
    `[windows] sandbox = "elevated"` and a trust entry for this repository.
-   Your other settings in that `config.toml` are kept.
-3. Checks the rule with `codex execpolicy check`: `gator loop status` must be
-   allowed, and `git write-tree` and `gator loop end` must match nothing.
+   Your other settings in that `config.toml` are kept. Settings that Codex
+   writes into Gator's block (for example the hook trust it records after you
+   approve the session-start hooks) are moved just above the block,
+   unchanged, so Codex does not ask again. The block also points `TEMP` and
+   `TMP` at a sandbox temp folder next to the home
+   (`~/.gator/adapters/codex/loop-home.sandbox-tmp`) and makes that folder
+   writable for the sandbox, so tests run inside the sandbox (see
+   Participant Guidance).
+3. Checks the whole rule file, including any saved approvals, with
+   `codex execpolicy check` before it writes anything: `gator loop status`
+   must be allowed, and `git write-tree` and `gator loop end` must match
+   nothing. If a saved approval makes a check fail, Gator names it by its
+   position. Remove or narrow that `prefix_rule(...)` line, then run the
+   command again.
 4. Prints the trust cost, then starts `codex` with `CODEX_HOME` set for that
    Codex process only. Your terminal's environment does not change.
 
@@ -82,10 +93,23 @@ or read your normal Codex login. Then continue as usual:
 launch without writing or starting anything.
 
 The command never starts, joins, or authorizes a loop, and it never takes a
-token. It **stops without changes** when it finds a rule file it did not
-write, another file in `rules\`, your own `[windows]` table or trust entry for
-this repository outside its block, or a failed rule check. In that case use
-the manual Setup below. It runs only on Windows, the verified surface. A Codex
+token.
+
+**Saved approvals.** When you approve a command in Codex with "don't ask
+again", Codex saves a `prefix_rule(...)` line after the Gator rule in
+`rules\default.rules`. `gator loop codex` keeps these saved approvals
+unchanged. It lists each one in `--dry-run` and before every launch, with the
+credentials it recognises (loop tokens, passwords, keys, authorization
+headers) hidden. A saved `allow` runs outside the Codex sandbox with your full
+user rights, like the Gator rule. A secret with no marker cannot be
+recognised and is shown as saved. To remove an approval, delete its
+`prefix_rule(...)` line.
+
+It **stops without changes** when the rule file holds anything else (an edited
+Gator rule, or saved content it cannot read or show safely), another file in
+`rules\`, your own `[windows]` table or trust entry for this repository
+outside its block, or a failed rule check. In that case use the manual Setup
+below. It runs only on Windows, the verified surface. A Codex
 version other than the verified one prints a warning; the rule check still
 runs.
 
@@ -194,6 +218,15 @@ This was not tested live. A Draftor still needs one host approval for
   prompt when the profile is not active. Do not `gator loop escalate` for
   it, and do not submit findings about it. A direct `git write-tree` stays
   outside the profile's allow-list.
+- **Run tests sandboxed.** With `gator loop codex`, `python -m pytest`
+  runs inside the Codex sandbox without a prompt: the sandbox temp folder
+  replaces `%TEMP%`, whose `pytest-of-<user>` folder the sandbox account
+  cannot read. Do not approve tests to run outside the sandbox. Such a
+  command gets the same `TEMP`, runs as you, and cannot use the
+  `pytest-of-<user>` folder the sandbox account created there. A saved
+  unsandboxed pytest approval is therefore not a fallback in this profile.
+  Verified with Codex `0.162.1` (spike artifact
+  `2026-10-27-codex-sandbox-temp-spike.md`).
 - **`git_busy` now means only real Git lock contention** (another Git
   process holds `index.lock`). One retry may help.
 - Copy the role token exactly. A mis-copied token fails safely with

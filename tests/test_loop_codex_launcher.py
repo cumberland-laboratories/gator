@@ -5,6 +5,7 @@ plan / apply seams directly on temp directories (validate_home's temp-dir
 refusal is exercised separately with an injected tempdir).
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -69,8 +70,12 @@ def test_prepare_fresh_home_writes_only_rule_and_config(tmp_path):
     assert (home / "rules" / "default.rules").read_bytes() == cl.RULE_BYTES
     config = (home / "config.toml").read_text(encoding="utf-8")
     key = cl.trust_key(repo, "win32")
+    root = tmp_path / "home.sandbox-tmp"  # #87: a sibling of the home, never inside it
+    assert cl.sandbox_temp_root(home) == root and root.is_dir()
     assert config == (
         f"{cl.BLOCK_BEGIN}\n[windows]\nsandbox = \"elevated\"\n\n"
+        f"[shell_environment_policy.set]\nTEMP = '{root}'\nTMP = '{root}'\n\n"
+        f"[sandbox_workspace_write]\nwritable_roots = ['{root}']\n\n"
         f"[projects.'{key}']\ntrust_level = \"trusted\"\n{cl.BLOCK_END}\n")
     assert key == key.lower() and "/" not in key
 
@@ -129,14 +134,115 @@ def _seed(home, rule=None, extra=None, config=None):
         (home / "config.toml").write_text(config, encoding="utf-8")
 
 
+# Shaped like the live file of 2026-10-26: Codex appended a pytest approval and
+# a token-bound PowerShell approval after the Gator rule (#87).
+LIVE_SUFFIX = (
+    'prefix_rule(pattern=["pytest"], decision="allow")\n'
+    'prefix_rule(pattern=["C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe", '
+    '"-Command", "gator loop submit-review --token glp_Y29tbWl0cw --file .tmp/a.md --approve; '
+    'exit $LASTEXITCODE"], decision="allow")\n'
+).encode("utf-8")
+
+
+def _rule(pattern, decision="allow"):
+    return f"prefix_rule(pattern={json.dumps(pattern)}, decision={json.dumps(decision)})\n".encode()
+
+
+# Rule-file contents that must refuse. "s3cr3t" must never reach the message.
+RULE_REFUSALS = {
+    "suffix-syntax-error": cl.RULE_BYTES + b'prefix_rule(pattern=["s3cr3t"], decision="allow"\n',
+    "suffix-assignment": cl.RULE_BYTES + b'x = "s3cr3t"\n',
+    "suffix-other-call": cl.RULE_BYTES + b'host_executable(name="s3cr3t")\n',
+    "suffix-positional": cl.RULE_BYTES + b'prefix_rule(["s3cr3t"], decision="allow")\n',
+    "suffix-unknown-kw": cl.RULE_BYTES + b'prefix_rule(pattern=["a"], decision="allow", foo="s3cr3t")\n',
+    "suffix-bad-decision": cl.RULE_BYTES + _rule(["a"], "s3cr3t"),
+    "suffix-non-string": cl.RULE_BYTES + b'prefix_rule(pattern=["s3cr3t", 1], decision="allow")\n',
+    "suffix-duplicate-gator": cl.RULE_BYTES + _rule(
+        ["gator", "loop", ["status", "wait", "submit-draft", "submit-review", "submit-implementation"]]),
+    "suffix-bidi": cl.RULE_BYTES + _rule(["s3cr3t\u202e"]).replace(b"\\u202e", "\u202e".encode()),
+    "suffix-non-utf8": cl.RULE_BYTES + b'prefix_rule(pattern=["\xff"], decision="allow")\n',
+    "suffix-program-hidden": cl.RULE_BYTES + _rule(["--token=s3cr3t"]),
+    "suffix-trailing-flag": cl.RULE_BYTES + _rule(["curl", "--token"]),
+    "suffix-script-quoted-secret": cl.RULE_BYTES + _rule(
+        ["powershell.exe", "-Command", "tool --password='two s3cr3t'; Get-Date"]),
+    "altered-prefix": cl.RULE_BYTES.replace(b'"wait"', b'"wakt"') + LIVE_SUFFIX,
+    "crlf-prefix-and-suffix": cl.RULE_TEXT.replace("\n", "\r\n").encode() + LIVE_SUFFIX,
+}
+
+
+# Shaped like the live config.toml after Codex trusted the session-start hooks
+# (spike E5): Codex appends its tables inside the Gator markers.
+CODEX_TABLES = (
+    '[tui]\nscreen_reader_detection_done = true\n\n'
+    '[tui.model_availability_nux]\n"gpt-6.1-sol" = 1\n\n'
+    '[hooks.state]\n\n'
+    "[hooks.state.'C:\\x\\.codex\\hooks.json:session_start:0:0']\n"
+    'trusted_hash = "sha256:abc"\n'
+)
+
+
+def _live_config(key):
+    return (f'{cl.BLOCK_BEGIN}\n[windows]\nsandbox = "elevated"\n\n'
+            f"[projects.'{key}']\ntrust_level = \"trusted\"\n\n{CODEX_TABLES}{cl.BLOCK_END}\n")
+
+
+def test_config_relocates_codex_tables_out_of_gator_block(tmp_path):
+    """#87 / spike E5-E6: Codex-written tables are kept, unchanged, above the block."""
+    home, repo = tmp_path / "home", _repo(tmp_path)
+    key = cl.trust_key(repo, "win32")
+    _seed(home, rule=cl.RULE_BYTES, config='model = "x"\n\n' + _live_config(key))
+    _prepare(home, repo)
+    text = (home / "config.toml").read_text(encoding="utf-8")
+    assert text.startswith('model = "x"\n\n' + CODEX_TABLES.rstrip("\n") + "\n\n" + cl.BLOCK_BEGIN)
+    block = text[text.index(cl.BLOCK_BEGIN):]
+    assert "[tui" not in block and "hooks.state" not in block
+    assert f"[projects.'{key}']" in block
+    assert {a["action"] for a in cl.plan_preparation(home, repo, "win32")} == {"keep"}
+
+
+def test_config_relocation_keeps_mixed_line_endings(tmp_path):
+    """Relocated Codex text and outside text keep their own terminators."""
+    home, repo = tmp_path / "home", _repo(tmp_path)
+    key = cl.trust_key(repo, "win32")
+    user = b'model = "x"\n'  # LF outside, CRLF Gator block, LF Codex section inside it
+    gator = (f'{cl.BLOCK_BEGIN}\r\n[windows]\r\nsandbox = "elevated"\r\n\r\n'
+             f"[projects.'{key}']\r\ntrust_level = \"trusted\"\r\n").encode("utf-8")
+    codex = b'[tui]\nfoo = "bar"\n'
+    _seed(home, rule=cl.RULE_BYTES)
+    (home / "config.toml").write_bytes(user + b"\r\n" + gator + codex
+                                       + cl.BLOCK_END.encode("utf-8") + b"\r\n")
+    _prepare(home, repo)
+    data = (home / "config.toml").read_bytes()
+    assert data.startswith(user + b"\r\n" + codex + b"\r\n" + cl.BLOCK_BEGIN.encode("utf-8") + b"\r\n")
+    assert data.endswith(cl.BLOCK_END.encode("utf-8") + b"\r\n")
+    assert {a["action"] for a in cl.plan_preparation(home, repo, "win32")} == {"keep"}
+
+
+BLOCK_REFUSALS = {
+    "block-key-before-table": f'{cl.BLOCK_BEGIN}\nfoo = 1\n[windows]\nsandbox = "elevated"\n{cl.BLOCK_END}\n',
+    "block-extra-project-key": (f"{cl.BLOCK_BEGIN}\n[projects.'c:\\other']\ntrust_level = \"trusted\"\n"
+                                f"extra = 1\n{cl.BLOCK_END}\n"),
+    "block-extra-windows-key": f'{cl.BLOCK_BEGIN}\n[windows]\nsandbox = "elevated"\nother = 1\n{cl.BLOCK_END}\n',
+    "block-extra-sandbox-key": (f"{cl.BLOCK_BEGIN}\n[sandbox_workspace_write]\nwritable_roots = ['x']\n"
+                                f"network_access = true\n{cl.BLOCK_END}\n"),
+    # #87: the temp-root tables are Gator's; a user copy outside the block conflicts.
+    "user-shell-env-policy": "[shell_environment_policy]\ninherit = \"all\"\n",
+    "user-sandbox-dotted": "sandbox_workspace_write.writable_roots = ['c:\\\\x']\n",
+}
+
+
 @pytest.mark.parametrize("case", [
     "unfamiliar-rule", "extra-rule-file", "user-windows", "user-windows-dotted",
-    "user-trust-entry", "begin-without-end", "duplicate-begin",
+    "user-trust-entry", "begin-without-end", "duplicate-begin", *RULE_REFUSALS, *BLOCK_REFUSALS,
 ])
 def test_prepare_fails_closed_without_writing(tmp_path, case):
     home, repo = tmp_path / "home", _repo(tmp_path)
     key = cl.trust_key(repo, "win32")
-    if case == "unfamiliar-rule":
+    if case in RULE_REFUSALS:
+        _seed(home, rule=RULE_REFUSALS[case])
+    elif case in BLOCK_REFUSALS:
+        _seed(home, rule=cl.RULE_BYTES, config=BLOCK_REFUSALS[case])
+    elif case == "unfamiliar-rule":
         _seed(home, rule=b"prefix_rule(pattern=['gator'], decision='allow')\n")
     elif case == "extra-rule-file":
         _seed(home, rule=cl.RULE_BYTES, extra="mine.rules")
@@ -154,7 +260,72 @@ def test_prepare_fails_closed_without_writing(tmp_path, case):
     with pytest.raises(cl.ProfileError) as exc:
         cl.plan_preparation(home, repo, "win32")
     assert cl.MANUAL_NOTE in str(exc.value)
+    assert "s3cr3t" not in str(exc.value)
     assert _snapshot(home) == before
+
+
+def test_prepare_keeps_codex_saved_approvals(tmp_path):
+    """#87: Gator's rule plus Codex-saved approvals is kept byte-for-byte."""
+    home, repo = tmp_path / "home", _repo(tmp_path)
+    _seed(home, rule=cl.RULE_BYTES + b"\n# saved by Codex\n" + LIVE_SUFFIX)
+    before = (home / "rules" / "default.rules").read_bytes()
+    actions = cl.plan_preparation(home, repo, "win32")
+    rule_act, = [a for a in actions if a["path"].name == "default.rules"]
+    assert rule_act["action"] == "keep"
+    assert [r.decision for r in rule_act["saved"]] == ["allow", "allow"]
+    assert rule_act["saved"][0].pattern == ("pytest",)
+    cl.apply_preparation(actions)
+    assert (home / "rules" / "default.rules").read_bytes() == before
+
+
+def test_saved_approvals_are_disclosed_in_dry_run_and_launch(tmp_path, monkeypatch, capsys):
+    home, other = tmp_path / "home", tmp_path / "Dry"
+    (other / ".gator").mkdir(parents=True)
+    _seed(home, rule=cl.RULE_BYTES + LIVE_SUFFIX + _rule(["tool", "--password", "two example-secret"]))
+    dry =cl.render_dry_run(cl.plan_preparation(home, other, "win32"), home, other, "win32")
+    rc, _run, _r, _h = _run_main(tmp_path, monkeypatch)
+    launch = capsys.readouterr().out
+    assert rc == 0
+    for text in (dry, launch):
+        assert "saved approvals (kept" in text
+        assert 'allow     ["pytest"]' in text
+        assert "--token <redacted> --file .tmp/a.md" in text
+        assert "glp_Y29tbWl0cw" not in text
+        assert '"tool", "--password", "<redacted>"' in text and "example-secret" not in text
+        assert cl.SAVED_SANDBOX_NOTE in text and cl.SAVED_LIMIT_NOTE in text
+        assert "justification" not in text.split("saved approvals", 1)[1]
+
+
+@pytest.mark.parametrize("pattern,shown", [
+    (("curl", "--header", "Authorization: Bearer example-secret"),
+     ["curl", "--header", "Authorization: <redacted>"]),
+    (("tool", "--password=example-secret"), ["tool", "--password=<redacted>"]),
+    (("tool", "--api-key", "example-secret"), ["tool", "--api-key", "<redacted>"]),
+    (("tool", "x-api-key:example-secret"), ["tool", "x-api-key: <redacted>"]),
+    (("git", "clone", "https://me:example-secret@host/x"),
+     ["git", "clone", "https://<redacted>@host/x"]),
+    (("powershell.exe", "-Command", "gator loop status --token glp_abc; curl -H x Bearer example-secret"),
+     ["powershell.exe", "-Command", "gator loop status --token <redacted>; curl -H x Bearer <redacted>"]),
+    (("gh", ("auth", "api"), "status"), ["gh", ["auth", "api"], "status"]),
+    (("pytest", "tests/test_token.py"), ["pytest", "tests/test_token.py"]),
+    (("tool", "--password", "two example-secret"), ["tool", "--password", "<redacted>"]),
+    (("powershell.exe", "-Command", "tool --password=example-secret; Get-Date"),
+     ["powershell.exe", "-Command", "tool --password=<redacted>; Get-Date"]),
+    (("glp_example-secret",), None),
+    (("curl", "--token"), None),
+    (("curl", "-H", "Authorization:"), None),
+    (("powershell.exe", "-Command", "tool --password='two example-secret'; Get-Date"), None),
+    (("powershell.exe", "-Command", "tool --token example-secret;Get-Date"), None),
+    (("powershell.exe", "-Command", "curl -H Authorization: Bearer example-secret; Get-Date"), None),
+    (("curl", "-H", "Authorization: Bearer example-secret; Get-Date"), None),
+], ids=["header", "assign", "flag", "header-one-word", "userinfo", "script", "alternatives",
+        "plain-words", "multiword-argv-value", "script-assign-then-command",
+        "program-hidden", "trailing-flag", "header-no-value", "script-quoted-value",
+        "script-value-joins-command", "script-header-then-command", "header-then-command"])
+def test_credential_display_policy(pattern, shown):
+    result = cl._safe_pattern(pattern)
+    assert result == shown
+    assert "example-secret" not in json.dumps(result)
 
 
 def test_config_refuses_unquotable_repo_path(tmp_path):
@@ -194,6 +365,63 @@ def test_home_validation_refuses(tmp_path, monkeypatch, where):
         cl.validate_home(home, repo, env, tempdir=tempdir)
 
 
+@pytest.mark.parametrize("where", ["root-is-repo", "root-contains-repo", "root-in-temp",
+                                   "root-in-caller-codex-home", "root-contains-normal-codex"])
+def test_temp_root_validation_refuses_overlap(tmp_path, monkeypatch, where):
+    """#87: the sandbox-writable sibling is validated on its own, both directions."""
+    fake_user = tmp_path / "user"
+    monkeypatch.setattr(cl.Path, "home", classmethod(lambda cls: fake_user))
+    base = tmp_path / "base"
+    home = base / "selected"
+    root = cl.sandbox_temp_root(home)
+    env, tempdir, repo = {}, tmp_path / "temp", tmp_path / "Repo"
+    if where == "root-is-repo":
+        repo = root
+    elif where == "root-contains-repo":
+        repo = root / "project"
+    elif where == "root-in-temp":
+        tempdir = base
+    elif where == "root-in-caller-codex-home":
+        env["CODEX_HOME"] = str(base)
+    elif where == "root-contains-normal-codex":
+        fake_user = root / "user"
+        monkeypatch.setattr(cl.Path, "home", classmethod(lambda cls: fake_user))
+    with pytest.raises(cl.ProfileError):
+        cl.validate_temp_root(root, home, repo, env, tempdir=tempdir)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="directory junctions (mklink /J) are Windows-only")
+def test_temp_root_refuses_junction_and_main_writes_nothing(tmp_path, monkeypatch, capsys):
+    """A junction at the root is refused before any planning or write."""
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    root = tmp_path / "home.sandbox-tmp"
+    res = _subprocess.run(["cmd", "/c", "mklink", "/J", str(root), str(target)],
+                          capture_output=True, text=True)
+    if res.returncode != 0:
+        pytest.skip("cannot create a directory junction here")
+    rc, run, _r, home = _run_main(tmp_path, monkeypatch)
+    assert rc == 1 and run.calls == []
+    assert not home.exists() and list(target.iterdir()) == []
+    assert "link or junction" in capsys.readouterr().err
+
+
+def test_main_refuses_sibling_root_that_is_the_repository(tmp_path, monkeypatch, capsys):
+    """The reviewer's case: home = <base>/selected, repo = <base>/selected.sandbox-tmp."""
+    fake_user = tmp_path / "user"
+    monkeypatch.setattr(cl.Path, "home", classmethod(lambda cls: fake_user))
+    repo = tmp_path / "selected.sandbox-tmp"
+    (repo / ".gator").mkdir(parents=True)
+    before = _snapshot(repo)
+    home = tmp_path / "selected"
+    run = FakeRun()
+    rc = cl.main(_args(home=str(home)), env={"PATH": "x"}, platform="win32",
+                 which=lambda name: "C:/bin/codex.CMD", run=run, cwd=repo, tempdir=tmp_path / "temp")
+    assert rc == 1 and run.calls == []
+    assert not home.exists() and _snapshot(repo) == before
+    assert "overlaps the repository" in capsys.readouterr().err
+
+
 def test_home_default_is_machine_local_and_accepted(tmp_path, monkeypatch):
     fake_user = tmp_path / "user"
     monkeypatch.setattr(cl.Path, "home", classmethod(lambda cls: fake_user))
@@ -217,6 +445,10 @@ def test_dry_run_preview_is_read_only(tmp_path):
     assert f"[projects.'{cl.trust_key(repo, 'win32')}']" in text
     assert 'pattern = ["gator", "loop", ["status", "wait"' in text
     assert "CODEX_HOME=" in text and "nothing is written or launched" in text
+    assert "saved approvals" not in text
+    assert f"sandbox temp root:    {cl.sandbox_temp_root(home)}" in text
+    assert cl.SANDBOX_TEMP_NOTE in text
+    assert not cl.sandbox_temp_root(home).exists()
     assert {a["action"] for a in actions} == {"mkdir", "write"}
 
 
@@ -246,6 +478,7 @@ class FakeRun:
 
     def __init__(self, policy=None, launch_rc=0, version="codex-cli 0.144.1"):
         self.calls = []
+        self.rules_seen = []
         self.policy = policy or {}
         self.launch_rc = launch_rc
         self.version = version
@@ -255,11 +488,12 @@ class FakeRun:
         if cmd[1:] == ["--version"]:
             return _types.SimpleNamespace(returncode=0, stdout=self.version, stderr="")
         if cmd[1:3] == ["execpolicy", "check"]:
+            self.rules_seen.append(Path(cmd[cmd.index("--rules") + 1]).read_bytes())
             probe = tuple(cmd[cmd.index("--") + 1:])
             key = probe[:2] if probe[0] == "git" else probe[:3]
             default = ALLOW_OUT if key == ("gator", "loop", "status") else NO_MATCH_OUT
-            rc, out = self.policy.get(key, (0, default))
-            return _types.SimpleNamespace(returncode=rc, stdout=out, stderr="")
+            rc, out, *err = self.policy.get(key, (0, default))
+            return _types.SimpleNamespace(returncode=rc, stdout=out, stderr=err[0] if err else "")
         return _types.SimpleNamespace(returncode=self.launch_rc, stdout="", stderr="")
 
     def launches(self):
@@ -299,6 +533,7 @@ def test_launch_passes_codex_home_to_child_only(tmp_path, monkeypatch, capsys):
                for c, kw2 in run.calls if c[1:3] == ["execpolicy", "check"])
     out = capsys.readouterr().out
     assert "Trust cost" in out and "OUTSIDE the Codex sandbox" in out
+    assert cl.SANDBOX_TEMP_NOTE in out and cl.sandbox_temp_root(home.resolve()).is_dir()
     assert "sign in for this isolated Gator Loop profile" in out
     assert "warning: Codex" not in out
 
@@ -312,10 +547,70 @@ def test_launch_passes_codex_home_to_child_only(tmp_path, monkeypatch, capsys):
 ], ids=["status-not-allowed", "write-tree-matched", "loop-end-matched", "nonzero-exit", "non-json"])
 def test_launch_policy_gate_blocks_launch(tmp_path, monkeypatch, capsys, probe, result):
     run = FakeRun(policy={probe: result})
-    rc, run, _repo_, _home = _run_main(tmp_path, monkeypatch, run=run)
+    rc, run, _repo_, home = _run_main(tmp_path, monkeypatch, run=run)
     assert rc == 1
     assert run.launches() == []
+    assert not home.exists()  # the boundary is proven before anything is written
+    assert not cl.sandbox_temp_root(home).exists()
+    assert run.rules_seen and all(seen == cl.RULE_BYTES for seen in run.rules_seen)
     assert cl.MANUAL_NOTE in capsys.readouterr().err
+
+
+def _match_out(*matches, decision="allow"):
+    return json.dumps({"matchedRules": [
+        {"prefixRuleMatch": {"matchedPrefix": list(p), "decision": d}} for p, d in matches],
+        "decision": decision})
+
+
+@pytest.mark.parametrize("saved,decision,probe,out", [
+    (["git"], "allow", ("git", "write-tree"), _match_out((["git"], "allow"))),
+    (["gator", "loop", "end"], "allow", ("gator", "loop", "end"),
+     _match_out((["gator", "loop", "end"], "allow"))),
+    (["gator", "loop", "status"], "forbidden", ("gator", "loop", "status"),
+     _match_out((["gator", "loop", "status"], "allow"), (["gator", "loop", "status"], "forbidden"),
+                decision="forbidden")),
+    (["pytest"], "allow", None, None),
+], ids=["git-opens-write-tree", "opens-loop-end", "forbids-status", "benign-pytest"])
+def test_saved_approval_policy_gate(tmp_path, monkeypatch, capsys, saved, decision, probe, out):
+    """#87: the whole kept file is proven before any write; a saved approval
+    that opens a protected command is named and stops the launch."""
+    home = tmp_path / "home"
+    rule = cl.RULE_BYTES + _rule(saved, decision)
+    _seed(home, rule=rule)
+    before = _snapshot(home)
+    run = FakeRun(policy={probe: (0, out)} if probe else None)
+    rc, run, _r, _h = _run_main(tmp_path, monkeypatch, run=run)
+    captured = capsys.readouterr()
+    assert run.rules_seen and all(seen == rule for seen in run.rules_seen)
+    if probe is None:
+        assert rc == 0 and len(run.launches()) == 1
+        assert 'allow     ["pytest"]' in captured.out
+        return
+    assert rc == 1 and run.launches() == []
+    assert _snapshot(home) == before  # config.toml was not written
+    assert f"saved approval 1 of 1: {decision} {json.dumps(saved)}" in captured.err
+    assert "Remove or narrow that saved approval" in captured.err
+
+
+SECRET_PREFIX = _match_out((["curl", "-H", "Authorization: Bearer example-secret",
+                             "glp_examplesecrettoken"], "allow"))
+
+
+@pytest.mark.parametrize("probe,result", [
+    (("git", "write-tree"), (0, SECRET_PREFIX)),
+    (("gator", "loop", "status"), (1, "", 'Error: failed to parse policy at x\n\nCaused by:\n'
+                                         '    prefix_rule(pattern=["example-secret"])\n')),
+    (("gator", "loop", "status"), (1, "", 'Error: invalid decision "example-secret"\n')),
+    (("gator", "loop", "status"), (0, '{"matchedRules": [], "decision": "example-secret"}')),
+    (("git", "write-tree"), (0, "not json: example-secret")),
+], ids=["matched-prefix", "parse-traceback", "error-line", "invalid-decision", "non-json"])
+def test_policy_failure_never_echoes_codex_output(tmp_path, monkeypatch, capsys, probe, result):
+    rc, run, _r, _h = _run_main(tmp_path, monkeypatch, run=FakeRun(policy={probe: result}))
+    captured = capsys.readouterr()
+    assert rc == 1 and run.launches() == []
+    assert " ".join(probe) in captured.err
+    for text in (captured.err, captured.out):
+        assert "example-secret" not in text and "glp_examplesecrettoken" not in text
 
 
 @pytest.mark.parametrize("case", ["codex-missing", "non-windows", "not-governed"])
@@ -404,6 +699,16 @@ def test_launch_real_codex_execpolicy_proves_boundary(tmp_path):
     rules.write_bytes(cl.RULE_BYTES)
     env = cl.child_env(os.environ, tmp_path / "codex-home-unused")
     cl.check_policy(_shutil.which("codex"), rules, env, _subprocess.run)
+
+    # #87: a composite file with a benign saved approval still passes ...
+    rules.write_bytes(cl.RULE_BYTES + _rule(["pytest"]))
+    cl.check_policy(_shutil.which("codex"), rules, env, _subprocess.run)
+    # ... and one that opens a protected command is refused and named.
+    rules.write_bytes(cl.RULE_BYTES + _rule(["git"]))
+    saved = cl.parse_saved_rules(_rule(["git"]), rules)
+    with pytest.raises(cl.ProfileError) as exc:
+        cl.check_policy(_shutil.which("codex"), rules, env, _subprocess.run, saved=saved)
+    assert 'saved approval 1 of 1: allow ["git"]' in str(exc.value)
 
 
 @pytest.mark.parametrize("note", NOTE_PAIR, ids=["template", "dogfood"])

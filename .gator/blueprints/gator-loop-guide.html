@@ -961,7 +961,7 @@
         <tr><td>An agent edits loop files directly</td><td>It skipped the protocol.</td><td>Re-paste the join prompt. Only the CLI may write loop files.</td></tr>
         <tr><td>An agent keeps escalating</td><td>The sketch is ambiguous, or the code it touches has no usable charter.</td><td>Answer with <code>unblock --file</code>. If it repeats, end the loop and sharpen the sketch.</td></tr>
         <tr><td>Approved coding loop reads Stale</td><td>The code changed after approval, or a hook altered the commit.</td><td>Inspect the difference; <code>reopen</code> if it needs review again.</td></tr>
-        <tr><td><code>gator loop codex</code> refuses to launch</td><td>Codex saved a "don't ask again" approval into the Gator rule file.</td><td>Remove the added line from <code>rules/default.rules</code>. Issue #87 tracks a fix.</td></tr>
+        <tr><td><code>gator loop codex</code> refuses to launch</td><td>The rule file has content Gator cannot read or show safely, or a saved approval matches a protected command.</td><td>Read the message. It names the approval by its position. Remove or narrow that <code>prefix_rule</code> line in <code>rules/default.rules</code>. Ordinary saved approvals are kept and listed.</td></tr>
       </tbody>
     </table>
   </div>
