@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.35.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "5589b45c324ffcf65ccb52ed27ba277f68fca429",
+  "short_commit": "5589b45",
+  "snippet_id": "snippet-5589b45c324ff",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "870673338d5fd997a73a10bc940aa1b85d8e8408",
+  "started_at": "2026-10-29T15:33:38Z",
+  "ended_at": "2026-10-29T15:33:38Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-29-gator-870673338d5fd.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for 2.35.0: Fleet Strict/Warn dropdown, quieter row menu,",
+    "blocked-commit reason fixes (paste, resize, 500 characters), Dashboard-first",
+    "approval guidance, and the Codex plain-command goal prompt (#99). See",
+    "`CHANGELOG.md`.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

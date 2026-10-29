@@ -11,11 +11,12 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.34.0 (2026-10-29).
-- **Commit policy is machine-local:** strict by default; an engineer can set Warn for their own clone from Fleet. It is stored in Git's private area, never in the repository, and Warn commits carry `Gator-Commit-Policy: warn`. Committed `config.json` levels are no longer read (behaviour change).
-- **`gator loop codex` (#87):** keeps and discloses Codex-saved approvals, keeps Codex-written config, and runs tests inside the sandbox. Remaining prompt causes are tracked in #99 (Windows 10 legacy parked; new-machine direction recorded there).
+**Latest released version**: v2.35.0 (2026-10-29).
+- **Fleet:** the Commit policy cell is a Strict / Warn dropdown; the ⋮ menu shows its border only on hover.
+- **Blocked-commit dialog:** pasted reasons are accepted, the field resizes, and reasons can be 500 characters. Approvals are Dashboard-first in all agent guidance.
+- **Codex `/goal` prompt (#99 part 1):** plain `gator loop` commands judged by printed text.
 
-v2.33.0 (2026-10-26): resolve a blocked commit from the Dashboard (#76). v2.32.0 (2026-10-25): the #75 pre-commit policy. v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
+v2.34.0 (2026-10-29): machine-local commit policy (Warn per clone, never in Git; `Gator-Commit-Policy: warn`) and `gator loop codex` saved-approval recovery (#87). v2.33.0 (2026-10-26): resolve a blocked commit from the Dashboard (#76). v2.32.0 (2026-10-25): the #75 pre-commit policy. v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
