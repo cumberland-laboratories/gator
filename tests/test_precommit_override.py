@@ -41,6 +41,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 import precommit_override as ovr  # noqa: E402
 import precommit_policy as policy  # noqa: E402
+import precommit_local_policy as local_policy  # noqa: E402
 
 
 # Lint-triggering SQL fixtures (rule SQL-001). Built by concatenation so
@@ -108,7 +109,10 @@ def any_repo(request, tmp_path):
     return _make_repo(tmp_path, scripts)
 
 
-def _make_repo(tmp_path, scripts_dir, level="strict"):
+def _make_repo(tmp_path, scripts_dir, level="strict", tracked_level="strict"):
+    """`level` is this clone's machine-local commit policy (Git's private
+    area); `tracked_level` is what the committed config.json says, which
+    the hooks no longer read."""
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
@@ -129,7 +133,8 @@ def _make_repo(tmp_path, scripts_dir, level="strict"):
     gator = root / ".gator"
     gator.mkdir()
     (gator / "config.json").write_text(
-        json.dumps({"enforcement_level": level}) + "\n", encoding="utf-8")
+        json.dumps({"enforcement_level": tracked_level}) + "\n", encoding="utf-8")
+    local_policy.write_level(root, level)
     (gator / "commit_draft.md").write_text(DRAFT.format(change_type="feature"), encoding="utf-8")
     (root / "README.md").write_text("# test\n", encoding="utf-8")
     (root / "old.py").write_text("x = 0\n", encoding="utf-8")
@@ -606,21 +611,53 @@ class TestAcknowledgement:
         assert "Gator-Dangerous" not in _last_message(repo)
 
 
-@pytest.mark.parametrize("level", ["warn", "off"])
-def test_legacy_broad_modes_keep_their_behavior(tmp_path, level):
-    """`warn` and `off` pass a missing charter update and a HIGH finding,
-    as before #75."""
-    repo = _make_repo(tmp_path, SCRIPTS, level=level)
+def test_machine_local_warn_passes_and_is_recorded(tmp_path):
+    """This clone's local `warn` passes a missing charter update and a HIGH
+    finding, and the commit says so in `Gator-Commit-Policy: warn`. The
+    file lives in Git's private area: nothing in the repository changes.
+    Back to strict, the next commit carries no policy trailer."""
+    repo = _make_repo(tmp_path, SCRIPTS, level="warn")
+    assert local_policy.policy_path(repo).is_file()
+    assert local_policy.POLICY_FILENAME not in _git(
+        repo, "status", "--porcelain", "--ignored").stdout
     _stage_code(repo)
     _stage_sql(repo, name="migrate.txt")
     rc, out = _commit(repo)
     assert rc == 0, out
-    if level == "warn":
-        assert "PASS (enforcement: warn" in out
-        assert "charter-alongside-code" in out and "SQL-001" in out
-    else:
-        assert "enforcement OFF" in out
+    assert "PASS (commit policy: warn on this machine" in out
+    assert "charter-alongside-code" in out and "SQL-001" in out
+    assert "Gator-Commit-Policy: warn" in _last_message(repo)
     assert _state_files(repo) == []
+
+    local_policy.write_level(repo, "strict")
+    assert not local_policy.policy_path(repo).exists()
+    (repo / "notes.txt").write_text("plain\n", encoding="utf-8")
+    _git(repo, "add", "notes.txt")
+    _draft(repo, "docs")
+    rc, out = _commit(repo)
+    assert rc == 0, out
+    assert "Gator-Commit-Policy" not in _last_message(repo)
+
+
+@pytest.mark.parametrize("tracked", ["warn", "off"])
+def test_tracked_config_cannot_relax_checks(any_repo_factory, tracked):
+    """A relaxation committed in config.json reaches every engineer through
+    Git, so neither hook copy reads it: a missing charter update still
+    blocks. The template hook says the value is ignored."""
+    repo, kind = any_repo_factory(tracked_level=tracked)
+    _stage_code(repo)
+    rc, out = _commit(repo)
+    assert rc != 0, out
+    assert "charter-alongside-code" in out
+    if kind == "template":
+        assert "tracked-commit-policy-ignored" in out and "is ignored" in out
+    assert "Gator-Commit-Policy" not in _git(repo, "log", "-1", "--format=%B").stdout
+
+
+@pytest.fixture(params=["template", "bundled"])
+def any_repo_factory(request, tmp_path):
+    scripts = SCRIPTS if request.param == "template" else BUNDLED_SCRIPTS
+    return lambda **kw: (_make_repo(tmp_path, scripts, **kw), request.param)
 
 
 # ---------------------------------------------------------------------------

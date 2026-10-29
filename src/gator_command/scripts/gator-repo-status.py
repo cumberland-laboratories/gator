@@ -494,6 +494,14 @@ def scan_repo_status(repo_path, repo_name=None):
             pass
     data["config"] = config
 
+    # Machine-local commit policy for this clone ("strict" | "warn"). The
+    # tracked config.json enforcement_level above is no longer the policy.
+    try:
+        import precommit_local_policy
+        data["commit_policy"] = precommit_local_policy.read_level(repo_path)
+    except ImportError:
+        data["commit_policy"] = "strict"
+
     # Topology
     try:
         from gator_core import get_repo_topology

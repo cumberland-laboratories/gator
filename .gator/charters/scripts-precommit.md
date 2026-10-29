@@ -1,6 +1,6 @@
 # Charter: Pre-Commit Governance and Override Approval
 
-**Covers**: starter `scripts/gator-pre-commit.py`, `scripts/precommit_override.py`, `scripts/precommit_policy.py`, `scripts/precommit_lint.py`, `scripts/precommit_charter.py`, `scripts/precommit_session.py`, `scripts/gator-approve.py` under `src/gator_command/templates/gator-starter/`, and the synchronized Enterprise bundled copies.
+**Covers**: starter `scripts/gator-pre-commit.py`, `scripts/precommit_override.py`, `scripts/precommit_policy.py`, `scripts/precommit_lint.py`, `scripts/precommit_charter.py`, `scripts/precommit_session.py`, `scripts/precommit_local_policy.py` (and its byte-identical `src/gator_command/scripts/` copy), `scripts/gator-approve.py`, `scripts/gator-enforce.py` (and its identical `src/gator_command/scripts/` copy) under `src/gator_command/templates/gator-starter/`, and the synchronized Enterprise bundled copies.
 
 Read [`scripts-cross-cutting.md`](scripts-cross-cutting.md) first. This charter owns the commit gate: rule evaluation, the resolution policy (#75), the block/approval envelope, trailer assembly, and post-commit cleanup.
 
@@ -10,12 +10,20 @@ Read [`scripts-cross-cutting.md`](scripts-cross-cutting.md) first. This charter 
 - The closed resolution policy (#75, `precommit_policy.py`): every finding is `fix-required`, `warning`, or `external-approval`.
 - The tree-bound override state machine (#34, #35): block records, Architect approvals, the validate→commit-msg handoff, and retirement.
 - The Architect override CLI (`gator hook override status|approve|cancel`, alias `gator hook approve`).
+- The machine-local commit policy (`precommit_local_policy.py`): per clone, never in Git.
 
 ## Does Not Own
 
 - Hook dispatch and runtime selection — [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md) (`gator-hook.py`).
 - Charter-surface resolution — `gator_core.resolve_charter_surface()` ([`scripts-cross-cutting.md`](scripts-cross-cutting.md)).
 - Session snippets and ledger — [`scripts-session-archaeology.md`](scripts-session-archaeology.md).
+
+## TRIPWIRE: The Commit Policy Is Machine-Local
+
+`precommit_local_policy.read_level(repo_root)` is the only source of the template hook's level: `strict` (default) or `warn`, read from `$(git rev-parse --git-path gator-commit-policy.json)`. The file is per clone, never staged and never pushed, so one engineer can never relax another's checks. Absent, unreadable or invalid means strict. An Enterprise-managed repository (`enterprise_managed()`, the same semantics as `gator_core.is_enterprise_active()`) is always strict here. `write_level()` (used by `gator enforce` and the Dashboard) refuses Enterprise-managed repositories and any level outside `LOCAL_LEVELS`; `strict` deletes the file.
+
+! The tracked `.gator/config.json` `enforcement_level` is **not read** for the policy. A committed `warn` or `off` only produces the advisory warning `tracked-commit-policy-ignored` (`tracked_relaxation()`). There is no local `off`, so the old "enforcement OFF" early exit is gone and every commit runs the checks. The only Git record of a relaxed policy is the trailer `Gator-Commit-Policy: warn` (`assemble_trailers(..., commit_policy=)`); strict commits carry no trailer.
+! The Enterprise bundled hook keeps `GATOR_HOOK_MODE` as its authority and falls back to **strict** (not `config.json`) when it is unset.
 
 ## TRIPWIRE: Approval Is Bound to One Exact Staged Change
 
@@ -127,9 +135,9 @@ Filesystem: `.gator/status.json`, `.gator/whiteboard.md` (W + staged), `.gator/c
 ! Bundled copy only: the `evidence_only` branch runs lint, `apply_approval(..., resolution_map(lint_failures))` and `write_block()`, and only then writes `status.json` (`commit_checks` with `integrity_failures` = fix-required rules such as `unmerged-index`, `external_approval_required`, `overridden_rules`) and the whiteboard. It stages the whiteboard only when `.gator/whiteboard.md` is already tracked, so an evidence_only repo's committed content is unchanged. Exit decisions are unchanged.
 
 
-### phase_trailers(msg_file_path) / assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None, handoff=None, acknowledged=None)
+### phase_trailers(msg_file_path) / assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None, handoff=None, acknowledged=None, skipped=None, commit_policy="strict")
 File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
-`commit-msg` hook. Reads the handoff for the **current** tree (`read_handoff(tree=index_tree())`) without consuming it. It reruns Layer 1 lint and `validate_acknowledgements()` for the effective mode (template: `_read_enforcement_level()`; bundled: `GATOR_HOOK_MODE` first) and passes `acknowledged=(keys, architect)` only when there are no problems; ! It fails closed: in the strict path (mode not `warn`, `off` or `evidence_only`), when the draft carries acknowledgement or skip evidence and the recomputation raises or reports problems, `commit-msg` prints "BLOCKED — dangerous-pattern evidence could not be revalidated" and exits 1, so the commit is not created rather than landing without its trailers. Without evidence, an error leaves the trailers alone. Pinned by `test_commit_msg_fails_closed_when_evidence_cannot_be_revalidated`. `assemble_trailers()` appends `policy.acknowledgement_trailers()` after the override trailers. `assemble_trailers()` emits `Gator-Charter-Changed: override-skip` when the handoff overrode a charter rule (else yes/no), then `override_state.override_trailers(handoff)` (`Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`, sanitized).
+`commit-msg` hook. Reads the handoff for the **current** tree (`read_handoff(tree=index_tree())`) without consuming it. It reruns Layer 1 lint and `validate_acknowledgements()` for the effective mode (template: `_read_enforcement_level(repo_root)`, the machine-local level; bundled: `GATOR_HOOK_MODE`, else strict), and passes that level as `commit_policy`, so a `warn` commit gets `Gator-Commit-Policy: warn` and passes `acknowledged=(keys, architect)` only when there are no problems; ! It fails closed: in the strict path (mode not `warn`, `off` or `evidence_only`), when the draft carries acknowledgement or skip evidence and the recomputation raises or reports problems, `commit-msg` prints "BLOCKED — dangerous-pattern evidence could not be revalidated" and exits 1, so the commit is not created rather than landing without its trailers. Without evidence, an error leaves the trailers alone. Pinned by `test_commit_msg_fails_closed_when_evidence_cannot_be_revalidated`. `assemble_trailers()` appends `policy.acknowledgement_trailers()` after the override trailers. `assemble_trailers()` emits `Gator-Charter-Changed: override-skip` when the handoff overrode a charter rule (else yes/no), then `override_state.override_trailers(handoff)` (`Gator-Override-Approved-By`, `-Block`, `-Reason`, `-Rules`, sanitized).
 <- `commit-msg` hook
 ! `override` parameter is retained for signature compatibility and ignored. No `.override-meta.json` side file exists any more.
 

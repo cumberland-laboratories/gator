@@ -1009,16 +1009,12 @@ def clear_commit_issues(gator_dir):
 # ---------------------------------------------------------------------------
 
 def _read_enforcement_level(gator_dir):
-    """Read enforcement level from .gator/config.json. Default: strict."""
-    config_path = gator_dir / "config.json"
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-            level = config.get("enforcement_level", "strict")
-            if level in ("strict", "warn", "off"):
-                return level
-        except (json.JSONDecodeError, OSError):
-            pass
+    """Fallback when GATOR_HOOK_MODE is unset: always "strict".
+
+    The tracked .gator/config.json enforcement_level is no longer read: a
+    committed relaxation would change every engineer's checks. Enterprise's
+    GATOR_HOOK_MODE stays the authority (fleet commit-policy slice).
+    """
     return "strict"
 
 

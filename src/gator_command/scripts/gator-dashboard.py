@@ -323,14 +323,14 @@ def _fleet_without(fleet, resolved_paths):
     return new
 
 
-def _fleet_with_repo_config(fleet, repo_name, config):
-    """New Fleet object whose first repo named repo_name has config merged."""
+def _fleet_with_repo_policy(fleet, repo_name, level):
+    """New Fleet object whose first repo named repo_name has `commit_policy`."""
     new = dict(fleet)
     repos = list(fleet.get("repos", []))
     for i, r in enumerate(repos):
         if r.get("name") == repo_name:
             entry = dict(r)
-            entry["config"] = {**(r.get("config") or {}), **config}
+            entry["commit_policy"] = level
             repos[i] = entry
             break
     new["repos"] = repos
@@ -2650,7 +2650,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # of the safe-content-transport migration.
 
         # Tier 2 — per-repo deep status (lazy, on demand)
-        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/check", "/topology", "/files")):
+        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/commit-policy", "/check", "/topology", "/files")):
             with _heavy_work() as admitted:
                 if not admitted:
                     self._send_heavy_busy()
@@ -4265,29 +4265,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self._with_repo_action(repo_name, target, source, run)
 
-    def _config_owned(self, repo_name, repo_path, req):
-        """Config POST body; the caller owns `_repo_action(repo_path)`."""
-        config_path = Path(repo_path) / ".gator" / "config.json"
-        # Read existing config
-        config = {}
-        if config_path.exists():
-            try:
-                config = json.loads(config_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                config = {}
-        # Apply changes
-        if "enforcement_level" in req:
-            level = req["enforcement_level"]
-            if level not in ("strict", "warn", "off"):
-                self._send_json({"error": "enforcement_level must be strict, warn, or off"}, 400)
-                return
-            config["enforcement_level"] = level
-        config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-        # Publish a Fleet copy so page refresh reflects the change
+    def _commit_policy_owned(self, repo_name, repo_path, req):
+        """Commit-policy POST body; the caller owns `_repo_action(repo_path)`.
+
+        Sets this machine's commit policy for the clone (`strict` | `warn`)
+        through precommit_local_policy: Git's private area, never the
+        repository. Refuses (409, nothing written) when Enterprise manages
+        the repository, so the local Dashboard can never change its policy.
+        """
+        import precommit_local_policy as local_policy
+        level = req.get("level")
+        if level not in local_policy.LOCAL_LEVELS:
+            self._send_json({"error": "level must be strict or warn"}, 400)
+            return
+        if local_policy.enterprise_managed(repo_path):
+            self._send_json({"error": "Enterprise manages this repository's commit policy; "
+                                      "it cannot be changed from the local Dashboard."}, 409)
+            return
+        try:
+            local_policy.write_level(repo_path, level)
+        except (local_policy.LocalPolicyError, OSError) as exc:
+            self._send_json({"error": f"commit policy not changed: {exc}"}, 400)
+            return
+        level = local_policy.read_level(repo_path)
+        # Publish a Fleet copy so a page refresh reflects the change.
         with _STATE_WRITE_LOCK:
-            _fleet_publish(_fleet_with_repo_config(
-                _fleet_snapshot(), repo_name, config))
-        self._send_json({"status": "ok", "config": config})
+            _fleet_publish(_fleet_with_repo_policy(
+                _fleet_snapshot(), repo_name, level))
+        self._send_json({"status": "ok", "commit_policy": level})
         return
 
     def _topology_owned(self, repo_path, target_topology):
@@ -4385,9 +4390,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._handle_repo_remove()
             return
 
-        # POST /api/repo/<name>/config — write to repo's .gator/config.json
-        if path.startswith("/api/repo/") and path.endswith("/config"):
-            repo_name = path[len("/api/repo/"):-len("/config")]
+        # POST /api/repo/<name>/commit-policy — this machine's commit policy
+        # for the clone (Git's private area, never the repository)
+        if path.startswith("/api/repo/") and path.endswith("/commit-policy"):
+            repo_name = path[len("/api/repo/"):-len("/commit-policy")]
             if not repo_name:
                 self._send_json({"error": "repo name required"}, 400)
                 return
@@ -4404,7 +4410,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             self._with_repo_action(
                 repo_name, repo_path, "registry",
-                lambda: self._config_owned(repo_name, repo_path, req))
+                lambda: self._commit_policy_owned(repo_name, repo_path, req))
             return
 
         # POST /api/repo/<name>/topology — switch repo between policy-synced and standalone

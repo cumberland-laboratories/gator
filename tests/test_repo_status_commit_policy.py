@@ -41,3 +41,20 @@ def test_enterprise_managed_follows_the_marker(tmp_path, marker, expected):
     data = json.loads(r.stdout)
     assert data["enterprise_managed"] is expected
     assert data["config"] == {"enforcement_level": "warn"}
+    # The committed "warn" is not the policy: this clone has no local file.
+    assert data["commit_policy"] == "strict"
+
+
+@pytest.mark.parametrize("marker,expected", [(None, "warn"), ('{"enabled": true}', "strict")])
+def test_commit_policy_is_the_machine_local_level(tmp_path, marker, expected):
+    """`commit_policy` reports this clone's machine-local level, which an
+    Enterprise-managed repository never relaxes."""
+    root = _repo(tmp_path, None)
+    (root / ".git" / "gator-commit-policy.json").write_text(
+        '{"schema": "gator-commit-policy-v1", "level": "warn"}\n', encoding="utf-8")
+    if marker is not None:
+        (root / ".gator" / "enterprise.json").write_text(marker, encoding="utf-8")
+    r = subprocess.run([sys.executable, str(SCRIPT), "--path", str(root), "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["commit_policy"] == expected

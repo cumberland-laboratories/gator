@@ -1,0 +1,52 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop codex: keep and disclose Codex-saved approvals instead of refusing to launch (#87)",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "loop",
+    "codex",
+    "security-boundary"
+  ],
+  "commit": "f865f9f104c086acdde3051aafa9f30d7c0cab5b",
+  "short_commit": "f865f9f",
+  "snippet_id": "snippet-f865f9f104c08",
+  "session_group_key": "anthropic:30c634fd-eb73-47eb-98b4-a8ce1e778011",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-26T20:28:19Z",
+  "ended_at": "2026-10-27T18:01:40Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/reference-notes/codex-routine-participant-profile.md",
+    ".gator/artifacts/2026-10-27-codex-sandbox-temp-spike.md",
+    ".gator/blueprints/gator-loop-guide.html",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-10-26-gator-63dd0cabf9c54.json",
+    "src/gator_command/scripts/loop/codex_launcher.py",
+    "src/gator_command/templates/gator-starter/docs/gator-loop-extras.html",
+    "src/gator_command/templates/gator-starter/reference-notes/codex-routine-participant-profile.md",
+    "tests/test_loop_codex_launcher.py"
+  ],
+  "notes": [
+    "`gator loop codex` no longer refuses to start after Codex saves a \"don't ask",
+    "again\" approval. Gator's own rule must still be exact; approvals Codex appends",
+    "after it are kept byte-for-byte, parsed with a closed `prefix_rule` grammar",
+    "(never evaluated), and listed before every launch and in `--dry-run` with",
+    "recognised credentials hidden. Unreadable or unshowable content still refuses",
+    "with nothing written, and the message names only the approval's position.",
+    "The Codex policy check now runs on the exact rule file before anything is",
+    "written to the home. A saved approval that opens `git write-tree` or"
+  ],
+  "transcript_session_id": "30c634fd-eb73-47eb-98b4-a8ce1e778011",
+  "transcript_ref": null
+}

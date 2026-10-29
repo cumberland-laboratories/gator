@@ -19,8 +19,12 @@ def test_reference_doc_declares_canonical_enum(reference_dir: Path) -> None:
         assert mode in text, f"hook-mode-vocabulary.md must mention '{mode}'"
 
 
+LOCAL_MODES = {"strict", "warn"}  # v2: the machine-local subset
+
+
 def test_gator_enforce_uses_canonical_enum() -> None:
-    """gator-enforce.py must define VALID_LEVELS = the three canonical modes."""
+    """gator-enforce.py must define VALID_LEVELS = the machine-local subset
+    (hook-mode-vocabulary-v2): canonical values only, and no "off"."""
     path = (REPO_ROOT / "src" / "gator_command" / "templates"
             / "gator-starter" / "scripts" / "gator-enforce.py")
     if not path.exists():
@@ -34,8 +38,8 @@ def test_gator_enforce_uses_canonical_enum() -> None:
 
     declared = {v.strip().strip('"').strip("'")
                 for v in match.group(1).split(",") if v.strip()}
-    assert declared == CANONICAL_MODES, (
-        f"gator-enforce.py declares {declared}, contract requires {CANONICAL_MODES}"
+    assert declared == LOCAL_MODES and declared <= CANONICAL_MODES, (
+        f"gator-enforce.py declares {declared}, contract requires {LOCAL_MODES}"
     )
 
 

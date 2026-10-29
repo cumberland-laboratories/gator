@@ -48,6 +48,7 @@ Pin shared hook vocabulary and the observable result of a fresh Gator installati
 <- Source CI
 -> starter templates and installer
 ! Fresh-layout checks validate executed installation output, not only planning constants.
+! `hook-mode-vocabulary-v2` (2026-10-28): the enum stays `strict|warn|off`. `test_gator_enforce_uses_canonical_enum` now pins `gator-enforce.py` `VALID_LEVELS` to the machine-local subset `{strict, warn}`. The reference doc adds the obligation that no level is ever stored in a Git-tracked file; the policy is per clone in `$(git rev-parse --git-path gator-commit-policy.json)`. `test_default_config_stub_uses_strict` still holds: the tracked stub stays `strict` and is no longer read.
 
 ### Blueprint HTML compatibility
 File: contracts/compatibility/test_blueprint_html_schema.py

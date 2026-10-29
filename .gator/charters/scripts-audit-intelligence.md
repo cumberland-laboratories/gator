@@ -64,6 +64,7 @@ Assemble per-repository health from charters, trailers, hooks, sessions, and cur
 -> coverage/trailer/hook/session helpers, `gator_core.is_enterprise_active()`
 ! Every field is scoped to the resolved requested repository.
 ! Additive `enterprise_managed` (#75): `is_enterprise_active(.gator/)` (fail closed; False when the helper cannot be imported). The Dashboard shows "Managed by Enterprise" for such a repository, because its Enterprise hook mode, not `config.json`, decides the commit checks. Pinned by `tests/test_repo_status_commit_policy.py`.
+! Additive `commit_policy` (machine-local commit policy, 2026-10-28): `precommit_local_policy.read_level(repo_path)`, this clone's level from Git's private area (`"strict"` | `"warn"`; `"strict"` when the module cannot be imported). `config` still reports the tracked `config.json` as-is, but it is no longer the policy.
 
 ### get_charter_coverage(repo_path)
 File: src/gator_command/scripts/gator-repo-status.py

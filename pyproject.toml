@@ -117,6 +117,7 @@ gator_command = [
     "scripts/gator_remote.py",
     "scripts/gator_runtime.py",
     "scripts/gator_session_reader.py",
+    "scripts/precommit_local_policy.py",
     "scripts/gatorize.py",
     "scripts/enforcer-prompt.md",
     "scripts/dashboard/**/*",

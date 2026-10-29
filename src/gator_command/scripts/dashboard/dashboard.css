@@ -2487,9 +2487,33 @@ mark.search-hit {
   min-width: 20px;
 }
 
-/* Commit policy posture (#75): read-only text, no control. */
+/* Commit policy posture (#75): text. The only controls are the Warn
+   checkbox column and "Restore default checks" in the row menu. */
 .fleet-policy {
   white-space: nowrap;
+}
+.fleet-table .fleet-warn-head,
+.fleet-table .fleet-warn-cell {
+  width: 56px;
+  text-align: center;
+}
+.fleet-warn-toggle {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+.fleet-warn-toggle:disabled {
+  cursor: progress;
+}
+/* A failed write: text, not colour alone ("Not changed: …"). */
+.fleet-policy-error:not(:empty) {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-sm);
+  color: var(--color-critical);
+  text-align: left;
+  white-space: normal;
 }
 
 

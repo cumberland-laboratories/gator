@@ -3,8 +3,8 @@
  *
  * Read-only commit policy (#75): the pre-commit hook's two categories and
  * each repository's effective posture. The strict/warn/off selector was
- * retired; a later Commit policy surface may add explicit, closed
- * settings. The posture text comes from window.GatorCommitPolicy
+ * retired; the only control is Fleet's machine-local Warn checkbox. The
+ * posture text comes from window.GatorCommitPolicy
  * (views/fleet.js, which loads first) over the Fleet payload, so this view
  * makes no request.
  */

@@ -81,6 +81,7 @@ from precommit_session import (  # noqa: E402
 )
 import precommit_override as override_state  # noqa: E402  (#34, #35)
 import precommit_policy as policy  # noqa: E402  (#75)
+import precommit_local_policy as local_policy  # noqa: E402  (machine-local commit policy)
 
 
 # ---------------------------------------------------------------------------
@@ -745,14 +746,16 @@ def validate_soft_rules(staged_files, frontmatter, body, gator_dir):
 # ---------------------------------------------------------------------------
 
 def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
-                      handoff=None, acknowledged=None, skipped=None):
+                      handoff=None, acknowledged=None, skipped=None,
+                      commit_policy="strict"):
     """Build Gator-* trailer lines from all available sources.
 
     ``handoff`` is the validate->commit-msg override handoff (read via
     ``override_state.read_handoff`` for the current tree). ``override`` is
     retained for signature compatibility and is ignored. ``acknowledged`` is
     ``(keys, architect)`` for validated Architect acknowledgement evidence
-    (#75), or None.
+    (#75), or None. ``commit_policy`` is this clone's machine-local level;
+    a relaxed one is recorded as ``Gator-Commit-Policy: <level>``.
     """
     charter_count, func_count = count_charters(gator_dir)
     thread_count = count_threads(gator_dir)
@@ -791,6 +794,10 @@ def assemble_trailers(frontmatter, body, gator_dir, staged_files, override=None,
         trailers.extend(policy.acknowledgement_trailers(*acknowledged))
     # A recorded skip: committed without an Architect decision.
     trailers.extend(policy.skip_trailers(skipped))
+    # The only place the machine-local commit policy reaches Git: a commit
+    # made under a relaxed policy says so. Strict commits carry nothing.
+    if commit_policy in ("warn", "off"):
+        trailers.append(f"Gator-Commit-Policy: {commit_policy}")
 
     # Change type (frontmatter preferred, fallback to inference)
     change_type = frontmatter.get("change-type") or infer_change_type(body, has_code)
@@ -1068,18 +1075,27 @@ def clear_commit_issues(gator_dir):
 # Enforcement configuration
 # ---------------------------------------------------------------------------
 
-def _read_enforcement_level(gator_dir):
-    """Read enforcement level from .gator/config.json. Default: strict."""
-    config_path = gator_dir / "config.json"
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-            level = config.get("enforcement_level", "strict")
-            if level in ("strict", "warn", "off"):
-                return level
-        except (json.JSONDecodeError, OSError):
-            pass
-    return "strict"
+def _read_enforcement_level(repo_root):
+    """This clone's machine-local commit policy: "strict" (default) or "warn".
+
+    Read from $(git rev-parse --git-path gator-commit-policy.json) by
+    precommit_local_policy. The tracked .gator/config.json enforcement_level
+    is no longer read, so a committed relaxation cannot change another
+    engineer's checks; Enterprise-managed repositories are always strict
+    here. The hook-mode vocabulary stays strict/warn/off (Enterprise's
+    GATOR_HOOK_MODE); "off" is not a local level.
+    """
+    return local_policy.read_level(repo_root)
+
+
+def _tracked_relaxation_notice(gator_dir):
+    """One line when config.json still commits warn/off (ignored), else None."""
+    level = local_policy.tracked_relaxation(gator_dir)
+    if not level:
+        return None
+    return (f".gator/config.json sets enforcement_level \"{level}\", which is ignored: "
+            "the commit policy is machine-local now. To relax checks on this machine "
+            "only, use Warn in the Dashboard's Fleet view.")
 
 
 # ---------------------------------------------------------------------------
@@ -1101,23 +1117,10 @@ def phase_validate():
     gator_dir = repo_root / ".gator"
     staged_files = get_staged_files(repo_root)
 
-    # Read enforcement level
-    enforcement = _read_enforcement_level(gator_dir)
-
-    # If enforcement is off, skip governance checks but clear stale artifacts
-    # so the repo doesn't misrepresent its posture. Trailers and cleanup
-    # still run in their own phases.
-    if enforcement == "off":
-        clear_commit_issues(gator_dir)  # transient; never staged (#34)
-        wb = write_whiteboard(gator_dir, [], [], None, enforcement_level="off")
-        stage_file(wb, repo_root)
-        status = build_status(gator_dir, staged_files, {}, "", None)
-        sf = write_status_json(gator_dir, status)
-        stage_file(sf, repo_root)
-        print()
-        print("  gator pre-commit: enforcement OFF — governance checks skipped")
-        print()
-        sys.exit(0)
+    # Machine-local commit policy: "strict" (default) or "warn". There is no
+    # local "off", so every commit runs the checks below.
+    enforcement = _read_enforcement_level(repo_root)
+    tracked_notice = _tracked_relaxation_notice(gator_dir)
 
     # Parse commit_draft
     frontmatter, body, parse_error = parse_commit_draft(gator_dir)
@@ -1138,6 +1141,8 @@ def phase_validate():
     # Validate governance rules (no override: approvals apply below)
     failures = validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir)
     warnings = validate_soft_rules(staged_files, frontmatter, body, gator_dir)
+    if tracked_notice:
+        warnings.append(("tracked-commit-policy-ignored", tracked_notice))
 
     if state_problem:
         failures.append(("unmerged-index", state_problem))
@@ -1331,7 +1336,8 @@ def phase_validate():
     if warnings:
         print()
         if enforcement == "warn":
-            print("  gator pre-commit: PASS (enforcement: warn — findings are advisory)")
+            print("  gator pre-commit: PASS (commit policy: warn on this machine — "
+                  "findings are advisory; recorded as Gator-Commit-Policy: warn)")
         else:
             print("  gator pre-commit: PASS (with warnings)")
         print()
@@ -1389,8 +1395,7 @@ def phase_trailers(msg_file_path):
     mode = None
     evidence_error = None
     try:
-        mode = _read_enforcement_level(gator_dir)
-        mode = "warn" if mode == "warning" else mode
+        mode = _read_enforcement_level(repo_root)
         dangerous, _, _ = policy.split_lint(run_layer1_lint(staged_files, repo_root), mode)
         ack_keys, ack_problems = policy.validate_acknowledgements(
             frontmatter, body, dangerous)
@@ -1417,7 +1422,8 @@ def phase_trailers(msg_file_path):
     # Build trailers
     trailers = assemble_trailers(frontmatter, body, gator_dir, staged_files,
                                  handoff=handoff, acknowledged=acknowledged,
-                                 skipped=skipped)
+                                 skipped=skipped,
+                                 commit_policy=mode if mode in ("warn", "off") else "strict")
 
     # Read current message (the -m message the agent provided, if any)
     msg_path = Path(msg_file_path)

@@ -84,8 +84,8 @@ def test_fleet_update_click_preserves_column_geometry(
 
     # Baseline geometry BEFORE the busy transition.
     before = _measure_header_geometry(page)
-    assert len(before) == 6, (
-        f"Expected 6 Fleet columns; got {len(before)}: {before}")
+    assert len(before) == 7, (
+        f"Expected 7 Fleet columns; got {len(before)}: {before}")
 
     # Trigger Update through the overflow menu — the shipped interaction
     # path in `views/fleet.js`. Open the first overflow menu, then click
@@ -108,7 +108,7 @@ def test_fleet_update_click_preserves_column_geometry(
 
     # Geometry AFTER the busy transition.
     after = _measure_header_geometry(page)
-    assert len(after) == 6
+    assert len(after) == 7
 
     # Every column's width AND x-coordinate must be unchanged within
     # 0.5px subpixel tolerance.
@@ -365,89 +365,190 @@ def test_fleet_sort_one_column(page, dashboard_fleet):
     assert all(r["menuRepo"] == r["name"] for r in before)
 
 
-def _route_policies(page):
-    """Rewrite /api/data so four repositories show the four postures, one
-    is not gatorized and one is unreadable (#75). Returns {name: label}."""
+def _route_policies(page, overrides=None):
+    """Rewrite /api/data so the rows show every posture (#75; machine-local
+    policy 2026-10-28). Returns {name: (label, has_warn_box, checked)}.
+    `overrides` ({name: level}, mutable) is applied after the fixture
+    settings, so a test can show what the server holds after a write."""
     expected = {}
+    overrides = overrides if overrides is not None else {}
 
     def handle(route):
         resp = route.fetch()
         data = resp.json()
+        if overrides:
+            data["generated_at"] = "after-write-" + str(len(overrides))
         repos = data.get("repos") or (data.get("fleet") or {}).get("repos", [])
-        # The first four rows become gatorized, accessible repositories with
-        # one posture each; later rows keep their fixture state (some are
-        # not gatorized, so the sort's missing-last rule stays exercised).
-        settings = [({"enforcement_level": "warn"}, False, "Legacy warn"),
-                    ({"enforcement_level": "off"}, False, "Legacy off"),
-                    ({"enforcement_level": "warn"}, True, "Managed by Enterprise"),
-                    ({"enforcement_level": "strict"}, False, "Default")]
-        for repo, (config, enterprise, label) in zip(repos, settings):
+        # The first four rows become gatorized, accessible repositories. The
+        # second commits "warn" in config.json but has no local level: the
+        # tracked value is not the policy, so it shows Default.
+        settings = [("warn", {"enforcement_level": "strict"}, False, ("Warn", True, True)),
+                    ("strict", {"enforcement_level": "warn"}, False, ("Default", True, False)),
+                    ("warn", {}, True, ("Managed by Enterprise", False, False)),
+                    ("strict", {"enforcement_level": "strict"}, False, ("Default", True, False))]
+        for repo, (level, config, enterprise, want) in zip(repos, settings):
             repo.update(gatorized=True, accessible=True, config=config,
-                        enterprise_managed=enterprise)
-            expected[repo["name"]] = label
-        # Two states with no effective policy: added but not gatorized
-        # (accessible), and unreadable (inaccessible, gatorized unknown).
+                        commit_policy=level, enterprise_managed=enterprise)
+            expected[repo["name"]] = want
         not_gatorized, unreadable = repos[4], repos[5]
         not_gatorized.update(gatorized=False, accessible=True, config={})
         unreadable.update(accessible=False, config={})
         unreadable.pop("gatorized", None)
-        expected[not_gatorized["name"]] = "Not gatorized"
-        expected[unreadable["name"]] = "Unknown"
+        expected[not_gatorized["name"]] = ("Not gatorized", False, False)
+        expected[unreadable["name"]] = ("Unknown", False, False)
+        for repo in repos:
+            if repo["name"] in overrides:
+                repo["commit_policy"] = overrides[repo["name"]]
         route.fulfill(response=resp, json=data)
 
     page.route("**/api/data", handle)
     return expected
 
 
-def test_fleet_commit_policy_is_read_only(page, dashboard_fleet):
-    """#75: no enforcement control; each gatorized row shows its read-only
-    posture (Default, Legacy warn/off, or Managed by Enterprise, which wins
-    over config), with the meaning in the title; Commit policy sorts like
-    any other column."""
+_POLICY_ROWS = """() => Array.from(document.querySelectorAll(
+    '.fleet-table tbody tr[data-row-index]')).map(tr => {
+        const box = tr.querySelector('.fleet-warn-toggle');
+        return {
+            name: tr.querySelector('.fleet-repo-name').textContent.trim(),
+            text: tr.querySelector('.fleet-policy-cell').textContent.trim(),
+            title: tr.querySelector('.fleet-policy') && tr.querySelector('.fleet-policy').title,
+            box: !!box, checked: !!(box && box.checked),
+            label: box ? box.getAttribute('aria-label') : null,
+        };
+    })"""
+
+
+def _open_policy_fleet(page, dashboard_fleet):
     expected = _route_policies(page)
     page.set_viewport_size({"width": 1440, "height": 900})
     page.goto(dashboard_fleet["url"], wait_until="load")
     open_fleet(page)
     _wait_for_fleet_render(page)
-    cells = page.evaluate("""() => Array.from(document.querySelectorAll(
-        '.fleet-table tbody tr[data-row-index]')).map(tr => ({
-            name: tr.querySelector('.fleet-repo-name').textContent.trim(),
-            text: tr.querySelector('.fleet-policy-cell').textContent.trim(),
-            title: tr.querySelector('.fleet-policy') && tr.querySelector('.fleet-policy').title}))""")
-    assert page.evaluate("() => document.querySelectorAll('.fleet-table select').length") == 0
-    seen = {c["name"]: c for c in cells if c["name"] in expected}
-    assert {n: c["text"] for n, c in seen.items()} == expected
-    labels = set(expected.values())
-    assert {"Legacy warn", "Legacy off", "Managed by Enterprise", "Default",
-            "Not gatorized", "Unknown"} <= labels
-    for c in seen.values():
-        if c["text"] == "Legacy warn":
-            assert "including missing charter updates" in c["title"]
-        if c["text"] == "Managed by Enterprise":
-            assert "Enterprise hook mode" in c["title"]
+    return expected
 
-    inactive = {n for n, label in expected.items() if label in ("Not gatorized", "Unknown")}
+
+def test_fleet_commit_policy_postures(page, dashboard_fleet):
+    """Each row shows its posture from the machine-local level (never the
+    tracked config.json), Enterprise wins, the meaning is in the title, a
+    Warn box appears only where the local Dashboard may change the level,
+    and Commit policy sorts like any other column. There is no Off."""
+    expected = _open_policy_fleet(page, dashboard_fleet)
+    rows = {r["name"]: r for r in page.evaluate(_POLICY_ROWS) if r["name"] in expected}
+    assert {n: (r["text"], r["box"], r["checked"]) for n, r in rows.items()} == expected
+    assert page.evaluate("() => document.querySelectorAll('.fleet-table select').length") == 0
+    assert page.evaluate("() => document.querySelector('.fleet-table thead th.fleet-warn-head')"
+                         ".textContent.trim()") == "Warn"
+    for r in rows.values():
+        assert "Off" not in r["text"] and "Legacy" not in r["text"]
+        if r["text"] == "Warn":
+            assert "On this machine only" in r["title"] and "Gator-Commit-Policy: warn" in r["title"]
+        if r["text"] == "Managed by Enterprise":
+            assert "Enterprise hook mode" in r["title"]
+        if r["box"]:
+            assert r["label"] == f"Use warn mode for {r['name']} on this machine"
+
+    inactive = {n for n, want in expected.items() if want[0] in ("Not gatorized", "Unknown")}
     for name in inactive:
-        assert "Default" not in seen[name]["title"] and seen[name]["title"], seen[name]
+        assert "Default" not in rows[name]["title"] and rows[name]["title"], rows[name]
 
     page.click('.fleet-sort[data-sort-key="policy"]')
     _assert_header(page, "policy", "ascending")
-    rows = page.evaluate(_ROWS)
-    assert all(r["policy"] == "" for r in rows if r["name"] in inactive), rows
-    policies = [r["policy"] for r in rows]
+    sorted_rows = page.evaluate(_ROWS)
+    assert all(r["policy"] == "" for r in sorted_rows if r["name"] in inactive), sorted_rows
+    policies = [r["policy"] for r in sorted_rows]
     present = [v for v in policies if v]
     assert policies[:len(present)] == present, policies    # missing last
     assert present == _natural(present), present
 
 
+def test_fleet_warn_control(page, dashboard_fleet):
+    """Checking asks first (Cancel writes nothing); confirming posts
+    {level: "warn"} to /commit-policy and a failure keeps the prior state
+    with a row error; clearing posts {level: "strict"} with no dialog."""
+    expected = _open_policy_fleet(page, dashboard_fleet)
+    names = list(expected)
+    warn_name, default_name = names[0], names[1]
+    posts = []
+    reply = {"status": 500, "body": {"error": "disk full"}}
+
+    def handle(route):
+        posts.append((route.request.url, route.request.post_data_json))
+        route.fulfill(status=reply["status"], json=reply["body"])
+
+    page.route("**/commit-policy", handle)
+    box = f'.fleet-warn-toggle[data-repo-name="{default_name}"]'
+
+    page.click(box)
+    page.wait_for_selector(".fleet-warn-dialog", timeout=5000)
+    dialog = page.inner_text(".fleet-warn-dialog")
+    assert default_name in dialog and "on this machine" in dialog
+    assert "not stored in the repository" in dialog and "Gator-Commit-Policy: warn" in dialog
+    assert page.is_checked(box) is False
+    page.click(".fleet-warn-dialog .modal-cancel-btn")
+    assert page.query_selector(".fleet-warn-dialog") is None and posts == []
+    assert page.evaluate("() => document.activeElement.classList.contains('fleet-warn-toggle')")
+
+    page.click(box)
+    page.click(".fleet-warn-dialog .warn-confirm-btn")
+    page.wait_for_function(
+        f"() => document.querySelector('{box}').closest('td')"
+        ".querySelector('.fleet-policy-error').textContent.length > 0", timeout=5000)
+    url, body = posts[-1]
+    assert url.endswith(f"/api/repo/{default_name}/commit-policy") and body == {"level": "warn"}
+    assert page.is_checked(box) is False and page.is_enabled(box)
+    err = page.evaluate(f"() => document.querySelector('{box}').closest('td')"
+                        ".querySelector('.fleet-policy-error').textContent")
+    assert err == "Not changed: disk full"
+
+    reply.update(status=500, body={"error": "nope"})
+    warn_box = f'.fleet-warn-toggle[data-repo-name="{warn_name}"]'
+    page.click(warn_box)
+    page.wait_for_function(f"() => !document.querySelector('{warn_box}').disabled", timeout=5000)
+    assert page.query_selector(".fleet-warn-dialog") is None
+    assert posts[-1][1] == {"level": "strict"}
+    assert page.is_checked(warn_box) is True    # the server still holds Warn
+
+
+def test_fleet_warn_success_rerenders_from_the_server(page, dashboard_fleet):
+    """Confirming Warn posts {level: "warn"}; on success Fleet re-renders
+    from the server, so the row shows Warn with its box checked."""
+    overrides = {}
+    expected = _route_policies(page, overrides)
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
+    _wait_for_fleet_render(page)
+    name = list(expected)[1]                       # a Default row
+    posts = []
+
+    def accept(route):
+        posts.append(route.request.post_data_json)
+        overrides[name] = "warn"                   # what the server now holds
+        route.fulfill(status=200, json={"status": "ok", "commit_policy": "warn"})
+
+    page.route("**/commit-policy", accept)
+    page.route("**/api/refresh", lambda route: route.fulfill(status=200, json={"status": "ok"}))
+    box = f'.fleet-warn-toggle[data-repo-name="{name}"]'
+    page.click(box)
+    page.click(".fleet-warn-dialog .warn-confirm-btn")
+    page.wait_for_function(
+        f"() => {{ const b = document.querySelector('{box}');"
+        " return b && b.checked && !b.disabled; }", timeout=15000)
+    assert posts == [{"level": "warn"}]
+    row = {r["name"]: r for r in page.evaluate(_POLICY_ROWS)}[name]
+    assert row["text"] == "Warn" and row["checked"] is True
+    assert page.evaluate(f"() => document.querySelector('{box}').closest('td')"
+                         ".querySelector('.fleet-policy-error').textContent") == ""
+
+
 def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
     """#75: Settings shows the two-category policy and each repository's
-    read-only posture with its note; there is no selector."""
+    posture with its note; there is no control."""
     expected = _route_policies(page)
     page.goto(dashboard_fleet["url"].rstrip("/") + "/?view=settings", wait_until="load")
     page.wait_for_selector(".settings-repo-table", timeout=15000)
     out = page.evaluate("""() => ({
-        selects: document.querySelectorAll('#view-slot select').length,
+        controls: document.querySelectorAll('#view-slot select, #view-slot input').length,
         categories: Array.from(document.querySelectorAll('.settings-policy-table tbody tr'))
             .map(tr => Array.from(tr.cells).map(td => td.textContent.trim())),
         repos: Object.fromEntries(Array.from(document.querySelectorAll(
@@ -455,7 +556,7 @@ def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
             [tr.querySelector('.settings-policy').textContent.trim(),
              tr.querySelector('.settings-policy-note').textContent.trim()]])),
     })""")
-    assert out["selects"] == 0
+    assert out["controls"] == 0
     assert out["categories"] == [
         ["Charter integrity", "Block", "Code needs its required charter update. When no "
          "charter edit is warranted, only the Architect may approve the exact staged change."],
@@ -463,11 +564,10 @@ def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
          "HIGH/CRITICAL findings pause the commit until the Architect's decision is "
          "recorded; a skip without one is recorded as unacknowledged."],
     ]
-    for name, label in expected.items():
-        assert out["repos"][name][0] == label, (name, out["repos"][name])
+    for name, want in expected.items():
+        assert out["repos"][name][0] == want[0], (name, out["repos"][name])
     notes = {out["repos"][n][0]: out["repos"][n][1] for n in expected}
-    assert "including missing charter updates" in notes["Legacy warn"]
-    assert notes["Legacy off"] == "Legacy broad mode: pre-commit checks are skipped."
+    assert "On this machine only" in notes["Warn"]
     assert "Enterprise hook mode" in notes["Managed by Enterprise"]
     assert notes["Not gatorized"] == "No Gator pre-commit checks run in this repository."
     assert notes["Unknown"] == "Not accessible: the commit policy cannot be read."

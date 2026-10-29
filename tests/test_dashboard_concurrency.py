@@ -11,6 +11,7 @@ live thread names and the unexpected outcomes.
 
 import errno
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -494,6 +495,54 @@ def _plain(tmp_path, name):
     return str(repo.resolve())
 
 
+class TestCommitPolicyRoute:
+    """POST /api/repo/<name>/commit-policy: this machine's level for the
+    clone, written to Git's private area through precommit_local_policy,
+    never into the repository; Enterprise-managed repositories are refused."""
+
+    def _repo(self, tmp_path, name="pol"):
+        repo = Path(_gatorized(tmp_path, name))
+        subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+        return repo
+
+    def test_warn_then_strict_writes_only_the_private_file(self, threaded, tmp_path):
+        repo = self._repo(tmp_path)
+        url = threaded([{"name": "pol", "path": str(repo)}])
+        private = repo / ".git" / "gator-commit-policy.json"
+        s, t = _request(url, "/api/repo/pol/commit-policy", {"level": "warn"})
+        assert s == 200 and json.loads(t) == {"status": "ok", "commit_policy": "warn"}, t
+        assert json.loads(private.read_text(encoding="utf-8"))["level"] == "warn"
+        assert not (repo / ".gator" / "config.json").exists()
+        fleet = {r["name"]: r for r in dashboard._fleet_snapshot()["repos"]}
+        assert fleet["pol"]["commit_policy"] == "warn"
+        s, t = _request(url, "/api/repo/pol/commit-policy", {"level": "strict"})
+        assert s == 200 and json.loads(t)["commit_policy"] == "strict", t
+        assert not private.exists()
+
+    @pytest.mark.parametrize("body", [{"level": "off"}, {"level": "loose"}, {},
+                                      {"enforcement_level": "warn"}])
+    def test_other_levels_are_refused(self, threaded, tmp_path, body):
+        repo = self._repo(tmp_path)
+        url = threaded([{"name": "pol", "path": str(repo)}])
+        s, t = _request(url, "/api/repo/pol/commit-policy", body)
+        assert s == 400 and "strict or warn" in t, (s, t)
+        assert not (repo / ".git" / "gator-commit-policy.json").exists()
+
+    def test_enterprise_managed_is_refused(self, threaded, tmp_path):
+        repo = self._repo(tmp_path)
+        (repo / ".gator" / "enterprise.json").write_text('{"enabled": true}', encoding="utf-8")
+        url = threaded([{"name": "pol", "path": str(repo)}])
+        s, t = _request(url, "/api/repo/pol/commit-policy", {"level": "warn"})
+        assert s == 409 and "Enterprise" in t, (s, t)
+        assert not (repo / ".git" / "gator-commit-policy.json").exists()
+
+    def test_retired_config_route_writes_nothing(self, threaded, tmp_path):
+        repo = self._repo(tmp_path)
+        url = threaded([{"name": "pol", "path": str(repo)}])
+        s, _ = _request(url, "/api/repo/pol/config", {"enforcement_level": "warn"})
+        assert s != 200
+        assert not (repo / ".gator" / "config.json").exists()
+
 class TestRemoveVersusSamePath:
 
     @pytest.fixture
@@ -531,7 +580,7 @@ class TestRemoveVersusSamePath:
     @pytest.mark.parametrize("verb,body,maker", [
         ("update", {}, _gatorized),
         ("gatorize", {}, _plain),
-        ("config", {"enforcement_level": "warn"}, _gatorized),
+        ("commit-policy", {"level": "warn"}, _gatorized),
         ("topology", {"topology": "standalone"}, _gatorized),
     ])
     def test_same_path_action_during_and_after_remove(
@@ -557,7 +606,7 @@ class TestRemoveVersusSamePath:
         s, t = _request(url, f"/api/repo/target/{verb}", body)
         assert s == 404, (s, t)
         assert runner.invocations == []
-        assert not (Path(repo) / ".gator" / "config.json").exists()
+        assert not (Path(repo) / ".git" / "gator-commit-policy.json").exists()
 
     def test_action_whose_target_is_removed_before_it_locks_gets_404(
             self, threaded, tmp_path, runner, monkeypatch):
@@ -1187,6 +1236,8 @@ class TestMixedStress:
             "# stress\n", encoding="utf-8")
         stress = str(repo.resolve())
         beta = _browsable_repo(tmp_path, "beta")
+        # The commit-policy writes resolve Git's private path: a real repository.
+        subprocess.run(["git", "init", "-q", beta], check=True, capture_output=True)
         churn = [_plain(tmp_path, f"churn{i}") for i in range(4)]
         url = threaded([{"name": "stress", "path": stress, "repo_key": rk},
                         {"name": "beta", "path": beta}], production=True)
@@ -1226,8 +1277,8 @@ class TestMixedStress:
             elif (i // 8) % 2:
                 plan.append(("GET", "/api/refresh", None, ok, None, None))
             else:
-                plan.append(("POST", "/api/repo/beta/config",
-                             {"enforcement_level": "warn"},
+                plan.append(("POST", "/api/repo/beta/commit-policy",
+                             {"level": "warn"},
                              {200, 409}, None, None))
         problems = []
 
@@ -1257,5 +1308,6 @@ class TestMixedStress:
             threaded.registry_file.read_text(encoding="utf-8"))["repos"])
         assert snapshot == persisted
         assert {stress, beta} <= set(snapshot)
-        assert json.loads((Path(beta) / ".gator" / "config.json").read_text(
-            encoding="utf-8")) == {"enforcement_level": "warn"}
+        assert json.loads((Path(beta) / ".git" / "gator-commit-policy.json").read_text(
+            encoding="utf-8"))["level"] == "warn"
+        assert not (Path(beta) / ".gator" / "config.json").exists()

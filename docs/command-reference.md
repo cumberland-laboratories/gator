@@ -26,9 +26,9 @@ Shows the installed Gator CLI version.
 
 Generates the strategic operations brief (`.gator/pulse.md`) — a summary of project momentum, priorities, and recent activity.
 
-### `gator enforce`
+### Commit policy (Dashboard Fleet → Warn)
 
-Manage enforcement level for a repo (strict, warn, off). Also configurable from the dashboard Fleet view.
+Each engineer chooses the commit policy for their own clone on their own machine: **strict** (the default) or **warn** (every finding is advisory). Set it with the **Warn** checkbox in the Dashboard Fleet view. The setting is stored in Git's private area for that clone (`$(git rev-parse --git-path gator-commit-policy.json)`), never in the repository, so it never changes anyone else's checks. A commit made in warn mode records the trailer `Gator-Commit-Policy: warn`. Enterprise-managed repositories follow Enterprise policy and cannot be changed locally. The tracked `.gator/config.json` `enforcement_level` is no longer read.
 
 ## Upgrade
 
