@@ -4,6 +4,26 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.35.0] — 2026-10-29
+
+Polish release. **Fleet's commit policy is now a Strict / Warn dropdown**, the blocked-commit dialog accepts a reason pasted from a terminal, and agents now point the Architect to the Gator Dashboard first when a commit needs approval. Codex loop participants are told to run plain `gator loop` commands, which removes the most common cause of extra approval prompts (#99).
+
+### Changed
+
+- **Fleet: Strict / Warn dropdown.** An editable repository's Commit policy cell shows a dropdown (Strict, Warn) instead of a checkbox beside "Default". Choosing Warn opens the same confirmation; choosing Strict switches back at once. The default posture is labelled **Strict** in Fleet and Settings. The dropdown sits in the existing cell, so the table keeps its width. Pinned by `test_fleet_commit_policy_postures`, `test_fleet_policy_dropdown` and `test_fleet_warn_success_rerenders_from_the_server`.
+- **Fleet: quieter row menu.** The ⋮ button shows its border only on hover and keyboard focus.
+- **Blocked-commit dialog: reason field.**
+  - A reason pasted from a terminal is accepted: line breaks and tabs are folded to single spaces, as the single-line trailer would make them anyway. Other control characters are still refused.
+  - The field resizes vertically again.
+  - A reason may be up to **500** characters (was 200) on every path: the dialog, the Dashboard relay and `gator hook approve` (`TRAILER_MAX`). The field no longer cuts a paste silently; the counter shows "(too long)" and Approve stays disabled above 500.
+  - Pinned by `test_reason_paste_length_and_resize`, `test_reason_textarea_resizes_vertically` and `test_approve_folds_pasted_line_breaks_into_one_line`.
+- **Approvals are Dashboard-first.** The hook's STOP box, the constitution, the override procedure, `/commit` and the pre-commit checks page now point the Architect to the Gator Dashboard's Commits view, and name `gator hook approve` as the terminal alternative.
+- **Codex `/goal` prompt (#99).** The prompt (Dashboard, Loop Extras and the participant note) no longer tells Codex to act on exit codes 2 and 3. It asks for each `gator loop` command as one plain command, judged by Gator's printed text. A wrapped command such as `...; exit $LASTEXITCODE` misses the profile's allow rule and becomes a host prompt.
+
+### Compatibility
+
+- `Gator-Override-Reason` can now hold up to 500 characters; trailer readers must not assume 200.
+
 ## [2.34.0] — 2026-10-29
 
 Feature release. **The commit policy is now each engineer's own choice, per clone, on their own machine.** Strict stays the default everywhere. An engineer can relax their own clone to Warn from the Dashboard's Fleet view, but nothing in Git can relax anyone else's checks any more: the setting lives in Git's private area for that clone, and every commit made in Warn mode says so in its trailers. **`gator loop codex` no longer refuses to start after Codex saves a "don't ask again" approval (#87).** It keeps those approvals, lists them before every launch with credentials hidden, keeps the settings Codex writes into its configuration, and lets tests run inside the Codex sandbox.
