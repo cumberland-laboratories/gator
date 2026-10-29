@@ -4,6 +4,36 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.34.0] — 2026-10-29
+
+Feature release. **The commit policy is now each engineer's own choice, per clone, on their own machine.** Strict stays the default everywhere. An engineer can relax their own clone to Warn from the Dashboard's Fleet view, but nothing in Git can relax anyone else's checks any more: the setting lives in Git's private area for that clone, and every commit made in Warn mode says so in its trailers. **`gator loop codex` no longer refuses to start after Codex saves a "don't ask again" approval (#87).** It keeps those approvals, lists them before every launch with credentials hidden, keeps the settings Codex writes into its configuration, and lets tests run inside the Codex sandbox.
+
+### Added
+
+- **Fleet: machine-local Warn.** Each gatorized repository row has a **Warn** checkbox. Turning it on asks first and explains that the setting applies only to this checkout on this machine; clearing it restores the default checks at once. Failures keep the previous state and show an inline row error. Enterprise-managed, unreadable and not-gatorized repositories show no control. Pinned by `test_fleet_commit_policy_postures`, `test_fleet_warn_control` and `test_fleet_warn_success_rerenders_from_the_server` (`tests/test_dashboard_ui/test_fleet_layout.py`).
+- **`Gator-Commit-Policy: warn` trailer.** A commit made under a relaxed local policy records it; strict commits carry no trailer.
+- **`POST /api/repo/<name>/commit-policy`** (`{"level": "strict"|"warn"}`), which refuses Enterprise-managed repositories (409) and any other level (400). Pinned by `TestCommitPolicyRoute` (`tests/test_dashboard_concurrency.py`).
+- **`precommit_local_policy.py`**, the single reader and writer of the per-clone policy file `$(git rev-parse --git-path gator-commit-policy.json)`, shipped byte-identically beside the hook and the Dashboard. Pinned by `tests/test_local_commit_policy.py`.
+- **Loop codex (#87): saved approvals are kept and disclosed.** Approvals Codex appends after Gator's rule in `rules/default.rules` are accepted only in a closed `prefix_rule` grammar (never evaluated), kept byte-for-byte, and listed in `--dry-run` and before every launch with recognised credentials hidden. Anything unreadable or unshowable still refuses, naming only the approval's position.
+- **Loop codex (#87): sandboxed tests.** The profile points `TEMP`/`TMP` at a sandbox temp folder next to the dedicated home (`<home>.sandbox-tmp`) and makes it writable for the sandbox, so pytest runs inside the Codex sandbox without a prompt. Evidence: `.gator/artifacts/2026-10-27-codex-sandbox-temp-spike.md`.
+
+### Changed
+
+- **The hooks no longer read `enforcement_level` from the tracked `.gator/config.json`.** A committed `warn` or `off` is ignored, with the advisory warning `tracked-commit-policy-ignored`. The Enterprise bundled hook keeps `GATOR_HOOK_MODE` as its authority and falls back to strict when it is unset. Contract: `hook-mode-vocabulary-v2` (the enum is unchanged; the local levels are `strict | warn`, and no level may be stored in a tracked file).
+- **Loop codex (#87):** the Codex policy check now runs on the exact rule file before anything is written to the home; a saved approval that opens `git write-tree` or `gator loop end` is named and stops the launch, and Codex's own output is never echoed. Settings Codex writes into Gator's `config.toml` block (hook trust, TUI state) are moved above the block unchanged instead of being deleted.
+- `gator-enforce.py` writes the per-clone file and accepts only `strict` and `warn`. `docs/command-reference.md` no longer describes a `gator enforce` command, which was never routed by the CLI.
+
+### Removed
+
+- `POST /api/repo/<name>/config` (it wrote the tracked `config.json`; its only caller was the retired Fleet selector).
+- The template hook's "enforcement OFF" path: there is no local Off.
+
+### Compatibility
+
+- **Behaviour change:** a repository that commits `warn` or `off` in `.gator/config.json` becomes **strict** for everyone after updating. An engineer who wants Warn sets it on their own clone from Fleet.
+- `Gator-Commit-Policy` is an additive trailer; readers must tolerate its absence on every earlier commit.
+- Known limitation (tracked in #99): Codex participants can still be prompted for wrapped `gator loop` commands; Windows 10's elevated sandbox remains a legacy surface.
+
 ## [2.33.0] — 2026-10-26
 
 Feature release. **A blocked commit can now be resolved from the Dashboard (#76).** While a commit is blocked, the Commits view shows one quiet alert. It opens a dialog that lists the findings under External approval, Architect decision required and Fix required. The Architect can approve the findings that need an external approval there, with a name, a reason and the existing ten-second delay. Pauses and fix-required findings are explained but can never be approved from the Dashboard, and nothing in the dialog implies that a commit happened. The repository's own approval command still makes every decision; the Dashboard adds no authority.
