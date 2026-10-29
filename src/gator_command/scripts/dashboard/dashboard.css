@@ -2487,20 +2487,20 @@ mark.search-hit {
   min-width: 20px;
 }
 
-/* Commit policy posture (#75): text. The only controls are the Warn
-   checkbox column and "Restore default checks" in the row menu. */
+/* Commit policy posture (#75): text. The only control is the
+   machine-local Warn checkbox, inline before the label in the same cell
+   (no extra column: the table must not widen). */
 .fleet-policy {
   white-space: nowrap;
 }
-.fleet-table .fleet-warn-head,
-.fleet-table .fleet-warn-cell {
-  width: 56px;
-  text-align: center;
+.fleet-policy-cell {
+  white-space: nowrap;
 }
 .fleet-warn-toggle {
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
   cursor: pointer;
 }
 .fleet-warn-toggle:disabled {
@@ -2512,7 +2512,6 @@ mark.search-hit {
   margin-top: 4px;
   font-size: var(--text-sm);
   color: var(--color-critical);
-  text-align: left;
   white-space: normal;
 }
 

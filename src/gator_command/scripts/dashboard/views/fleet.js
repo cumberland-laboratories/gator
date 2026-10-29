@@ -162,8 +162,7 @@
         <table class="data-table fleet-table">
           <thead>
             <tr>
-              ${SORT_COLUMNS.map(c => `<th data-sort-key="${c.key}"><button class="fleet-sort" data-sort-key="${c.key}">${c.label}<span class="fleet-sort-mark" aria-hidden="true"></span></button></th>`
-                + (c.key === "policy" ? '<th class="fleet-warn-head">Warn</th>' : "")).join("")}
+              ${SORT_COLUMNS.map(c => `<th data-sort-key="${c.key}"><button class="fleet-sort" data-sort-key="${c.key}">${c.label}<span class="fleet-sort-mark" aria-hidden="true"></span></button></th>`).join("")}
               <th></th>
               <th style="width:24px"></th>
             </tr>
@@ -183,7 +182,9 @@
       const policyHtml = `<span class="fleet-policy${policy.active ? "" : " muted"}" title="${escHtml(policy.note)}">${escHtml(policy.label)}</span>`;
 
       // Warn checkbox: this machine's policy for the clone, only where the
-      // local Dashboard may change it.
+      // local Dashboard may change it. It sits inside the Commit policy cell,
+      // before the label, so the table gains no width (a separate column
+      // pushed the ⋮ menu past the pane edge at 800px).
       const warnHtml = policyEditable(repo)
         ? `<input type="checkbox" class="fleet-warn-toggle"
              data-repo-name="${escHtml(repo.name)}"
@@ -235,8 +236,7 @@
             ${accIcon}
           </td>
           <td class="fleet-branch">${branch}</td>
-          <td class="fleet-policy-cell">${policyHtml}</td>
-          <td class="fleet-warn-cell">${warnHtml}<span class="fleet-policy-error" role="alert"></span></td>
+          <td class="fleet-policy-cell">${warnHtml}${policyHtml}<span class="fleet-policy-error" role="alert"></span></td>
           <td class="fleet-version">${cliVersion || '<span class="muted">-</span>'}</td>
           <td class="status-cell">${menuHtml}</td>
           <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
@@ -245,7 +245,7 @@
     });
 
     if (repos.length === 0) {
-      html += `<tr><td colspan="7" class="fleet-empty">
+      html += `<tr><td colspan="6" class="fleet-empty">
         <p>No repos registered yet.</p>
         <p><code>gator gatorize /path/to/repo</code> — install governance + register</p>
         <p><code>gator dashboard --add-repo /path/to/repo</code> — register an existing gatorized repo</p>

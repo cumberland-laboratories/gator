@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.34.0",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "7a6be29d040d4bd56da670aab02e7b0c7599caf8",
+  "short_commit": "7a6be29",
+  "snippet_id": "snippet-7a6be29d040d4",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "6701daa4676024b3cbf229e25708e43fb38e9597",
+  "started_at": "2026-10-29T01:07:41Z",
+  "ended_at": "2026-10-29T01:07:41Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-10-29-gator-6701daa467602.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version bump for 2.34.0: machine-local commit policy (Fleet Warn, per clone,",
+    "never in Git) and the `gator loop codex` saved-approval recovery (#87). See",
+    "`CHANGELOG.md`.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

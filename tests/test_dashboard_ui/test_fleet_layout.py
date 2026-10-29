@@ -84,8 +84,8 @@ def test_fleet_update_click_preserves_column_geometry(
 
     # Baseline geometry BEFORE the busy transition.
     before = _measure_header_geometry(page)
-    assert len(before) == 7, (
-        f"Expected 7 Fleet columns; got {len(before)}: {before}")
+    assert len(before) == 6, (
+        f"Expected 6 Fleet columns; got {len(before)}: {before}")
 
     # Trigger Update through the overflow menu — the shipped interaction
     # path in `views/fleet.js`. Open the first overflow menu, then click
@@ -108,7 +108,7 @@ def test_fleet_update_click_preserves_column_geometry(
 
     # Geometry AFTER the busy transition.
     after = _measure_header_geometry(page)
-    assert len(after) == 7
+    assert len(after) == 6
 
     # Every column's width AND x-coordinate must be unchanged within
     # 0.5px subpixel tolerance.
@@ -436,8 +436,10 @@ def test_fleet_commit_policy_postures(page, dashboard_fleet):
     rows = {r["name"]: r for r in page.evaluate(_POLICY_ROWS) if r["name"] in expected}
     assert {n: (r["text"], r["box"], r["checked"]) for n, r in rows.items()} == expected
     assert page.evaluate("() => document.querySelectorAll('.fleet-table select').length") == 0
-    assert page.evaluate("() => document.querySelector('.fleet-table thead th.fleet-warn-head')"
-                         ".textContent.trim()") == "Warn"
+    # The checkbox lives inside the Commit policy cell: no extra column.
+    assert page.evaluate("() => document.querySelectorAll('.fleet-table thead th').length") == 6
+    assert page.evaluate("() => Array.from(document.querySelectorAll('.fleet-warn-toggle'))"
+                         ".every(b => b.closest('td').classList.contains('fleet-policy-cell'))")
     for r in rows.values():
         assert "Off" not in r["text"] and "Legacy" not in r["text"]
         if r["text"] == "Warn":
