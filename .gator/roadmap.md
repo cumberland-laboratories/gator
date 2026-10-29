@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-26._ Current strategy, priorities, and planned work.
+_Updated 2026-10-29._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,11 +11,11 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.33.0 (2026-10-26).
-- **Commits:** resolve a blocked commit from the Dashboard (#76). A quiet alert opens a dialog that groups findings as external approval, Architect decision and fix required; Approve appears only for findings that still need an approval, and every approve or discard re-reads the state first.
-- **CLI:** `gator hook override status|approve|cancel --json` with `--expect-block` / `--expect-revision` guards.
+**Latest released version**: v2.34.0 (2026-10-29).
+- **Commit policy is machine-local:** strict by default; an engineer can set Warn for their own clone from Fleet. It is stored in Git's private area, never in the repository, and Warn commits carry `Gator-Commit-Policy: warn`. Committed `config.json` levels are no longer read (behaviour change).
+- **`gator loop codex` (#87):** keeps and discloses Codex-saved approvals, keeps Codex-written config, and runs tests inside the sandbox. Remaining prompt causes are tracked in #99 (Windows 10 legacy parked; new-machine direction recorded there).
 
-v2.32.0 (2026-10-25): the #75 pre-commit policy (charter updates block with an Architect-only approval; dangerous patterns pause for a recorded decision). v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
+v2.33.0 (2026-10-26): resolve a blocked commit from the Dashboard (#76). v2.32.0 (2026-10-25): the #75 pre-commit policy. v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 
