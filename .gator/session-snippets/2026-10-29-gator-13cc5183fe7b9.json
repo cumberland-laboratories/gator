@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.34.0 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "13cc5183fe7b9a9b2de00dfb188be787a64a1f3f",
+  "short_commit": "13cc518",
+  "snippet_id": "snippet-13cc5183fe7b9",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-10-29T11:02:29Z",
+  "ended_at": "2026-10-29T11:02:29Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-10-29-gator-72cc121dd435b.json"
+  ],
+  "notes": [
+    "Records v2.34.0 (machine-local commit policy; `gator loop codex` saved-approval",
+    "recovery, #87) as the latest released version.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

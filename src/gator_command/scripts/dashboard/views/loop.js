@@ -714,15 +714,21 @@
   // received from, or sent to, the document. One line (a pasted newline
   // can submit early in terminal agent UIs). The <token> placeholder is
   // part of the text (Codex reuses the token from its join); the wait is
-  // the protocol default, 360 (Architect direction, 2026-10-24).
+  // the protocol default, 360 (Architect direction, 2026-10-24). It asks for
+  // plain commands judged by Gator's printed text, never exit codes (#99):
+  // a wrapped command (`...; exit $LASTEXITCODE`) misses the profile's
+  // allow rule and turns into a host prompt.
   var CODEX_GOAL_PROMPT =
     "/goal Remain an active participant in the Gator loop I just joined until it reaches "
-    + "a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use "
-    + "the existing role token and reissue `gator loop wait --token <token> --max-seconds "
-    + "360` whenever it returns exit code 3. Stay connected through paused and blocked "
-    + "states. When my turn arrives, perform the required governed review or submission "
-    + "through the CLI. Stop only on terminal exit code 2; do not edit loop files directly "
-    + "or submit without completing the required work.";
+    + "a terminal state. Follow the Gator loop protocol exactly. Run every `gator loop` "
+    + "command as one plain command with nothing added (no `; exit $LASTEXITCODE`, no "
+    + "second line) and judge the result by Gator's printed text, not the exit code: "
+    + "`Your turn: YES` means act, `Loop ended.` means stop. If it is not my turn, use the "
+    + "existing role token and reissue `gator loop wait --token <token> --max-seconds 360` "
+    + "each time it prints that it is still waiting. Stay connected through paused and "
+    + "blocked states. When my turn arrives, perform the required governed review or "
+    + "submission through the CLI. Do not edit loop files directly or submit without "
+    + "completing the required work.";
   var EXTRAS_MSG_TYPE = "gator-loop";
   var EXTRAS_COPY_REQUEST = "copy-codex-goal";
   var EXTRAS_COPY_RESULT = "copy-codex-goal-result";

@@ -206,6 +206,11 @@ This was not tested live. A Draftor still needs one host approval for
 
 ## Participant Guidance
 
+- **Run each `gator loop` command as one plain command.** Do not append
+  `; exit $LASTEXITCODE`, a second line, `Write-Output`, or any other
+  command. The profile's rule matches only a single plain command, so a
+  wrapped one runs as a host prompt instead. If that prompt is approved with
+  "don't ask again", Codex saves the wrapped command as a new approval.
 - **Read Gator's text, not the exit code.** Windows PowerShell 5.1 reports
   exit `1` for every non-zero exit, so `2` (loop ended) and `3` (still
   waiting) look the same. Use the output: `Loop ended.` means stop, and

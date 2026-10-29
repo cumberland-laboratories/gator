@@ -596,7 +596,7 @@
 
   <h3>Keep Codex in the loop with <code>/goal</code></h3>
   <p>Paste this into the Codex session after it has joined the loop.</p>
-  <pre id="codex-goal">/goal Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. If it is not my turn, use the existing role token and reissue `gator loop wait --token &lt;token&gt; --max-seconds 360` whenever it returns exit code 3. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Stop only on terminal exit code 2; do not edit loop files directly or submit without completing the required work.</pre>
+  <pre id="codex-goal">/goal Remain an active participant in the Gator loop I just joined until it reaches a terminal state. Follow the Gator loop protocol exactly. Run every `gator loop` command as one plain command with nothing added (no `; exit $LASTEXITCODE`, no second line) and judge the result by Gator's printed text, not the exit code: `Your turn: YES` means act, `Loop ended.` means stop. If it is not my turn, use the existing role token and reissue `gator loop wait --token &lt;token&gt; --max-seconds 360` each time it prints that it is still waiting. Stay connected through paused and blocked states. When my turn arrives, perform the required governed review or submission through the CLI. Do not edit loop files directly or submit without completing the required work.</pre>
   <div class="copy-row">
     <button type="button" id="copy-codex-goal">Copy goal prompt</button>
     <div id="copy-status" role="status" aria-live="polite"></div>

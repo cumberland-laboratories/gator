@@ -26,7 +26,7 @@
   // misdescribes the two categories (charter integrity blocks, with an
   // Architect approval as the escape hatch; dangerous patterns pause). Shared with views/settings.js through
   // window.GatorCommitPolicy (fleet.js loads first). The only Fleet
-  // control is the machine-local Warn checkbox (below).
+  // control is the machine-local Strict/Warn dropdown (below).
 
   // `active` is false for the two states with no effective policy to
   // report (unreadable, or not gatorized): they never claim the default
@@ -49,7 +49,7 @@
       return { key: "warn", label: "Warn", active: true,
                note: "On this machine only: every finding is advisory, so commits go through with missing charter updates and dangerous-pattern findings. Each such commit records Gator-Commit-Policy: warn." };
     }
-    return { key: "default", label: "Default", active: true,
+    return { key: "default", label: "Strict", active: true,
              note: "Charter updates block; dangerous patterns pause for an Architect decision." };
   }
 
@@ -181,16 +181,20 @@
       const policy = commitPolicy(repo);
       const policyHtml = `<span class="fleet-policy${policy.active ? "" : " muted"}" title="${escHtml(policy.note)}">${escHtml(policy.label)}</span>`;
 
-      // Warn checkbox: this machine's policy for the clone, only where the
-      // local Dashboard may change it. It sits inside the Commit policy cell,
-      // before the label, so the table gains no width (a separate column
-      // pushed the ⋮ menu past the pane edge at 800px).
-      const warnHtml = policyEditable(repo)
-        ? `<input type="checkbox" class="fleet-warn-toggle"
+      // Strict/Warn dropdown: this machine's policy for the clone, only where
+      // the local Dashboard may change it; it replaces the label in the
+      // Commit policy cell, so the table gains no width (a separate column
+      // pushed the ⋮ menu past the pane edge at 800px). Other rows keep text.
+      const level = policyLevel(repo);
+      const cellHtml = policyEditable(repo)
+        ? `<select class="fleet-policy-select"
              data-repo-name="${escHtml(repo.name)}"
-             aria-label="Use warn mode for ${escHtml(repo.name)} on this machine"
-             ${policyLevel(repo) === "warn" ? "checked" : ""}>`
-        : "";
+             aria-label="Commit policy for ${escHtml(repo.name)} on this machine"
+             title="${escHtml(policy.note)}">
+             <option value="strict"${level === "strict" ? " selected" : ""}>Strict</option>
+             <option value="warn"${level === "warn" ? " selected" : ""}>Warn</option>
+           </select>`
+        : policyHtml;
 
       // Overflow menu replaces the direct action button.
       // Carries both data-repo-name (for Update/Gatorize) and
@@ -236,7 +240,7 @@
             ${accIcon}
           </td>
           <td class="fleet-branch">${branch}</td>
-          <td class="fleet-policy-cell">${warnHtml}${policyHtml}<span class="fleet-policy-error" role="alert"></span></td>
+          <td class="fleet-policy-cell">${cellHtml}<span class="fleet-policy-error" role="alert"></span></td>
           <td class="fleet-version">${cliVersion || '<span class="muted">-</span>'}</td>
           <td class="status-cell">${menuHtml}</td>
           <td class="activity-cell" data-repo="${escHtml(repo.name)}"><span class="activity-indicator" aria-live="polite"></span></td>
@@ -257,7 +261,7 @@
     applySort(container.querySelector(".fleet-table"));
     bindSortHeaders(container);
     bindOverflowMenus(container);
-    bindWarnToggles(container);
+    bindPolicySelects(container);
 
     // Add Repository button
     const addBtn = container.querySelector("#add-repo-btn");
@@ -422,32 +426,33 @@
     container.querySelectorAll(".overflow-menu.open").forEach(m => m.classList.remove("open", "open-up"));
   }
 
-  // ── Commit policy: the Warn checkbox (machine-local) ─────────────────
+  // ── Commit policy: the Strict/Warn dropdown (machine-local) ──────────
   //
   // The level lives in this clone's Git private area on this machine, never
   // in the repository, so it never changes another engineer's checks. The
-  // checkbox never shows a state the server has not confirmed. Turning Warn
-  // on is reverted at once and asks first; clearing it (the safe direction)
-  // writes `strict` directly. Both go through writePolicy(), the only caller
-  // of POST /api/repo/<name>/commit-policy; success re-renders Fleet from
-  // the server, failure keeps the prior state and shows a row error.
+  // dropdown never shows a level the server has not confirmed. Choosing
+  // Warn is reverted to Strict at once and asks first; choosing Strict (the
+  // safe direction) writes `strict` directly. Both go through writePolicy(),
+  // the only caller of POST /api/repo/<name>/commit-policy; success
+  // re-renders Fleet from the server, failure restores the level the server
+  // still holds and shows a row error.
 
-  function bindWarnToggles(container) {
-    container.querySelectorAll(".fleet-warn-toggle").forEach(box => {
-      box.addEventListener("change", function () {
+  function bindPolicySelects(container) {
+    container.querySelectorAll(".fleet-policy-select").forEach(select => {
+      select.addEventListener("change", function () {
         const repoName = this.dataset.repoName;
         const errorEl = this.closest("td").querySelector(".fleet-policy-error");
-        if (this.checked) {
-          this.checked = false;
+        if (this.value === "warn") {
+          this.value = "strict";
           openWarnConfirmDialog(repoName, container, this, errorEl);
         } else {
-          writePolicy(repoName, "strict", errorEl, this, true);
+          writePolicy(repoName, "strict", errorEl, this, "warn");
         }
       });
     });
   }
 
-  function openWarnConfirmDialog(repoName, container, box, errorEl) {
+  function openWarnConfirmDialog(repoName, container, control, errorEl) {
     const modal = document.createElement("div");
     modal.className = "gator-modal-overlay";
     modal.innerHTML = `
@@ -455,7 +460,7 @@
         <h3 id="fleet-warn-title">Use Warn mode for ${escHtml(repoName)} on this machine?</h3>
         <div class="gator-modal-body">
           <p>Warn mode allows your commits in <strong>${escHtml(repoName)}</strong> with missing charter updates and dangerous-pattern findings. Every finding becomes advisory.</p>
-          <p class="muted" style="font-size:13px">This applies only to this checkout on this machine. It is not stored in the repository and does not change anyone else's checks. Each commit you make in Warn mode records <code>Gator-Commit-Policy: warn</code>. Clear the Warn box to restore the default checks.</p>
+          <p class="muted" style="font-size:13px">This applies only to this checkout on this machine. It is not stored in the repository and does not change anyone else's checks. Each commit you make in Warn mode records <code>Gator-Commit-Policy: warn</code>. Choose Strict to restore the default checks.</p>
         </div>
         <div class="gator-modal-footer" style="display:flex;justify-content:flex-end;gap:8px">
           <button class="gator-btn modal-cancel-btn">Cancel</button>
@@ -467,25 +472,25 @@
     const cancelBtn = modal.querySelector(".modal-cancel-btn");
     const confirmBtn = modal.querySelector(".warn-confirm-btn");
 
-    function close() { modal.remove(); box.focus(); }
+    function close() { modal.remove(); control.focus(); }
 
     cancelBtn.addEventListener("click", close);
     modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
     modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
     confirmBtn.addEventListener("click", function () {
       modal.remove();
-      writePolicy(repoName, "warn", errorEl, box, false);
+      writePolicy(repoName, "warn", errorEl, control, "strict");
     });
     cancelBtn.focus();
   }
 
-  // `box` (optional) is disabled during the request; on failure it returns
-  // to `boxPrior`, the state the server still holds.
-  async function writePolicy(repoName, level, errorEl, box, boxPrior) {
+  // `control` (the row's dropdown) is disabled during the request; on
+  // failure it returns to `prior`, the level the server still holds.
+  async function writePolicy(repoName, level, errorEl, control, prior) {
     if (errorEl) errorEl.textContent = "";
-    if (box) box.disabled = true;
+    if (control) control.disabled = true;
     function fail(message) {
-      if (box) { box.disabled = false; box.checked = !!boxPrior; }
+      if (control) { control.disabled = false; control.value = prior; }
       if (errorEl) errorEl.textContent = "Not changed: " + message;
     }
     try {
@@ -497,7 +502,7 @@
       const data = await resp.json().catch(() => ({}));
       if (resp.ok && data.status === "ok") {
         if (window.gatorRefreshFleet) window.gatorRefreshFleet();
-        else if (box) box.disabled = false;
+        else if (control) control.disabled = false;
       } else {
         fail(data.error || ("HTTP " + resp.status));
       }
