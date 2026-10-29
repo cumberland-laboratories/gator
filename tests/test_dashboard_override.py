@@ -151,8 +151,9 @@ GOOD = {"block_id": BLOCK, "revision": REV, "name": "Architect", "reason": "ok"}
 @pytest.mark.parametrize("body", [
     "not an object",
     dict(GOOD, name=""), dict(GOOD, name="   "), dict(GOOD, name="x" * 81),
-    dict(GOOD, name="A\nB"), dict(GOOD, reason=""), dict(GOOD, reason="r" * 201),
-    dict(GOOD, reason="a\x07b"), dict(GOOD, block_id="xyz"), dict(GOOD, block_id=None),
+    dict(GOOD, reason=" \r\n\t "), dict(GOOD, reason=""), dict(GOOD, reason="r" * 501),
+    dict(GOOD, reason="a\x07b"), dict(GOOD, reason="a\x1b[31mb"),
+    dict(GOOD, block_id="xyz"), dict(GOOD, block_id=None),
     dict(GOOD, revision="short"), {k: v for k, v in GOOD.items() if k != "revision"},
 ])
 def test_approve_rejects_invalid_body(body):
@@ -160,6 +161,17 @@ def test_approve_rejects_invalid_body(body):
     result = dashboard_data.resolve_repo_override("approve", "/repo", body, run_fn=runner)
     assert result["status"] == 400 and "error" in result["data"]
     assert runner.calls == [], "validation runs before any subprocess"
+
+
+def test_approve_folds_pasted_line_breaks_into_one_line():
+    """A reason pasted from a terminal (CRLF, LF, tabs) is accepted and sent
+    as one line, as the trailer would make it anyway; 500 characters fit."""
+    args, error = dashboard_data.override_cli_args("approve", dict(
+        GOOD, name="Dash\nArchitect", reason="  first line\r\n\tsecond  line\n"))
+    assert error is None
+    assert args[-4:] == ["--name", "Dash Architect", "--reason", "first line second line"]
+    args, error = dashboard_data.override_cli_args("approve", dict(GOOD, reason="r" * 500))
+    assert error is None and args[-1] == "r" * 500
 
 
 def test_cancel_body_validation_and_argv():

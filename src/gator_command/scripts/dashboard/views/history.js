@@ -409,7 +409,14 @@
     ["fix-required", "✚", "Fix required"],
   ];
   const BLOCK_NAME_MAX = 80;
-  const BLOCK_REASON_MAX = 200;
+  const BLOCK_REASON_MAX = 500;   // = precommit_override.TRAILER_MAX["reason"]
+
+  // The reason becomes one trailer line: line breaks and tabs (a paste from
+  // a terminal) count and are sent as single spaces, exactly as the server
+  // normalizes them. The counter and the limit apply to this form.
+  function oneLine(text) {
+    return String(text || "").replace(/[ \t\r\n\v\f]+/g, " ").trim();
+  }
   const BLOCK_FILES_SHOWN = 8;
   const BLOCK_CHANGED_NOTICE = "The blocked commit changed. Review it again before approving.";
   const DISCARD_CHANGED_NOTICE = "The blocked commit changed. Review it, then confirm again.";
@@ -534,7 +541,7 @@
 
     function fieldsValid() {
       const n = st.name.trim();
-      const r = st.reason.trim();
+      const r = oneLine(st.reason);
       return n.length > 0 && n.length <= BLOCK_NAME_MAX
         && r.length > 0 && r.length <= BLOCK_REASON_MAX;
     }
@@ -663,15 +670,23 @@
       const reason = el("textarea", "loop-ctrl-input");
       reason.id = "commit-block-reason";
       reason.rows = 3;
-      reason.maxLength = BLOCK_REASON_MAX;
+      // No maxLength: it would silently cut a pasted reason by its raw
+      // length (line breaks included). The counter shows the one-line
+      // length, and Approve stays disabled above the limit.
       reason.value = st.reason;
       reason.disabled = st.sending;
-      const count = el("span", "commit-block-count", st.reason.length + " / " + BLOCK_REASON_MAX);
+      const count = el("span", "commit-block-count", "");
       count.setAttribute("aria-live", "polite");
+      const syncCount = function () {
+        const n = oneLine(st.reason).length;
+        count.textContent = n + " / " + BLOCK_REASON_MAX
+          + (n > BLOCK_REASON_MAX ? " (too long)" : "");
+      };
+      syncCount();
       name.addEventListener("input", function () { st.name = name.value; syncApprove(); });
       reason.addEventListener("input", function () {
         st.reason = reason.value;
-        count.textContent = st.reason.length + " / " + BLOCK_REASON_MAX;
+        syncCount();
         syncApprove();
       });
       area.appendChild(nameLabel);
@@ -823,7 +838,7 @@
       preflight(BLOCK_CHANGED_NOTICE).then(function (fresh) {
         if (!fresh) return null;
         const body = { block_id: st.status.block.block_id, revision: st.status.revision,
-                       name: st.name.trim(), reason: st.reason.trim() };
+                       name: st.name.trim(), reason: oneLine(st.reason) };
         return postOverride(ctl.repoName, "approve", body).then(function (res) {
           if (res.status !== 200 || !res.data.ok) return afterRefusal(res, BLOCK_CHANGED_NOTICE);
           const rem = res.data.remaining || {};

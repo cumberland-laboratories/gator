@@ -205,7 +205,7 @@ def test_approve_flow(page, dashboard_fleet):
     btn = page.locator(".commit-block-approve")
     assert btn.is_disabled() and "available in" in btn.text_content()
     page.fill("#commit-block-reason", "No charter edit is warranted.")
-    assert page.text_content(".commit-block-count") == "29 / 200"
+    assert page.text_content(".commit-block-count") == "29 / 500"
     page.wait_for_function(
         "() => !document.querySelector('.commit-block-approve').disabled", timeout=5000)
     assert btn.text_content() == "Approve"
@@ -225,6 +225,45 @@ def test_approve_flow(page, dashboard_fleet):
     assert action == "approve" and header == "1"
     assert body == {"block_id": BLOCK, "revision": REV, "name": "Test Architect",
                     "reason": "No charter edit is warranted."}
+
+
+def test_reason_paste_length_and_resize(page, dashboard_fleet):
+    """A reason pasted from a terminal (line breaks, tabs) counts and is sent
+    as one line; over 500 characters Approve stays disabled and the counter
+    says so, with nothing silently cut; the textarea resizes vertically."""
+    stub = Stub(page, [_status(findings=(EXT,), approve_wait_seconds=0)],
+                post=lambda action, body: (200, {"ok": True, "message": "Override approved.",
+                                                 "remaining": {"fix_required": [], "paused": []}}))
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    btn = page.locator(".commit-block-approve")
+
+    page.fill("#commit-block-reason", "x" * 501)
+    assert page.input_value("#commit-block-reason") == "x" * 501      # not cut
+    assert page.text_content(".commit-block-count") == "501 / 500 (too long)"
+    assert btn.is_disabled()
+
+    one_line = "Reviewed in the terminal: no charter edit needed."
+    page.fill("#commit-block-reason", "  Reviewed in the terminal:\r\n\tno charter edit\nneeded.  ")
+    assert page.text_content(".commit-block-count") == f"{len(one_line)} / 500"
+    page.wait_for_function(
+        "() => !document.querySelector('.commit-block-approve').disabled", timeout=5000)
+    btn.click()
+    page.wait_for_selector(".commit-block-success", timeout=5000)
+    assert stub.posts[-1][1]["reason"] == one_line
+
+
+def test_reason_textarea_resizes_vertically(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(EXT,))])
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    style = page.evaluate("""() => { const t = document.querySelector('#commit-block-reason');
+        const s = getComputedStyle(t); return {resize: s.resize, flex: s.flexGrow + ' ' + s.flexShrink,
+        before: t.getBoundingClientRect().height}; }""")
+    assert style["resize"] == "vertical" and style["flex"] == "0 0", style
+    after = page.evaluate("""() => { const t = document.querySelector('#commit-block-reason');
+        t.style.height = '220px'; return t.getBoundingClientRect().height; }""")
+    assert abs(after - 220) < 2 and after > style["before"] + 50, (style, after)
 
 
 @pytest.mark.parametrize("case", ["new-block", "same-id-new-rule", "post-refused"])

@@ -21,17 +21,22 @@ Every blocked attempt is recorded, and every finding is tagged with how it is re
 | `[external-approval]` | A missing charter update, or a HIGH or CRITICAL dangerous pattern in a mode that requires external approval. | Fix it (update the charter), or the Architect approves it. |
 | `[warning]` / `[pause]` | A HIGH or CRITICAL dangerous pattern under the default policy, and the `dangerous-pattern-pause` it causes. No approval command: record the Architect's decision (or an explicit skip) in `commit_draft.md`. | The Architect, in the session. |
 
-The hook output ends with a `Block ID` and the command `gator hook override status`. The STOP box that names `gator hook approve` appears only when an `[external-approval]` finding is present.
+The hook output ends with a `Block ID` and the command `gator hook override status`. The STOP box that names the approval (the Dashboard's Commits view, or `gator hook approve` in a terminal) appears only when an `[external-approval]` finding is present.
 
 ## What the Agent Does
 
 1. Present the findings to the Architect, with each finding's tag.
 2. Fix the `[fix-required]` findings. They block no matter what is approved.
 3. For `[external-approval]` findings, the Architect decides: fix them, or approve them. For a missing charter update, the default is to update the charter; suggest approval only when you can say why no charter edit is warranted.
+4. When the Architect chooses approval, point them to the **Gator Dashboard first**: the repository's **Commits** view shows a blocked-commit alert (⚑) that opens the approval dialog. Mention `gator hook approve` only as the terminal alternative. Do not send the Architect to the command line by default.
 
-The agent must NOT run `gator hook approve` (or `gator hook override approve`). The agent must NOT create or edit override files. This is an auditable governance boundary. The agent may run `gator hook override status` and `gator hook override cancel`.
+The agent must NOT approve: not in the Dashboard, and not with `gator hook approve` (or `gator hook override approve`). The agent must NOT create or edit override files. This is an auditable governance boundary. The agent may run `gator hook override status` and `gator hook override cancel`.
 
-## What the Architect Runs
+## How the Architect Approves
+
+**In the Gator Dashboard (the default).** Open the repository's **Commits** view. While a commit is blocked it shows an alert (for example "⚑ Commit blocked"). The alert opens a dialog that groups the findings as External approval, Architect decision required and Fix required. Enter your name and a reason, and choose **Approve**. Approve is offered only for findings that still need an approval, after the ten-second guard. The dialog runs the same repository command as the terminal and writes the same approval and trailers.
+
+**In a terminal (the alternative).**
 
 ```
 gator hook override status
@@ -46,7 +51,7 @@ gator hook approve --reason "<why the override is acceptable>" --name "<Architec
 gator hook approve --reason "Typo fix in a log message; no charter content changes." --name "Alan Gillette"
 ```
 
-The command refuses, with the reason, when:
+Both paths refuse, with the reason, when:
 
 - no blocked attempt is recorded (retry the commit first);
 - the staged changes differ from the blocked attempt (retry the commit to record a fresh block);

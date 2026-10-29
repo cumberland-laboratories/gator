@@ -977,7 +977,7 @@ def write_commit_issues(gator_dir, findings):
         "present each one, and the Architect decides to fix, remove, or keep it.",
         "They do not block the commit and have no approval command. Where an",
         "Enterprise mode requires external approval, the hook blocks instead and",
-        "names `gator hook approve`. The agent must not approve its own findings.",
+        "names the approval (the Dashboard's Commits view, or `gator hook approve`). The agent must not approve its own findings.",
         "",
     ]
 

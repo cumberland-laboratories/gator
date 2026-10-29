@@ -99,7 +99,7 @@ LEGACY_FILES = (
     ".override",
 )
 
-TRAILER_MAX = {"approved_by": 80, "reason": 200}
+TRAILER_MAX = {"approved_by": 80, "reason": 500}
 
 
 class OverrideStateError(Exception):
@@ -723,10 +723,12 @@ def render_block_report(header, failures, warnings, resolutions, notes, block,
             "  │                                                        │",
             "  │ Present these findings to the Architect, who decides:  │",
             "  │   1. Fix the findings and retry the commit, or         │",
-            "  │   2. Approve the external-approval findings:           │",
-            "  │        gator hook approve                              │",
+            "  │   2. Approve the external-approval findings in the     │",
+            "  │      Gator Dashboard: Commits view, blocked-commit     │",
+            "  │      alert (terminal alternative: gator hook approve)  │",
             "  │                                                        │",
-            "  │ You may NOT run gator hook approve yourself.           │",
+            "  │ Point the Architect to the Dashboard first. You may    │",
+            "  │ NOT approve yourself, in the Dashboard or terminal.    │",
             "  │ Unauthorized self-approval is a governance violation.  │",
             "  └─────────────────────────────────────────────────────────┘",
         ]

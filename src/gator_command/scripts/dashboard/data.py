@@ -339,10 +339,14 @@ _OVERRIDE_TEXT_MAX = 2000
 _OVERRIDE_FILES_MAX = 500
 _OVERRIDE_FINDINGS_MAX = 200
 _OVERRIDE_NAME_MAX = 80
-_OVERRIDE_REASON_MAX = 200
+_OVERRIDE_REASON_MAX = 500   # = precommit_override.TRAILER_MAX["reason"]
 _BLOCK_ID_RE = re.compile(r"^[0-9a-f]{8}$")
 _REVISION_RE = re.compile(r"^[0-9a-f]{16}$")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+# Line breaks and tabs (a paste from a terminal) become single spaces, as the
+# single-line trailer would make them anyway; other control characters are
+# still refused.
+_WHITESPACE_RUN_RE = re.compile(r"[ \t\r\n\v\f]+")
 _OVERRIDE_TRUNCATED = " … (truncated; see `gator hook override status`)"
 OVERRIDE_INCOMPLETE_MESSAGE = (
     "This blocked commit has {total} findings, more than the Dashboard can "
@@ -547,7 +551,7 @@ def override_cli_args(action, body):
         value = body.get(key)
         if not isinstance(value, str) or not value.strip():
             return None, f"{key} is required"
-        value = value.strip()
+        value = _WHITESPACE_RUN_RE.sub(" ", value).strip()
         if len(value) > cap:
             return None, f"{key} is limited to {cap} characters"
         if _CONTROL_RE.search(value):

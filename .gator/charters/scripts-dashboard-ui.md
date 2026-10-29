@@ -249,7 +249,7 @@ Render Git-native commit history as collapsed rows with a readable Gator record 
     - `.loop-dialog-note` guidance per state and group (covered/still-needed lines, exact-change, pause → the agent session and `commit_draft.md`, fix → retry);
     - the unsupported, unavailable and incomplete message, with `code.commit-block-command`.
   - **Approve.** It appears only when `approvableHere()` holds: state `blocked`, uncovered external rules, and `approve_refusal` null or `too-recent`.
-    - Fields: "Architect name" (prefilled from `architect_default`, max 80) and "Reason (required)" (max 200, live "n / 200").
+    - Fields: "Architect name" (prefilled from `architect_default`, max 80) and "Reason (required)" (max 500 after line breaks and tabs are folded to single spaces by `oneLine()`, live "n / 500", "(too long)" above it; no `maxLength`, so a paste is never silently cut; the textarea has `flex: none` in `.commit-block-fields` so `resize: vertical` works).
     - It stays disabled until both are valid and `approve_wait_seconds` (from fetch time) has passed. The label reads "Approve (available in Ns)", ticking with one-second `setTimeout`s while the dialog is open; this is not a server poll.
   - **Every mutation re-reads first (`preflight()`).** A changed `revision`, state or block id re-renders from the fresh status with "The blocked commit changed. Review it again before approving." (Discard: "… Review it, then confirm again."), keeps the fields, and posts nothing. A failed re-read shows the error and posts nothing.
     - The POST carries the `block_id` and `revision` the dialog was rendered from (Discard sends `block_id: null` for an unreadable block).

@@ -2420,6 +2420,13 @@ mark.search-hit {
   font-size: var(--text-xs);
   color: var(--gray-600);
 }
+/* The reason textarea is in a column flex area: `flex: 1` (from
+   .loop-ctrl-input) would own its height and defeat `resize: vertical`.
+   `flex: none` lets the drag handle set the height. */
+.commit-block-fields textarea.loop-ctrl-input {
+  flex: none;
+  min-height: 5em;
+}
 .commit-block-command {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
