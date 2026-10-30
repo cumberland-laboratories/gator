@@ -43,6 +43,7 @@
     docs:     { title: "Docs",     subtitle: "" },
     updates:  { title: "Updates",  subtitle: "" },
     loop:     { title: "Loop",     subtitle: "" },
+    charters: { title: "Charters", subtitle: "" },
     settings: { title: "Settings", subtitle: "" },
     welcome:  { title: "Welcome to Gator!", subtitle: "" },
   };
@@ -61,6 +62,7 @@
   const repoTab        = document.getElementById("repo-tab");
   const loopTab        = document.getElementById("loop-tab");
   const historyTab     = document.getElementById("history-tab");
+  const chartersTab    = document.getElementById("charters-tab");
   const sidebarContext = document.getElementById("sidebar-context");
   const topbarTitle    = document.getElementById("topbar-title");
   const brandHome      = document.getElementById("brand-home");
@@ -187,13 +189,13 @@
     }
   }
 
-  // Repo/Commits/Loop need a repository. A dimmed item also carries
+  // Repo/Commits/Loop/Charters need a repository. A dimmed item also carries
   // aria-disabled and an explanatory title (a non-colour cue); the
   // sidebar click handler still keys on the `dimmed` class.
   const REPO_ITEM_HINT = "Choose a repository in Fleet first";
 
   function setRepoItemsEnabled(enabled) {
-    [repoTab, historyTab, loopTab].forEach(item => {
+    [repoTab, historyTab, loopTab, chartersTab].forEach(item => {
       if (!item) return;
       item.classList.toggle("dimmed", !enabled);
       if (enabled) {
@@ -207,7 +209,7 @@
   }
 
   // Set the shell's repository context: name, API key, the sidebar
-  // context card, and the Repo/Commits/Loop items enabled. Docs is
+  // context card, and the Repo/Commits/Loop/Charters items enabled. Docs is
   // repository-independent and always enabled.
   function setActiveRepo(repoName, repoKey) {
     state.activeRepo = repoName;
@@ -735,6 +737,22 @@
       return;
     }
 
+    // Charters (charters-sidebar-sync): repository-scoped, gated like Loop.
+    if (name === "charters") {
+      updateTopbar("charters");
+      const repoName = state.activeRepo;
+      if (!repoName) {
+        viewSlot.innerHTML = "<p class='muted' style='padding:40px;text-align:center'>Select a repo from the Fleet view first.</p>";
+        return;
+      }
+      if (views.charters) {
+        views.charters(state.data, viewSlot, repoName, state.activeRepoKey);
+      } else {
+        viewSlot.innerHTML = "<p class='muted'>Charters view not available.</p>";
+      }
+      return;
+    }
+
     // #72: Welcome is repository-independent. It never reads or changes
     // activeRepo / activeRepoKey, so Repo/Docs/Loop dimming is untouched.
     if (name === "welcome") {
@@ -766,7 +784,7 @@
     const item = e.target.closest(".sidebar-item");
     if (!item || item.classList.contains("dimmed") || item.classList.contains("placeholder")) return;
     const view = item.dataset.view;
-    if ((view === "repo" || view === "loop") && !state.activeRepo) return;
+    if ((view === "repo" || view === "loop" || view === "charters") && !state.activeRepo) return;
     navigate(view);
   });
 

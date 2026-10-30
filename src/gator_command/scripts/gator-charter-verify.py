@@ -18,7 +18,7 @@ Usage:
     python gator-command/scripts/gator-charter-verify.py --path <repo> --changed-only
 
 @reads: charter files, source files (via ast), .gator/.charterignore, git
-@writes: stdout (text or json)
+@writes: stdout (text or json; JSON adds `charters: [{name, path, covers}]`)
 """
 
 import argparse
@@ -544,14 +544,38 @@ def print_findings(findings):
             print()
 
 
-def print_json_findings(findings):
-    """Output findings as JSON."""
+def charter_summaries(repo_root):
+    """Return `[{name, path, covers}]` for every parsed charter.
+
+    `path` is repo-relative POSIX when the charter lives under the repo.
+    Additive JSON for consumers that attribute findings to charters or
+    evaluate `Covers` themselves (the Dashboard charter sync check).
+
+    @reads: charter .md files
+    """
+    _, _, _, charters = parse_charters(find_charter_dirs(repo_root))
+    root = Path(repo_root).resolve()
+    out = []
+    for c in charters:
+        path = Path(c["file"])
+        try:
+            rel = path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            rel = path.as_posix()
+        out.append({"name": c["name"], "path": rel, "covers": list(c["covers"])})
+    return out
+
+
+def print_json_findings(findings, charters=None):
+    """Output findings as JSON. `charters` (additive) is included when given."""
     output = {
         "version": VERSION,
         "finding_count": len(findings),
         "summary": {},
         "findings": findings,
     }
+    if charters is not None:
+        output["charters"] = charters
     # Summary by class
     for f in findings:
         cls = f["class"]
@@ -602,7 +626,7 @@ def main():
 
     # Output
     if args.json:
-        print_json_findings(findings)
+        print_json_findings(findings, charter_summaries(repo_root))
     else:
         print_findings(findings)
 

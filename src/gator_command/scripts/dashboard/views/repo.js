@@ -1451,4 +1451,18 @@
       contentEl.innerHTML = `<div class="muted" style="padding:40px">Failed to load file</div>`;
     }
   }
+
+  // Explicit open from another view (the Charters page): select `path` in
+  // that repository's next mount. The repository's cached listing is
+  // dropped, so the mount draws the fresh listing first and its ordinary
+  // restore rule loads the file (falling back to the default document when
+  // the file is not listed). A file created after the listing was cached,
+  // such as a new report, is therefore found. Ordinary navigation never
+  // calls this, so it keeps cache-first drawing.
+  window.GatorViews.repo.preselect = function (repoKey, path) {
+    if (!repoKey || typeof repoKey !== "string") return;
+    if (typeof path !== "string" || !path || path.length > 400) return;
+    acquireTreeState(repoKey).selectedFile = path;
+    _listingCache.delete(repoKey);
+  };
 })();

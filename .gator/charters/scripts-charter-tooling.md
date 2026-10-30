@@ -56,6 +56,14 @@ Build coverage maps and emit structured findings over selected source directorie
 -> source analyzers and Git changed-file selection
 ! Warnings identify likely coverage gaps; informational function/complexity findings are heuristics, not instructions to expand every charter.
 
+### charter_summaries(repo_root) / print_json_findings(findings, charters=None)
+File: src/gator_command/scripts/gator-charter-verify.py
+`--json` output is `{version, finding_count, summary, findings, charters}`. `charters` (additive, 2026-10-29) is `[{name, path, covers}]` for every parsed charter: `path` is repo-relative POSIX, and `covers` is the raw backtick list from the `**Covers**` line, globs included. Text output is unchanged.
+<- verify `main()` (JSON mode only)
+-> `find_charter_dirs()`, `parse_charters()`
+! Consumers: the Dashboard `/check` route, enforcer-review structural priors and the Dashboard charter sync check (`scripts-dashboard.md` → `dashboard/charter_sync.py`). Only the last reads `charters`. Its absence (older wheel) must stay tolerated. Existing keys and finding shapes do not change meaning (cross-cutting additive rule).
+! The coverage map used by `coverage-gap` still matches `Covers` entries exactly, so a glob-covered file is reported as uncovered (#88). `charters.covers` exposes the raw entries; consumers that match globs must not assume the verifier agrees.
+
 ### coverage and stale checks
 File: src/gator_command/scripts/gator-charter-verify.py
 Compare `**Covers**` patterns and documented names with current source structure.

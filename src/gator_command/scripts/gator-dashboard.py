@@ -62,6 +62,7 @@ from dashboard.updates import (  # noqa: E402
     restart_server as _restart_server,
 )
 from dashboard.snapshot import build_snapshot  # noqa: E402
+from dashboard import charter_sync as _charter_sync  # noqa: E402
 from dashboard.data import (  # noqa: E402
     load_registry_repos as _load_registry_repos,
     resolve_repo_path as _resolve_repo_path,
@@ -2530,6 +2531,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                 cache_control="no-store")
                 return
 
+        # Charter sync: the last recorded summary for this checkout. A small
+        # Git-private file read, so not heavy work. The name is the parse-once
+        # decoded `req.repo_name` (decoded exactly once; encoded separators
+        # and double encoding were already refused).
+        if path.startswith("/api/repo/") and path.endswith("/charter-sync"):
+            repo_name = req.repo_name
+            if not repo_name:
+                self._send_json({"error": "repo name required"}, 400, cache_control="no-store")
+                return
+            repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+            if not repo_path or not Path(repo_path).is_dir():
+                self._send_json({"error": "repo not accessible"}, 400, cache_control="no-store")
+                return
+            last = _charter_sync.read_last(repo_path)
+            self._send_json(last if last is not None else {"state": "none"},
+                            cache_control="no-store")
+            return
+
         # Commit history — git log based, no session dependency
         if path.startswith("/api/repo/") and path.endswith("/history"):
             with _heavy_work() as admitted:
@@ -2650,7 +2669,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # of the safe-content-transport migration.
 
         # Tier 2 — per-repo deep status (lazy, on demand)
-        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/commit-policy", "/check", "/topology", "/files")):
+        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/commit-policy", "/check", "/topology", "/files", "/charter-sync")):
             with _heavy_work() as admitted:
                 if not admitted:
                     self._send_heavy_busy()
@@ -4265,6 +4284,55 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         self._with_repo_action(repo_name, target, source, run)
 
+    _CHARTER_SYNC_BODY_MAX = 4096
+
+    def _handle_charter_sync_post(self):
+        """Run the charter sync check for one repository.
+
+        `_check_post_auth()` and the drain gate already ran in `do_POST`. The
+        body is read and ignored. The repository name comes from
+        `_parse_request()`, the same decode-once boundary as the GET routes.
+        The run takes a shared heavy-work slot, then the same-repository
+        action lock (the documented lock order: `_LifecycleGate` ->
+        `_heavy_work` -> `_repo_action`)."""
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            self._send_json({"error": "invalid Content-Length"}, 400, cache_control="no-store")
+            return
+        if length > self._CHARTER_SYNC_BODY_MAX:
+            self.close_connection = True
+            self._send_json({"error": "request body too large"}, 413, cache_control="no-store")
+            return
+        if length > 0:
+            self.rfile.read(length)
+        parsed, perr = _parse_request(self)
+        if perr is not None:
+            self._send_json({"error": perr.message}, perr.status, cache_control="no-store")
+            return
+        repo_name = parsed.repo_name
+        if not repo_name:
+            self._send_json({"error": "repo name required"}, 400, cache_control="no-store")
+            return
+        target, source = _resolve_action_target(
+            repo_name, _registry_snapshot(), _fleet_snapshot())
+        if target is None:
+            self._send_json({"error": f"repo '{repo_name}' not found"}, 404, cache_control="no-store")
+            return
+        if not Path(target).is_dir():
+            self._send_json({"error": "repo not accessible"}, 400, cache_control="no-store")
+            return
+
+        def run():
+            result, status = _charter_sync.run_sync(target)
+            self._send_json(result, status, cache_control="no-store")
+
+        with _heavy_work() as admitted:
+            if not admitted:
+                self._send_heavy_busy(cache_control="no-store")
+                return
+            self._with_repo_action(repo_name, target, source, run)
+
     def _commit_policy_owned(self, repo_name, repo_path, req):
         """Commit-policy POST body; the caller owns `_repo_action(repo_path)`.
 
@@ -4379,6 +4447,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if path.startswith("/api/repo/") and path.endswith(suffix):
                 self._handle_override_post(path[len("/api/repo/"):-len(suffix)], action)
                 return
+
+        # POST /api/repo/<name>/charter-sync — run the charter sync check
+        if path.startswith("/api/repo/") and path.endswith("/charter-sync"):
+            self._handle_charter_sync_post()
+            return
 
         # POST /api/repos/register — add a repo to the dashboard registry
         if path == "/api/repos/register":

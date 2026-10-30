@@ -32,6 +32,7 @@ _VIEWS = [
     ("?repo=alpha", ".repo-file-item", "Repo"),
     ("?repo=alpha&view=history", "#view-slot", "Commits"),
     ("?repo=alpha&view=loop", "#loop-tabbar", "Loop"),
+    ("?repo=alpha&view=charters", ".charters-view[data-loaded='true']", "Charters"),
     ("?view=docs", ".docs-sidebar", "Docs"),
     ("?view=updates", "#view-slot", "Updates"),
 ]
@@ -208,10 +209,10 @@ def test_welcome_sidebar_item_navigates(page, dashboard_fleet):
 
 
 def test_unavailable_items_carry_non_colour_cue(page, dashboard_fleet):
-    """Without a repository, Repo/Commits/Loop are dimmed with
-    aria-disabled and an explanatory title; selecting one clears all three;
+    """Without a repository, Repo/Commits/Loop/Charters are dimmed with
+    aria-disabled and an explanatory title; selecting one clears all four;
     the static Repo label never names the repository."""
-    ids = ["repo-tab", "history-tab", "loop-tab"]
+    ids = ["repo-tab", "history-tab", "loop-tab", "charters-tab"]
     state_js = """ids => ids.map(id => {
         const e = document.getElementById(id);
         return [e.classList.contains('dimmed'), e.getAttribute('aria-disabled'),
@@ -220,10 +221,10 @@ def test_unavailable_items_carry_non_colour_cue(page, dashboard_fleet):
     page.goto(_origin(dashboard_fleet), wait_until="load")
     page.wait_for_selector(".welcome-workspace", timeout=15000)
     hint = "Choose a repository in Fleet first"
-    assert page.evaluate(state_js, ids) == [[True, "true", hint]] * 3
+    assert page.evaluate(state_js, ids) == [[True, "true", hint]] * 4
     page.goto(_origin(dashboard_fleet) + "?repo=alpha", wait_until="load")
     page.wait_for_selector(".repo-file-item", timeout=15000)
-    assert page.evaluate(state_js, ids) == [[False, None, None]] * 3
+    assert page.evaluate(state_js, ids) == [[False, None, None]] * 4
     repo = page.evaluate("""() => {
         const e = document.getElementById('repo-tab');
         return {text: e.textContent.trim(), indent: e.style.paddingLeft};
@@ -498,6 +499,27 @@ def _surface_docs(page, fleet):
     page.wait_for_selector(".docs-sidebar", timeout=15000)
 
 
+def _surface_charters(page, fleet):
+    """A completed charter sync result (stubbed) with the "Show all"
+    disclosure open, so every text role on the page is measured."""
+    group = {"kind": "stale-structure", "label": "mod", "charter_path": ".gator/mission.md",
+             "message": "Charter names code that no longer exists.", "count": 2}
+    result = {
+        "schema": "gator-charter-sync-v1", "state": "needs-review",
+        "checked_at": "2026-10-29T12:00:00Z", "revision": "0123456789ab", "dirty": False,
+        "headline": "2 findings in 1 charter.",
+        "counts": {"current": 1, "needs_review": 1, "missing": 0},
+        "recent_commits": {"examined": 2, "without_charter_update": 0, "reason": None},
+        "findings_total": 18, "groups_total": 9, "findings": [group] * 9,
+        "artifact_path": ".gator/artifacts/2026-10-29-charter-sync-report.md",
+    }
+    page.route("**/api/repo/alpha/charter-sync", lambda r: r.fulfill(
+        status=200, content_type="application/json", body=json.dumps(result)))
+    page.goto(_origin(fleet) + "?repo=alpha&view=charters", wait_until="load")
+    page.wait_for_selector(".charters-band", timeout=15000)
+    page.click(".charters-more-summary")
+
+
 def _surface_loop_active(page, fleet):
     _open_loop(page, fleet, "widget-refactor")
 
@@ -532,6 +554,7 @@ _TYPE_SURFACES = {
     "updates": _surface_updates,
     "settings": _surface_settings,
     "docs": _surface_docs,
+    "charters": _surface_charters,
     "loop-active": _surface_loop_active,
     "loop-interject-dialog": _surface_loop_interject,
     "loop-decision-dialog": _surface_loop_decision,

@@ -56,11 +56,13 @@ class TestBuildSnapshot:
         assert 'src="views/settings.js"' not in html
         assert 'src="views/welcome.js"' not in html
         assert 'src="views/docs.js"' not in html
+        assert 'src="views/charters.js"' not in html
         assert 'src="workspace.js"' not in html
         assert "window.GatorLoopMarkdown" in html  # #45 formatter inlined
         assert "window.GatorWorkspace" in html  # #80 workspace model inlined
         assert "window.GatorViews.welcome" in html  # #72 Welcome inlined
         assert "window.GatorViews.docs" in html  # repo-independent Docs inlined
+        assert "window.GatorViews.charters" in html  # charters-sidebar-sync
 
     def test_welcome_docs_inlined_with_csp_meta(self):
         """Every shipped Gator document (Welcome and Docs) is inlined, each with exactly one
@@ -145,6 +147,7 @@ class TestBuildSnapshot:
             'src="views/settings.js"',
             'src="views/welcome.js"',
             'src="views/docs.js"',
+            'src="views/charters.js"',
             'src="workspace.js"',
             'src="dashboard.js"',
         ]:
