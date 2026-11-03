@@ -326,7 +326,54 @@ class TestDashboardUpdateEndpoint:
             "status": "ok",
             "output": "Everything is current.",
             "exit_code": 0,
+            "transient_untracked": None,
         }
+
+    def _result_stdout(self, transient, output="  Done.\n"):
+        import json as _json
+        return _json.dumps({"schema": "gator-update-result-v1", "version": "x",
+                            "exit_code": 0, "output": output,
+                            "transient_untracked": transient})
+
+    def test_result_json_flag_and_transient_result(self, tmp_path):
+        """#78: the endpoint asks for --result-json and passes the shared
+        migration result through additively, with the human text."""
+        repo, registry_repos, fleet_data = self._make_fixture(tmp_path)
+        transient = {"paths": [".gator/status.json", ".gator/whiteboard.md"],
+                     "count": 2, "message": "Gator removed 2 hook-ephemera paths ...",
+                     "why": "Because."}
+        calls = []
+
+        def fake_run_text(*args, **kwargs):
+            calls.append(args)
+            return (self._result_stdout(transient), "", 0)
+
+        result = dashboard_data.resolve_repo_update(
+            "myrepo", registry_repos=registry_repos, fleet_data=fleet_data,
+            run_text_fn=fake_run_text)
+        assert "--result-json" in calls[0]
+        assert result["data"]["output"] == "  Done.\n"
+        assert result["data"]["transient_untracked"] == transient
+
+    @pytest.mark.parametrize("bad", [
+        None, "x", {"paths": []}, {"paths": [1], "message": "m", "why": "w"},
+        {"paths": ["a"], "message": None, "why": "w"},
+    ])
+    def test_malformed_transient_result_is_null(self, tmp_path, bad):
+        repo, registry_repos, fleet_data = self._make_fixture(tmp_path)
+        result = dashboard_data.resolve_repo_update(
+            "myrepo", registry_repos=registry_repos, fleet_data=fleet_data,
+            run_text_fn=lambda *a, **k: (self._result_stdout(bad), "", 0))
+        assert result["data"]["transient_untracked"] is None
+        assert result["data"]["output"] == "  Done.\n"
+
+    def test_non_result_stdout_falls_back_to_raw_text(self, tmp_path):
+        repo, registry_repos, fleet_data = self._make_fixture(tmp_path)
+        result = dashboard_data.resolve_repo_update(
+            "myrepo", registry_repos=registry_repos, fleet_data=fleet_data,
+            run_text_fn=lambda *a, **k: ("", "usage: gator-update ...", 2))
+        assert result["data"] == {"status": "error", "output": "usage: gator-update ...",
+                                  "exit_code": 2, "transient_untracked": None}
 
     def test_nonzero_exit_reports_error_status(self, tmp_path):
         """Failed gator-update returns status=error and preserves exit code."""
@@ -346,6 +393,7 @@ class TestDashboardUpdateEndpoint:
             "status": "error",
             "output": "boom",
             "exit_code": 2,
+            "transient_untracked": None,
         }
 
     def test_repo_not_in_registry_returns_404(self, tmp_path):

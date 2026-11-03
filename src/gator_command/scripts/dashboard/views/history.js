@@ -410,6 +410,9 @@
   ];
   const BLOCK_NAME_MAX = 80;
   const BLOCK_REASON_MAX = 500;   // = precommit_override.TRAILER_MAX["reason"]
+  const ACK_NOTE_MAX = 500;       // = gator-approve.py NOTE_MAX
+  const PAUSE_OPEN_TEXT = "Closing does not resolve the pause. The commit still pauses "
+    + "until a decision is recorded here, by an agent, or as a visible skip.";
 
   // The reason becomes one trailer line: line breaks and tabs (a paste from
   // a terminal) count and are sent as single spaces, exactly as the server
@@ -526,6 +529,8 @@
       fetchedAt: Date.now(),
       name: ctl.status.architect_default || "",
       reason: "",
+      ackName: "",
+      ackNote: "",
       notice: "",
       error: "",
       success: "",
@@ -544,6 +549,93 @@
       const r = oneLine(st.reason);
       return n.length > 0 && n.length <= BLOCK_NAME_MAX
         && r.length > 0 && r.length <= BLOCK_REASON_MAX;
+    }
+
+    // #102: the pause decision. Offered only for the complete, current set
+    // of paused findings of this exact staged change; the server and the
+    // CLI re-check everything before anything is written.
+    function ackable(status) {
+      const pf = status.pause_findings || [];
+      return (status.state === "blocked" || status.state === "approved")
+        && findingsOf(status, "pause").length > 0
+        && pf.length > 0 && !status.pause_findings_incomplete
+        && !!(status.block && status.block.tree_matches) && !st.confirmDiscard;
+    }
+
+    // Who decided: the draft's Architect, else the Dashboard's default; a
+    // name is asked for only when neither exists.
+    function ackIdentity(status) {
+      if (status.draft_architect) return { ask: false, send: null };
+      if (status.architect_default) return { ask: false, send: status.architect_default };
+      const n = st.ackName.trim();
+      return { ask: true, send: n || null };
+    }
+
+    function ackValid() {
+      const who = ackIdentity(st.status);
+      if (who.ask && (!who.send || who.send.length > BLOCK_NAME_MAX)) return false;
+      return oneLine(st.ackNote).length <= ACK_NOTE_MAX;
+    }
+
+    function ackPanel(body) {
+      const status = st.status;
+      const pf = status.pause_findings || [];
+      const sec = el("section", "commit-block-ack");
+      sec.appendChild(el("h3", "commit-block-group-title",
+                         "Acknowledge " + pf.length + " current finding" + (pf.length === 1 ? "" : "s")));
+      sec.appendChild(el("p", "loop-dialog-note",
+        "Keep all of these findings in this commit. Gator records one decision for the "
+        + "whole set in commit_draft.md, with your name. To fix or remove any of them "
+        + "instead, close this dialog and change the code."));
+      const list = el("ul", "commit-block-list commit-block-ack-list");
+      pf.forEach(function (f) {
+        const li = el("li", "commit-block-finding");
+        li.dataset.key = f.key;
+        const head = el("div", "commit-block-finding-head");
+        head.appendChild(el("code", "commit-block-code", f.key));
+        if (f.severity) head.appendChild(el("span", "commit-block-tag", f.severity));
+        li.appendChild(head);
+        if (f.message) li.appendChild(el("p", "commit-block-msg", f.message));
+        list.appendChild(li);
+      });
+      sec.appendChild(list);
+      const who = ackIdentity(status);
+      const area = el("div", "loop-ctrl-input-area commit-block-fields");
+      if (who.ask) {
+        const label = el("label", "loop-ctrl-label", "Architect name");
+        label.htmlFor = "commit-block-ack-name";
+        const name = el("input", "loop-ctrl-input");
+        name.id = "commit-block-ack-name";
+        name.type = "text";
+        name.maxLength = BLOCK_NAME_MAX;
+        name.value = st.ackName;
+        name.disabled = st.sending;
+        name.addEventListener("input", function () { st.ackName = name.value; syncAck(); });
+        area.appendChild(label);
+        area.appendChild(name);
+      } else {
+        sec.appendChild(el("p", "loop-dialog-note commit-block-ack-by",
+          "Recorded as decided by " + (status.draft_architect || status.architect_default) + "."));
+      }
+      const noteLabel = el("label", "loop-ctrl-label", "Shared note (optional)");
+      noteLabel.htmlFor = "commit-block-ack-note";
+      const note = el("textarea", "loop-ctrl-input");
+      note.id = "commit-block-ack-note";
+      note.rows = 2;
+      note.value = st.ackNote;
+      note.disabled = st.sending;
+      note.addEventListener("input", function () { st.ackNote = note.value; syncAck(); });
+      area.appendChild(noteLabel);
+      area.appendChild(note);
+      sec.appendChild(area);
+      body.appendChild(sec);
+    }
+
+    function syncAck() {
+      const btn = dlg.querySelector(".commit-block-acknowledge");
+      if (!btn) return;
+      btn.textContent = st.sending ? "Sending…" : "Acknowledged";
+      btn.disabled = st.sending || !ackValid();
     }
 
     function setStatus(fresh, notice) {
@@ -647,8 +739,11 @@
              + "staged needs a new blocked attempt.");
       }
       if (findingsOf(status, "pause").length) {
-        note("A pause is resolved in the active agent session: the Architect's decision "
-             + "is recorded in commit_draft.md. It cannot be approved here.");
+        note(ackable(status)
+          ? "A pause needs the Architect's decision. Acknowledge the findings below to "
+            + "keep them, or fix them in the code. " + PAUSE_OPEN_TEXT
+          : "A pause needs the Architect's decision, recorded here once the current "
+            + "findings are shown, or in the agent session. " + PAUSE_OPEN_TEXT);
       }
       if (findingsOf(status, "fix-required").length) {
         note("Fix-required findings must be corrected, then the commit retried.");
@@ -752,6 +847,8 @@
       guidance(status, dlg);
       const canApprove = approvableHere(status) && !st.confirmDiscard;
       if (canApprove) fields(dlg);
+      const canAck = ackable(status);
+      if (canAck) ackPanel(dlg);
 
       const err = el("p", "loop-ctrl-error commit-block-error", st.error);
       err.setAttribute("role", "alert");
@@ -762,7 +859,11 @@
       if (st.confirmDiscard) {
         actions.appendChild(el("p", "loop-dialog-note commit-block-confirm",
           "Discard this blocked attempt and any approval? Nothing is committed. "
-          + "The next commit attempt records a fresh block."));
+          + "The next commit attempt records a fresh block."
+          + (findingsOf(status, "pause").length
+            ? " Discarding does not decide the pause: it returns on the next attempt "
+              + "until a decision is recorded."
+            : "")));
         actions.appendChild(button("loop-ctrl-cancel commit-block-keep", "Keep", function () {
           st.confirmDiscard = false;
           render();
@@ -778,13 +879,22 @@
             render();
           }));
         }
-        actions.appendChild(button("loop-ctrl-cancel commit-block-close", "Close", close));
+        const unresolved = findingsOf(status, "pause").length > 0
+          || findingsOf(status, "fix-required").length > 0
+          || (status.uncovered_external_rules || []).length > 0;
+        actions.appendChild(button("loop-ctrl-cancel commit-block-close",
+                                   unresolved ? "Close without resolving" : "Close", close));
         if (canApprove) {
           actions.appendChild(button("loop-ctrl-confirm commit-block-approve", "Approve", approve));
+        }
+        if (canAck) {
+          actions.appendChild(button("loop-ctrl-confirm commit-block-acknowledge",
+                                     "Acknowledged", acknowledge));
         }
       }
       dlg.appendChild(actions);
       syncApprove();
+      syncAck();
     }
 
     function setSending(on) {
@@ -847,6 +957,39 @@
             ? "External approval recorded. This commit is still blocked until the "
               + "remaining findings are resolved."
             : "External approval recorded. Retry the commit in your Git client or agent session.";
+          finish("");
+          return fetchOverrideStatus(ctl.repoName).then(function (s) { ctl.update(s); },
+                                                        function () {});
+        });
+      }).catch(function (e) { finish("Not sent: " + e.message); });
+    }
+
+    function acknowledge() {
+      if (st.sending || !ackValid()) return;
+      st.error = "";
+      st.notice = "";
+      setSending(true);
+      render();
+      preflight(BLOCK_CHANGED_NOTICE).then(function (fresh) {
+        if (!fresh) return null;
+        const status = st.status;
+        const body = { block_id: status.block.block_id,
+                       keys: (status.pause_findings || []).map(function (f) { return f.key; }) };
+        const who = ackIdentity(status);
+        if (who.send) body.architect = who.send;
+        const note = oneLine(st.ackNote);
+        if (note) body.note = note;
+        return postOverride(ctl.repoName, "acknowledge", body).then(function (res) {
+          if (res.status !== 200 || !res.data.ok) {
+            if (res.data.refusal === "tree-changed") {
+              return fetchOverrideStatus(ctl.repoName).then(function (s) {
+                setStatus(s, BLOCK_CHANGED_NOTICE);
+                finish(res.data.message || "");
+              }, function () { finish(res.data.message || ""); });
+            }
+            return afterRefusal(res, BLOCK_CHANGED_NOTICE);
+          }
+          st.success = "Decision recorded; retry the commit.";
           finish("");
           return fetchOverrideStatus(ctl.repoName).then(function (s) { ctl.update(s); },
                                                         function () {});

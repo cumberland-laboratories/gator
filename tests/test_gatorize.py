@@ -768,3 +768,89 @@ class TestGatorizeLeavesNativeFilesUntouched:
         out = capsys.readouterr().out
         assert "CLAUDE.md / AGENTS.md / GEMINI.md untouched" in out
         assert "entry-point files" not in out
+
+
+# ---------------------------------------------------------------------------
+# #78: tracked hook ephemera are untracked visibly and exactly
+# ---------------------------------------------------------------------------
+
+def _legacy_repo(tmp_path, enterprise=False):
+    """A repository that committed every hook-ephemera file."""
+    import subprocess
+
+    def git(*a):
+        return subprocess.run(["git", *a], cwd=str(tmp_path), capture_output=True,
+                              text=True, encoding="utf-8", errors="replace")
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "T")
+    gator = tmp_path / ".gator"
+    gator.mkdir()
+    for rel in gatorize.TRANSIENT_GATOR_FILES[:4]:
+        (tmp_path / rel).write_text("legacy\n", encoding="utf-8")
+    (gator / "keep.md").write_text("x", encoding="utf-8")
+    if enterprise:
+        (gator / "enterprise.json").write_text('{"enabled": true}', encoding="utf-8")
+    git("add", "-f", "-A")
+    git("-c", "core.hooksPath=/dev/null", "commit", "-q", "--no-verify", "-m", "init")
+    return git
+
+
+class TestTransientMigration:
+    def test_inventory_covers_hook_ephemera(self):
+        templ = SCRIPTS_DIR.parent / "templates" / "gator-starter" / "scripts"
+        ovr = load_script("precommit_override", search_dir=templ)
+        assert set(ovr.HOOK_EPHEMERA_PATHS) <= set(gatorize.TRANSIENT_GATOR_FILES)
+        assert gatorize.TRANSIENT_GATOR_FILES[:4] == ovr.HOOK_EPHEMERA_PATHS
+
+    def test_prediction_is_read_only(self, tmp_path):
+        git = _legacy_repo(tmp_path)
+        before = git("ls-files", "--stage").stdout
+        predicted = gatorize.tracked_transient_files(tmp_path)
+        assert predicted == list(gatorize.TRANSIENT_GATOR_FILES[:4])
+        assert git("ls-files", "--stage").stdout == before
+        assert git("status", "--porcelain").stdout.strip() == ""
+
+    def test_execution_untracks_exactly_the_prediction(self, tmp_path):
+        git = _legacy_repo(tmp_path)
+        predicted = gatorize.tracked_transient_files(tmp_path)
+        untracked = gatorize.ensure_repo_gitignore(tmp_path, untrack_paths=predicted)
+        assert untracked == predicted
+        tracked = git("ls-files").stdout.splitlines()
+        staged = git("diff", "--cached", "--name-status").stdout.splitlines()
+        for rel in predicted:
+            assert rel not in tracked
+            assert (tmp_path / rel).is_file(), "working file must be kept"
+            assert f"D\t{rel}" in staged
+        assert ".gator/keep.md" in tracked
+        # Idempotent, quiet no-op.
+        assert gatorize.tracked_transient_files(tmp_path) == []
+        assert gatorize.ensure_repo_gitignore(tmp_path) == []
+        assert gatorize.transient_untrack_result([]) is None
+
+    def test_enterprise_keeps_its_evidence_tracked(self, tmp_path):
+        git = _legacy_repo(tmp_path, enterprise=True)
+        untracked = gatorize.ensure_repo_gitignore(tmp_path)
+        assert untracked == [".gator/commit_draft.md", ".gator/commit_issues.md"]
+        tracked = git("ls-files").stdout.splitlines()
+        assert ".gator/status.json" in tracked and ".gator/whiteboard.md" in tracked
+
+    def test_shared_result_and_text(self):
+        result = gatorize.transient_untrack_result([".gator/status.json"])
+        assert result["count"] == 1
+        assert result["message"] == (
+            "Gator removed 1 hook-ephemera path from the Git index. The files remain "
+            "on disk. Git has staged their removal. Commit this migration with the update.")
+        assert result["why"] == gatorize.TRANSIENT_UNTRACK_WHY
+        lines = gatorize.format_transient_untrack(result)
+        assert lines[0].strip() == result["message"]
+        assert "    - .gator/status.json" in lines
+        three = gatorize.transient_untrack_result(["a", "b", "c"])
+        assert three["message"].startswith("Gator removed 3 hook-ephemera paths ")
+        predicted = gatorize.format_transient_untrack(three, predicted=True)
+        assert predicted[0] == "  Hook-ephemera paths to remove from the Git index (3):"
+
+    def test_install_defers_untracking_to_the_reported_tail(self, tmp_path):
+        _legacy_repo(tmp_path)
+        assert gatorize.ensure_repo_gitignore(tmp_path, untrack=False) == []
+        assert gatorize.tracked_transient_files(tmp_path)

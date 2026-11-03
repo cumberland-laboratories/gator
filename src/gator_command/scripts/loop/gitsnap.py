@@ -7,7 +7,11 @@ tree, detached state, the staged tree (``git write-tree``), changed paths
 against the captured base, and unstaged/untracked residue.
 
 Facts are RAW: no path filtering or normalization. The staged-tree OID is
-the review authority; prose never substitutes for it.
+the review authority; prose never substitutes for it. One named, derived
+value sits beside them: ``governed_index_identity`` (and, in a successor
+history fact, ``governed_tree_identity``), a digest that excludes
+``GOVERNED_EXCLUDED_PATHS`` (the hook-owned files). Approval comparison
+uses it when both sides carry it; nothing else does (#102).
 
 Failure is explicit and never yields a misleading binding: the result is
 ``{"ok": False, "error": <code>, "detail": <text>}`` with ``error`` one of
@@ -48,6 +52,19 @@ ERROR_CODES = frozenset({
     "git_unavailable", "not_a_repo", "bare", "unborn", "conflict",
     "bad_base", "git_busy", "git_permission_denied", "git_error",
 })
+
+# Hook-owned paths excluded from the governed identity. Equal to
+# precommit_override.HOOK_MANAGED_PATHS (pinned by tests/test_loop_gitsnap.py):
+# the commit hook writes or resets these files, so they must not make an
+# approved candidate look changed (#102).
+GOVERNED_EXCLUDED_PATHS = frozenset({
+    ".gator/status.json",
+    ".gator/whiteboard.md",
+    ".gator/commit_draft.md",
+    ".gator/commit_issues.md",
+    ".gator/lint-allow.json",
+})
+GOVERNED_IDENTITY_PREFIX = "gov1:"
 
 # A session-supplied OID is validated before it reaches Git (never an option).
 _OID_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
@@ -160,6 +177,62 @@ def _out(r):
 def _split_z(raw):
     return [p for p in (raw or b"").decode("utf-8", "replace").split("\0")
             if p != ""]
+
+
+def _governed_digest(entries):
+    """``gov1:<sha256>`` over ``(mode, oid, path)`` byte entries, sorted by
+    path bytes, excluding ``GOVERNED_EXCLUDED_PATHS``. The same content
+    yields the same value from the index and from a commit's tree."""
+    import hashlib
+    digest = hashlib.sha256()
+    for mode, oid, path in sorted(entries, key=lambda e: e[2]):
+        if path.decode("utf-8", "replace") in GOVERNED_EXCLUDED_PATHS:
+            continue
+        digest.update(mode + b" " + oid + b" " + path + b"\0")
+    return GOVERNED_IDENTITY_PREFIX + digest.hexdigest()
+
+
+def _governed_index_identity(root):
+    """Governed identity of the staged index, or None on any Git failure
+    (callers then fall back to the raw tree comparison)."""
+    try:
+        r = _invoke(["ls-files", "--stage", "-z"], root)
+    except _GitError:
+        return None
+    if r.returncode != 0:
+        return None
+    entries = []
+    for entry in (r.stdout or b"").split(b"\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition(b"\t")
+        parts = meta.split()
+        if len(parts) != 3 or parts[2] != b"0":
+            return None
+        entries.append((parts[0], parts[1], path))
+    return _governed_digest(entries)
+
+
+def _governed_tree_identity(root, commit):
+    """Governed identity of ``commit``'s tree (validated OID), or None."""
+    if not _OID_RE.fullmatch(commit or ""):
+        return None
+    try:
+        r = _invoke(["ls-tree", "-r", "-z", "--full-tree", commit], root)
+    except _GitError:
+        return None
+    if r.returncode != 0:
+        return None
+    entries = []
+    for entry in (r.stdout or b"").split(b"\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition(b"\t")
+        parts = meta.split()
+        if len(parts) != 3:
+            return None
+        entries.append((parts[0], parts[2], path))
+    return _governed_digest(entries)
 
 
 def _parse_name_status_z(raw):
@@ -290,6 +363,9 @@ def _snapshot(start, base_head, approved_head=None):
         "detached": detached,
         "branch": branch,
         "staged_tree": staged_tree,
+        # #102 (additive): the approval-comparison identity; None when it
+        # could not be read.
+        "governed_index_identity": _governed_index_identity(root),
         "base_head": base_head,
         "base_tree": base_tree,
         "changed_paths": changed,
@@ -351,7 +427,8 @@ def _approval_history(root, approved, head):
         if r.returncode != 0:
             raise _GitError("git_error", _err(r))
         return {"ok": True, "status": "successor", "commit": successor,
-                "tree": _out(r)}
+                "tree": _out(r),
+                "governed_tree_identity": _governed_tree_identity(root, successor)}
     except _GitError as exc:
         return {"ok": False, "error": exc.code, "detail": exc.detail[:500]}
 

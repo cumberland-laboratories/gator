@@ -36,15 +36,29 @@ from gator_core import (
 
 VERSION = get_version()
 
-# Gitignore convergence — import from gatorize (graceful degradation)
+# Gitignore convergence and the transient-file migration (#78) — import
+# from gatorize (graceful degradation: no prediction, no untracking).
+def _no_gitignore(repo_root, untrack=True, untrack_paths=None):
+    return []
+
+
 try:
     _gatorize = import_sibling("gatorize")
-    if _gatorize:
-        ensure_repo_gitignore = _gatorize.ensure_repo_gitignore
-    else:
-        ensure_repo_gitignore = lambda repo_root: None
 except Exception:
-    ensure_repo_gitignore = lambda repo_root: None
+    _gatorize = None
+if _gatorize:
+    ensure_repo_gitignore = _gatorize.ensure_repo_gitignore
+    tracked_transient_files = _gatorize.tracked_transient_files
+    transient_untrack_result = _gatorize.transient_untrack_result
+    format_transient_untrack = _gatorize.format_transient_untrack
+else:
+    ensure_repo_gitignore = _no_gitignore
+    tracked_transient_files = lambda repo_root: []
+    transient_untrack_result = lambda paths: None
+    format_transient_untrack = lambda result, predicted=False: []
+
+# The --result-json record of the last execution (gator-update-result-v1).
+_RESULT = {"transient_untracked": None}
 
 
 # Files that are template-derived (safe to overwrite)
@@ -751,8 +765,12 @@ def install_git_hooks(gator_dir, repo_root):
 
 # --- Output ---
 
-def print_plan(plan, dry_run=False, hooks=None):
-    """Print the update plan."""
+def print_plan(plan, dry_run=False, hooks=None, transient=None):
+    """Print the update plan.
+
+    `transient` is the predicted list of tracked hook-ephemera paths. A
+    dry run lists it; execution reports the actual result afterwards.
+    """
     adds = [(a, s, d) for a, s, d in plan if a == "add"]
     updates = [(a, s, d) for a, s, d in plan if a == "update"]
     unchanged = [(a, s, d) for a, s, d in plan if a == "unchanged"]
@@ -787,7 +805,14 @@ def print_plan(plan, dry_run=False, hooks=None):
                 print(f"    ~ {hook_dir}/{name}")
         print()
 
+    if dry_run and transient:
+        print("\n".join(format_transient_untrack(
+            transient_untrack_result(transient), predicted=True)))
+        print()
+
     if not adds and not updates and not hook_adds and not hook_updates:
+        if transient:
+            return
         print(f"  Everything is current. No updates needed.")
         print()
         return
@@ -803,7 +828,7 @@ def print_result(added, updated, unchanged):
     print()
 
 
-def print_json_plan(plan, templates_dir, hooks=None):
+def print_json_plan(plan, templates_dir, hooks=None, transient=None):
     """Output the plan as JSON.
 
     Top-level schema field is "gator-update-v1" — declared here so downstream
@@ -811,6 +836,8 @@ def print_json_plan(plan, templates_dir, hooks=None):
     `entry_point_actions` (and its summary count) is kept for v1
     compatibility and is always empty: Gator no longer manages
     CLAUDE.md / AGENTS.md / GEMINI.md (gator-native entry point, 2026-10-08).
+    `transient_untrack` (#78, additive) lists the tracked hook-ephemera
+    paths that execution would remove from the index.
     """
     items = []
     for action, src, dest in plan:
@@ -844,7 +871,10 @@ def print_json_plan(plan, templates_dir, hooks=None):
             "hooks_add": sum(1 for h in hook_items if h["action"] == "add"),
             "hooks_update": sum(1 for h in hook_items if h["action"] == "update"),
             "entry_point_actions": 0,
-        }
+            "transient_untrack": len(transient or []),
+        },
+        "transient_untrack": {"paths": list(transient or []),
+                              "count": len(transient or [])},
     }
     print(json.dumps(output, indent=2))
 
@@ -1240,7 +1270,45 @@ def main():
         action="store_true",
         help="Migrate v1 flat layout to v2 .includes/ layout"
     )
+    parser.add_argument(
+        "--result-json",
+        action="store_true",
+        help="Execute, then print one gator-update-result-v1 JSON object "
+             "(used by the Dashboard)"
+    )
     args = parser.parse_args()
+    if args.result_json:
+        if args.json or args.dry_run:
+            parser.error("--result-json executes; it cannot be combined "
+                         "with --json or --dry-run")
+        sys.exit(_run_with_result(args))
+    _run(args)
+
+
+def _run_with_result(args):
+    """Run an update with its human output captured, then print exactly one
+    `gator-update-result-v1` object: `output` (the text), `exit_code` and
+    `transient_untracked` (the shared migration result, or null)."""
+    import contextlib
+    import io
+    buf = io.StringIO()
+    code = 0
+    with contextlib.redirect_stdout(buf):
+        try:
+            _run(args)
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+    print(json.dumps({
+        "schema": "gator-update-result-v1",
+        "version": VERSION,
+        "exit_code": code,
+        "output": buf.getvalue(),
+        "transient_untracked": _RESULT["transient_untracked"],
+    }))
+    return code
+
+
+def _run(args):
 
     # Find the repo
     repo_root = find_gator_root(args.path)
@@ -1388,22 +1456,32 @@ def main():
     # Plan git hook installation
     hooks_to_install = plan_hook_updates(gator_dir, repo_root)
 
+    # Tracked hook ephemera to remove from the index (#78): predicted here,
+    # read-only, so dry-run and JSON describe exactly what execution does.
+    transient = tracked_transient_files(repo_root)
+
     # JSON mode
     if args.json:
-        print_json_plan(plan, templates_dir, hooks_to_install)
+        print_json_plan(plan, templates_dir, hooks_to_install, transient=transient)
         return
 
     # Dry run
     if args.dry_run:
-        print_plan(plan, dry_run=True, hooks=hooks_to_install)
+        print_plan(plan, dry_run=True, hooks=hooks_to_install, transient=transient)
         return
 
     # Converge gitignore rules (same as gatorize.py install/upgrade path)
-    ensure_repo_gitignore(repo_root)
+    # and untrack exactly the predicted paths.
+    untracked = ensure_repo_gitignore(repo_root, untrack_paths=transient)
 
     # Execute
-    print_plan(plan, hooks=hooks_to_install)
+    print_plan(plan, hooks=hooks_to_install, transient=transient)
     added, updated, unchanged = execute_updates(plan)
+    transient_result = transient_untrack_result(untracked)
+    _RESULT["transient_untracked"] = transient_result
+    if transient_result:
+        print("\n".join(format_transient_untrack(transient_result)))
+        print()
 
     # Install/refresh git hooks
     hooks_installed = install_git_hooks(gator_dir, repo_root)
@@ -1432,7 +1510,7 @@ def main():
     # - `updated:` still gates on file changes — preserves "last modification"
     #   timestamp semantics. Native agent files (CLAUDE.md / AGENTS.md /
     #   GEMINI.md) are repository-owned and never touched by update.
-    made_changes = added > 0 or updated > 0
+    made_changes = added > 0 or updated > 0 or bool(untracked)
     version_file = gator_dir / ".gator-version"
     from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")

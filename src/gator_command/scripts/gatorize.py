@@ -359,13 +359,19 @@ def write_stubs(gator_dir):
     vault_gitkeep = vault_dir / ".gitkeep"
     if not vault_gitkeep.exists():
         vault_gitkeep.write_text("", encoding="utf-8")
-    ensure_repo_gitignore(gator_dir.parent)
+    # Untracking happens once, in main()'s common tail, which reports it.
+    ensure_repo_gitignore(gator_dir.parent, untrack=False)
 
 
-# Hook-transient .gator files that must never be committed (#34). Beyond
-# being ignored, any already-tracked copy is untracked (index only) so the
-# ignore rule actually takes effect.
+# Hook-transient .gator files that must never be committed (#34, #78).
+# Beyond being ignored, any already-tracked copy is untracked (index only)
+# so the ignore rule actually takes effect. The first four are the hook
+# ephemera (precommit_override.HOOK_EPHEMERA_PATHS, pinned by
+# tests/test_gatorize.py); the rest are retired v1 override files.
 TRANSIENT_GATOR_FILES = (
+    ".gator/status.json",
+    ".gator/whiteboard.md",
+    ".gator/commit_draft.md",
     ".gator/commit_issues.md",
     ".gator/override-request.json",
     ".gator/override-approved.json",
@@ -373,15 +379,35 @@ TRANSIENT_GATOR_FILES = (
     ".gator/.override",
 )
 
+# Kept tracked in Enterprise-managed repositories: the Enterprise bundled
+# hook still commits status.json, and the Enterprise server records its
+# presence per commit (plan assumption A1).
+ENTERPRISE_EVIDENCE_FILES = (
+    ".gator/status.json",
+    ".gator/whiteboard.md",
+)
 
-def ensure_repo_gitignore(repo_root):
+TRANSIENT_UNTRACK_WHY = (
+    "Gator's commit hook writes these files on every commit attempt, and "
+    ".gitignore lists them. Older Gator versions committed them, and an "
+    "ignore rule does not stop Git from tracking a file it already tracks. "
+    "While they stay tracked, a commit attempt can change what is staged. "
+    "Removing them from the index fixes this permanently. Your copies on "
+    "disk are not changed."
+)
+
+
+def ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None):
     """Ensure standard gitignore rules exist in the repo's .gitignore.
 
     Called on both fresh install and upgrade paths so all governed repos
     converge on the same set of ignore rules. Matching is on exact,
     whitespace-stripped lines — a substring test would treat
     `.gator/.override` as present whenever `.gator/.override-meta.json` is.
-    Afterwards, tracked copies of TRANSIENT_GATOR_FILES are untracked.
+    Afterwards, unless `untrack` is False, tracked copies of
+    TRANSIENT_GATOR_FILES are untracked: exactly `untrack_paths` when given
+    (the update's predicted list), else whatever is tracked now. Returns
+    the untracked paths.
     """
     repo_gi = repo_root / ".gitignore"
     gi_rules = {
@@ -415,35 +441,101 @@ def ensure_repo_gitignore(repo_root):
     if additions:
         with open(repo_gi, "a" if gi_text else "w", encoding="utf-8") as f:
             f.write("\n" + "\n".join(additions) + "\n")
-    untrack_transient_files(repo_root)
+    if not untrack:
+        return []
+    return untrack_transient_files(repo_root, untrack_paths)
 
 
-def untrack_transient_files(repo_root):
-    """Remove tracked copies of TRANSIENT_GATOR_FILES from the index only.
+def transient_inventory(repo_root):
+    """TRANSIENT_GATOR_FILES for this repository: an Enterprise-managed
+    repository keeps ENTERPRISE_EVIDENCE_FILES tracked (A1)."""
+    try:
+        from gator_core import is_enterprise_active
+        enterprise = is_enterprise_active(Path(repo_root) / ".gator")
+    except Exception:  # noqa: BLE001 — an absent helper means not Enterprise
+        enterprise = False
+    if not enterprise:
+        return TRANSIENT_GATOR_FILES
+    return tuple(p for p in TRANSIENT_GATOR_FILES if p not in ENTERPRISE_EVIDENCE_FILES)
 
-    The working-tree files are kept (`git rm --cached`). Silent no-op
-    outside a git repo or when nothing is tracked. Returns the untracked
-    paths.
+
+def tracked_transient_files(repo_root):
+    """Read-only: the inventory paths Git tracks now, in inventory order.
+
+    The update's dry-run and JSON plan report this prediction; execution
+    untracks exactly this list. [] outside Git or on any Git failure.
     """
     import subprocess
+    inventory = transient_inventory(repo_root)
     try:
         r = subprocess.run(
-            ["git", "ls-files", "--", *TRANSIENT_GATOR_FILES],
-            cwd=str(repo_root), capture_output=True, text=True, timeout=10,
+            ["git", "ls-files", "-z", "--", *inventory],
+            cwd=str(repo_root), capture_output=True, timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return []
-    tracked = [p for p in (r.stdout or "").splitlines() if p.strip()]
-    if r.returncode != 0 or not tracked:
+    if r.returncode != 0:
+        return []
+    tracked = {p.decode("utf-8", "replace").replace("\\", "/")
+               for p in r.stdout.split(b"\0") if p}
+    return [p for p in inventory if p in tracked]
+
+
+def untrack_transient_files(repo_root, paths=None):
+    """Remove tracked transient files from the index only.
+
+    `paths` (the predicted list) is untracked exactly; None means the
+    currently tracked inventory. The working-tree files are kept (`git rm
+    --cached`), so Git stages their deletion. Silent no-op outside a git
+    repo or when nothing is tracked. Returns the untracked paths.
+    """
+    import subprocess
+    tracked = tracked_transient_files(repo_root) if paths is None else list(paths)
+    if not tracked:
         return []
     try:
-        subprocess.run(
+        r = subprocess.run(
             ["git", "rm", "--cached", "--quiet", "--", *tracked],
             cwd=str(repo_root), capture_output=True, text=True, timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return []
+    if r.returncode != 0:
+        return []
     return tracked
+
+
+def transient_untrack_result(paths):
+    """The one structured migration result shared by `gatorize`, `gator
+    update` (text and --result-json) and the Dashboard update response.
+    None when nothing was untracked, so a no-op shows nothing."""
+    paths = list(paths or [])
+    if not paths:
+        return None
+    n = len(paths)
+    return {
+        "paths": paths,
+        "count": n,
+        "message": (f"Gator removed {n} hook-ephemera path{'s' if n != 1 else ''} "
+                    "from the Git index. The files remain on disk. Git has staged "
+                    "their removal. Commit this migration with the update."),
+        "why": TRANSIENT_UNTRACK_WHY,
+    }
+
+
+def format_transient_untrack(result, predicted=False):
+    """Terminal lines for a transient result (or a dry-run prediction)."""
+    if not result:
+        return []
+    if predicted:
+        lines = [f"  Hook-ephemera paths to remove from the Git index ({result['count']}):"]
+    else:
+        lines = ["  " + result["message"]]
+    lines += [f"    - {p}" for p in result["paths"]]
+    if predicted:
+        lines.append("    The files stay on disk. Git will stage their removal; "
+                     "commit it with the update.")
+    return lines
 
 
 def write_gator_version(gator_dir, action):
@@ -722,7 +814,7 @@ def main():
     # Always stamp .gator-version with current cli-version — even when
     # gator-update found no template changes to apply.
     write_gator_version(target / ".gator", "update" if scenario == 3 else "install")
-    ensure_repo_gitignore(target)
+    untracked = ensure_repo_gitignore(target)
     action_install_outbox(target)
     action_install_product_source(target, SCRIPTS_DIR, TODAY)
     action_register(target, TODAY)
@@ -736,6 +828,10 @@ def main():
     if not ok or not current_branch:
         current_branch = "(current branch)"
     print_summary(target, scenario, current_branch)
+    lines = format_transient_untrack(transient_untrack_result(untracked))
+    if lines:
+        print("\n".join(lines))
+        print()
 
 
 if __name__ == "__main__":

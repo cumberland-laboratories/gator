@@ -586,3 +586,83 @@ def test_settings_commit_policy_is_read_only(page, dashboard_fleet):
     assert "Enterprise hook mode" in notes["Managed by Enterprise"]
     assert notes["Not gatorized"] == "No Gator pre-commit checks run in this repository."
     assert notes["Unknown"] == "Not accessible: the commit policy cannot be read."
+
+
+def test_update_result_lists_untracked_hook_files(page, dashboard_fleet):
+    """#78: when the update untracked legacy hook files, Fleet shows the
+    shared message, the exact paths and a "Why am I seeing this?" note."""
+    page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
+    _wait_for_fleet_render(page)
+    page.evaluate("""
+        () => {
+            const real = window.fetch;
+            window.fetch = function (url, opts) {
+                if (String(url).endsWith('/update')) {
+                    return Promise.resolve(new Response(JSON.stringify({
+                        status: 'ok', output: 'Done', exit_code: 0,
+                        transient_untracked: {
+                            paths: ['.gator/status.json', '.gator/whiteboard.md'],
+                            count: 2,
+                            message: 'Gator removed 2 hook-ephemera paths from the Git index. '
+                                + 'The files remain on disk. Git has staged their removal. '
+                                + 'Commit this migration with the update.',
+                            why: 'Old copies were committed.'}})));
+                }
+                return real.apply(this, arguments);
+            };
+        }
+    """)
+    page.locator(".overflow-menu-btn").first.click()
+    page.wait_for_selector(".overflow-menu.open", timeout=3000)
+    page.evaluate("""
+        () => {
+            const b = document.querySelector('.overflow-menu.open .menu-lifecycle');
+            b.removeAttribute('disabled');
+            b.dataset.action = 'update';
+        }
+    """)
+    page.locator(".overflow-menu.open .menu-lifecycle").first.click()
+    dlg = page.locator(".fleet-untracked-dialog")
+    dlg.wait_for(timeout=5000)
+    assert "Commit this migration with the update." in dlg.locator(
+        ".fleet-untracked-message").inner_text()
+    assert dlg.locator(".fleet-untracked-paths li").all_inner_texts() == [
+        ".gator/status.json", ".gator/whiteboard.md"]
+    assert dlg.locator(".fleet-untracked-why summary").inner_text() == "Why am I seeing this?"
+    dlg.locator(".modal-cancel-btn").click()
+    assert page.locator(".fleet-untracked-dialog").count() == 0
+
+
+def test_update_without_untracking_shows_no_dialog(page, dashboard_fleet):
+    page.goto(dashboard_fleet["url"], wait_until="load")
+    open_fleet(page)
+    _wait_for_fleet_render(page)
+    page.evaluate("""
+        () => {
+            const real = window.fetch;
+            window.__updated = false;
+            window.fetch = function (url, opts) {
+                if (String(url).endsWith('/update')) {
+                    window.__updated = true;
+                    return Promise.resolve(new Response(JSON.stringify({
+                        status: 'ok', output: 'Done', exit_code: 0,
+                        transient_untracked: null})));
+                }
+                return real.apply(this, arguments);
+            };
+        }
+    """)
+    page.locator(".overflow-menu-btn").first.click()
+    page.wait_for_selector(".overflow-menu.open", timeout=3000)
+    page.evaluate("""
+        () => {
+            const b = document.querySelector('.overflow-menu.open .menu-lifecycle');
+            b.removeAttribute('disabled');
+            b.dataset.action = 'update';
+        }
+    """)
+    page.locator(".overflow-menu.open .menu-lifecycle").first.click()
+    page.wait_for_function("window.__updated === true", timeout=5000)
+    page.wait_for_timeout(300)
+    assert page.locator(".fleet-untracked-dialog").count() == 0

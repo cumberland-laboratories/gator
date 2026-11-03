@@ -684,8 +684,26 @@ APPROVAL_NONE = "none"
 APPROVAL_INVALIDATED = "invalidated"
 
 
+def same_governed(approved_tree, approved_identity, live_tree, live_identity):
+    """(same, identity_kind) for an approved candidate against a live fact.
+
+    Compares the governed identities (hook-owned paths excluded, #102)
+    when both sides carry one, else the raw tree OIDs. ``identity_kind``
+    is ``"governed"`` or ``"raw"``.
+    """
+    if approved_identity and live_identity:
+        return approved_identity == live_identity, "governed"
+    return approved_tree == live_tree, "raw"
+
+
 def resolve_approval(approval, snap):
     """Pure: where does an approved candidate stand against live Git facts?
+
+    Every "carries the approved tree" test below goes through
+    ``same_governed()``: hook-owned files (status, whiteboard, the commit
+    draft) never make an approved candidate stale or uncommitted, while a
+    source or charter change still does. Old approvals and snapshots
+    without governed identities compare raw trees exactly as before.
 
     - committed: the immediate first-parent successor of the approved HEAD
       (``snap["approval_history"]``, #85) carries the approved tree — the
@@ -721,7 +739,11 @@ def resolve_approval(approval, snap):
                staged_tree=snap.get("staged_tree"),
                detached=bool(snap.get("detached")))
     if snap.get("current_head") == approval.get("head"):
-        if snap.get("staged_tree") == approval.get("tree"):
+        same, kind = same_governed(approval.get("tree"), approval.get("governed_identity"),
+                                   snap.get("staged_tree"),
+                                   snap.get("governed_index_identity"))
+        out["identity"] = kind
+        if same:
             return dict(out, state=APPROVAL_PENDING, reason=None)
         return dict(out, state=APPROVAL_STALE, reason="staged_tree_changed")
     if snap.get("detached"):
@@ -733,7 +755,10 @@ def resolve_approval(approval, snap):
         return dict(out, state=APPROVAL_UNKNOWN,
                     reason=hist.get("error") or "history_unavailable")
     if hist.get("status") == "successor":
-        if hist.get("tree") == approval.get("tree"):
+        same, kind = same_governed(approval.get("tree"), approval.get("governed_identity"),
+                                   hist.get("tree"), hist.get("governed_tree_identity"))
+        out["identity"] = kind
+        if same:
             return dict(out, state=APPROVAL_COMMITTED, reason=None,
                         commit=hist.get("commit"))
         return dict(out, state=APPROVAL_STALE,

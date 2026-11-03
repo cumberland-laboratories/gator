@@ -338,3 +338,145 @@ def skip_trailers(keys):
         return []
     joined = ",".join(k.replace("\r", " ").replace("\n", " ") for k in keys)
     return [f"Gator-Dangerous-Patterns-Unacknowledged: {joined}"]
+
+
+# ---------------------------------------------------------------------------
+# commit_draft.md parsing and the acknowledgement writer (#102)
+# ---------------------------------------------------------------------------
+
+def parse_simple_yaml(text):
+    """Minimal parser for commit_draft frontmatter: flat ``key: value``
+    pairs and single-line ``[a, b]`` lists. Returns None when malformed.
+    The single parser for the hook (template copy) and the acknowledgement
+    writer, so both read the draft the same way."""
+    result = {}
+    try:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if ":" not in line:
+                return None
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip()
+            if value.startswith("[") and value.endswith("]"):
+                items = [item.strip().strip("'\"") for item in value[1:-1].split(",")]
+                result[key] = [i for i in items if i]
+            elif ((value.startswith('"') and value.endswith('"'))
+                  or (value.startswith("'") and value.endswith("'"))):
+                result[key] = value[1:-1]
+            else:
+                result[key] = value
+        return result
+    except Exception:  # noqa: BLE001 — any parse failure is "malformed"
+        return None
+
+
+def split_draft(text):
+    """``(frontmatter_text, frontmatter, body, error)`` for commit_draft text.
+
+    With a ``---`` frontmatter block: its raw text, the parsed dict, the
+    stripped body, and an error string when the block is malformed.
+    Without one: ``(None, {}, body, None)``, where body drops ``# `` heading
+    lines (the historical "# Session Change Log" rule).
+    """
+    if not text or not text.strip():
+        return None, {}, "", None
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            yaml_text = parts[1].strip()
+            body = parts[2].strip()
+            frontmatter = parse_simple_yaml(yaml_text)
+            if frontmatter is None:
+                return yaml_text, {}, body, "Malformed YAML frontmatter in commit_draft.md"
+            return yaml_text, frontmatter, body, None
+    lines = text.splitlines()
+    return None, {}, "\n".join(l for l in lines if not l.startswith("# ")).strip(), None
+
+
+ACK_SURFACES = {"dashboard": "in the Dashboard", "agent": "in the agent session"}
+
+
+def acknowledgement_text(surface="agent", note=None):
+    """The decision text of one generated acknowledgement bullet."""
+    text = f"Acknowledged by the Architect {ACK_SURFACES.get(surface, ACK_SURFACES['agent'])}."
+    note = " ".join(str(note or "").split())
+    return f"{text} {note}" if note else text
+
+
+def render_acknowledgement(text, keys, architect, note=None, surface="agent"):
+    """New commit_draft text recording one Architect decision for ``keys``.
+
+    ``architect`` is the already-resolved, non-empty identity (ValueError
+    when blank). It is written into the frontmatter ``architect:`` line:
+    an empty value is replaced, an absent line is inserted, an equal value
+    is kept; a different non-empty value raises ValueError (the caller
+    refuses that case first). ``dangerous-pattern-acknowledgements`` is set
+    or merged (earlier keys kept, in order), and one ``- `KEY`: <decision>``
+    bullet per new key is appended to ``## Architect acknowledgement``
+    (created at the end of the body when absent). Every other byte of the
+    draft is kept; CRLF drafts stay CRLF. ValueError when the draft has no
+    closed ``---`` frontmatter block.
+    """
+    architect = " ".join(str(architect or "").split())
+    if not architect:
+        raise ValueError("an Architect identity is required")
+    crlf = "\r\n" in text
+    lines = text.replace("\r\n", "\n").split("\n")
+    if not lines or lines[0].strip() != "---":
+        raise ValueError("commit_draft.md has no frontmatter block")
+    try:
+        close = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        raise ValueError("commit_draft.md frontmatter is not closed") from None
+
+    def key_of(line):
+        return line.partition(":")[0].strip() if ":" in line else None
+
+    front = lines[1:close]
+    arch_idx = next((i for i, l in enumerate(front) if key_of(l) == "architect"), None)
+    if arch_idx is None:
+        front.append(f"architect: {architect}")
+    else:
+        current = parse_simple_yaml(front[arch_idx]) or {}
+        value = str(current.get("architect") or "").strip()
+        if not value:
+            front[arch_idx] = f"architect: {architect}"
+        elif " ".join(value.split()) != architect:
+            raise ValueError("the draft names a different Architect")
+    ack_idx = next((i for i, l in enumerate(front) if key_of(l) == ACK_FIELD), None)
+    existing = []
+    if ack_idx is not None:
+        raw = (parse_simple_yaml(front[ack_idx]) or {}).get(ACK_FIELD)
+        existing = raw if isinstance(raw, list) else []
+    new = [k for k in keys if k not in existing]
+    line = f"{ACK_FIELD}: [{', '.join(existing + new)}]"
+    if ack_idx is None:
+        front.append(line)
+    else:
+        front[ack_idx] = line
+
+    body = lines[close + 1:]
+    bullets = [f"- `{k}`: {acknowledgement_text(surface, note)}" for k in new]
+    head = next((i for i, l in enumerate(body) if l.strip() == ACK_HEADING), None)
+    if head is None:
+        while body and not body[-1].strip():
+            body.pop()
+        body += ["", ACK_HEADING, ""] + bullets + [""]
+    else:
+        end = next((i for i in range(head + 1, len(body))
+                    if body[i].startswith("## ") or body[i].startswith("# ")), len(body))
+        last = end
+        while last > head + 1 and not body[last - 1].strip():
+            last -= 1
+        insert = bullets if last > head + 1 else [""] + bullets
+        tail = [""] if end < len(body) else [""]
+        body = body[:last] + insert + tail + body[end:]
+        while len(body) > 1 and not body[-1].strip() and not body[-2].strip():
+            body.pop()
+    out = "\n".join(["---"] + front + ["---"] + body)
+    if not out.endswith("\n"):
+        out += "\n"
+    return out.replace("\n", "\r\n") if crlf else out

@@ -549,3 +549,108 @@ class TestCli:
         r = cli(c, "submit-review", "--token", c["tok"]["reviewer"],
                 "--file", str(f), "--approve")
         assert r.returncode == 1  # not the reviewer's turn any more
+
+
+# ---------------------------------------------------------------------------
+# #102: approvals compare governed identities (hook-owned paths excluded)
+# ---------------------------------------------------------------------------
+
+GOV = "gov1:" + "g" * 64
+
+
+class TestResolveApprovalGoverned:
+    def test_pending_when_only_hook_files_differ(self):
+        appr = dict(APPROVAL, governed_identity=GOV)
+        r = sm.resolve_approval(appr, snap(staged_tree="z" * 40,
+                                           governed_index_identity=GOV))
+        assert r["state"] == "pending" and r["identity"] == "governed"
+
+    def test_stale_when_governed_identity_differs(self):
+        appr = dict(APPROVAL, governed_identity=GOV)
+        r = sm.resolve_approval(appr, snap(governed_index_identity="gov1:other"))
+        assert r["state"] == "stale" and r["reason"] == "staged_tree_changed"
+        assert r["identity"] == "governed"
+
+    def test_raw_fallback_when_either_side_lacks_identity(self):
+        r = sm.resolve_approval(APPROVAL, snap(staged_tree="z" * 40,
+                                               governed_index_identity=GOV))
+        assert r["state"] == "stale" and r["identity"] == "raw"
+        appr = dict(APPROVAL, governed_identity=GOV)
+        r = sm.resolve_approval(appr, snap())
+        assert r["state"] == "pending" and r["identity"] == "raw"
+
+    def test_committed_when_successor_differs_only_in_hook_files(self):
+        appr = dict(APPROVAL, governed_identity=GOV)
+        hist = dict(SUCCESSOR, tree="q" * 40, governed_tree_identity=GOV)
+        r = sm.resolve_approval(appr, snap(current_head="n" * 40,
+                                           approval_history=hist))
+        assert r["state"] == "committed" and r["identity"] == "governed"
+        hist = dict(hist, governed_tree_identity="gov1:other")
+        r = sm.resolve_approval(appr, snap(current_head="n" * 40,
+                                           approval_history=hist))
+        assert r["state"] == "stale" and r["reason"] == "head_moved_tree_differs"
+
+    def test_same_governed_helper(self):
+        assert sm.same_governed("a", GOV, "b", GOV) == (True, "governed")
+        assert sm.same_governed("a", None, "a", GOV) == (True, "raw")
+        assert sm.same_governed("a", GOV, "b", None) == (False, "raw")
+
+
+def _stage_hook_file(repo, rel=".gator/status.json", text='{"t": 1}\n'):
+    p = Path(repo) / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    git(repo, "add", "-f", rel)
+
+
+class TestGovernedEndToEnd:
+    def test_hook_file_between_submit_and_approve_does_not_block(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        *_, gen = submit_impl(c)
+        _stage_hook_file(c["repo"])
+        review(c, approve=True)
+        s = sess(c)
+        assert s["status"]["stage"] == "implementation_approved"
+        appr = s["coding"]["approval"]
+        assert appr["governed_identity"] == gen["snapshot"]["governed_index_identity"]
+        assert s["coding"]["generations"][-1]["review"]["candidate_changed"] is False
+        r = resolution(c)
+        assert r["state"] == "pending" and r["identity"] == "governed"
+        # The hook file is removed from the commit (as the hook's
+        # normalization would do); the commit is still the approved one.
+        git(c["repo"], "rm", "-q", "--cached", ".gator/status.json")
+        git(c["repo"], "commit", "-q", "-m", "the one normal commit")
+        r = resolution(c)
+        assert r["state"] == "committed" and r["identity"] == "governed"
+
+    def test_charter_edit_after_approval_is_stale(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        review(c, approve=True)
+        _stage_hook_file(c["repo"], ".gator/charters/extra.md", "# extra\n")
+        r = resolution(c)
+        assert r["state"] == "stale" and r["reason"] == "staged_tree_changed"
+
+    def test_source_edit_between_submit_and_approve_still_blocks(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        _stage_hook_file(c["repo"])
+        stage_change(c["repo"], "extra.py", "x = 1\n")
+        with pytest.raises(ValueError) as ei:
+            review(c, approve=True)
+        assert "changed since submission" in str(ei.value)
+
+    def test_old_session_without_identity_compares_raw(self, coding):
+        c = coding
+        stage_change(c["repo"])
+        submit_impl(c)
+        review(c, approve=True)
+        s = sess(c)
+        s["coding"]["approval"].pop("governed_identity")
+        loop_session.save_session(c["loop_dir"], s)
+        _stage_hook_file(c["repo"])
+        r = resolution(c)
+        assert r["state"] == "stale" and r["identity"] == "raw"

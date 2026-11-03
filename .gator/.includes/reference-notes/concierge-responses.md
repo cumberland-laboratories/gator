@@ -40,7 +40,7 @@ When the Architect asks a question that matches a pattern below, read the refere
 
 **Draw from**: `reference-notes/expected-governance-residue.md`, constitution commit-hook section
 
-**Frame as**: Explain expected governance residue. After a successful Gator commit, `.gator/commit_draft.md` and `.gator/whiteboard.md` may appear modified because the hooks reset or clear them for the next session. That is expected housekeeping, not unfinished product work.
+**Frame as**: Explain expected governance residue. The hooks write their files (`status.json`, `whiteboard.md`, `commit_draft.md`, `commit_issues.md`) to the working tree and never stage them. In a repository that still tracks old copies, they may appear modified after a commit; that is expected housekeeping, not unfinished product work. `gator update` untracks them once: commit the staged deletion it reports.
 
 ### "What are we building?" / "What's the mission?"
 

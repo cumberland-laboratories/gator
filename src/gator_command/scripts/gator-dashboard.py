@@ -4246,6 +4246,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._with_repo_action(repo_name, target, source, run)
 
     _OVERRIDE_BODY_MAX = 4096
+    # acknowledge carries the complete current key set (up to 200 keys).
+    _OVERRIDE_ACK_BODY_MAX = 65536
 
     def _handle_override_post(self, repo_name, action):
         """Approve or cancel a blocked commit through the repository's own
@@ -4256,7 +4258,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._send_json({"error": "invalid Content-Length"}, 400)
             return
-        if length > self._OVERRIDE_BODY_MAX:
+        cap = (self._OVERRIDE_ACK_BODY_MAX if action == "acknowledge"
+               else self._OVERRIDE_BODY_MAX)
+        if length > cap:
             self.close_connection = True
             self._send_json({"error": "request body too large"}, 413)
             return
@@ -4441,8 +4445,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._dispatch_loop_post(path)
             return
 
-        # POST /api/repo/<name>/override/{approve,cancel} (#76)
-        for action in ("approve", "cancel"):
+        # POST /api/repo/<name>/override/{approve,cancel} (#76) and
+        # /override/acknowledge (#102: record a pause decision)
+        for action in ("approve", "cancel", "acknowledge"):
             suffix = "/override/" + action
             if path.startswith("/api/repo/") and path.endswith(suffix):
                 self._handle_override_post(path[len("/api/repo/"):-len(suffix)], action)

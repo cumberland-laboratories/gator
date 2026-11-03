@@ -528,6 +528,7 @@
 
       if (indicator) indicator.innerHTML = "";
       if (data.status === "ok") {
+        if (data.transient_untracked) openUntrackedDialog(repoName, data.transient_untracked);
         if (window.gatorRefreshFleet) window.gatorRefreshFleet();
       } else {
         const reason = (data.output || data.error || "no output from CLI").trim();
@@ -540,6 +541,40 @@
       const label = action === "gatorize" ? "Gatorize" : "Update";
       alert(label + " request failed for " + repoName + ": " + err);
     }
+  }
+
+  // ── Update result: hook ephemera removed from the Git index (#78) ────
+  //
+  // Shown only when the update untracked legacy hook files. The text comes
+  // from the CLI's one shared result (message, paths, why). The dialog is
+  // attached to <body> so the Fleet refresh that follows cannot remove it.
+
+  function openUntrackedDialog(repoName, result) {
+    const paths = (result.paths || []).map(p => `<li><code>${escHtml(p)}</code></li>`).join("");
+    const modal = document.createElement("div");
+    modal.className = "gator-modal-overlay fleet-untracked-dialog";
+    modal.innerHTML = `
+      <div class="gator-modal" role="dialog" aria-modal="true" aria-labelledby="fleet-untracked-title">
+        <h3 id="fleet-untracked-title">${escHtml(repoName)}: commit the update</h3>
+        <div class="gator-modal-body">
+          <p class="fleet-untracked-message">${escHtml(result.message || "")}</p>
+          <ul class="fleet-untracked-paths">${paths}</ul>
+          <details class="fleet-untracked-why">
+            <summary>Why am I seeing this?</summary>
+            <p>${escHtml(result.why || "")}</p>
+          </details>
+        </div>
+        <div class="gator-modal-footer" style="display:flex;justify-content:flex-end;gap:8px">
+          <button class="gator-btn modal-cancel-btn">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    function close() { modal.remove(); }
+    modal.querySelector(".modal-cancel-btn").addEventListener("click", close);
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    modal.querySelector(".modal-cancel-btn").focus();
   }
 
   // ── Remove confirmation dialog ────────────────────────────────────────

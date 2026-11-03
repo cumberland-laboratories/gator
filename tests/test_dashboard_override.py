@@ -30,7 +30,8 @@ dashboard_data = sys.modules["dashboard.data"]
 # Real-repo helpers from the pre-commit override suite (functions only, so
 # no test classes are re-collected here).
 from test_precommit_override import (  # noqa: E402
-    SCRIPTS, _backdate_block, _commit, _last_message, _make_repo, _stage_code)
+    SCRIPTS, _backdate_block, _commit, _last_message, _make_repo, _stage_code,
+    _stage_sql)
 
 TIMEOUT = 30
 REV = "0123456789abcdef"
@@ -262,7 +263,7 @@ def _call(url, path, body=None, auth=True):
         return e.code, json.loads(e.read() or b"{}"), e.headers
 
 
-@pytest.mark.parametrize("action", ["approve", "cancel"])
+@pytest.mark.parametrize("action", ["approve", "cancel", "acknowledge"])
 def test_override_posts_require_dashboard_header(serve, tmp_path, monkeypatch, action):
     runner = FakeRunner()
     monkeypatch.setattr(dashboard_data, "run_override_cli", runner)
@@ -364,3 +365,116 @@ def dashboard_data_state_dir(repo):
     itself never computes or reads it)."""
     import precommit_override as ovr
     return ovr.state_dir(repo)
+
+
+
+# ---------------------------------------------------------------------------
+# #102: acknowledge relay and the additive pause fields
+# ---------------------------------------------------------------------------
+
+_KEYS = ["SQL-001@m1.txt:1", "SQL-001@two  spaces.txt:3"]
+
+
+class TestAcknowledgeRelay:
+    def test_cli_args(self):
+        args, err = dashboard_data.override_cli_args("acknowledge", {
+            "block_id": "a1b2c3d4", "keys": _KEYS, "architect": " Alan\n Gillette ",
+            "note": "ok"})
+        assert err is None
+        assert args == ["acknowledge", "--json", "--surface", "dashboard",
+                        "--expect-block", "a1b2c3d4", "--architect", "Alan Gillette",
+                        "--note", "ok", "--keys", *_KEYS]
+
+    @pytest.mark.parametrize("body", [
+        {"block_id": "nope", "keys": _KEYS},
+        {"block_id": "a1b2c3d4", "keys": []},
+        {"block_id": "a1b2c3d4", "keys": ["--all-current"]},
+        {"block_id": "a1b2c3d4", "keys": ["SQL-001@a\x00b:1"]},
+        {"block_id": "a1b2c3d4", "keys": ["SQL-001@a:1"] * 201},
+        {"block_id": "a1b2c3d4", "keys": _KEYS, "architect": "x" * 81},
+        {"block_id": "a1b2c3d4", "keys": _KEYS, "note": "x" * 501},
+        {"block_id": "a1b2c3d4", "keys": _KEYS, "architect": 7},
+    ])
+    def test_invalid_bodies_never_reach_the_cli(self, body):
+        calls = []
+        r = dashboard_data.resolve_repo_override(
+            "acknowledge", "/repo", body, run_fn=lambda *a: calls.append(a))
+        assert r["status"] == 400 and calls == []
+
+    def test_success_and_refusal_shapes(self):
+        ok = json.dumps({"schema": "gator-override-acknowledge-v1", "ok": True,
+                         "outcome": "retry-commit", "acknowledged": _KEYS,
+                         "all_acknowledged": _KEYS, "architect": "A", "block_id": "a1b2c3d4"})
+        r = dashboard_data.resolve_repo_override(
+            "acknowledge", "/repo", {"block_id": "a1b2c3d4", "keys": _KEYS},
+            run_fn=lambda *a: (ok, "", 0))
+        assert r["status"] == 200
+        assert r["data"]["ok"] is True and r["data"]["outcome"] == "retry-commit"
+        assert r["data"]["acknowledged"] == _KEYS and r["data"]["architect"] == "A"
+        refused = json.dumps({"schema": "gator-override-acknowledge-v1", "ok": False,
+                              "refusal": "architect-mismatch", "message": "m",
+                              "draft_architect": "B"})
+        r = dashboard_data.resolve_repo_override(
+            "acknowledge", "/repo", {"block_id": "a1b2c3d4", "keys": _KEYS},
+            run_fn=lambda *a: (refused, "", 1))
+        assert r["status"] == 409
+        assert r["data"]["refusal"] == "architect-mismatch"
+        assert r["data"]["draft_architect"] == "B"
+
+    def _status(self, **extra):
+        base = {"schema": "gator-override-status-v1", "state": "blocked",
+                "revision": "0123456789abcdef", "findings": [
+                    {"rule": "dangerous-pattern-pause", "resolution": "pause",
+                     "message": "m", "covered": False}]}
+        base.update(extra)
+        return dashboard_data.shape_override_status(json.dumps(base), "", 0)
+
+    def test_status_pause_fields_are_allowlisted(self):
+        pf = [{"key": _KEYS[0], "rule": "SQL-001", "file": "m1.txt", "line": 1,
+               "severity": "HIGH", "message": "DROP", "match": "secret source"}]
+        shaped = self._status(pause_findings=pf, draft_architect="A")
+        assert shaped["pause_findings"] == [{"key": _KEYS[0], "rule": "SQL-001",
+                                             "file": "m1.txt", "line": 1,
+                                             "severity": "HIGH", "message": "DROP"}]
+        assert shaped["draft_architect"] == "A"
+        assert "pause_findings_incomplete" not in shaped
+
+    def test_status_tolerates_older_runtime(self):
+        shaped = self._status()
+        assert shaped["pause_findings"] == [] and shaped["draft_architect"] is None
+
+    @pytest.mark.parametrize("pf", [
+        [{"key": "not a key"}],
+        [{"key": _KEYS[0]}] * 201,
+        "x",
+    ])
+    def test_incomplete_pause_findings_offer_nothing(self, pf):
+        shaped = self._status(pause_findings=pf)
+        assert shaped["pause_findings"] == [] and shaped["pause_findings_incomplete"] is True
+
+
+def test_dashboard_acknowledge_end_to_end(serve, governed):
+    """#102: a pause on three findings is decided once in the Dashboard; the
+    next commit lands with the acknowledgement trailers."""
+    for i in (1, 2, 3):
+        _stage_sql(governed, name=f"m{i}.txt")
+    rc, out = _commit(governed)
+    assert rc != 0 and "dangerous-pattern-pause [pause]" in out
+    url = serve([{"name": "target", "path": str(governed)}])
+    status, data, _ = _call(url, "/api/repo/target/override")
+    assert status == 200 and data["draft_architect"] == "Test Architect"
+    keys = [f["key"] for f in data["pause_findings"]]
+    assert keys == ["SQL-001@m1.txt:1", "SQL-001@m2.txt:1", "SQL-001@m3.txt:1"]
+    body = {"block_id": data["block"]["block_id"], "keys": keys}
+    status, refused, _ = _call(url, "/api/repo/target/override/acknowledge",
+                               dict(body, keys=keys[:1]))
+    assert status == 409 and refused["refusal"] == "findings-changed"
+    status, ok, _ = _call(url, "/api/repo/target/override/acknowledge", body)
+    assert status == 200 and ok["ok"] is True and ok["acknowledged"] == keys, ok
+    assert "Acknowledged by the Architect in the Dashboard." in (
+        governed / ".gator" / "commit_draft.md").read_text(encoding="utf-8")
+    rc, out = _commit(governed)
+    assert rc == 0, out
+    msg = _last_message(governed)
+    assert "Gator-Dangerous-Patterns: " + ",".join(keys) in msg
+    assert "Gator-Dangerous-Pattern-Acknowledged-By: Test Architect" in msg

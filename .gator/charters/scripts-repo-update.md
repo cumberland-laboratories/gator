@@ -48,6 +48,18 @@ Filesystem: managed hook directory and Git config (RW)
 ! Refuse an unresolvable explicit launcher rather than writing wrappers that cannot execute.
 ! Wrapper generation, health probes, and display paths agree on the same canonical directory.
 
+### Transient-file migration (#78) in main() / print_plan() / print_json_plan()
+File: src/gator_command/scripts/gator-update.py
+`main()` predicts `tracked_transient_files(repo_root)` right after planning (read-only). `--dry-run` lists the prediction (`print_plan(transient=)`), `--json` adds additive `transient_untrack: {paths, count}` and `summary.transient_untrack`. Execution calls `ensure_repo_gitignore(repo_root, untrack_paths=<prediction>)`, so it untracks exactly what was predicted, then prints `format_transient_untrack(transient_untrack_result(...))` and counts the untracking as a change for the `updated:` stamp. The helpers come from the `gatorize` sibling; without it (the template copy run standalone) they degrade to no prediction and no untracking, as before #78.
+! "Everything is current" is not printed while hook ephemera are still tracked.
+
+### _run_with_result(args) / _run(args) — `--result-json`
+File: src/gator_command/scripts/gator-update.py
+`main()` parses arguments and calls `_run(args)` (the former body). `--result-json` executes under `contextlib.redirect_stdout` and prints exactly one `gator-update-result-v1` object: `schema`, `version`, `exit_code` (from `SystemExit`), `output` (the captured human text) and `transient_untracked` (the shared result or null, from `_RESULT`). It refuses `--json` / `--dry-run` (argparse error, exit 2).
+<- `main()`; consumed by the Dashboard update relay (`dashboard/data.resolve_repo_update()`)
+-> `_run()`
+! stdout carries only the JSON object; anything the update prints goes into `output`, so a new `print()` in `_run()` never breaks the consumer.
+
 ### execute_updates()
 File: src/gator_command/scripts/gator-update.py
 Apply a previously built overlay plan and create required destination directories.
@@ -70,6 +82,7 @@ Emit the versioned machine-readable update plan.
 <- update `--json`
 ! Preserve `gator-update-v1` compatibility; removing or renaming fields requires a schema bump.
 ! `entry_point_actions` and `summary.entry_point_actions` remain for v1 compatibility and are always `[]` / `0`.
+! `transient_untrack` and `summary.transient_untrack` (#78) are additive v1 fields.
 
 ### main()
 File: src/gator_command/scripts/gator-update.py

@@ -149,19 +149,23 @@ def state_dir(repo_root):
     return p if p.is_absolute() else (repo_root / p)
 
 
-# Files the hooks themselves write/stage during a commit attempt (or that
-# carry the commit message being fixed). They must not count toward the
-# staged-change identity, or every attempt would look like a different
-# change: validate stages status.json / whiteboard.md / commit_issues.md
-# with fresh timestamps, the pass path restages lint-allow.json, and fixing
-# a fix-required finding means editing commit_draft.md.
-HOOK_MANAGED_PATHS = frozenset({
+# Files the hooks themselves write or reset during a commit cycle: hook
+# ephemera. They are gitignored. The template hook writes them to the
+# working tree only and never stages them (#102); a legacy repository may
+# still track them until `gator update` untracks them (#78).
+HOOK_EPHEMERA_PATHS = (
     ".gator/status.json",
     ".gator/whiteboard.md",
-    ".gator/commit_issues.md",
-    ".gator/lint-allow.json",
     ".gator/commit_draft.md",
-})
+    ".gator/commit_issues.md",
+)
+
+# Paths excluded from the staged-change identity: the hook ephemera plus
+# the deprecated, read-only lint-allow.json. Fixing a fix-required finding
+# means editing commit_draft.md, and a legacy-tracked ephemera file (or the
+# Enterprise bundled hook, which still stages status.json) must not make a
+# retry look like a different change.
+HOOK_MANAGED_PATHS = frozenset(HOOK_EPHEMERA_PATHS) | {".gator/lint-allow.json"}
 
 
 def index_tree(repo_root):
@@ -199,6 +203,58 @@ def index_tree(repo_root):
             continue
         digest.update(mode + b" " + oid + b" " + path + b"\0")
     return digest.hexdigest()
+
+
+def normalize_ephemera_index(repo_root):
+    """Remove staged hook-ephemera additions/modifications from the index.
+
+    Runs before validation reads the staged change. For each path in
+    ``HOOK_EPHEMERA_PATHS`` staged against HEAD (the empty tree on an
+    unborn branch): an addition is removed from the index (``git rm
+    --cached``); a modification or type change is reset to HEAD's entry
+    (``git reset``). The working-tree file is never touched. A staged
+    deletion is kept: it is the `gator update` migration that untracks a
+    legacy copy (#78), and the user commits it. No other path is ever
+    passed to Git here.
+
+    Returns the sorted normalized paths ([] when nothing changed, and on
+    any Git failure: the identity already excludes these paths).
+    """
+    root = str(repo_root)
+    try:
+        r = subprocess.run(
+            ["git", "diff", "--cached", "--name-status", "--no-renames", "-z",
+             "--", *HOOK_EPHEMERA_PATHS],
+            cwd=root, capture_output=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if r.returncode != 0:
+        return []
+    fields = [f for f in r.stdout.split(b"\0") if f]
+    added, modified = [], []
+    for status, raw in zip(fields[0::2], fields[1::2]):
+        path = raw.decode("utf-8", "replace").replace("\\", "/")
+        if path not in HOOK_EPHEMERA_PATHS:
+            continue
+        kind = status[:1]
+        if kind == b"A":
+            added.append(path)
+        elif kind in (b"M", b"T"):
+            modified.append(path)
+    done = []
+    for args, paths in ((["rm", "--cached", "-q", "--"], added),
+                        (["reset", "-q", "HEAD", "--"], modified)):
+        if not paths:
+            continue
+        try:
+            r = subprocess.run(["git", *args, *paths], cwd=root,
+                               capture_output=True)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if r.returncode == 0:
+            done.extend(paths)
+    return sorted(done)
 
 
 # ---------------------------------------------------------------------------

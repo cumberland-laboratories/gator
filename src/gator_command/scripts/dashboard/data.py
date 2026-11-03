@@ -251,16 +251,52 @@ def resolve_repo_update(repo_name, registry_repos=None, fleet_data=None,
 
     runner = run_text_fn or run_text
     stdout, stderr, exit_code = runner(
-        "gator-update", "--path", repo_path, timeout=60,
+        "gator-update", "--path", repo_path, "--result-json", timeout=60,
     )
+    output, transient = stdout or stderr, None
+    result = _parse_update_result(stdout)
+    if result is not None:
+        output = result.get("output") or stderr or ""
+        transient = _valid_transient_result(result.get("transient_untracked"))
     return {
         "data": {
             "status": "ok" if exit_code == 0 else "error",
-            "output": stdout or stderr,
+            "output": output,
             "exit_code": exit_code,
+            # #78 (additive): the hook-ephemera paths the update removed
+            # from the Git index, or null. Older readers ignore it.
+            "transient_untracked": transient,
         },
         "status": 200,
     }
+
+
+def _parse_update_result(stdout):
+    """The `gator-update-result-v1` object, or None when stdout is not one
+    (an argparse error, or a runtime without --result-json): the caller
+    then shows the raw text as before."""
+    try:
+        data = json.loads((stdout or "").strip())
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or data.get("schema") != "gator-update-result-v1":
+        return None
+    return data
+
+
+def _valid_transient_result(value):
+    """Pass through only a well-formed transient result; anything else is
+    null, so the browser never renders a partial migration notice."""
+    if not isinstance(value, dict):
+        return None
+    paths = value.get("paths")
+    if (not isinstance(paths, list) or not paths
+            or not all(isinstance(p, str) for p in paths)):
+        return None
+    message, why = value.get("message"), value.get("why")
+    if not isinstance(message, str) or not isinstance(why, str):
+        return None
+    return {"paths": paths, "count": len(paths), "message": message, "why": why}
 
 
 # ── repo gatorize (Stage 3 fold-in of retire-gator-install plan) ──────────────
@@ -325,6 +361,7 @@ def resolve_repo_gatorize(repo_name, registry_repos=None, fleet_data=None,
 OVERRIDE_STATUS_SCHEMA = "gator-override-status-v1"
 OVERRIDE_APPROVE_SCHEMA = "gator-override-approve-v1"
 OVERRIDE_CANCEL_SCHEMA = "gator-override-cancel-v1"
+OVERRIDE_ACK_SCHEMA = "gator-override-acknowledge-v1"
 _OVERRIDE_STATES = frozenset({
     "none", "blocked", "approved", "stale", "expired", "malformed", "legacy",
     "unavailable",
@@ -334,7 +371,13 @@ _OVERRIDE_REFUSALS = frozenset({
     "no-block", "malformed", "block-changed", "findings-changed", "unavailable",
     "tree-changed", "expired", "legacy", "nothing-approvable", "too-recent",
     "invalid-input", "write-failed", "too-many-findings",
+    # acknowledge (#102)
+    "no-pause", "draft-unstructured", "existing-evidence-invalid",
+    "architect-mismatch", "architect-required",
 })
+_OVERRIDE_NOTE_MAX = 500
+# A finding key as the hook writes it (precommit_policy.KEY_PATTERN).
+_FINDING_KEY_RE = re.compile(r"^[A-Z]+-[0-9]+@.+:[0-9]+$")
 _OVERRIDE_TEXT_MAX = 2000
 _OVERRIDE_FILES_MAX = 500
 _OVERRIDE_FINDINGS_MAX = 200
@@ -466,7 +509,15 @@ def shape_override_status(stdout, stderr, exit_code):
         "approve_wait_seconds": max(0, min(int(wait), 3600)) if wait is not None else 0,
         "min_approval_delay_seconds": int(delay) if delay is not None else None,
         "architect_default": _ov_text(obj.get("architect_default"), _OVERRIDE_NAME_MAX),
+        # #102 (additive; absent from older runtimes): the findings a pause
+        # still waits on, and the Architect the draft already names.
+        "pause_findings": _pause_findings_view(obj.get("pause_findings")),
+        "draft_architect": _ov_text(obj.get("draft_architect"), _OVERRIDE_NAME_MAX),
     }
+    if shaped["pause_findings"] is None:
+        # Not every paused finding can be shown, so none can be decided here.
+        shaped["pause_findings"] = []
+        shaped["pause_findings_incomplete"] = True
     if obj["state"] == "unavailable":
         shaped["message"] = _ov_text(obj.get("message")) or ""
     if not complete and obj["state"] in ("blocked", "approved"):
@@ -484,13 +535,41 @@ def shape_override_status(stdout, stderr, exit_code):
     return shaped
 
 
+def _pause_findings_view(value):
+    """Allowlisted pause findings, or None when any entry cannot be shown
+    in full (over the cap, or malformed): the Dashboard then offers no
+    acknowledgement, because the decision must cover the complete set."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > _OVERRIDE_FINDINGS_MAX:
+        return None
+    out = []
+    for f in value:
+        if not isinstance(f, dict):
+            return None
+        key = f.get("key")
+        if (not isinstance(key, str) or len(key) > _OVERRIDE_TEXT_MAX
+                or not _FINDING_KEY_RE.match(key) or _CONTROL_RE.search(key)):
+            return None
+        out.append({
+            "key": key,
+            "rule": _ov_text(f.get("rule"), 120),
+            "file": _ov_text(f.get("file")),
+            "line": _ov_num(f.get("line")),
+            "severity": _ov_text(f.get("severity"), 16),
+            "message": _ov_text(f.get("message")) or "",
+        })
+    return out
+
+
 def shape_override_result(stdout, stderr, exit_code, action):
     """(data, http_status) for an approve/cancel CLI answer.
 
     200 on success; 409 on a CLI refusal, an unsupported runtime or a
     dispatcher skip (each with a ``refusal`` code and ``message``).
     """
-    schema = OVERRIDE_APPROVE_SCHEMA if action == "approve" else OVERRIDE_CANCEL_SCHEMA
+    schema = {"approve": OVERRIDE_APPROVE_SCHEMA, "cancel": OVERRIDE_CANCEL_SCHEMA,
+              "acknowledge": OVERRIDE_ACK_SCHEMA}[action]
     command = f"gator hook override {action}"
     if exit_code == 0 and not (stdout or "").strip():
         return ({"ok": False, "refusal": "unavailable", "command": command,
@@ -521,19 +600,61 @@ def shape_override_result(stdout, stderr, exit_code, action):
             }
         if action == "cancel":
             data["removed"] = _ov_list(obj.get("removed"), 10)
+        if action == "acknowledge":
+            data["outcome"] = "retry-commit"
+            data["acknowledged"] = _ov_list(obj.get("acknowledged"), _OVERRIDE_FINDINGS_MAX)
+            data["architect"] = _ov_text(obj.get("architect"), _OVERRIDE_NAME_MAX)
         return data, 200
     refusal = obj.get("refusal")
     data["refusal"] = refusal if refusal in _OVERRIDE_REFUSALS else "refused"
     retry = _ov_num(obj.get("retry_after_seconds"))
     data["retry_after_seconds"] = int(retry) if retry is not None else None
+    if action == "acknowledge":
+        data["current_keys"] = _ov_list(obj.get("current_keys"), _OVERRIDE_FINDINGS_MAX)
+        data["draft_architect"] = _ov_text(obj.get("draft_architect"), _OVERRIDE_NAME_MAX)
     return data, 409
 
 
+def _ack_cli_args(body):
+    """(argv, error) for an acknowledge POST body (#102): `block_id`, the
+    complete `keys` list, and optional `architect` / `note`. The CLI
+    re-reads the block and the live findings and refuses anything stale;
+    this only keeps request text well-formed."""
+    block_id = body.get("block_id")
+    if not isinstance(block_id, str) or not _BLOCK_ID_RE.match(block_id):
+        return None, "block_id must be 8 lowercase hex characters"
+    keys = body.get("keys")
+    if (not isinstance(keys, list) or not keys or len(keys) > _OVERRIDE_FINDINGS_MAX
+            or not all(isinstance(k, str) and _FINDING_KEY_RE.match(k)
+                       and not _CONTROL_RE.search(k) for k in keys)):
+        return None, "keys must be a non-empty list of finding keys (RULE@path:line)"
+    args = ["acknowledge", "--json", "--surface", "dashboard", "--expect-block", block_id]
+    for key, flag, cap in (("architect", "--architect", _OVERRIDE_NAME_MAX),
+                           ("note", "--note", _OVERRIDE_NOTE_MAX)):
+        value = body.get(key)
+        if value is None or value == "":
+            continue
+        if not isinstance(value, str):
+            return None, f"{key} must be text"
+        value = _WHITESPACE_RUN_RE.sub(" ", value).strip()
+        if len(value) > cap:
+            return None, f"{key} is limited to {cap} characters"
+        if _CONTROL_RE.search(value):
+            return None, f"{key} must not contain control characters"
+        if value:
+            args += [flag, value]
+    # --keys last: its values are separate argv entries.
+    return args + ["--keys", *keys], None
+
+
 def override_cli_args(action, body):
-    """(argv, error) for an approve/cancel POST body. Validates before any
-    subprocess; request text only ever becomes separate argv values."""
+    """(argv, error) for an approve/cancel/acknowledge POST body. Validates
+    before any subprocess; request text only ever becomes separate argv
+    values."""
     if not isinstance(body, dict):
         return None, "request body must be a JSON object"
+    if action == "acknowledge":
+        return _ack_cli_args(body)
     revision = body.get("revision")
     if not isinstance(revision, str) or not _REVISION_RE.match(revision):
         return None, "revision must be 16 lowercase hex characters"
@@ -563,7 +684,7 @@ def override_cli_args(action, body):
 def resolve_repo_override(action, repo_path, body=None, run_fn=None):
     """Run one override action for a resolved repository path.
 
-    ``action`` is "status", "approve" or "cancel". Returns
+    ``action`` is "status", "approve", "cancel" or "acknowledge". Returns
     {"data": ..., "status": ...}. Testable without HTTP (inject run_fn).
     """
     runner = run_fn or run_override_cli

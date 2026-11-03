@@ -26,6 +26,7 @@ raw test output, and full significance steelmen in charters or artifacts.
 4. If the hook blocks the commit, present the findings to the Architect (they are in the hook output and `.gator/whiteboard.md`). Each finding is tagged:
    - `[fix-required]` — fix it and retry; it can never be approved.
    - `[approvable]` / `[lint]` — fix it, or the Architect may approve this exact staged change.
+   - `[pause]` — a HIGH/CRITICAL dangerous pattern needs the Architect's decision. Show the current findings in one enumerated prompt ("Reply **Acknowledged** to keep all N, or name the findings to fix/remove"). On an explicit keep-all reply, run `gator hook override acknowledge --all-current`, then retry. See `procedures/dangerous-pattern-warnings.md`.
    `gator hook override status` shows the recorded block at any time (safe for anyone).
 5. Let the post-commit hook clear `commit_draft.md` after a successful commit.
 

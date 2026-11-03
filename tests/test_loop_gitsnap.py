@@ -390,8 +390,10 @@ class TestApprovalHistory:
         for i in range(later):
             commit(repo, f"later{i}.txt", "x\n")
         h = history(repo, approved)
+        governed = h.pop("governed_tree_identity")
         assert h == {"ok": True, "status": "successor", "commit": first,
                      "tree": tree}
+        assert governed.startswith(gitsnap.GOVERNED_IDENTITY_PREFIX)
 
     def test_not_ancestor_after_branch_switch(self, repo):
         git(repo, "checkout", "-q", "-b", "side")
@@ -455,3 +457,53 @@ def test_parse_name_status_rejects_malformed():
         gitsnap._parse_name_status_z(b"R100\0only-old\0")
     with pytest.raises(gitsnap._GitError):
         gitsnap._parse_name_status_z(b"M\0")
+
+
+# ---------------------------------------------------------------------------
+# #102: the governed identity excludes hook-owned paths
+# ---------------------------------------------------------------------------
+
+def _stage(r, rel, text):
+    p = Path(r) / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    git(r, "add", "-f", rel)
+
+
+class TestGovernedIdentity:
+    def test_excluded_paths_equal_hook_managed_paths(self):
+        templ = (Path(__file__).parent.parent / "src" / "gator_command"
+                 / "templates" / "gator-starter" / "scripts")
+        sys.path.insert(0, str(templ))
+        try:
+            import precommit_override
+        finally:
+            sys.path.remove(str(templ))
+        assert gitsnap.GOVERNED_EXCLUDED_PATHS == precommit_override.HOOK_MANAGED_PATHS
+
+    def test_index_identity_equals_committed_tree_identity(self, repo):
+        _stage(repo, "a-b.txt", "1\n")
+        _stage(repo, "a/c.txt", "2\n")   # tree order differs from index order
+        _stage(repo, ".gator/status.json", "{}\n")
+        staged = gitsnap.snapshot(repo)["governed_index_identity"]
+        approved = head(repo)
+        git(repo, "commit", "-q", "-m", "c")
+        h = gitsnap.snapshot(repo, approved_head=approved)["approval_history"]
+        assert h["governed_tree_identity"] == staged
+
+    def test_hook_owned_change_keeps_identity_source_change_does_not(self, repo):
+        s0 = gitsnap.snapshot(repo)
+        for rel in sorted(gitsnap.GOVERNED_EXCLUDED_PATHS):
+            _stage(repo, rel, "generated\n")
+        s1 = gitsnap.snapshot(repo)
+        assert s1["staged_tree"] != s0["staged_tree"]
+        assert s1["governed_index_identity"] == s0["governed_index_identity"]
+        _stage(repo, ".gator/charters/x.md", "# x\n")
+        s2 = gitsnap.snapshot(repo)
+        assert s2["governed_index_identity"] != s1["governed_index_identity"]
+        _stage(repo, "src.py", "x = 1\n")
+        assert gitsnap.snapshot(repo)["governed_index_identity"] != s2["governed_index_identity"]
+
+    def test_raw_facts_are_unchanged(self, repo):
+        s = gitsnap.snapshot(repo)
+        assert s["staged_tree"] == git(repo, "write-tree").stdout.strip()

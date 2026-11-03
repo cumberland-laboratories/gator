@@ -7,6 +7,8 @@ Reached through the hook dispatcher:
     gator hook override status            show the last blocked attempt
     gator hook override approve [...]     approve its approvable findings
     gator hook override cancel            drop the block and any approval
+    gator hook override acknowledge [...] record the Architect's decision to
+                                          keep the current paused findings
     gator hook approve [...]              alias of `override approve`
 
 Every blocked commit attempt records a block (see precommit_override.py) that
@@ -26,6 +28,13 @@ approval, not only the block ID, and is defined for unreadable records.
 APPROVAL IS ARCHITECT-ONLY. The agent must NOT run `approve` — the
 constitution forbids it; unauthorized self-approval is an auditable
 governance violation. `status` and `cancel` are safe for anyone.
+
+`acknowledge` (#102) writes the Architect's keep decision for a
+dangerous-pattern pause into commit_draft.md, for every current paused
+finding at once. It is not an override and touches no override state. The
+Dashboard runs it after the Architect confirms; an agent runs it only
+after the Architect's explicit reply to the enumerated finding set (see
+procedures/dangerous-pattern-warnings.md).
 """
 
 import argparse
@@ -41,8 +50,12 @@ if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 
 import precommit_override as ovr  # noqa: E402
+import precommit_lint as lint  # noqa: E402
+import precommit_policy as policy  # noqa: E402
 
 STATUS_SCHEMA = "gator-override-status-v1"
+ACK_SCHEMA = "gator-override-acknowledge-v1"
+NOTE_MAX = 500
 APPROVE_SCHEMA = "gator-override-approve-v1"
 CANCEL_SCHEMA = "gator-override-cancel-v1"
 REVISION_LENGTH = 16
@@ -71,6 +84,22 @@ def build_parser():
     p_approve.add_argument("--reason", help="Why the override is justified (required)")
     p_approve.add_argument("--name", help="Architect name (required)")
     p_cancel = sub.add_parser("cancel", help="Drop the recorded block and any approval")
+    p_ack = sub.add_parser(
+        "acknowledge",
+        help="Record the Architect's decision to keep every current paused finding")
+    which = p_ack.add_mutually_exclusive_group(required=True)
+    which.add_argument("--all-current", action="store_true",
+                       help="Acknowledge exactly the findings that pause the commit now")
+    which.add_argument("--keys", nargs="+", metavar="KEY",
+                       help="The complete current set of paused finding keys (RULE@path:line)")
+    p_ack.add_argument("--architect", help="Architect name, when the draft names none")
+    p_ack.add_argument("--note", help="Optional shared note for the whole set")
+    p_ack.add_argument("--surface", choices=sorted(policy.ACK_SURFACES), default="agent",
+                       help="Where the Architect decided (bullet text)")
+    p_ack.add_argument("--json", action="store_true",
+                       help="Print gator-override-acknowledge-v1 JSON")
+    p_ack.add_argument("--expect-block", metavar="BLOCK_ID",
+                       help="Refuse unless this is the recorded block")
     for p in (p_approve, p_cancel):
         p.add_argument("--json", action="store_true",
                        help="Print a JSON result and never prompt")
@@ -247,7 +276,9 @@ def _approval_refusal(snap, tree, now, expect_block=None, expect_revision=None):
             lines.append(f"  Fix these findings and retry the commit: {', '.join(fix_required)}")
         if paused:
             lines.append("  A dangerous-pattern pause is resolved by recording the Architect's")
-            lines.append("  decision in commit_draft.md, never by this command.")
+            lines.append("  decision in commit_draft.md, never by this command. The Dashboard")
+            lines.append("  records it, or `gator hook override acknowledge` after the")
+            lines.append("  Architect's explicit reply.")
         return ("nothing-approvable", lines, {})
     wait = ovr.MIN_APPROVAL_DELAY_SECONDS - ovr.block_age_seconds(block, now)
     if wait > 0:
@@ -358,6 +389,10 @@ def _status_record(root, sdir, tree, now):
         "approve_wait_seconds": wait,
         "min_approval_delay_seconds": ovr.MIN_APPROVAL_DELAY_SECONDS,
         "architect_default": _architect_default(root),
+        # #102 (additive): the findings a pause still waits on (never the
+        # matched source text), and the Architect the draft already names.
+        "pause_findings": _pause_findings(root, block, tree) if b_state == "ok" else [],
+        "draft_architect": _draft_architect(root),
     }
 
 
@@ -546,11 +581,205 @@ def cmd_approve(args):
     return 0
 
 
+# ---------------------------------------------------------------------------
+# acknowledge (#102): one scoped Architect decision for a pause
+# ---------------------------------------------------------------------------
+
+def _draft_path(root):
+    return Path(root) / ".gator" / "commit_draft.md"
+
+
+def _read_draft(root):
+    """(text, frontmatter, body, error); text None when the draft is absent."""
+    path = _draft_path(root)
+    if not path.is_file():
+        return None, {}, "", None
+    with open(path, encoding="utf-8", errors="replace", newline="") as f:
+        text = f.read()
+    _, frontmatter, body, error = policy.split_draft(text)
+    return text, frontmatter, body, error
+
+
+def _draft_architect(root):
+    try:
+        _, frontmatter, _, error = _read_draft(root)
+    except OSError:
+        return None
+    value = " ".join(str(frontmatter.get("architect") or "").split()) if not error else ""
+    return value or None
+
+
+def _current_dangerous(root):
+    """The live HIGH/CRITICAL warning findings of the staged change, read
+    exactly as the hook reads them (Layer 1 lint, strict split)."""
+    r = ovr._git(["diff", "--cached", "--name-only"], root)
+    if r.returncode != 0:
+        raise ovr.OverrideStateError("cannot read the staged files")
+    staged = [line for line in (r.stdout or "").splitlines() if line.strip()]
+    dangerous, _, _ = policy.split_lint(lint.run_layer1_lint(staged, root), "strict")
+    return dangerous
+
+
+def _unresolved(dangerous, frontmatter, body):
+    """(unresolved findings, acknowledged keys, problems) against the draft."""
+    ack, ack_problems = policy.validate_acknowledgements(frontmatter, body, dangerous)
+    skip, skip_problems = policy.validate_skips(frontmatter, dangerous, ack)
+    decided = set(ack) | set(skip)
+    pending = [f for f in dangerous if policy.finding_key(f) not in decided]
+    return pending, list(ack), ack_problems + skip_problems
+
+
+def _finding_view(f):
+    return {"key": policy.finding_key(f), "rule": f.get("rule"), "file": f.get("file"),
+            "line": f.get("line"), "severity": f.get("severity"),
+            "message": f.get("message", "")}
+
+
+def _pause_findings(root, block, tree):
+    """Status view: the paused findings, only while the recorded block is a
+    pause for this exact staged change. Never raises."""
+    try:
+        if block.get("index_tree") != tree or not _failure_rules(block, ovr.PAUSE):
+            return []
+        _, frontmatter, body, error = _read_draft(root)
+        if error:
+            frontmatter, body = {}, ""
+        pending, _, _ = _unresolved(_current_dangerous(root), frontmatter, body)
+        return [_finding_view(f) for f in pending]
+    except Exception:  # noqa: BLE001 — status stays readable
+        return []
+
+
+def _ack_refusal(code, lines, args, extra=None):
+    if args.json:
+        out = {"schema": ACK_SCHEMA, "ok": False, "refusal": code, "message": _message(lines)}
+        out.update(extra or {})
+        _emit(out)
+    else:
+        print()
+        for line in lines:
+            print(line)
+        print()
+    return 1
+
+
+def _write_atomic(path, text):
+    import os
+    import tempfile
+    fd, tmp = tempfile.mkstemp(prefix=".commit_draft.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.replace(tmp, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def cmd_acknowledge(args):
+    root, sdir, tree = _context(ACK_SCHEMA if args.json else None)
+    snap = _snapshot(sdir)
+    if snap["b_state"] != "ok":
+        return _ack_refusal("no-block", [
+            "  No readable blocked commit attempt is recorded for this worktree.",
+            "  Retry `git commit`: a dangerous-pattern pause is recorded, then decided."], args)
+    block = snap["block"]
+    guard = _guard_refusal(snap, args.expect_block, None)
+    if guard:
+        return _ack_refusal(guard[0], guard[1], args)
+    if not _failure_rules(block, ovr.PAUSE):
+        return _ack_refusal("no-pause", [
+            "  The recorded attempt is not paused on a dangerous pattern."], args)
+    if block.get("index_tree") != tree:
+        return _ack_refusal("tree-changed", [
+            "  Refused: the staged changes differ from the paused attempt, so the",
+            "  findings may have moved. Retry `git commit` and decide on the new pause."], args)
+    try:
+        text, frontmatter, body, error = _read_draft(root)
+    except OSError as exc:
+        return _ack_refusal("unavailable", [f"  Refused: cannot read commit_draft.md: {exc}"], args)
+    if text is None or error or not text.startswith("---"):
+        return _ack_refusal("draft-unstructured", [
+            "  Refused: commit_draft.md has no readable frontmatter block. Fix the",
+            "  draft (see /commit), then record the decision."], args)
+    try:
+        dangerous = _current_dangerous(root)
+    except ovr.OverrideStateError as exc:
+        return _ack_refusal("unavailable", [f"  Refused: {exc}"], args)
+    pending, ack_keys, problems = _unresolved(dangerous, frontmatter, body)
+    if problems:
+        return _ack_refusal("existing-evidence-invalid", [
+            "  Refused: commit_draft.md already holds dangerous-pattern evidence that",
+            "  does not match the staged change: " + "; ".join(problems)], args)
+    current = [policy.finding_key(f) for f in pending]
+    if not current:
+        return _ack_refusal("no-pause", [
+            "  Every current dangerous-pattern finding already has a recorded decision.",
+            "  Retry the commit."], args)
+    requested = current if args.all_current else list(args.keys)
+    if len(set(requested)) != len(requested) or set(requested) != set(current):
+        return _ack_refusal("findings-changed", [
+            "  Refused: the decision must cover exactly the current paused findings:",
+            "  " + ", ".join(current) + ". Show them to the Architect again."],
+            args, {"current_keys": current})
+
+    supplied = " ".join(str(args.architect or "").split())
+    note = " ".join(str(args.note or "").split())
+    if len(supplied) > ovr.TRAILER_MAX["approved_by"] or len(note) > NOTE_MAX:
+        return _ack_refusal("invalid-input", [
+            f"  Refused: the Architect name is limited to {ovr.TRAILER_MAX['approved_by']}"
+            f" characters and the note to {NOTE_MAX}."], args)
+    named = " ".join(str(frontmatter.get("architect") or "").split())
+    if named and supplied and supplied != named:
+        return _ack_refusal("architect-mismatch", [
+            f"  Refused: commit_draft.md names the Architect as {named!r}, not {supplied!r}."],
+            args, {"draft_architect": named})
+    architect = named or supplied
+    if not architect:
+        return _ack_refusal("architect-required", [
+            "  Refused: name the Architect who decided (--architect); commit_draft.md",
+            "  names none."], args)
+
+    try:
+        new_text = policy.render_acknowledgement(text, current, architect,
+                                                 note=note, surface=args.surface)
+    except ValueError as exc:
+        return _ack_refusal("write-failed", [f"  Refused: {exc}. Nothing was written."], args)
+    _, fm2, body2, err2 = policy.split_draft(new_text)
+    keys2, problems2 = ([], [err2]) if err2 else policy.validate_acknowledgements(
+        fm2, body2, dangerous)
+    if problems2 or set(keys2) != set(ack_keys) | set(current):
+        return _ack_refusal("write-failed", [
+            "  Refused: the recorded decision would not validate ("
+            + "; ".join(problems2 or ["unexpected key set"]) + "). Nothing was written."], args)
+    try:
+        _write_atomic(_draft_path(root), new_text)
+    except OSError as exc:
+        return _ack_refusal("write-failed", [f"  Refused: cannot write commit_draft.md: {exc}"], args)
+
+    if args.json:
+        _emit({"schema": ACK_SCHEMA, "ok": True, "outcome": "retry-commit",
+               "acknowledged": current, "all_acknowledged": sorted(keys2),
+               "architect": architect, "block_id": block["block_id"]})
+    else:
+        print()
+        print(f"  Decision recorded for {len(current)} finding(s), kept on the direction of {architect}:")
+        for key in current:
+            print(f"    - {key}")
+        print("  Retry the commit: git commit")
+        print()
+    return 0
+
+
 def main(argv=None):
     _ensure_utf8_stdout()
     argv = _normalize_argv(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
-    handlers = {"status": cmd_status, "approve": cmd_approve, "cancel": cmd_cancel}
+    handlers = {"status": cmd_status, "approve": cmd_approve, "cancel": cmd_cancel,
+                "acknowledge": cmd_acknowledge}
     return handlers[args.command](args)
 
 

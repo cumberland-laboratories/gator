@@ -13,7 +13,7 @@ The governed planning loop — a CLI-mediated debate between two AI models (draf
 - `host.py` owns loop initialization (`init_loop()` and `start_loop()`), the single-active guard for extension (`extend_loop()`), the watch loop (attention recording for attention-mode loops, #47; legacy timeout enforcement otherwise), platform-aware file locking (`host.lock`, `start.lock`, plus retrying watcher attachment), and active-loop scanning
 - `cli.py` owns argparse subcommand routing for all 17 loop subcommands (start [--mode planning|coding, --from-loop], status, submit-draft, submit-implementation, submit-review, escalate, pause, interject, end, unblock, extend, reopen, wait, participant {watch,status}, tail, codex [--dry-run, --home], list)
 - `liveness.py` owns the private participant-liveness sidecar (#36): the per-worktree store at `$(git rev-parse --git-path gator-loop-liveness)/<loop_id>.json`, its strict schema allowlist, atomic persistence, the leaf lock, and the pure helpers `state_key()` / `classify()` / `prune()` / `redact()`. Operational data only; never loop authority
-- `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head, approved_head=None)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue, and with `approved_head` the #85 `approval_history` first-parent-successor fact) or an explicit error code. Read-only toward refs, index, and worktree
+- `gitsnap.py` owns the coding-loop Git snapshot (#41): `snapshot(worktree_root, base_head, approved_head=None)` -> raw, unfiltered Git facts (HEAD, trees, staged-tree OID, changed paths vs base, unstaged/untracked residue, and with `approved_head` the #85 `approval_history` first-parent-successor fact), plus one named derived value, `governed_index_identity` (#102), or an explicit error code. Read-only toward refs, index, and worktree
 - `codex_launcher.py` owns the opt-in Codex participant launcher (#37 follow-up). It prepares a dedicated `CODEX_HOME` with the canonical rule and the Gator-owned `config.toml` block, and keeps and discloses the approvals Codex saves after that rule (#87). Read-only plan versus apply. It has no imports from the loop state modules, so it never affects loop authority
 - `gator-loop.py` is the thin entry script dispatched by `src/gator_command/cli.py`
 
@@ -298,14 +298,16 @@ Pure. Places an approved candidate against live Git facts, checked in this order
 |---|---|---|
 | 1 | no approval / invalidated | `none` / `invalidated` (`reopened`) |
 | 2 | snapshot not ok | `unknown`, reason = the snapshot error |
-| 3 | HEAD is the approved HEAD | `pending` if the staged tree is the approved tree, else `stale: staged_tree_changed` |
+| 3 | HEAD is the approved HEAD | `pending` if the staged tree is the approved tree (governed comparison, see below), else `stale: staged_tree_changed` |
 | 4 | HEAD moved and is detached | `stale: detached_mismatch` (history is not consulted; a detached HEAD is never committed) |
 | 5 | no `approval_history` dict / history `ok: false` | `unknown: history_unavailable` / `unknown`, reason = its error code |
-| 6 | `successor` with the approved tree | `committed`, `commit` = the successor OID (not the current HEAD) |
+| 6 | `successor` with the approved tree (governed comparison) | `committed`, `commit` = the successor OID (not the current HEAD) |
 | 7 | `successor` with another tree | `stale: head_moved_tree_differs` |
 | 8 | `diverged` (any `why`) | `stale: history_diverged` |
 
-The question it answers: did the approved tree become the **immediate first-parent successor** of the approved HEAD? It never searches history for a matching tree, so a hook-altered normal commit stays stale even if a later commit restores the tree. It never reads prose, branch names or timestamps. The result keeps its keys (`approved_tree`, `approved_head`, `current_head`, `head_tree`, `staged_tree`, `detached`, `state`, `reason`, `commit`) and never echoes `approval_history`.
+**Governed comparison (#102): `same_governed(approved_tree, approved_identity, live_tree, live_identity)`** returns `(same, kind)`. When the approval carries `governed_identity` AND the live fact carries `governed_index_identity` (row 3) or `governed_tree_identity` (rows 6–7), it compares those; otherwise it compares raw tree OIDs exactly as before, so old approvals and old snapshots keep their meaning. The result gains additive `identity: "governed" | "raw"` in rows 3, 6 and 7. Effect: a hook-owned file (status, whiteboard, commit draft, commit issues, lint-allow) staged or left out never makes an approval stale or uncommitted; a source or charter change still does.
+
+The question it answers: did the approved tree become the **immediate first-parent successor** of the approved HEAD? It never searches history for a matching tree, so a hook-altered normal commit stays stale even if a later commit restores the tree. It never reads prose, branch names or timestamps. The result keeps its keys (`approved_tree`, `approved_head`, `current_head`, `head_tree`, `staged_tree`, `detached`, `state`, `reason`, `commit`; additive `identity`) and never echoes `approval_history`.
 
 <- `cli._approval_resolution()` (status / wait / architect status) and the Dashboard `_handle_loop_coding_snapshot()`; both pass `approved_head=approval.head` to one fresh `gitsnap.snapshot()`
 ! Compatibility (#85): a correction within `gator-loop-status-v1` / `gator-loop-coding-snapshot-v1` with no bump. Committed was always meant to say the normal commit carried the reviewed tree. `head_moved_tree_differs` narrowed to the first successor. `detached_mismatch` widened to every moved detached HEAD (one sitting on the approval commit used to read Committed). `history_diverged` / `history_unavailable` are additive.
@@ -476,7 +478,7 @@ File: `src/gator_command/scripts/loop/submit.py`
 Planning reviews are unchanged. For coding loops (#41), inside the same session lock:
 - **Binding:** the review binds to the LATEST generation's submitted candidate (`reviewed_tree` / `reviewed_head`). The Reviewer inspects it with the immutable `git diff <base_tree> <staged_tree>`.
 - **Live check:** a fresh `gitsnap` snapshot is taken.
-  - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** If the live snapshot fails, approval is also rejected ("Cannot verify the live candidate before approval: " + `gitsnap.failure_text(snap)`; #67 adds the guidance sentence for `git_permission_denied`).
+  - **APPROVE is rejected unless the live staged tree AND HEAD still equal the submitted candidate.** The tree test is `_same_candidate(submitted, snap)` → `state_machine.same_governed()` (#102): governed identities when both carry one, else raw trees. The review records additive `reviewed_governed_identity`, and the approval record gains `governed_identity` (None for a candidate captured before #102). If the live snapshot fails, approval is also rejected ("Cannot verify the live candidate before approval: " + `gitsnap.failure_text(snap)`; #67 adds the guidance sentence for `git_permission_denied`).
   - **Findings are always accepted**, flagged `candidate_changed` / `live_snapshot_ok`, so the loop can never deadlock in review.
 - **#62:** in a flagged session `_summary_or_raise(text, "Review")` runs after the Reviewed-Candidate guard and before the snapshot, on the participant text (before the CLI appends Reviewed Candidate). `base_event` carries `executive_summary`, so all four outcomes (`checkpoint_approved`, `implementation_approved`, `revision_requested`, `max_rounds_exceeded`) carry the Reviewer's own text.
 - **Artifact:** it must be UTF-8 and must not author `## Reviewed Candidate`. The CLI appends that section (verdict, reviewed tree / HEAD, round, live-unchanged) to `findings.round-N.md` / `findings.current.md`.
@@ -913,7 +915,7 @@ File: `src/gator_command/scripts/loop/cli.py`
 
 ### snapshot(worktree_root, base_head=None, approved_head=None)
 File: `src/gator_command/scripts/loop/gitsnap.py`
-Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_head, head_tree, detached, branch, staged_tree, base_head, base_tree, changed_paths[{status, path[, old_path]}], changed_truncated, unstaged_paths, unstaged_truncated[, approval_history]}`, or `{"ok": False, "error", "detail"}` and never raises for Git conditions.
+Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_head, head_tree, detached, branch, staged_tree, governed_index_identity, base_head, base_tree, changed_paths[{status, path[, old_path]}], changed_truncated, unstaged_paths, unstaged_truncated[, approval_history]}`, or `{"ok": False, "error", "detail"}` and never raises for Git conditions.
 
 | Field | Source command |
 |---|---|
@@ -922,6 +924,7 @@ Returns `{"schema": "gator-loop-gitsnap-v1", "ok": True, worktree_root, current_
 | `head_tree` | `rev-parse HEAD^{tree}` |
 | `detached` / `branch` | `symbolic-ref -q HEAD` |
 | `staged_tree` | `write-tree` |
+| `governed_index_identity` (#102) | `_governed_index_identity()`: `ls-files --stage -z` → `_governed_digest()`; None on any failure |
 | `base_tree` | `rev-parse <base>^{tree}`, with `base_head` normalized to a full OID |
 | `changed_paths` | `diff --cached --name-status -z -M <base or HEAD>` |
 | `unstaged_paths` | the union of `diff --name-only -z` and `ls-files --others --exclude-standard -z` (gitignored files are not residue) |
@@ -944,13 +947,14 @@ Error codes:
 File: `src/gator_command/scripts/loop/gitsnap.py`
 The single source of each error code's participant-facing explanation. `ERROR_GUIDANCE` maps only `git_permission_denied` -> `PERMISSION_GUIDANCE` (the sandbox execution-permission sentence; it names no vendor). `error_guidance(code)` returns that text or None. `failure_text(snap)` returns `"<error> (<detail>)"`, plus `" -- " + guidance` only when guidance exists, so every other code's message is byte-identical to the pre-#67 inline format. Pure; display text only, never authority.
 
-**`approval_history` (#85)** answers one question: what is the immediate first-parent successor of the approved HEAD A on the captured HEAD H's history? Shapes: `{ok: true, status: "same_head"}` (A == H, no Git call); `{ok: true, status: "successor", commit, tree}`; `{ok: true, status: "diverged", why}` with `why` = `head_missing` (A is not a full lowercase hex OID, or `rev-parse --verify -q` exit 1 with empty stderr), `not_ancestor` (`merge-base --is-ancestor` exit 1), or `not_first_parent` (L's first parent is not A: A came in only through a merge's second parent); or `{ok: false, error, detail}`. It is computed from the snapshot's own `current_head`, so HEAD and history are one observation. Policy (detached, tree match) belongs to `resolve_approval()`, not here.
+**`approval_history` (#85)** answers one question: what is the immediate first-parent successor of the approved HEAD A on the captured HEAD H's history? Shapes: `{ok: true, status: "same_head"}` (A == H, no Git call); `{ok: true, status: "successor", commit, tree, governed_tree_identity}` (the last from `_governed_tree_identity()`: `ls-tree -r -z --full-tree L` → `_governed_digest()`, None on failure); `{ok: true, status: "diverged", why}` with `why` = `head_missing` (A is not a full lowercase hex OID, or `rev-parse --verify -q` exit 1 with empty stderr), `not_ancestor` (`merge-base --is-ancestor` exit 1), or `not_first_parent` (L's first parent is not A: A came in only through a merge's second parent); or `{ok: false, error, detail}`. It is computed from the snapshot's own `current_head`, so HEAD and history are one observation. Policy (detached, tree match) belongs to `resolve_approval()`, not here.
 ! Only those two exact exit-1 cases are divergence evidence. Every other non-zero exit (for example 128 `fatal:`), an empty range or a launch failure is `_GitError` -> `{ok: false}`, which resolves `unknown`, never stale or approved. A history failure never fails the snapshot: `snapshot.ok` stays true so the other live facts remain usable.
 ! A is validated against `_OID_RE` before any Git call, so a session value can never become a Git option. The history probe is pure object-database reads and writes nothing (unlike `write-tree`). `rev-list` output is bounded by the commits since approval, and the `--is-ancestor` pre-check prevents a walk over unrelated history.
 
 Path lists are capped at `MAX_PATHS` (1000), with truncation counts; the staged-tree OID, not the list, is the binding. `_run` is the test seam.
 Filesystem: Git object database (W — tree objects written by `write-tree`, unreferenced until a commit; reclaimed by `git gc`). Refs, index, and worktree are never modified (pinned).
-! Facts are RAW. Never filter or normalize paths (for example hook-managed `.gator/` files) out of the binding. The approved #41 plan keeps the raw staged tree authoritative everywhere.
+! Facts are RAW. Never filter or normalize paths (for example hook-managed `.gator/` files) out of `staged_tree`, `head_tree`, `base_tree`, the path lists or the history `tree`. The raw staged tree stays the review authority (the review diff, Commit State, checkpoint bases, "nothing staged").
+! **The one derived value (#102):** `_governed_digest(entries)` = `gov1:` + SHA-256 over `mode SP oid SP path NUL` for every entry sorted by path bytes, skipping `GOVERNED_EXCLUDED_PATHS`. That set equals `precommit_override.HOOK_MANAGED_PATHS` (pinned by `TestGovernedIdentity` in `tests/test_loop_gitsnap.py`). Index and tree produce the same value for the same content (pinned with an `a-b` / `a/c` ordering case). Only approval comparison (`same_governed()`) reads it; it is never a review command or a replacement for `staged_tree`.
 
 ### diff_trees(worktree_root, from_tree, to_tree) (#55)
 File: `src/gator_command/scripts/loop/gitsnap.py`
@@ -1018,9 +1022,11 @@ Violation: a junction under `.gator/loops/` redirects source reads outside the g
 
 ## TRIPWIRE: Raw Staged Tree Is Review Authority (coding mode, #41)
 
-In coding-mode loops the reviewed and approved candidate is the raw `git write-tree` OID captured by `gitsnap.snapshot()` — never artifact prose and never a filtered or normalized tree. Implementation artifacts describe the candidate; the CLI writes their `## Commit State` facts from the snapshot.
+In coding-mode loops the reviewed candidate is the raw `git write-tree` OID captured by `gitsnap.snapshot()` — never artifact prose and never a filtered or normalized tree. Implementation artifacts describe the candidate; the CLI writes their `## Commit State` facts from the snapshot, and the Reviewer diffs raw trees.
 
-Violation: approving from prose, or from a filtered tree, lets a commit land that differs from what the Reviewer inspected.
+**Approval comparison is governed (#102, deliberate change of this tripwire).** Whether the live index or the first commit after approval still *is* the approved candidate is decided by `state_machine.same_governed()`: the named `governed_index_identity` / `governed_tree_identity` when both sides carry one, else the raw tree. The only paths it ignores are the hook-owned files (`GOVERNED_EXCLUDED_PATHS`), which the commit hook writes or resets and the user never authors as part of the change. Raw trees remain recorded on every snapshot, review and approval.
+
+Violation: approving from prose, or from a tree filtered beyond the hook-owned set, lets a commit land that differs from what the Reviewer inspected. Widening `GOVERNED_EXCLUDED_PATHS` beyond `HOOK_MANAGED_PATHS` is such a violation.
 
 ## TRIPWIRE: Checkpoint Approval Never Commits (#55)
 

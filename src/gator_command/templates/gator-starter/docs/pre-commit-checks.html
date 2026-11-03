@@ -600,9 +600,9 @@
 <section id="warning">
   <h2>When a commit pauses</h2>
   <ol class="steps">
-    <li><strong>The agent shows you the finding.</strong> It tells you the rule, the file and line, and what the pattern means in this change.</li>
-    <li><strong>You decide.</strong> Fix it, remove it, or keep it.</li>
-    <li class="step-done"><strong>A decision to keep it is recorded.</strong> The agent writes your decision in the commit draft, in your words, and names you as the Architect. The agent never records a decision on its own.</li>
+    <li><strong>The agent shows you the findings.</strong> It lists every current finding in one question, with the rule, the file and line, and what the pattern means in this change. It ends with: "Reply <strong>Acknowledged</strong> to keep all of them, or name the findings to fix or remove."</li>
+    <li><strong>You decide.</strong> Fix them, remove them, or keep them. A reply of "Acknowledged" applies only to the findings in that question.</li>
+    <li class="step-done"><strong>A decision to keep them is recorded.</strong> The agent runs <code>gator hook override acknowledge --all-current</code>, or you choose <strong>Acknowledged</strong> in the Dashboard's Commits view. Either way, Gator writes the decision for every listed finding into the commit draft and names you as the Architect. You do not type keys or bullets. Gator refuses, and writes nothing, if the findings changed. The agent never records a decision on its own.</li>
   </ol>
   <p>The best time is before the pattern is written. A good agent tells you when it is about to write or run something dangerous. Then your decision is in the commit draft before the first attempt, and the commit does not pause.</p>
   <p>An agent can choose not to ask. It can only go ahead by recording a skip. The commit then carries <code>Gator-Dangerous-Patterns-Unacknowledged</code>, and the Commits view shows <strong>! Unacknowledged</strong>, so the choice is always visible.</p>

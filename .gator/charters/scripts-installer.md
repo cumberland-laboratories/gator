@@ -50,15 +50,20 @@ Filesystem: managed hook path and Git config (RW)
 -> `gator-update.install_git_hooks()`
 ! Installer and updater use one hook implementation so health checks cannot drift from fresh installs.
 
-### ensure_repo_gitignore(repo_root) / untrack_transient_files(repo_root)
+### ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None) / transient_inventory(repo_root) / tracked_transient_files(repo_root) / untrack_transient_files(repo_root, paths=None)
 File: src/gator_command/scripts/gatorize.py
-Converge required machine-local, sensitive, and hook-transient Gator ignore entries without removing user rules, then untrack (index only, `git rm --cached`) any tracked copy of `TRANSIENT_GATOR_FILES` (`.gator/commit_issues.md` and the retired v1 override files `override-request.json`, `override-approved.json`, `.override-meta.json`, `.override`) so the ignore rule takes effect.
+Converge required machine-local, sensitive, and hook-transient Gator ignore entries without removing user rules, then untrack (index only, `git rm --cached`) tracked copies of `TRANSIENT_GATOR_FILES` so the ignore rule takes effect, and return the untracked paths. `TRANSIENT_GATOR_FILES` = the four hook ephemera (`status.json`, `whiteboard.md`, `commit_draft.md`, `commit_issues.md`; equal to `precommit_override.HOOK_EPHEMERA_PATHS`, pinned by `TestTransientMigration` in `tests/test_gatorize.py`) plus the retired v1 override files (#78). `transient_inventory()` drops `ENTERPRISE_EVIDENCE_FILES` (`status.json`, `whiteboard.md`) when `gator_core.is_enterprise_active()`: the Enterprise bundled hook still commits status.json and the server records it per commit (plan assumption A1). `tracked_transient_files()` is the read-only prediction (`git ls-files -z`, inventory order). `untrack_transient_files(paths=)` untracks exactly `paths` (the prediction) or, with None, what is tracked now.
 Filesystem: `.gitignore` (RW), git index (W: removals only)
-<- every successful install/upgrade scenario (gatorize install/upgrade, `gator update`)
+<- every successful install/upgrade scenario (gatorize common tail, `gator update` execution with the predicted list); `action_install_gator()` passes `untrack=False` so untracking happens once, in the reported tail
 ! Append only missing canonical entries; preserve comments, ordering, and unrelated patterns.
 ! Presence is tested on exact, whitespace-stripped lines (#34). The earlier substring test treated `.gator/.override` as present whenever `.gator/.override-meta.json` was listed.
-! Untracking never deletes working-tree files and is a silent no-op outside git. The resulting staged deletion is committed by the operator with the rest of the update.
-! Hook-written files the pre-commit hook must not stage: see `scripts-precommit.md` (commit_issues.md is no longer staged by validate).
+! Untracking never deletes working-tree files and is a silent no-op outside git or on a Git failure (returns `[]`). The resulting staged deletion is committed by the operator with the rest of the update; the pre-commit hook keeps a staged deletion of these paths (see `scripts-precommit.md`, TRIPWIRE "Hook Evidence Never Enters the Commit").
+
+### transient_untrack_result(paths) / format_transient_untrack(result, predicted=False)
+File: src/gator_command/scripts/gatorize.py
+The ONE migration result shared by gatorize, `gator update` text, `gator update --result-json` and the Dashboard update response: `{paths, count, message, why}` or None when nothing was untracked (a no-op shows nothing). `message` is "Gator removed N hook-ephemera path(s) from the Git index. The files remain on disk. Git has staged their removal. Commit this migration with the update."; `why` is `TRANSIENT_UNTRACK_WHY`. `format_transient_untrack()` renders the terminal lines (the dry-run form says what *would* be removed).
+<- gatorize `main()` common tail (after the summary), `gator-update.py`
+! Write the wording only here; consumers render these fields and never restate them.
 
 ### write_gator_version(gator_dir, action)
 File: src/gator_command/scripts/gatorize.py

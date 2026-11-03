@@ -7,8 +7,9 @@ Called from three git hooks:
   commit-msg:  --phase trailers <msg-file>
   post-commit: --phase cleanup
 
-Phase 1 (validate): Checks structural rules, writes status.json and
-whiteboard.md, stages both. Blocks the commit if hard rules fail.
+Phase 1 (validate): Removes accidentally staged hook ephemera from the
+index, checks structural rules, and writes status.json and whiteboard.md to
+the working tree (never staged, #102). Blocks the commit if hard rules fail.
 
 Phase 2 (trailers): Reads commit_draft.md frontmatter and .gator/ state,
 assembles Gator-* trailers, appends them to the commit message.
@@ -167,11 +168,6 @@ def get_current_branch(repo_root):
     return git("branch", "--show-current", cwd=repo_root) or "unknown"
 
 
-def stage_file(filepath, repo_root):
-    """Stage a single file."""
-    git("add", str(filepath), cwd=repo_root)
-
-
 # ---------------------------------------------------------------------------
 # .gator/ state readers (non-charter)
 # ---------------------------------------------------------------------------
@@ -252,66 +248,16 @@ def parse_commit_draft(gator_dir):
     - frontmatter: dict of YAML fields, or {} if no frontmatter
     - body: string of everything after frontmatter
     - error: string if frontmatter is present but malformed, else None
+
+    Parsing is `precommit_policy.split_draft()`, the one parser shared with
+    the acknowledgement writer (`gator hook override acknowledge`).
     """
     draft_file = gator_dir / "commit_draft.md"
     if not draft_file.exists():
         return {}, "", None
-
     text = draft_file.read_text(encoding="utf-8", errors="replace")
-    if not text.strip():
-        return {}, "", None
-
-    # Check for YAML frontmatter (--- delimited)
-    if text.startswith("---"):
-        parts = text.split("---", 2)
-        if len(parts) >= 3:
-            yaml_text = parts[1].strip()
-            body = parts[2].strip()
-            frontmatter = _parse_simple_yaml(yaml_text)
-            if frontmatter is None:
-                return {}, body, "Malformed YAML frontmatter in commit_draft.md"
-            return frontmatter, body, None
-
-    # No frontmatter — entire file is body
-    # Strip the "# Session Change Log" header if present
-    lines = text.splitlines()
-    body_lines = [l for l in lines if not l.startswith("# ")]
-    return {}, "\n".join(body_lines).strip(), None
-
-
-def _parse_simple_yaml(text):
-    """Minimal YAML parser for commit_draft frontmatter.
-
-    Handles flat key: value pairs and simple lists [a, b, c].
-    No external dependency needed. Returns None on parse failure.
-    """
-    result = {}
-    try:
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if ":" not in line:
-                return None  # malformed
-            key, _, value = line.partition(":")
-            key = key.strip()
-            value = value.strip()
-
-            # Handle YAML list syntax: [a, b, c]
-            if value.startswith("[") and value.endswith("]"):
-                inner = value[1:-1]
-                items = [item.strip().strip("'\"") for item in inner.split(",")]
-                result[key] = [i for i in items if i]
-            # Handle quoted strings
-            elif (value.startswith('"') and value.endswith('"')) or \
-                 (value.startswith("'") and value.endswith("'")):
-                result[key] = value[1:-1]
-            else:
-                result[key] = value
-
-        return result
-    except Exception:
-        return None
+    _, frontmatter, body, error = policy.split_draft(text)
+    return frontmatter, body, error
 
 
 # ---------------------------------------------------------------------------
@@ -1115,6 +1061,16 @@ def phase_validate():
         sys.exit(0)
 
     gator_dir = repo_root / ".gator"
+    # Hook ephemera staged by accident (e.g. `git add -A` in a repository
+    # that still tracks legacy copies) leave this attempt before anything
+    # reads the staged change. A staged deletion (the `gator update`
+    # migration, #78) is kept.
+    normalized = override_state.normalize_ephemera_index(repo_root)
+    if normalized:
+        print()
+        print("  Removed generated hook files from this commit attempt. Run "
+              "`gator update`")
+        print("  to permanently untrack legacy copies: " + ", ".join(normalized))
     staged_files = get_staged_files(repo_root)
 
     # Machine-local commit policy: "strict" (default) or "warn". There is no
@@ -1187,7 +1143,7 @@ def phase_validate():
     for finding in advisory:
         warnings.append((finding["rule"], policy.finding_text(finding)))
     # Whiteboard / status text never carries the matched source text: a
-    # passing commit stages the whiteboard.
+    # legacy repository may still track and commit these files.
     attention = [(f["rule"], policy.finding_text(f)) for f in dangerous]
     attention_out = [(f["rule"], policy.finding_text(f)
                       + (f"\n       > {f['match']}" if f.get("match") else ""))
@@ -1284,16 +1240,15 @@ def phase_validate():
     # Write status.json (even on failure — captures the state at attempt time)
     status = build_status(gator_dir, staged_files, frontmatter, body, handoff,
                           checks=checks)
-    status_file = write_status_json(gator_dir, status)
-    stage_file(status_file, repo_root)
+    # Hook evidence stays in the working tree; it is never staged (#102).
+    write_status_json(gator_dir, status)
 
     # Write whiteboard (always — clears stale findings on clean pass)
-    wb_file = write_whiteboard(gator_dir, failures, warnings, handoff,
-                               enforcement_level=enforcement,
-                               resolutions=resolutions, attention=attention,
-                               acknowledged=ack_keys, acknowledged_by=acknowledged_by,
-                               skipped=skip_keys)
-    stage_file(wb_file, repo_root)
+    write_whiteboard(gator_dir, failures, warnings, handoff,
+                     enforcement_level=enforcement,
+                     resolutions=resolutions, attention=attention,
+                     acknowledged=ack_keys, acknowledged_by=acknowledged_by,
+                     skipped=skip_keys)
 
     # Output
     if failures:

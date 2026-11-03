@@ -33,7 +33,7 @@ Vault is gitignored by design. Nothing in `.gator/vault/` is committed. If you s
 
 ### 2c. Post-commit governance residue
 
-`.gator/commit_draft.md` and `.gator/whiteboard.md` may appear modified after a successful `git commit` — Gator's post-commit hook intentionally resets/clears them. This is expected. Do NOT re-commit them just because they show as modified. See [`../reference-notes/expected-governance-residue.md`](../reference-notes/expected-governance-residue.md).
+The hooks write `.gator/status.json`, `.gator/whiteboard.md`, `.gator/commit_draft.md` and `.gator/commit_issues.md` to the working tree and never stage them. They are gitignored, so in a current repository they do not appear in `git status`. In an older repository that still tracks copies, they may appear modified after a commit. Do NOT stage or re-commit them. If they are staged by accident, the pre-commit hook removes them from that attempt and says so. Run `gator update` to untrack them permanently. See [`../reference-notes/expected-governance-residue.md`](../reference-notes/expected-governance-residue.md).
 
 ### 2c-bis. Override and lint internals (#34, #35)
 
@@ -46,7 +46,7 @@ Never stage these, even when following a "stage all `.gator/` changes" instructi
 | `.gator/lint-allow.json` | Baseline `[]` only | Deprecated: it no longer authorizes lint findings, and the hook never rewrites or stages it | Never add entries |
 | `.gator/.override`, `override-request.json`, `override-approved.json`, `.override-meta.json` | No (gitignored) | Retired v1 files, removed after the next commit | Never create. `.override` blocks the commit. |
 
-If `gator update` shows a staged deletion of `.gator/commit_issues.md` or a v1 override file, that is the update untracking a transient file. Commit it with the rest of the update.
+If `gator update` reports "Gator removed N hook-ephemera paths from the Git index", or shows a staged deletion of `.gator/status.json`, `.gator/whiteboard.md`, `.gator/commit_draft.md`, `.gator/commit_issues.md` or a v1 override file, that is the update untracking a transient file. The files stay on disk. Commit the deletion with the rest of the update.
 
 ### 2d. Session snippets from unrelated sessions
 

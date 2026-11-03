@@ -210,8 +210,27 @@ def _state_files(repo):
             if (_sdir(repo) / n).exists()]
 
 
-def _head_json(repo, path):
-    return json.loads(_git(repo, "show", f"HEAD:{path}").stdout)
+def _evidence_json(repo, path):
+    """Hook evidence for the last commit. The template hook never stages
+    it (#102), so it is read from the working tree; the Enterprise bundled
+    hook still commits status.json (A1), so it is read from HEAD there."""
+    if _git(repo, "cat-file", "-e", f"HEAD:{path}", check=False).returncode == 0:
+        return json.loads(_git(repo, "show", f"HEAD:{path}").stdout)
+    return json.loads((repo / path).read_text(encoding="utf-8"))
+
+
+def _validate_whiteboard(repo):
+    """Run only the validate phase and return the working-tree whiteboard.
+    The post-commit cleanup resets the whiteboard, and the template hook
+    no longer commits it, so a pass's whiteboard is read before committing."""
+    hook = (repo.parent / "hooks" / "pre-commit").read_text(encoding="utf-8")
+    pc = SCRIPTS if "bundled_scripts" not in hook else BUNDLED_SCRIPTS
+    r = subprocess.run([sys.executable, str(pc / "gator-pre-commit.py"),
+                        "--phase", "validate"], cwd=str(repo),
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    return (repo / ".gator" / "whiteboard.md").read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +263,7 @@ class TestCharterEscapeHatch:
         assert "Gator-Charter-Changed: override-skip" in msg
         assert "Gator-Override-Rules: charter-alongside-code" in msg
         assert "Gator-Override-Reason: typo fix; no charter change" in msg
-        assert _head_json(repo, ".gator/status.json")["charter_changed"] == "override-skip"
+        assert _evidence_json(repo, ".gator/status.json")["charter_changed"] == "override-skip"
         assert _state_files(repo) == []
 
     def test_second_block_keeps_the_approval(self, repo):
@@ -325,7 +344,7 @@ class TestCharterEscapeHatch:
         assert "Gator-Charter-Changed: override-skip" in trailers
         assert f"Gator-Dangerous-Patterns: {KEY}" in trailers
         assert not any(l.startswith("Gator-Dangerous-Patterns-Unacknowledged") for l in trailers)
-        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        checks = _evidence_json(repo, ".gator/status.json")["commit_checks"]
         assert checks["overridden_rules"] == ["charter-alongside-code"]
         assert checks["dangerous_pattern_warnings"] == [KEY]
         assert checks["dangerous_pattern_acknowledged"] == [KEY]
@@ -377,6 +396,7 @@ class TestDangerousPatternPause:
         repo = any_repo
         _stage_sql(repo, name="migrate.txt")
         _skip_draft(repo, ["SQL-001@migrate.txt:1"])
+        wb = _validate_whiteboard(repo)
         rc, out = _commit(repo)
         assert rc == 0, out
         assert "Committed without an Architect decision" in out
@@ -387,12 +407,11 @@ class TestDangerousPatternPause:
         assert not any(l.startswith("Gator-Override") for l in trailers)
         assert not any(SQL_MATCH in l for l in trailers)
 
-        status = _head_json(repo, ".gator/status.json")
+        status = _evidence_json(repo, ".gator/status.json")
         checks = status["commit_checks"]
         assert checks["dangerous_pattern_skipped"] == ["SQL-001@migrate.txt:1"]
         assert checks["dangerous_pattern_acknowledged"] == []
         assert checks["dangerous_pattern_pause"] == []
-        wb = _git(repo, "show", "HEAD:.gator/whiteboard.md").stdout
         assert "## Unacknowledged dangerous patterns (recorded skip)" in wb
         assert SQL_MATCH not in wb and SQL_MATCH not in json.dumps(status)
 
@@ -505,6 +524,7 @@ class TestAcknowledgement:
         repo = any_repo
         _stage_sql(repo, name="migrate.txt")
         _ack_draft(repo)
+        wb = _validate_whiteboard(repo)
         rc, out = _commit(repo)
         assert rc == 0, out
         assert "Kept on the Architect's direction (Test Architect): " + KEY in out
@@ -516,10 +536,9 @@ class TestAcknowledgement:
         assert not any(SQL_MATCH in l for l in trailers)
         assert not any(l.startswith("Gator-Override") for l in trailers)
         assert "## Architect acknowledgement" in msg
-        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        checks = _evidence_json(repo, ".gator/status.json")["commit_checks"]
         assert checks["dangerous_pattern_acknowledged"] == [KEY]
         assert checks["acknowledged_by"] == "Test Architect"
-        wb = _git(repo, "show", "HEAD:.gator/whiteboard.md").stdout
         assert "## Architect acknowledgements" in wb
         assert "## Dangerous-pattern warnings" not in wb
         assert _state_files(repo) == []
@@ -534,7 +553,7 @@ class TestAcknowledgement:
         assert rc == 0, out
         trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
         assert f"Gator-Dangerous-Patterns: {key}" in trailers
-        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        checks = _evidence_json(repo, ".gator/status.json")["commit_checks"]
         assert checks["dangerous_pattern_acknowledged"] == [key]
 
     def test_acknowledgement_trailers_only_neutralize_line_breaks(self):
@@ -847,7 +866,7 @@ class TestEnterpriseEvidenceOnly:
         assert rc == 0, out
         rc, out = _commit(repo, env=EV)
         assert rc == 0, out
-        checks = _head_json(repo, ".gator/status.json")["commit_checks"]
+        checks = _evidence_json(repo, ".gator/status.json")["commit_checks"]
         assert checks["overridden_rules"] == ["SQL-001"]
         assert checks["external_approval_required"] == []
         assert checks["dangerous_pattern_acknowledged"] == []
@@ -1703,3 +1722,379 @@ class TestOverrideJson:
         assert rc == 1 and data["state"] == "unavailable"
         rc, data = _cli_json(tmp_path, "approve", "--json")
         assert rc == 1 and data["refusal"] == "unavailable"
+
+
+# ---------------------------------------------------------------------------
+# #102: hook evidence stays out of the commit; legacy tracked ephemera
+# ---------------------------------------------------------------------------
+
+NOTICE = "Removed generated hook files from this commit attempt."
+
+
+def _track_legacy_ephemera(repo):
+    """A repository from before the ignore rules: status.json and
+    whiteboard.md (and, as in every fixture repo, commit_draft.md) are
+    tracked. Committed without hooks; the draft is restored afterwards."""
+    gator = repo / ".gator"
+    (gator / "status.json").write_text('{"legacy": true}\n', encoding="utf-8")
+    (gator / "whiteboard.md").write_text("# Whiteboard\n\nlegacy\n", encoding="utf-8")
+    _git(repo, "add", "-f", ".gator/status.json", ".gator/whiteboard.md")
+    _git(repo, "-c", f"core.hooksPath={(repo / '.no-hooks').as_posix()}",
+         "commit", "-q", "-m", "legacy ephemera")
+    _draft(repo, "feature")
+
+
+def _staged(repo):
+    return set(_git(repo, "diff", "--cached", "--name-only").stdout.split())
+
+
+def _committed(repo):
+    """Paths in HEAD's commit, minus the session snippets every commit
+    deliberately carries for the evidence trail."""
+    names = _git(repo, "show", "--name-only", "--format=", "HEAD").stdout.splitlines()
+    return {n for n in names if n and not n.startswith(".gator/session-snippets/")}
+
+
+class TestHookEphemera:
+    def test_hook_never_stages_its_evidence(self, repo):
+        (repo / "notes.md").write_text("docs\n", encoding="utf-8")
+        _git(repo, "add", "notes.md")
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert NOTICE not in out
+        assert _committed(repo) == {"notes.md"}
+        assert (repo / ".gator" / "status.json").is_file()
+        tracked = _git(repo, "ls-files", ".gator").stdout.split()
+        assert ".gator/status.json" not in tracked
+        assert ".gator/whiteboard.md" not in tracked
+
+    def test_blocked_retries_keep_the_staged_change_and_approval(self, repo):
+        """#102 headline: in a legacy repository, two blocked attempts stage
+        nothing of their own, the identity and block id are stable, and the
+        Architect's approval still authorizes the retry."""
+        _track_legacy_ephemera(repo)
+        _stage_code(repo)
+        before = ovr.index_tree(repo)
+        rc, out = _commit(repo)
+        assert rc != 0 and "charter-alongside-code [external-approval]" in out
+        block1 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert _staged(repo) == {"foo.py"}
+        rc, out = _commit(repo)
+        assert rc != 0
+        block2 = json.loads((_sdir(repo) / ovr.BLOCK_FILE).read_text(encoding="utf-8"))
+        assert _staged(repo) == {"foo.py"}
+        assert ovr.index_tree(repo) == before == block2["index_tree"]
+        assert block1["block_id"] == block2["block_id"]
+        assert NOTICE not in out
+
+        _backdate_block(repo)
+        rc, out = _approve(repo, "approve", "--reason", "no charter change",
+                           "--name", "Architect")
+        assert rc == 0, out
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "OVERRIDE (charter-alongside-code) approved by Architect" in out
+        assert _committed(repo) == {"foo.py"}
+
+    @pytest.mark.parametrize("legacy", [False, True], ids=["untracked", "tracked"])
+    def test_add_all_is_normalized_with_a_notice(self, repo, legacy):
+        if legacy:
+            _track_legacy_ephemera(repo)
+        # A first attempt writes fresh evidence; `git add -A` then sweeps it
+        # (and the edited draft) into the index.
+        (repo / "notes.md").write_text("docs\n", encoding="utf-8")
+        _git(repo, "add", "notes.md")
+        _draft(repo, "bogus")
+        rc, out = _commit(repo)
+        assert rc != 0
+        _draft(repo, "docs")
+        _git(repo, "add", "-A")
+        assert ".gator/status.json" in _staged(repo)
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert out.count(NOTICE) == 1
+        assert ".gator/status.json" in out and ".gator/whiteboard.md" in out
+        committed = _committed(repo)
+        assert "notes.md" in committed
+        assert not committed & set(ovr.HOOK_EPHEMERA_PATHS)
+        assert (repo / ".gator" / "status.json").is_file()
+
+    def test_staged_migration_deletion_is_kept(self, repo):
+        _track_legacy_ephemera(repo)
+        _git(repo, "rm", "--cached", "-q", ".gator/status.json", ".gator/whiteboard.md")
+        (repo / "notes.md").write_text("docs\n", encoding="utf-8")
+        _git(repo, "add", "notes.md")
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert NOTICE not in out
+        assert _committed(repo) == {"notes.md", ".gator/status.json", ".gator/whiteboard.md"}
+        tree = _git(repo, "ls-tree", "-r", "--name-only", "HEAD").stdout.split()
+        assert ".gator/status.json" not in tree and ".gator/whiteboard.md" not in tree
+        assert (repo / ".gator" / "status.json").is_file()
+
+    def test_normalization_touches_only_hook_ephemera(self, repo):
+        gator = repo / ".gator"
+        (gator / "charters").mkdir()
+        (gator / "charters" / "x.md").write_text("# x\n", encoding="utf-8")
+        (gator / "lint-allow.json").write_text("[]\n", encoding="utf-8")
+        (gator / "status.json").write_text("{}\n", encoding="utf-8")
+        (gator / "commit_issues.md").write_text("x\n", encoding="utf-8")
+        (repo / "old.py").write_text("x = 2\n", encoding="utf-8")
+        _git(repo, "add", "-A")
+        before = _staged(repo)
+        assert ovr.normalize_ephemera_index(repo) == [
+            ".gator/commit_issues.md", ".gator/status.json"]
+        assert _staged(repo) == before - {".gator/commit_issues.md", ".gator/status.json"}
+        assert {".gator/charters/x.md", ".gator/lint-allow.json", "old.py"} <= _staged(repo)
+        assert (gator / "status.json").read_text(encoding="utf-8") == "{}\n"
+        assert ovr.normalize_ephemera_index(repo) == []
+
+    def test_modified_tracked_ephemera_reset_to_head(self, repo):
+        _track_legacy_ephemera(repo)
+        (repo / ".gator" / "status.json").write_text('{"new": 1}\n', encoding="utf-8")
+        _git(repo, "add", ".gator/status.json")
+        assert ovr.normalize_ephemera_index(repo) == [".gator/status.json"]
+        assert _staged(repo) == set()
+        assert (repo / ".gator" / "status.json").read_text(encoding="utf-8") == '{"new": 1}\n'
+
+    def test_unborn_head(self, tmp_path):
+        root = tmp_path / "fresh"
+        root.mkdir()
+        _git(root, "init", "-q", "-b", "main")
+        (root / ".gator").mkdir()
+        (root / ".gator" / "status.json").write_text("{}\n", encoding="utf-8")
+        (root / "README.md").write_text("# x\n", encoding="utf-8")
+        _git(root, "add", "-A")
+        assert ovr.normalize_ephemera_index(root) == [".gator/status.json"]
+        assert _staged(root) == {"README.md"}
+
+    def test_ephemera_inventory(self):
+        assert set(ovr.HOOK_EPHEMERA_PATHS) < ovr.HOOK_MANAGED_PATHS
+        assert ovr.HOOK_MANAGED_PATHS - set(ovr.HOOK_EPHEMERA_PATHS) == {
+            ".gator/lint-allow.json"}
+
+
+# ---------------------------------------------------------------------------
+# #102: one scoped acknowledgement writer (`gator hook override acknowledge`)
+# ---------------------------------------------------------------------------
+
+THREE = ("SQL-001@m1.txt:1", "SQL-001@m2.txt:1", "SQL-001@m3.txt:1")
+DOCS_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _pause_three(repo, draft=None):
+    for i in (1, 2, 3):
+        _stage_sql(repo, name=f"m{i}.txt")
+    if draft is not None:
+        (repo / ".gator" / "commit_draft.md").write_text(draft, encoding="utf-8")
+    rc, out = _commit(repo)
+    assert rc != 0 and "dangerous-pattern-pause [pause]" in out, out
+    return (repo / ".gator" / "commit_draft.md").read_bytes()
+
+
+def _ack(repo, *args):
+    return _cli_json(repo, "acknowledge", *args, "--json")
+
+
+def _draft_text(repo):
+    return (repo / ".gator" / "commit_draft.md").read_text(encoding="utf-8")
+
+
+_NO_ARCHITECT = DRAFT.format(change_type="feature").replace("architect: Test Architect\n", "")
+_EMPTY_ARCHITECT = DRAFT.format(change_type="feature").replace(
+    "architect: Test Architect\n", "architect:\n")
+
+
+class TestAcknowledgeCommand:
+    def test_three_findings_acknowledged_once_then_committed(self, repo):
+        _pause_three(repo)
+        status = _status_json(repo)
+        assert [f["key"] for f in status["pause_findings"]] == list(THREE)
+        assert status["draft_architect"] == "Test Architect"
+        assert SQL_MATCH not in json.dumps(status)
+
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 0, data
+        assert data["schema"] == "gator-override-acknowledge-v1"
+        assert data["ok"] is True and data["outcome"] == "retry-commit"
+        assert data["acknowledged"] == list(THREE) and data["architect"] == "Test Architect"
+        draft = _draft_text(repo)
+        fm_text, fm, body, err = policy.split_draft(draft)
+        assert err is None and fm[policy.ACK_FIELD] == list(THREE)
+        for key in THREE:
+            assert f"- `{key}`: Acknowledged by the Architect in the agent session." in body
+        assert "- Added foo." in body and 'message: "Add foo"' in draft
+        assert _status_json(repo)["pause_findings"] == []
+
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        trailers = [l for l in _last_message(repo).splitlines() if l.startswith("Gator-")]
+        assert f"Gator-Dangerous-Patterns: {','.join(THREE)}" in trailers
+        assert "Gator-Dangerous-Pattern-Acknowledged-By: Test Architect" in trailers
+        assert not any(l.startswith("Gator-Override") for l in trailers)
+
+    @pytest.mark.parametrize("draft", [_NO_ARCHITECT, _EMPTY_ARCHITECT],
+                             ids=["no-line", "empty"])
+    def test_supplied_identity_is_persisted(self, repo, draft):
+        _pause_three(repo, draft)
+        rc, data = _ack(repo, "--all-current", "--architect", "Alan  Gillette",
+                        "--surface", "dashboard", "--note", "Fixtures only.")
+        assert rc == 0, data
+        assert data["architect"] == "Alan Gillette"
+        fm = policy.split_draft(_draft_text(repo))[1]
+        assert fm["architect"] == "Alan Gillette"
+        assert ("Acknowledged by the Architect in the Dashboard. Fixtures only."
+                in _draft_text(repo))
+        rc, out = _commit(repo)
+        assert rc == 0, out
+        assert "Gator-Dangerous-Pattern-Acknowledged-By: Alan Gillette" in _last_message(repo)
+
+    def test_equal_identity_is_accepted(self, repo):
+        _pause_three(repo)
+        rc, data = _ack(repo, "--all-current", "--architect", "Test Architect")
+        assert rc == 0 and data["architect"] == "Test Architect"
+        assert _draft_text(repo).count("architect: Test Architect") == 1
+
+    def test_conflicting_identity_is_refused(self, repo):
+        before = _pause_three(repo)
+        rc, data = _ack(repo, "--all-current", "--architect", "Someone Else")
+        assert rc == 1 and data["refusal"] == "architect-mismatch"
+        assert data["draft_architect"] == "Test Architect"
+        assert (repo / ".gator" / "commit_draft.md").read_bytes() == before
+
+    def test_missing_identity_is_refused(self, repo):
+        before = _pause_three(repo, _EMPTY_ARCHITECT)
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 1 and data["refusal"] == "architect-required"
+        assert (repo / ".gator" / "commit_draft.md").read_bytes() == before
+
+    def test_stale_line_is_refused(self, repo):
+        before = _pause_three(repo)
+        (repo / "m1.txt").write_text("-- moved\n" + SQL_DROP_USERS, encoding="utf-8")
+        _git(repo, "add", "m1.txt")
+        rc, data = _ack(repo, "--keys", *THREE)
+        assert rc == 1 and data["refusal"] == "tree-changed"
+        assert (repo / ".gator" / "commit_draft.md").read_bytes() == before
+
+    def test_partial_or_invented_set_is_refused(self, repo):
+        before = _pause_three(repo)
+        rc, data = _ack(repo, "--keys", THREE[0])
+        assert rc == 1 and data["refusal"] == "findings-changed"
+        assert data["current_keys"] == list(THREE)
+        rc, data = _ack(repo, "--keys", *THREE, "SQL-001@other.txt:9")
+        assert rc == 1 and data["refusal"] == "findings-changed"
+        rc, data = _ack(repo, "--keys", THREE[0], THREE[0], THREE[1], THREE[2])
+        assert rc == 1 and data["refusal"] == "findings-changed"
+        assert (repo / ".gator" / "commit_draft.md").read_bytes() == before
+
+    def test_existing_valid_evidence_is_merged(self, repo):
+        for i in (1, 2, 3):
+            _stage_sql(repo, name=f"m{i}.txt")
+        _ack_draft(repo, keys=(THREE[0],))
+        rc, out = _commit(repo)
+        assert rc != 0 and "dangerous-pattern-pause [pause]" in out
+        assert [f["key"] for f in _status_json(repo)["pause_findings"]] == list(THREE[1:])
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 0, data
+        assert data["acknowledged"] == list(THREE[1:])
+        assert data["all_acknowledged"] == sorted(THREE)
+        draft = _draft_text(repo)
+        assert "Keep this migration fixture; the Architect confirmed it." in draft
+        assert policy.split_draft(draft)[1][policy.ACK_FIELD] == list(THREE)
+        rc, out = _commit(repo)
+        assert rc == 0, out
+
+    def test_invalid_existing_evidence_is_refused(self, repo):
+        for i in (1, 2, 3):
+            _stage_sql(repo, name=f"m{i}.txt")
+        _ack_draft(repo, keys=("SQL-001@gone.txt:1",))
+        rc, out = _commit(repo)
+        assert rc != 0
+        before = (repo / ".gator" / "commit_draft.md").read_bytes()
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 1 and data["refusal"] == "existing-evidence-invalid"
+        assert (repo / ".gator" / "commit_draft.md").read_bytes() == before
+
+    def test_no_pause_and_no_block(self, repo):
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 1 and data["refusal"] == "no-block"
+        _stage_code(repo)
+        rc, out = _commit(repo)
+        assert rc != 0 and "charter-alongside-code" in out
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 1 and data["refusal"] == "no-pause"
+
+    def test_crlf_draft_stays_crlf(self, repo):
+        crlf = DRAFT.format(change_type="feature").replace("\n", "\r\n")
+        for i in (1, 2, 3):
+            _stage_sql(repo, name=f"m{i}.txt")
+        (repo / ".gator" / "commit_draft.md").write_bytes(crlf.encode("utf-8"))
+        rc, out = _commit(repo)
+        assert rc != 0
+        rc, data = _ack(repo, "--all-current")
+        assert rc == 0, data
+        raw = (repo / ".gator" / "commit_draft.md").read_bytes()
+        assert b"\r\n" in raw and b"\n" not in raw.replace(b"\r\n", b"")
+        rc, out = _commit(repo)
+        assert rc == 0, out
+
+    def test_human_output(self, repo):
+        _pause_three(repo)
+        rc, out = _approve(repo, "acknowledge", "--all-current")
+        assert rc == 0, out
+        assert "Decision recorded for 3 finding(s)" in out and "Retry the commit" in out
+
+    def test_bundled_copy_is_identical(self):
+        for name in ("gator-approve.py", "precommit_policy.py"):
+            assert (SCRIPTS / name).read_bytes() == (BUNDLED_SCRIPTS / name).read_bytes()
+
+
+class TestRenderAcknowledgement:
+    BASE = "---\nmessage: x\n{arch}---\n\n# Session Change Log\n\n- did it.\n"
+
+    def test_inserts_and_replaces_architect(self):
+        for arch in ("", "architect:\n"):
+            out = policy.render_acknowledgement(self.BASE.format(arch=arch), ["A-1@x:1"], "Z")
+            fm = policy.split_draft(out)[1]
+            assert fm["architect"] == "Z" and fm[policy.ACK_FIELD] == ["A-1@x:1"]
+            assert out.endswith("## Architect acknowledgement\n\n"
+                                "- `A-1@x:1`: Acknowledged by the Architect in the agent session.\n")
+
+    def test_blank_or_different_identity_raises(self):
+        with pytest.raises(ValueError):
+            policy.render_acknowledgement(self.BASE.format(arch=""), ["A-1@x:1"], "  ")
+        with pytest.raises(ValueError):
+            policy.render_acknowledgement(self.BASE.format(arch="architect: Y\n"),
+                                          ["A-1@x:1"], "Z")
+        with pytest.raises(ValueError):
+            policy.render_acknowledgement("no frontmatter\n", ["A-1@x:1"], "Z")
+
+    def test_section_before_another_heading(self):
+        text = ("---\nmessage: x\narchitect: Z\n"
+                "dangerous-pattern-acknowledgements: [A-1@x:1]\n---\n\n"
+                "## Architect acknowledgement\n\n- `A-1@x:1`: keep\n\n## Notes\n\nn\n")
+        out = policy.render_acknowledgement(text, ["B-2@y:2"], "Z")
+        assert ("- `A-1@x:1`: keep\n- `B-2@y:2`: Acknowledged by the Architect in the agent "
+                "session.\n\n## Notes\n\nn\n") in out
+        fm, body = policy.split_draft(out)[1:3]
+        dangerous = [{"rule": "A-1", "file": "x", "line": 1, "severity": "HIGH"},
+                     {"rule": "B-2", "file": "y", "line": 2, "severity": "HIGH"}]
+        assert policy.validate_acknowledgements(fm, body, dangerous) == (["A-1@x:1", "B-2@y:2"], [])
+
+    def test_split_draft_matches_the_hook_rules(self):
+        assert policy.split_draft("") == (None, {}, "", None)
+        assert policy.split_draft("# Session Change Log\n- x\n") == (None, {}, "- x", None)
+        assert policy.split_draft("---\nnot yaml\n---\nb")[3] is not None
+
+
+class TestAgentAcknowledgementGuidance:
+    """The agent one-reply contract lives in the procedure (both copies)."""
+
+    def test_procedure_pair_is_identical_and_scoped(self):
+        rel = "procedures/dangerous-pattern-warnings.md"
+        tpl = (DOCS_ROOT / "src/gator_command/templates/gator-starter" / rel).read_text(encoding="utf-8")
+        live = (DOCS_ROOT / ".gator/.includes" / rel).read_text(encoding="utf-8")
+        assert tpl == live
+        assert "Reply **Acknowledged** to keep all" in tpl
+        assert "gator hook override acknowledge --all-current" in tpl
+        assert "immediately preceding" in tpl

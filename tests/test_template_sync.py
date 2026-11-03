@@ -139,3 +139,105 @@ class TestUpdateLeavesNativeFilesUntouched:
                           if p.name.endswith((".pre-gator-update", "_ROLLBACK.md")))
         assert siblings == []
         assert "Entry-point" not in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Layer 3 — #78 transient migration: predicted, exact, reported once
+# ---------------------------------------------------------------------------
+
+_EPHEMERA = (".gator/status.json", ".gator/whiteboard.md",
+             ".gator/commit_draft.md", ".gator/commit_issues.md")
+
+
+def _git_out(repo, *args):
+    return subprocess.run(["git", *args], cwd=str(repo), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace").stdout
+
+
+def _legacy_governed_repo(tmp_path):
+    repo = _governed_repo(tmp_path)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=str(repo), check=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=str(repo), check=True)
+    for rel in _EPHEMERA:
+        (repo / rel).write_text("legacy\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", "-A"], cwd=str(repo), check=True)
+    subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-q",
+                    "--no-verify", "-m", "legacy"], cwd=str(repo), check=True)
+    return repo
+
+
+def _update(tmp_path, script, repo, *flags, source=True):
+    """`source=False` relies on the product source an earlier call bound;
+    a `--source` rebind prints a notice before any JSON output."""
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home),
+               PYTHONIOENCODING="utf-8")
+    src = ["--source", str(PACKAGE_ROOT)] if source else []
+    return subprocess.run(
+        [sys.executable, str(script), "--path", str(repo), *src, *flags],
+        cwd=str(repo), env=env, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=180,
+    )
+
+
+class TestTransientMigration:
+    """The installed `gator update` runs the package copy, which imports
+    gatorize. The template copy has no gatorize sibling and degrades to no
+    prediction and no untracking, exactly as before #78."""
+
+    update_script = PACKAGE_UPDATE
+
+    def test_template_copy_degrades_quietly(self, tmp_path):
+        repo = _legacy_governed_repo(tmp_path)
+        r = _update(tmp_path, TEMPLATE_UPDATE, repo, "--result-json")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert json.loads(r.stdout)["transient_untracked"] is None
+        assert ".gator/status.json" in _git_out(repo, "ls-files").splitlines()
+
+    def test_dry_run_and_json_predict_without_changing(self, tmp_path):
+        update_script = self.update_script
+        repo = _legacy_governed_repo(tmp_path)
+        index = _git_out(repo, "ls-files", "--stage")
+        r = _update(tmp_path, update_script, repo, "--dry-run")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "Hook-ephemera paths to remove from the Git index (4):" in r.stdout
+        for rel in _EPHEMERA:
+            assert f"    - {rel}" in r.stdout
+        r = _update(tmp_path, update_script, repo, "--json", source=False)
+        assert r.returncode == 0, r.stdout + r.stderr
+        plan = json.loads(r.stdout)
+        assert plan["transient_untrack"] == {"paths": list(_EPHEMERA), "count": 4}
+        assert plan["summary"]["transient_untrack"] == 4
+        assert _git_out(repo, "ls-files", "--stage") == index
+
+    def test_execution_reports_then_is_quiet(self, tmp_path):
+        update_script = self.update_script
+        repo = _legacy_governed_repo(tmp_path)
+        r = _update(tmp_path, update_script, repo, "--result-json")
+        assert r.returncode == 0, r.stdout + r.stderr
+        result = json.loads(r.stdout)
+        assert result["schema"] == "gator-update-result-v1"
+        assert result["exit_code"] == 0
+        t = result["transient_untracked"]
+        assert t["paths"] == list(_EPHEMERA) and t["count"] == 4
+        assert t["message"].startswith("Gator removed 4 hook-ephemera paths from the Git index.")
+        assert t["message"] in result["output"]
+        tracked = _git_out(repo, "ls-files").splitlines()
+        staged = _git_out(repo, "diff", "--cached", "--name-status").splitlines()
+        for rel in _EPHEMERA:
+            assert rel not in tracked and (repo / rel).is_file()
+            assert f"D\t{rel}" in staged
+        # Second run: nothing to untrack, nothing reported.
+        r = _update(tmp_path, update_script, repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "hook-ephemera" not in r.stdout
+        r = _update(tmp_path, update_script, repo, "--result-json")
+        assert json.loads(r.stdout)["transient_untracked"] is None
+
+    @pytest.mark.parametrize("update_script", [PACKAGE_UPDATE, TEMPLATE_UPDATE],
+                             ids=["package", "template"])
+    def test_result_json_rejects_plan_modes(self, tmp_path, update_script):
+        repo = _governed_repo(tmp_path)
+        r = _update(tmp_path, update_script, repo, "--result-json", "--dry-run")
+        assert r.returncode == 2 and "--result-json executes" in r.stderr

@@ -414,3 +414,125 @@ def test_alert_survives_empty_or_failed_history(page, dashboard_fleet, case):
     page.click(".commit-block-close")
     page.wait_for_selector("dialog.commit-block-dialog", state="detached", timeout=5000)
     assert stub.gets >= 2 and page.locator(".commit-row").count() == 0
+
+
+# ---------------------------------------------------------------------------
+# #102: the pause decision is recorded here, and closing never resolves it
+# ---------------------------------------------------------------------------
+
+PAUSE_KEYS = ["SQL-001@m1.txt:1", "SQL-001@m2.txt:1", "SQL-001@m3.txt:1"]
+
+
+def _pf(keys=PAUSE_KEYS):
+    return [{"key": k, "rule": "SQL-001", "file": k.split("@")[1].split(":")[0],
+             "line": 1, "severity": "HIGH", "message": "DROP statement"} for k in keys]
+
+
+def _ack_ok(action, body):
+    return (200, {"ok": True, "message": "", "outcome": "retry-commit",
+                  "acknowledged": body.get("keys", []), "architect": "Test Architect",
+                  "remaining": {"fix_required": [], "paused": []}})
+
+
+def test_close_without_resolving_keeps_the_alert(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect="Test Architect")])
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    text = page.text_content("dialog.commit-block-dialog")
+    assert "Closing does not resolve the pause." in text
+    assert "cannot be approved here" not in text
+    assert page.text_content(".commit-block-close") == "Close without resolving"
+    page.click(".commit-block-close")
+    page.wait_for_selector("dialog.commit-block-dialog", state="detached", timeout=5000)
+    assert page.text_content(".commit-block-alert") == "⚑ Architect decision needed"
+    assert stub.posts == []
+
+
+def test_acknowledge_records_the_complete_set(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect="Test Architect")], post=_ack_ok)
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    assert page.text_content(".commit-block-ack h3") == "Acknowledge 3 current findings"
+    assert page.locator(".commit-block-ack-list li").count() == 3
+    assert page.locator("#commit-block-ack-name").count() == 0
+    assert "Recorded as decided by Test Architect." in page.text_content(".commit-block-ack")
+    assert page.locator(".commit-block-approve").count() == 0
+    page.fill("#commit-block-ack-note", "Fixtures only.")
+    page.click(".commit-block-acknowledge")
+    page.wait_for_selector(".commit-block-success", timeout=5000)
+    assert page.text_content(".commit-block-success") == "Decision recorded; retry the commit."
+    action, body, header = stub.posts[0]
+    assert action == "acknowledge" and header == "1"
+    assert body == {"block_id": BLOCK, "keys": PAUSE_KEYS, "note": "Fixtures only."}
+
+
+def test_name_field_only_without_any_identity(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(PAUSE_KEYS[:1]),
+                               draft_architect=None, architect_default=None)],
+                post=_ack_ok)
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    assert page.text_content(".commit-block-ack h3") == "Acknowledge 1 current finding"
+    assert page.is_disabled(".commit-block-acknowledge")
+    page.fill("#commit-block-ack-name", "Alan Gillette")
+    assert not page.is_disabled(".commit-block-acknowledge")
+    page.click(".commit-block-acknowledge")
+    page.wait_for_selector(".commit-block-success", timeout=5000)
+    assert stub.posts[0][1]["architect"] == "Alan Gillette"
+
+
+def test_default_identity_is_sent_without_asking(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect=None)], post=_ack_ok)
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    assert page.locator("#commit-block-ack-name").count() == 0
+    page.click(".commit-block-acknowledge")
+    page.wait_for_selector(".commit-block-success", timeout=5000)
+    assert stub.posts[0][1]["architect"] == "Test Architect"
+
+
+@pytest.mark.parametrize("over", [
+    {"pause_findings": []},
+    {"pause_findings": [], "pause_findings_incomplete": True},
+    {"state": "stale"},
+], ids=["older-runtime", "incomplete", "stale"])
+def test_no_acknowledge_without_the_complete_current_set(page, dashboard_fleet, over):
+    status = _status(findings=(PAUSE,), pause_findings=_pf(), draft_architect="T")
+    status.update(over)
+    stub = Stub(page, [status])
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    assert page.locator(".commit-block-acknowledge").count() == 0
+    assert page.locator(".commit-block-ack").count() == 0
+
+
+def test_refusal_refreshes_and_keeps_the_pause(page, dashboard_fleet):
+    fresh = _status(findings=(PAUSE,), pause_findings=_pf(PAUSE_KEYS[:2]),
+                    draft_architect="Test Architect", revision=REV2)
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect="Test Architect"),
+                       _status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect="Test Architect"),
+                       fresh],
+                post=lambda a, b: (409, {"ok": False, "refusal": "findings-changed",
+                                         "message": "Refused: the decision must cover exactly the current paused findings.",
+                                         "remaining": {"fix_required": [], "paused": []}}))
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    page.click(".commit-block-acknowledge")
+    page.wait_for_selector(".commit-block-error:not([hidden])", timeout=5000)
+    assert "current paused findings" in page.text_content(".commit-block-error")
+    assert page.text_content(".commit-block-ack h3") == "Acknowledge 2 current findings"
+    assert page.locator(".commit-block-success").count() == 0
+
+
+def test_discard_note_says_the_pause_returns(page, dashboard_fleet):
+    stub = Stub(page, [_status(findings=(PAUSE,), pause_findings=_pf(),
+                               draft_architect="Test Architect")])
+    _open(page, dashboard_fleet, stub)
+    _open_dialog(page)
+    page.click(".commit-block-discard")
+    assert "it returns on the next attempt" in page.text_content(".commit-block-confirm")

@@ -8,11 +8,16 @@ If the hook instead tags the finding `[external-approval]` (Enterprise `evidence
 
 ## What the Agent Does
 
-1. **Present each finding to the Architect.** Give the rule, the file and line, the severity, and what the pattern means in this change. The finding is also in `.gator/commit_issues.md` and `.gator/whiteboard.md`.
-2. **Stop and ask the Architect to decide.** The choices are:
+1. **Present the current finding set in one scoped prompt.** For each finding, give the rule, the file and line, the severity, and what the pattern means in this change. The findings are also in `.gator/commit_issues.md`, `.gator/whiteboard.md` and `gator hook override status --json` (`pause_findings`). End with exactly this kind of question:
+
+   > These 3 current HIGH/CRITICAL findings require your decision: `SQL-001@m1.txt:1`, `SQL-001@m2.txt:1`, `SQL-001@m3.txt:1`. Reply **Acknowledged** to keep all 3, or name the findings to fix/remove.
+
+2. **Stop and wait for the Architect.** The choices are:
    - **Fix** the code, or **remove** it. Then no record is needed, and the retry passes.
-   - **Keep** it. Then record the Architect's decision (below) and retry.
-3. **Never acknowledge a finding yourself.** Record a keep decision only on the Architect's direction, in the Architect's words.
+   - **Keep all of them.** A reply such as **"Acknowledged"** or **"Approved"** means "keep all of the findings in the immediately preceding, enumerated prompt", and nothing else. Record it with one command (below) and retry.
+   - **A mixed decision** (keep one, fix another). Ask the Architect to confirm the split, apply the fixes, and prompt again with the findings that remain.
+3. **Record a keep-all reply with one command.** Run `gator hook override acknowledge --all-current`. Add `--architect "<Architect name>"` only when `commit_draft.md` names no Architect. The command writes the keys, the `architect` field, and one `## Architect acknowledgement` bullet per key into `commit_draft.md`. The Architect does not need to know the keys or write any frontmatter. Add `--note "<text>"` only when the Architect gave a reason for the whole set. The command refuses, and writes nothing, when the current findings differ from the ones it would record (for example, a line moved) or when the draft names a different Architect. Then show the new finding set and ask again. The Architect can also record the same decision in the Dashboard: the repository's **Commits** view, blocked-commit alert, **Acknowledged**.
+4. **Never acknowledge a finding yourself.** Run the command only after the Architect's explicit reply to the enumerated set. A bare "Approved" never applies to findings that were not in that prompt.
 
 The best time to ask is before you write or run the pattern. See [`reference-notes/dangerous-patterns.md`](../reference-notes/dangerous-patterns.md). Then the decision is in `commit_draft.md` before the first commit attempt, and the commit does not pause.
 
@@ -20,9 +25,9 @@ The best time to ask is before you write or run the pattern. See [`reference-not
 
 Some agents or situations will not stop to ask. Gator does not prevent that, but it records it. The pause prompts human involvement and records every bypass; it does not enforce the Architect's approval. List the keys in the optional field `dangerous-pattern-skips: [RULE@path:line]`. The commit then passes and carries the trailer `Gator-Dangerous-Patterns-Unacknowledged: <keys>`. The Commits view shows it as **! Unacknowledged**. Use a skip only when the Architect cannot be asked; never present a skip as the Architect's decision. A skipped key must be a current warning finding, listed once, and not also acknowledged.
 
-## How to Record a Keep Decision
+## How to Record a Keep Decision by Hand
 
-Each finding has a key: `RULE@path:line`. The path uses forward slashes. A dangerous filename has line `0`. A path character that the draft list cannot hold is percent-encoded: `,` is `%2C`, `[` is `%5B`, `]` is `%5D`, a quotation mark is `%22` or `%27`, a backtick is `%60`, `%` is `%25`, a control character is `%XX`, and a space at either end is `%20`. Other characters, including inner spaces, stay as they are. The hook prints the current keys in its output and in `.gator/status.json` (`commit_checks.dangerous_pattern_warnings`). Copy each key exactly as printed.
+The `acknowledge` command above writes this for you. Write it by hand only when the command is not available. Each finding has a key: `RULE@path:line`. The path uses forward slashes. A dangerous filename has line `0`. A path character that the draft list cannot hold is percent-encoded: `,` is `%2C`, `[` is `%5B`, `]` is `%5D`, a quotation mark is `%22` or `%27`, a backtick is `%60`, `%` is `%25`, a control character is `%XX`, and a space at either end is `%20`. Other characters, including inner spaces, stay as they are. The hook prints the current keys in its output and in `.gator/status.json` (`commit_checks.dangerous_pattern_warnings`). Copy each key exactly as printed.
 
 In `commit_draft.md`, add the keys to the frontmatter and explain each one in a body section:
 

@@ -31,8 +31,18 @@ from state_machine import (
     advance_reopened, advance_implementation_submitted,
     advance_implementation_reviewed,
     advance_paused_by_architect, advance_interjected,
-    advance_ended_by_architect,
+    advance_ended_by_architect, same_governed,
 )
+
+
+def _same_candidate(submitted, snap):
+    """Is the live snapshot still the submitted candidate? Hook-owned files
+    never count (governed identities, #102); raw trees when either side
+    predates them."""
+    same, _kind = same_governed(
+        submitted.get("staged_tree"), submitted.get("governed_index_identity"),
+        snap.get("staged_tree"), snap.get("governed_index_identity"))
+    return same
 
 
 # ---------------------------------------------------------------------------
@@ -1144,7 +1154,7 @@ def _coding_review(session, role, loop_dir, source, approve):
     snap = gitsnap.snapshot(repo_root, coding["base_head"])
     live_ok = bool(snap.get("ok"))
     changed = (not live_ok
-               or snap["staged_tree"] != submitted["staged_tree"]
+               or not _same_candidate(submitted, snap)
                or snap["current_head"] != submitted["current_head"])
     if approve and changed:
         if not live_ok:
@@ -1169,6 +1179,8 @@ def _coding_review(session, role, loop_dir, source, approve):
         "generation": gen_num,
         "reviewed_tree": submitted["staged_tree"],
         "reviewed_head": submitted["current_head"],
+        # #102 (additive): absent for candidates captured before it existed.
+        "reviewed_governed_identity": submitted.get("governed_index_identity"),
         "candidate_changed": changed,
         "live_snapshot_ok": live_ok,
         "artifact_path": versioned_name,
@@ -1201,6 +1213,7 @@ def _coding_review(session, role, loop_dir, source, approve):
     if approve:
         approval = {"tree": review["reviewed_tree"],
                     "head": review["reviewed_head"],
+                    "governed_identity": review["reviewed_governed_identity"],
                     "round": gen["round"], "generation": gen_num, "ts": now}
     advance_implementation_reviewed(session, approve, timeout,
                                     approval=approval)

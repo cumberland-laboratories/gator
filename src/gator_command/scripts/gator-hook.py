@@ -22,7 +22,7 @@ the governing runtime from wherever the decision says it lives:
 
 Usage:  gator-hook.py <hook-name> [passthrough-args...]
 Hooks:  pre-commit | commit-msg | post-commit | session-open | session-start
-Verbs:  enforcer-review | override <status|approve|cancel> | approve (alias)
+Verbs:  enforcer-review | override <status|approve|cancel|acknowledge> | approve (alias)
 
 Invoked by the pin-aware stubs `build_git_hook_wrappers` generates (git
 hooks) and by the `gator hook` CLI verb (vendor SessionStart hooks).
@@ -57,7 +57,7 @@ HOOK_MAP = {
     # `gator hook enforcer-review [args...]`. Non-blocking; passthrough.
     "enforcer-review": ("enforcer-review.py", [], True),
     # Pre-commit override control (#34, #35): `gator hook override
-    # status|approve|cancel [flags]` forwards argv to gator-approve.py,
+    # status|approve|cancel|acknowledge [flags]` forwards argv to gator-approve.py,
     # whose argparse rejects unknown subcommands (exit 2). `approve` is
     # the compatibility alias for `override approve` (Phase 4d path:
     # `gator hook approve --reason ... --name ...`). APPROVAL IS
