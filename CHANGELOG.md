@@ -4,6 +4,27 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.36.0] — 2026-11-02
+
+Commit-resolution release (#78, #102). **The commit hook no longer puts its own files into your commit**, so a blocked commit that the Architect approved retries cleanly and a coding loop's approval is not undone by hook output. `gator update` removes old tracked copies of those files from the Git index, visibly. A dangerous-pattern pause can now be decided in one step, in the Dashboard or from the agent session. The Dashboard also gains a **Charters** page with a charter sync check.
+
+**Upgrade note:** in a repository that committed hook files before they were ignored (`.gator/status.json`, `.gator/whiteboard.md`, `.gator/commit_draft.md`, `.gator/commit_issues.md`), the next `gator update` removes them from the Git index and **stages that deletion**. The files stay on disk. Commit the deletion with the update. Enterprise-managed repositories keep `status.json` and `whiteboard.md` tracked.
+
+### Added
+
+- **Record a pause decision in one step (#102).** `gator hook override acknowledge --all-current` records the Architect's decision to keep every current dangerous-pattern finding: the keys, the Architect's name and one acknowledgement line per finding go into `commit_draft.md`. It checks the result with the hook's own validator, and writes nothing when the findings moved, the set is incomplete, existing evidence is invalid, or the Architect name is missing or conflicts. JSON: `gator-override-acknowledge-v1`. `gator hook override status --json` gains additive `pause_findings` and `draft_architect`. Pinned by `TestAcknowledgeCommand` and `TestRenderAcknowledgement` (`tests/test_precommit_override.py`).
+- **Dashboard: decide a pause.** The blocked-commit dialog lists every current paused finding and records them all with one **Acknowledged** confirmation (`POST /api/repo/<name>/override/acknowledge`). It asks for a name only when neither the draft nor the Dashboard knows one. Pinned by `TestAcknowledgeRelay`, `test_dashboard_acknowledge_end_to_end` and the Commits block UI tests.
+- **Dashboard: Charters page.** A charter sync check asks whether the charters still describe the repository well enough to guide the next change, and saves a Markdown report with a repair sketch to `.gator/artifacts/`. It never edits code or charters. `gator-charter-verify --json` gains an additive `charters` list.
+- **`gator update --result-json`** prints one `gator-update-result-v1` object (used by the Dashboard).
+
+### Changed
+
+- **Hook evidence stays out of the commit (#102).** The pre-commit hook writes `status.json` and `whiteboard.md` to the working tree only. Hook files staged by accident (for example by `git add -A`) are removed from that commit attempt, with a one-line notice; a staged deletion of them is kept. The Enterprise bundled hook is unchanged. Pinned by `TestHookEphemera`.
+- **Visible migration of tracked hook files (#78).** `gator update` predicts the paths in `--dry-run` and in `--json` (additive `transient_untrack`), untracks exactly those paths, and reports "Gator removed N hook-ephemera paths from the Git index…" in the terminal and in a Fleet dialog with "Why am I seeing this?". A second run is quiet. Pinned by `TestTransientMigration` (`tests/test_gatorize.py`, `tests/test_template_sync.py`).
+- **Coding-loop approvals ignore hook-owned files (#102).** The loop compares an additive governed identity (`governed_index_identity`) that excludes only the hook-owned paths, so a staged or omitted hook file never makes an approval stale or uncommitted; a source or charter change still does. Raw Git trees stay recorded and remain what reviewers diff. Older sessions compare raw trees. Pinned by `TestGovernedIdentity` and `TestResolveApprovalGoverned`.
+- **Close without resolving.** In the blocked-commit dialog, Close reads "Close without resolving" while anything is unresolved and says the commit still pauses; Discard says a pause returns.
+- **Guidance.** The constitution, the dangerous-pattern procedure, `/commit` and the pre-commit checks page describe the one-question pause flow; hook files are no longer described as "may appear modified" after a commit.
+
 ## [2.35.0] — 2026-10-29
 
 Polish release. **Fleet's commit policy is now a Strict / Warn dropdown**, the blocked-commit dialog accepts a reason pasted from a terminal, and agents now point the Architect to the Gator Dashboard first when a commit needs approval. Codex loop participants are told to run plain `gator loop` commands, which removes the most common cause of extra approval prompts (#99).
