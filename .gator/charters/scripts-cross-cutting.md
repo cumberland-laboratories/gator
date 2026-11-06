@@ -1,6 +1,6 @@
 # Charter: Cross-Cutting Runtime Contracts
 
-**Covers**: `src/gator_command/cli.py`, `src/gator_command/__init__.py`, `src/gator_command/scripts/gator_core.py`, `src/gator_command/scripts/gator_runtime.py`, `src/gator_command/scripts/gator_remote.py`, `pyproject.toml`
+**Covers**: `src/gator_command/cli.py`, `src/gator_command/__init__.py`, `src/gator_command/scripts/gator_core.py`, `src/gator_command/scripts/gator_runtime.py`, `src/gator_command/scripts/gator_remote.py`, `pyproject.toml`, `src/gator_command/templates/gator-starter/scripts/enforcer-review.py`
 
 Read this charter before the domain charter selected through [`INDEX.md`](INDEX.md). It contains only contracts that cross multiple domains.
 

@@ -1,6 +1,6 @@
 # Charter: Core Library
 
-**Covers**: `src/gator_command/scripts/gator_core.py`, `src/gator_command/scripts/gator-machine-id.py`, `src/gator_command/scripts/gator_remote.py`, `src/gator_command/scripts/gator-version.py`, `src/gator_command/scripts/gator_runtime.py`
+**Covers**: `src/gator_command/scripts/gator_core.py`, `src/gator_command/scripts/gator-machine-id.py`, `src/gator_command/scripts/gator_remote.py`, `src/gator_command/scripts/gator-version.py`, `src/gator_command/scripts/gator_runtime.py`, `src/gator_command/templates/gator-starter/scripts/gator_core.py`, `src/gator_command/templates/gator-starter/scripts/gator-version.py`
 
 ## Owns
 

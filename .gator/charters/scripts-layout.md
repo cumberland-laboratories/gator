@@ -1,6 +1,6 @@
 # Charter: Layout Resolver
 
-**Covers**: `src/gator_command/scripts/gator_layout.py`
+**Covers**: `src/gator_command/scripts/gator_layout.py`, `src/gator_command/templates/gator-starter/scripts/gator_layout.py`
 
 ## Owns
 

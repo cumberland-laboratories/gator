@@ -5,7 +5,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | If you're changing... | Read these charters |
 |---|---|
 | `src/gator_command/cli.py`, `src/gator_command/__init__.py`, `pyproject.toml` | [Cross-Cutting](scripts-cross-cutting.md) |
-| `src/gator_command/scripts/gator_core.py`, `gator_runtime.py`, `gator_remote.py`, `gator-machine-id.py`, `gator-version.py` | [Core Library](scripts-core-library.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `src/gator_command/scripts/gator_core.py`, `gator_runtime.py`, `gator_remote.py`, `gator-machine-id.py`, `gator-version.py`, starter `gator_core.py` and `gator-version.py` | [Core Library](scripts-core-library.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-fleet-report.py`, `gator-fleet-intel.py`, `gator-drift.py` | [Fleet Status and Drift](scripts-fleet-intelligence.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-audit.py`, `gator-audit-renderers.py`, `gator-repo-status.py` | [Audit and Repo Intelligence](scripts-audit-intelligence.md) · [Session Archaeology](scripts-session-archaeology.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-session-aggregator.py`, `gator_session_reader.py` | [Session Archaeology](scripts-session-archaeology.md) · [Cross-Cutting](scripts-cross-cutting.md) |
