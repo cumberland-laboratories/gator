@@ -1,0 +1,51 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Codex /goal prompt waits up to an hour between turns",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "gator-loop",
+    "codex",
+    "loop-wait-interval"
+  ],
+  "commit": "bfc1f8addb9ef07fce4f9e0fbbc45a4ebcae47b7",
+  "short_commit": "bfc1f8a",
+  "snippet_id": "snippet-bfc1f8addb9ef",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "32aac5af9580d446b2cb6582746962d7e148ae45",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-06T11:00:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.includes/reference-notes/codex-loop-participant.md",
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-11-06-gator-32aac5af9580d.json",
+    "src/gator_command/scripts/dashboard/views/loop.js",
+    "src/gator_command/templates/gator-starter/docs/gator-loop-extras.html",
+    "src/gator_command/templates/gator-starter/reference-notes/codex-loop-participant.md",
+    "tests/test_dashboard_ui/test_loop_workspace.py"
+  ],
+  "notes": [
+    "The Codex `/goal` prompt that the Loop workspace's Extras tab copies now asks",
+    "Codex to reissue `gator loop wait --max-seconds 3600` instead of 360 (Architect",
+    "direction 2026-11-03). Every wait that ends without a turn costs Codex a model",
+    "turn, and a wait still returns at once when it becomes Codex's turn, so a",
+    "longer interval cuts idle turns to at most one an hour without slowing the",
+    "loop. The protocol default stays 360; the Extras document, both copies of the",
+    "Codex participant note, and the Dashboard charters say so.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}
