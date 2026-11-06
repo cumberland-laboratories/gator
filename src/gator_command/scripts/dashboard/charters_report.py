@@ -32,6 +32,7 @@ PCT_MAX = 10 ** 6
 ITEMS_MAX = 200
 UNCOVERED_MAX = 50
 LARGEST_MAX = 10
+MODULE_PATHS_MAX = 50
 PROBLEMS_MAX = 20
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -250,6 +251,17 @@ def _coverage(c):
     }
 
 
+def _module(m):
+    m = _obj(m)
+    # `paths` / `paths_truncated` are additive in v1: a record from before they
+    # existed still sanitizes, with no paths.
+    return {
+        "charter": _str(m["charter"]), "files": _count(m["files"]), "lines": _count(m["lines"]),
+        "paths": _list(m.get("paths", []), MODULE_PATHS_MAX, _path),
+        "paths_truncated": _flag(m.get("paths_truncated", False)),
+    }
+
+
 def _code(c):
     c = _obj(c)
     target = _obj(c["target"])
@@ -259,9 +271,7 @@ def _code(c):
         "target": {"min": _pct(target["min"], False), "max": _pct(target["max"], False),
                    "source": _str(target["source"])},
         "band": _choice(c["band"], _BANDS, nullable=True),
-        "modules": _list(c["modules"], ITEMS_MAX, lambda m: {
-            "charter": _str(_obj(m)["charter"]), "files": _count(m["files"]),
-            "lines": _count(m["lines"])}),
+        "modules": _list(c["modules"], ITEMS_MAX, _module),
         "modules_truncated": _flag(c["modules_truncated"]),
         "uncovered_module": {"files": _count(_obj(c["uncovered_module"])["files"]),
                              "lines": _count(c["uncovered_module"]["lines"])},

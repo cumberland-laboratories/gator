@@ -3,7 +3,7 @@
  * sync check (charters-sidebar-sync; charters-health-section Release A).
  *
  * Repository-scoped, in three tabs. Overview shows the charter report's
- * health tiles (GET/POST /api/repo/<name>/charters-report) above the charter
+ * health figures (GET/POST /api/repo/<name>/charters-report) above the charter
  * sync check (GET/POST /api/repo/<name>/charter-sync). Code shows where the
  * code is by charter. Features is a placeholder for a later release.
  *
@@ -12,8 +12,9 @@
  * or refresh keeps the displayed figures and shows an alert. A page open
  * makes one report GET and at most one automatic report refresh; nothing is
  * timed. The mount sends one POST at a time, because both runs take the
- * same per-repository lock. State is always a word; colours and bars are
- * decorative.
+ * same per-repository lock. The report pages use the Cumberland reading
+ * style (lede, ruled headings, inline-SVG figures with text captions). State
+ * is always a word; colours and shapes are never the only cue.
  *
  * Exposes: window.GatorViews.charters(data, container, repoName, repoKey)
  */
@@ -23,7 +24,6 @@
 
   window.GatorViews = window.GatorViews || {};
 
-  var VISIBLE_GROUPS = 8;
   var STATE_WORDS = { "current": "Current", "needs-review": "Needs review" };
   var TABS = [
     { key: "overview", label: "Overview" },
@@ -123,28 +123,6 @@
       + "charters. It writes a reviewable report and repair sketch to .gator/artifacts/."));
   }
 
-  function findingItem(g, ctx) {
-    var li = el("li", "charters-finding");
-    li.dataset.kind = g.kind;
-    li.appendChild(dot(g.kind === "coverage-gap" ? "missing" : "review"));
-    var main = el("div", "charters-finding-main");
-    var head = el("div", "charters-finding-head");
-    head.appendChild(el("span", "charters-finding-label", g.label));
-    head.appendChild(el("span", "charters-finding-count", plural(g.count, "finding")));
-    main.appendChild(head);
-    main.appendChild(el("p", "charters-prose charters-finding-message", g.message));
-    var actions = el("div", "charters-actions");
-    if (g.charter_path) {
-      actions.appendChild(actionButton("Open charter",
-        function () { openFile(ctx.repoName, ctx.repoKey, g.charter_path); }));
-    }
-    actions.appendChild(actionButton("Open report",
-      function () { openFile(ctx.repoName, ctx.repoKey, ctx.artifact); }));
-    main.appendChild(actions);
-    li.appendChild(main);
-    return li;
-  }
-
   function renderResult(body, d, ctx) {
     body.textContent = "";
     ctx.artifact = d.artifact_path;
@@ -166,66 +144,44 @@
     band.appendChild(top);
     band.appendChild(el("p", "charters-prose charters-headline", d.headline));
 
-    var counts = el("div", "charters-counts");
-    [["current", d.counts.current, "current", null],
-     ["review", d.counts.needs_review, "needs review", null],
-     ["missing", d.counts.missing, "missing charter", "source files"]].forEach(function (c) {
-      var box = el("div", "charters-count");
-      box.dataset.count = c[0];
-      var n = el("span", "charters-count-n");
-      n.appendChild(dot(c[0]));
-      n.appendChild(document.createTextNode(String(c[1])));
-      box.appendChild(n);
-      box.appendChild(el("span", "charters-count-label", c[2]));
-      if (c[3]) box.appendChild(el("span", "charters-count-unit", c[3]));
-      counts.appendChild(box);
-    });
-    band.appendChild(counts);
+    // Charters current vs needing review, as the same donut as Coverage.
+    var charters = d.counts.current + d.counts.needs_review;
+    band.appendChild(donutChart([
+      { value: d.counts.current, stroke: "charters-stroke", swatch: "charters-swatch",
+        label: plural(d.counts.current, "charter") + " current" },
+      { value: d.counts.needs_review, stroke: "charters-stroke-review",
+        swatch: "charters-swatch charters-swatch-review",
+        label: plural(d.counts.needs_review, "charter") + " need review" },
+    ], charters ? Math.round(d.counts.current * 100 / charters) + "%" : "—", "current",
+      d.counts.current + " of " + plural(charters, "charter") + " current", "sync"));
+    band.appendChild(el("p", "charters-note charters-missing",
+      num(d.counts.missing) + " source " + (d.counts.missing === 1 ? "file has" : "files have")
+      + " no charter."));
     body.appendChild(band);
 
+    // Recent commits: how many changed governed code without a charter update.
     var commits = el("section", "charters-section charters-commits");
     commits.appendChild(el("h2", "charters-section-title", "Recent commit coverage"));
     var rc = d.recent_commits;
-    commits.appendChild(el("p", "charters-prose", rc.reason
-      ? rc.reason
-      : plural(rc.examined, "commit") + " examined · " + rc.without_charter_update
-        + " changed governed code without a charter update"));
+    if (rc.reason || !rc.examined) {
+      commits.appendChild(el("p", "charters-prose", rc.reason || "No commits were examined."));
+    } else {
+      var ok = rc.examined - rc.without_charter_update;
+      commits.appendChild(figure("commits", donutChart([
+        { value: ok, stroke: "charters-stroke", swatch: "charters-swatch",
+          label: plural(ok, "commit") + " kept charters in step" },
+        { value: rc.without_charter_update, stroke: "charters-stroke-review",
+          swatch: "charters-swatch charters-swatch-review",
+          label: plural(rc.without_charter_update, "commit") + " changed governed code without a charter update" },
+      ], Math.round(ok * 100 / rc.examined) + "%", "in step",
+        ok + " of " + plural(rc.examined, "recent commit") + " kept charters in step", "commits"),
+        "The last " + plural(rc.examined, "commit") + " (merges excluded). A commit is in step "
+        + "unless it changed governed code without a charter update."));
+    }
     body.appendChild(commits);
 
-    if (d.findings.length) {
-      var attention = el("section", "charters-section charters-attention");
-      attention.appendChild(el("h2", "charters-section-title", "Needs attention"));
-      var list = el("ul", "charters-findings");
-      d.findings.slice(0, VISIBLE_GROUPS).forEach(function (g) {
-        list.appendChild(findingItem(g, ctx));
-      });
-      attention.appendChild(list);
-      if (d.findings.length > VISIBLE_GROUPS) {
-        var more = el("details", "charters-more");
-        more.appendChild(el("summary", "charters-more-summary",
-          "Show all (" + d.findings.length + ")"));
-        var rest = el("ul", "charters-findings");
-        d.findings.slice(VISIBLE_GROUPS).forEach(function (g) {
-          rest.appendChild(findingItem(g, ctx));
-        });
-        more.appendChild(rest);
-        attention.appendChild(more);
-      }
-      if (d.groups_total > d.findings.length) {
-        attention.appendChild(el("p", "charters-note",
-          "Showing the first " + d.findings.length + " groups. The report lists all "
-          + plural(d.findings_total, "finding") + "."));
-      }
-      body.appendChild(attention);
-    }
-
-    var report = el("p", "charters-report");
-    report.appendChild(el("span", "charters-report-label", "Report: "));
-    report.appendChild(el("code", "charters-report-path", d.artifact_path));
-    report.appendChild(actionButton("Open report",
-      function () { openFile(ctx.repoName, ctx.repoKey, d.artifact_path); }));
-    body.appendChild(report);
   }
+
 
   function renderUnavailable(body, run, message) {
     body.textContent = "";
@@ -239,6 +195,25 @@
   }
 
   // ── Charter report (charters-health-section) ─────────────────────────
+  // Cumberland reading style: a lede sentence, ruled section headings, and
+  // figures drawn as inline SVG. Every figure states its numbers in text as
+  // well (labels, caption, <title> hover), so the drawing is never the only
+  // carrier of a value and colour is never the only cue.
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var CHART_ROWS = 24;          // more charters than this fold into one row
+
+  function svg(tag, attrs, text) {
+    var e = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, String(attrs[k])); });
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    return e;
+  }
+
+  function hover(node, text) {
+    node.appendChild(svg("title", null, text));
+    return node;
+  }
 
   function mark(symbol, word, cls) {
     var s = el("span", cls);
@@ -250,43 +225,145 @@
     return s;
   }
 
-  function tile(key, label, value, status, sub) {
-    var t = el("div", "charters-tile");
-    t.dataset.tile = key;
-    t.appendChild(el("span", "charters-tile-label", label));
-    t.appendChild(el("span", "charters-tile-value", value));
-    if (status) t.appendChild(status);
-    if (sub) t.appendChild(el("span", "charters-tile-sub", sub));
-    return t;
+  function figure(key, chart, caption) {
+    var f = el("figure", "charters-figure");
+    f.dataset.figure = key;
+    f.appendChild(chart);
+    var c = el("figcaption", "charters-caption");
+    if (caption.nodeType) c.appendChild(caption); else c.textContent = caption;
+    f.appendChild(c);
+    return f;
   }
 
-  function renderHealth(area, r, freshness) {
+  function section(cls, title) {
+    var s = el("section", "charters-doc-section " + cls);
+    s.appendChild(el("h2", "charters-doc-title", title));
+    return s;
+  }
+
+  // Charter lines as a share of product lines, against the 3–6% target band.
+  function sizeChart(code) {
+    var W = 640, H = 64, L = 16, R = 20, base = 38;
+    var pct = code.charter_to_code_pct;
+    var max = Math.max(10, Math.ceil(((pct || 0) + 1) / 2) * 2);
+    var x = function (v) { return L + (W - L - R) * Math.min(v, max) / max; };
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "Charter size " + (pct === null ? "unknown" : pct + "% of product code")
+        + "; target " + code.target.min + " to " + code.target.max + "%" });
+    s.setAttribute("class", "charters-chart");
+    s.appendChild(svg("line", { x1: L, y1: base, x2: W - R, y2: base, class: "charters-axis" }));
+    s.appendChild(hover(svg("rect", { x: x(code.target.min), y: base - 16,
+      width: x(code.target.max) - x(code.target.min), height: 16, rx: 2, class: "charters-band-fill" }),
+      "Target: " + code.target.min + "–" + code.target.max + "% of product code"));
+    s.appendChild(svg("text", { x: (x(code.target.min) + x(code.target.max)) / 2, y: base - 21,
+      "text-anchor": "middle", class: "charters-chart-note" },
+      "target " + code.target.min + "–" + code.target.max + "%"));
+    for (var t = 0; t <= max; t += 2) {
+      s.appendChild(svg("line", { x1: x(t), y1: base, x2: x(t), y2: base + 4, class: "charters-axis" }));
+      s.appendChild(svg("text", { x: x(t), y: base + 17, "text-anchor": "middle",
+        class: "charters-chart-tick" }, t + "%"));
+    }
+    if (pct !== null) {
+      s.appendChild(hover(svg("rect", { x: x(pct) - 2, y: base - 22, width: 4, height: 26, rx: 2,
+        class: "charters-marker" }), "Charter size: " + pct + "% of product code"));
+    }
+    return s;
+  }
+
+  // What a charter covers, in one short line under its bar: the files by name
+  // when there are few, otherwise their folders with a count each.
+  var MODULE_NAMES = 6;
+
+  function folderOf(path) {
+    var parts = path.split("/");
+    parts.pop();
+    return parts.length ? parts.slice(-2).join("/") + "/" : "./";
+  }
+
+  function moduleSummary(paths, files, truncated) {
+    if (!paths.length) return "";
+    var text;
+    if (files <= MODULE_NAMES && !truncated) {
+      text = paths.map(shortName).join(", ");
+    } else {
+      var counts = {}, order = [];
+      paths.forEach(function (p) {
+        var d = folderOf(p);
+        if (!counts[d]) { counts[d] = 0; order.push(d); }
+        counts[d] += 1;
+      });
+      order.sort(function (a, b) { return counts[b] - counts[a] || (a < b ? -1 : 1); });
+      var shown = order.slice(0, 4).map(function (d) { return d + " (" + counts[d] + ")"; });
+      if (order.length > 4) shown.push("+" + (order.length - 4) + " more");
+      text = shown.join(", ") + (truncated ? " (first " + paths.length + " files)" : "");
+    }
+    return text.length > 72 ? text.slice(0, 71) + "…" : text;
+  }
+
+  // Lines of code covered by each charter: one series, a direct label on every
+  // row, what the charter covers in a line under its bar, "No charter" last.
+  function modulesChart(code, cov) {
+    var rows = code.modules.map(function (m) {
+      return { name: m.charter, lines: m.lines, files: m.files, none: false,
+        paths: m.paths || [], truncated: !!m.paths_truncated };
+    });
+    if (rows.length > CHART_ROWS) {
+      var rest = rows.slice(CHART_ROWS - 1);
+      rows = rows.slice(0, CHART_ROWS - 1);
+      rows.push({ name: "Other charters (" + rest.length + ")", none: false, paths: [], truncated: false,
+        lines: rest.reduce(function (a, r) { return a + r.lines; }, 0),
+        files: rest.reduce(function (a, r) { return a + r.files; }, 0) });
+    }
+    rows.push({ name: "No charter", lines: code.uncovered_module.lines,
+      files: code.uncovered_module.files, none: true,
+      paths: cov.uncovered, truncated: cov.uncovered_truncated });
+    var max = 1;
+    rows.forEach(function (r) { if (r.lines > max) max = r.lines; });
+    var W = 640, LABEL = 200, VALUE = 92, ROW = 42, BAR = 12, TOP = 4;
+    var plot = W - LABEL - VALUE;
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + (rows.length * ROW + TOP), role: "img",
+      "aria-label": "Lines of code covered by each charter" });
+    s.setAttribute("class", "charters-chart charters-chart-bars");
+    rows.forEach(function (r, i) {
+      var y = i * ROW + TOP;
+      var g = svg("g", { class: "charters-row" + (r.none ? " charters-row-none" : "") });
+      var label = r.name.length > 30 ? r.name.slice(0, 29) + "…" : r.name;
+      g.appendChild(svg("text", { x: LABEL - 8, y: y + BAR - 1, "text-anchor": "end",
+        class: "charters-chart-label" }, label));
+      var w = Math.max(r.lines ? 4 : 0, Math.round(plot * r.lines / max));
+      if (w) {
+        g.appendChild(svg("rect", { x: LABEL, y: y, width: w, height: BAR, rx: 2,
+          class: r.none ? "charters-fill-none" : "charters-fill" }));
+      }
+      g.appendChild(svg("text", { x: LABEL + w + 6, y: y + BAR - 1, class: "charters-chart-value" },
+        num(r.lines)));
+      var summary = moduleSummary(r.paths, r.files, r.truncated);
+      if (summary) {
+        g.appendChild(svg("text", { x: LABEL, y: y + BAR + 14, class: "charters-chart-sub" }, summary));
+      }
+      // A full-row hit target, larger than the bar; the hover lists the files.
+      g.appendChild(hover(svg("rect", { x: 0, y: y - 6, width: W, height: ROW, class: "charters-hit" }),
+        r.name + ": " + num(r.lines) + " lines in " + plural(r.files, "file")
+        + (r.paths.length ? "\n" + r.paths.join("\n") + (r.truncated ? "\n…" : "") : "")));
+      s.appendChild(g);
+    });
+    return s;
+  }
+
+
+  function renderHealth(area, r, freshness, ctx) {
     area.textContent = "";
     var f = FRESHNESS[freshness] || FRESHNESS.unknown;
     var ch = r.charters, cov = r.coverage, code = r.code;
 
-    var tiles = el("div", "charters-tiles");
-    tiles.appendChild(tile("charters", "Charters", num(ch.count), null,
-      num(ch.lines) + " lines · " + num(ch.documented_functions) + " documented functions"));
-    var band = BANDS[code.band];
-    tiles.appendChild(tile("size", "Charter size vs code",
-      code.charter_to_code_pct === null ? "—" : code.charter_to_code_pct + "%",
-      band ? mark(band[0], band[1], "charters-tile-status") :
-        mark("–", "No source lines", "charters-tile-status"),
-      "target " + code.target.min + "–" + code.target.max + "%"));
-    tiles.appendChild(tile("uncovered", "Files without a charter", num(cov.uncovered_files),
-      null, "of " + num(cov.source_files) + " source files"));
-    area.appendChild(tiles);
-
-    if (ch.count === 0) {
-      area.appendChild(el("p", "charters-prose", "This repository has no charters yet."));
-    }
-    if (r.problems.length) {
-      var partial = el("ul", "charters-problems");
-      r.problems.forEach(function (p) { partial.appendChild(el("li", null, p.message)); });
-      area.appendChild(el("p", "charters-note", "Partial report. Some figures are incomplete:"));
-      area.appendChild(partial);
-    }
+    var lede = ch.count === 0
+      ? "This repository has no charters yet. None of its " + plural(cov.source_files, "source file")
+        + " is described by a charter."
+      : plural(ch.count, "charter") + " describe " + num(cov.covered_files) + " of "
+        + num(cov.source_files) + " source files"
+        + (cov.uncovered_files ? "; " + num(cov.uncovered_files)
+          + (cov.uncovered_files === 1 ? " has" : " have") + " no charter yet." : ".");
+    area.appendChild(el("p", "charters-doc-lede", lede));
 
     var prov = el("p", "charters-provenance");
     prov.appendChild(mark(f[0], f[1], "charters-freshness"));
@@ -294,6 +371,46 @@
       + " · " + (r.inputs.revision ? "revision " + r.inputs.revision : "no commits yet")));
     prov.title = r.generated_at;
     area.appendChild(prov);
+
+    if (r.problems.length) {
+      area.appendChild(el("p", "charters-note", "Partial report. Some figures are incomplete:"));
+      var partial = el("ul", "charters-problems");
+      r.problems.forEach(function (p) { partial.appendChild(el("li", null, p.message)); });
+      area.appendChild(partial);
+    }
+
+    var sizes = section("charters-sizes", "Charters by size");
+    if (ch.items.length) {
+      sizes.appendChild(figure("charters", charterSizesChart(ch.items, ctx),
+        guideLegend(CHARTER_GUIDE, "charter")));
+      if (ch.items_truncated) {
+        sizes.appendChild(el("p", "charters-note", "Showing the first " + ch.items.length + " charters."));
+      }
+    } else {
+      sizes.appendChild(el("p", "charters-prose", "There are no charters to show yet."));
+    }
+    area.appendChild(sizes);
+
+    var size = section("charters-size", "Total charters size as percentage of codebase size");
+    var band = BANDS[code.band];
+    var cap = el("span");
+    if (code.charter_to_code_pct === null) {
+      cap.textContent = "There are no source lines to compare with.";
+    } else {
+      cap.appendChild(document.createTextNode(num(ch.lines) + " charter lines are "
+        + code.charter_to_code_pct + "% of " + num(code.product_lines) + " lines of product code. "));
+      if (band) cap.appendChild(mark(band[0], band[1], "charters-figure-status"));
+      cap.appendChild(document.createTextNode(" Target " + code.target.min + "–"
+        + code.target.max + "%. The charters document " + plural(ch.documented_functions, "function") + "."));
+    }
+    size.appendChild(figure("size", sizeChart(code), cap));
+    area.appendChild(size);
+
+    var covSec = section("charters-coverage", "Coverage");
+    covSec.appendChild(figure("coverage", coverageChart(cov),
+      num(cov.covered_files) + " covered · " + num(cov.uncovered_files) + " without a charter"
+      + (cov.percent === null ? "" : " · " + cov.percent + "% covered") + "."));
+    area.appendChild(covSec);
 
     var how = el("details", "charters-measured");
     how.appendChild(el("summary", "charters-measured-summary", "How measured"));
@@ -305,72 +422,199 @@
     area.appendChild(how);
   }
 
-  function barRow(name, lines, files, max) {
-    var li = el("li", "charters-module");
-    var head = el("div", "charters-module-head");
-    head.appendChild(el("span", "charters-module-name", name));
-    head.appendChild(el("span", "charters-module-size",
-      num(lines) + " lines · " + plural(files, "file")));
-    li.appendChild(head);
-    var bar = el("span", "charters-bar");
-    bar.setAttribute("aria-hidden", "true");
-    bar.style.width = (max > 0 ? Math.max(1, Math.round(lines * 100 / max)) : 0) + "%";
-    li.appendChild(bar);
-    return li;
+  // Ranked bars with a guide (largest files; charters by size): bars on a light
+  // track, a dashed guide crossing every row, and size bands shown by fill AND
+  // a symbol after the value. Each row is a link (click, Enter or Space) that
+  // opens its file in Repo. The guides are reading aids fixed in the view, not
+  // rules: thresholds and their tracked setting are a later release.
+  var FILE_GUIDE = { guide: 1500, large: 4000 };
+  var CHARTER_GUIDE = { guide: 300, large: 600 };
+
+  // A readable label: the file with its folder (skipping generic folders), and
+  // a tag for shipped copies, so the starter and Enterprise copies of one
+  // script are told apart. The full path is in the hover text and aria-label.
+  var GENERIC_DIRS = ["scripts", "dashboard", "bundled_scripts", "src"];
+
+  function shortName(path) {
+    var parts = path.split("/");
+    var base = parts[parts.length - 1];
+    var parent = parts.length > 1 ? parts[parts.length - 2] : "";
+    var label = (parent && GENERIC_DIRS.indexOf(parent) === -1 ? parent + "/" : "") + base;
+    if (path.indexOf("templates/gator-starter/") !== -1) label += " · starter";
+    else if (path.indexOf("enterprise/") === 0) label += " · enterprise";
+    return clip(label);
+  }
+
+  function clip(label) {
+    return label.length > 34 ? "…" + label.slice(label.length - 33) : label;
+  }
+
+  function sizeBand(lines, guide) {
+    if (lines > guide.large) return { cls: "charters-fill-large", symbol: "■", word: "over " + num(guide.large) + " lines" };
+    if (lines > guide.guide) return { cls: "charters-fill-over", symbol: "▲", word: "over " + num(guide.guide) + " lines" };
+    return { cls: "charters-fill", symbol: "", word: "" };
+  }
+
+  // rows: [{label, lines, path, detail}] in display order.
+  function rankedChart(rows, guide, ariaLabel, rowClass, ctx) {
+    var max = guide.guide * 1.2;
+    rows.forEach(function (r) { if (r.lines > max) max = r.lines; });
+    var W = 640, LABEL = 250, TAIL = 96, ROW = 30, BAR = 14, TOP = 6;
+    var plot = W - LABEL - TAIL;
+    var x = function (v) { return LABEL + plot * v / max; };
+    var H = rows.length * ROW + TOP + 4;
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "group", "aria-label": ariaLabel });
+    s.setAttribute("class", "charters-chart charters-chart-ranked");
+    rows.forEach(function (r, i) {
+      var y = TOP + i * ROW;
+      var band = sizeBand(r.lines, guide);
+      var g = svg("g", { class: "charters-link-row " + rowClass, role: "link", tabindex: 0,
+        "aria-label": "Open " + r.path + ", " + num(r.lines) + " lines" + (band.word ? ", " + band.word : "") });
+      g.appendChild(svg("rect", { x: 0, y: y - 7, width: W, height: ROW, rx: 4, class: "charters-hit" }));
+      g.appendChild(svg("text", { x: LABEL - 10, y: y + BAR - 2, "text-anchor": "end",
+        class: "charters-chart-label charters-chart-path" }, r.label));
+      g.appendChild(svg("rect", { x: LABEL, y: y, width: plot, height: BAR, rx: 2, class: "charters-track" }));
+      g.appendChild(svg("rect", { x: LABEL, y: y, width: Math.max(4, x(r.lines) - LABEL), height: BAR,
+        rx: 2, class: band.cls }));
+      g.appendChild(svg("text", { x: LABEL + plot + 10, y: y + BAR - 2, class: "charters-chart-value" },
+        num(r.lines)));
+      if (band.symbol) {
+        g.appendChild(svg("text", { x: W - 8, y: y + BAR - 2, "text-anchor": "end",
+          class: "charters-chart-symbol", "aria-hidden": "true" }, band.symbol));
+      }
+      hover(g, r.detail + (band.word ? " · " + band.word : ""));
+      var open = function () { openFile(ctx.repoName, ctx.repoKey, r.path); };
+      g.addEventListener("click", open);
+      g.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+      s.appendChild(g);
+    });
+    // The guide is drawn last so it crosses every bar.
+    s.appendChild(svg("line", { x1: x(guide.guide), y1: TOP - 4, x2: x(guide.guide), y2: H - 2,
+      class: "charters-guide", "aria-hidden": "true" }));
+    return s;
+  }
+
+  function guideLegend(guide, noun) {
+    var p = el("span");
+    [["■", "over " + num(guide.large) + " lines"], ["▲", "over " + num(guide.guide)],
+     ["┆", num(guide.guide) + "-line guide"]].forEach(function (m) {
+      p.appendChild(mark(m[0], m[1], "charters-legend-item"));
+    });
+    p.appendChild(document.createTextNode(" Select a row to open the " + noun + "."));
+    return p;
+  }
+
+  function largestChart(files, ctx) {
+    return rankedChart(files.map(function (f) {
+      return { label: shortName(f.path), lines: f.lines, path: f.path,
+        detail: f.path + ": " + num(f.lines) + " lines"
+          + (f.charters.length ? " · " + f.charters.join(", ") : " · no charter") };
+    }), FILE_GUIDE, "Largest files by lines; select a row to open the file", "charters-file-row", ctx);
+  }
+
+  function charterSizesChart(items, ctx) {
+    var rows = items.slice().sort(function (a, b) {
+      return b.lines - a.lines || (a.name < b.name ? -1 : 1);
+    });
+    return rankedChart(rows.map(function (c) {
+      return { label: clip(c.name), lines: c.lines, path: c.path,
+        detail: c.name + ": " + num(c.lines) + " lines · "
+          + plural(c.documented_functions, "documented function") + " · covers "
+          + plural(c.covered_files, "file") };
+    }), CHARTER_GUIDE, "Charters by size; select a row to open the charter", "charters-charter-row", ctx);
+  }
+
+  // A donut (coverage, charter sync, recent commits): parts drawn in order from
+  // twelve o'clock with 2px gaps, any non-zero part at least a visible sliver,
+  // the headline value in the middle, and a legend list with every count in
+  // words (swatches aria-hidden). parts: [{value, stroke, swatch, label}].
+  function donutChart(parts, center, unit, ariaLabel, key) {
+    var wrap = el("div", "charters-donut");
+    wrap.dataset.donut = key;
+    var R = 58, SW = 24, C = 2 * Math.PI * R, GAP = 2, MIN = Math.max(8, C * 0.012);
+    var total = parts.reduce(function (a, p) { return a + p.value; }, 0);
+    var s = svg("svg", { viewBox: "0 0 160 160", role: "img", "aria-label": ariaLabel });
+    s.setAttribute("class", "charters-chart charters-donut-chart");
+    var ring = svg("g", { transform: "rotate(-90 80 80)" });
+    var live = parts.filter(function (p) { return p.value > 0; });
+    if (!live.length) {
+      ring.appendChild(svg("circle", { cx: 80, cy: 80, r: R, fill: "none", "stroke-width": SW,
+        class: "charters-donut-empty" }));
+    } else {
+      var lens = live.map(function (p) { return C * p.value / total; });
+      // Lift small parts to the sliver minimum, taking the difference from the largest.
+      var big = lens.indexOf(Math.max.apply(null, lens));
+      lens.forEach(function (l, i) {
+        if (live.length > 1 && l < MIN) { lens[big] -= MIN - l; lens[i] = MIN; }
+      });
+      var at = 0;
+      live.forEach(function (p, i) {
+        var gap = live.length > 1 ? GAP : 0;
+        var len = lens[i] - gap;
+        ring.appendChild(hover(svg("circle", { cx: 80, cy: 80, r: R, fill: "none", "stroke-width": SW,
+          class: p.stroke, "stroke-dasharray": len + " " + (C - len),
+          "stroke-dashoffset": -(at + gap / 2) }), p.label));
+        at += lens[i];
+      });
+    }
+    s.appendChild(ring);
+    s.appendChild(svg("text", { x: 80, y: 80, "text-anchor": "middle", class: "charters-donut-value" }, center));
+    s.appendChild(svg("text", { x: 80, y: 100, "text-anchor": "middle", class: "charters-donut-unit" }, unit));
+    wrap.appendChild(s);
+
+    var legend = el("ul", "charters-donut-legend");
+    parts.forEach(function (p) {
+      var li = el("li", "charters-donut-item");
+      var sw = el("span", p.swatch);
+      sw.setAttribute("aria-hidden", "true");
+      li.appendChild(sw);
+      li.appendChild(el("span", null, p.label));
+      legend.appendChild(li);
+    });
+    wrap.appendChild(legend);
+    return wrap;
+  }
+
+  // Coverage: covered and uncovered source files.
+  function coverageChart(cov) {
+    return donutChart([
+      { value: cov.covered_files, stroke: "charters-stroke", swatch: "charters-swatch",
+        label: num(cov.covered_files) + " covered by a charter" },
+      { value: cov.uncovered_files, stroke: "charters-stroke-none",
+        swatch: "charters-swatch charters-swatch-none",
+        label: num(cov.uncovered_files) + " without a charter" },
+    ], cov.percent === null ? "—" : cov.percent + "%", "covered",
+      num(cov.covered_files) + " of " + num(cov.source_files) + " source files covered by a charter",
+      "coverage");
   }
 
   function renderCode(panel, r, ctx) {
     panel.textContent = "";
     var code = r.code, cov = r.coverage;
-    panel.appendChild(el("p", "charters-prose charters-code-total", "Product code: "
-      + num(code.product_lines) + " lines in " + plural(code.product_files, "source file") + "."));
+    panel.appendChild(el("p", "charters-doc-lede", num(code.product_lines)
+      + " lines of product code in " + plural(code.product_files, "source file") + "."));
 
-    var mods = el("section", "charters-section charters-modules");
-    mods.appendChild(el("h2", "charters-section-title", "Lines by charter"));
-    var max = code.uncovered_module.lines;
-    code.modules.forEach(function (m) { if (m.lines > max) max = m.lines; });
-    var ul = el("ul", "charters-module-list");
-    code.modules.forEach(function (m) { ul.appendChild(barRow(m.charter, m.lines, m.files, max)); });
-    ul.appendChild(barRow("No charter", code.uncovered_module.lines,
-      code.uncovered_module.files, max));
-    mods.appendChild(ul);
+    var big = section("charters-largest", "Largest files");
+    if (code.largest_files.length) {
+      big.appendChild(figure("largest", largestChart(code.largest_files, ctx), guideLegend(FILE_GUIDE, "file")));
+    } else {
+      big.appendChild(el("p", "charters-prose", "There are no source files to show."));
+    }
+    panel.appendChild(big);
+
+    var mods = section("charters-modules", "Lines of code covered by each charter");
+    mods.appendChild(figure("modules", modulesChart(code, cov),
+      "Each row is one charter and the lines of the files it covers; the line under each bar "
+      + "names those files, or their folders with a count. A file covered by two charters "
+      + "counts in both rows."));
     if (code.modules_truncated) {
       mods.appendChild(el("p", "charters-note", "Showing the first " + code.modules.length + " charters."));
     }
     panel.appendChild(mods);
-
-    var big = el("section", "charters-section charters-largest");
-    big.appendChild(el("h2", "charters-section-title", "Largest files"));
-    var ol = el("ol", "charters-file-list");
-    code.largest_files.forEach(function (f) {
-      var li = el("li", "charters-file");
-      var main = el("div", "charters-file-main");
-      main.appendChild(el("code", "charters-file-path", f.path));
-      main.appendChild(el("span", "charters-file-meta", num(f.lines) + " lines · "
-        + (f.charters.length ? f.charters.join(", ") : "No charter")));
-      li.appendChild(main);
-      li.appendChild(actionButton("Open file",
-        function () { openFile(ctx.repoName, ctx.repoKey, f.path); }));
-      ol.appendChild(li);
-    });
-    big.appendChild(ol);
-    panel.appendChild(big);
-
-    var gaps = el("section", "charters-section charters-uncovered");
-    gaps.appendChild(el("h2", "charters-section-title", "Files without a charter"));
-    if (!cov.uncovered_files) {
-      gaps.appendChild(el("p", "charters-prose", "Every source file is covered by a charter."));
-    } else {
-      var gl = el("ul", "charters-uncovered-list");
-      cov.uncovered.forEach(function (p) { gl.appendChild(el("li", null)).appendChild(el("code", null, p)); });
-      gaps.appendChild(gl);
-      if (cov.uncovered_files > cov.uncovered.length) {
-        gaps.appendChild(el("p", "charters-note",
-          "and " + num(cov.uncovered_files - cov.uncovered.length) + " more."));
-      }
-    }
-    panel.appendChild(gaps);
   }
+
 
   window.GatorViews.charters = function (data, container, repoName, repoKey) {
     var gen = ++mountGen;
@@ -385,6 +629,10 @@
     tablist.setAttribute("role", "tablist");
     tablist.setAttribute("aria-label", "Charters sections");
     bar.appendChild(tablist);
+    // The report feeds both Overview and Code, so its refresh sits with the tabs.
+    var refresh = el("button", "charters-action charters-refresh", "Refresh report");
+    refresh.type = "button";
+    bar.appendChild(refresh);
     root.appendChild(bar);
     var tabs = {}, panels = {};
     TABS.forEach(function (t) {
@@ -437,12 +685,7 @@
     var overview = panels.overview;
     var health = el("section", "charters-health");
     health.setAttribute("aria-label", "Charter health");
-    var healthHead = el("div", "charters-head");
-    healthHead.appendChild(el("h2", "charters-section-title", "Charter health"));
-    var refresh = el("button", "charters-action charters-refresh", "Refresh report");
-    refresh.type = "button";
-    healthHead.appendChild(refresh);
-    health.appendChild(healthHead);
+    health.appendChild(el("h2", "charters-doc-title", "Charter health"));
     var healthError = el("p", "charters-prose charters-health-error");
     healthError.setAttribute("role", "alert");
     healthError.hidden = true;
@@ -451,6 +694,7 @@
     health.appendChild(healthArea);
     overview.appendChild(health);
 
+    overview.appendChild(el("h2", "charters-doc-title charters-sync-title", "Charter sync"));
     var head = el("div", "charters-head");
     head.appendChild(el("p", "charters-prose charters-lede",
       "Keep the repository’s architecture guidance connected to its code."));
@@ -516,7 +760,7 @@
     function paintReport(r, freshness) {
       shown = r;
       health.dataset.report = freshness;
-      renderHealth(healthArea, r, freshness);
+      renderHealth(healthArea, r, freshness, ctx);
       renderCode(codePanel, r, ctx);
     }
     function paintNoReport(text) {

@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator update: pin the runtime to 2.36.0",
+  "change_type": "maintenance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "gator-update",
+    "runtime-pin"
+  ],
+  "commit": "959db994257f297e5f599db93a9fde88f83c5725",
+  "short_commit": "959db99",
+  "snippet_id": "snippet-959db994257f2",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "bfc1f8addb9ef07fce4f9e0fbbc45a4ebcae47b7",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-06T11:00:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/.gator-version",
+    ".gator/commit_draft.md",
+    ".gator/runtime-pin.json",
+    ".gator/session-snippets/2026-11-06-gator-bfc1f8addb9ef.json"
+  ],
+  "notes": [
+    "`gator update` advances this repository's governed runtime pin from 2.29.0 to",
+    "the installed 2.36.0, so the commit hooks run the current scripts and the",
+    "session-start warning about a newer CLI goes away. It also stops tracking",
+    "`.gator/commit_draft.md`, a hook-managed working file that is already",
+    "gitignored (#78); the file stays on disk.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}

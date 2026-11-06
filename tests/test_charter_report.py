@@ -68,6 +68,7 @@ def test_field_set_and_bounds(repo, monkeypatch):
     code = r["code"]
     assert code["product_lines"] == 7 and code["uncovered_module"] == {"files": 1, "lines": 1}
     assert [m["charter"] for m in code["modules"]] == ["lib", "mod"]   # ties broken by name
+    assert [(m["paths"], m["paths_truncated"]) for m in code["modules"]] ==         [(["lib/d/c.py"], False), (["src/a.py", "src/b.py"], False)]
     assert code["largest_files"] == [{"path": "lib/d/c.py", "lines": 3, "charters": ["lib"]},
                                      {"path": "src/a.py", "lines": 2, "charters": ["mod"]}]
     assert code["band"] in ("below", "within", "above") and code["target"]["min"] == 3

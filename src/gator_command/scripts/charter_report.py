@@ -28,6 +28,7 @@ from gator_core import get_version, import_sibling, resolve_charter_surface
 SCHEMA = "gator-charters-report-v1"
 ITEMS_MAX = 200
 UNCOVERED_MAX = 50
+MODULE_PATHS_MAX = 50
 LARGEST_MAX = 10
 PROBLEMS_MAX = 20
 TEXT_MAX = 300
@@ -286,9 +287,10 @@ def build_report(repo_root):
                              "message": _text(f"{f} could not be read: {exc.strerror or exc}")})
     index = coverage_index(files, parsed)
 
-    items = []
+    items, covered_by = [], {}
     for c in parsed:
         covered = [f for f in files if c["name"] in index.get(f, ())]
+        covered_by[c["name"]] = covered
         items.append({
             "name": c["name"], "path": _rel(c["file"], repo), "lines": c["line_count"],
             "documented_functions": len(c["functions"]), "covers_entries": len(c["covers"]),
@@ -300,7 +302,10 @@ def build_report(repo_root):
     ratio = _pct(charter_lines, product_lines)
 
     modules = sorted(({"charter": i["name"], "files": i["covered_files"],
-                       "lines": i["covered_lines"]} for i in items),
+                       "lines": i["covered_lines"],
+                       "paths": covered_by[i["name"]][:MODULE_PATHS_MAX],
+                       "paths_truncated": len(covered_by[i["name"]]) > MODULE_PATHS_MAX}
+                      for i in items),
                      key=lambda m: (-m["lines"], m["charter"]))
     largest = sorted(files, key=lambda f: (-lines[f], f))[:LARGEST_MAX]
 

@@ -95,14 +95,19 @@ def test_first_visit_then_completed_result(page, dashboard_fleet):
     assert posts == ["1"]                               # the Dashboard header
     assert _text(page, ".charters-state-word") == "Needs review"
     assert _text(page, ".charters-headline") == RESULT["headline"]
-    counts = page.evaluate("""() => Array.from(document.querySelectorAll('.charters-count'))
-        .map(c => c.innerText.replace(/\\s+/g, ' ').trim())""")
-    assert counts == ["5 current", "3 needs review", "1 missing charter source files"]
-    assert "3 commits examined · 1 changed governed code without a charter update" \
-        in _text(page, ".charters-commits")
-    assert page.locator(".charters-attention > .charters-findings > li").count() == 8
-    assert _text(page, ".charters-more-summary") == "Show all (10)"
-    assert _text(page, ".charters-report-path") == RESULT["artifact_path"]
+    def legend(key):
+        return [" ".join(t.split()) for t in
+                page.locator(f".charters-donut[data-donut='{key}'] .charters-donut-item").all_inner_texts()]
+    def center(key):
+        return page.locator(f".charters-donut[data-donut='{key}'] .charters-donut-value").text_content()
+    assert legend("sync") == ["5 charters current", "3 charters need review"]
+    assert center("sync") == "63%"
+    assert _text(page, ".charters-missing") == "1 source file has no charter."
+    assert legend("commits") == ["2 commits kept charters in step",
+                                 "1 commit changed governed code without a charter update"]
+    assert center("commits") == "67%"
+    assert page.locator(".charters-attention, .charters-finding").count() == 0   # no per-group list
+    assert page.locator(".charters-report").count() == 0      # no saved-report line or button
     assert page.evaluate("""() => Array.from(document.querySelectorAll('.charters-dot'))
         .every(d => d.getAttribute('aria-hidden') === 'true')""")
 
@@ -166,15 +171,20 @@ def _wait_selected(page, logical):
         " return !!s && s.selectedFile === p; }", arg=logical, timeout=15000)
 
 
-def test_open_charter_selects_that_file(page, dashboard_fleet):
-    _stub(page, dict(RESULT, findings=[GROUP], groups_total=1))
+def test_open_file_selects_that_file(page, dashboard_fleet):
+    _stub(page, RESULT)
+    _stub_report(page, _report("current"))       # largest file: .gator/mission.md
     _open_charters(page, dashboard_fleet)
-    page.click(".charters-finding .charters-action:has-text('Open charter')")
+    _wait_report(page, "current")
+    page.click("#charters-view-tab-code")
+    page.click(".charters-file-row")        # the chart row is the link
     _wait_selected(page, "mission.md")
     assert page.evaluate("() => document.getElementById('topbar-title').textContent") == "Repo"
 
 
-def test_new_report_opens_over_a_cached_listing(page, dashboard_fleet_mutable):
+def test_real_run_then_open_file_over_a_cached_listing(page, dashboard_fleet_mutable):
+    """A real sync run paints its saved report path, and a chart row opens its
+    file in Repo even when Repo's listing is already cached (explicit open)."""
     fleet = dashboard_fleet_mutable
     keys = _keys(page, fleet)
     page.goto(_origin(fleet), wait_until="load")
@@ -187,22 +197,17 @@ def test_new_report_opens_over_a_cached_listing(page, dashboard_fleet_mutable):
     page.click("#charters-tab")
     page.wait_for_selector(".charters-view[data-loaded='true']", timeout=15000)
     page.click(".charters-run")
-    page.wait_for_selector(".charters-report-path", timeout=60000)
-    report = _text(page, ".charters-report-path")
-    assert report.startswith(".gator/artifacts/") and report.endswith(".md")
+    page.wait_for_selector(".charters-band", timeout=60000)     # the real run painted its result
 
-    requested = []
-    page.on("request", lambda r: requested.append(r.url))
-    page.click(".charters-report .charters-action")
-    logical = report[len(".gator/"):]
+    page.wait_for_selector(".charters-health[data-report='current']:not([data-refreshing])",
+                           timeout=60000)
+    page.click("#charters-view-tab-code")
+    row = page.locator(".charters-file-row").first
+    path = row.get_attribute("aria-label")[len("Open "):].split(",")[0]
+    logical = path[len(".gator/"):] if path.startswith(".gator/") else path
+    row.click()
     _wait_selected(page, logical)
-    page.wait_for_function(
-        "() => (document.getElementById('repo-file-content') || {}).textContent"
-        "  && document.getElementById('repo-file-content').textContent.includes('Charter sync report')",
-        timeout=15000)
-    assert page.locator(f'#repo-file-list .repo-file-item.active[data-path="{logical}"]').count() == 1
-    files = [u for u in requested if "/file/" in u]
-    assert files and all(logical.split("/")[-1] in u for u in files), files
+    assert page.evaluate("() => document.getElementById('topbar-title').textContent") == "Repo"
 
     page.go_back()
     page.wait_for_selector(".charters-view", timeout=15000)
@@ -228,14 +233,24 @@ REPORT = {
     "generated_at": "2026-11-06T02:00:00Z", "gator_version": "2.36.0",
     "inputs": {"fingerprint": "a" * 64, "head": "b" * 40, "revision": "b" * 12},
     "charters": {"count": 22, "lines": 4819, "documented_functions": 313,
-                 "charter_dir": ".gator/charters", "items": [], "items_truncated": False},
+                 "charter_dir": ".gator/charters", "items_truncated": False,
+                 "items": [{"name": "scripts-layout", "path": ".gator/mission.md", "lines": 96,
+                            "documented_functions": 4, "covers_entries": 1,
+                            "covered_files": 1, "covered_lines": 499},
+                           {"name": "scripts-loop", "path": ".gator/roadmap.md", "lines": 1134,
+                            "documented_functions": 60, "covers_entries": 2,
+                            "covered_files": 11, "covered_lines": 10252}]},
     "coverage": {"grammar": "gator-covers-v1", "source_files": 224, "covered_files": 221,
                  "uncovered_files": 3, "percent": 98.7,
                  "uncovered": ["tools/a.py", "tools/b.py"], "uncovered_truncated": True},
     "code": {"product_files": 224, "product_lines": 81995, "charter_to_code_pct": 5.9,
              "target": {"min": 3, "max": 6, "source": "constitution"}, "band": "within",
-             "modules": [{"charter": "scripts-dashboard", "files": 12, "lines": 9000},
-                         {"charter": "scripts-loop", "files": 9, "lines": 4500}],
+             "modules": [{"charter": "scripts-dashboard", "files": 12, "lines": 9000,
+                          "paths": [f"src/app/dashboard/m{i}.py" for i in range(9)]
+                          + ["src/app/views/a.js", "src/app/views/b.js", "src/gator.py"],
+                          "paths_truncated": False},
+                         {"charter": "scripts-loop", "files": 2, "lines": 4500,
+                          "paths": ["src/loop/cli.py", "src/loop/host.py"], "paths_truncated": False}],
              "modules_truncated": False, "uncovered_module": {"files": 3, "lines": 120},
              "largest_files": [{"path": ".gator/mission.md", "lines": 4737,
                                 "charters": ["scripts-dashboard"]}]},
@@ -270,9 +285,12 @@ def _report(freshness, **changes):
     return {"state": "report", "freshness": freshness, "report": dict(REPORT, **changes)}
 
 
-def _tiles(page):
-    return page.evaluate("""() => Array.from(document.querySelectorAll('.charters-tile'))
-        .map(t => t.innerText.replace(/\\s+/g, ' ').trim())""")
+def _lede(page):
+    return " ".join(_text(page, "#charters-panel-overview .charters-doc-lede").split())
+
+
+def _caption(page, key):
+    return " ".join(_text(page, f".charters-figure[data-figure='{key}'] .charters-caption").split())
 
 
 def _wait_report(page, state):
@@ -280,17 +298,30 @@ def _wait_report(page, state):
                            timeout=10000)
 
 
-def test_cache_hit_paints_tiles_in_words_without_a_refresh(page, dashboard_fleet):
+def test_cache_hit_paints_the_report_in_words_without_a_refresh(page, dashboard_fleet):
     _stub(page, RESULT)
     posts, _ = _stub_report(page, _report("current"))
     _open_charters(page, dashboard_fleet)
     _wait_report(page, "current")
-    assert _tiles(page) == ["Charters 22 4,819 lines · 313 documented functions",
-                            "Charter size vs code 5.9% ✓ In range target 3–6%",
-                            "Files without a charter 3 of 224 source files"]
+    assert _lede(page) == "22 charters describe 221 of 224 source files; 3 have no charter yet."
+    assert _caption(page, "size") == ("4,819 charter lines are 5.9% of 81,995 lines of product code. "
+                                      "✓ In range Target 3–6%. The charters document 313 functions.")
+    assert _caption(page, "coverage") == "221 covered · 3 without a charter · 98.7% covered."
     assert "✓ Current From the charter report" in _text(page, ".charters-provenance")
-    assert page.evaluate("""() => Array.from(document.querySelectorAll(
-        '.charters-mark-symbol, .charters-bar')).every(e => e.getAttribute('aria-hidden') === 'true')""")
+    # Every figure is an image with a text alternative and hover text; symbols are hidden.
+    assert page.evaluate("""() => Array.from(document.querySelectorAll('.charters-chart'))
+        .every(s => ['img', 'group'].includes(s.getAttribute('role')) && s.getAttribute('aria-label'))""")
+    assert page.locator(".charters-figure[data-figure='size'] title").count() >= 2
+    assert page.evaluate("""() => Array.from(document.querySelectorAll('.charters-mark-symbol'))
+        .every(e => e.getAttribute('aria-hidden') === 'true')""")
+    # Coverage donut: the percent in the middle, both counts in words beside it.
+    assert page.locator(".charters-donut[data-donut='coverage'] .charters-donut-value").text_content() == "98.7%"
+    assert [" ".join(t.split()) for t in page.locator(".charters-donut[data-donut='coverage'] .charters-donut-item").all_inner_texts()] ==         ["221 covered by a charter", "3 without a charter"]
+    # Charters by size: largest first, oversize in words, each row opens its charter.
+    rows = page.locator(".charters-charter-row")
+    assert [rows.nth(i).get_attribute("aria-label") for i in range(rows.count())] == [
+        "Open .gator/roadmap.md, 1,134 lines, over 600 lines",
+        "Open .gator/mission.md, 96 lines"]
     page.wait_for_timeout(500)
     assert posts == []                                    # a current cache is never refreshed
     assert _text(page, ".charters-headline") == RESULT["headline"]   # sync section unchanged
@@ -303,14 +334,14 @@ def test_stale_report_refreshes_exactly_once(page, dashboard_fleet, after):
     _open_charters(page, dashboard_fleet)
     page.wait_for_selector(".charters-health[data-report='stale']", timeout=10000)
     assert "▲ Stale" in _text(page, ".charters-provenance")       # cached figures, labelled
-    assert _tiles(page)[0].startswith("Charters 22")
+    assert _lede(page).startswith("22 charters")
     page.wait_for_function("() => document.querySelector('.charters-refresh').disabled")
     assert posts == ["1"] and len(held) == 1
     held[0].fulfill(status=200, content_type="application/json",
                     body=json.dumps(dict(_report(after, charters=dict(REPORT["charters"], count=23)),
                                          persisted=True)))
     _wait_report(page, after)
-    assert _tiles(page)[0].startswith("Charters 23")
+    assert _lede(page).startswith("23 charters")
     page.wait_for_timeout(500)
     assert posts == ["1"]                                 # never a second automatic refresh
 
@@ -322,13 +353,13 @@ def test_refresh_failure_keeps_the_cached_figures(page, dashboard_fleet):
     page.wait_for_selector(".charters-health-error:not([hidden])", timeout=10000)
     alert = _text(page, ".charters-health-error")
     assert alert.startswith("Refresh failed: boom.") and "Figures shown are from" in alert
-    assert _tiles(page)[0].startswith("Charters 22")
+    assert _lede(page).startswith("22 charters")
     assert page.locator(".charters-refresh").is_enabled()
     assert page.locator(".charters-error").is_hidden()   # the sync alert is separate
 
 
 @pytest.mark.parametrize("get_body, refreshes, expect", [
-    ({"state": "none"}, 1, "Charters 22"),
+    ({"state": "none"}, 1, "22 charters describe"),
     ({"state": "unavailable", "message": "Not gatorized here."}, 0, "Not gatorized here."),
 ])
 def test_first_build_and_unavailable(page, dashboard_fleet, get_body, refreshes, expect):
@@ -352,9 +383,25 @@ def test_tabs_by_keyboard_show_code_and_features(page, dashboard_fleet):
     assert page.get_attribute("#charters-view-tab-code", "aria-selected") == "true"
     assert page.locator("#charters-panel-overview").is_hidden()
     code = _text(page, "#charters-panel-code")
-    assert "Product code: 81,995 lines in 224 source files." in code
-    assert "9,000 lines · 12 files" in code and "No charter" in code
-    assert "and 1 more." in code                          # 3 uncovered, 2 listed
+    assert "81,995 lines of product code in 224 source files." in code
+    sections = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '#charters-panel-code h2')).map(h => h.textContent)""")
+    assert sections == ["Largest files", "Lines of code covered by each charter"]
+    rows = page.evaluate("""() => Array.from(document.querySelectorAll(
+        '.charters-figure[data-figure="modules"] .charters-row')).map(g =>
+        [g.querySelector('.charters-chart-label').textContent,
+         g.querySelector('.charters-chart-value').textContent,
+         (g.querySelector('.charters-chart-sub') || {}).textContent || null])""")
+    assert rows == [
+        ["scripts-dashboard", "9,000", "app/dashboard/ (9), app/views/ (2), src/ (1)"],
+        ["scripts-loop", "4,500", "loop/cli.py, loop/host.py"],
+        ["No charter", "120", "tools/ (2) (first 2 files)"]]   # truncated: grouped by folder
+    title = page.locator(".charters-figure[data-figure='modules'] .charters-row title").first.text_content()
+    assert title.startswith("scripts-dashboard: 9,000 lines in 12 files\nsrc/app/dashboard/m0.py")
+    largest = page.locator(".charters-file-row").first
+    assert largest.get_attribute("role") == "link" and largest.get_attribute("tabindex") == "0"
+    assert largest.get_attribute("aria-label") == "Open .gator/mission.md, 4,737 lines, over 4,000 lines"
+    assert largest.locator(".charters-chart-symbol").text_content() == "■"   # size band also as a symbol
     page.keyboard.press("End")
     assert "A feature map is planned for a later release." in _text(page, "#charters-panel-features")
     page.keyboard.press("Home")

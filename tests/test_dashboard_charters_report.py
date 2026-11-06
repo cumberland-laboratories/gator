@@ -157,6 +157,16 @@ def test_record_keeps_only_allowlisted_fields(serve, repo, producer):
     assert saved == ran["report"]
 
 
+def test_a_record_from_before_module_paths_still_loads(repo):
+    """`modules[].paths` is additive in v1: an older record sanitizes without it."""
+    r = charter_report.build_report(repo)
+    for m in r["code"]["modules"]:
+        del m["paths"], m["paths_truncated"]
+    clean = relay.sanitize(r)
+    assert clean is not None
+    assert all(m["paths"] == [] and m["paths_truncated"] is False for m in clean["code"]["modules"])
+
+
 def _bad_path(path):
     r = charter_report.build_report(path)
     r["coverage"]["uncovered"] = ["../outside.py"]

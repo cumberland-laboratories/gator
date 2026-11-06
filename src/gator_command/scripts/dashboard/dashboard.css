@@ -3985,8 +3985,7 @@ textarea.loop-ctrl-input {
 }
 .charters-action:hover { background: var(--gray-100); }
 .charters-run:focus-visible,
-.charters-action:focus-visible,
-.charters-more-summary:focus-visible {
+.charters-action:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -4018,11 +4017,6 @@ textarea.loop-ctrl-input {
 .charters-state { font-size: var(--text-section); font-weight: 700; color: var(--gray-900); }
 .charters-checked { font-size: var(--text-sm); color: var(--gray-600); margin-left: auto; }
 .charters-headline { color: var(--gray-800); }
-.charters-counts { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); }
-.charters-count { display: flex; flex-direction: column; min-width: 96px; }
-.charters-count-n { font-size: var(--text-section); font-weight: 700; color: var(--gray-900); }
-.charters-count-label { font-size: var(--text-ui); color: var(--gray-700); }
-.charters-count-unit { font-size: var(--text-sm); color: var(--gray-500); }
 .charters-dot {
   display: inline-block;
   width: 10px;
@@ -4042,60 +4036,27 @@ textarea.loop-ctrl-input {
   font-weight: 600;
   color: var(--gray-900);
 }
-.charters-findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.charters-finding {
-  display: flex;
-  align-items: flex-start;
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--gray-200);
-}
-.charters-finding > .charters-dot { margin-top: 7px; flex: 0 0 auto; }
-.charters-finding-main { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; flex: 1; }
-.charters-finding-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); }
-.charters-finding-label {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--gray-900);
-  overflow-wrap: anywhere;
-}
-.charters-finding-count { font-size: var(--text-sm); color: var(--gray-600); }
-.charters-finding-message { color: var(--gray-700); }
-.charters-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-top: var(--space-1); }
-.charters-more-summary {
-  font-size: var(--text-ui);
-  font-weight: 600;
-  color: var(--teal-ink);
-  cursor: pointer;
-  padding: var(--space-2) 0;
-}
 .charters-note { margin: 0; font-size: var(--text-sm); color: var(--gray-600); }
-.charters-report {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--gray-600);
-}
-.charters-report-path {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--gray-800);
-  overflow-wrap: anywhere;
-}
 /* Charters tabs and the charter report (charters-health-section). The tab
    bar reuses .gator-tabbar inside the view; panels stack their sections.
    Every status is a symbol plus a word; the bars are aria-hidden. */
-.charters-tabbar { padding: 0; }
+.charters-tabbar {
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.charters-tabbar .charters-refresh { margin-bottom: 4px; }
 .charters-tablist { display: flex; flex-wrap: wrap; gap: 4px; }
-.charters-panel { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.charters-panel { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 .charters-panel[hidden] { display: none; }
 .charters-panel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
 .charters-measured-summary { font-size: var(--text-sm); color: var(--gray-700); cursor: pointer; }
 .charters-measured-summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .charters-health { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
-.charters-health-area { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.charters-health-area { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .charters-health-area > .charters-prose { color: var(--gray-700); }
 .charters-health-error {
   color: var(--gray-900);
@@ -4104,47 +4065,92 @@ textarea.loop-ctrl-input {
   padding: var(--space-2) var(--space-3);
 }
 .charters-refresh:disabled { opacity: .7; cursor: progress; }
-.charters-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-3);
-}
-.charters-tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  min-width: 0;
-}
-.charters-tile-label { font-size: var(--text-sm); color: var(--gray-600); }
-.charters-tile-value { font-size: var(--text-section); font-weight: 700; color: var(--gray-900); }
-.charters-tile-status { font-weight: 600; color: var(--gray-800); }
-.charters-tile-sub { font-size: var(--text-sm); color: var(--gray-600); }
 .charters-provenance { margin: 0; font-size: var(--text-sm); color: var(--gray-600); }
 .charters-freshness { font-weight: 600; color: var(--gray-800); }
 .charters-measured-list,
 .charters-problems { margin: var(--space-2) 0 0; padding-left: 20px; font-size: var(--text-sm); color: var(--gray-700); }
-.charters-module-list,
-.charters-file-list,
-.charters-uncovered-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-.charters-module { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.charters-module-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); }
-.charters-module-name { font-weight: 600; color: var(--gray-900); overflow-wrap: anywhere; }
-.charters-module-size { font-size: var(--text-sm); color: var(--gray-600); }
-.charters-bar { display: block; height: 6px; border-radius: 3px; background: var(--gray-300); }
-.charters-file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.charters-file-main { display: flex; flex-direction: column; min-width: 0; }
-.charters-file-path,
-.charters-uncovered-list code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--gray-800);
-  overflow-wrap: anywhere;
+/* Cumberland reading style for the report pages (the Welcome documents'
+   lede, ruled section headings and figure cards), drawn in the view. */
+.charters-doc-lede {
+  margin: 0;
+  max-width: 52rem;
+  font-size: 1.3rem;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--gray-900);
 }
-.charters-file-meta { font-size: var(--text-sm); color: var(--gray-600); }
+.charters-doc-title {
+  margin: 0;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+.charters-sync-title { margin-top: var(--space-4); }
+.charters-doc-section { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.charters-figure {
+  margin: 0;
+  padding: 1.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  min-width: 0;
+}
+.charters-chart { display: block; width: 100%; height: auto; }
+.charters-caption {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--gray-600);
+}
+.charters-figure-status { font-weight: 600; color: var(--gray-800); }
+/* Chart marks: one series in the validated Cumberland teal (#0e9aa6, the
+   Welcome documents' chart colour); "No charter" is the neutral gray and
+   always carries its own text label. */
+.charters-fill { fill: #0e9aa6; }
+.charters-fill-none { fill: #9ca3af; }
+.charters-band-fill { fill: rgba(25, 174, 184, 0.16); stroke: #0e9aa6; stroke-width: 1; stroke-dasharray: 3 3; }
+.charters-marker { fill: var(--gray-900); }
+.charters-axis { stroke: var(--gray-300); stroke-width: 1; }
+.charters-hit { fill: transparent; }
+.charters-row:hover .charters-fill { fill: #0b7d87; }
+/* Largest files: size bands are fill plus a symbol (■ / ▲), validated with
+   the teal; the dashed guide is a reading aid, not a rule. */
+.charters-fill-over { fill: #d4880f; }
+.charters-fill-large { fill: #d94040; }
+.charters-track { fill: var(--gray-100); }
+.charters-guide { stroke: var(--gray-800); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.charters-chart-path { font-family: var(--font-mono); font-size: 12px; }
+.charters-chart-symbol { font-size: 12px; fill: var(--gray-800); }
+.charters-link-row { cursor: pointer; outline: none; }
+.charters-link-row:hover .charters-hit { fill: var(--gray-50); }
+.charters-link-row:focus-visible .charters-hit { stroke: var(--focus-ring); stroke-width: 2; }
+/* Coverage donut: covered teal, uncovered neutral gray, the percent in the
+   middle and both counts in the legend (the swatches are aria-hidden). */
+.charters-donut { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
+.charters-donut-chart { width: 168px; height: 168px; flex: 0 0 auto; }
+.charters-stroke { stroke: #0e9aa6; }
+.charters-stroke-none { stroke: #9ca3af; }
+.charters-donut-empty { stroke: var(--gray-200); }
+.charters-donut-value { font-size: 24px; font-weight: 700; fill: var(--gray-900); }
+.charters-donut-unit { font-size: 12px; fill: var(--gray-600); }
+.charters-donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.charters-donut-item { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-base); color: var(--gray-800); }
+.charters-swatch { width: 12px; height: 12px; border-radius: 3px; background: #0e9aa6; flex: 0 0 auto; }
+.charters-swatch-none { background: #9ca3af; }
+/* "Needs review" / "out of step" parts: the validated amber, always beside
+   its count in words. */
+.charters-stroke-review { stroke: #d4880f; }
+.charters-swatch-review { background: #d4880f; }
+.charters-band .charters-donut { padding: var(--space-2) 0; }
+.charters-missing { margin-top: calc(-1 * var(--space-2)); }
+.charters-legend-item { margin-right: var(--space-3); }
+.charters-chart-label { font-size: 12px; fill: var(--gray-800); }
+.charters-chart-value { font-size: 12px; fill: var(--gray-700); }
+.charters-chart-tick { font-size: 11px; fill: var(--gray-500); }
+.charters-chart-note { font-size: 11px; fill: var(--gray-600); }
+.charters-chart-sub { font-size: 11px; fill: var(--gray-600); }
 @media (max-width: 768px) {
   .charters-checked { margin-left: 0; }
   .charters-band { padding: var(--space-3) var(--space-4); }
