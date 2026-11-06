@@ -30,6 +30,7 @@ from pathlib import Path
 from gator_core import (
     get_version, find_gator_root, ensure_utf8_stdout, git, import_sibling,
 )
+from charter_covers import coverage_index
 
 VERSION = get_version()
 
@@ -223,7 +224,10 @@ def verify(repo_root, gator_dir, dirs=None, changed_only=False):
 
     # Parse existing charters
     charter_dirs = find_charter_dirs(repo_root)
-    coverage_map, charter_functions, charter_function_files, charters = parse_charters(charter_dirs)
+    _, charter_functions, charter_function_files, charters = parse_charters(charter_dirs)
+    # Resolve Covers entries (exact, directory prefix, or glob) against the
+    # discovered files through the shared grammar (#88): file -> charter names.
+    coverage_map = coverage_index(all_files, charters)
 
     # Analyze source files (all supported languages)
     analyses = {}
@@ -371,16 +375,13 @@ def _check_function_gaps(analyses, coverage_map, charter_functions):
 
 
 def _check_complexity_mismatch(analyses, coverage_map, charters):
-    """Find complex files with unusually thin charters."""
+    """Find complex files with unusually thin charters.
+
+    `coverage_map` is the resolved `{file: [charter names]}` index.
+    """
     findings = []
 
-    # Build charter line count map
-    charter_lines = {}
-    for c in charters:
-        for src_path in c["covers"]:
-            # Use the charter with the most lines if multiple cover this file
-            if src_path not in charter_lines or c["line_count"] > charter_lines[src_path]:
-                charter_lines[src_path] = c["line_count"]
+    line_counts = {c["name"]: c["line_count"] for c in charters}
 
     for rel_path, analysis in analyses.items():
         if rel_path not in coverage_map:
@@ -389,8 +390,9 @@ def _check_complexity_mismatch(analyses, coverage_map, charters):
         c = analysis["complexity"]
         # Heuristic: file has significant complexity
         is_complex = (c["functions"] >= 8 or c["classes"] >= 2 or c["lines"] >= 300)
-        # Charter is thin (less than 30 lines suggests minimal documentation)
-        charter_lc = charter_lines.get(rel_path, 0)
+        # Charter is thin (less than 30 lines suggests minimal documentation).
+        # Use the longest of the charters that cover this file.
+        charter_lc = max(line_counts.get(n, 0) for n in coverage_map[rel_path])
         is_thin = charter_lc < 30
 
         if is_complex and is_thin:

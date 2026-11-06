@@ -79,11 +79,14 @@ include-package-data = false
 # Architect direction to keep all Enterprise pieces in one place.
 [tool.setuptools.package-data]
 gator_command = [
+    "scripts/charter_covers.py",
+    "scripts/charter_report.py",
     "scripts/gator-audit.py",
     "scripts/gator-audit-renderers.py",
     "scripts/gator-charter-draft.py",
     "scripts/gator-charter-lint.py",
     "scripts/gator-charter-verify.py",
+    "scripts/gator-charters.py",
     "scripts/gator-dashboard.py",
     "scripts/gator-drift.py",
     "scripts/gator-enforce.py",

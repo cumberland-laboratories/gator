@@ -77,6 +77,7 @@ COMMANDS = {
     "loop":       ("gator-loop.py",          "Run a governed planning loop"),
     "enterprise": ("gator-enterprise.py",    "Manage Enterprise capability (setup, status, sync, ...)"),
     "state":      ("gator-state.py",         "Report repo state (constitution drift, native agent files)"),
+    "charters":   ("gator-charters.py",      "Report charter health (read-only)"),
 }
 
 
@@ -95,6 +96,7 @@ def main():
             "  gator init             Start a governed session\n"
             "  gator dashboard        Launch the governance dashboard\n"
             "  gator pulse            Generate the strategic operations brief\n"
+            "  gator charters report  Report charter health (add --json for JSON)\n"
             "  gator enterprise       Manage Enterprise capability\n"
         ),
     )

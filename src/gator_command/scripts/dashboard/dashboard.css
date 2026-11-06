@@ -4084,6 +4084,67 @@ textarea.loop-ctrl-input {
   color: var(--gray-800);
   overflow-wrap: anywhere;
 }
+/* Charters tabs and the charter report (charters-health-section). The tab
+   bar reuses .gator-tabbar inside the view; panels stack their sections.
+   Every status is a symbol plus a word; the bars are aria-hidden. */
+.charters-tabbar { padding: 0; }
+.charters-tablist { display: flex; flex-wrap: wrap; gap: 4px; }
+.charters-panel { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.charters-panel[hidden] { display: none; }
+.charters-panel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
+.charters-measured-summary { font-size: var(--text-sm); color: var(--gray-700); cursor: pointer; }
+.charters-measured-summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.charters-health { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.charters-health-area { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.charters-health-area > .charters-prose { color: var(--gray-700); }
+.charters-health-error {
+  color: var(--gray-900);
+  background: var(--amber-light);
+  border-left: 3px solid var(--color-drifted);
+  padding: var(--space-2) var(--space-3);
+}
+.charters-refresh:disabled { opacity: .7; cursor: progress; }
+.charters-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+.charters-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  min-width: 0;
+}
+.charters-tile-label { font-size: var(--text-sm); color: var(--gray-600); }
+.charters-tile-value { font-size: var(--text-section); font-weight: 700; color: var(--gray-900); }
+.charters-tile-status { font-weight: 600; color: var(--gray-800); }
+.charters-tile-sub { font-size: var(--text-sm); color: var(--gray-600); }
+.charters-provenance { margin: 0; font-size: var(--text-sm); color: var(--gray-600); }
+.charters-freshness { font-weight: 600; color: var(--gray-800); }
+.charters-measured-list,
+.charters-problems { margin: var(--space-2) 0 0; padding-left: 20px; font-size: var(--text-sm); color: var(--gray-700); }
+.charters-module-list,
+.charters-file-list,
+.charters-uncovered-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.charters-module { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.charters-module-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); }
+.charters-module-name { font-weight: 600; color: var(--gray-900); overflow-wrap: anywhere; }
+.charters-module-size { font-size: var(--text-sm); color: var(--gray-600); }
+.charters-bar { display: block; height: 6px; border-radius: 3px; background: var(--gray-300); }
+.charters-file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.charters-file-main { display: flex; flex-direction: column; min-width: 0; }
+.charters-file-path,
+.charters-uncovered-list code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gray-800);
+  overflow-wrap: anywhere;
+}
+.charters-file-meta { font-size: var(--text-sm); color: var(--gray-600); }
 @media (max-width: 768px) {
   .charters-checked { margin-left: 0; }
   .charters-band { padding: var(--space-3) var(--space-4); }

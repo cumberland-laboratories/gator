@@ -9,11 +9,10 @@ edits a charter, source file, Git history or commit message.
 `read_last()` returns the recorded summary, re-validated field by field, or
 None. The report is the evidence; the record is only a display cache.
 
-Imports only `dashboard.helpers`, `gator_core`, `gator_layout` and the
-standard library. It never imports `gator-dashboard.py`.
+Imports only `dashboard.helpers`, `charter_covers`, `gator_core`,
+`gator_layout` and the standard library. It never imports `gator-dashboard.py`.
 """
 
-import fnmatch
 import json
 import os
 import re
@@ -22,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dashboard.helpers import git_run, run_json
+# The shared Covers grammar (#88); `covers_match` stays a module-level name.
+from charter_covers import covers_match
 
 VERIFY_TIMEOUT = 60
 COMMIT_LIMIT = 20
@@ -207,23 +208,6 @@ def _revision(repo):
 # Commit coverage
 # ---------------------------------------------------------------------------
 
-def covers_match(path, entry):
-    """True when repo-relative POSIX `path` is named by one `Covers` entry.
-
-    Closed grammar: an entry containing `*`, `?` or `[` is an `fnmatch`
-    pattern over the full path (never the basename alone); an entry ending
-    in `/` is a directory prefix; anything else is an exact path.
-    """
-    entry = entry.strip().replace("\\", "/")
-    if entry.startswith("./"):
-        entry = entry[2:]
-    if not entry:
-        return False
-    if any(c in entry for c in "*?["):
-        return fnmatch.fnmatchcase(path, entry)
-    if entry.endswith("/"):
-        return path.startswith(entry)
-    return path == entry
 
 
 def _charter_dir_rel(repo):

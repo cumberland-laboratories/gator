@@ -219,3 +219,161 @@ def test_page_fits_a_narrow_screen(page, dashboard_fleet):
         return v.scrollWidth <= v.clientWidth + 1
             && slot.scrollWidth <= slot.clientWidth + 1
             && document.documentElement.scrollWidth <= window.innerWidth; }""")
+
+
+# ── Charter report: Overview, Code and Features (charters-health-section) ──
+
+REPORT = {
+    "schema": "gator-charters-report-v1", "status": "complete",
+    "generated_at": "2026-11-06T02:00:00Z", "gator_version": "2.36.0",
+    "inputs": {"fingerprint": "a" * 64, "head": "b" * 40, "revision": "b" * 12},
+    "charters": {"count": 22, "lines": 4819, "documented_functions": 313,
+                 "charter_dir": ".gator/charters", "items": [], "items_truncated": False},
+    "coverage": {"grammar": "gator-covers-v1", "source_files": 224, "covered_files": 221,
+                 "uncovered_files": 3, "percent": 98.7,
+                 "uncovered": ["tools/a.py", "tools/b.py"], "uncovered_truncated": True},
+    "code": {"product_files": 224, "product_lines": 81995, "charter_to_code_pct": 5.9,
+             "target": {"min": 3, "max": 6, "source": "constitution"}, "band": "within",
+             "modules": [{"charter": "scripts-dashboard", "files": 12, "lines": 9000},
+                         {"charter": "scripts-loop", "files": 9, "lines": 4500}],
+             "modules_truncated": False, "uncovered_module": {"files": 3, "lines": 120},
+             "largest_files": [{"path": ".gator/mission.md", "lines": 4737,
+                                "charters": ["scripts-dashboard"]}]},
+    "sync": {"state": "none"},
+    "measurement": {"lines": "Physical lines (newline count) of each source file."},
+    "problems": [],
+}
+
+
+def _stub_report(page, get_body, post=None, hold=False):
+    """Answer the report GET with `get_body`; POST with `post` = (status, body).
+
+    With `hold`, POSTs are held (returned in `held`) instead of answered.
+    """
+    posts, held = [], []
+
+    def handler(route):
+        if route.request.method == "POST":
+            posts.append(route.request.headers.get("x-gator-dashboard"))
+            if hold:
+                held.append(route)
+                return
+            status, body = post
+            route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
+        else:
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(get_body))
+    page.route("**/api/repo/alpha/charters-report", handler)
+    return posts, held
+
+
+def _report(freshness, **changes):
+    return {"state": "report", "freshness": freshness, "report": dict(REPORT, **changes)}
+
+
+def _tiles(page):
+    return page.evaluate("""() => Array.from(document.querySelectorAll('.charters-tile'))
+        .map(t => t.innerText.replace(/\\s+/g, ' ').trim())""")
+
+
+def _wait_report(page, state):
+    page.wait_for_selector(f".charters-health[data-report='{state}']:not([data-refreshing])",
+                           timeout=10000)
+
+
+def test_cache_hit_paints_tiles_in_words_without_a_refresh(page, dashboard_fleet):
+    _stub(page, RESULT)
+    posts, _ = _stub_report(page, _report("current"))
+    _open_charters(page, dashboard_fleet)
+    _wait_report(page, "current")
+    assert _tiles(page) == ["Charters 22 4,819 lines · 313 documented functions",
+                            "Charter size vs code 5.9% ✓ In range target 3–6%",
+                            "Files without a charter 3 of 224 source files"]
+    assert "✓ Current From the charter report" in _text(page, ".charters-provenance")
+    assert page.evaluate("""() => Array.from(document.querySelectorAll(
+        '.charters-mark-symbol, .charters-bar')).every(e => e.getAttribute('aria-hidden') === 'true')""")
+    page.wait_for_timeout(500)
+    assert posts == []                                    # a current cache is never refreshed
+    assert _text(page, ".charters-headline") == RESULT["headline"]   # sync section unchanged
+
+
+@pytest.mark.parametrize("after", ["current", "stale"])
+def test_stale_report_refreshes_exactly_once(page, dashboard_fleet, after):
+    _stub(page, RESULT)
+    posts, held = _stub_report(page, _report("stale"), hold=True)
+    _open_charters(page, dashboard_fleet)
+    page.wait_for_selector(".charters-health[data-report='stale']", timeout=10000)
+    assert "▲ Stale" in _text(page, ".charters-provenance")       # cached figures, labelled
+    assert _tiles(page)[0].startswith("Charters 22")
+    page.wait_for_function("() => document.querySelector('.charters-refresh').disabled")
+    assert posts == ["1"] and len(held) == 1
+    held[0].fulfill(status=200, content_type="application/json",
+                    body=json.dumps(dict(_report(after, charters=dict(REPORT["charters"], count=23)),
+                                         persisted=True)))
+    _wait_report(page, after)
+    assert _tiles(page)[0].startswith("Charters 23")
+    page.wait_for_timeout(500)
+    assert posts == ["1"]                                 # never a second automatic refresh
+
+
+def test_refresh_failure_keeps_the_cached_figures(page, dashboard_fleet):
+    _stub(page, RESULT)
+    _stub_report(page, _report("stale"), (500, {"state": "failed", "error": "boom"}))
+    _open_charters(page, dashboard_fleet)
+    page.wait_for_selector(".charters-health-error:not([hidden])", timeout=10000)
+    alert = _text(page, ".charters-health-error")
+    assert alert.startswith("Refresh failed: boom.") and "Figures shown are from" in alert
+    assert _tiles(page)[0].startswith("Charters 22")
+    assert page.locator(".charters-refresh").is_enabled()
+    assert page.locator(".charters-error").is_hidden()   # the sync alert is separate
+
+
+@pytest.mark.parametrize("get_body, refreshes, expect", [
+    ({"state": "none"}, 1, "Charters 22"),
+    ({"state": "unavailable", "message": "Not gatorized here."}, 0, "Not gatorized here."),
+])
+def test_first_build_and_unavailable(page, dashboard_fleet, get_body, refreshes, expect):
+    _stub(page, RESULT)
+    posts, _ = _stub_report(page, get_body, (200, dict(_report("current"), persisted=True)))
+    _open_charters(page, dashboard_fleet)
+    _wait_report(page, "current" if refreshes else "unavailable")
+    page.wait_for_timeout(300)
+    assert len(posts) == refreshes
+    assert expect in " ".join(_text(page, ".charters-health-area").split())
+    assert page.locator(".charters-refresh").is_visible() is bool(refreshes)
+
+
+def test_tabs_by_keyboard_show_code_and_features(page, dashboard_fleet):
+    _stub(page, RESULT)
+    _stub_report(page, _report("current"))
+    _open_charters(page, dashboard_fleet)
+    _wait_report(page, "current")
+    page.focus("#charters-view-tab-overview")
+    page.keyboard.press("ArrowRight")
+    assert page.get_attribute("#charters-view-tab-code", "aria-selected") == "true"
+    assert page.locator("#charters-panel-overview").is_hidden()
+    code = _text(page, "#charters-panel-code")
+    assert "Product code: 81,995 lines in 224 source files." in code
+    assert "9,000 lines · 12 files" in code and "No charter" in code
+    assert "and 1 more." in code                          # 3 uncovered, 2 listed
+    page.keyboard.press("End")
+    assert "A feature map is planned for a later release." in _text(page, "#charters-panel-features")
+    page.keyboard.press("Home")
+    assert page.locator("#charters-panel-overview").is_visible()
+
+
+def test_a_sync_run_waits_for_an_inflight_refresh(page, dashboard_fleet):
+    """Both POSTs take the same repository lock, so the view sends one at a time."""
+    sync_posts = _stub(page, RESULT, (200, dict(RESULT, headline="After refresh.", persisted=True)))
+    _, held = _stub_report(page, _report("stale"), hold=True)
+    _open_charters(page, dashboard_fleet)
+    page.wait_for_function("() => document.querySelector('.charters-refresh').disabled")
+    page.click(".charters-run")
+    page.wait_for_timeout(300)
+    assert sync_posts == [] and len(held) == 1
+    held[0].fulfill(status=200, content_type="application/json",
+                    body=json.dumps(dict(_report("current"), persisted=True)))
+    page.wait_for_function(
+        "() => document.querySelector('.charters-headline')"
+        " && document.querySelector('.charters-headline').textContent === 'After refresh.'",
+        timeout=10000)
+    assert sync_posts == ["1"]

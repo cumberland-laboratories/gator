@@ -731,12 +731,23 @@ The Docs view: the shipped Gator HTML documents, from the installed package, the
 ! The DOM is built with `createElement`/`textContent` only: no document text or label is interpolated into HTML.
 - **Pinned by** `tests/test_dashboard_ui/test_docs_view.py`.
 
-### GatorViews.charters() / renderResult() / renderIntro() / renderUnavailable() / findingItem() / openFile() / toLogical() (Charters view, charters-sidebar-sync)
+### GatorViews.charters() / renderResult() / renderIntro() / renderUnavailable() / findingItem() / openFile() / toLogical() / renderHealth() / renderCode() / mark() / tile() / barRow() (Charters view, charters-sidebar-sync; charters-health-section)
 File: src/gator_command/scripts/dashboard/views/charters.js
-The Charters page: the charter sync check for the selected repository, in the Paper reading style. It answers the sketch's three questions in order: the summary band (sync state), recent commit coverage, and what to do next (the button, "Needs attention", and the report).
+The Charters page, in the Paper reading style, in three tabs. **Overview** shows the charter report's health tiles above the charter sync check (unchanged). **Code** shows where the code is by charter. **Features** is one sentence: a feature map is planned for a later release.
 <- `showView("charters")` (repository-scoped; see the shell entry's Charters item)
--> `GET` / `POST /api/repo/<encoded name>/charter-sync` (see `scripts-dashboard.md` → `_handle_charter_sync_post()`); `GatorViews.repo.preselect()` + `window.gatorNavToRepo()` for "Open charter" / "Open report"
-- **States:**
+-> `GET` / `POST /api/repo/<encoded name>/charter-sync` (see `scripts-dashboard.md` → `_handle_charter_sync_post()`); `GET` / `POST /api/repo/<encoded name>/charters-report` (see `scripts-dashboard.md` → `dashboard/charters_report.py`); `GatorViews.repo.preselect()` + `window.gatorNavToRepo()` for "Open charter" / "Open report" / "Open file"
+- **Tabs (Welcome pattern):** `div.gator-tabbar.charters-tabbar` > `[role=tablist][aria-label="Charters sections"]` > `button.gator-tab.charters-view-tab#charters-view-tab-<key>` (never `#charters-tab`, the sidebar item), and `section.charters-panel#charters-panel-<key>[role=tabpanel]`. `aria-selected`, roving `tabindex`, `hidden`; click, Left/Right (wrapping), Home and End. Module-local `selectedTab` (default `overview`) survives remounts and resets on page load. `.charters-panel[hidden]` must stay `display: none`, because `.charters-panel` sets `display: flex`.
+- **Charter report (Overview `section.charters-health[data-report]`, Code panel):**
+  - One GET on mount. `report` + `current` paints and sends no POST. `report` + `stale` / `unknown` paints the cached figures labelled "▲ Stale" / "? Not verified", then sends one POST. `none` shows "Building the charter report…" and sends one POST. `unavailable` shows the server's message and hides "Refresh report".
+  - **At most one automatic refresh per mount** (`autoRefreshed`), even when the refresh itself answers `stale`. "Refresh report" (`.charters-refresh`, `aria-busy` while running) is the only other way to refresh. Nothing is timed.
+  - A failed refresh or read shows `p.charters-health-error[role=alert]`: "Refresh failed: <error>." plus "Figures shown are from <time>." or "No figures are available yet." The painted figures stay. A late initial GET never replaces figures a refresh already painted (`shown`).
+  - Tiles (`.charters-tile[data-tile]`): "Charters" (count, lines, documented functions); "Charter size vs code" (percent, "✓ In range" / "▲ Below range" / "▲ Above range", "target 3–6%"); "Files without a charter" ("of N source files"). "This repository has no charters yet." when the count is 0. A partial report lists its problems.
+  - `.charters-provenance`: the freshness mark plus "From the charter report, <relative time> · revision <rev>". `details.charters-measured` "How measured" (summary class `charters-measured-summary`) lists the report's `measurement` sentences.
+  - Code: "Product code: N lines in M source files."; "Lines by charter" (a row per module, then "No charter", each with lines and files in words and an `aria-hidden` proportional `.charters-bar`); "Largest files" with "Open file"; "Files without a charter" (the listed paths, then "and N more.").
+  - `data-report` is `pending` → `current` | `stale` | `unknown` | `none` | `unavailable` | `failed` | `snapshot`; `data-refreshing` is set while a refresh runs.
+! **One POST at a time per mount (`enqueuePost`).** A report refresh and a sync run take the same server `_repo_action` lock, so concurrent POSTs would give 409. Both go through one promise chain. A "Run charter sync check" click during a refresh waits for it, and the button shows "Checking…" at once. Pinned by `test_a_sync_run_waits_for_an_inflight_refresh`.
+! Report-area class names never reuse the sync section's (`.charters-error`, `.charters-count`, `.charters-more-summary`, `.charters-band`), because the sync tests and the page address those by class.
+- **Charter sync check states (unchanged):**
   - **Loading:** the lede and button render at once. One GET with `cache: "no-store"`, under a mount-generation guard (`mountGen` plus `root.isConnected`); `root.dataset.loaded` goes from `pending` to `true`.
   - **First visit:** `{state: "none"}` → the sketch's first-visit text, which says the check does not edit code or charters and writes to `.gator/artifacts/`.
   - **Result:** `current` or `needs-review` → `renderResult()`:
@@ -749,13 +760,13 @@ The Charters page: the charter sync check for the selected repository, in the Pa
   - **Running:** the button is disabled with "Checking…" and `aria-busy`. The displayed result stays.
   - **Failure:** a non-2xx, a network error, or a 2xx that is not a result → `p.charters-error[role=alert]` "…failed: <server error>. The previous result is unchanged." The body is not touched. A GET failure shows the first-visit text plus the alert.
   - **Unavailable:** the server's `unavailable` hides the button and shows its message.
-  - **Snapshot:** `window.GATOR_SNAPSHOT` hides the button and shows a live-Dashboard notice, with no fetch.
+  - **Snapshot:** `window.GATOR_SNAPSHOT` hides both buttons and shows a live-Dashboard notice in the sync body, the health area and the Code panel, with no fetch (`data-report="snapshot"`).
 ! The browser never paints a result the server did not return: `renderResult()` runs only on a 2xx whose `state` is a result state.
 ! **Read/run ownership (round 1 review).** Two requests can paint the body: the initial GET and a run's POST. The mount guard (`current()`) only covers navigation, so it does not order them. The rule is that the initial read owns the body only until a run starts: the click handler sets `readOwnsBody = false` before its POST, and every initial-read callback that paints (result, no record, read failure) checks `readMayPaint()` (`current() && readOwnsBody`). A late initial response therefore never replaces a run's result or adds a read error after it. Only `root.dataset.loaded` still moves to `true`. The button stays enabled while the read is pending, so a run never waits on it. Pinned by `test_late_initial_read_never_replaces_a_run` (late no-record, older result and failure), which fails if the handoff is removed.
 ! The DOM is built with `createElement` / `textContent` only. Server text (headline, labels, messages, paths, reasons) never enters markup.
 ! "Open charter" / "Open report" map the repo-relative path to the Repo view's logical path (`toLogical()`: `.gator/` content without the prefix, other namespaces unchanged). They call `GatorViews.repo.preselect(repoKey, logical)`, then `gatorNavToRepo(repoName, repoKey)`, so a just-created report is selected over a stale listing cache (see the Repo entry's explicit-open TRIPWIRE).
-! Colour is never the only cue. Every state and count carries a word, and every dot is `aria-hidden`.
-- **Pinned by** `tests/test_dashboard_ui/test_charters_view.py`.
+! Colour is never the only cue. Every state and count carries a word, and every dot, symbol (`.charters-mark-symbol`, followed by a real space and the word) and bar is `aria-hidden`.
+- **Pinned by** `tests/test_dashboard_ui/test_charters_view.py` (sync tests, and the report tests: a cache hit without a POST, exactly one refresh when stale, a failed refresh keeping figures, first build and unavailable, keyboard tabs with the Code and Features panels, and POST serialization).
 
 ### GatorViews.welcome() / applyTopic() / selectTopic() / ensureFrame() / bindCopyListener() / isCopyRequest() / handleCopyRequest() / replyCopy() (#72; Welcome HTML documents)
 File: src/gator_command/scripts/dashboard/views/welcome.js

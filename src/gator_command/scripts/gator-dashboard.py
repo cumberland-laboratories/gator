@@ -63,6 +63,7 @@ from dashboard.updates import (  # noqa: E402
 )
 from dashboard.snapshot import build_snapshot  # noqa: E402
 from dashboard import charter_sync as _charter_sync  # noqa: E402
+from dashboard import charters_report as _charters_report  # noqa: E402
 from dashboard.data import (  # noqa: E402
     load_registry_repos as _load_registry_repos,
     resolve_repo_path as _resolve_repo_path,
@@ -2549,6 +2550,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             cache_control="no-store")
             return
 
+        # Charter report: the recorded report and its freshness. Heavy work,
+        # because the freshness check runs Git (the input fingerprint). Same
+        # parse-once name boundary as charter-sync.
+        if path.startswith("/api/repo/") and path.endswith("/charters-report"):
+            repo_name = req.repo_name
+            if not repo_name:
+                self._send_json({"error": "repo name required"}, 400, cache_control="no-store")
+                return
+            repo_path = _resolve_repo_path(repo_name, _registry_snapshot())
+            if not repo_path or not Path(repo_path).is_dir():
+                self._send_json({"error": "repo not accessible"}, 400, cache_control="no-store")
+                return
+            with _heavy_work() as admitted:
+                if not admitted:
+                    self._send_heavy_busy(cache_control="no-store")
+                    return
+                body, status = _charters_report.read_report(repo_path)
+                self._send_json(body, status, cache_control="no-store")
+            return
+
         # Commit history — git log based, no session dependency
         if path.startswith("/api/repo/") and path.endswith("/history"):
             with _heavy_work() as admitted:
@@ -2669,7 +2690,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # of the safe-content-transport migration.
 
         # Tier 2 — per-repo deep status (lazy, on demand)
-        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/commit-policy", "/check", "/topology", "/files", "/charter-sync")):
+        if path.startswith("/api/repo/") and "/file" not in path and not path.endswith(("/update", "/config", "/commit-policy", "/check", "/topology", "/files", "/charter-sync", "/charters-report")):
             with _heavy_work() as admitted:
                 if not admitted:
                     self._send_heavy_busy()
@@ -4291,7 +4312,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
     _CHARTER_SYNC_BODY_MAX = 4096
 
     def _handle_charter_sync_post(self):
-        """Run the charter sync check for one repository.
+        """Run the charter sync check for one repository."""
+        self._handle_charter_run_post(_charter_sync.run_sync)
+
+    def _handle_charters_report_post(self):
+        """Refresh the charter health report for one repository."""
+        self._handle_charter_run_post(_charters_report.refresh_report)
+
+    def _handle_charter_run_post(self, engine):
+        """One heavy, same-repository charter run: `engine(target) -> (body, status)`.
 
         `_check_post_auth()` and the drain gate already ran in `do_POST`. The
         body is read and ignored. The repository name comes from
@@ -4328,7 +4357,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         def run():
-            result, status = _charter_sync.run_sync(target)
+            result, status = engine(target)
             self._send_json(result, status, cache_control="no-store")
 
         with _heavy_work() as admitted:
@@ -4456,6 +4485,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # POST /api/repo/<name>/charter-sync — run the charter sync check
         if path.startswith("/api/repo/") and path.endswith("/charter-sync"):
             self._handle_charter_sync_post()
+            return
+
+        # POST /api/repo/<name>/charters-report — refresh the charter report
+        if path.startswith("/api/repo/") and path.endswith("/charters-report"):
+            self._handle_charters_report_post()
             return
 
         # POST /api/repos/register — add a repo to the dashboard registry

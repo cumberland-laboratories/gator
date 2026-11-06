@@ -13,7 +13,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | starter `gator-session-start.py`, `gator-session-open.py`, and synchronized bundled copies | [Vendor Session Capture](scripts-session-capture.md) · [Session Boot and Hook Dispatch](scripts-repo-lifecycle.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-init.py`, `gator-hook.py`, starter `gator-init.py` | [Session Boot and Hook Dispatch](scripts-repo-lifecycle.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-update.py`, `gator-policy-status.py`, starter `gator-update.py` | [Repo Update and Policy Sync](scripts-repo-update.md) · [Layout Resolver](scripts-layout.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py`, `charter_covers.py`, `charter_report.py`, `gator-charters.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-pulse.py`, starter `gator-pulse.py` | [Strategic Pulse](scripts-pulse.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-dashboard.py`, `gator-kill.py`, `src/gator_command/scripts/dashboard/*.py` | [Dashboard Server](scripts-dashboard.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/dashboard/*.css` | [Dashboard Browser UI](scripts-dashboard-ui.md) |

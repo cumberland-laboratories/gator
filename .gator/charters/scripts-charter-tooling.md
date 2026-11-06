@@ -1,12 +1,14 @@
 # Charter: Charter Tooling
 
-**Covers**: `src/gator_command/scripts/gator-charter-lint.py`, `src/gator_command/scripts/gator-charter-draft.py`, `src/gator_command/scripts/gator-charter-verify.py`
+**Covers**: `src/gator_command/scripts/gator-charter-lint.py`, `src/gator_command/scripts/gator-charter-draft.py`, `src/gator_command/scripts/gator-charter-verify.py`, `src/gator_command/scripts/charter_covers.py`, `src/gator_command/scripts/charter_report.py`, `src/gator_command/scripts/gator-charters.py`
 
 ## Owns
 
 - Charter Schema v1 parsing and shape validation.
 - Source discovery and draft charter scaffolding.
 - Heuristic coverage, function-gap, stale-structure, complexity, and cross-cutting reports.
+- The shared `Covers` matcher grammar (`gator-covers-v1`).
+- The read-only charter health report (`gator charters report`, `gator-charters-report-v1`) and its input fingerprint.
 
 ## Does Not Own
 
@@ -51,9 +53,9 @@ Render reviewable charter starting points and optionally write them to an explic
 
 ### parse_charters() / verify()
 File: src/gator_command/scripts/gator-charter-verify.py
-Build coverage maps and emit structured findings over selected source directories.
+Build coverage maps and emit structured findings over selected source directories. `parse_charters()` still returns its raw entry-keyed map, but `verify()` discards it and resolves coverage with `charter_covers.coverage_index(all_files, charters)` (#88): `{file: [charter names]}` over the discovered files, so every check (coverage-gap, function-gap, complexity, stale-structure) sees glob- and prefix-covered files. `_check_complexity_mismatch()` takes the longest covering charter's `line_count` from that index.
 <- verify `main()`
--> source analyzers and Git changed-file selection
+-> source analyzers and Git changed-file selection, `charter_covers.coverage_index()`
 ! Warnings identify likely coverage gaps; informational function/complexity findings are heuristics, not instructions to expand every charter.
 
 ### charter_summaries(repo_root) / print_json_findings(findings, charters=None)
@@ -62,19 +64,46 @@ File: src/gator_command/scripts/gator-charter-verify.py
 <- verify `main()` (JSON mode only)
 -> `find_charter_dirs()`, `parse_charters()`
 ! Consumers: the Dashboard `/check` route, enforcer-review structural priors and the Dashboard charter sync check (`scripts-dashboard.md` → `dashboard/charter_sync.py`). Only the last reads `charters`. Its absence (older wheel) must stay tolerated. Existing keys and finding shapes do not change meaning (cross-cutting additive rule).
-! The coverage map used by `coverage-gap` still matches `Covers` entries exactly, so a glob-covered file is reported as uncovered (#88). `charters.covers` exposes the raw entries; consumers that match globs must not assume the verifier agrees.
+! Coverage honours globs and directory prefixes through the shared grammar (#88 fixed, 2026-11-06), so the verifier and the charter sync check agree. `charters.covers` still exposes the raw entries; consumers match them with `charter_covers.covers_match()`, never their own rule. Fixing #88 changed findings, not keys: fewer `coverage-gap`, and possibly more function/stale/complexity findings for files that are now covered.
 
 ### coverage and stale checks
 File: src/gator_command/scripts/gator-charter-verify.py
 Compare `**Covers**` patterns and documented names with current source structure.
 <- `verify()`
 ! Coverage globs must use repository-relative paths. A broad glob can hide poor routing even when the metric turns green.
+! Discovery uses plain `git ls-files`, which quotes non-ASCII paths; such files never match a `Covers` entry and are reported as uncovered (known limit).
+
+### normalize_path() / covers_match() / covering_charters() / coverage_index() — shared Covers matcher (`GRAMMAR = "gator-covers-v1"`)
+File: src/gator_command/scripts/charter_covers.py
+The one answer to "does this `Covers` entry name this file?". Paths and entries are normalized (`\` → `/`, no leading `./`); matching is case-sensitive everywhere. An entry with `*`, `?` or `[` is `fnmatchcase` over the full path (never the basename; `*` crosses `/`); a trailing `/` is a directory prefix; anything else is exact. `coverage_index(files, charters)` returns `{file: [names]}` for covered files only; `covering_charters()` keeps the caller's charter order.
+<- `gator-charter-verify.verify()`, `dashboard/charter_sync.py` (`covers_match` is re-bound there, see `scripts-dashboard.md`)
+! Closed grammar: an empty, absolute (`/…`, `X:`) or `..`-segment entry matches nothing. Adding a rule changes every consumer's numbers at once; extend it only with a grammar bump and the compatibility matrix in `tests/test_charter_covers.py`.
+! Standard library only, imported by plain name: callers run with the scripts directory on `sys.path` (scripts run by filename, the Dashboard). It ships through `package-data`.
+! Other producers (pre-commit `precommit_charter.py`, `gator-repo-status.py`, enforcer audit phase 1) still use their own matching; moving them needs a separate decision.
+
+### build_report(repo_root) / input_fingerprint(repo_root) / render_text(report) / unavailable_report() / failed_report() — charter health report
+File: src/gator_command/scripts/charter_report.py
+Build `gator-charters-report-v1` from files and Git only: `{schema, status (complete|partial|unavailable|failed), generated_at, gator_version, inputs {fingerprint, head, revision}, charters {count, lines, documented_functions, charter_dir, items[≤200], items_truncated}, coverage {grammar, source_files, covered_files, uncovered_files, percent, uncovered[≤50], uncovered_truncated}, code {product_files, product_lines, charter_to_code_pct, target {3, 6, constitution}, band, modules[≤200], modules_truncated, uncovered_module, largest_files[≤10]}, sync, measurement, problems[≤20]}`; `unavailable` carries `reason`, `failed` carries `error` (≤300 chars) and nothing else.
+<- `gator-charters.py main()`; `input_fingerprint()` also ← the Dashboard report relay (checkpoint 3)
+-> `gator-charter-draft.discover_files()` (the source-file set), `gator-charter-verify.parse_charters()` (the charter set, lines, documented functions) through `import_sibling`, `charter_covers.coverage_index()`, `gator_core.resolve_charter_surface()` (charter directory), `dashboard.charter_sync.read_last()` (sync summary)
+! Reuse, not copy: the report never runs the verifier's checks or the sync check and never writes a file. Because it uses the verifier's own file and charter sets, `coverage.uncovered_files` equals the verifier's `coverage-gap` count on the same tree (pinned).
+! **Fingerprint.** SHA-256 over canonical JSON of the schema, `gator_version()`, HEAD (null when unborn), SHA-256 of `ls-files -s -z`, each `--no-optional-locks status --porcelain=v1 -z --untracked-files=no` entry's `(path, XY, size, mtime_ns)`, the charter directory's `*.md` `(name, size, mtime_ns)`, `.charterignore`'s stat, and the charter sync record's bytes. Any Git failure → None ("unknown" to consumers); it never raises. It is taken before any input is read, so an edit during a run leaves the report stale, never falsely current. Stat-based detection shares Git's same-size, same-tick limit.
+! **States.** No `.gator/` or not a work tree → `unavailable`; a Git read failure or a missing verifier → `failed`. An unreadable source file (counted as 0 lines) or an unavailable sync reader (`sync.state: unavailable`) → `partial` with `problems`. No sync record → `sync.state: none`, not a problem. No charters → `complete` with every source file uncovered.
+! `gator_version()` resolves from this file's directory, never the caller's working directory, so a CLI run and the Dashboard of one install compute the same fingerprint; it never raises (`unknown`).
+! The coverage percent uses the verifier's file set, not `gator-repo-status.py`'s `charter_coverage_pct`; the two can differ (`measurement.coverage` says which). Prose fragments in a charter's `**Covers**` line are read as entries: a directory fragment such as `src/gator_command/scripts/` claims that whole directory.
+
+### main()
+File: src/gator_command/scripts/gator-charters.py
+`gator charters report [--json] [--path P]`: one positional `action` (`report`) and flat optionals, so `report --json` and the Dashboard's `--json report --path P` both parse. Prints `render_text()` or the JSON (`indent=2`). Exit 0 for `complete` / `partial`, 1 for `unavailable` / `failed`; the JSON body is printed either way. An unexpected exception becomes `failed` with a one-line message, never a traceback on stdout.
+<- `cli.py` `COMMANDS["charters"]`, `helpers.run_json("gator-charters", "report", ...)` (checkpoint 3)
+-> `find_gator_root()`, `charter_report`
 
 ## Before Changing This Module
 
 - Test Windows and POSIX path normalization.
 - Preserve text and JSON output schemas.
-- Run `tests/test_charter_lint.py` and focused draft/verify tests.
+- Run `tests/test_charter_lint.py`, `tests/test_charter_covers.py`, `tests/test_charter_report.py` and focused draft/verify tests.
+- Keep `gator-charters-report-v1` additive; a removed or redefined field needs a schema bump and consumer migration.
 - Validate the repository's own charters as a dogfood case.
 
 ## Connections
