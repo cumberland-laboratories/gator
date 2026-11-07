@@ -1,0 +1,47 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters page: hand charter repairs to the agent with one prompt",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "charters-health-section",
+    "copy-prompt"
+  ],
+  "commit": "7322e433ececc0a54c820b02203d09bd93ec692a",
+  "short_commit": "7322e43",
+  "snippet_id": "snippet-7322e433ececc",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "0d0b8fe93be7d0c07b182c7ba444897286fac393",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:15:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-11-06-gator-0d0b8fe93be7d.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "src/gator_command/scripts/dashboard/views/charters.js",
+    "tests/test_dashboard_ui/test_charters_view.py"
+  ],
+  "notes": [
+    "When a charter sync check needs review, the Charters page now shows the exact",
+    "prompt to give the agent session, with a Copy prompt button. The prompt names",
+    "the saved sync report, which holds the repair sketch, and the flagged",
+    "charters, and asks the agent to make each charter match its code, to move",
+    "dated history out of the charter (per the charter README), to change charters",
+    "only, and to show the changes before committing. The Dashboard",
+    "itself still edits nothing, and the prompt carries no token or secret.",
+    "Recent commit coverage is now its own Overview section, with a heading at the"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}

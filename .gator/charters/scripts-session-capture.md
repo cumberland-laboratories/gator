@@ -1,6 +1,6 @@
 # Charter: Vendor Session Capture
 
-**Covers**: `src/gator_command/templates/gator-starter/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-open.py`
+**Covers**: `src/gator_command/templates/gator-starter/scripts/gator-session-start.py`, `src/gator_command/templates/gator-starter/scripts/gator-session-open.py`, `src/gator_command/templates/gator-starter/scripts/gator_diagnostics.py`
 
 ## Owns
 
