@@ -112,6 +112,35 @@ def test_first_visit_then_completed_result(page, dashboard_fleet):
         .every(d => d.getAttribute('aria-hidden') === 'true')""")
 
 
+@pytest.mark.parametrize("state", ["needs-review", "current"])
+def test_repair_prompt_hands_off_to_the_agent(page, dashboard_fleet, state):
+    """A check that needs review shows one copyable line naming the report and
+    the flagged charters (at most 8, then a count); a current check shows none."""
+    page.add_init_script("""Object.defineProperty(navigator, 'clipboard', { value: {
+        writeText: t => { window.__copied = t; return Promise.resolve(); } } });""")
+    _stub(page, dict(RESULT, state=state))
+    _open_charters(page, dashboard_fleet)
+    if state == "current":
+        assert page.locator(".charters-prompt").count() == 0
+        return
+    text = _text(page, ".charters-prompt-text")
+    assert text == ("Read the charter sync report at " + RESULT["artifact_path"] + ". For the "
+                    "flagged charters (group-0, group-1, group-2, group-3, group-4, group-5, "
+                    "group-6, group-7 and 2 more), compare each charter with its code and follow "
+                    "the report's repair sketch so the charter matches the code, and move dated "
+                    "history (release notes, review rounds, resolved findings) out of the charter, "
+                    "per the charter README. Change charters only, not code. Show me the charter "
+                    "changes before you commit.")
+    assert "\n" not in text
+    page.click(".charters-copy")
+    page.wait_for_function("() => window.__copied !== undefined")
+    assert page.evaluate("() => window.__copied") == text
+    assert _text(page, ".charters-copy-status") == "✓ Copied"
+    heading = page.locator(".charters-commits > h2")
+    assert heading.text_content() == "Recent commit coverage"
+    assert "charters-doc-title" in heading.get_attribute("class")
+
+
 def test_failed_run_keeps_the_previous_result(page, dashboard_fleet):
     _stub(page, RESULT, (500, {"state": "failed", "error": "charter verifier failed: boom"}))
     _open_charters(page, dashboard_fleet)

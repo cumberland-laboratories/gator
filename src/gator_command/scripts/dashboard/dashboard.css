@@ -4145,6 +4145,29 @@ textarea.loop-ctrl-input {
 .charters-swatch-review { background: #d4880f; }
 .charters-band .charters-donut { padding: var(--space-2) 0; }
 .charters-missing { margin-top: calc(-1 * var(--space-2)); }
+/* Repair hand-off: the prompt is shown in full (selectable) and copied on
+   request; it reads like the Welcome session prompt. */
+.charters-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--teal-light, rgba(25, 174, 184, 0.08));
+  border-left: 3px solid var(--teal);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+.charters-prompt-label { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--gray-800); }
+.charters-prompt-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--gray-900);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+.charters-prompt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.charters-copy-status { font-size: var(--text-sm); color: var(--gray-700); }
 .charters-legend-item { margin-right: var(--space-3); }
 .charters-chart-label { font-size: 12px; fill: var(--gray-800); }
 .charters-chart-value { font-size: 12px; fill: var(--gray-700); }

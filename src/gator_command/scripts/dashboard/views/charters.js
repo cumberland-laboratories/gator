@@ -123,6 +123,57 @@
       + "charters. It writes a reviewable report and repair sketch to .gator/artifacts/."));
   }
 
+  // The repair hand-off: the Dashboard never edits charters, so a check that
+  // needs review offers one line for the Architect's agent session. It names
+  // the saved report (which holds the repair sketch) and the flagged charters,
+  // and carries no token or secret. Shown in full and copied on request.
+  var PROMPT_CHARTERS = 8;
+
+  function repairPrompt(d) {
+    var names = [];
+    d.findings.forEach(function (g) {
+      if (g.charter_path && names.indexOf(g.label) === -1) names.push(g.label);
+    });
+    var shown = names.slice(0, PROMPT_CHARTERS);
+    var more = names.length - shown.length;
+    var which = shown.length
+      ? "the flagged charters (" + shown.join(", ") + (more ? " and " + more + " more" : "") + ")"
+      : "the flagged charters and files";
+    return "Read the charter sync report at " + d.artifact_path + ". For " + which
+      + ", compare each charter with its code and follow the report's repair sketch so the "
+      + "charter matches the code, and move dated history (release notes, review rounds, "
+      + "resolved findings) out of the charter, per the charter README. Change charters "
+      + "only, not code. Show me the charter changes before you commit.";
+  }
+
+  function repairBlock(d) {
+    var text = repairPrompt(d);
+    var box = el("div", "charters-prompt");
+    box.appendChild(el("p", "charters-prompt-label",
+      "To fix these charters, give this prompt to your agent session:"));
+    box.appendChild(el("p", "charters-prompt-text", text));
+    var row = el("div", "charters-prompt-actions");
+    var copy = el("button", "charters-action charters-copy", "Copy prompt");
+    copy.type = "button";
+    var status = el("span", "charters-copy-status");
+    status.setAttribute("aria-live", "polite");
+    copy.addEventListener("click", function () {
+      if (!(navigator.clipboard && navigator.clipboard.writeText)) {
+        status.textContent = "Copy is not available here. Select the prompt above and copy it.";
+        return;
+      }
+      navigator.clipboard.writeText(text).then(function () {
+        status.textContent = "✓ Copied";
+      }, function () {
+        status.textContent = "Copy failed. Select the prompt above and copy it.";
+      });
+    });
+    row.appendChild(copy);
+    row.appendChild(status);
+    box.appendChild(row);
+    return box;
+  }
+
   function renderResult(body, d, ctx) {
     body.textContent = "";
     ctx.artifact = d.artifact_path;
@@ -157,11 +208,11 @@
     band.appendChild(el("p", "charters-note charters-missing",
       num(d.counts.missing) + " source " + (d.counts.missing === 1 ? "file has" : "files have")
       + " no charter."));
+    if (d.state === "needs-review") band.appendChild(repairBlock(d));
     body.appendChild(band);
 
     // Recent commits: how many changed governed code without a charter update.
-    var commits = el("section", "charters-section charters-commits");
-    commits.appendChild(el("h2", "charters-section-title", "Recent commit coverage"));
+    var commits = section("charters-commits", "Recent commit coverage");
     var rc = d.recent_commits;
     if (rc.reason || !rc.examined) {
       commits.appendChild(el("p", "charters-prose", rc.reason || "No commits were examined."));
