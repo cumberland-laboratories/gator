@@ -133,11 +133,12 @@
   var PROMPT_CHARTERS = 8;
 
   function repairPrompt(d) {
-    // A group whose top finding is an advisory function gap names no
-    // drift, so it is not a charter to fix (#105).
+    // A group whose top finding is advisory (a function gap or an import
+    // fan-out heuristic) names no drift, so it is not a charter to fix (#105).
+    var ADVISORY = ["function-gap", "cross-cutting-suspect"];
     var names = [];
     d.findings.forEach(function (g) {
-      if (g.charter_path && g.kind !== "function-gap" && names.indexOf(g.label) === -1) {
+      if (g.charter_path && ADVISORY.indexOf(g.kind) === -1 && names.indexOf(g.label) === -1) {
         names.push(g.label);
       }
     });

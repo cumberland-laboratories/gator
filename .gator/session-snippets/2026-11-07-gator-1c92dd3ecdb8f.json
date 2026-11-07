@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters: clear the stale entries the #105 checker found",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "charter-function-significance"
+  ],
+  "commit": "1c92dd3ecdb8f8e2921132c7da45e72bf15e34a4",
+  "short_commit": "1c92dd3",
+  "snippet_id": "snippet-1c92dd3ecdb8f",
+  "session_group_key": "anthropic:2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "7ca4830c3c74a29e44526076fdb79b21ebfe0d3a",
+  "started_at": "2026-11-07T13:14:27Z",
+  "ended_at": "2026-11-07T18:25:39Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/README.md",
+    ".gator/charters/scripts-charter-tooling.md",
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-11-07-gator-7ca4830c3c74a.json",
+    "src/gator_command/scripts/gator-charter-verify.py",
+    "tests/test_charter_verify_functions.py"
+  ],
+  "notes": [
+    "The #105 checker reported 17 stale charter entries. Eleven were false",
+    "alarms. Some entries list several `File:` lines, and the checker read only",
+    "the first, so it missed names defined in the others. An entry now owns all",
+    "of its consecutive `File:` lines, and a name is stale only when none of",
+    "them defines it.",
+    "The other six were real. The Fleet and Audit entries named global",
+    "functions that live in `dashboard.js`, so that file is added to both",
+    "entries. A heading named the browser's built-in `fetch()` as if it were"
+  ],
+  "transcript_session_id": "2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "transcript_ref": null
+}

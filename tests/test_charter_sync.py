@@ -190,16 +190,24 @@ def _gap(charter="mod", file="src/a.py"):
             "function": "f", "reason": "entry", "message": "m", "charter": charter}
 
 
-def test_advisory_function_gaps_alone_leave_the_result_current(repo):
-    """#105: default function gaps are shown and counted, never decisive."""
+FAN_OUT = {"class": "cross-cutting-suspect", "severity": "info", "file": "src/a.py",
+           "message": "High sibling-import fan-out"}
+
+
+def test_advisory_findings_alone_leave_the_result_current(repo):
+    """#105: default function gaps and import fan-out suspects are shown and
+    counted, never decisive."""
     result, _ = charter_sync.run_sync(
-        repo, now=NOW, verify_fn=_stub([_gap(), _gap(file="src/b.py")]))
+        repo, now=NOW, verify_fn=_stub([_gap(), _gap(file="src/b.py"), FAN_OUT]))
     assert result["state"] == "current"
-    assert result["headline"] == "Current — 2 advisory function gaps in 1 charter."
+    assert result["headline"] == "Current — 3 advisory findings in 1 charter."
     assert result["counts"] == {"current": 2, "needs_review": 0, "missing": 0}
-    assert result["findings_total"] == 2
+    assert result["findings_total"] == 3
     assert [(g["kind"], g["label"], g["count"]) for g in result["findings"]] == [
-        ("function-gap", "mod", 2)]
+        ("function-gap", "mod", 3)]
+    assert charter_sync.ADVISORY == {"function-gap", "cross-cutting-suspect"}
+    text = (repo / result["artifact_path"]).read_text(encoding="utf-8")
+    assert "- [cross-cutting-suspect] (advisory) `src/a.py`" in text
 
 
 @pytest.mark.parametrize("decisive", [

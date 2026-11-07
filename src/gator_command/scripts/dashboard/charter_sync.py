@@ -44,8 +44,9 @@ KINDS = ("stale-structure", "stale-exclusion", "complexity-mismatch", "coverage-
 _PRIORITY = {k: i for i, k in enumerate(KINDS)}
 
 # Shown and counted, but never alone a reason for "needs-review" (#105):
-# a default function gap is a review prompt, not drift.
-ADVISORY = frozenset({"function-gap"})
+# a default function gap or an import fan-out heuristic is a review
+# prompt, not drift.
+ADVISORY = frozenset({"function-gap", "cross-cutting-suspect"})
 
 # The sketch's finding-to-action table: page wording, repair guidance.
 WORDING = {
@@ -54,7 +55,7 @@ WORDING = {
     "complexity-mismatch": "Charter may be too thin for this module.",
     "stale-structure": "Charter names code that no longer exists.",
     "stale-exclusion": "Charter lists an internal name that no longer exists.",
-    "cross-cutting-suspect": "High fan-out may need cross-cutting treatment.",
+    "cross-cutting-suspect": "High fan-out may need cross-cutting treatment (advisory).",
 }
 REPAIR = {
     "coverage-gap": "Identify the owning charter or create a new charter boundary.",
@@ -327,7 +328,7 @@ def _roll_up(findings, charters, coverage):
         headline = "Current — no structural charter-to-code findings."
     elif state == "current":
         advised = {n for (k, n) in _group_findings(advisory, charters) if k == "charter"}
-        headline = (f"Current — {_plural(len(advisory), 'advisory function gap')} "
+        headline = (f"Current — {_plural(len(advisory), 'advisory finding')} "
                     f"in {_plural(len(advised), 'charter')}.")
     else:
         headline = (f"{_plural(len(decisive), 'finding')} "

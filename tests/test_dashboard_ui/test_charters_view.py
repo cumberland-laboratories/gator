@@ -122,7 +122,9 @@ def test_repair_prompt_hands_off_to_the_agent(page, dashboard_fleet, state):
     page.add_init_script("""Object.defineProperty(navigator, 'clipboard', { value: {
         writeText: t => { window.__copied = t; return Promise.resolve(); } } });""")
     _stub(page, dict(RESULT, state=state,
-                     findings=[ADVISORY_GROUP] + RESULT["findings"]))
+                     findings=[ADVISORY_GROUP, dict(ADVISORY_GROUP, kind="cross-cutting-suspect",
+                                                    label="fan-out-only")]
+                     + RESULT["findings"]))
     _open_charters(page, dashboard_fleet)
     if state == "current":
         assert page.locator(".charters-prompt").count() == 0
@@ -136,7 +138,7 @@ def test_repair_prompt_hands_off_to_the_agent(page, dashboard_fleet, state):
                     "per the charter README. Do not add one heading per function; document "
                     "seams, group related helpers, or use the Internal line. Change charters "
                     "only, not code. Show me the charter changes before you commit.")
-    assert "advisory-only" not in text
+    assert "advisory-only" not in text and "fan-out-only" not in text
     assert "\n" not in text
     page.click(".charters-copy")
     page.wait_for_function("() => window.__copied !== undefined")
