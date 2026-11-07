@@ -81,6 +81,7 @@ include-package-data = false
 gator_command = [
     "scripts/charter_covers.py",
     "scripts/charter_report.py",
+    "scripts/charter_significance.py",
     "scripts/gator-audit.py",
     "scripts/gator-audit-renderers.py",
     "scripts/gator-charter-draft.py",

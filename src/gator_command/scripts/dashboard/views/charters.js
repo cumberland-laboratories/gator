@@ -130,9 +130,13 @@
   var PROMPT_CHARTERS = 8;
 
   function repairPrompt(d) {
+    // A group whose top finding is an advisory function gap names no
+    // drift, so it is not a charter to fix (#105).
     var names = [];
     d.findings.forEach(function (g) {
-      if (g.charter_path && names.indexOf(g.label) === -1) names.push(g.label);
+      if (g.charter_path && g.kind !== "function-gap" && names.indexOf(g.label) === -1) {
+        names.push(g.label);
+      }
     });
     var shown = names.slice(0, PROMPT_CHARTERS);
     var more = names.length - shown.length;
@@ -142,8 +146,9 @@
     return "Read the charter sync report at " + d.artifact_path + ". For " + which
       + ", compare each charter with its code and follow the report's repair sketch so the "
       + "charter matches the code, and move dated history (release notes, review rounds, "
-      + "resolved findings) out of the charter, per the charter README. Change charters "
-      + "only, not code. Show me the charter changes before you commit.";
+      + "resolved findings) out of the charter, per the charter README. Do not add one "
+      + "heading per function; document seams, group related helpers, or use the Internal "
+      + "line. Change charters only, not code. Show me the charter changes before you commit.";
   }
 
   function repairBlock(d) {

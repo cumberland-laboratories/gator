@@ -21,8 +21,11 @@ import json
 
 import pytest
 
-GROUP = {"kind": "function-gap", "label": "mod", "charter_path": ".gator/mission.md",
-         "message": "Public function is not represented in its charter.", "count": 3}
+GROUP = {"kind": "stale-structure", "label": "mod", "charter_path": ".gator/mission.md",
+         "message": "Charter names code that no longer exists.", "count": 3}
+# An advisory-only group (#105): shown, but never named in the repair prompt.
+ADVISORY_GROUP = dict(GROUP, kind="function-gap", label="advisory-only",
+                      message="Public seam is not represented in its charter (advisory).")
 RESULT = {
     "schema": "gator-charter-sync-v1", "state": "needs-review",
     "checked_at": "2026-10-29T12:00:00Z", "revision": "0123456789ab", "dirty": False,
@@ -118,7 +121,8 @@ def test_repair_prompt_hands_off_to_the_agent(page, dashboard_fleet, state):
     the flagged charters (at most 8, then a count); a current check shows none."""
     page.add_init_script("""Object.defineProperty(navigator, 'clipboard', { value: {
         writeText: t => { window.__copied = t; return Promise.resolve(); } } });""")
-    _stub(page, dict(RESULT, state=state))
+    _stub(page, dict(RESULT, state=state,
+                     findings=[ADVISORY_GROUP] + RESULT["findings"]))
     _open_charters(page, dashboard_fleet)
     if state == "current":
         assert page.locator(".charters-prompt").count() == 0
@@ -129,8 +133,10 @@ def test_repair_prompt_hands_off_to_the_agent(page, dashboard_fleet, state):
                     "group-6, group-7 and 2 more), compare each charter with its code and follow "
                     "the report's repair sketch so the charter matches the code, and move dated "
                     "history (release notes, review rounds, resolved findings) out of the charter, "
-                    "per the charter README. Change charters only, not code. Show me the charter "
-                    "changes before you commit.")
+                    "per the charter README. Do not add one heading per function; document "
+                    "seams, group related helpers, or use the Internal line. Change charters "
+                    "only, not code. Show me the charter changes before you commit.")
+    assert "advisory-only" not in text
     assert "\n" not in text
     page.click(".charters-copy")
     page.wait_for_function("() => window.__copied !== undefined")

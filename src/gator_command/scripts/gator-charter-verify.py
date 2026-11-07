@@ -7,18 +7,26 @@ findings. Machine checks plausibility; enforcer judges materiality.
 
 Finding classes:
   coverage-gap       — tracked source file not covered by any charter
-  function-gap       — public function not represented in any charter
+  function-gap       — public seam (entry point or cross-charter import) not
+                       represented in its charter; `reason` says which
+  function-candidate — strict mode only (--functions strict): a public function
+                       the broad name/docstring heuristic flags but the
+                       default policy (charter_significance) does not
   complexity-mismatch — complex file with unusually thin charter
   stale-structure    — charter references functions that no longer exist
+  stale-exclusion    — a name on a charter's **Internal**: line is defined in
+                       none of the files that charter covers
   cross-cutting-suspect — high import fan-out without cross-cutting treatment
 
 Usage:
     python gator-command/scripts/gator-charter-verify.py --path <repo>
     python gator-command/scripts/gator-charter-verify.py --path <repo> --json
     python gator-command/scripts/gator-charter-verify.py --path <repo> --changed-only
+    python gator-command/scripts/gator-charter-verify.py --path <repo> --functions strict
 
 @reads: charter files, source files (via ast), .gator/.charterignore, git
-@writes: stdout (text or json; JSON adds `charters: [{name, path, covers}]`)
+@writes: stdout (text or json; JSON adds `charters: [{name, path, covers}]`
+         and `function_policy: "default" | "strict"`)
 """
 
 import argparse
@@ -31,6 +39,7 @@ from gator_core import (
     get_version, find_gator_root, ensure_utf8_stdout, git, import_sibling,
 )
 from charter_covers import coverage_index
+import charter_significance as significance
 
 VERSION = get_version()
 
@@ -121,6 +130,8 @@ def parse_charters(charter_dirs):
                 "label": label,
                 "covers": covers,
                 "functions": functions,
+                # **Internal**: names (#105); shape problems are lint findings.
+                "internal": significance.parse_internal(text)[0],
                 "line_count": len(text.splitlines()),
             })
 
@@ -141,10 +152,12 @@ def _parse_covers(text):
 def _parse_function_entries(text):
     """Extract function names from ### entries in a charter.
 
-    Recognizes patterns like:
+    Recognizes patterns like (see `charter_significance.heading_names()`):
     - ### function_name(args)
-    - ### ClassName.method_name(args)
+    - ### first(args) / second() / ClassName.method_name(args)
     - ### class ClassName
+
+    `File:` lines are read with or without backticks.
 
     Returns a set of function names (for coverage checks) and a dict
     mapping function names to their associated File: path (for stale checks).
@@ -153,44 +166,39 @@ def _parse_function_entries(text):
     function_files = {}  # name -> file path from File: line
     last_file_ref = None  # Track File: context for #### method entries
 
+    def _record(name, file_ref):
+        # For ClassName.method, record both the dotted name and the method
+        for key in ([name, name.split(".")[-1]] if "." in name else [name]):
+            functions.add(key)
+            if file_ref:
+                function_files[key] = file_ref
+
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        # Match both ### and #### entries (methods use ####)
-        m = re.match(r'^#{3,4}\s+(?:class\s+)?(\w[\w.]*?)(?:\(|$)', line)
-        if m:
-            name = m.group(1)
-            # For ClassName.method, extract both class and method
-            if "." in name:
-                parts = name.split(".")
-                functions.add(parts[-1])
-                functions.add(name)
-            else:
-                functions.add(name)
-
+        # ### and #### entries (methods use ####); a grouped heading
+        # (`### a() / b()`) documents every name it lists.
+        names = significance.heading_names(line)
+        if names:
             # Look for File: line in the next few lines
-            found_file = False
+            file_ref = None
             for j in range(i + 1, min(i + 4, len(lines))):
-                fm = re.match(r'^File:\s*`([^`]+)`', lines[j])
-                if fm:
-                    file_ref = fm.group(1)
-                    function_files[name] = file_ref
-                    if "." in name:
-                        function_files[name.split(".")[-1]] = file_ref
+                file_ref = significance.parse_file_line(lines[j])
+                if file_ref:
                     last_file_ref = file_ref
-                    found_file = True
                     break
 
             # #### entries (methods) inherit the File: from their parent ### entry
-            if not found_file and line.startswith("####") and last_file_ref:
-                function_files[name] = last_file_ref
-                if "." in name:
-                    function_files[name.split(".")[-1]] = last_file_ref
+            if not file_ref and line.startswith("####"):
+                file_ref = last_file_ref
+
+            for name in names:
+                _record(name, file_ref)
 
         # Track File: lines for context inheritance
         elif line.startswith("File:"):
-            fm = re.match(r'^File:\s*`([^`]+)`', line)
-            if fm:
-                last_file_ref = fm.group(1)
+            file_ref = significance.parse_file_line(line)
+            if file_ref:
+                last_file_ref = file_ref
 
         # Reset context at section boundaries
         elif line.startswith("---") or line.startswith("## "):
@@ -203,8 +211,11 @@ def _parse_function_entries(text):
 # Finding generation
 # ---------------------------------------------------------------------------
 
-def verify(repo_root, gator_dir, dirs=None, changed_only=False):
+def verify(repo_root, gator_dir, dirs=None, changed_only=False, function_policy="default"):
     """Run all verification checks. Returns a list of findings.
+
+    `function_policy="strict"` adds `function-candidate` findings; every
+    default finding is identical in both modes.
 
     @reads: charters, source files, git
     """
@@ -248,17 +259,26 @@ def verify(repo_root, gator_dir, dirs=None, changed_only=False):
         if result:
             analyses[rel_path] = result
 
+    signals, importers = _collect_signals(repo_root, analyses)
+
     # --- Check: coverage-gap ---
     findings.extend(_check_coverage_gaps(all_files, coverage_map))
 
     # --- Check: function-gap ---
-    findings.extend(_check_function_gaps(analyses, coverage_map, charter_functions))
+    charter_internal = {c["name"]: set(c["internal"]) for c in charters}
+    findings.extend(_check_function_gaps(
+        analyses, coverage_map, charter_functions, signals, importers, function_policy,
+        charter_internal))
+
+    # --- Check: stale-exclusion ---
+    findings.extend(_check_stale_exclusions(repo_root, analyses, coverage_map, charters, signals))
 
     # --- Check: complexity-mismatch ---
     findings.extend(_check_complexity_mismatch(analyses, coverage_map, charters))
 
     # --- Check: stale-structure ---
-    findings.extend(_check_stale_structure(analyses, coverage_map, charter_functions, charter_function_files))
+    findings.extend(_check_stale_structure(
+        analyses, coverage_map, charter_functions, charter_function_files, signals))
 
     # --- Check: cross-cutting-suspect ---
     findings.extend(_check_cross_cutting(analyses, coverage_map))
@@ -280,28 +300,47 @@ def _check_coverage_gaps(all_files, coverage_map):
     return findings
 
 
-# Functions that are conventionally not charter-worthy
-_SKIP_FUNCTION_NAMES = {
-    "main", "setup", "teardown",
-    # Common output helpers — rarely need charter entries
-    "print_report", "print_json", "print_json_report", "print_result",
-    "print_plan", "print_json_plan", "print_findings", "print_json_findings",
-    "print_scaffolds", "print_index_suggestions",
-    # Common rendering helpers
-    "escHtml", "fmtTs", "fmtDate",
-}
+_PY_EXTENSIONS = (".py",)
+_JS_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx")
+
+
+def _collect_signals(repo_root, analyses):
+    """Per-file significance signals and the cross-module import map.
+
+    Returns `(signals, importers)`: `signals[rel_path]` is the
+    `charter_significance` signal dict; `importers[(stem, name)]` is the
+    set of analyzed files that import `name` from a module named `stem`.
+    Only analyzed (discovered) files count as importers.
+    """
+    signals = {}
+    importers = {}
+    for rel_path in analyses:
+        ext = Path(rel_path).suffix.lower()
+        if ext not in _PY_EXTENSIONS + _JS_EXTENSIONS:
+            continue
+        try:
+            source = (repo_root / rel_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        sig = (significance.python_signals(source) if ext in _PY_EXTENSIONS
+               else significance.javascript_signals(source))
+        signals[rel_path] = sig
+        for key in sig["imports"]:
+            importers.setdefault(key, set()).add(rel_path)
+    return signals, importers
 
 
 def _is_charter_worthy(fn, analysis):
-    """Heuristic: is this function significant enough to warrant a charter entry?
+    """Broad heuristic, used only by strict mode (`function-candidate`).
 
-    Filters out conventional helpers and small utility functions to reduce noise.
-    Only flags functions that look like public API, complex logic, or entrypoints.
+    The default `function-gap` decision is `charter_significance.decide()`.
+    This keeps the pre-#105 name/docstring/argument-count signal as an
+    opt-in investigation tool.
     """
     name = fn["name"]
 
     # Skip conventional names
-    if name in _SKIP_FUNCTION_NAMES:
+    if name in significance.CONVENTIONAL_NAMES:
         return False
 
     # Skip private functions
@@ -339,12 +378,23 @@ def _is_charter_worthy(fn, analysis):
     return False
 
 
-def _check_function_gaps(analyses, coverage_map, charter_functions):
-    """Find significant public functions not documented in their covering charter.
+def _check_function_gaps(analyses, coverage_map, charter_functions,
+                         signals=None, importers=None, function_policy="default",
+                         charter_internal=None):
+    """Find public seams not documented in their covering charter.
 
-    Uses heuristics to filter out conventional helpers and small utility
-    functions. Only flags functions that look charter-worthy.
+    The default decision is `charter_significance.decide()`: entry points,
+    and functions imported by a file that a different charter owns. Strict
+    mode also reports `function-candidate` for undocumented functions that
+    the broad `_is_charter_worthy()` heuristic flags but the policy calls
+    internal. A name on the `**Internal**:` line of a charter that covers
+    the file (`charter_internal`) is neither. `coverage_map` is the
+    resolved `{file: [charter names]}` index, so a charter that does not
+    cover the file can never suppress its gaps.
     """
+    signals = signals or {}
+    importers = importers or {}
+    charter_internal = charter_internal or {}
     findings = []
     for rel_path, analysis in analyses.items():
         # Only check files that have a charter
@@ -354,23 +404,83 @@ def _check_function_gaps(analyses, coverage_map, charter_functions):
         charter_names = coverage_map[rel_path]
         # Collect all documented functions across covering charters
         all_documented = set()
+        excluded = set()
         for cn in charter_names:
             all_documented.update(charter_functions.get(cn, set()))
+            excluded.update(charter_internal.get(cn, set()))
 
-        # Check charter-worthy functions only
+        stem = Path(rel_path).stem
+        entries = signals.get(rel_path, {}).get("entries", set())
         for fn in analysis["functions"]:
-            if fn["name"] in all_documented:
+            name = fn["name"]
+            if name in all_documented or name in excluded:
                 continue
-            if not _is_charter_worthy(fn, analysis):
+            importer_owners = [coverage_map.get(q, [])
+                               for q in importers.get((stem, name), ()) if q != rel_path]
+            decision, reason = significance.decide(
+                name, fn["is_private"], entries, importer_owners, charter_names)
+            if decision == "document":
+                kind = "entry point" if reason == "entry" else "imported by another charter's code"
+                findings.append({
+                    "class": "function-gap",
+                    "severity": "info",
+                    "file": rel_path,
+                    "function": name,
+                    "reason": reason,
+                    "message": f"Public seam `{name}()` ({kind}) not documented in charter",
+                    "charter": charter_names[0],
+                })
+            elif (function_policy == "strict" and decision == "internal"
+                    and _is_charter_worthy(fn, analysis)):
+                findings.append({
+                    "class": "function-candidate",
+                    "severity": "info",
+                    "file": rel_path,
+                    "function": name,
+                    "message": f"Public function `{name}()` may deserve a charter entry (strict heuristic)",
+                    "charter": charter_names[0],
+                })
+    return findings
+
+
+def _check_stale_exclusions(repo_root, analyses, coverage_map, charters, signals=None):
+    """Find `**Internal**:` names defined in none of the charter's covered files.
+
+    "Out of scope" and "stale" are one condition for a name list scoped to
+    the files `coverage_index()` assigns the charter: a name that exists
+    only in a file another charter covers is reported too.
+    """
+    signals = signals or {}
+    root = Path(repo_root).resolve()
+    findings = []
+    for charter in charters:
+        if not charter["internal"]:
+            continue
+        defined = set()
+        for rel_path, names in coverage_map.items():
+            if charter["name"] not in names or rel_path not in analyses:
                 continue
-            findings.append({
-                "class": "function-gap",
-                "severity": "info",
-                "file": rel_path,
-                "function": fn["name"],
-                "message": f"Public function `{fn['name']}()` not documented in charter",
-                "charter": charter_names[0],
-            })
+            analysis = analyses[rel_path]
+            defined.update(fn["name"] for fn in analysis["functions"])
+            for cls in analysis["classes"]:
+                defined.add(cls["name"])
+                defined.update(m["name"] for m in cls["methods"])
+            defined.update(signals.get(rel_path, {}).get("registered", ()))
+        try:
+            charter_path = Path(charter["file"]).resolve().relative_to(root).as_posix()
+        except ValueError:
+            charter_path = Path(charter["file"]).as_posix()
+        for name in charter["internal"]:
+            if name not in defined:
+                findings.append({
+                    "class": "stale-exclusion",
+                    "severity": "info",
+                    "file": charter_path,
+                    "function": name,
+                    "message": (f"Charter `{charter['name']}` lists `{name}` on **Internal**: "
+                                "but it is not defined in any file this charter covers"),
+                    "charter": charter["name"],
+                })
     return findings
 
 
@@ -408,13 +518,16 @@ def _check_complexity_mismatch(analyses, coverage_map, charters):
     return findings
 
 
-def _check_stale_structure(analyses, coverage_map, charter_functions, charter_function_files):
+def _check_stale_structure(analyses, coverage_map, charter_functions, charter_function_files,
+                           signals=None):
     """Find charter function entries that no longer exist in code.
 
     Only flags functions whose File: line in the charter matches the
     specific source file being checked. This avoids false positives when
-    a charter covers multiple files.
+    a charter covers multiple files. JavaScript `window.<path>`
+    registrations (`signals[...]["registered"]`) count as existing code.
     """
+    signals = signals or {}
     findings = []
 
     for rel_path, analysis in analyses.items():
@@ -431,6 +544,7 @@ def _check_stale_structure(analyses, coverage_map, charter_functions, charter_fu
             for m in cls["methods"]:
                 actual_names.add(m["name"])
                 actual_names.add(f"{cls['name']}.{m['name']}")
+        actual_names.update(signals.get(rel_path, {}).get("registered", ()))
 
         for cn in charter_names:
             documented = charter_functions.get(cn, set())
@@ -568,8 +682,9 @@ def charter_summaries(repo_root):
     return out
 
 
-def print_json_findings(findings, charters=None):
-    """Output findings as JSON. `charters` (additive) is included when given."""
+def print_json_findings(findings, charters=None, function_policy=None):
+    """Output findings as JSON. `charters` and `function_policy` (additive)
+    are included when given."""
     output = {
         "version": VERSION,
         "finding_count": len(findings),
@@ -578,6 +693,8 @@ def print_json_findings(findings, charters=None):
     }
     if charters is not None:
         output["charters"] = charters
+    if function_policy is not None:
+        output["function_policy"] = function_policy
     # Summary by class
     for f in findings:
         cls = f["class"]
@@ -613,6 +730,11 @@ def main():
         "--changed-only", "-c", action="store_true",
         help="Only check files changed in the last commit",
     )
+    parser.add_argument(
+        "--functions", choices=("default", "strict"), default="default",
+        help="Function-gap policy: default (public seams only) or strict "
+             "(also report broad-heuristic candidates as function-candidate)",
+    )
     args = parser.parse_args()
 
     # Find repo root
@@ -624,11 +746,11 @@ def main():
     gator_dir = repo_root / ".gator"
 
     # Run verification
-    findings = verify(repo_root, gator_dir, args.dirs, args.changed_only)
+    findings = verify(repo_root, gator_dir, args.dirs, args.changed_only, args.functions)
 
     # Output
     if args.json:
-        print_json_findings(findings, charter_summaries(repo_root))
+        print_json_findings(findings, charter_summaries(repo_root), args.functions)
     else:
         print_findings(findings)
 

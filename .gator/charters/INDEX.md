@@ -13,7 +13,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | starter `gator-session-start.py`, `gator-session-open.py`, `gator_diagnostics.py`, and synchronized bundled copies | [Vendor Session Capture](scripts-session-capture.md) · [Session Boot and Hook Dispatch](scripts-repo-lifecycle.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-init.py`, `gator-hook.py`, starter `gator-init.py` | [Session Boot and Hook Dispatch](scripts-repo-lifecycle.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-update.py`, `gator-policy-status.py`, starter `gator-update.py` | [Repo Update and Policy Sync](scripts-repo-update.md) · [Layout Resolver](scripts-layout.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py`, `charter_covers.py`, `charter_report.py`, `gator-charters.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `gator-charter-lint.py`, `gator-charter-draft.py`, `gator-charter-verify.py`, `charter_covers.py`, `charter_significance.py`, `charter_report.py`, `gator-charters.py` | [Charter Tooling](scripts-charter-tooling.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-pulse.py`, starter `gator-pulse.py` | [Strategic Pulse](scripts-pulse.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `gator-dashboard.py`, `gator-kill.py`, `src/gator_command/scripts/dashboard/*.py` | [Dashboard Server](scripts-dashboard.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/dashboard/*.css` | [Dashboard Browser UI](scripts-dashboard-ui.md) |
@@ -25,7 +25,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `enterprise/app/**`, `enterprise/migrations/**`, `enterprise/Dockerfile`, `enterprise/alembic.ini`, `enterprise/fly.toml`, `enterprise/requirements.txt` | [Enterprise Server](scripts-enterprise-server.md) · [Contracts](contracts.md) |
 | `src/gator_command/scripts/gator-state.py` | [Managed State](scripts-managed-state.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator_layout.py`, starter `gator_layout.py` | [Layout Resolver](scripts-layout.md) · [Cross-Cutting](scripts-cross-cutting.md) |
-| `gator-pre-commit.py`, `precommit_*.py`, `gator-approve.py`, starter copies, and synchronized Enterprise bundled copies | [Pre-Commit Governance](scripts-precommit.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `gator-pre-commit.py`, `precommit_*.py`, `gator-approve.py`, starter copies, the starter and bundled `charter_significance.py`, and synchronized Enterprise bundled copies | [Pre-Commit Governance](scripts-precommit.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `.gator/.includes/scripts/enforcer-review.py` and starter copy | [Cross-Cutting](scripts-cross-cutting.md) |
 | `contracts/**` | [Contracts](contracts.md) |
 | `.github/workflows/**`, `scripts/release-individual.sh`, `scripts/test-install-cycle.sh` | [Release Pipeline](release-pipeline.md) · [Cross-Cutting](scripts-cross-cutting.md) |

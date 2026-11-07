@@ -1,6 +1,6 @@
 # Charter: Charter Tooling
 
-**Covers**: `src/gator_command/scripts/gator-charter-lint.py`, `src/gator_command/scripts/gator-charter-draft.py`, `src/gator_command/scripts/gator-charter-verify.py`, `src/gator_command/scripts/charter_covers.py`, `src/gator_command/scripts/charter_report.py`, `src/gator_command/scripts/gator-charters.py`
+**Covers**: `src/gator_command/scripts/gator-charter-lint.py`, `src/gator_command/scripts/gator-charter-draft.py`, `src/gator_command/scripts/gator-charter-verify.py`, `src/gator_command/scripts/charter_covers.py`, `src/gator_command/scripts/charter_significance.py`, `src/gator_command/scripts/charter_report.py`, `src/gator_command/scripts/gator-charters.py`
 
 ## Owns
 
@@ -8,6 +8,7 @@
 - Source discovery and draft charter scaffolding.
 - Heuristic coverage, function-gap, stale-structure, complexity, and cross-cutting reports.
 - The shared `Covers` matcher grammar (`gator-covers-v1`).
+- The shared function-significance policy (`gator-significance-v1`): which functions need a charter entry.
 - The read-only charter health report (`gator charters report`, `gator-charters-report-v1`) and its input fingerprint.
 
 ## Does Not Own
@@ -20,10 +21,12 @@
 
 ### parse_charter() / validate_charter()
 File: src/gator_command/scripts/gator-charter-lint.py
-Parse one charter and validate required shape, function-entry fields, and index links.
+Parse one charter and validate required shape, function-entry fields, and index links. `_validate_internal()` adds the `**Internal**:` shape rules (#105): `internal-syntax` (malformed item, empty list, a second line, or a line after the first `## `), `internal-duplicate`, and `internal-conflict` (a name that a heading also documents; the documented entry wins). `bare-entry` (warn) flags a `###` entry with neither a `File:` line nor description prose, in addition to `file-line`, never instead of it.
 <- lint `main()`
--> Charter Schema v1 rules
+-> Charter Schema v1 rules, `charter_significance.parse_internal()` / `heading_names()`
 ! `INDEX.md` and the cross-cutting charter have intentional structural exceptions; keep exemptions narrow and explicit.
+! A `---` separator ends the current entry and is never counted as its description, so an entry followed only by a separator is bare.
+! Scope (is each Internal name defined in a covered file?) needs coverage resolution: it is the verifier's `stale-exclusion`, not a lint rule.
 
 ### collect_files() / find_charter_dirs()
 File: src/gator_command/scripts/gator-charter-lint.py
@@ -51,16 +54,19 @@ Render reviewable charter starting points and optionally write them to an explic
 <- draft `main()`
 ! Drafts are scaffolds, not authoritative documentation. Never overwrite a maintained charter implicitly.
 
-### parse_charters() / verify()
+### parse_charters() / verify(repo_root, gator_dir, dirs=None, changed_only=False, function_policy="default")
 File: src/gator_command/scripts/gator-charter-verify.py
-Build coverage maps and emit structured findings over selected source directories. `parse_charters()` still returns its raw entry-keyed map, but `verify()` discards it and resolves coverage with `charter_covers.coverage_index(all_files, charters)` (#88): `{file: [charter names]}` over the discovered files, so every check (coverage-gap, function-gap, complexity, stale-structure) sees glob- and prefix-covered files. `_check_complexity_mismatch()` takes the longest covering charter's `line_count` from that index.
+Build coverage maps and emit structured findings over selected source directories. `parse_charters()` still returns its raw entry-keyed map, but `verify()` discards it and resolves coverage with `charter_covers.coverage_index(all_files, charters)` (#88): `{file: [charter names]}` over the discovered files, so every check (coverage-gap, function-gap, complexity, stale-structure) sees glob- and prefix-covered files. `_check_complexity_mismatch()` takes the longest covering charter's `line_count` from that index. `_parse_function_entries()` reads headings through `charter_significance.heading_names()` (a grouped `### a() / b()` documents every name, and each inherits the entry's `File:`) and `parse_file_line()` (`File:` with or without backticks).
 <- verify `main()`
--> source analyzers and Git changed-file selection, `charter_covers.coverage_index()`
+-> source analyzers and Git changed-file selection, `charter_covers.coverage_index()`, `charter_significance`
 ! Warnings identify likely coverage gaps; informational function/complexity findings are heuristics, not instructions to expand every charter.
+! **Function gaps (#105).** `_collect_signals()` reads each analyzed `.py` / `.js`-family file once into `charter_significance` signals and builds the `(stem, name) → importer files` map over analyzed files only. `_check_function_gaps()` reports `function-gap` (with `reason`: `entry` | `cross-module`) only when `charter_significance.decide()` says `document`; importer and file owners come from the resolved coverage index. `function_policy="strict"` (`--functions strict`) also reports `function-candidate` for `internal` functions the broad `_is_charter_worthy()` heuristic flags; default findings are identical in both modes, and only strict mode keeps that heuristic.
+! **Internal exclusions.** `parse_charters()` adds each charter's `internal` names (`charter_significance.parse_internal()`). A name clears a function gap or candidate only through a charter that `coverage_index()` assigns to the file, so a broad or unrelated charter never suppresses another file's gap. `_check_stale_exclusions()` emits `stale-exclusion` (info; `file` is the charter path) for a name defined in none of that charter's covered files: functions, classes, methods or `registered` names. "Out of scope" and "stale" are the same condition.
+! **Stale checks.** `File:` remains the only association that enables `stale-structure`, and since #105 the README's plain `File: path` form counts. `_check_stale_structure()` counts the file's `registered` signal names (Python module-level bindings, JavaScript `window.<path>` registrations and object-literal methods) as existing code. A grouped entry whose names live in two files but whose `File:` names one is reported as stale for the others: that is real charter drift.
 
-### charter_summaries(repo_root) / print_json_findings(findings, charters=None)
+### charter_summaries(repo_root) / print_json_findings(findings, charters=None, function_policy=None)
 File: src/gator_command/scripts/gator-charter-verify.py
-`--json` output is `{version, finding_count, summary, findings, charters}`. `charters` (additive, 2026-10-29) is `[{name, path, covers}]` for every parsed charter: `path` is repo-relative POSIX, and `covers` is the raw backtick list from the `**Covers**` line, globs included. Text output is unchanged.
+`--json` output is `{version, finding_count, summary, findings, charters, function_policy}`. `charters` (additive, 2026-10-29) is `[{name, path, covers}]` for every parsed charter: `path` is repo-relative POSIX, and `covers` is the raw backtick list from the `**Covers**` line, globs included. `function_policy` (additive, #105) is `"default"` or `"strict"`; `function-gap` findings carry an additive `reason`, and `function-candidate` appears only in strict mode. Text output is unchanged.
 <- verify `main()` (JSON mode only)
 -> `find_charter_dirs()`, `parse_charters()`
 ! Consumers: the Dashboard `/check` route, enforcer-review structural priors and the Dashboard charter sync check (`scripts-dashboard.md` → `dashboard/charter_sync.py`). Only the last reads `charters`. Its absence (older wheel) must stay tolerated. Existing keys and finding shapes do not change meaning (cross-cutting additive rule).
@@ -80,6 +86,15 @@ The one answer to "does this `Covers` entry name this file?". Paths and entries 
 ! Closed grammar: an empty, absolute (`/…`, `X:`) or `..`-segment entry matches nothing. Adding a rule changes every consumer's numbers at once; extend it only with a grammar bump and the compatibility matrix in `tests/test_charter_covers.py`.
 ! Standard library only, imported by plain name: callers run with the scripts directory on `sys.path` (scripts run by filename, the Dashboard). It ships through `package-data`.
 ! Other producers (pre-commit `precommit_charter.py`, `gator-repo-status.py`, enforcer audit phase 1) still use their own matching; moving them needs a separate decision.
+
+### decide() / heading_names() / parse_file_line() / parse_internal() / python_signals() / javascript_signals() — shared significance policy (`POLICY = "gator-significance-v1"`)
+File: src/gator_command/scripts/charter_significance.py
+The one answer to "does this function need a charter entry?". `decide(name, is_private, entries, importer_owners, file_owners)` → `(decision, reason)`: `document` for an entry point (`entry`) or a name imported by a file whose owning charters are disjoint from the defining file's (`cross-module`); `internal` (`local`) otherwise; `not-applicable` for private names and `CONVENTIONAL_NAMES`. Signals: `python_signals()` (AST: `ENTRY_DECORATORS` final attribute, `func=` keywords, literal `__all__`; imports as `(module_stem, name)` through `from … import`, `import M as a` + `a.x`, `import_sibling` / `import_module` aliases) and `javascript_signals()` (regex: exports, `module.exports`, named functions assigned to `window.<path>`; `import { … } from`). `heading_names()`, `parse_file_line()` and `parse_internal()` are the charter-side readers. `parse_internal(text)` → `(names, problems)`: at most one `**Internal**:` line before the first `## `, backticked identifiers only. Only the first well-placed line suppresses anything; problem codes are `malformed`, `duplicate`, `multiple-lines` and `misplaced`.
+<- `gator-charter-verify.py` (`parse_charters()`, `_parse_function_entries()`, `_collect_signals()`, `_check_function_gaps()`, `_check_stale_structure()`), `gator-charter-lint.py` (`_validate_internal()`)
+! No patterns on `**Internal**:`. A finite, stale-checked name list is auditable; a wildcard would be a blanket suppression.
+! Closed policy: docstrings, argument counts, file size and verb prefixes never make a function a seam by default. An importer with no owning charter (tests, undiscovered files) is ignored. Widening the policy changes every consumer's numbers at once.
+! Never imports or executes inspected source; unparseable Python gives empty signals. State access and tripwires are not inferred (strict mode is the investigation tool).
+! Standard library only, imported by plain name like `charter_covers`; ships through `package-data`.
 
 ### build_report(repo_root) / input_fingerprint(repo_root) / render_text(report) / unavailable_report() / failed_report() — charter health report
 File: src/gator_command/scripts/charter_report.py
@@ -103,7 +118,7 @@ File: src/gator_command/scripts/gator-charters.py
 
 - Test Windows and POSIX path normalization.
 - Preserve text and JSON output schemas.
-- Run `tests/test_charter_lint.py`, `tests/test_charter_covers.py`, `tests/test_charter_report.py` and focused draft/verify tests.
+- Run `tests/test_charter_lint.py`, `tests/test_charter_covers.py`, `tests/test_charter_report.py`, `tests/test_charter_significance.py`, `tests/test_charter_verify_functions.py` and focused draft/verify tests.
 - Keep `gator-charters-report-v1` additive; a removed or redefined field needs a schema bump and consumer migration.
 - Validate the repository's own charters as a dogfood case.
 
@@ -111,4 +126,4 @@ File: src/gator_command/scripts/gator-charters.py
 
 -> [Cross-Cutting](scripts-cross-cutting.md) - canonical charter-surface resolver
 -> [Repo Lifecycle](scripts-repo-lifecycle.md) - boot-time charter counts
--> [Charter README](README.md) - authoring and size rules
+-> [Charter README](README.md) - authoring and size rules, the `**Internal**:` line and the function-gap repair rule (the starter `charters/README.md` and `docs/charter-schema-v1.html` carry the same schema text)

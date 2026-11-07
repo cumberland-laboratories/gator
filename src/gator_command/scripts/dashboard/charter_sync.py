@@ -39,24 +39,32 @@ _CHECKED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 _REVISION_RE = re.compile(r"^[0-9a-f]{4,40}$")
 
 # Display order: highest signal first.
-KINDS = ("stale-structure", "complexity-mismatch", "coverage-gap",
+KINDS = ("stale-structure", "stale-exclusion", "complexity-mismatch", "coverage-gap",
          "function-gap", "cross-cutting-suspect")
 _PRIORITY = {k: i for i, k in enumerate(KINDS)}
+
+# Shown and counted, but never alone a reason for "needs-review" (#105):
+# a default function gap is a review prompt, not drift.
+ADVISORY = frozenset({"function-gap"})
 
 # The sketch's finding-to-action table: page wording, repair guidance.
 WORDING = {
     "coverage-gap": "Source file has no charter coverage.",
-    "function-gap": "Public function is not represented in its charter.",
+    "function-gap": "Public seam is not represented in its charter (advisory).",
     "complexity-mismatch": "Charter may be too thin for this module.",
     "stale-structure": "Charter names code that no longer exists.",
+    "stale-exclusion": "Charter lists an internal name that no longer exists.",
     "cross-cutting-suspect": "High fan-out may need cross-cutting treatment.",
 }
 REPAIR = {
     "coverage-gap": "Identify the owning charter or create a new charter boundary.",
-    "function-gap": "Add, combine, or explicitly exclude the responsibility.",
+    "function-gap": ("Document the public seam or high-blast-radius helper, group related "
+                     "helpers that share one boundary and invariant, or list the name on the "
+                     "charter's **Internal**: line; do not add bare function lists."),
     "complexity-mismatch": ("Review public responsibilities and module boundary; "
                             "do not pad prose mechanically."),
     "stale-structure": "Update the named responsibility or restore the intended implementation.",
+    "stale-exclusion": "Remove the name from the Internal line, or restore the function.",
     "cross-cutting-suspect": "Decide whether the concern belongs in a cross-cutting charter.",
 }
 COMMIT_WORDING = "Commit changed governed code without a charter update."
@@ -287,11 +295,18 @@ def _group_findings(findings, charters):
     return groups
 
 
+def _plural(n, word):
+    return f"{n} {word}{'s' if n != 1 else ''}"
+
+
 def _roll_up(findings, charters, coverage):
     charter_paths = {c["name"]: c["path"] for c in (charters or [])}
     groups = _group_findings(findings, charters)
     names = set(charter_paths) | {n for (k, n) in groups if k == "charter"}
-    needs_review = {n for (k, n) in groups if k == "charter"}
+    # Only decisive findings put a charter (or the result) in needs-review.
+    decisive = [f for f in findings if f["class"] not in ADVISORY]
+    advisory = [f for f in findings if f["class"] in ADVISORY]
+    needs_review = {n for (k, n) in _group_findings(decisive, charters) if k == "charter"}
     missing = {f["file"] for f in findings if f["class"] == "coverage-gap"}
 
     shown = []
@@ -307,14 +322,20 @@ def _roll_up(findings, charters, coverage):
     shown.sort(key=lambda g: (_PRIORITY.get(g["kind"], len(KINDS)), -g["count"], g["label"]))
 
     flagged = coverage["without_charter_update"]
-    state = "current" if not findings and not flagged else "needs-review"
-    if state == "current":
+    state = "current" if not decisive and not flagged else "needs-review"
+    if state == "current" and not advisory:
         headline = "Current — no structural charter-to-code findings."
+    elif state == "current":
+        advised = {n for (k, n) in _group_findings(advisory, charters) if k == "charter"}
+        headline = (f"Current — {_plural(len(advisory), 'advisory function gap')} "
+                    f"in {_plural(len(advised), 'charter')}.")
     else:
-        headline = (f"{len(findings)} finding{'s' if len(findings) != 1 else ''} "
-                    f"in {len(needs_review)} charter{'s' if len(needs_review) != 1 else ''}")
+        headline = (f"{_plural(len(decisive), 'finding')} "
+                    f"in {_plural(len(needs_review), 'charter')}")
         if missing:
-            headline += f"; {len(missing)} source file{'s' if len(missing) != 1 else ''} without a charter"
+            headline += f"; {_plural(len(missing), 'source file')} without a charter"
+        if advisory:
+            headline += f"; {len(advisory)} advisory"
         headline += "."
     return {
         "state": state,
@@ -378,7 +399,8 @@ def _render_report(summary, findings, charters, coverage):
         lines.append("")
         for f in sorted(items, key=lambda f: (_PRIORITY.get(f["class"], len(KINDS)), f["file"])):
             msg = str(f.get("message", "")).replace("\n", " ")
-            lines.append(f"- [{f['class']}] {_code(f['file'])}: {msg}")
+            note = " (advisory)" if f["class"] in ADVISORY else ""
+            lines.append(f"- [{f['class']}]{note} {_code(f['file'])}: {msg}")
         lines.append("")
 
     lines += ["## Recent commit coverage", ""]
@@ -402,13 +424,19 @@ def _render_report(summary, findings, charters, coverage):
     lines += ["## Repair sketch", "",
               "Each step is guidance from the evidence above. Nothing has been changed.", ""]
     step = 0
-    for (kind, label), items in sorted(
-            groups.items(), key=lambda kv: (kv[0][0] != "charter", kv[0][1])):
-        for cls in sorted({f["class"] for f in items}, key=lambda c: _PRIORITY.get(c, len(KINDS))):
-            step += 1
-            n = sum(1 for f in items if f["class"] == cls)
-            lines.append(f"{step}. {_code(label)} — {cls} ({n}): "
-                         f"{REPAIR.get(cls, 'Review the finding.')}")
+    # Decisive steps first, then the advisory ones.
+    for advisory_pass in (False, True):
+        for (kind, label), items in sorted(
+                groups.items(), key=lambda kv: (kv[0][0] != "charter", kv[0][1])):
+            for cls in sorted({f["class"] for f in items},
+                              key=lambda c: _PRIORITY.get(c, len(KINDS))):
+                if (cls in ADVISORY) != advisory_pass:
+                    continue
+                step += 1
+                n = sum(1 for f in items if f["class"] == cls)
+                note = ", advisory" if advisory_pass else ""
+                lines.append(f"{step}. {_code(label)} — {cls} ({n}{note}): "
+                             f"{REPAIR.get(cls, 'Review the finding.')}")
     for c in coverage["commits"]:
         if c["flagged"]:
             step += 1

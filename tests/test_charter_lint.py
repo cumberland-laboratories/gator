@@ -331,3 +331,53 @@ class TestValidateIndex:
 
         checks = [f.check for f in findings if f.severity == "warn"]
         assert "dispatch-table" in checks
+
+
+# ---------------------------------------------------------------------------
+# **Internal**: exclusions and bare entries (#105)
+# ---------------------------------------------------------------------------
+
+def _with_internal(line):
+    return VALID_CHARTER.replace("**Covers**: `src/test.py`\n",
+                                 "**Covers**: `src/test.py`\n" + line + "\n")
+
+
+def _checks(tmp_path, content):
+    doc = lint.parse_charter(_write(tmp_path, "test.md", content))
+    return [f.check for f in lint.validate_charter(doc)]
+
+
+class TestInternalLine:
+    def test_valid_line_adds_no_findings(self, tmp_path):
+        checks = _checks(tmp_path, _with_internal("**Internal**: `render_row`, `parse_key`"))
+        assert not [c for c in checks if c.startswith("internal-")]
+
+    @pytest.mark.parametrize("content,check", [
+        (_with_internal("**Internal**: `render_*`"), "internal-syntax"),          # glob
+        (_with_internal("**Internal**: `Cls.method`"), "internal-syntax"),        # dotted
+        (_with_internal("**Internal**: render_row"), "internal-syntax"),          # not backticked
+        (_with_internal("**Internal**: `a` and helpers"), "internal-syntax"),     # prose fragment
+        (_with_internal("**Internal**:"), "internal-syntax"),                     # empty
+        (_with_internal("**Internal**: `a`, `a`"), "internal-duplicate"),
+        (_with_internal("**Internal**: `a`\n**Internal**: `b`"), "internal-syntax"),  # second line
+        (VALID_CHARTER.replace("## Connections\n", "## Connections\n\n**Internal**: `a`\n"),
+         "internal-syntax"),                                                     # misplaced
+        (_with_internal("**Internal**: `run_task`"), "internal-conflict"),        # also documented
+    ])
+    def test_problem_is_reported(self, tmp_path, content, check):
+        assert check in _checks(tmp_path, content)
+
+
+class TestBareEntry:
+    BARE = VALID_CHARTER.replace(
+        "### run_task(name)\nFile: src/test.py\nRuns a named task from the registry.\n← cli_handler()\n",
+        "### run_task(name)\n← cli_handler()\n")
+
+    def test_heading_without_file_or_prose_warns(self, tmp_path):
+        checks = _checks(tmp_path, self.BARE)
+        assert checks.count("bare-entry") == 1
+        assert "file-line" in checks                     # reported in addition, never instead
+
+    def test_grouped_entry_with_file_and_prose_is_not_bare(self, tmp_path):
+        grouped = VALID_CHARTER.replace("### run_task(name)", "### run_task(name) / stop_task()")
+        assert "bare-entry" not in _checks(tmp_path, grouped)

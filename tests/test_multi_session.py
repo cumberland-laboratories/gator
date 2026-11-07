@@ -726,6 +726,10 @@ class TestByteIdentityAcrossThreeCopies:
         "precommit_lint.py",
         # #75: the shared resolution policy both pre-commit copies call.
         "precommit_policy.py",
+        # #105: the new-seam warning and the significance policy it shares
+        # with the charter verifier.
+        "precommit_charter.py",
+        "charter_significance.py",
         # `gator-pre-commit.py` is DELIBERATELY NOT included here — the
         # three copies of that file drifted pre-2026-08-08 for reasons
         # unrelated to the transcripts-first MVP work, and reconciling
@@ -781,6 +785,25 @@ class TestByteIdentityAcrossThreeCopies:
         assert "import precommit_override as override_state" in src
         assert "import precommit_policy as policy" in src
         assert "def check_override(" not in src, "v1 override flow must be gone"
+        # #105: the installed precommit_charter resolves charter_significance
+        # from the same installed directory, not from this checkout.
+        assert (installed / "charter_significance.py").is_file()
+        probe = (
+            "import sys; sys.path.insert(0, sys.argv[1]); import precommit_charter, "
+            "pathlib; precommit_charter.new_seam_functions(pathlib.Path(sys.argv[2])); "
+            "import charter_significance as s; "
+            "print(pathlib.Path(s.__file__).resolve().parent)")
+        r = subprocess.run([_sys.executable, "-c", probe, str(installed), str(tmp_path)],
+                           capture_output=True, text=True, cwd=str(tmp_path))
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.strip() == str(installed.resolve())
+
+    def test_policy_module_matches_the_verifier_copy(self):
+        """#105: the hook runtimes and the charter verifier run one policy."""
+        scripts = self._REPO_ROOT / "src" / "gator_command" / "scripts"
+        template = scripts.parent / "templates" / "gator-starter" / "scripts"
+        assert ((scripts / "charter_significance.py").read_bytes()
+                == (template / "charter_significance.py").read_bytes())
 
     @pytest.mark.parametrize("filename", [
         "precommit_session.py",

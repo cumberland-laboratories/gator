@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters page: tabs stay in view while the page scrolls",
+  "change_type": "feature",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charters-health-section"
+  ],
+  "commit": "d5c8bfe01c3c9b7bd55896bd909e4e29f26d6aae",
+  "short_commit": "d5c8bfe",
+  "snippet_id": "snippet-d5c8bfe01c3c9",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 10,
+  "previous_commit_in_session": "99a613d67cfea440c3a57b66b4a809e342bc30b6",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:51:24Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-11-07-gator-99a613d67cfea.json",
+    "src/gator_command/scripts/dashboard/dashboard.css"
+  ],
+  "notes": [
+    "The Overview / Code / Features tabs and the Refresh report button now stay",
+    "pinned at the top of the content pane while a panel scrolls, as the Welcome",
+    "tabs do. The tab bar is sticky on the page background, so scrolled content",
+    "passes under it; at rest the layout is unchanged, and on narrow screens it",
+    "pins below the top navigation row.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}

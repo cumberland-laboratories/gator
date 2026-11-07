@@ -1,8 +1,10 @@
 """Charter discovery and validation for the gator pre-commit hook.
 
 Resolves charter surfaces, iterates charter files, parses INDEX.md,
-checks function references, and detects undocumented functions.
-Self-contained — no gator_core imports required.
+checks function references, and detects new undocumented seams.
+Self-contained — no gator_core imports required. `new_seam_functions()`
+imports the sibling `charter_significance` (shipped beside this file in
+every hook runtime) and degrades to no warning without it.
 """
 
 from __future__ import annotations
@@ -183,51 +185,191 @@ def _check_charter_function_refs(charter_files, repo_root):
     return stale
 
 
-def _detect_new_functions(staged_files, repo_root):
-    """Detect new function definitions in staged code and new ### entries in charters.
+_PY_EXTENSIONS = (".py",)
+_JS_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx")
+_PY_NEW_DEF = re.compile(r"^(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(")
+_JS_NEW_DEF = re.compile(
+    r"^\s*(?:export\s+)?(?:(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\("
+    r"|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=)")
 
-    Uses git diff --cached to find added lines. Returns (new_code_funcs, new_charter_entries).
-    Self-contained — no gator_core imports.
-    """
-    new_code_funcs = []
-    new_charter_entries = []
 
+def _git_bytes(repo_root, args, stdin=None):
+    """Run git and return stdout bytes, or None on any failure."""
     try:
-        result = subprocess.run(
-            ["git", "diff", "--cached", "-U0", "--no-color"],
-            capture_output=True, text=True, cwd=str(repo_root),
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode != 0:
-            return [], []
+        result = subprocess.run(["git", *args], cwd=str(repo_root), input=stdin,
+                                capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
-        return [], []
+        return None
+    return result.stdout if result.returncode == 0 else None
 
-    for line in result.stdout.splitlines():
-        if not line.startswith("+") or line.startswith("+++"):
+
+def _new_definitions(repo_root):
+    """`[(path, name)]` for top-level definitions added in the staged diff."""
+    out = _git_bytes(repo_root, ["diff", "--cached", "-U0", "--no-color", "--no-ext-diff"])
+    if out is None:
+        return []
+    found = []
+    path = None
+    for line in out.decode("utf-8", errors="replace").splitlines():
+        if line.startswith("+++ "):
+            target = line[4:].rstrip("\t")
+            path = target[2:] if target.startswith("b/") else None
             continue
-        added = line[1:].strip()
+        if not path or not line.startswith("+"):
+            continue
+        added = line[1:]
+        ext = Path(path).suffix.lower()
+        if ext in _PY_EXTENSIONS:
+            m = _PY_NEW_DEF.match(added)          # top level only, like the verifier
+            name = m.group(1) if m else None
+        elif ext in _JS_EXTENSIONS:
+            m = _JS_NEW_DEF.match(added)
+            name = (m.group(1) or m.group(2)) if m else None
+        else:
+            name = None
+        if name and (path, name) not in found:
+            found.append((path, name))
+    return found
 
-        # New function definitions in code
-        if (added.startswith("def ") or
-                added.startswith("function ") or
-                added.startswith("func ")):
-            # Extract name: "def foo(..." -> "foo"
-            for prefix in ("def ", "function ", "func "):
-                if added.startswith(prefix):
-                    rest = added[len(prefix):]
-                    name = rest.split("(")[0].strip()
-                    if name and not name.startswith("_"):
-                        new_code_funcs.append(name)
-                    break
 
-        # New charter entries
-        if added.startswith("### ") and "(" in added:
-            name = added[4:].split("(")[0].strip()
-            if name:
-                new_charter_entries.append(name)
+def _index_entries(repo_root):
+    """`{path: oid}` for every stage-0 entry in the index, or None."""
+    out = _git_bytes(repo_root, ["ls-files", "-s", "-z"])
+    if out is None:
+        return None
+    entries = {}
+    for record in out.split(b"\0"):
+        if not record:
+            continue
+        meta, _, path = record.partition(b"\t")
+        fields = meta.split()
+        if len(fields) == 3 and fields[2] == b"0":
+            entries[path.decode("utf-8", errors="replace")] = fields[1].decode()
+    return entries
 
-    return new_code_funcs, new_charter_entries
+
+def _read_blobs(repo_root, oids):
+    """`{oid: text}` read through one `git cat-file --batch`, or None."""
+    oids = list(dict.fromkeys(oids))
+    if not oids:
+        return {}
+    out = _git_bytes(repo_root, ["cat-file", "--batch"],
+                     stdin=("\n".join(oids) + "\n").encode())
+    if out is None:
+        return None
+    blobs, pos = {}, 0
+    for oid in oids:
+        end = out.find(b"\n", pos)
+        if end < 0:
+            return None
+        header = out[pos:end].split()
+        pos = end + 1
+        if len(header) != 3 or header[1] != b"blob":
+            continue                              # missing or not a blob
+        size = int(header[2])
+        blobs[oid] = out[pos:pos + size].decode("utf-8", errors="replace")
+        pos += size + 1                           # content, then a newline
+    return blobs
+
+
+def new_seam_functions(repo_root, charter_dir=None):
+    """New public seams in the staged change that no charter documents.
+
+    Reads the index only — never the working tree (#105):
+    - new top-level definitions come from the added lines of the staged diff;
+    - every tracked `.py` / `.js`-family path is a candidate importer, read
+      by object ID through one `git cat-file --batch`; a blob that does not
+      mention a new name is skipped before parsing;
+    - ownership is the staged INDEX.md routing. The cross-cutting charter
+      is "read first" routing, not ownership, so it counts only for a file
+      routed to nothing else;
+    - documented and `**Internal**:` names come from every staged charter.
+    The decision is `charter_significance.decide()`, shared with the
+    verifier. Any Git or import failure returns [] (advisory, never a block).
+    """
+    try:
+        scripts_dir = str(Path(__file__).resolve().parent)
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import charter_significance as significance
+
+        new_defs = _new_definitions(repo_root)
+        if not new_defs:
+            return []
+        entries = _index_entries(repo_root)
+        if entries is None:
+            return []
+        cross_cutting = None
+        if charter_dir is None:
+            charter_dir, cross_cutting = _resolve_charter_surface(repo_root)
+        try:
+            charter_rel = Path(charter_dir).resolve().relative_to(
+                Path(repo_root).resolve()).as_posix()
+        except ValueError:
+            return []
+
+        charter_paths = [p for p in entries
+                         if p.startswith(charter_rel + "/") and p.endswith(".md")
+                         and "/" not in p[len(charter_rel) + 1:]]
+        if cross_cutting is None:
+            cross_cutting = next((p.rsplit("/", 1)[-1] for p in charter_paths
+                                  if "cross-cutting" in p.rsplit("/", 1)[-1]), None)
+        code_paths = [p for p in entries
+                      if Path(p).suffix.lower() in _PY_EXTENSIONS + _JS_EXTENSIONS]
+        blobs = _read_blobs(repo_root, [entries[p] for p in charter_paths + code_paths])
+        if blobs is None:
+            return []
+
+        def text(path):
+            return blobs.get(entries.get(path), "")
+
+        mappings = _parse_index_text(text(charter_rel + "/INDEX.md"))
+
+        def owners(path):
+            routed = _required_charters_for_files([path], repo_root, mappings)
+            narrowed = routed - {cross_cutting}
+            return narrowed or routed
+
+        documented, excluded = set(), set()
+        for path in charter_paths:
+            if path.rsplit("/", 1)[-1] in CHARTER_SCAFFOLD_FILES:
+                continue
+            body = text(path)
+            for line in body.splitlines():
+                for name in significance.heading_names(line):
+                    documented.update({name, name.split(".")[-1]})
+            excluded.update(significance.parse_internal(body)[0])
+
+        def signals(path):
+            if Path(path).suffix.lower() in _PY_EXTENSIONS:
+                return significance.python_signals(text(path))
+            return significance.javascript_signals(text(path))
+
+        new_names = {name for _, name in new_defs}
+        importer_signals = {}
+        for path in code_paths:
+            body = text(path)
+            if any(name in body for name in new_names):
+                importer_signals[path] = signals(path)
+
+        seams = []
+        for path, name in new_defs:
+            if name in documented or name in excluded or name in seams:
+                continue
+            if path not in entries:
+                continue                          # deleted or not a tracked file
+            stem = Path(path).stem
+            importer_owners = [owners(q) for q, sig in importer_signals.items()
+                               if q != path and (stem, name) in sig["imports"]]
+            own_signals = importer_signals.get(path) or signals(path)
+            decision, _ = significance.decide(
+                name, name.startswith("_"), own_signals["entries"],
+                importer_owners, owners(path))
+            if decision == "document":
+                seams.append(name)
+        return seams
+    except Exception:
+        return []
 
 
 def _parse_charter_index(repo_root):
@@ -247,6 +389,11 @@ def _parse_charter_index(repo_root):
     except OSError:
         return []
 
+    return _parse_index_text(text)
+
+
+def _parse_index_text(text):
+    """INDEX.md text -> list of (pattern_str, set_of_charter_filenames)."""
     mappings = []
     for line in text.splitlines():
         line = line.strip()
@@ -274,14 +421,18 @@ def _parse_charter_index(repo_root):
     return mappings
 
 
-def _required_charters_for_files(code_files, repo_root):
+def _required_charters_for_files(code_files, repo_root, mappings=None):
     """Given a list of changed code files, return the set of charter filenames
     that INDEX.md says should be consulted.
+
+    `mappings` (from `_parse_index_text()`) replaces the working-tree
+    INDEX.md, so a caller can route against the staged INDEX blob.
 
     Returns set of charter filenames (e.g. {"scripts-fleet-intelligence.md",
     "scripts-cross-cutting.md"}).
     """
-    mappings = _parse_charter_index(repo_root)
+    if mappings is None:
+        mappings = _parse_charter_index(repo_root)
     if not mappings:
         return set()
 

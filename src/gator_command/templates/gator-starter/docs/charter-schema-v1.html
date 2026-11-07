@@ -569,7 +569,7 @@
          font-family="'Segoe UI', system-ui, sans-serif"
          role="img" aria-labelledby="anatomy-title anatomy-desc">
       <title id="anatomy-title">Anatomy of a charter file</title>
-      <desc id="anatomy-desc">A charter file shown line by line, with each line's enforcement level. Error, meaning required: the "# Charter:" title, the "Covers" line (exempt for the cross-cutting charter), "## Owns", "## Does Not Own", and a "---" separator before function entries. Function entries are optional; inside each, the File line and a description are Warn, and access patterns, callers, callees and tripwires are optional. "## Before Changing This Module" and "## Connections" are Warn when function entries exist.</desc>
+      <desc id="anatomy-desc">A charter file shown line by line, with each line's enforcement level. Error, meaning required: the "# Charter:" title, the "Covers" line (exempt for the cross-cutting charter), an optional "Internal" line of deliberately internal names, "## Owns", "## Does Not Own", and a "---" separator before function entries. Function entries are optional; inside each, the File line and a description are Warn, and access patterns, callers, callees and tripwires are optional. "## Before Changing This Module" and "## Connections" are Warn when function entries exist.</desc>
       <rect x="10" y="10" width="420" height="364" rx="6" fill="#f3f4f6" stroke="#d1d5db"/>
       <text x="24" y="40" font-family="Consolas, Monaco, monospace" font-size="12.5" fill="#111827" xml:space="preserve"># Charter: [Name]</text>
       <rect x="446" y="26" width="74" height="19" rx="9.5" fill="white" stroke="#d94040" stroke-width="1.3"/>
@@ -634,6 +634,7 @@
       <tbody>
         <tr><td><code># Charter: [Name]</code></td><td><span class="pill warn">Error</span></td><td>First line of the file</td></tr>
         <tr><td><code>**Covers**:</code></td><td><span class="pill warn">Error</span></td><td>Exempt for cross-cutting charters</td></tr>
+        <tr><td><code>**Internal**:</code></td><td><span class="pill na">Optional</span></td><td>One line, directly after <code>**Covers**</code>. It lists backticked identifiers that are deliberately internal, not charter entries. Globs, dotted names and prose are a Warn. A name that no covered file defines is reported as <code>stale-exclusion</code>.</td></tr>
         <tr><td><code>## Owns</code></td><td><span class="pill warn">Error</span></td><td>Must exist</td></tr>
         <tr><td><code>## Does Not Own</code></td><td><span class="pill warn">Error</span></td><td>Must exist</td></tr>
         <tr><td><code>---</code> separator</td><td><span class="pill warn">Error</span></td><td>At least one, before any function entries</td></tr>
@@ -649,8 +650,8 @@
     <table>
       <thead><tr><th>Element</th><th>Enforcement</th><th>Format</th></tr></thead>
       <tbody>
-        <tr><td>Heading</td><td><span class="pill warn">Error</span></td><td><code>### name(args)</code> or free-form after <code>### </code>. Disambiguate duplicate names with <code>[filename.ext]</code> when needed.</td></tr>
-        <tr><td>File line</td><td><span class="pill caution">Warn</span></td><td>A <code>File:</code> line is recommended</td></tr>
+        <tr><td>Heading</td><td><span class="pill warn">Error</span></td><td><code>### name(args)</code> or free-form after <code>### </code>. A grouped heading, <code>### a() / b()</code>, documents every name it lists. Disambiguate duplicate names with <code>[filename.ext]</code> when needed.</td></tr>
+        <tr><td>File line</td><td><span class="pill caution">Warn</span></td><td>A <code>File:</code> line is recommended, with or without backticks. A heading with neither a <code>File:</code> line nor a description is a <code>bare-entry</code> Warn.</td></tr>
         <tr><td>Description</td><td><span class="pill caution">Warn</span></td><td>At least one non-annotation line after the heading</td></tr>
         <tr><td>Access patterns</td><td><span class="pill na">Optional</span></td><td><code>@reads:</code>, <code>@writes:</code>, <code>Models:</code>, <code>Filesystem:</code>, <code>Session R:</code>, <code>Session W:</code></td></tr>
         <tr><td>Callers</td><td><span class="pill na">Optional</span></td><td><code>←</code> or <code>&lt;-</code> prefix</td></tr>

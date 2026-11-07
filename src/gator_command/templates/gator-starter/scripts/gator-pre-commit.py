@@ -54,7 +54,7 @@ from precommit_lint import (  # noqa: E402
 from precommit_charter import (  # noqa: E402
     CHARTER_SCAFFOLD_FILES,
     _check_charter_function_refs,
-    _detect_new_functions,
+    new_seam_functions,
     _parse_charter_index,
     _required_charters_for_files,
     _resolve_charter_surface,
@@ -660,24 +660,22 @@ def validate_soft_rules(staged_files, frontmatter, body, gator_dir):
                 f"{refs_str}. Verify these weren't renamed or removed."
             ))
 
-    # 6. New code functions without charter entries: if code added new def/func
-    #    lines but charter didn't add corresponding ### entries, warn.
-    #    Compares specific names, not just counts — adding an unrelated charter
-    #    entry doesn't suppress the warning for undocumented functions.
+    # 6. New public seams without charter entries (#105): a new definition
+    #    that the shared significance policy calls a seam (entry point, or
+    #    imported by another charter's code), judged over the staged index
+    #    only, and not documented or listed on **Internal**: in any staged
+    #    charter. Advisory; never a block.
     if has_code and has_charter:
-        new_code_funcs, new_charter_entries = _detect_new_functions(
-            staged_files, gator_dir.parent
-        )
-        charter_entry_names = set(new_charter_entries)
-        undocumented = [f for f in new_code_funcs if f not in charter_entry_names]
+        undocumented = new_seam_functions(gator_dir.parent)
         if undocumented:
             funcs_str = ", ".join(undocumented[:5])
             if len(undocumented) > 5:
                 funcs_str += f" (+{len(undocumented) - 5} more)"
             warnings.append((
                 "new-functions-undocumented",
-                f"New function(s) in code ({funcs_str}) without matching ### "
-                f"entries in charters. Consider documenting them."
+                f"New public seam(s) in code ({funcs_str}) without a charter entry "
+                f"or Internal listing. Document the seam, group it with related "
+                f"helpers, or list it on **Internal**:."
             ))
 
     # 7. Cross-module imports — now enforced as a hard block in

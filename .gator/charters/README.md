@@ -18,6 +18,7 @@ Every module charter uses this order:
 # Charter: Domain
 
 **Covers**: `path/or/glob/**`
+**Internal**: `helper_name`, `other_helper`   (optional)
 
 ## Owns
 [Responsibilities and durable contracts.]
@@ -39,7 +40,9 @@ File: path/to/file.py
 -> Other Charter - link the real neighboring charter and explain the boundary
 ```
 
-Use function or class names, never line numbers. Group tightly related helpers in one entry when they share the same boundary and invariant.
+Use function or class names, never line numbers. Group tightly related helpers in one entry when they share the same boundary and invariant: every name in a grouped heading (`### a() / b()`) counts as documented and inherits the entry's `File:`. `File:` may be written with or without backticks.
+
+The optional `**Internal**:` line, directly after `**Covers**`, lists names that are deliberately internal and not charter entries. Each item is a backticked identifier. No globs, dotted names or prose are allowed, and only one line is allowed. A name that no file covered by the charter defines is a `stale-exclusion` finding. A name that is also documented is a lint warning, and the documented entry wins.
 
 ## Notation
 
@@ -98,3 +101,5 @@ python src/gator_command/scripts/gator-charter-verify.py --path .
 ```
 
 The linter checks charter shape. The verifier reports coverage, stale structure, and likely gaps; its informational findings require judgment rather than automatic expansion.
+
+To repair a `function-gap`, do one of three things. Document the public seam or high-blast-radius helper. Group related helpers that share one boundary and invariant. Or list the name on `**Internal**:`. Never add inventory-style bare function lists: a heading with no `File:` line and no description is a `bare-entry` lint warning. `gator-charter-verify --functions strict` shows the broader, pre-#105 candidate list for investigation only.

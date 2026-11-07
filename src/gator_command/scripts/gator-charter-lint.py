@@ -28,6 +28,8 @@ except ImportError:
     def ensure_utf8_stdout():
         pass
 
+import charter_significance as significance  # noqa: E402
+
 SKIP_FILES = {"_template.md", "README.md"}
 
 
@@ -125,6 +127,9 @@ def parse_charter(path):
         # Separators
         if stripped == "---":
             doc.separators.append(lineno)
+            # A separator ends the current entry; it is not description prose.
+            current_func = None
+            continue
 
         # Tables (for dispatch table detection)
         if stripped.startswith("|") and "|" in stripped[1:]:
@@ -269,12 +274,50 @@ def validate_charter(doc):
                 f"Function entry '{func.name}' has no description after File: line"
             ))
 
+        # A bare heading must not clear a function gap while escaping
+        # stale checks (#105): it needs a File: line or explanatory prose.
+        if not func.has_file_line and not func.has_description:
+            findings.append(Finding(
+                "bare-entry", "warn", func.line,
+                f"Function entry '{func.name}' has neither a File: line nor a description; "
+                "document the seam, group it with related helpers, or list it on **Internal**:"
+            ))
+
         if not func.has_annotations:
             findings.append(Finding(
                 "no-annotations", "info", func.line,
                 f"Function entry '{func.name}' has no caller/callee/tripwire annotations"
             ))
 
+    findings.extend(_validate_internal(doc))
+    return findings
+
+
+def _validate_internal(doc):
+    """Shape rules for the optional `**Internal**:` line (#105).
+
+    Scope (is each name defined in a covered file?) needs coverage
+    resolution and is the verifier's `stale-exclusion`, not a lint rule.
+    """
+    findings = []
+    names, problems = significance.parse_internal("\n".join(doc.lines))
+    for p in problems:
+        check = "internal-duplicate" if p["code"] == "duplicate" else "internal-syntax"
+        findings.append(Finding(check, "warn", p["line"], p["detail"]))
+    if not names:
+        return findings
+    documented = {}
+    for func in doc.functions:
+        for name in significance.heading_names("### " + func.name):
+            documented.setdefault(name, func.line)
+            documented.setdefault(name.split(".")[-1], func.line)
+    for name in names:
+        if name in documented:
+            findings.append(Finding(
+                "internal-conflict", "warn", documented[name],
+                f"`{name}` is both documented and listed on **Internal**:; "
+                "the documented entry wins — remove one"
+            ))
     return findings
 
 

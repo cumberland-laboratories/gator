@@ -4,7 +4,9 @@ Each test proves one risk named by the approved plan: the verifier JSON
 gains `charters` additively; the roll-up produces the sketch's counts and
 state; the commit signal is conservative and glob-aware; a report is never
 overwritten; a failed run writes nothing; the Git-private record is
-untrusted input; and the report carries the four sketch sections.
+untrusted input; and the report carries the four sketch sections. Since
+#105, default function gaps are advisory: shown and counted, never alone
+a reason for needs-review.
 """
 
 import json
@@ -66,7 +68,8 @@ def test_verifier_json_adds_charters_additively(repo):
         [sys.executable, str(SCRIPTS_DIR / "gator-charter-verify.py"), "--path", str(repo), "--json"],
         capture_output=True, text=True, check=True).stdout
     data = json.loads(out)
-    assert list(data) == ["version", "finding_count", "summary", "findings", "charters"]
+    assert list(data) == ["version", "finding_count", "summary", "findings", "charters",
+                          "function_policy"]
     assert data["charters"] == [{"name": "mod", "path": ".gator/charters/mod.md",
                                  "covers": ["src/*.py"]}]
     for f in data["findings"]:
@@ -177,7 +180,64 @@ def test_report_has_four_sections_and_revision(repo):
         assert heading in text
     assert result["revision"] and f"`{result['revision']}`" in text
     assert "charter update not observed" in text
-    assert "Add, combine, or explicitly exclude the responsibility." in text
+    assert "- [function-gap] (advisory) `src/a.py`" in text
+    assert charter_sync.REPAIR["function-gap"] in text
+    assert "do not add bare function lists" in charter_sync.REPAIR["function-gap"]
+
+
+def _gap(charter="mod", file="src/a.py"):
+    return {"class": "function-gap", "severity": "info", "file": file,
+            "function": "f", "reason": "entry", "message": "m", "charter": charter}
+
+
+def test_advisory_function_gaps_alone_leave_the_result_current(repo):
+    """#105: default function gaps are shown and counted, never decisive."""
+    result, _ = charter_sync.run_sync(
+        repo, now=NOW, verify_fn=_stub([_gap(), _gap(file="src/b.py")]))
+    assert result["state"] == "current"
+    assert result["headline"] == "Current — 2 advisory function gaps in 1 charter."
+    assert result["counts"] == {"current": 2, "needs_review": 0, "missing": 0}
+    assert result["findings_total"] == 2
+    assert [(g["kind"], g["label"], g["count"]) for g in result["findings"]] == [
+        ("function-gap", "mod", 2)]
+
+
+@pytest.mark.parametrize("decisive", [
+    {"class": "coverage-gap", "severity": "warn", "file": "tools/u.py", "message": "m"},
+    {"class": "stale-structure", "severity": "info", "file": "lib/x.py",
+     "function": "gone", "message": "m", "charter": "other"},
+    {"class": "stale-exclusion", "severity": "info", "file": ".gator/charters/other.md",
+     "function": "gone", "message": "m", "charter": "other"},
+])
+def test_decisive_findings_still_need_review(repo, decisive):
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub([_gap(), decisive]))
+    assert result["state"] == "needs-review"
+    assert result["headline"].endswith("; 1 advisory.")
+    # The advisory-only charter `mod` is not counted as needing review.
+    assert result["counts"]["needs_review"] == (0 if decisive["class"] == "coverage-gap" else 1)
+    if decisive["class"] == "stale-exclusion":
+        assert result["findings"][0]["kind"] == "stale-exclusion"
+        assert result["findings"][0]["message"] == charter_sync.WORDING["stale-exclusion"]
+
+
+def test_flagged_commit_with_only_advisory_findings_needs_review(repo):
+    _commit(repo, {}, "charter only")
+    _commit(repo, {"src/a.py": "a"}, "code only")
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub([_gap()]))
+    assert result["recent_commits"]["without_charter_update"] == 1
+    assert result["state"] == "needs-review"
+
+
+def test_saved_records_stay_valid_across_the_vocabulary_change(repo):
+    """Record keys are unchanged: an older record and one with the new
+    `stale-exclusion` kind both sanitize."""
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub([_gap()]))
+    record = {k: v for k, v in result.items() if k != "persisted"}
+    old = dict(record, state="needs-review", findings=[dict(
+        record["findings"][0], message="Public function is not represented in its charter.")])
+    assert charter_sync._sanitize(old) is not None
+    new = dict(record, findings=[dict(record["findings"][0], kind="stale-exclusion")])
+    assert charter_sync._sanitize(new)["findings"][0]["kind"] == "stale-exclusion"
 
 
 def _fail_git_when(monkeypatch, needle):

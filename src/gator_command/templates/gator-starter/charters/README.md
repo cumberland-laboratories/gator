@@ -68,6 +68,20 @@ Session W: last_graded_at
 | `Session R:` / `Session W:` | State access | Tracks untyped state (session dicts, Redis keys) that code analysis alone can't reveal |
 | `TRIPWIRE` | Section-level danger label | Flags architectural patterns that span multiple functions and must be preserved as a unit |
 
+### Which functions get an entry
+
+A charter is a map, not an API index. Give an entry to a **public seam**: a command or route entry point, an exported function, or a function another charter's code calls. Give one to a **high-blast-radius helper** too. Do not add one heading per function.
+
+- **Group related helpers** in one entry when they share one boundary and invariant: `### parse_row() / render_row()`, followed by one `File:` line and a description. Every name in the heading counts as documented. If one of them is renamed or removed, `gator-charter-verify` reports the entry as stale.
+- **Record deliberately internal names** on one optional line, directly after `**Covers**`:
+
+  ```
+  **Internal**: `parse_cache_key`, `render_row`
+  ```
+
+  Each name is a backticked identifier. Globs, dotted names and prose are not allowed. The line means "deliberately internal, not a charter entry", not "unowned". A name that no covered file defines is reported as `stale-exclusion`. A name that is also documented is a lint warning, and the documented entry wins.
+- An entry needs a `File:` line (written with or without backticks) and a description. A bare heading is a lint warning (`bare-entry`), because it would clear a gap without being checked for staleness.
+
 **Why function names, not line numbers:** An earlier version of this notation used `[Lnnn]` line anchors. These break on every edit above them, creating combinatorial maintenance overhead. Function names are structurally stable — they survive code churn, they're self-verifying via grep, and they match how LLM agents actually navigate code. The staleness signal is cleaner too: a function name either resolves or visibly fails. A stale line number silently points to the wrong code.
 
 ## The Cross-Cutting Charter
@@ -102,7 +116,7 @@ Three god-function decompositions were completed without regressions. A cross-mo
 
 In a mature codebase, charters are one layer of a three-layer structure:
 
-1. **Charters** — per-module API references. Every public function, what it reads/writes, what models it touches, session keys, cross-references, and tripwires. Organized by code structure. The machine-readable map.
+1. **Charters** — per-module maps. Every public seam and high-blast-radius helper, what it reads/writes, what models it touches, session keys, cross-references, and tripwires. Organized by code structure. The machine-readable map.
 2. **Designs** — flow-oriented user journey documents. Each one describes a complete business flow (checkout, authentication, quiz-taking) from the user's perspective, referencing charters for technical detail. Organized by what the user does.
 3. **Systems** — infrastructure and subsystem documentation. How specific subsystems work (CI/CD, caching, rendering pipeline). Technical reference.
 

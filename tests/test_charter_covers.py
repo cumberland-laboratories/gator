@@ -97,7 +97,10 @@ def test_verifier_honours_glob_covers(tmp_path):
     for rel in ("src/a.py", "lib/d/b.py"):
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text('def build_widget():\n    """Build one."""\n    return 1\n', encoding="utf-8")
+        # An `__all__` export is a seam under the default significance
+        # policy (#105), so the function-gap check must reach this file.
+        p.write_text('__all__ = ["build_widget"]\n\n\ndef build_widget():\n    return 1\n',
+                     encoding="utf-8")
     (tmp_path / "tools").mkdir()
     (tmp_path / "tools" / "u.py").write_text("X = 1\n", encoding="utf-8")
     _git(tmp_path, "add", "-A")
@@ -111,3 +114,35 @@ def test_verifier_honours_glob_covers(tmp_path):
     assert gaps == {"tools/u.py"}
     function_gaps = {(f["file"], f["charter"]) for f in findings if f["class"] == "function-gap"}
     assert function_gaps == {("src/a.py", "mod"), ("lib/d/b.py", "mod")}
+
+
+def test_internal_exclusion_applies_only_after_coverage_resolution(tmp_path):
+    """#105: only a charter that `coverage_index()` assigns to a glob-covered
+    file can clear its gap with `**Internal**:`; a charter that does not
+    cover the file cannot suppress it."""
+    _git(tmp_path, "init", "-q")
+    charters = tmp_path / ".gator" / "charters"
+    charters.mkdir(parents=True)
+    mod = charters / "mod.md"
+    mod.write_text("# Charter: mod\n\n**Covers**: `src/*.py`\n", encoding="utf-8")
+    (charters / "other.md").write_text(
+        "# Charter: other\n\n**Covers**: `lib/`\n**Internal**: `build_widget`\n",
+        encoding="utf-8")
+    for rel in ("src/a.py", "lib/b.py"):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text('__all__ = ["build_widget"]\n\n\ndef build_widget():\n    return 1\n',
+                     encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+
+    def gaps():
+        out = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "gator-charter-verify.py"),
+             "--path", str(tmp_path), "--json"],
+            capture_output=True, text=True, check=True).stdout
+        return {f["file"] for f in json.loads(out)["findings"] if f["class"] == "function-gap"}
+
+    assert gaps() == {"src/a.py"}          # other.md clears lib/b.py only
+    mod.write_text("# Charter: mod\n\n**Covers**: `src/*.py`\n**Internal**: `build_widget`\n",
+                   encoding="utf-8")
+    assert gaps() == set()
