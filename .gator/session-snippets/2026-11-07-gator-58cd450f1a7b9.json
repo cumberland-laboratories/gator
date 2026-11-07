@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop charter: current contracts only, history archived",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-history"
+  ],
+  "commit": "58cd450f1a7b9db140c2907d88b4f9df140c0d55",
+  "short_commit": "58cd450",
+  "snippet_id": "snippet-58cd450f1a7b9",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 8,
+  "previous_commit_in_session": "d9741bb170738e89c2e7badd7f20b9e169ee6a62",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:37:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-11-07-charter-history-archive.md",
+    ".gator/charters/scripts-loop.md",
+    ".gator/session-snippets/2026-11-07-gator-d9741bb170738.json"
+  ],
+  "notes": [
+    "The Gator Loop charter now states current contracts without their",
+    "provenance: issue tags, dates, milestone and checkpoint labels, measurement",
+    "dates and fix stories. Issue numbers that named a contract generation (\"pre-#55",
+    "plans\", \"a session paused before #53\", \"the pre-#41 sets\") are restated as the",
+    "feature itself (plans without declared checkpoints, sessions from before",
+    "suspension fields, the planning-only sets), so the migration boundaries stay",
+    "exact. Every function, contract flag, file, test pin and tripwire stays, and",
+    "the tripwire names cited by the cross-cutting charter are unchanged."
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}
