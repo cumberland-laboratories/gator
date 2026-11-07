@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters: Session Capture covers gator_diagnostics.py",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charters-health-section",
+    "covers-grammar"
+  ],
+  "commit": "2e38b016121b9315ff13b71640e78102f51bbafe",
+  "short_commit": "2e38b01",
+  "snippet_id": "snippet-2e38b016121b9",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "7322e433ececc0a54c820b02203d09bd93ec692a",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:23:00Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/INDEX.md",
+    ".gator/charters/scripts-session-capture.md",
+    ".gator/session-snippets/2026-11-07-gator-7322e433ececc.json"
+  ],
+  "notes": [
+    "The starter `gator_diagnostics.py` (the session-hook diagnostics log) was the",
+    "last source file with no charter. The Vendor Session Capture charter, which",
+    "owns the session hooks that write that log, now covers it, and INDEX routes it",
+    "there. Every source file now has a charter.",
+    "This keeps the one coverage fix from a Codex charter-repair pass. The rest of",
+    "that pass was discarded: it listed 708 bare function names without",
+    "descriptions or annotations, which cleared the function-gap count but",
+    "pushed the charters to 7.2% of the code and out of the charter schema."
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}
