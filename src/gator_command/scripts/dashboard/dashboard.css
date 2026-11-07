@@ -4049,6 +4049,17 @@ textarea.loop-ctrl-input {
   gap: var(--space-2);
 }
 .charters-tabbar .charters-refresh { margin-bottom: 4px; }
+/* The tab bar stays in view while a panel scrolls, like the Welcome tabs:
+   sticky at the top of #view-slot (the scroll container), on the page
+   background so scrolled content passes under it, never through it. */
+.charters-tabbar {
+  position: sticky;
+  top: calc(-1 * var(--space-6));
+  z-index: 2;
+  margin-top: calc(-1 * var(--space-6));
+  padding-top: var(--space-6);
+  background: var(--color-bg);
+}
 .charters-tablist { display: flex; flex-wrap: wrap; gap: 4px; }
 .charters-panel { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 .charters-panel[hidden] { display: none; }

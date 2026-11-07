@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Pre-commit charter: current contracts only, history archived",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-history"
+  ],
+  "commit": "99a613d67cfea440c3a57b66b4a809e342bc30b6",
+  "short_commit": "99a613d",
+  "snippet_id": "snippet-99a613d67cfea",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 9,
+  "previous_commit_in_session": "58cd450f1a7b9db140c2907d88b4f9df140c0d55",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:38:04Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-11-07-charter-history-archive.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-11-07-gator-58cd450f1a7b9.json"
+  ],
+  "notes": [
+    "The Pre-Commit Governance charter now states current contracts without their",
+    "provenance: issue tags, dates, checkpoint labels and fix stories (\"recreates",
+    "become \"legacy resolution values\" and the \"resolution-policy migration guard\",",
+    "so the migration rules stay exact. Every rule, tripwire name, file and test",
+    "pin is unchanged.",
+    "The previous text of every changed line is kept verbatim in",
+    "`.gator/artifacts/2026-11-07-charter-history-archive.md`.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}
