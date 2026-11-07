@@ -18,7 +18,7 @@ and returns honest partial data for Gemini until Phase 4 lands.
 """
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api_contract import (

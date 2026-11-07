@@ -14,7 +14,6 @@ from app.models.repository import Repository
 from app.services.session_blocks import (
     get_block_for_commit,
     get_pending_blocks_by_machine,
-    get_session_reconstruction,
 )
 
 router = APIRouter(tags=["session_blocks"])

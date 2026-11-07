@@ -9,7 +9,7 @@ Designed for customer-hosted / air-gapped environments.
 
 import secrets
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select
 

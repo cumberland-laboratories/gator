@@ -21,9 +21,7 @@ Handles five scenarios:
 
 import argparse
 import json
-import os
 import shutil
-import stat
 import subprocess
 import sys
 from datetime import datetime
@@ -43,8 +41,9 @@ from gatorize.helpers import (  # noqa: E402
     GATOR_MARKER, COMMAND_POST_MARKER,
 )
 from gatorize.vendor_hooks import (  # noqa: E402
-    merge_hooks_into_settings, install_vendor_hooks,
-    _extract_hook_commands, VENDOR_HOOK_CONFIGS,
+    merge_hooks_into_settings,
+    install_vendor_hooks,
+    VENDOR_HOOK_CONFIGS,
 )
 from gatorize.post_install import (  # noqa: E402
     action_install_outbox,

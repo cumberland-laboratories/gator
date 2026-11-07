@@ -9,7 +9,7 @@ All auth mechanics are internal — callers use the ProviderAdapter interface.
 import hashlib
 import hmac
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import httpx
 import jwt

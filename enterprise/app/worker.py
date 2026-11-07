@@ -11,7 +11,6 @@ duplicate jobs resolve as successful no-ops, not failures.
 """
 
 import signal
-import sys
 import time
 from datetime import datetime, timezone
 from dateutil.parser import isoparse

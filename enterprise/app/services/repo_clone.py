@@ -8,7 +8,6 @@ Auth is injected per-operation via git http.extraHeader — tokens are
 never persisted in .git/config or on disk.
 """
 
-import os
 import subprocess
 import threading
 from pathlib import Path

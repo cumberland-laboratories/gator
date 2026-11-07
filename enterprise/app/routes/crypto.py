@@ -5,7 +5,6 @@ keypairs stored server-side. Machine keys are public keys registered by
 developer machines during activation.
 """
 
-import uuid
 from datetime import datetime, timezone
 
 from cryptography.hazmat.primitives.asymmetric import rsa

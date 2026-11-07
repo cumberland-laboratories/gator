@@ -9,7 +9,6 @@ Three supported checks (MVP):
 - trailers_required: governance trailers present in commit message
 """
 
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session

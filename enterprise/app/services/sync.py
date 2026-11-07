@@ -18,7 +18,7 @@ from app.models.git_provider import GitProvider
 from app.models.ingest_job import IngestJob
 from app.models.repository import Repository
 from app.models.sync_run import ProviderSyncRun
-from app.providers.base import CommitInfo, ProviderAdapter, RepoInfo
+from app.providers.base import CommitInfo, ProviderAdapter
 from app.providers.github import GitHubAdapter
 
 

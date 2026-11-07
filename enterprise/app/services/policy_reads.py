@@ -13,7 +13,6 @@ from app.models.policy import Policy, PolicyVersion
 from app.models.policy_rollout import PolicyRollout
 from app.models.policy_target import PolicyTarget
 from app.models.repository import Repository
-from app.services.fleet_reads import compute_repo_compliance
 
 
 def get_policy_compliance(

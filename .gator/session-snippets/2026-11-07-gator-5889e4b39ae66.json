@@ -1,0 +1,48 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charter Sync: import fan-out suspects are advisory",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "charter-function-significance"
+  ],
+  "commit": "5889e4b39ae667b7b0ea107ef7fa68fb023aba9f",
+  "short_commit": "5889e4b",
+  "snippet_id": "snippet-5889e4b39ae66",
+  "session_group_key": "anthropic:2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "1c92dd3ecdb8f8e2921132c7da45e72bf15e34a4",
+  "started_at": "2026-11-07T13:14:27Z",
+  "ended_at": "2026-11-07T18:32:13Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-11-07-gator-1c92dd3ecdb8f.json",
+    "src/gator_command/scripts/dashboard/charter_sync.py",
+    "src/gator_command/scripts/dashboard/views/charters.js",
+    "tests/test_charter_sync.py",
+    "tests/test_dashboard_ui/test_charters_view.py"
+  ],
+  "notes": [
+    "The import fan-out check flagged 58 files here, and that alone kept the",
+    "repository's Charter Sync at \"Needs review\". The check counts third-party",
+    "and most standard-library imports as internal dependencies. Of the 58",
+    "files, 28 were flagged only for those imports, and 26 import only code",
+    "under their own charter. The rest are already known hubs.",
+    "Fan-out suspects are now advisory, like function gaps. They are still",
+    "shown and counted, and the report marks them \"(advisory)\". They no longer",
+    "make a charter or the result \"Needs review\" on their own, and the repair"
+  ],
+  "transcript_session_id": "2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "transcript_ref": null
+}

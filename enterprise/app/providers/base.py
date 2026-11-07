@@ -4,7 +4,7 @@ Auth plumbing (tokens, JWTs, keys) is internal to each adapter.
 The protocol consumer only sees business operations.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 

@@ -16,7 +16,7 @@ Compliance states (evaluation precedence: failed > pending > drifting > aligned 
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, case, distinct, exists, func, select
+from sqlalchemy import distinct, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.models.api_token import ApiToken

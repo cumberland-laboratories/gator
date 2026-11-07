@@ -42,42 +42,20 @@ if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 
 from precommit_lint import (  # noqa: E402
-    LINT_RULES,
-    DANGEROUS_FILENAMES,
-    DANGEROUS_PREFIXES,
-    DANGEROUS_SAFE,
-    parse_diff_added_lines,
     load_lint_allowlist,
-    _effective_severity,
     run_layer1_lint,
 )
 from precommit_charter import (  # noqa: E402
     CHARTER_SCAFFOLD_FILES,
     _check_charter_function_refs,
     new_seam_functions,
-    _parse_charter_index,
     _required_charters_for_files,
     _resolve_charter_surface,
-    _resolve_charter_dir,
-    _iter_charter_files,
     count_charters,
     read_tripwire_patterns,
 )
 from precommit_session import (  # noqa: E402
-    normalize_agent_name,
-    _update_frontmatter,
-    _extract_note_lines,
     _read_machine_id,
-    _read_machine_label,
-    _read_vendor_session,
-    _derive_intent,
-    parse_ledger,
-    build_commit_entry,
-    render_ledger_block,
-    render_snippet_json,
-    _infer_vendor_from_agent,
-    _reassemble_ledger,
-    write_commit_summary,
     record_commit_and_emit_snippet as _record_commit_and_emit_snippet,
 )
 import precommit_override as override_state  # noqa: E402  (#34, #35)

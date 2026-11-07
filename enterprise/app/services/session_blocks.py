@@ -8,7 +8,7 @@ and pending evidence detection.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.logging import get_logger

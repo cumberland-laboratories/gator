@@ -54,7 +54,8 @@ from gator_core import get_version, import_sibling, git, normalize_path  # noqa:
 
 # ── extracted modules ─────────────────────────────────────────────────────────
 from dashboard.helpers import (  # noqa: E402
-    run_json, run_text, git_run as _git_run,
+    run_json,
+    git_run as _git_run,
     read_welcome_html as _read_welcome_html,
 )
 from dashboard.updates import (  # noqa: E402
@@ -74,7 +75,6 @@ from dashboard.data import (  # noqa: E402
     resolve_repo_override as _resolve_repo_override,
     resolve_discovery_roots as _resolve_discovery_roots,
     inject_repo_keys as _inject_repo_keys,
-    parse_search_query as _parse_search_query,
     search_documents as _search_documents,
     SEARCH_NAMESPACES as _SEARCH_NAMESPACES,
     collect_standalone_data,
@@ -657,10 +657,7 @@ def _resolve_loop_dir(repo_key, loop_id):
 #   - vault/artifacts/2026-09-08-dashboard-b1-execution-errata.md
 #     (E1-E5, authoritative for corrections)
 
-from dashboard import content_policy as _content_policy  # noqa: E402
 from dashboard.content_policy import (  # noqa: E402
-    _ALLOWED_TEXT_EXTS_SOURCE,
-    _ALLOWED_TEXT_EXTS_GOVERNANCE,
     _ALLOWED_RAW_ASSET_EXTS,
     _DENIED_DIR_SEGMENTS,
     _DENIED_HIDDEN_PREFIXES,
@@ -673,7 +670,6 @@ from dashboard.content_policy import (  # noqa: E402
 )
 
 import functools as _functools  # noqa: E402
-import stat as _stat  # noqa: E402
 
 
 # ── Logical-path parse (r6 §4 + errata E5) ────────────────────────

@@ -11,7 +11,7 @@ for this service. Use "activity" throughout.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, func, select, text
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.models.commit import Commit
