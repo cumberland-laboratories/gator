@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard UI charter: current contracts only, history archived",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-history"
+  ],
+  "commit": "d9741bb170738e89c2e7badd7f20b9e169ee6a62",
+  "short_commit": "d9741bb",
+  "snippet_id": "snippet-d9741bb170738",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "019a646bcc44df08c0d3f88c48feb2943df949a3",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:34:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-11-07-charter-history-archive.md",
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/session-snippets/2026-11-07-gator-019a646bcc44d.json"
+  ],
+  "notes": [
+    "The Dashboard Browser UI charter now states current behaviour without its",
+    "provenance: issue tags, dates, plan, checkpoint and loop labels, \"Architect",
+    "direction <date>\" notes, and fix stories such as \"before #97 …\" or \"the bug",
+    "dates from …\". A few history notes are restated as standing rules (for",
+    "example, \"Not present (do not reintroduce)\", and why the dialog keeps",
+    "`margin: auto`). Every function, file, test pin and CSS class it names is",
+    "unchanged.",
+    "One statement was wrong and is corrected: the Charter sync result no longer"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}
