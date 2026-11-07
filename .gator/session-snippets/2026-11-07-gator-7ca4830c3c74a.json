@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters page: a file row opens that file in Repo",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charters-health-section"
+  ],
+  "commit": "7ca4830c3c74a29e44526076fdb79b21ebfe0d3a",
+  "short_commit": "7ca4830",
+  "snippet_id": "snippet-7ca4830c3c74a",
+  "session_group_key": "anthropic:2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "e4b2199577d78d2505554598394b2a783fac7192",
+  "started_at": "2026-11-07T13:14:27Z",
+  "ended_at": "2026-11-07T18:23:55Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-ui.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-11-07-gator-e4b2199577d78.json",
+    "src/gator_command/scripts/dashboard/views/charters.js",
+    "tests/test_dashboard_ui/test_charters_view.py"
+  ],
+  "notes": [
+    "Clicking a file in Code → Largest files went to Repo but showed the default",
+    "`mission.md`. The Repo view addresses source files under a `source/`",
+    "namespace, and the Charters page handed it the bare repository path, which",
+    "Repo read as a missing `.gator/` document. The page now maps paths to Repo's",
+    "namespaces (`.gator/` without the prefix, `gator-command/` as it is, and",
+    "everything else under `source/`), so the row opens that exact file, selected",
+    "in the tree.",
+    "The tests now check the namespace for all three cases and that a real"
+  ],
+  "transcript_session_id": "2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "transcript_ref": null
+}

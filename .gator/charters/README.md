@@ -40,7 +40,7 @@ File: path/to/file.py
 -> Other Charter - link the real neighboring charter and explain the boundary
 ```
 
-Use function or class names, never line numbers. Group tightly related helpers in one entry when they share the same boundary and invariant: every name in a grouped heading (`### a() / b()`) counts as documented and inherits the entry's `File:`. `File:` may be written with or without backticks.
+Use function or class names, never line numbers. Group tightly related helpers in one entry when they share the same boundary and invariant: every name in a grouped heading (`### a() / b()`) counts as documented and inherits the entry's `File:`. `File:` may be written with or without backticks. An entry whose names live in more than one file lists each file on its own consecutive `File:` line.
 
 The optional `**Internal**:` line, directly after `**Covers**`, lists names that are deliberately internal and not charter entries. Each item is a backticked identifier. No globs, dotted names or prose are allowed, and only one line is allowed. A name that no file covered by the charter defines is a `stale-exclusion` finding. A name that is also documented is a lint warning, and the documented entry wins.
 

@@ -151,3 +151,18 @@ def test_stale_exclusion(repo, charter, name):
     # An out-of-scope name never clears another charter's gap either.
     if name == "page":
         assert ("src/ui.py", "page") not in _classes(data, "function-gap")  # local, not a seam
+
+
+def test_consecutive_file_lines_all_belong_to_the_entry(repo):
+    """A name may live in any of an entry's File: files; it is stale only
+    when none of them defines it, and is reported once."""
+    md = repo / ".gator/charters/ui.md"
+    md.write_text(md.read_text(encoding="utf-8") +
+                  "\n### page() / renderRow()\nFile: src/ui.py\nFile: web/view.js\nPage and rows.\n",
+                  encoding="utf-8")
+    assert not _classes(_verify(repo), "stale-structure")
+    view = repo / "web/view.js"
+    view.write_text(view.read_text(encoding="utf-8").replace("renderRow", "renderLine"),
+                    encoding="utf-8")
+    stale = [f for f in _verify(repo)["findings"] if f["class"] == "stale-structure"]
+    assert [(f["file"], f["function"]) for f in stale] == [("src/ui.py", "renderRow")]

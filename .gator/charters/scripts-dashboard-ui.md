@@ -150,7 +150,7 @@ The full-width strip of workspace contexts above the sidebar and main pane. Top 
 ! TRIPWIRE: inactive contexts are not live. Only the selected context is rendered, so switching tears down Loop polling, timers and listeners through `showView()`'s existing teardown. Never keep hidden DOM copies of other contexts.
 - **Pinned by** `test_strip_spans_shell_above_sidebar`, `test_strip_aria_keyboard_and_close_labels`, `test_switch_restores_each_context`, `test_only_active_loop_context_polls` and `test_close_changes_navigation_only` in `tests/test_dashboard_ui/test_workspace_tabs.py`.
 
-### fetch() / mutation requests — same-origin API calls from every view
+### Same-origin API requests — fetch and mutation calls from every view
 File: src/gator_command/scripts/dashboard/dashboard.js
 Call same-origin dashboard APIs and normalize errors for views.
 <- all view modules
@@ -159,6 +159,7 @@ Call same-origin dashboard APIs and normalize errors for views.
 
 ### renderStandaloneRepos() / GatorViews.fleet() / placeMenu() / applySort() / sortRows() / window.gatorNavToRepo() / window.gatorOpenRepoInNewContext() — Fleet view and actions
 File: src/gator_command/scripts/dashboard/views/fleet.js
+File: src/gator_command/scripts/dashboard/dashboard.js
 Render repository health and expose explicit per-repository actions via a three-dot overflow menu.
 <- fleet route
 -> repo update/gatorize endpoints, `POST /api/repos/remove`
@@ -372,6 +373,7 @@ A closed display formatter for **expanded Loop artifacts**: hostile, model-autho
 
 ### GatorViews.audit() / showSessionModal() — Audit view
 File: src/gator_command/scripts/dashboard/views/audit.js
+File: src/gator_command/scripts/dashboard/dashboard.js
 Render session evidence and request source-qualified drill-down content.
 <- audit/repo session panels
 -> audit/session endpoints

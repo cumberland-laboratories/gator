@@ -193,6 +193,13 @@ Filesystem: git index (R only: `diff --cached`, `ls-files -s -z`, one `cat-file 
 ! Advisory only: any Git or import failure returns `[]`, never a block. The old added-lines name matcher (`_detect_new_functions()`) is gone from both copies.
 ! `precommit_charter.py` and `charter_significance.py` are byte-identical with their Enterprise bundled copies (`TestByteIdentityAcrossThreeCopies`), and `charter_significance.py` with `src/gator_command/scripts/charter_significance.py` (`test_policy_module_matches_the_verifier_copy`). The bundled `gator-pre-commit.py` rule-6 site is kept in step by hand.
 
+### decide() / heading_names() / parse_file_line() / parse_internal() / python_signals() / javascript_signals() — hook copies of the significance policy
+File: src/gator_command/templates/gator-starter/scripts/charter_significance.py
+File: enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/charter_significance.py
+The hook runtimes' byte-identical copies of the shared function-significance policy, imported by `new_seam_functions()` from its own directory. Behavior and contract are owned by `scripts-charter-tooling.md` (the `src/gator_command/scripts/` copy); change all three together.
+<- `precommit_charter.new_seam_functions()`
+! Pinned byte-identical by `TestByteIdentityAcrossThreeCopies` and `test_policy_module_matches_the_verifier_copy`; never edit one copy alone.
+
 ### write_commit_issues(gator_dir, findings)
 File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
 Lint findings file (gitignored; the only file that carries the matched text). Guidance: HIGH/CRITICAL findings need the Architect's attention (fix, remove, or keep); they do not block and have no approval command, except where an Enterprise mode requires external approval.

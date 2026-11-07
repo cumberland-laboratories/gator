@@ -160,18 +160,20 @@ def _parse_function_entries(text):
     `File:` lines are read with or without backticks.
 
     Returns a set of function names (for coverage checks) and a dict
-    mapping function names to their associated File: path (for stale checks).
+    mapping function names to the tuple of paths on the entry's File:
+    lines (for stale checks). Consecutive `File:` lines all belong to the
+    entry: a name lives in one of them.
     """
     functions = set()
-    function_files = {}  # name -> file path from File: line
+    function_files = {}  # name -> tuple of file paths from File: lines
     last_file_ref = None  # Track File: context for #### method entries
 
-    def _record(name, file_ref):
+    def _record(name, file_refs):
         # For ClassName.method, record both the dotted name and the method
         for key in ([name, name.split(".")[-1]] if "." in name else [name]):
             functions.add(key)
-            if file_ref:
-                function_files[key] = file_ref
+            if file_refs:
+                function_files[key] = file_refs
 
     lines = text.splitlines()
     for i, line in enumerate(lines):
@@ -179,20 +181,28 @@ def _parse_function_entries(text):
         # (`### a() / b()`) documents every name it lists.
         names = significance.heading_names(line)
         if names:
-            # Look for File: line in the next few lines
-            file_ref = None
+            # Look for the first File: line in the next few lines, then
+            # take every File: line that directly follows it.
+            file_refs = ()
             for j in range(i + 1, min(i + 4, len(lines))):
-                file_ref = significance.parse_file_line(lines[j])
-                if file_ref:
-                    last_file_ref = file_ref
+                first = significance.parse_file_line(lines[j])
+                if first:
+                    refs = [first]
+                    for k in range(j + 1, len(lines)):
+                        more = significance.parse_file_line(lines[k])
+                        if not more:
+                            break
+                        refs.append(more)
+                    file_refs = tuple(refs)
+                    last_file_ref = first
                     break
 
             # #### entries (methods) inherit the File: from their parent ### entry
-            if not file_ref and line.startswith("####"):
-                file_ref = last_file_ref
+            if not file_refs and line.startswith("####") and last_file_ref:
+                file_refs = (last_file_ref,)
 
             for name in names:
-                _record(name, file_ref)
+                _record(name, file_refs)
 
         # Track File: lines for context inheritance
         elif line.startswith("File:"):
@@ -522,29 +532,36 @@ def _check_stale_structure(analyses, coverage_map, charter_functions, charter_fu
                            signals=None):
     """Find charter function entries that no longer exist in code.
 
-    Only flags functions whose File: line in the charter matches the
+    Only flags functions whose File: lines in the charter name the
     specific source file being checked. This avoids false positives when
-    a charter covers multiple files. JavaScript `window.<path>`
+    a charter covers multiple files. An entry with several File: lines is
+    stale only when the name is in none of them, and is reported once, on
+    the first of its files that was analyzed. JavaScript `window.<path>`
     registrations (`signals[...]["registered"]`) count as existing code.
     """
     signals = signals or {}
     findings = []
+
+    def _actual(analysis, rel_path):
+        # All actual function/class names in one file
+        names = set()
+        for fn in analysis["functions"]:
+            names.add(fn["name"])
+        for cls in analysis["classes"]:
+            names.add(cls["name"])
+            for m in cls["methods"]:
+                names.add(m["name"])
+                names.add(f"{cls['name']}.{m['name']}")
+        names.update(signals.get(rel_path, {}).get("registered", ()))
+        return names
+
+    actual_by_file = {p: _actual(a, p) for p, a in analyses.items()}
 
     for rel_path, analysis in analyses.items():
         if rel_path not in coverage_map:
             continue
 
         charter_names = coverage_map[rel_path]
-        # Get all actual function/class names in the file
-        actual_names = set()
-        for fn in analysis["functions"]:
-            actual_names.add(fn["name"])
-        for cls in analysis["classes"]:
-            actual_names.add(cls["name"])
-            for m in cls["methods"]:
-                actual_names.add(m["name"])
-                actual_names.add(f"{cls['name']}.{m['name']}")
-        actual_names.update(signals.get(rel_path, {}).get("registered", ()))
 
         for cn in charter_names:
             documented = charter_functions.get(cn, set())
@@ -555,15 +572,13 @@ def _check_stale_structure(analyses, coverage_map, charter_functions, charter_fu
                 if doc_fn in ("Internal_helpers", "Internal"):
                     continue
 
-                # Only check if the File: line points to this specific file
-                declared_file = fn_files.get(doc_fn, "")
-                if declared_file and declared_file != rel_path:
-                    continue  # This function belongs to a different file in the same charter
-
                 # If no File: line, skip — can't determine which file it belongs to
-                if not declared_file:
+                declared = [f for f in fn_files.get(doc_fn, ()) if f in actual_by_file]
+                # Check once, from the first declared file that was analyzed
+                if not declared or declared[0] != rel_path:
                     continue
 
+                actual_names = set().union(*(actual_by_file[f] for f in declared))
                 base_name = doc_fn.split(".")[-1] if "." in doc_fn else doc_fn
                 if base_name not in actual_names and doc_fn not in actual_names:
                     findings.append({
