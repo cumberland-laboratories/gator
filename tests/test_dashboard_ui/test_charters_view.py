@@ -206,14 +206,20 @@ def _wait_selected(page, logical):
         " return !!s && s.selectedFile === p; }", arg=logical, timeout=15000)
 
 
-def test_open_file_selects_that_file(page, dashboard_fleet):
+@pytest.mark.parametrize("path, logical", [
+    (".gator/mission.md", "mission.md"),                         # governance: no prefix
+    ("src/app/widget.py", "source/src/app/widget.py"),           # source files: source/
+    ("gator-command/notes.md", "gator-command/notes.md"),        # its own namespace
+])
+def test_open_file_hands_repo_the_right_namespace(page, dashboard_fleet, path, logical):
     _stub(page, RESULT)
-    _stub_report(page, _report("current"))       # largest file: .gator/mission.md
+    largest = [{"path": path, "lines": 4737, "charters": ["scripts-dashboard"]}]
+    _stub_report(page, _report("current", code=dict(REPORT["code"], largest_files=largest)))
     _open_charters(page, dashboard_fleet)
     _wait_report(page, "current")
     page.click("#charters-view-tab-code")
     page.click(".charters-file-row")        # the chart row is the link
-    _wait_selected(page, "mission.md")
+    _wait_selected(page, logical)
     assert page.evaluate("() => document.getElementById('topbar-title').textContent") == "Repo"
 
 
@@ -239,9 +245,11 @@ def test_real_run_then_open_file_over_a_cached_listing(page, dashboard_fleet_mut
     page.click("#charters-view-tab-code")
     row = page.locator(".charters-file-row").first
     path = row.get_attribute("aria-label")[len("Open "):].split(",")[0]
-    logical = path[len(".gator/"):] if path.startswith(".gator/") else path
+    logical = path[len(".gator/"):] if path.startswith(".gator/") else "source/" + path
     row.click()
     _wait_selected(page, logical)
+    # The file itself opens: selected in the tree and shown, not the default document.
+    page.wait_for_selector(f'#repo-file-list .repo-file-item.active[data-path="{logical}"]', timeout=15000)
     assert page.evaluate("() => document.getElementById('topbar-title').textContent") == "Repo"
 
     page.go_back()

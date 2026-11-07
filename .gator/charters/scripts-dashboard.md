@@ -134,6 +134,7 @@ Converts the URL-visible logical namespace into a validated namespace root plus 
 <- request parser, list/file/raw handlers
 -> content-policy constants
 ! Reject encoded separators, traversal, hidden/denied segments, reserved Windows names, trailing dots/spaces, and ambiguous decoding before filesystem access.
+! The namespace scheme has a browser mirror: the Charters view's `toLogical()` (`views/charters.js`) maps repo-relative paths into these namespaces (`.gator/` content without the prefix, `gator-command/` as it is, everything else under `source/`). Changing a namespace must change it too; see `scripts-dashboard-ui.md` → Charters view.
 
 ### _parse_request(handler)
 File: src/gator_command/scripts/gator-dashboard.py

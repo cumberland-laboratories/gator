@@ -85,10 +85,13 @@
     });
   }
 
-  // The Repo view's logical path: `.gator/` content is addressed without
-  // the prefix; other namespaces keep their path.
+  // The Repo view's logical path for a repo-relative path (the server's
+  // `parse_logical_path` namespaces): `.gator/` content without the prefix,
+  // `gator-command/` as it is, and everything else under `source/`.
   function toLogical(rel) {
-    return rel.indexOf(".gator/") === 0 ? rel.slice(".gator/".length) : rel;
+    if (rel.indexOf(".gator/") === 0) return rel.slice(".gator/".length);
+    if (rel.indexOf("gator-command/") === 0) return rel;
+    return "source/" + rel;
   }
 
   function relativeTime(iso) {
