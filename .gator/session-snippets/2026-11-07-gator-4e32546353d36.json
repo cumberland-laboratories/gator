@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Cross-Cutting charter: current contracts only, history archived",
+  "change_type": "governance",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-history",
+    "issue-94"
+  ],
+  "commit": "4e32546353d36c9f56995c4a3b6084dee33d00de",
+  "short_commit": "4e32546",
+  "snippet_id": "snippet-4e32546353d36",
+  "session_group_key": "anthropic:ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "2e38b016121b9315ff13b71640e78102f51bbafe",
+  "started_at": "2026-11-06T01:52:38Z",
+  "ended_at": "2026-11-07T01:26:25Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-11-07-charter-history-archive.md",
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-11-07-gator-2e38b016121b9.json"
+  ],
+  "notes": [
+    "The cross-cutting charter is read at the start of every session, so it should",
+    "state what is true now, not how it came to be. Its dated history (issue tags,",
+    "dates, checkpoint and loop names, version notes, and change-log wording such",
+    "as \"gains\" or \"is replaced by\") is removed, and the CLI-compatibility section",
+    "is restated as the current contract: the optional fields readers must",
+    "tolerate, grouped by schema, and the trailer rules. The test-pin paragraph is",
+    "now a list.",
+    "No rule, field, tolerance requirement or test pin was dropped. The only"
+  ],
+  "transcript_session_id": "ae112c02-c628-4cb0-9bb3-f2fb8ecb99f4",
+  "transcript_ref": null
+}

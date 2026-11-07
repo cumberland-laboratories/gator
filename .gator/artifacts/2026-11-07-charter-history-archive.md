@@ -102,3 +102,109 @@ See `scripts-dashboard.md` → `get_repo_history()` and `scripts-dashboard-ui.md
 ## Package and License Surface (Git-private state)
 
 Per-worktree Git-private state lives under `$(git rev-parse --git-path <name>)`: `gator-override/` (pre-commit override envelope), `gator-loop-liveness/` (loop participant liveness sidecar, #36), `gator-charter-sync.json` (the Dashboard charter sync check's last summary, a display cache; see `scripts-dashboard.md` → `dashboard/charter_sync.py`) and `gator-charters-report.json` (the sanitized charter report, a display cache; see `scripts-dashboard.md` → `dashboard/charters_report.py`). None of them is ever staged, served by the Dashboard content APIs, or shared through the repository.
+
+# Core Library
+
+Source: `.gator/charters/scripts-core-library.md` (as of commit 4e32546). History (dates, release-by-release version notes, project phases, review findings and fix stories) was removed and the entries restated as current contracts. Three statements had drifted from the code and were corrected at the same time: `resolve_governed_runtime()` is called by the hook dispatcher `gator-hook.py` on every hook (the template pre-commit only behind `GATOR_RUNTIME_RESOLVER=1`); the runtime pin is read by that resolver (no longer "reader-free"); and there is no `gator-prefs` CLI. Previous text of every changed entry, verbatim:
+
+```markdown
+- Vendor-transcript discovery, parsing, or session schema — Enterprise-side since the audit-surface tranche (the `extract-*.py` scripts and `gator-session-common.py` retired 2026-08-13/2026-08-16; see [`scripts-enterprise`](scripts-enterprise.md)).
+```
+
+```markdown
+! **VERSION file and pyproject.toml must stay byte-consistent on the version field.** Historical drift (root `VERSION` at `1.8.1` while pyproject was at `2.4.5`) was harmless in the normal source-checkout path because the resolver reads pyproject first, but the fallback path (deployed repos without full git history) would silently serve stale numbers. Pre-cutover fix (2026-08-02) synced both to 2.5.0, then 2.5.1 for the actual first monorepo release, then 2.5.2 (silent-partial-commit) and 2.5.3 (recovery release with the actual code), then 2.5.4 (session-hook + migration hardening — closes the fleet-wide silent-no-op class introduced by the `.includes/` split). The drift RECURRED across 2.6.0 → 2.7.0 (three releases bumped pyproject only; VERSION sat at 2.5.4) — caught and re-synced at the 2.8.0 bump (2026-08-16), maintained at the 2.9.0/2.9.1/2.9.2 bumps (2026-08-23), 2.9.3 (2026-08-28), 2.10.0 (2026-08-29), 2.11.0 (2026-08-30), and 2.11.1 (2026-08-30), 2.12.0 (2026-09-02), 2.12.1 (2026-09-03), 2.12.2 (2026-09-03), 2.12.3 (2026-09-03), and 2.13.0 (2026-09-12), 2.13.1 (2026-09-12), and 2.13.2 (2026-09-12), and 2.13.3 (2026-09-14), 2.13.4 (2026-09-16), 2.14.0 (2026-09-20), 2.14.1 (2026-09-20), 2.15.0 (2026-09-23), 2.15.1 (2026-09-25), 2.16.0 (2026-09-26), 2.17.0 (2026-09-27), 2.18.0 (2026-09-28), and 2.19.0 (2026-10-02), and 2.20.0 (2026-10-03), and 2.21.0 (2026-10-04), 2.22.0 (2026-10-05), 2.23.0 (2026-10-07), 2.23.1 (2026-10-08), 2.24.0 (2026-10-09), 2.25.0 (2026-10-12), 2.25.1 (2026-10-12), 2.26.0 (2026-10-18), 2.26.1 (2026-10-18), 2.27.0 (2026-10-19), 2.28.0 (2026-10-20), 2.29.0 (2026-10-22), 2.30.0 (2026-10-23), 2.31.0 (2026-10-23), 2.32.0 (2026-10-25), 2.33.0 (2026-10-26), 2.34.0 (2026-10-29), 2.35.0 (2026-10-29), and 2.36.0 (2026-11-02, current: **2.36.0** in both files). Both files should be updated together in every version bump commit — CI has no cross-file consistency check for this.
+```
+
+```markdown
+### write_runtime_pin(gator_dir, version=None, runtime_dir=None) / _read_machine_id_value()
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — repo-resident gator-update imports the repo-side gator_core)
+Runtime-split Phase 1 (roadmap item 19, Variant A ratified 2026-08-18). Writes `.gator/runtime-pin.json` (schema `gator-runtime-pin-v1`, contract at `contracts/schemas/`): `runtime_version` (arg or `get_version()`), `pinned_at` (UTC Z), `pinned_by_machine` (best-effort `~/.gator/machine-id` `id:` field via `_read_machine_id_value`, None on any failure — never raises), and `manifest` = sha256 of every file under the shipped scripts dir (`.includes/scripts/` v2-first, `scripts/` v1 fallback; `__pycache__` excluded), keyed by posix relpath. Returns the pin dict, or None when no shipped scripts dir exists (no file written).
+Filesystem: shipped scripts dir (R), `~/.gator/machine-id` (R), `.gator/runtime-pin.json` (W)
+<- `gator-update.py::main()` (post-stamp, best-effort), `gatorize.py` v2 install path (post-`write_gator_version`, best-effort)
+-> `get_version()`
+! Phase 4a (2026-08-19): new `runtime_dir` param — callers (both gator-update copies + gatorize) pass the WHEEL's template scripts dir, so the manifest hashes the bytes actually in force under Variant A. Wheel-sourced manifests are also checkout-stable (wheel files never pass through git's autocrlf), largely retiring the risk-7 caveat for pinned repos; the repo-probe fallback (v2 → v1) remains for standalone pre-Phase-4 runs, where the on-disk-bytes caveat still applies.
+! Emission is additive and reader-free until the Phase 2 resolver lands. Callers wrap in try/except — a pin failure must never fail an update or install.
+! Pin is COMMITTED (not gitignored) — it is the from-git-history proof of which runtime governed each commit.
+
+### resolve_governed_runtime(repo_root, cli_version=None) / _version_tuple(v)
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — the hook orchestrator is repo-resident and imports the repo-side gator_core; this is a DOCUMENTED DEVIATION from the plan's "natural home is gator_runtime.py": gator_runtime is wheel-only and unavailable to repo scripts)
+Runtime-split Phase 2 (Variant A). Pure decision function — no side effects, no exits; callers own messaging/exit codes. Resolution order (plan §4.4): pin present → numeric-tuple version compare (`_version_tuple` honors numeric prefixes, ignores rc/dev suffixes, None on garbage) yielding `current` / `cli-newer` (run + advise `gator update`) / `refuse` (fail-closed, `core.repositoryformatversion` semantics, reason includes `pipx upgrade gator-command`); no pin + repo scripts → `repo-scripts` (pre-split behavior); neither → `ungoverned`. Returns `{"mode", "pin_version", "cli_version", "reason"}`.
+Filesystem: `.gator/runtime-pin.json` (R), shipped scripts dirs (existence probe only)
+<- template `gator-pre-commit.py::main()` (validate phase, behind `GATOR_RUNTIME_RESOLVER=1` feature flag until Phase 3)
+-> `get_version()` (when cli_version not passed)
+! Malformed/unreadable pin FAILS OPEN to `pin-unreadable` (repo-scripts fallback + repair hint) — a corrupt pin must never brick commits. Contrast with `is_enterprise_active`'s fail-CLOSED: refusing to activate a feature is safe; refusing to commit is not. BOTH unreadable branches (malformed JSON and unparseable `runtime_version`) follow the same degradation contract: repo scripts present → `pin-unreadable`; absent → `ungoverned` with an honest no-fallback reason (whiteboard 2026-08-19 Finding 1 fix — the version-parse branch originally promised a repo-scripts fallback it couldn't deliver; pin: `test_unparseable_version_without_scripts_is_ungoverned`).
+! Pin is read with `encoding="utf-8-sig"` (BOM-tolerant; reads plain UTF-8 identically). Live-caught 2026-08-18: PowerShell 5.1 `Set-Content -Encoding utf8` writes a BOM, which under plain utf-8 turned a should-refuse pin into JSONDecodeError → fail-open fallback — a Windows editor could silently disable the version gate. Pin: `test_bom_pin_still_parses_and_refuses`.
+! The comparison is VERSION-based, not manifest-based — CRLF/autocrlf makes cross-platform manifest comparison invalid (plan §8 risk 7); manifest verification is future integrity work with git-blob-hash semantics.
+```
+
+```markdown
+### policy_staleness_nudge(gator_dir, now=None, stale_days=None)
+File: `src/gator_command/scripts/gator_core.py` (block-mirrored in the template copy)
+Runtime-split D6 decision (c), Architect-ratified 2026-08-22. Returns a one-line staleness nudge for the org-policy channel, or None. Purely LOCAL: `is_enterprise_active(gator_dir)` gate → mtime of `~/.gator/enterprise/org-policies.json` vs threshold (default 7 days; `GATOR_POLICY_STALE_DAYS` env; `stale_days` arg for tests). Never raises (blanket except → None).
+<- `gator-init.py` banner (agent-facing surface — the agent reads it at session opening and runs the pull) and `gator-session-open.py` (STDERR only — that script's contract forbids stdout)
+-> `is_enterprise_active()`
+! NO NETWORK in any session-opening path — this is the whole point of D6 (c): freshness failures are visible staleness, never a blown hook timeout or a silent success-looking failure.
+! **Wiring pinned, not just the helper** (whiteboard 2026-08-22 r3): the original gator-init banner call referenced an undefined `gator_dir` and its blanket except swallowed the NameError — the agent-facing surface was dead code while the helper's own tests stayed green. Fix: `paths.gator_root`. Pins: `test_banner_shows_policy_nudge_wiring` (sentinel through the real `print_boot_sequence` on a minimal v2 repo) + `test_banner_survives_nudge_helper_raising`. Lesson: any call site guarded by a blanket except needs an end-to-end wiring test. The same test class also pins the banner's session-opening directive tail (`test_banner_ends_with_session_opening_directive`, `test_session_opening_directive_resolves_v2_path` — see `scripts-repo-lifecycle.md` for the surface).
+```
+
+```markdown
+### is_enterprise_active(gator_dir)
+File: `src/gator_command/scripts/gator_core.py`
+Canonical presence-detection for the `.gator/enterprise.json` marker. Returns True iff the marker exists AND parses as a JSON **object** AND has `enabled: true` (literal identity check, not truthy). Fail-closed on any other outcome: missing file, unreadable file, malformed JSON, non-object JSON root (e.g. `[]`, `42`, `"foo"`, `true`, `null`), `enabled` absent or non-bool or `false`, wrong-typed `enabled`. Accepts str or Path for the `gator_dir` argument. Reference impl in `contracts/compatibility/test_enterprise_marker.py::_is_enterprise_active` — production impl MUST stay byte-behaviorally identical; `tests/test_gator_core.py::TestIsEnterpriseActive` pins the semantics (12 cases including the 6-way parametrized non-object-root sweep added after Codex Phase 4b review caught a real crash-not-fail-closed bug in both impls). Filesystem: `.gator/enterprise.json` (R).
+<- Phase 4c/4d Enterprise-side code paths (marker check before any Enterprise behavior fires)
+! Fail-closed by design (Codex Phase 4a Decision-B amendment). Never accept `enabled: "true"` (string), `enabled: 1` (int), or missing `enabled` as activation. If the marker isn't parseable, the answer is "not active" — never "assume active as a courtesy."
+```
+
+```markdown
+! Subprocess call uses `encoding="utf-8", errors="replace"` — NOT bare `text=True`. Bare `text=True` decodes with the platform-default locale codec (`cp1252` on Windows), which crashes with `UnicodeDecodeError` on any git output containing bytes unrepresentable in cp1252 — commit subjects with non-ASCII, author names with diacritics, or trailer content copied from external sources. Symptom in the Dashboard: History endpoint returns "Empty reply from server" mid-response because the handler crashes and closes the socket. Fixed in v2.4.4. Same pattern already lives in `dashboard/helpers.py::git_run` and `dashboard/helpers.py::run_text`. Do NOT reintroduce bare `text=True` on any subprocess whose child may emit non-ASCII output.
+```
+
+```markdown
+### override_event_fields(trailers)
+File: `src/gator_command/scripts/gator_core.py`
+Classify an Architect override from one commit's trailer map. Returns None, or `{override_type, approver, block_id, reason, rules}`. Detects v2 (#34, #35) `Gator-Override-Approved-By` / `-Block` / `-Reason` / `-Rules`, v1 `Gator-Charter-Changed: override-skip` + approver/block, and a bare legacy `Gator-Override:`. `override_type` is the legacy value, else `charter-skip`, else `lint` (rules only), else `override`.
+Filesystem: none
+<- `gator-audit._collect_trailer_intelligence()`, `gator-repo-status.get_trailer_data()`
+! Single source of override detection for readers. Readers previously keyed only on `Gator-Override:`, which the hook never emitted, so no override was ever reported. The package copy only — the starter/bundled `gator_core.py` copies are separate files and not byte-pinned.
+```
+
+```markdown
+### CURRENT_GENERATION / GATOR_MARK_LINES
+File: `src/gator_command/scripts/gator_core.py`
+`CURRENT_GENERATION = 2` is the single source of truth for the template generation number. `GATOR_MARK_LINES` is the single source of truth for the ASCII gator logo.
+<- `gator-drift.py` (reads CURRENT_GENERATION for drift comparison), `gator-init.py` (reads GATOR_MARK_LINES for display)
+! The Python installer imports `CURRENT_GENERATION` directly. Keep the assignment on one line with no whitespace variation — downstream tooling (linters, future readers) may parse this line literally. Historical: bash `gatorize.sh` read it via `sed`/grep — that installer chain was retired in v2.4.0 (retire-gator-install Stage 4).
+```
+
+```markdown
+### PREFERENCES_FILE / PREFERENCES_SCHEMA / read_preferences() / _validate_launcher_candidate(path, for_shebang=True)
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy — the reader is machine-scoped state and template callers may consult it)
+Machine-local unified preferences file at `~/.gator/preferences.json`, schema `gator-preferences-v1`. `read_preferences()` returns a **discriminated result** (`{"state": "absent"}` / `{"state": "malformed", "reason": ...}` / `{"state": "present", "data": {...}}`) so callers can distinguish "no preference set" (safe to fall back) from "user configured something and it's broken" (must be surfaced loudly, never silently ignored — collapsing these two into `Optional[dict]` was the r1 mistake caught by 2026-08-29 whiteboard finding 1). BOM-tolerant (`utf-8-sig`). Never raises. `_validate_launcher_candidate(path, for_shebang=True)` returns `(valid, reason)` — checks non-empty, absolute, basename `py.exe`, spaceless (when for_shebang), exists; existence is checked LAST so configuration reasons (basename-mismatch, relative-path, spaced-path) surface even when the file is missing.
+Filesystem: `~/.gator/preferences.json` (R), candidate launcher path (R via `os.path.isfile`)
+<- `resolve_python_launcher_for_hooks()` (Phase 2), `gator-prefs` CLI (Phase 4)
+! **Malformed-file case must NEVER fall through to auto-detect.** The resolver's caller (`_hook_shebang`) refuses loudly (`HookShebangUnresolvable`) on any malformed preference file, because falling back to auto-detect is exactly what the user overrode by writing the file in the first place. Deviates from `resolve_governed_runtime()`'s fail-OPEN-on-corrupt-pin behavior on purpose — a broken runtime pin must never brick commits, but a broken user preference must never silently defeat the user's own configuration.
+! `PREFERENCES_FILE` is captured at import time from `Path.home()`. Tests that need to relocate it must monkeypatch the module attribute, not the user's home directory.
+! Reader tolerates unknown top-level sections (`hooks:` is reserved for the follow-on plan; future sections are additive within v1 by construction).
+! Operator-facing recovery documentation lives in the shipped procedure `procedures/configure-machine-preferences.md` — when the resolver refuses, the refusal message points at that procedure by name so an operator or agent can recover without CLI availability (v2.10.0 Phase 3).
+
+### resolve_python_launcher_for_hooks()
+File: `src/gator_command/scripts/gator_core.py` (mirrored in the template copy)
+Canonical Windows Python-launcher resolver — the single seam every launcher-consuming site on the machine goes through (v2.10.0 Phase 2). Windows only; non-Windows returns `not-applicable` so callers keep the Unix shebang path. Returns a structured dict: `{"status": "resolved" | "degraded" | "not-applicable", "source": "user" | "auto" | "none", "path": <str> | None, "shebang_safe": bool, "reason": <str>, "checked": [{tier, path, outcome}, ...]}`. Never raises. Resolution order: (1) `~/.gator/preferences.json` python.windows_py_launcher — valid → resolved user, invalid or malformed file → degraded user (NEVER fall through), absent or no-python-section → proceed; (2) auto-detect tiers `shutil.which("py")` → `%LOCALAPPDATA%\Programs\Python\Launcher\py.exe` → `C:\Windows\py.exe`, each space-checked; (3) nothing usable → degraded none with the full checked audit trail. The `checked` array is load-bearing for the refusal message caller (`_hook_shebang` renders it via `_format_shebang_refusal`).
+Filesystem: `~/.gator/preferences.json` (R via `read_preferences`), candidate launcher paths (R via `_validate_launcher_candidate`)
+<- `gator-update.py::_hook_shebang()` (only current consumer); future: any launcher-consuming machine-side seam
+-> `read_preferences()`, `_validate_launcher_candidate()`, `shutil.which`, `os.path.expandvars`, `os.path.isfile`
+! **`source == "user" && status == "degraded"` is the invariant Sketch §9 Rule 2 enforces**: a broken user-configured preference (malformed JSON OR invalid path) refuses loudly rather than silently falling back to auto-detect. Downstream refusal messages must preserve this distinction — the caller learned something specific about the user's intent that a "not found" auto-detect result would not communicate.
+! Delegates to `read_preferences()` for the discriminated absent/malformed/present result — the resolver's malformed-refuses-no-fallback semantics depend on that reader NOT collapsing the two states. If the reader ever changes shape, this resolver's tier-1 dispatch is the load-bearing consumer.
+! **`python.allow_for_hook_shebang: false` is live** — the operator sets it to signal "this launcher is valid for other uses (subprocess seams, future non-shebang consumers) but must NOT be baked into the git hook shebang." Resolver treats an opted-out launcher as if no `python:` section existed and falls through to auto-detect, so the shebang gets an auto-detected launcher instead. Default `true` when the field is absent. Regression pin: `tests/test_gator_core.py::test_allow_for_hook_shebang_false_falls_through_to_auto`. Whiteboard 2026-08-29 finding 2 caught the resolver ignoring this field despite it being documented in the schema/fixture/procedure.
+! **Wrong-shape preference sections must degrade, not crash.** `read_preferences()` runs `_validate_preferences_shape()` to type-check every documented section and field (python must be object, hooks must be object, notes/updated_at must be string, python.windows_py_launcher must be string, python.allow_for_hook_shebang must be bool). Without this defense, a tagged payload like `{"schema": "gator-preferences-v1", "python": []}` would slip through and crash the resolver's `.get()` chain with AttributeError, violating the "never raises" contract. Whiteboard 2026-08-29 finding 1.
+! **Empty `windows_py_launcher` is malformed, not "no launcher configured".** Shape validator additionally rejects `python.windows_py_launcher: ""` to match the schema's `minLength: 1`. Reason: the resolver's pre-fix `if not launcher:` shortcut lumped empty strings with `None` and silently fell through to auto-detect — recreating the silent-fallback class this feature exists to prevent. Post-fix resolver also uses `if launcher is None:` (belt + suspenders — reader catches the bytes, resolver's precise-None check keeps future bypasses honest). Whiteboard 2026-08-29 follow-up finding. Regression pin: `test_empty_windows_py_launcher_returns_malformed` (reader layer) + `test_empty_launcher_refuses_no_fallback_even_if_reader_bypassed` (resolver layer).
+! **Validator tests use `tmp_path` for portable absolute paths.** `os.path.isabs` behavior on Windows Python 3.13 tightened — drive-less rooted paths like `/tmp/x` are no longer absolute. Windows-shaped strings like `C:/...` are not absolute on Linux CI. Tests that need to exercise later validator rules (spaces, exists) must compose their fixture paths from `tmp_path` (platform-native absolute prefix) rather than hand-writing literals; alternatively they can patch `os.path.isabs` to bypass the check. `test_spaced_absolute_returns_spaced_path` + `test_missing_file_returns_file_not_found` both use `tmp_path` for this reason (CI-caught 2026-08-29). Hook-wrapper tests that need to exercise the shebang path but not the resolver internals should patch `gator_core.resolve_python_launcher_for_hooks` directly rather than patching `os.name` + downstream helpers — see `test_windows_platform_shebang` for the pattern.
+```
+
+```markdown
+- `CURRENT_GENERATION` is imported by the Python installer and downstream tooling. Keep it on a single `CURRENT_GENERATION = N` line — some readers may still parse it literally. Bash installer chain retired in v2.4.0.
+```
+
+```markdown
+-> [scripts-session-archaeology](scripts-session-archaeology.md) — session reader + aggregator (machine identity's sole owner since the 2026-08-16 sweep)
+```
