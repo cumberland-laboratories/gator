@@ -310,3 +310,33 @@ def test_failed_publication_leaves_no_report(repo, monkeypatch, break_it):
 def test_unavailable_without_gator(tmp_path):
     result, status = charter_sync.run_sync(tmp_path, now=NOW, verify_fn=_stub([]))
     assert (status, result["state"]) == (200, "unavailable")
+
+
+def test_architect_approved_commit_is_not_flagged(repo):
+    """A commit the Architect approved without a charter edit (the hook's
+    `Gator-Charter-Changed: override-skip` trailer) is a recorded decision,
+    not drift; an unapproved one is still flagged."""
+    _commit(repo, {}, "charter only")
+    _commit(repo, {"src/a.py": "a"},
+            "approved\n\nGator-Charter-Changed: override-skip\nGator-Override-Block: abc123")
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub([]))
+    assert result["recent_commits"]["without_charter_update"] == 0
+    assert result["state"] == "current"
+    text = (repo / result["artifact_path"]).read_text(encoding="utf-8")
+    assert "no charter update; the Architect approved it" in text
+
+    _commit(repo, {"src/b.py": "b"}, "unapproved\n\nGator-Charter-Changed: no")
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub([]))
+    assert result["recent_commits"]["without_charter_update"] == 1
+
+
+@pytest.mark.parametrize("findings, headline", [
+    ([], "1 recent commit changed governed code without a charter update."),
+    ([_gap()], "1 recent commit changed governed code without a charter update; 1 advisory."),
+])
+def test_headline_names_a_flagged_commit_as_the_cause(repo, findings, headline):
+    _commit(repo, {}, "charter only")
+    _commit(repo, {"src/a.py": "a"}, "code only")
+    result, _ = charter_sync.run_sync(repo, now=NOW, verify_fn=_stub(findings))
+    assert result["state"] == "needs-review"
+    assert result["headline"] == headline

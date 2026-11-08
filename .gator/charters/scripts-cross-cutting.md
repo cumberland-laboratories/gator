@@ -127,6 +127,8 @@ The `change-type`, `significance`, vendor, and source-kind vocabularies are shar
 - **Acknowledgement trailers:** the view shows a separate "✓ Architect acknowledgement" note and "✓ Acknowledged" tag, never an override note, when `Gator-Dangerous-Patterns` is present.
 - **`Gator-Machine-Id`:** shown only in the view's Raw trailers.
 
+**Charter Sync as a trailer consumer.** `dashboard/charter_sync.py` `_commit_coverage()` reads `Gator-Charter-Changed` from its `git log`: `override-skip` (the Architect's charter approval) means a commit that skipped the charter is not flagged. Any other value, or no trailer (older commits), keeps the path-based rule. See `scripts-dashboard.md` → `run_sync()`.
+
 See `scripts-dashboard.md` → `get_repo_history()` and `scripts-dashboard-ui.md` → Commits view.
 
 ## TRIPWIRE: Product Boundary

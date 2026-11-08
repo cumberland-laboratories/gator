@@ -245,9 +245,12 @@ def _commit_coverage(repo, charters, has_commits=True):
     if charter_rel is None:
         result["reason"] = "The charter directory could not be resolved."
         return result
+    # Header: `\x1e<hash> <short>\x1f<Gator-Charter-Changed values>\x1f<subject>`,
+    # then the changed paths, one per line.
     out, ok = git_run("-c", "core.quotepath=off", "log", "--no-merges",
                       f"-n{COMMIT_LIMIT}", "--name-only",
-                      "--format=\x1e%H %h %s", cwd=str(repo))
+                      "--format=\x1e%H %h\x1f%(trailers:key=Gator-Charter-Changed,"
+                      "valueonly,separator=%x2c)\x1f%s", cwd=str(repo))
     if not ok:
         raise GitReadError(out.strip() or "commit history could not be read")
     entries = [e for c in charters for e in c["covers"]]
@@ -255,19 +258,24 @@ def _commit_coverage(repo, charters, has_commits=True):
         lines = [ln for ln in record.splitlines() if ln.strip()]
         if not lines:
             continue
-        parts = lines[0].split(" ", 2)
+        head, _, rest = lines[0].partition("\x1f")
+        trailer, _, subject = rest.partition("\x1f")
+        parts = head.split(" ", 1)
         short = parts[1] if len(parts) > 1 else ""
-        subject = parts[2] if len(parts) > 2 else ""
         files = [ln.strip() for ln in lines[1:]]
         governed = [f for f in files if any(covers_match(f, e) for e in entries)]
         charter_updated = any(f.startswith(charter_rel + "/") for f in files)
+        # The Architect approved this exact change without a charter edit
+        # (the hook's charter escape hatch): a recorded decision, not drift.
+        architect_approved = "override-skip" in {v.strip() for v in trailer.split(",")}
         result["examined"] += 1
-        flagged = bool(governed) and not charter_updated
+        flagged = bool(governed) and not charter_updated and not architect_approved
         if flagged:
             result["without_charter_update"] += 1
         result["commits"].append({
             "short": short, "subject": subject, "governed": governed,
-            "charter_updated": charter_updated, "flagged": flagged,
+            "charter_updated": charter_updated, "architect_approved": architect_approved,
+            "flagged": flagged,
         })
     return result
 
@@ -331,13 +339,20 @@ def _roll_up(findings, charters, coverage):
         headline = (f"Current — {_plural(len(advisory), 'advisory finding')} "
                     f"in {_plural(len(advised), 'charter')}.")
     else:
-        headline = (f"{_plural(len(decisive), 'finding')} "
-                    f"in {_plural(len(needs_review), 'charter')}")
-        if missing:
-            headline += f"; {_plural(len(missing), 'source file')} without a charter"
+        # Name each cause that is present, decisive first.
+        causes = []
+        if decisive:
+            cause = (f"{_plural(len(decisive), 'finding')} "
+                     f"in {_plural(len(needs_review), 'charter')}")
+            if missing:
+                cause += f"; {_plural(len(missing), 'source file')} without a charter"
+            causes.append(cause)
+        if flagged:
+            causes.append(f"{_plural(flagged, 'recent commit')} changed governed code "
+                          "without a charter update")
         if advisory:
-            headline += f"; {len(advisory)} advisory"
-        headline += "."
+            causes.append(f"{len(advisory)} advisory")
+        headline = "; ".join(causes) + "."
     return {
         "state": state,
         "headline": headline,
@@ -415,6 +430,8 @@ def _render_report(summary, findings, charters, coverage):
         for c in coverage["commits"]:
             note = ("charter update not observed" if c["flagged"]
                     else "charter updated" if c["charter_updated"]
+                    else "no charter update; the Architect approved it" if c["architect_approved"]
+                    and c["governed"]
                     else "no governed code changed")
             subject = c["subject"].replace("\n", " ")
             lines.append(f"- {_code(c['short'])} {subject} — {note}")
