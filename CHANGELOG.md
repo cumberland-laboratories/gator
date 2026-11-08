@@ -4,6 +4,34 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.37.0] — 2026-11-08
+
+Charter-health release (#105, #88). **Charters are judged as an architectural map, not an API index.** The charter checker now asks only about real seams (entry points, exports, and functions another charter's code imports), so this repository's "function not in charter" findings fell from 708 to about 100. Charters can record deliberately internal names on one checked line. The Dashboard has a Charters page that reports charter health and keeps advisory findings from making a healthy charter look drifted.
+
+**Upgrade note:** function gaps and import fan-out findings are now advisory in Charter Sync, and a commit you approved without a charter edit is no longer flagged. The first sync check after upgrading may change a repository from "Needs review" to "Current". The commit hook's new-function warning now judges new functions against the staged tree and the same seam policy, so it warns far less often. It never blocks a commit.
+
+### Added
+
+- **Shared function-significance policy (#105).** `charter_significance.py` (`gator-significance-v1`) decides which functions need a charter entry: route and command entry points, `__all__` and JavaScript exports, and functions imported by code under a different charter. The charter verifier, the linter and the pre-commit warning all use it. Byte-identical copies ship with the hook runtime and the Enterprise bundle (`TestByteIdentityAcrossThreeCopies`, `test_policy_module_matches_the_verifier_copy`).
+- **`**Internal**:` charter line (#105).** One optional line after `**Covers**` lists deliberately internal names. It clears their gaps only for files that charter covers. The linter checks its shape (`internal-syntax`, `internal-duplicate`, `internal-conflict`), and the verifier reports a name no covered file defines (`stale-exclusion`). See the charter README and `charter-schema-v1.html`.
+- **`gator-charter-verify --functions strict`** keeps the old broad heuristic as `function-candidate` findings for investigation. Additive JSON: `function_policy`, and `reason` (`entry` / `cross-module`) on each `function-gap`.
+- **`bare-entry` lint warning** for a charter heading with neither a `File:` line nor a description.
+- **`gator charters report [--json]`** (`gator-charters-report-v1`), a read-only charter health report: charter count and size, coverage, charter-to-code ratio, code by charter, and the last sync check.
+- **Dashboard Charters page.** Overview, Code and Features tabs with charts in the Cumberland reading style, the charter sync check, recent commit coverage, and a one-click repair prompt to hand to the agent session. A file row opens that exact file in Repo. The tabs stay in view while the page scrolls.
+
+### Changed
+
+- **Grouped charter headings and plain `File:` lines count (#105).** `### a() / b()` documents every name it lists, `File:` is read with or without backticks, and an entry may list several consecutive `File:` lines. Together these turn the stale-entry check back on for most charters.
+- **Charter Sync advisory findings.** Function gaps and import fan-out suspects are shown and counted but never alone make a charter "Needs review". A commit carrying `Gator-Charter-Changed: override-skip` (the Architect's charter approval) is not flagged. The headline names each cause.
+- **Pre-commit `new-functions-undocumented` warning (#105)** reads the full staged index only (one `git ls-files` and one `git cat-file --batch`), applies the shared policy, honours staged `**Internal**:` lines, and stays advisory. Same change in the Enterprise bundled hook.
+- **Charter verifier and Charter Sync share one `Covers` rule (`gator-covers-v1`, #88)**, so glob- and directory-covered files are no longer reported as uncovered.
+- **Codex `/goal` prompt** in the Loop Extras tab waits with `--max-seconds 3600` between turns (the protocol default stays 360).
+
+### Fixed
+
+- The charter linter no longer counts a `---` separator as an entry's description.
+- Removed 70 unused imports from the commit hook (both copies), the Dashboard server, `gatorize.py` and the Enterprise server.
+
 ## [2.36.0] — 2026-11-02
 
 Commit-resolution release (#78, #102). **The commit hook no longer puts its own files into your commit**, so a blocked commit that the Architect approved retries cleanly and a coding loop's approval is not undone by hook output. `gator update` removes old tracked copies of those files from the Git index, visibly. A dangerous-pattern pause can now be decided in one step, in the Dashboard or from the agent session. The Dashboard also gains a **Charters** page with a charter sync check.

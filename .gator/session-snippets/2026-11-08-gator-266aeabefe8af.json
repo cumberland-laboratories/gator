@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Loop Workspace View charter: one entry per responsibility, 77 KB to 27 KB",
+  "change_type": "docs",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard-ui-charter-split"
+  ],
+  "commit": "266aeabefe8af2b14578fb34e02233d68e504266",
+  "short_commit": "266aeab",
+  "snippet_id": "snippet-266aeabefe8af",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "5a1213920945a53f225d25e551358cfeeac5ea36",
+  "started_at": "2026-11-08T13:48:17Z",
+  "ended_at": "2026-11-08T13:48:17Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-loop-ui.md",
+    ".gator/session-snippets/2026-11-08-gator-5a1213920945a.json"
+  ],
+  "notes": [
+    "The Loop Workspace View charter was mostly one 68 KB entry. It is now",
+    "thirteen entries, one per responsibility (tabs, the Primary tab, Help and",
+    "Extras, History sub-state, the create form, handoff and recovery,",
+    "rendering and polling, the header, Architect controls, the timeline,",
+    "artifacts, coding loops, attention and liveness), plus one section of",
+    "view-wide rules.",
+    "It was trimmed by content, not to a line count, following the research",
+    "note on charter size: CSS and layout details the stylesheet shows,"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
