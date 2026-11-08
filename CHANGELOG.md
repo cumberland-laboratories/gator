@@ -4,6 +4,21 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.37.1] — 2026-11-08
+
+Security patch: **agent credential files stay out of commits.** Claude Code saves approved commands, credentials included, into `.claude/settings.local.json`, and Codex keeps its login in `auth.json` under `CODEX_HOME`.
+
+**Upgrade note:** run `gator update` in each governed repository to add the new ignore rules. Ignoring a file does not untrack a copy that was already committed: if a repository committed one of these files, remove it with `git rm --cached <path>`, commit, and rotate any credentials it held.
+
+### Security
+
+- **Ignore rules for agent credential files.** Install and update add `.claude/settings.local.json`, `.gemini/.env` and `.codex/auth.json` to a governed repository's `.gitignore` (`ensure_repo_gitignore()`).
+- **Commit hook flags staged credential files.** A staged `.claude/settings.local.json` or `.codex/auth.json` is a HYG-002 (HIGH) finding, matched by repository path, like `.env` (a bare `auth.json` elsewhere is not flagged). Under the default policy the commit pauses for an Architect decision; in Enterprise `evidence_only` it needs an Architect approval. Same change in the Enterprise bundled hook. Pinned by `tests/test_agent_credential_files.py`.
+
+### Fixed
+
+- **Removing a secret file is no longer flagged.** The hook used to report a staged deletion of `.env` (and now of the agent credential files) as HYG-002, pausing the very commit that fixed the problem. Deletions are never flagged.
+
 ## [2.37.0] — 2026-11-08
 
 Charter-health release (#105, #88). **Charters are judged as an architectural map, not an API index.** The charter checker now asks only about real seams (entry points, exports, and functions another charter's code imports), so this repository's "function not in charter" findings fell from 708 to about 100. Charters can record deliberately internal names on one checked line. The Dashboard has a Charters page that reports charter health and keeps advisory findings from making a healthy charter look drifted.

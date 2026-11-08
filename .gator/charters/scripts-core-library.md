@@ -27,7 +27,7 @@ Filesystem: `pyproject.toml` (R), `.git/` (R), `VERSION` file (R)
 <- `gator-version.py`, `gator-fleet-report.py`, `gator-drift.py`, `gator-audit.py`, `gator-fleet-intel.py`, `gatorize.py`, `gator-deploy.py`, `gator-update.py`, `dashboard/data.py`, `dashboard/updates.py`, `__init__.py`
 -> `_read_pyproject_version()`, `_read_version_file()`, `_find_repo_root()`
 ! This is the single source of truth for version resolution. All callers must use this function — do not add inline pyproject.toml reading or importlib.metadata calls elsewhere.
-! **`VERSION` and `pyproject.toml` must carry the same version.** The resolver reads `pyproject.toml` first, so a stale `VERSION` is invisible in a source checkout but is served by the fallback path (deployed repos without full Git history). Update both in every version-bump commit; CI has no cross-file check for this. Current: 2.37.0.
+! **`VERSION` and `pyproject.toml` must carry the same version.** The resolver reads `pyproject.toml` first, so a stale `VERSION` is invisible in a source checkout but is served by the fallback path (deployed repos without full Git history). Update both in every version-bump commit; CI has no cross-file check for this. Current: 2.37.1.
 
 ### get_version_short(cwd=None)
 File: `src/gator_command/scripts/gator_core.py`

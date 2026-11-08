@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Keep agent credential files out of commits",
+  "change_type": "fix",
+  "significance": "notable",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "agent-credential-files"
+  ],
+  "commit": "cf9ed78270ddbc0cdb4ff1cf15539c0205f4af80",
+  "short_commit": "cf9ed78",
+  "snippet_id": "snippet-cf9ed78270ddb",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 5,
+  "previous_commit_in_session": "511e06d75c88903dbd86ee06c409958ecbcf505b",
+  "started_at": "2026-11-08T23:13:37Z",
+  "ended_at": "2026-11-08T23:13:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-enterprise-cli.md",
+    ".gator/charters/scripts-installer.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-11-08-gator-511e06d75c889.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/precommit_lint.py",
+    "src/gator_command/scripts/gatorize.py",
+    "src/gator_command/templates/gator-starter/scripts/precommit_lint.py",
+    "tests/test_agent_credential_files.py"
+  ],
+  "notes": [
+    "Claude Code saves every approved command into",
+    "`.claude/settings.local.json`, credentials included, and Codex keeps its",
+    "login in `auth.json` under CODEX_HOME. Gator ignored the Claude file only",
+    "in its own repository, and the commit hook only knew `.env`.",
+    "Install and update now add `.claude/settings.local.json`, `.gemini/.env` and",
+    "`.codex/auth.json` to a governed repository's ignore rules. The commit hook",
+    "flags a staged `.claude/settings.local.json` or `.codex/auth.json` by path",
+    "(HYG-002, HIGH), in both hook copies. Removing one of these files, or a"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
