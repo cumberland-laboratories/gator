@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-10-29._ Current strategy, priorities, and planned work.
+_Updated 2026-11-08._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,12 +11,12 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.35.0 (2026-10-29).
-- **Fleet:** the Commit policy cell is a Strict / Warn dropdown; the ⋮ menu shows its border only on hover.
-- **Blocked-commit dialog:** pasted reasons are accepted, the field resizes, and reasons can be 500 characters. Approvals are Dashboard-first in all agent guidance.
-- **Codex `/goal` prompt (#99 part 1):** plain `gator loop` commands judged by printed text.
+**Latest released version**: v2.37.0 (2026-11-08).
+- **Charter health (#105, #88):** `function-gap` reports only real seams (entry points, exports, cross-charter imports), one shared policy for the verifier, linter and commit hook; the checked `**Internal**:` charter line; one shared `Covers` rule.
+- **Dashboard Charters page** and `gator charters report`; Charter Sync treats function gaps and import fan-out as advisory and does not flag Architect-approved commits.
+- **Charters as a map:** the Loop and Dashboard UI charters split along code layers; charter size judged by content, not a line count (vault research note 2026-11-08).
 
-v2.34.0 (2026-10-29): machine-local commit policy (Warn per clone, never in Git; `Gator-Commit-Policy: warn`) and `gator loop codex` saved-approval recovery (#87). v2.33.0 (2026-10-26): resolve a blocked commit from the Dashboard (#76). v2.32.0 (2026-10-25): the #75 pre-commit policy. v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
+v2.36.0 (2026-11-02): the commit hook keeps its own files out of the commit (#78, #102); decide a dangerous-pattern pause in one step. v2.35.0 (2026-10-29): Fleet commit-policy dropdown; blocked-commit dialog polish; Codex `/goal` prompt (#99 part 1). v2.34.0 (2026-10-29): machine-local commit policy (Warn per clone, never in Git; `Gator-Commit-Policy: warn`) and `gator loop codex` saved-approval recovery (#87). v2.33.0 (2026-10-26): resolve a blocked commit from the Dashboard (#76). v2.32.0 (2026-10-25): the #75 pre-commit policy. v2.31.0 (2026-10-23): the Paper Dashboard reading baseline. Release detail lives in `CHANGELOG.md` and the GitHub Releases.
 
 **Status key**: Done · Building · Designed · Considering · Deferred
 

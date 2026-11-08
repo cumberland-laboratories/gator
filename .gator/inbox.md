@@ -110,7 +110,6 @@ against the code 2026-10-21). Issue `#N` is
 - **#18** INDEX route requires every listed charter (UI-only overrides)
 - **#16** `stale-charter-refs` false positive on compound headings
 - **#17** `new-functions-undocumented` fires on tests
-- **#88** Charter verifier ignores Covers globs (mostly false coverage gaps)
 - **#78** `gator update` leaves hook files tracked
 - #75 Separate charter enforcement from dangerous-pattern blocks
 - #23 Session-opening hardening (mostly done)
