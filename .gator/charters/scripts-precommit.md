@@ -176,6 +176,7 @@ File: `src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py`
 ### run_layer1_lint(staged_files, repo_root) / load_lint_allowlist(gator_dir)
 File: `src/gator_command/templates/gator-starter/scripts/precommit_lint.py`
 Layer 1 mechanical lint over ADDED lines (plus dangerous staged filenames). Returns every finding with `rule`, `severity` (context-aware via `_effective_severity()`), `file`, `line`, `message`, optional `match`, and `allowlisted` (True when the deprecated `.gator/lint-allow.json` lists `(rule, file)`).
+! **Dangerous staged files (HYG-002, HIGH):** a `.env` / `.env.*` basename (except `.env.example`), or an agent credential file matched by repo-relative path suffix, `DANGEROUS_PATHS` = `.claude/settings.local.json`, `.codex/auth.json` (a bare `auth.json` is too common to flag). A staged **deletion** is never flagged: removing one is the fix (2.37.1). Pinned by `tests/test_agent_credential_files.py` (both copies).
 ! `parse_diff_added_lines()` drops the single TAB Git appends to a `+++ b/` header path that contains a space, so `file` (and the finding key) names the staged path exactly. Paths Git quotes (`core.quotepath`) do not start with `+++ b/` and are not linted.
 Filesystem: git diff (R), staged files (R), `.gator/lint-allow.json` (R)
 <- `phase_validate()`

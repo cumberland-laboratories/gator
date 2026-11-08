@@ -427,6 +427,9 @@ def ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None):
         "AGENTS.local.md": "# Local agent companion — personal notes/skills (machine-local)",
         "CLAUDE.local.md": "# Local agent companion — personal notes/skills (machine-local)",
         "GEMINI.local.md": "# Local agent companion — personal notes/skills (machine-local)",
+        ".claude/settings.local.json": "# Claude Code local permissions — can hold credentials (machine-local)",
+        ".gemini/.env": "# Gemini CLI project secrets (machine-local)",
+        ".codex/auth.json": "# Codex login credentials, if CODEX_HOME points into the repo",
     }
     if repo_gi.exists():
         gi_text = repo_gi.read_text(encoding="utf-8", errors="replace")

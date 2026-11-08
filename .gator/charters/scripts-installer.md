@@ -56,6 +56,7 @@ Converge required machine-local, sensitive, and hook-transient Gator ignore entr
 Filesystem: `.gitignore` (RW), git index (W: removals only)
 <- every successful install/upgrade scenario (gatorize common tail, `gator update` execution with the predicted list); `action_install_gator()` passes `untrack=False` so untracking happens once, in the reported tail
 ! Append only missing canonical entries; preserve comments, ordering, and unrelated patterns.
+! Agent-tool credential files are in the managed set (2.37.1): `.claude/settings.local.json` (Claude Code saves approved commands, credentials included), `.gemini/.env` and `.codex/auth.json`. Ignoring does not untrack an already-committed copy; the pre-commit HYG-002 check flags staging one (see `scripts-precommit.md` → `run_layer1_lint()`). Pinned by `tests/test_agent_credential_files.py`.
 ! Presence is tested on exact, whitespace-stripped lines (#34). The earlier substring test treated `.gator/.override` as present whenever `.gator/.override-meta.json` was listed.
 ! Untracking never deletes working-tree files and is a silent no-op outside git or on a Git failure (returns `[]`). The resulting staged deletion is committed by the operator with the rest of the update; the pre-commit hook keeps a staged deletion of these paths (see `scripts-precommit.md`, TRIPWIRE "Hook Evidence Never Enters the Commit").
 

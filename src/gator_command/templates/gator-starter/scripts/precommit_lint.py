@@ -116,6 +116,18 @@ LINT_RULES = [
 DANGEROUS_FILENAMES = {".env"}
 DANGEROUS_PREFIXES = {".env."}
 DANGEROUS_SAFE = {".env.example"}
+# Agent-tool files that hold credentials, matched by repo-relative path (a
+# basename like auth.json is too common to flag on its own). Claude Code
+# saves approved commands, credentials included, into settings.local.json;
+# Codex keeps its login in auth.json under CODEX_HOME. Gemini CLI's
+# .gemini/.env is already caught by the .env rule.
+DANGEROUS_PATHS = {".claude/settings.local.json", ".codex/auth.json"}
+
+
+def _is_dangerous_path(filepath):
+    """True when a repo-relative path names an agent credential file."""
+    norm = filepath.replace("\\", "/")
+    return any(norm == p or norm.endswith("/" + p) for p in DANGEROUS_PATHS)
 
 
 def parse_diff_added_lines(repo_root):
@@ -247,12 +259,17 @@ def run_layer1_lint(staged_files, repo_root):
     gator_doc_excludes = {"reference-notes/dangerous-patterns.md"}
 
     # Check for dangerous filenames in staged files (these are always checked
-    # regardless of diff — staging a .env file is the danger)
+    # regardless of diff — staging a .env file is the danger). A staged
+    # deletion is the fix, never the danger, so it is not flagged.
+    deleted = set(_git("diff", "--cached", "--name-only", "--diff-filter=D",
+                       cwd=repo_root).splitlines())
     for filepath in staged_files:
+        if filepath in deleted:
+            continue
         basename = os.path.basename(filepath)
         if basename in self_excludes:
             continue
-        if basename in DANGEROUS_FILENAMES or (
+        if basename in DANGEROUS_FILENAMES or _is_dangerous_path(filepath) or (
             any(basename.startswith(p) for p in DANGEROUS_PREFIXES)
             and basename not in DANGEROUS_SAFE
         ):
