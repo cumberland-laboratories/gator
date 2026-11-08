@@ -4094,7 +4094,8 @@ textarea.loop-ctrl-input {
   margin: 0;
   padding-bottom: 0.4rem;
   border-bottom: 1px solid var(--gray-200);
-  font-size: 1.35rem;
+  font-size: calc(var(--text-section) * 1.2);   /* 21.6px, never root-relative */
+  line-height: var(--leading-ui);
   font-weight: 600;
   color: var(--gray-900);
 }
@@ -4111,8 +4112,8 @@ textarea.loop-ctrl-input {
 .charters-chart { display: block; width: 100%; height: auto; }
 .charters-caption {
   margin-top: 0.75rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: var(--text-nav);
+  line-height: var(--leading-ui);
   color: var(--gray-600);
 }
 .charters-figure-status { font-weight: 600; color: var(--gray-800); }

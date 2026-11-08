@@ -500,8 +500,9 @@ def _surface_docs(page, fleet):
 
 
 def _surface_charters(page, fleet):
-    """A completed charter sync result (stubbed) with the "Show all"
-    disclosure open, so every text role on the page is measured."""
+    """A completed charter sync result (stubbed), so every text role on the
+    page is measured. The page has no "Show all" disclosure since the
+    Cumberland restyle (0d0b8fe); every section renders open."""
     group = {"kind": "stale-structure", "label": "mod", "charter_path": ".gator/mission.md",
              "message": "Charter names code that no longer exists.", "count": 2}
     result = {
@@ -517,7 +518,6 @@ def _surface_charters(page, fleet):
         status=200, content_type="application/json", body=json.dumps(result)))
     page.goto(_origin(fleet) + "?repo=alpha&view=charters", wait_until="load")
     page.wait_for_selector(".charters-band", timeout=15000)
-    page.click(".charters-more-summary")
 
 
 def _surface_loop_active(page, fleet):
