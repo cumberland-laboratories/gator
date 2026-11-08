@@ -569,7 +569,7 @@ def test_no_text_inherits_root_type(page, dashboard_fleet, surface):
     (23px / 2.3) without touching the type tokens, so an element that uses a
     token such as --text-base stays put, and only an accidental inheritor
     moves. A new surface needs an explicit role or a compact-leading owner
-    (scripts-dashboard-ui.md, Paper tokens)."""
+    (scripts-dashboard-shell.md, Paper tokens)."""
     page.set_viewport_size({"width": 1440, "height": 900})
     _TYPE_SURFACES[surface](page, dashboard_fleet)
     before = page.evaluate(_TYPE_SNAPSHOT)

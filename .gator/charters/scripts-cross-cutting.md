@@ -14,7 +14,7 @@ Read this charter before the domain charter selected through [`INDEX.md`](INDEX.
 
 ## Does Not Own
 
-- Dashboard HTTP, content, or browser behavior; see [`scripts-dashboard.md`](scripts-dashboard.md) and [`scripts-dashboard-ui.md`](scripts-dashboard-ui.md).
+- Dashboard HTTP, content, or browser behavior; see [`scripts-dashboard.md`](scripts-dashboard.md), [`scripts-dashboard-shell.md`](scripts-dashboard-shell.md), [`scripts-dashboard-views.md`](scripts-dashboard-views.md) and [`scripts-dashboard-loop-ui.md`](scripts-dashboard-loop-ui.md).
 - Session aggregation and provenance; see [`scripts-session-archaeology.md`](scripts-session-archaeology.md).
 - Update planning, layout migration, or policy synchronization; see [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
 - Enterprise command or server behavior; see the Enterprise charters.
@@ -129,7 +129,7 @@ The `change-type`, `significance`, vendor, and source-kind vocabularies are shar
 
 **Charter Sync as a trailer consumer.** `dashboard/charter_sync.py` `_commit_coverage()` reads `Gator-Charter-Changed` from its `git log`: `override-skip` (the Architect's charter approval) means a commit that skipped the charter is not flagged. Any other value, or no trailer (older commits), keeps the path-based rule. See `scripts-dashboard.md` → `run_sync()`.
 
-See `scripts-dashboard.md` → `get_repo_history()` and `scripts-dashboard-ui.md` → Commits view.
+See `scripts-dashboard.md` → `get_repo_history()` and `scripts-dashboard-views.md` → Commits view.
 
 ## TRIPWIRE: Product Boundary
 

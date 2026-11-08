@@ -66,4 +66,4 @@ Filesystem: `.gator/pulse.md` (W)
 
 -> [Session Archaeology](scripts-session-archaeology.md) - committed decision input
 -> [Cross-Cutting](scripts-cross-cutting.md) - template-copy and Git conventions
--> [Dashboard UI](scripts-dashboard-ui.md) - pulse document consumer
+-> [Dashboard Views](scripts-dashboard-views.md) - pulse document consumer

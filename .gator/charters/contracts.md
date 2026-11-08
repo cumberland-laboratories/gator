@@ -109,7 +109,7 @@ Pin narrow/wide layout behavior, initial-load network isolation, CSP liveness ag
 
 -> [Cross-Cutting](scripts-cross-cutting.md) - shared schema/version rules
 -> [Dashboard Server](scripts-dashboard.md) - content transport and CSP
--> [Dashboard UI](scripts-dashboard-ui.md) - iframe and document rendering
+-> [Dashboard Views](scripts-dashboard-views.md) - iframe and document rendering
 -> [Enterprise CLI](scripts-enterprise-cli.md) - policy/runtime artifact consumers
 -> [Enterprise Server](scripts-enterprise-server.md) - wire and persistence producers
 -> [Release Pipeline](release-pipeline.md) - contract execution in CI
