@@ -518,6 +518,12 @@ def _surface_charters(page, fleet):
         status=200, content_type="application/json", body=json.dumps(result)))
     page.goto(_origin(fleet) + "?repo=alpha&view=charters", wait_until="load")
     page.wait_for_selector(".charters-band", timeout=15000)
+    # The health report loads separately; measure it every time, not only
+    # when it happens to arrive first (a Linux-only miss in 2.37.0 CI).
+    # Settled: not pending, not "none" (a first build is running), not refreshing.
+    page.wait_for_selector('.charters-health[data-report]:not([data-report="pending"])'
+                           ':not([data-report="none"]):not([data-refreshing])',
+                           timeout=60000)
 
 
 def _surface_loop_active(page, fleet):

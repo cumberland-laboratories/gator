@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charters page: explicit type sizes; type test no longer opens a removed disclosure",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "d934d82c5a5d4f1728b86f1e6e1ac599bc9af976",
+  "short_commit": "d934d82",
+  "snippet_id": "snippet-d934d82c5a5d4",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "0fa7c46b07e73a3dee695e5b0cfe7f3bf0c7f1f0",
+  "started_at": "2026-11-08T18:54:46Z",
+  "ended_at": "2026-11-08T18:54:46Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-dashboard-shell.md",
+    ".gator/session-snippets/2026-11-08-gator-0fa7c46b07e73.json",
+    "src/gator_command/scripts/dashboard/dashboard.css",
+    "tests/test_dashboard_ui/test_paper_shell.py"
+  ],
+  "notes": [
+    "The 2.37.0 source CI failed on both platforms in the Paper type test for the",
+    "Charters page. The test still clicked the \"Show all\" disclosure that the",
+    "Cumberland restyle (0d0b8fe) removed, so it timed out. With that fixed, the",
+    "test found a real problem from the same restyle: the section titles and the",
+    "commit-coverage caption used rem sizes, so they took their size from the",
+    "page root. They now use Paper tokens (`calc(var(--text-section) * 1.2)`,",
+    "which keeps 21.6px, and `--text-nav`), with explicit line heights.",
+    "The Dashboard Shell charter now lists all 13 surfaces the type test checks."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

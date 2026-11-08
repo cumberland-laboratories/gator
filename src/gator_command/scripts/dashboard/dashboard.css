@@ -4085,7 +4085,7 @@ textarea.loop-ctrl-input {
 .charters-doc-lede {
   margin: 0;
   max-width: 52rem;
-  font-size: 1.3rem;
+  font-size: calc(var(--text-base) * 1.3);   /* 20.8px, never root-relative */
   line-height: 1.5;
   font-weight: 500;
   color: var(--gray-900);
