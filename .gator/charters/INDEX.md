@@ -19,7 +19,9 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `src/gator_command/scripts/dashboard/*.css` | [Dashboard Browser UI](scripts-dashboard-ui.md) |
 | `src/gator_command/scripts/dashboard/*.html`, `src/gator_command/scripts/dashboard/*.js`, `src/gator_command/scripts/dashboard/views/**`, and `src/gator_command/scripts/dashboard/*.png` | [Dashboard Browser UI](scripts-dashboard-ui.md) · [Dashboard Server](scripts-dashboard.md) |
 | Welcome documents `src/gator_command/templates/gator-starter/docs/*.html` | [Dashboard Server](scripts-dashboard.md) |
-| `src/gator_command/scripts/loop/**`, `gator-loop.py` | [Gator Loop](scripts-loop.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/__init__.py` | [Loop State](scripts-loop-state.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/loop/gitsnap.py`, `src/gator_command/scripts/gator-loop.py` | [Loop Commands](scripts-loop-commands.md) · [Cross-Cutting](scripts-cross-cutting.md) |
+| `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/liveness.py`, `src/gator_command/scripts/loop/codex_launcher.py` | [Loop Lifecycle and Hosting](scripts-loop-host.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/gator-enterprise.py` | [Enterprise Dispatcher](scripts-enterprise.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `enterprise/enterprise-cli/**` | [Enterprise CLI](scripts-enterprise-cli.md) · [Enterprise Dispatcher](scripts-enterprise.md) |
 | `enterprise/app/**`, `enterprise/migrations/**`, `enterprise/Dockerfile`, `enterprise/alembic.ini`, `enterprise/fly.toml`, `enterprise/requirements.txt` | [Enterprise Server](scripts-enterprise-server.md) · [Contracts](contracts.md) |

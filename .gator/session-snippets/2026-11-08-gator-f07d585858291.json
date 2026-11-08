@@ -1,0 +1,46 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Charter Sync: an Architect-approved commit is not drift",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "charter-function-significance"
+  ],
+  "commit": "f07d585858291a890b709f97b24a4100f47866d4",
+  "short_commit": "f07d585",
+  "snippet_id": "snippet-f07d585858291",
+  "session_group_key": "anthropic:2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-11-07T13:14:27Z",
+  "ended_at": "2026-11-08T13:14:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-11-07-gator-dded4624c8146.json",
+    "src/gator_command/scripts/dashboard/charter_sync.py",
+    "tests/test_charter_sync.py"
+  ],
+  "notes": [
+    "Charter Sync flagged every recent commit that changed governed code",
+    "without a charter edit, even when the Architect had approved exactly that",
+    "in the commit hook. A recorded decision was being reported as drift, and",
+    "it kept the repository at \"Needs review\" until the commit aged out of the",
+    "last 20.",
+    "A commit whose `Gator-Charter-Changed` trailer is `override-skip` is now",
+    "treated as reviewed. The report says \"no charter update; the Architect",
+    "approved it\". Commits that skip the charter with no recorded decision are"
+  ],
+  "transcript_session_id": "2f3a1397-32cc-4368-8633-2cd8d4dabae7",
+  "transcript_ref": null
+}

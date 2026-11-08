@@ -5,7 +5,7 @@ Packages the verified #37 Phase 1 profile (reference note
 dedicated, loop-only `CODEX_HOME` containing exactly the verified
 five-subcommand rule plus a Gator-owned trust/sandbox block in `config.toml`.
 
-Boundaries (see scripts-loop.md):
+Boundaries (see scripts-loop-host.md):
 - writes only inside the dedicated home; never reads the normal Codex home;
 - never accepts, stores, prints, or passes a loop token;
 - never starts, joins, or authorizes a loop;
