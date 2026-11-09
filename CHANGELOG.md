@@ -4,6 +4,25 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.38.0] — 2026-11-09
+
+Session-orientation release. **An AI session started outside a governed repository now learns what Gator is and where to go, instead of being mis-oriented.**
+
+**Upgrade note:** the Welcome page's session prompt has one new sentence for the case where `gator init` finds no governed repository. Copy it again from the Dashboard if you keep it elsewhere. If your Dashboard lists your home folder as a repository (left by older `gator init` runs), remove it from Fleet (⋮ → Remove).
+
+### Added
+
+- **`gator --explain`.** Orients a model with no governed repository: a short introduction, the installed paths of three Welcome documents to read in order (Gator overview, Gatorize a repo, What Gator can do), and where the session is (version, folder, whether it is a governed repository, the governed repositories registered on this machine, and the next step). It writes nothing and points at the shipped documents, so there is no new document to maintain. Pinned by `tests/test_explain_and_orientation.py`.
+
+### Changed
+
+- **Welcome session prompt** adds: "If gator init reports that this is not a governed repository, run gator --explain, read the documents it lists, and ask me which repository to work in." Still one line.
+- **`gator init` outside a governed repository** says so plainly, exits 1, and points to `gator --explain`. It no longer suggests `gator gatorize .`, because gatorizing is the Architect's decision.
+
+### Fixed
+
+- **`~/.gator/` is never a repository.** `find_gator_root()` accepted Gator's machine-state directory as a repository's `.gator/`, so from any folder under the home directory `gator init` reported "oriented. the terrain is mapped." and listed reads for files that do not exist. Every copy (wheel, starter, Enterprise bundle, both hooks, Loop) now skips it, by location and by its machine-only files (`machine-id`, `dashboard-repos.json`).
+
 ## [2.37.1] — 2026-11-08
 
 Security patch: **agent credential files stay out of commits.** Claude Code saves approved commands, credentials included, into `.claude/settings.local.json`, and Codex keeps its login in `auth.json` under `CODEX_HOME`.
