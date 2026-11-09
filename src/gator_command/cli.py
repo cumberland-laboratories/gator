@@ -92,6 +92,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
+            "  gator --explain        Orient an AI session (what Gator is, where you are)\n"
             "  gator version          Show installed version\n"
             "  gator init             Start a governed session\n"
             "  gator dashboard        Launch the governance dashboard\n"
@@ -105,12 +106,24 @@ def main():
         action="version",
         version=f"%(prog)s {_get_version()}",
     )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="orient an AI session: what Gator is, which documents to read, and where you are",
+    )
 
     sub = parser.add_subparsers(dest="command")
     for cmd_name, (_, help_text) in COMMANDS.items():
         sub.add_parser(cmd_name, help=help_text, add_help=False)
 
     args, remaining = parser.parse_known_args()
+
+    if args.explain:
+        scripts_dir = _find_scripts_dir()
+        if not scripts_dir:
+            print("  Error: Gator scripts directory not found.", file=sys.stderr)
+            sys.exit(1)
+        _run_script(scripts_dir, "gator-explain.py", [])
 
     if not args.command:
         parser.print_help()

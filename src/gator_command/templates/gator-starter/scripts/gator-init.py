@@ -467,10 +467,14 @@ def print_not_found():
     print()
     print(f"  {VERSION}  ·  navigation coding, governed")
     print()
-    print("  no .gator/ found.")
+    print("  not a governed repository: no repository .gator/ found here or above.")
+    print("  (~/.gator/ is Gator's machine state, never a repository.)")
     print()
-    print("  to gatorize this repo:")
-    print("    gator gatorize .")
+    print("  new to Gator, or in the wrong folder? run:")
+    print("    gator --explain")
+    print("  it explains Gator and lists the governed repositories on this machine.")
+    print()
+    print("  gatorizing a repository is the Architect's decision (gator gatorize <path>).")
     print()
 
 

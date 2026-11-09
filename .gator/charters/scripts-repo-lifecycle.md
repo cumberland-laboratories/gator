@@ -1,6 +1,6 @@
 # Charter: Session Boot and Hook Dispatch
 
-**Covers**: `src/gator_command/scripts/gator-init.py`, `src/gator_command/scripts/gator-hook.py`, `src/gator_command/templates/gator-starter/scripts/gator-init.py`
+**Covers**: `src/gator_command/scripts/gator-init.py`, `src/gator_command/scripts/gator-explain.py`, `src/gator_command/scripts/gator-hook.py`, `src/gator_command/templates/gator-starter/scripts/gator-init.py`
 
 ## Owns
 
@@ -16,6 +16,22 @@
 - Charter analysis or pulse generation.
 
 ---
+
+### print_not_found()
+File: src/gator_command/scripts/gator-init.py (and starter copy)
+`gator init` with no governed repository here or above: says so plainly, notes that `~/.gator/` is machine state, points to `gator --explain`, and says gatorizing is the Architect's decision. Exit 1. It never prints a read list or "oriented".
+<- `main()` when `find_gator_root()` returns None
+
+### render(cwd=None) / where_you_are(cwd) / _governed_repos() — `gator --explain`
+File: src/gator_command/scripts/gator-explain.py
+Orients an AI session with no governed repository: a fixed one-paragraph introduction (its first sentence is the Welcome overview's), the installed paths of `READING_ORDER` (Gator overview, Gatorize a repo, What Gator can do; Architect order, 2026-11-09), and a live "Where you are" section (version, working directory, governed root or Git repository, the governed repositories registered on this machine, the next step).
+Filesystem: `templates/gator-starter/docs/*.html` (paths only), `~/.gator/dashboard-repos.json` (R), git (R)
+<- `cli.py --explain`
+-> `gator_core.find_gator_root()`, `read_dashboard_registry()`, `git()`
+! Writes nothing, anywhere. Points at the shipped Welcome documents the Dashboard already serves; there is no second explainer document to maintain.
+! `start-a-session.html` is deliberately not in the reading list: the session-opening prompt the user pasted comes from it.
+! A registered repository is listed only when `find_gator_root(path)` is that path, so a registry entry for the home directory or a missing folder never appears. Gatorizing is always presented as the Architect's decision.
+- **Pinned by** `tests/test_explain_and_orientation.py`.
 
 ### count_constitution_rules() / count_working_set() / count_field_guides()
 File: src/gator_command/scripts/gator-init.py

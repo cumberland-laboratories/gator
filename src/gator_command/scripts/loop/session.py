@@ -73,8 +73,20 @@ def find_gator_root(start_path=None):
     Returns the repo root (parent of .gator/), or raises if not found.
     """
     current = Path(start_path or os.getcwd()).resolve()
+    # ~/.gator/ is Gator's machine-state directory: never a repository's
+    # Gator layer, so the home directory is never a governed root through it.
+    # Recognized by location and by its machine-only files, so a changed
+    # HOME (sudo, WSL, tests) cannot turn it back into a repository.
+    try:
+        machine_state = (Path.home() / ".gator").resolve()
+    except (RuntimeError, OSError):
+        machine_state = None
     for parent in [current] + list(current.parents):
-        if (parent / ".gator").is_dir():
+        gator = parent / ".gator"
+        if gator.is_dir() and not (
+                (machine_state is not None and gator.resolve() == machine_state)
+                or (gator / "machine-id").exists()
+                or (gator / "dashboard-repos.json").exists()):
             return parent
     raise FileNotFoundError(
         "No .gator/ directory found. Are you inside a Gator-governed repo?"

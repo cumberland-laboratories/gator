@@ -628,7 +628,7 @@
     <li>Open a terminal in the repository root, the folder that contains <code>.git</code>.</li>
     <li>Start your coding agent there: Claude Code, Codex, Gemini CLI, Cursor, or another capable agent.</li>
     <li>Paste the session-opening prompt:
-      <pre class="prompt"><code>Run gator init in this repository. Treat its output, including the required session-opening reads, as binding. Do not provide a substantive response until those reads are complete.</code></pre>
+      <pre class="prompt"><code>Run gator init in this repository. Treat its output, including the required session-opening reads, as binding. Do not provide a substantive response until those reads are complete. If gator init reports that this is not a governed repository, run gator --explain, read the documents it lists, and ask me which repository to work in.</code></pre>
       The <span class="ui">Start a session with Gator</span> tab has a button that copies it for you.</li>
     <li>The agent runs <code>gator init</code>. It then reads the Gator entry document, the constitution, and the mission, roadmap and inbox.</li>
     <li>The <code>charters/</code> folder is empty, so the agent follows the bootstrap procedure. It asks what the project is and whether it is solo or team work. It looks for existing knowledge such as <code>ARCHITECTURE.md</code>, decision records or AI instruction files, and asks before it migrates any of it. It fills in <code>mission.md</code> and <code>roadmap.md</code>, finds the module boundaries (usually 3 to 8 charters), and writes the first charters, their index, and a cross-cutting charter for rules that span modules.</li>

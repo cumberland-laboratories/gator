@@ -290,6 +290,10 @@ Commit-time session attribution: walk this process's parent chain as `(pid, star
 
 Approval in these tests runs `gator-approve.py approve` only inside the temp repos — never against this repository's own blocks. The charter escape hatch (`TestCharterEscapeHatch`, both copies) and the second-block headline exercise the envelope in strict mode; the supersede, expiry, retry-safety and trailer-injection tests run through the bundled copy with `GATOR_HOOK_MODE=evidence_only` and a staged SQL-001 finding. Strict-mode warning tests stage `migrate.txt`, because `.txt` is charter-exempt while `.sql` is code. Legacy-migration fixtures write legacy-resolution `block.json` / `approval.json` / `handoff.json` records by hand.
 
+## Repository Root
+
+Both `gator-pre-commit.py` copies carry their own `find_gator_root()` with the shared machine-state rule: `~/.gator/` is never a repository's Gator layer (see `scripts-core-library.md` → `find_gator_root()`). Pinned by `tests/test_explain_and_orientation.py`.
+
 ## Delivery (where these scripts run)
 
 | Runtime | Source | Reaches a repo via | Pin |

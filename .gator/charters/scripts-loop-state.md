@@ -380,6 +380,10 @@ Violation: the host reads a terminal event, loads session.json to print a summar
 
 **Sole exception: `architect_attention_due`.** `_try_record_attention` appends this event BEFORE saving its `attention_notified_turn` marker, both inside the session lock. The rule protects events that imply a state change, and this awareness-only event implies none: the marker is idempotency metadata. The inverted order is what makes a crash between the two writes recoverable, because the event is found and the marker repaired. Session-first order would instead lose the event forever behind a marker. No other event may use this exception.
 
+## TRIPWIRE: Machine State Is Not a Loop's Repository
+
+`session.find_gator_root()` skips `~/.gator/` (by location and by its `machine-id` / `dashboard-repos.json` files), like every other copy, so a loop command run outside a governed repository raises `FileNotFoundError` instead of treating the home directory as one. See `scripts-core-library.md` → `find_gator_root()`.
+
 ## TRIPWIRE: Token Nonce Separation
 
 Committed `session.json` contains only role names. Secret nonces live only in gitignored `.tokens.json`. Tokens cannot be reconstructed from committed data because the nonce never appears outside `.tokens.json`.

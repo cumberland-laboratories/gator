@@ -34,7 +34,9 @@ from ._harness import open_fleet
 SESSION_PROMPT = (
     "Run gator init in this repository. Treat its output, including the required "
     "session-opening reads, as binding. Do not provide a substantive response until "
-    "those reads are complete."
+    "those reads are complete. If gator init reports that this is not a governed "
+    "repository, run gator --explain, read the documents it lists, and ask me which "
+    "repository to work in."
 )
 
 TOPICS = ["session", "overview", "can", "docs", "loop", "gatorize"]

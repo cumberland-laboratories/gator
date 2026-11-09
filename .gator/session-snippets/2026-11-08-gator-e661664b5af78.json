@@ -1,0 +1,43 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.37.1",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "e661664b5af78e9e1ef0d7790a349e106efd7c81",
+  "short_commit": "e661664",
+  "snippet_id": "snippet-e661664b5af78",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "cf9ed78270ddbc0cdb4ff1cf15539c0205f4af80",
+  "started_at": "2026-11-08T23:13:56Z",
+  "ended_at": "2026-11-08T23:13:56Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-08-gator-cf9ed78270ddb.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.37.1, a security patch: agent credential files",
+    "(`.claude/settings.local.json`, `.gemini/.env`, `.codex/auth.json`) are",
+    "ignored in governed repositories and flagged by the commit hook when",
+    "staged, and removing a secret file is no longer flagged. See the CHANGELOG.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

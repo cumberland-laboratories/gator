@@ -78,10 +78,11 @@ Filesystem: repo directories (R)
 
 ### find_gator_root(start_path=None)
 File: `src/gator_command/scripts/gator_core.py`
-Walks up from start_path looking for `.gator/` directory.
+Walks up from start_path looking for a repository's `.gator/` directory.
 Filesystem: repo directories (R)
-<- `gator-init.py`, `gator-update.py`
+<- `gator-init.py`, `gator-update.py`, `gator-explain.py` and about 20 other scripts
 ! Use this for scripts that operate from inside a governed fleet repo. Not for command-post scripts.
+! **`~/.gator/` is never a repository (Architect, 2026-11-09).** It is Gator's machine-state directory, so the home directory is never a governed root through it. It is recognized by location (`Path.home() / ".gator"`) and by its machine-only files (`machine-id`, `dashboard-repos.json`), so a changed `HOME` (sudo, WSL, tests) cannot turn it back into a repository. Six copies carry the identical rule: this one, the starter and Enterprise bundled `gator_core.py`, both `gator-pre-commit.py` copies and `loop/session.py`. Pinned by `tests/test_explain_and_orientation.py` (all six). Before the rule, `gator init` from any folder under home printed "oriented. the terrain is mapped." against `~/.gator/`.
 
 ### is_enterprise_active(gator_dir)
 File: `src/gator_command/scripts/gator_core.py`
