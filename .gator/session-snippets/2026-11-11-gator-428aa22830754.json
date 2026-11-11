@@ -1,0 +1,41 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.38.1",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "428aa22830754c778ea5160f1c128bc02effec52",
+  "short_commit": "428aa22",
+  "snippet_id": "snippet-428aa22830754",
+  "session_group_key": "anthropic:916b0523-e72c-4efa-afe4-adeef407547f",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "2c2fc0955bc772cbe0d6d56815277526e9d5ec25",
+  "started_at": "2026-11-10T17:32:13Z",
+  "ended_at": "2026-11-11T16:24:59Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-11-gator-2c2fc0955bc77.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.38.1, a patch: Gator no longer creates the obsolete `outbox.md` at",
+    "a repository's root, and fleet-intel no longer reads it. See the CHANGELOG.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": "916b0523-e72c-4efa-afe4-adeef407547f",
+  "transcript_ref": null
+}

@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-11-08._ Current strategy, priorities, and planned work.
+_Updated 2026-11-11._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,7 +11,9 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.37.0 (2026-11-08).
+**Latest released version**: v2.38.1 (2026-11-11): Gator no longer creates the obsolete `outbox.md`. v2.38.0 (2026-11-09): `gator --explain`; `~/.gator/` is never a repository. v2.37.1 (2026-11-08): agent credential files stay out of commits.
+
+v2.37.0 (2026-11-08):
 - **Charter health (#105, #88):** `function-gap` reports only real seams (entry points, exports, cross-charter imports), one shared policy for the verifier, linter and commit hook; the checked `**Internal**:` charter line; one shared `Covers` rule.
 - **Dashboard Charters page** and `gator charters report`; Charter Sync treats function gaps and import fan-out as advisory and does not flag Architect-approved commits.
 - **Charters as a map:** the Loop and Dashboard UI charters split along code layers; charter size judged by content, not a line count (vault research note 2026-11-08).
