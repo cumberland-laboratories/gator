@@ -1,4 +1,4 @@
-"""Post-install wiring: outbox, product source, registry, summary.
+"""Post-install wiring: product source, registry, summary.
 
 These run in the common tail of every gatorize scenario.
 All functions that need startup globals receive them as parameters.
@@ -8,25 +8,6 @@ import json
 from pathlib import Path
 
 from gatorize.helpers import git, log_step
-
-
-def action_install_outbox(target):
-    """Create outbox.md stub."""
-    outbox = target / "outbox.md"
-    if outbox.exists():
-        text = outbox.read_text(encoding="utf-8", errors="replace")
-        lines = [l for l in text.splitlines() if l.strip() and not l.startswith("#") and not l.startswith("---")]
-        if lines:
-            log_step("outbox.md already exists with content — preserved")
-            return
-    outbox.write_text(
-        "# Outbox\n\n"
-        "Messages for Gator Command. The Architect triages these during command post sessions.\n"
-        "Do not clear this file from the project repo — the command post session clears\n"
-        "entries after processing.\n\n---\n\n",
-        encoding="utf-8",
-    )
-    log_step("Created outbox.md")
 
 
 def action_install_product_source(target, scripts_dir, today):

@@ -70,6 +70,7 @@ Collect bounded activity, mission, charter, thread, and issue signals for one re
 Filesystem: repo Git and `.gator/` knowledge surfaces (R)
 <- fleet-intel CLI
 ! Profiles summarize evidence; they do not infer governance compliance beyond available signals.
+! No `outbox` field: the outbox is retired, and `read_outbox()` and the "Outbox Items" section were removed.
 
 ### render_thread(profile)
 File: src/gator_command/scripts/gator-fleet-intel.py

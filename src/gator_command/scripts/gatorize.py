@@ -46,7 +46,6 @@ from gatorize.vendor_hooks import (  # noqa: E402
     VENDOR_HOOK_CONFIGS,
 )
 from gatorize.post_install import (  # noqa: E402
-    action_install_outbox,
     action_install_product_source, action_register, print_summary,
 )
 from gatorize.morph import (  # noqa: E402
@@ -751,7 +750,7 @@ def main():
             print("  ================================================================")
             print()
             sys.exit(result.returncode)
-        # Fall through to common tail — refreshes outbox, product-source
+        # Fall through to common tail — refreshes product-source
     elif scenario == 4:
         print()
         print("  Scenario 4: Legacy memex structure detected")
@@ -817,7 +816,6 @@ def main():
     # gator-update found no template changes to apply.
     write_gator_version(target / ".gator", "update" if scenario == 3 else "install")
     untracked = ensure_repo_gitignore(target)
-    action_install_outbox(target)
     action_install_product_source(target, SCRIPTS_DIR, TODAY)
     action_register(target, TODAY)
 

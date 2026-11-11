@@ -187,20 +187,6 @@ def read_committed_decisions(repo_path, days=30):
     return decisions[:20]  # cap at 20 most recent
 
 
-def read_outbox(repo_path):
-    """Read outbox items (cross-repo observations)."""
-    outbox = repo_path / ".gator" / "outbox.md"
-    if not outbox.exists():
-        return []
-    text = outbox.read_text(encoding="utf-8", errors="replace")
-    items = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("- ") and stripped != "- *(empty)*":
-            items.append(stripped[2:])
-    return items
-
-
 # ---------------------------------------------------------------------------
 # Profile generation
 # ---------------------------------------------------------------------------
@@ -224,7 +210,6 @@ def build_profile(name, repo_path):
     threads = read_active_threads(path)
     open_issues = read_issues_count(path)
     decisions = read_committed_decisions(path)
-    outbox = read_outbox(path)
 
     # Derive activity level
     c7 = freq.get("7d", 0)
@@ -268,7 +253,6 @@ def build_profile(name, repo_path):
             for c in commits[:10]
         ],
         "decisions": decisions[:10],
-        "outbox": outbox,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
@@ -356,15 +340,6 @@ def render_thread(profile):
             lines.append(f"- {d}")
         if len(decisions) > 7:
             lines.append(f"- ... and {len(decisions) - 7} more")
-        lines.append("")
-
-    # Outbox
-    outbox = profile.get("outbox", [])
-    if outbox:
-        lines.append("## Outbox Items")
-        lines.append("")
-        for item in outbox:
-            lines.append(f"- {item}")
         lines.append("")
 
     # Footer

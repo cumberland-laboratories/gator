@@ -31,7 +31,7 @@ Target has no `.git/`, no `.memex/` or `memex/`, no `.gator/`.
 
 1. `action_git_init(target)` — `git init`, normalize to git's `init.defaultBranch` (`main` if unset), stage existing files (or empty commit) with message "Initial commit (pre-Gator)". Leaves the caller on the default branch. No safety branch.
 2. `action_install_gator(target)` — install `.gator/` from templates (v2 `.includes/` layout: scaffolding at root, shipped content under `.gator/.includes/`).
-3. Common tail: `write_gator_version`, `ensure_repo_gitignore`, `action_install_entry_points`, `action_install_outbox`, `action_install_product_source`, `action_register`, `print_summary`.
+3. Common tail: `write_gator_version`, `ensure_repo_gitignore`, `action_install_product_source`, `action_register`, `print_summary`.
 
 ### Scenario 2: Git repo, clean (no memex, no gator)
 
@@ -58,10 +58,10 @@ Every `.gator/` install is assigned a generation via `.gator/.gator-version`:
 
 #### Sub-case 3a: Pre-installer builds (gen 0)
 
-These installs pre-date the installer's existence. They may have **more** reference-notes and scripts than the current template. They have no registry entry and no outbox.
+These installs pre-date the installer's existence. They may have **more** reference-notes and scripts than the current template. They have no registry entry.
 
 1. **Overlay** template files — refresh template-derived files, but **do not delete** extra reference-notes, scripts, or procedures that exist only in the target. Template files overwrite same-named files; everything else is preserved.
-2. Add outbox, entry points, register (all new for gen 0).
+2. Register (new for gen 0).
 3. Write `.gator-version` (gen 2).
 
 Note: pre-v2.4.0 command-post-era installs may still have a `.gator/command-post.md` file on disk (that's part of what makes the install "gen 1"), but the current installer neither creates nor refreshes it — thin-link installation was retired with the broader command-post retirement.

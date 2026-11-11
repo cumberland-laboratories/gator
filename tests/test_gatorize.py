@@ -854,3 +854,34 @@ class TestTransientMigration:
         _legacy_repo(tmp_path)
         assert gatorize.ensure_repo_gitignore(tmp_path, untrack=False) == []
         assert gatorize.tracked_transient_files(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# The retired outbox: gatorize never creates, reads or deletes outbox.md
+# ---------------------------------------------------------------------------
+
+class TestNoOutbox:
+    def test_fresh_gatorize_creates_no_outbox(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        assert (repo / ".gator" / ".includes" / "GATOR_INIT.md").is_file()
+        assert not (repo / "outbox.md").exists()
+        assert not (repo / ".gator" / "outbox.md").exists()
+
+    def test_existing_outbox_keeps_exact_bytes(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+        body = "# Outbox\r\n\r\n---\r\n\r\n".encode("utf-8")
+        (repo / "outbox.md").write_bytes(body)
+        subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, timeout=10)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "outbox"],
+                       check=True, timeout=10)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        assert (repo / "outbox.md").read_bytes() == body

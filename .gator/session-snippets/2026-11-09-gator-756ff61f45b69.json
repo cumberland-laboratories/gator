@@ -1,0 +1,42 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.38.0",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "756ff61f45b69e957f4821550ca001397fb64707",
+  "short_commit": "756ff61",
+  "snippet_id": "snippet-756ff61f45b69",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "e33b95b429d5899c0b6f90e1228ae4fc804e6e90",
+  "started_at": "2026-11-09T21:44:47Z",
+  "ended_at": "2026-11-09T21:44:47Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-09-gator-e33b95b429d58.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.38.0, the session-orientation release: `gator --explain`, a",
+    "Welcome prompt that handles sessions outside a governed repository, and",
+    "`~/.gator/` never treated as a repository. See the CHANGELOG.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

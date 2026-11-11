@@ -98,6 +98,10 @@ Filesystem: legacy and `.gator/` knowledge trees (RW)
 -> normal Gator install actions
 ! Morph is a migration path, not a reason to create new Memex structures.
 
+## TRIPWIRE: No outbox.md
+
+The outbox was retired with the command post. Gator never creates, reads, or deletes `outbox.md`. The retired `action_install_outbox()` wrote a root stub on every gatorize run through v2.38.0. Copies already in repositories belong to those repositories and are left as they are. Pins: `TestNoOutbox` in `tests/test_gatorize.py`.
+
 ### action_register(target, today)
 File: src/gator_command/scripts/gatorize/post_install.py
 Register the resolved repository path through the canonical machine registry helper.
