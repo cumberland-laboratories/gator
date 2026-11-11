@@ -4,6 +4,20 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.38.1] — 2026-11-11
+
+Patch: **Gator no longer creates `outbox.md`.**
+
+**Upgrade note:** nothing to do. An `outbox.md` that an earlier Gator wrote at a repository's root is left as it is; delete it if you no longer want it.
+
+### Fixed
+
+- **`gator gatorize` wrote an obsolete `outbox.md` at the repository root** on every run, including a Dashboard Gatorize of an existing repository. The outbox belonged to the retired command post, and nothing uses it. Gatorize no longer creates it. `gator init` and `gator update` never did. Pinned by `TestNoOutbox` in `tests/test_gatorize.py` and the installer charter's "No outbox.md" tripwire.
+
+### Removed
+
+- **Fleet-intel outbox reader.** `gator-fleet-intel.py` no longer reads `.gator/outbox.md`, and its repository profiles no longer carry an `outbox` field or an "Outbox Items" section.
+
 ## [2.38.0] — 2026-11-09
 
 Session-orientation release. **An AI session started outside a governed repository now learns what Gator is and where to go, instead of being mis-oriented.**

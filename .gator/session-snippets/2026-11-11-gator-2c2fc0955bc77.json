@@ -1,0 +1,50 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Gator no longer creates or reads the obsolete outbox.md",
+  "change_type": "fix",
+  "significance": "minor",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "installer",
+    "retirement"
+  ],
+  "commit": "2c2fc0955bc772cbe0d6d56815277526e9d5ec25",
+  "short_commit": "2c2fc09",
+  "snippet_id": "snippet-2c2fc0955bc77",
+  "session_group_key": "anthropic:916b0523-e72c-4efa-afe4-adeef407547f",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-11-10T17:32:13Z",
+  "ended_at": "2026-11-11T16:05:15Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-fleet-intelligence.md",
+    ".gator/charters/scripts-installer.md",
+    ".gator/procedures/gatorize-permutations.md",
+    ".gator/session-snippets/2026-11-09-gator-756ff61f45b69.json",
+    "src/gator_command/scripts/gator-fleet-intel.py",
+    "src/gator_command/scripts/gatorize.py",
+    "src/gator_command/scripts/gatorize/post_install.py",
+    "tests/test_fleet_intel.py",
+    "tests/test_gatorize.py"
+  ],
+  "notes": [
+    "Every gatorize run, including a Dashboard Gatorize on an existing repository,",
+    "wrote an `outbox.md` stub at the repository root. The outbox belonged to the",
+    "retired command post, and nothing uses it now. Gatorize no longer creates the",
+    "file, and fleet-intel no longer reads `.gator/outbox.md` or renders an",
+    "\"Outbox Items\" section. `gator init` and `gator update` never touched it.",
+    "Existing `outbox.md` files are left as they are: they belong to their",
+    "repositories, and Gator neither reads nor deletes them."
+  ],
+  "transcript_session_id": "916b0523-e72c-4efa-afe4-adeef407547f",
+  "transcript_ref": null
+}
