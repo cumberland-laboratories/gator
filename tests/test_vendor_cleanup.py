@@ -67,7 +67,8 @@ def _write(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(data, (dict, list)):
         data = json.dumps(data, indent=2) + "\n"
-    path.write_text(data, encoding="utf-8", newline="\n")
+    # Bytes, not write_text(newline=): that keyword needs Python 3.10+.
+    path.write_bytes(data.encode("utf-8"))
 
 
 def _commit_all(repo):

@@ -90,6 +90,8 @@ Directory containment checks must test **both** `is_symlink()` and the reparse-p
 
 ## TRIPWIRE: CLI and Git Compatibility
 
+**Python floor is 3.9** (`requires-python = ">=3.9"`; the `fast` CI matrix runs py3.9 on Ubuntu and Windows). Shipped code **and tests** must avoid 3.10+ APIs. Two have caught us: `Path.write_text(newline=...)` (use `write_bytes()`, or `open(..., newline=)`, as `tests/test_precommit_override.py` and `tests/test_vendor_cleanup.py` do) and runtime `X | Y` type unions. There is no local py3.9 on the main dev machine, so a grep for these before pushing is the check.
+
 Machine-readable CLI output has a top-level `schema` identifier. Additive fields may remain within a version; removing, renaming, or changing meaning requires a schema bump and consumer migration. Readers tolerate the absence of every optional field below, because older output and older sessions never carry them and are never backfilled.
 
 Loop turn windows (legacy loops) and Architect attention intervals (same stored field) have one validation authority: `loop/session.validate_turn_timeout()` (30..3600 s, integral). The loop CLI (`unblock --timeout`, legacy loops only; attention-mode loops refuse it) and the Dashboard HTTP endpoints (loop start `attention_interval` / alias `turn_timeout`, unblock `timeout` for legacy loops only, via `_validate_http_turn_timeout()`) both route through it; the browser mirrors the bounds only for early feedback. Do not re-implement the range at a call site. The per-extension round increment follows the same rule via `validate_round_count()` (1..20): CLI `extend --rounds` and Dashboard `/extend` (`_validate_http_round_count()`).
