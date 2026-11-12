@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Vendor cleanup tests run on Python 3.9",
+  "change_type": "test",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "ci",
+    "python-3.9"
+  ],
+  "commit": "da79be1263ed863841f1049b9630c00971b464fa",
+  "short_commit": "da79be1",
+  "snippet_id": "snippet-da79be1263ed8",
+  "session_group_key": "anthropic:543eeb61-d743-46a4-a160-5881cf228209",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "f8673abd19e07968bc33435a906e621da6e2e3eb",
+  "started_at": "2026-11-11T23:41:42Z",
+  "ended_at": "2026-11-12T12:02:28Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/session-snippets/2026-11-12-gator-f8673abd19e07.json",
+    "tests/test_vendor_cleanup.py"
+  ],
+  "notes": [
+    "The vendor cleanup tests' file helper used `Path.write_text(newline=...)`, which exists only from Python 3.10, so both py3.9 CI jobs failed. It now writes bytes. Shipped code was not affected."
+  ],
+  "transcript_session_id": "543eeb61-d743-46a4-a160-5881cf228209",
+  "transcript_ref": null
+}

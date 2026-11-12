@@ -4,6 +4,38 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.39.0] — 2026-11-12
+
+Machine-integration release (#58). **Gator connects to your AI tools once per machine, and repositories carry no AI-tool files.** `pipx install gator-command` plus any `gator` command (normally `gator dashboard`) is now the whole setup.
+
+**Upgrade note:**
+- **Run `gator update` in each governed repository.** It removes the AI-tool files that earlier Gator versions added (`--dry-run` shows the list first). A file that held only Gator's content is deleted and the deletion is staged. A settings file that also holds your own entries keeps them: Gator removes only its hooks and leaves the file for you to review and commit. A command file you edited stays.
+- **In Codex, approve Gator's hook once:** run `/hooks`. Codex asks for this once per machine. Gator never pre-trusts it. Then press Done in Dashboard → Settings, or run `gator integration dismiss-codex-reminder`.
+- **Before you uninstall Gator, run `gator integration remove`.** Otherwise your AI tools keep calling a `gator` command that no longer exists.
+- The four Gator slash commands (`/init`, `/update`, `/commit`, `/loop-join`) are retired. Start a session with `gator init`, and join a loop by pasting the join prompt.
+
+### Added
+
+- **Machine integration.** Every ordinary `gator` command adds Gator's two session hooks (`gator hook session-open`, `gator hook session-start`) to the user settings of each AI tool installed on the machine: `~/.claude/settings.json`, `~/.codex/hooks.json` (or `$CODEX_HOME`), `~/.gemini/settings.json`. Gator never creates a tool's home folder. It changes only its own entries, which it recognizes by a closed list of the commands it has shipped, and it never rewrites a file it cannot parse. Messages go to stderr only, so `--json` output stays clean. A failure never changes a command's exit code. `gator hook` and `gator integration` never connect. `GATOR_NO_VENDOR_INTEGRATION=1` opts out. Pinned by `tests/test_machine_integration.py` and `tests/test_cli_integration.py`. Charter: `scripts-machine-integration.md`.
+- **`gator integration status | remove | dismiss-codex-reminder`.** Shows, removes or acknowledges the connection. Machine state is in `~/.gator/vendor-integration.json`.
+- **Dashboard Settings → Connected AI tools.** Each tool's state is shown in words, with the one-time Codex `/hooks` reminder and a Done button (`GET /api/integration`, `POST /api/integration/dismiss-codex-reminder`). Pinned by `tests/test_dashboard_integration.py` and `tests/test_dashboard_ui/test_settings_integration.py`.
+
+### Changed
+
+- **Session hooks never write to stdout.** Outside a governed repository they are completely silent. Inside one, the runtime advisory and any stray output go to stderr. Machine-wide hooks therefore add nothing to the model's context in any repository, and Gemini CLI's JSON-only stdout stays valid. Pinned by `tests/test_gator_hook.py`.
+- **`gator init` shows the runtime advisory** (for example "installed CLI is newer than the pinned runtime") as a `! runtime` line in its banner, because the session hooks no longer print it.
+- **`gator gatorize` and `gator update` write no `.claude/`, `.codex/` or `.gemini/` files**, and `gator update` removes Gator's old ones as a planned, dry-run-visible step. `--json` gains additive `vendor_cleanup` and `summary.vendor_cleanup` fields, and `--result-json` gains `vendor_cleanup`. Pinned by `tests/test_vendor_cleanup.py` and `TestNoVendorFilesInRepos` in `tests/test_gatorize.py`.
+- **Gemini hook timeout is now in milliseconds (10000).** Gemini CLI reads `timeout` in milliseconds, so the previous `5` gave Gator's hooks 5 ms.
+
+### Removed
+
+- **Gator slash commands** (`templates/gator-starter/commands/`) and **repository hook templates** (`templates/gator-starter/vendor-hooks/`), with the repository-scoped hook merge (`gatorize/vendor_hooks.py`, and the copy in `gator-update.py`). The one instruction only `/loop-join` carried is now in the loop protocol's Step 1: in Claude Code, prefer the background watcher and end the turn after starting it.
+
+### Known limitations
+
+- **Antigravity CLI (`agy`) records no session.** It has no SessionStart event and uses a different hook format (#106). `gator init` works in it as usual.
+- **A tool that cannot find `gator` on its PATH** (possible for desktop apps and IDE extensions) shows a one-line SessionStart hook notice per session and records no session. The session itself is not affected.
+
 ## [2.38.1] — 2026-11-11
 
 Patch: **Gator no longer creates `outbox.md`.**
