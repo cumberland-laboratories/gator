@@ -704,7 +704,7 @@ def cmd_acknowledge(args):
     if text is None or error or not text.startswith("---"):
         return _ack_refusal("draft-unstructured", [
             "  Refused: commit_draft.md has no readable frontmatter block. Fix the",
-            "  draft (see /commit), then record the decision."], args)
+            "  draft (see the constitution's commit step), then record the decision."], args)
     try:
         dangerous = _current_dangerous(root)
     except ovr.OverrideStateError as exc:

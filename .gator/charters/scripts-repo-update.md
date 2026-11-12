@@ -32,12 +32,17 @@ Filesystem: template source and `.gator/` layout (R)
 
 `gator update` (both copies) never reads, creates, refreshes, backs up, or edits `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `*.local.md` (gator-native entry point, 2026-10-08). Historical `GATOR:BEGIN`/`GATOR:END` blocks keep their exact bytes, and no `.pre-gator-update` sibling is written. The Gator entry document is `GATOR_INIT.md`, delivered through `TEMPLATE_FILES`. The retired Stage 4b entry-point plan/execute pair and the template copy's inlined managed-block helpers are gone. Do not reintroduce native-file writes here; an opt-in adapter would be a separate, explicit command. Pins: `TestUpdateLeavesNativeFilesUntouched` in `tests/test_template_sync.py`.
 
-### merge_hooks_into_settings() / install_vendor_hooks()
-File: src/gator_command/scripts/gator-update.py
-Merge managed vendor hook commands while preserving unrelated user commands.
-Filesystem: vendor settings (RW)
-<- update execution
-! Recognize prior and current Gator hook shapes so migration is idempotent and never duplicates hooks.
+## TRIPWIRE: No AI-Tool Files in Repositories
+
+`gator update` (both copies) writes no repo-level vendor configuration or command files. The repo-scoped hook merge (`_extract_hook_commands`, `_is_gator_hook_command`, `merge_hooks_into_settings`, `VENDOR_HOOK_CONFIGS`, `install_vendor_hooks`), the `--migrate-layout` vendor-hook refresh and the `CLAUDE_COMMANDS_DIR` slash-command overlay are gone. Gator's session hooks live in each AI tool's user settings ([`scripts-machine-integration.md`](scripts-machine-integration.md)). Instead, the update removes what earlier versions left in the repository, as a planned operation (below).
+
+### Vendor cleanup in _run() / print_plan() / print_json_plan() / _run_with_result()
+File: src/gator_command/scripts/gator-update.py (and starter copy, byte-identical)
+`_run()` predicts `vendor_actions = plan_vendor_cleanup(repo_root)` next to the #78 prediction (read-only). `--dry-run` lists it (`print_plan(vendor_actions=)`, through `format_vendor_cleanup(predicted=True)`), and "Everything is current" is not printed while a delete or strip action remains. `--json` adds additive `vendor_cleanup: {actions, count}` and `summary.vendor_cleanup` (count = delete + strip; `user-owned` entries are listed but never applied). Execution calls `apply_vendor_cleanup(repo_root, vendor_actions)` where the repo hook merge used to run (after `install_git_hooks()`), stores the applied actions in `_RESULT["vendor_cleanup"]`, prints them with any `user-owned` notes, and counts them as a change for the `updated:` stamp. `--result-json` adds `vendor_cleanup` (applied actions, or null).
+<- update `main()`
+-> `gatorize` sibling: `plan_vendor_cleanup`, `apply_vendor_cleanup`, `format_vendor_cleanup` (see [`scripts-installer.md`](scripts-installer.md))
+! Same seam as #78: without the `gatorize` sibling (the template copy run standalone) the three names degrade to no plan, no action, no output.
+! Staging rule: only files that were wholly Gator's are deleted (tracked → deletion staged). A stripped file still holds user content and is left unstaged with "review and commit".
 
 ### build_git_hook_wrappers() / install_git_hooks()
 File: src/gator_command/scripts/gator-update.py
@@ -55,7 +60,7 @@ File: src/gator_command/scripts/gator-update.py
 
 ### _run_with_result(args) / _run(args) — `--result-json`
 File: src/gator_command/scripts/gator-update.py
-`main()` parses arguments and calls `_run(args)` (the former body). `--result-json` executes under `contextlib.redirect_stdout` and prints exactly one `gator-update-result-v1` object: `schema`, `version`, `exit_code` (from `SystemExit`), `output` (the captured human text) and `transient_untracked` (the shared result or null, from `_RESULT`). It refuses `--json` / `--dry-run` (argparse error, exit 2).
+`main()` parses arguments and calls `_run(args)` (the former body). `--result-json` executes under `contextlib.redirect_stdout` and prints exactly one `gator-update-result-v1` object: `schema`, `version`, `exit_code` (from `SystemExit`), `output` (the captured human text), `transient_untracked` (the shared result or null, from `_RESULT`) and `vendor_cleanup` (the applied repository vendor cleanup or null). It refuses `--json` / `--dry-run` (argparse error, exit 2).
 <- `main()`; consumed by the Dashboard update relay (`dashboard/data.resolve_repo_update()`)
 -> `_run()`
 ! stdout carries only the JSON object; anything the update prints goes into `output`, so a new `print()` in `_run()` never breaks the consumer.
@@ -82,7 +87,7 @@ Emit the versioned machine-readable update plan.
 <- update `--json`
 ! Preserve `gator-update-v1` compatibility; removing or renaming fields requires a schema bump.
 ! `entry_point_actions` and `summary.entry_point_actions` remain for v1 compatibility and are always `[]` / `0`.
-! `transient_untrack` and `summary.transient_untrack` (#78) are additive v1 fields.
+! `transient_untrack` and `summary.transient_untrack` (#78) are additive v1 fields, as are `vendor_cleanup` and `summary.vendor_cleanup`.
 
 ### main()
 File: src/gator_command/scripts/gator-update.py

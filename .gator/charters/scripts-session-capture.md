@@ -10,7 +10,7 @@
 
 ## Does Not Own
 
-- Hook command installation; see [`scripts-installer.md`](scripts-installer.md) and [`scripts-repo-update.md`](scripts-repo-update.md).
+- Hook command installation; see [`scripts-machine-integration.md`](scripts-machine-integration.md) (each AI tool's user settings; repositories carry no AI-tool files).
 - Hook runtime dispatch; see [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
 - Aggregation of committed snippets; see [`scripts-session-archaeology.md`](scripts-session-archaeology.md).
 
@@ -74,7 +74,7 @@ Read one JSON payload from stdin and persist normalized active-session identity.
 ## Connections
 
 -> [Session Boot](scripts-repo-lifecycle.md) - runtime dispatch and correct Git root
--> [Installer](scripts-installer.md) - vendor settings installation
+-> [Machine Integration](scripts-machine-integration.md) - where the session hooks are installed
 -> [Repo Update](scripts-repo-update.md) - hook repair and template overlay
 -> [Session Archaeology](scripts-session-archaeology.md) - downstream evidence grouping
 -> [Enterprise CLI](scripts-enterprise-cli.md) - bundled-copy synchronization

@@ -324,6 +324,50 @@ def init_copy(request):
     return init if request.param == "package" else _load_template_init()
 
 
+class TestRuntimeAdvisoryBanner:
+    """Session hooks no longer put the runtime advisory on stdout, so the
+    `gator init` banner carries it (machine-level vendor integration, CP1)."""
+
+    def _banner(self, init_copy, repo, capsys):
+        init_copy.print_boot_sequence(
+            repo, gator_layout.get_gator_paths(repo),
+            {"status": "ok", "detail": "ok"},
+            {"status": "ok", "detail": "registered"},
+        )
+        return capsys.readouterr().out
+
+    @pytest.mark.parametrize("mode", ["cli-newer", "pin-unreadable", "refuse"])
+    def test_mismatch_modes_show_runtime_line(self, tmp_path, monkeypatch,
+                                              capsys, init_copy, mode):
+        import gator_core
+        monkeypatch.setattr(gator_core, "resolve_governed_runtime",
+                            lambda root, **kw: {"mode": mode,
+                                                "reason": "RUNTIME-SENTINEL"})
+        out = self._banner(init_copy, _v2_repo(tmp_path, True), capsys)
+        assert "! runtime" in out and "RUNTIME-SENTINEL" in out
+
+    @pytest.mark.parametrize("mode", ["current", "repo-scripts", "ungoverned"])
+    def test_other_modes_show_no_runtime_line(self, tmp_path, monkeypatch,
+                                              capsys, init_copy, mode):
+        import gator_core
+        monkeypatch.setattr(gator_core, "resolve_governed_runtime",
+                            lambda root, **kw: {"mode": mode,
+                                                "reason": "RUNTIME-SENTINEL"})
+        out = self._banner(init_copy, _v2_repo(tmp_path, True), capsys)
+        assert "! runtime" not in out and "RUNTIME-SENTINEL" not in out
+
+    def test_resolver_failure_never_blocks_boot(self, tmp_path, monkeypatch,
+                                                capsys, init_copy):
+        import gator_core
+
+        def boom(root, **kw):
+            raise RuntimeError("resolver down")
+        monkeypatch.setattr(gator_core, "resolve_governed_runtime", boom)
+        out = self._banner(init_copy, _v2_repo(tmp_path, True), capsys)
+        assert "! runtime" not in out
+        assert "session opening is not finished" in out
+
+
 class TestSessionOpeningHandoff:
     def test_bootstrap_is_named_first_when_present(self, tmp_path, init_copy):
         repo = _v2_repo(tmp_path, with_bootstrap=True)

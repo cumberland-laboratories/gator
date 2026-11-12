@@ -8,7 +8,7 @@ If you have not installed Gator yet, start with [How to Use Gator](how-to-use-ga
 
 Modern AI coding assistants (Claude Code, Codex CLI, Gemini CLI) all take three kinds of guidance:
 
-- **Slash commands** — short authored prompts you invoke by name in a session (e.g. `/init`, `/review`). Vendors store them under `.claude/commands/`, `.codex/commands/`, or `.gemini/commands/` in the repo.
+- **Slash commands** — short authored prompts you invoke by name in a session (e.g. `/review`). Vendors store them under `.claude/commands/`, `.codex/commands/`, or `.gemini/commands/` in the repo.
 - **Vendor instruction files** — free-form markdown the tool reads on session start. Vendors call this `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` at the repo root. It sets tone, priorities, and standing rules for the agent.
 - **Personal notes** — the same shape as vendor instruction files, but scoped to one person on one machine.
 
@@ -16,21 +16,13 @@ All three are just markdown or short prompt files. Nothing about them is Gator-s
 
 ## What Happens to Your `.claude/` (or `.codex/`, `.gemini/`) on Install
 
-When you run `gator gatorize` on a repo, four Gator-owned slash commands land in the vendor `commands/` directory:
+Nothing. Gator adds no AI-tool files to your repository. Your `.claude/`, `.codex/` and `.gemini/` folders, if you have them, stay entirely yours.
 
-- `init.md` — orients the agent to the constitution, mission, and roadmap at session start.
-- `update.md` — runs a template refresh.
-- `commit.md` — walks the pre-commit governance loop.
-- `loop-join.md` — joins a Gator Loop (multi-agent governed planning).
+Gator connects to your AI tools **once per machine** instead. The first time you run any `gator` command, it adds two session hooks to the user settings of each AI tool installed on that machine (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/settings.json`). Gator's entries go in alongside any hooks you already had. Your permissions, environment variables, and other hooks are never touched. Codex asks you to approve the hook once, in `/hooks`. `gator integration status` shows what is connected, and `gator integration remove` takes it out.
 
-Two rules apply to these files:
+Gator ships no slash commands. A session starts with `gator init`, in every AI tool.
 
-1. **Existing non-Gator commands are backed up with a `.pre-gator` suffix before overwrite.** If you already had a `.claude/commands/init.md` that did something different, gatorize renames it to `init.pre-gator.md` so nothing is silently lost.
-2. **Existing Gator commands are refreshed silently.** `gator update` overwrites Gator-owned commands with the current template versions; that is intentional so improvements to the shared prompts reach every repo.
-
-**User-authored slash commands you add later are preserved.** If you author `.claude/commands/review.md` yourself, `gator update` leaves it alone.
-
-Vendor `SessionStart` hook configs (`.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json`) get merged non-destructively: Gator's hook entries are inserted alongside any hooks you already had. Your permissions, environment variables, and non-Gator hooks are never touched.
+**Repositories gatorized by an earlier Gator version** may have Gator's hook entries in `.claude/settings.json`, `.codex/hooks.json` or `.gemini/settings.json`, and four Gator command files in `.claude/commands/` (`init.md`, `update.md`, `commit.md`, `loop-join.md`). The next `gator update` removes them, with `--dry-run` showing exactly what it will do first. A file that held only Gator's content is deleted, and the deletion is staged for your commit. A settings file that also holds your own entries keeps them: Gator removes only its hooks and leaves the file for you to review and commit. A command file you edited is left in place.
 
 ## What Happens to Your Custom Instructions in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`
 
@@ -89,7 +81,7 @@ When a skill benefits more than one person on the team, route it to a tracked su
 - **Your vendor files** — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. Good for standing tool-specific instructions the agent should always read at session start. Gator never edits them.
 - **`.gator/procedures/`** — good for team workflows, install recipes, review checklists, deploy runbooks. Travels through normal PR review.
 - **`.gator/charters/`** — good for module-level invariants, tripwires, architectural boundaries. The agent reads these before touching related code.
-- **User-authored `.claude/commands/`** — good for team-shared slash commands with a UI affordance (short, recallable prompts). Add them, commit them, teammates pick them up on `git pull`. Gator preserves user-authored commands on update — only the four Gator-owned ones (`init`, `update`, `commit`, `loop-join`) get refreshed.
+- **User-authored `.claude/commands/`** — good for team-shared slash commands with a UI affordance (short, recallable prompts). Add them, commit them, teammates pick them up on `git pull`. Gator never writes or refreshes anything in `.claude/commands/`.
 
 The rule of thumb: **would a teammate cloning this repo tomorrow benefit from seeing this?** If yes, it belongs on a tracked surface. If no, `*.local.md`.
 
@@ -97,9 +89,9 @@ The rule of thumb: **would a teammate cloning this repo tomorrow benefit from se
 
 From Gator's standpoint, these habits keep the team aligned:
 
-- **Commit vendor tooling to the repo.** Check in `.claude/settings.json`, `.claude/commands/`, `.codex/hooks.json`, `.gemini/settings.json`. Teammates get the same tooling shape on pull.
+- **Commit your own vendor tooling if the team shares it.** Your `.claude/settings.json`, `.claude/commands/`, `.codex/hooks.json` or `.gemini/settings.json` are yours to commit. Gator's own hooks are not in them: each teammate's machine connects Gator itself, the first time they run a `gator` command.
 - **Do NOT commit `.claude/settings.local.json`** (gitignored by default). And don't commit any `*.local.md` — those are per-machine by design.
-- **Review `gator update` diffs like any other change.** They touch only `.gator/` content, hooks, and vendor settings — never your `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`.
+- **Review `gator update` diffs like any other change.** They touch only `.gator/` content and Git hooks, plus the one-time removal of Gator's old AI-tool files — never your `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`.
 - **Prefer `.gator/procedures/` over a slash command** unless the skill needs a slash-invoked UI in the agent tool. Procedures travel through normal PR review; slash commands need to be authored, refreshed, and audited separately.
 - **Promote resolved disagreements.** When agents in the team disagree about a workflow, the resolved answer belongs in a procedure or charter — not a personal `*.local.md`. That way the resolution outlives whoever recorded it.
 
@@ -108,11 +100,11 @@ From Gator's standpoint, these habits keep the team aligned:
 **"My `CLAUDE.md` still has an old `<!-- GATOR:BEGIN -->` block."**
 An older Gator version wrote it. It is no longer refreshed and may be out of date. Keep it, replace it with a one-line `gator init` pointer, or delete it in a normal commit — Gator will not touch it either way.
 
-**"I don't want the four Gator slash commands."**
-Delete them from `.claude/commands/`. They will reappear on the next `gator update` because they are Gator-owned. To keep them out for your machine only, add `.claude/commands/init.md`, `.claude/commands/update.md`, `.claude/commands/commit.md`, `.claude/commands/loop-join.md` to your `.gitignore` (but note: teammates who pull will still get them by default — this is only local suppression).
+**"I don't want Gator connected to my AI tools on this machine."**
+Run `gator integration remove`. It removes Gator's hooks from every AI tool's user settings on this machine. The next ordinary `gator` command connects them again, so to keep them out, also set `GATOR_NO_VENDOR_INTEGRATION=1` in your environment. Other machines are not affected.
 
 **"I want a totally clean slate."**
-Run `gator gatorize` on the same repo. Existing Gator content in `.gator/` is refreshed, your vendor files are left alone, and slash commands you authored yourself are left alone. This is the same command as first install — it detects the existing `.gator/` and takes the upgrade path.
+Run `gator gatorize` on the same repo. Existing Gator content in `.gator/` is refreshed, and your vendor files and slash commands are left alone. This is the same command as first install — it detects the existing `.gator/` and takes the upgrade path.
 
 **"I ran `gator gatorize` and don't like the changes."**
 `gatorize` installs on your current branch, in place — it does not create a dedicated safety branch on your behalf. The load-bearing clean-undo pattern is to create your own experiment branch **before** running gatorize (`git checkout -b my-gator-experiment`), and delete that branch afterward to fully revert. If you ran gatorize directly on your working branch, its success banner prints a scenario-aware recovery paragraph with git-native recipes for the uncommitted / committed / untracked-files cases.

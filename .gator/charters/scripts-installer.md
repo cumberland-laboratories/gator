@@ -7,13 +7,14 @@
 - Cross-platform installation and upgrade of Gator governance into a target repository.
 - Scenario detection, template overlay, initial layout (including the shipped `GATOR_INIT.md` entry document), Git ignore rules, and dashboard registration.
 - Explicit migration from legacy Memex content.
-- Initial vendor-hook settings merge.
+- The one-time repository vendor cleanup (`gatorize/vendor_cleanup.py`), which `gator update` calls through its `gatorize` sibling import.
 
 ## Does Not Own
 
 - Overlay updates after installation; see [`scripts-repo-update.md`](scripts-repo-update.md).
 - Runtime hook dispatch and boot display; see [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
 - Session payload parsing; see [`scripts-session-capture.md`](scripts-session-capture.md).
+- Gator's session hooks in AI-tool user settings; see [`scripts-machine-integration.md`](scripts-machine-integration.md).
 - Shipped template content or layout classification.
 
 ---
@@ -81,14 +82,21 @@ Parse the single Gator sentinel region and classify absent, clean, modified, cor
 
 ## TRIPWIRE: Native Agent Files Are Repository-Owned
 
-`gatorize` never creates, prompts about, backs up, or edits `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `*.local.md` (gator-native entry point, 2026-10-08). The retired `gatorize/entry_points.py` (`render_entry_content()`, `upgrade_legacy_entry_point()`, `action_install_entry_points()` with its foreign-file backup-append-overwrite prompt and `*_ROLLBACK.md`) is gone. Loop-join and Executive Summary guidance lives only in the protocol, `/loop-join` and `GATOR_INIT.md` pointers. The pre-action summary states that these files are left untouched. The Gator entry document is `GATOR_INIT.md`, installed by `action_install_gator()`. The `.gitignore` entries for `*.local.md` remain (`ensure_repo_gitignore`) and are behavior-neutral. Pins: `TestGatorizeLeavesNativeFilesUntouched` in `tests/test_gatorize.py`.
+`gatorize` never creates, prompts about, backs up, or edits `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `*.local.md` (gator-native entry point, 2026-10-08). The retired `gatorize/entry_points.py` (`render_entry_content()`, `upgrade_legacy_entry_point()`, `action_install_entry_points()` with its foreign-file backup-append-overwrite prompt and `*_ROLLBACK.md`) is gone. Loop-join and Executive Summary guidance lives only in the protocol and the `GATOR_INIT.md` pointer (the `/loop-join` command is retired). The pre-action summary states that these files are left untouched. The Gator entry document is `GATOR_INIT.md`, installed by `action_install_gator()`. The `.gitignore` entries for `*.local.md` remain (`ensure_repo_gitignore`) and are behavior-neutral. Pins: `TestGatorizeLeavesNativeFilesUntouched` in `tests/test_gatorize.py`.
 
-### install_vendor_hooks()
-File: src/gator_command/scripts/gatorize/vendor_hooks.py
-Merge current Gator session-hook commands into supported vendor settings.
-Filesystem: vendor settings (RW)
-<- installer common tail
-! Preserve unrelated commands and recognize older managed forms to avoid duplicates.
+## TRIPWIRE: No AI-Tool Files in Repositories
+
+Gator creates and retains no repo-level vendor configuration or command files. `action_install_gator()` writes nothing under `.claude/`, `.codex/` or `.gemini/`: the session hooks live in each AI tool's user-level settings ([`scripts-machine-integration.md`](scripts-machine-integration.md)), and the four Gator slash commands (`init`, `update`, `commit`, `loop-join`) are retired (Architect decision A, 2026-11-11). User-owned vendor files and user entries in them may remain; Gator leaves them alone. The retired `gatorize/vendor_hooks.py` (`install_vendor_hooks()`, repo-scoped merge) and `templates/gator-starter/{commands,vendor-hooks}/` are gone. Pins: `TestNoVendorFilesInRepos` in `tests/test_gatorize.py`.
+
+### plan_vendor_cleanup(repo_root) / apply_vendor_cleanup(repo_root, actions) / format_vendor_cleanup(actions, predicted=False) / RETIRED_COMMANDS / ELIGIBLE_SETTINGS
+File: src/gator_command/scripts/gatorize/vendor_cleanup.py
+The one-time removal of what earlier Gator versions put into a repository. `plan_vendor_cleanup()` is read-only and returns sorted `{path, action, tracked}`. Settings files come from the closed list `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json`. A file whose only content is Gator's hook entries is `delete`. One that also holds user hooks or settings is `strip`. A file with no Gator entries, or invalid JSON, gets no action. Each command file in `RETIRED_COMMANDS` is `delete` when its line-ending-normalized SHA-256 matches a shipped version; any other content is a `user-owned` note, reported and never applied. `apply_vendor_cleanup()` applies exactly the given delete/strip actions: tracked delete → `git rm -q -f` (deletion staged; `-f` because the plan already found the working copy wholly Gator's); untracked delete → unlink; strip → atomic rewrite, left unstaged. It then removes `.claude/commands/`, `.claude/`, `.codex/`, `.gemini/` if they are empty on disk.
+Filesystem: the eligible repo files (RW), Git index (W, deletions only)
+<- `gator-update.py` `_run()` via the `gatorize` sibling (see [`scripts-repo-update.md`](scripts-repo-update.md))
+-> `machine_integration.strip_managed_entries()`, `_read_json()`, `_atomic_write_json()`, `_Malformed`
+! Gator entries are recognized only by the closed grammar `machine_integration.is_gator_hook_command()`. A neighbouring user `gator hook <other verb>` or `.gator/` command is user content, so its file is stripped, never deleted.
+! `RETIRED_COMMANDS` holds 36 digests: every version of the four command templates in this repository's history (`git log --all --follow`) and in the pre-monorepo repositories' `*commands/<name>.md` history, computed 2026-11-11. It is a closed historical record; do not add to it.
+! `user-owned` notes and stripped files are reported for the user; Gator never stages a file that still holds user content.
 
 ### action_morph_memex()
 File: src/gator_command/scripts/gatorize/morph.py
@@ -120,7 +128,7 @@ Resolve templates, show the pre-action summary, gate unsafe working trees, execu
 ## Before Changing This Module
 
 - Exercise every install scenario and dirty-tree gate.
-- Verify user content, native agent files (byte-for-byte), and existing vendor commands survive.
+- Verify user content, native agent files (byte-for-byte), and user-owned vendor files survive; a fresh install creates no `.claude/`, `.codex/` or `.gemini/`.
 - Check v2 layout plus user-visible scaffolding placement.
 - Run installer, layout, hooks, registry, and install-cycle tests.
 
@@ -129,5 +137,5 @@ Resolve templates, show the pre-action summary, gate unsafe working trees, execu
 -> [Repo Update](scripts-repo-update.md) - shared hook behavior and shipped root files
 -> [Layout Resolver](scripts-layout.md) - initial directory placement
 -> [Managed State](scripts-managed-state.md) - post-install classification and repair
--> [Session Capture](scripts-session-capture.md) - installed vendor hook targets
+-> [Machine Integration](scripts-machine-integration.md) - where the session hooks live now; the shared hook grammar and stripper
 -> [Core Library](scripts-core-library.md) - registry and template resolution

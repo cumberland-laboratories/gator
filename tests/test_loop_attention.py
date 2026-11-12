@@ -781,11 +781,10 @@ class TestParticipantDocs:
     WATCHERS = [ROOT / ".gator" / ".includes" / "reference-notes" / "loop-participant-watcher.md",
                 ROOT / "src" / "gator_command" / "templates" / "gator-starter"
                 / "reference-notes" / "loop-participant-watcher.md"]
-    JOINS = [ROOT / ".claude" / "commands" / "loop-join.md",
-             ROOT / "src" / "gator_command" / "templates" / "gator-starter"
-             / "commands" / "loop-join.md"]
+    # The `/loop-join` pair is gone: Gator's slash commands are retired
+    # (machine-level vendor integration, 2026-11-11).
 
-    @pytest.mark.parametrize("pair", ["PROTOCOLS", "WATCHERS", "JOINS"])
+    @pytest.mark.parametrize("pair", ["PROTOCOLS", "WATCHERS"])
     def test_pairs_identical(self, pair):
         a, b = getattr(self, pair)
         if not a.exists():
@@ -807,8 +806,7 @@ class TestParticipantDocs:
             if "turn window" in low or "deadline" in low or "timeout" in low:
                 assert ("legacy" in low or "no participant deadline" in low), line
 
-    def test_join_and_watcher_have_no_time_language(self):
-        join = self.JOINS[1].read_text(encoding="utf-8").lower()
+    def test_watcher_has_no_time_language(self):
         watcher = self.WATCHERS[1].read_text(encoding="utf-8").lower()
         for w in ("turn window", "turn timeout", "deadline", "time remaining"):
-            assert w not in join and w not in watcher, w
+            assert w not in watcher, w

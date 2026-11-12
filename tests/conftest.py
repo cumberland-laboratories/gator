@@ -8,6 +8,7 @@ scenarios, plus an import helper for hyphenated script names.
 import contextlib
 import importlib.util
 import io
+import os
 import sys
 import threading
 from pathlib import Path
@@ -18,6 +19,12 @@ import pytest
 SCRIPTS_DIR = Path(__file__).parent.parent / "src" / "gator_command" / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+
+# Every ordinary `gator` command connects the machine's AI tools (writes
+# ~/.claude, ~/.codex, ~/.gemini settings). Tests that run the real CLI —
+# in-process or as a subprocess, which inherits this — must never do that
+# to the developer's or CI machine. Trigger tests delete it explicitly.
+os.environ["GATOR_NO_VENDOR_INTEGRATION"] = "1"
 
 
 class _OwnThreadStdout(io.TextIOBase):

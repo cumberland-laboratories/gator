@@ -10,6 +10,7 @@ scripts are resolved from the package installation.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -78,7 +79,35 @@ COMMANDS = {
     "enterprise": ("gator-enterprise.py",    "Manage Enterprise capability (setup, status, sync, ...)"),
     "state":      ("gator-state.py",         "Report repo state (constitution drift, native agent files)"),
     "charters":   ("gator-charters.py",      "Report charter health (read-only)"),
+    "integration": ("gator-integration.py",  "Show or remove Gator's connection to AI tools on this machine"),
 }
+
+# Verbs that never connect the machine's AI tools: `hook` runs inside every
+# vendor session (hot path), and `integration` must not re-add what
+# `remove` removes.
+NO_ENSURE_VERBS = frozenset({"hook", "integration"})
+
+
+def _ensure_machine_integration(scripts_dir):
+    """Connect Gator to the AI tools installed on this machine.
+
+    Idempotent and cheap (a few small JSON reads; writes only on change).
+    Output goes to stderr only, so `--json` stdout stays parseable, and no
+    failure ever changes the command's exit code.
+    `GATOR_NO_VENDOR_INTEGRATION=1` skips it.
+    """
+    if os.environ.get("GATOR_NO_VENDOR_INTEGRATION") == "1":
+        return
+    try:
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        import machine_integration
+        result = machine_integration.ensure()
+        lines = result["messages"] + result["problems"]
+    except Exception as exc:  # noqa: BLE001 — never block the command
+        lines = [f"Gator: vendor integration skipped ({type(exc).__name__}: {exc})"]
+    for line in lines:
+        print(line, file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +152,7 @@ def main():
         if not scripts_dir:
             print("  Error: Gator scripts directory not found.", file=sys.stderr)
             sys.exit(1)
+        _ensure_machine_integration(scripts_dir)
         _run_script(scripts_dir, "gator-explain.py", [])
 
     if not args.command:
@@ -134,6 +164,9 @@ def main():
         print("  Error: Gator scripts directory not found.", file=sys.stderr)
         print("  Run from a Gator checkout, or install with: pipx install gator-command", file=sys.stderr)
         sys.exit(1)
+
+    if args.command not in NO_ENSURE_VERBS:
+        _ensure_machine_integration(scripts_dir)
 
     script_name, _ = COMMANDS[args.command]
     _run_script(scripts_dir, script_name, remaining)

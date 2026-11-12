@@ -36,8 +36,9 @@ from gator_core import (
 
 VERSION = get_version()
 
-# Gitignore convergence and the transient-file migration (#78) — import
-# from gatorize (graceful degradation: no prediction, no untracking).
+# Gitignore convergence, the transient-file migration (#78) and the
+# repository vendor cleanup — import from gatorize (graceful degradation:
+# no prediction, no untracking, no cleanup).
 def _no_gitignore(repo_root, untrack=True, untrack_paths=None):
     return []
 
@@ -51,14 +52,20 @@ if _gatorize:
     tracked_transient_files = _gatorize.tracked_transient_files
     transient_untrack_result = _gatorize.transient_untrack_result
     format_transient_untrack = _gatorize.format_transient_untrack
+    plan_vendor_cleanup = _gatorize.plan_vendor_cleanup
+    apply_vendor_cleanup = _gatorize.apply_vendor_cleanup
+    format_vendor_cleanup = _gatorize.format_vendor_cleanup
 else:
     ensure_repo_gitignore = _no_gitignore
     tracked_transient_files = lambda repo_root: []
     transient_untrack_result = lambda paths: None
     format_transient_untrack = lambda result, predicted=False: []
+    plan_vendor_cleanup = lambda repo_root: []
+    apply_vendor_cleanup = lambda repo_root, actions: []
+    format_vendor_cleanup = lambda actions, predicted=False: []
 
 # The --result-json record of the last execution (gator-update-result-v1).
-_RESULT = {"transient_untracked": None}
+_RESULT = {"transient_untracked": None, "vendor_cleanup": None}
 
 
 # Files that are template-derived (safe to overwrite)
@@ -99,10 +106,6 @@ TEMPLATE_DIRS = {**SHIPPED_TEMPLATE_DIRS, **USER_TEMPLATE_DIRS}
 
 # Charter scaffolding files (shipped — on v2 they go to .includes/charters/)
 CHARTER_TEMPLATE_FILES = ["README.md", "_template.md"]
-
-# Slash commands
-CLAUDE_COMMANDS_DIR = "commands"
-
 
 # --- Path resolution ---
 
@@ -215,15 +218,6 @@ def plan_updates(templates_dir, gator_dir, repo_root):
     # User-content directories → always gator_dir root
     _plan_dir_overlay(plan, templates_dir, gator_dir, USER_TEMPLATE_DIRS)
 
-    # Claude Code slash commands (not in .gator/)
-    src_commands = templates_dir / CLAUDE_COMMANDS_DIR
-    if src_commands.is_dir():
-        dest_commands = repo_root / ".claude" / "commands"
-        for src_file in sorted(src_commands.iterdir()):
-            if src_file.is_file():
-                dest_file = dest_commands / src_file.name
-                plan.append(plan_file_update(src_file, dest_file))
-
     return plan
 
 
@@ -248,171 +242,6 @@ def _plan_dir_overlay(plan, templates_dir, dest_base, dirs_map):
                         dest_file = dest_sub / src_file.name
                         plan.append(plan_file_update(src_file, dest_file))
 
-
-
-def _extract_hook_commands(groups):
-    """Extract all command strings from a list of hook groups.
-
-    Each group is a dict with a "hooks" key containing a list of hook entries.
-    Each hook entry has a "command" key.
-    """
-    commands = set()
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        for hook in group.get("hooks", []):
-            if isinstance(hook, dict) and "command" in hook:
-                commands.add(hook["command"])
-    return commands
-
-
-def _is_gator_hook_command(cmd):
-    """True when a vendor-hook command string is Gator-managed.
-
-    Recognizes all three shapes: the pre-Phase-3 repo-script invocations
-    (".gator/" path substring — also matches the Phase 3b shell-chain
-    fallback), the bare CLI route ("gator hook <name>"), and the
-    absolute-launcher route ('"/path/to/gator[.exe]" hook <name>' —
-    emitted machine-side by Enterprise). All must match or updates would
-    duplicate the Gator group when migrating between generations.
-    """
-    if ".gator/" in cmd:
-        return True
-    s = cmd.strip()
-    if s.startswith('"'):
-        end = s.find('"', 1)
-        if end == -1:
-            return False
-        head, rest = s[1:end], s[end + 1:].lstrip()
-    else:
-        parts = s.split(None, 1)
-        head, rest = parts[0], (parts[1] if len(parts) > 1 else "")
-    exe = head.replace("\\", "/").rsplit("/", 1)[-1].lower()
-    return exe in ("gator", "gator.exe") and rest.startswith("hook ")
-
-
-def merge_hooks_into_settings(settings_path, hooks_template_path):
-    """Merge Gator hooks into a vendor settings JSON file without clobbering.
-
-    If the settings file doesn't exist, writes the hooks template as-is.
-    If it exists, deep-merges the hooks block: for each hook event,
-    compares individual hook commands and adds any that are missing.
-    This ensures that adding a new Gator hook (e.g., gator-session-open.py)
-    to the template will propagate to repos that already have older Gator
-    hooks installed.
-
-    Returns: 'add', 'update', or 'unchanged'.
-    """
-    hooks_template = json.loads(hooks_template_path.read_text(encoding="utf-8"))
-    template_hooks = hooks_template.get("hooks", {})
-
-    if not settings_path.exists():
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
-        settings_path.write_text(
-            json.dumps(hooks_template, indent=2) + "\n", encoding="utf-8"
-        )
-        return "add"
-
-    # Read existing settings
-    try:
-        existing = json.loads(settings_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, ValueError):
-        # Corrupt file — don't clobber, skip
-        return "unchanged"
-
-    if not isinstance(existing, dict):
-        return "unchanged"
-
-    # Validate hooks shape — bail if it's not what we expect
-    existing_hooks = existing.get("hooks", {})
-    if not isinstance(existing_hooks, dict):
-        # hooks is present but wrong type (e.g., a list) — don't clobber
-        return "unchanged"
-
-    needs_update = False
-
-    for event_name, groups in template_hooks.items():
-        if event_name not in existing_hooks:
-            existing_hooks[event_name] = groups
-            needs_update = True
-        else:
-            event_value = existing_hooks[event_name]
-            if not isinstance(event_value, list):
-                # Event value is wrong shape — skip this event, don't corrupt
-                continue
-            # Get the template hooks list for this event
-            template_hooks_list = []
-            for group in groups:
-                if isinstance(group, dict):
-                    template_hooks_list = group.get("hooks", [])
-                    break
-            if not template_hooks_list:
-                continue
-
-            # Find the existing Gator group (contains any .gator/ command)
-            gator_group = None
-            for existing_group in event_value:
-                if not isinstance(existing_group, dict):
-                    continue
-                group_hooks = existing_group.get("hooks", [])
-                group_cmds = [h.get("command", "") for h in group_hooks if isinstance(h, dict)]
-                if any(_is_gator_hook_command(cmd) for cmd in group_cmds):
-                    gator_group = existing_group
-                    break
-
-            if gator_group is None:
-                # No existing Gator group — append the template group
-                event_value.append({"hooks": list(template_hooks_list)})
-                needs_update = True
-            else:
-                # Separate user hooks from Gator hooks in the existing group,
-                # then rebuild: template Gator hooks + preserved user hooks.
-                existing_hooks_list = gator_group.get("hooks", [])
-                existing_gator = [h for h in existing_hooks_list if isinstance(h, dict) and _is_gator_hook_command(h.get("command", ""))]
-                user_hooks = [h for h in existing_hooks_list if not (isinstance(h, dict) and _is_gator_hook_command(h.get("command", "")))]
-                existing_gator_cmds = [h.get("command", "") for h in existing_gator]
-                template_cmds = [h.get("command", "") for h in template_hooks_list if isinstance(h, dict)]
-                if existing_gator_cmds != template_cmds:
-                    # Rebuild: template Gator hooks first, then user hooks
-                    gator_group["hooks"] = list(template_hooks_list) + user_hooks
-                    needs_update = True
-
-    if not needs_update:
-        return "unchanged"
-
-    existing["hooks"] = existing_hooks
-    settings_path.write_text(
-        json.dumps(existing, indent=2) + "\n", encoding="utf-8"
-    )
-    return "update"
-
-
-# Vendor hook config: (template_file, target_dir, target_filename)
-VENDOR_HOOK_CONFIGS = [
-    ("vendor-hooks/claude-settings.json", ".claude", "settings.json"),
-    ("vendor-hooks/codex-hooks.json", ".codex", "hooks.json"),
-    ("vendor-hooks/gemini-settings.json", ".gemini", "settings.json"),
-]
-
-
-def install_vendor_hooks(templates_dir, repo_root):
-    """Install vendor SessionStart hook configs into the repo.
-
-    Merge-safe: injects Gator hooks into existing settings files
-    without clobbering user content (permissions, env vars, other hooks).
-
-    Returns count of files added or updated.
-    """
-    changed = 0
-    for template_file, target_dir, target_name in VENDOR_HOOK_CONFIGS:
-        src = templates_dir / template_file
-        if not src.exists():
-            continue
-        dest = repo_root / target_dir / target_name
-        result = merge_hooks_into_settings(dest, src)
-        if result in ("add", "update"):
-            changed += 1
-    return changed
 
 
 def execute_updates(plan):
@@ -765,11 +594,13 @@ def install_git_hooks(gator_dir, repo_root):
 
 # --- Output ---
 
-def print_plan(plan, dry_run=False, hooks=None, transient=None):
+def print_plan(plan, dry_run=False, hooks=None, transient=None,
+               vendor_actions=None):
     """Print the update plan.
 
-    `transient` is the predicted list of tracked hook-ephemera paths. A
-    dry run lists it; execution reports the actual result afterwards.
+    `transient` is the predicted list of tracked hook-ephemera paths, and
+    `vendor_actions` the planned repository vendor cleanup. A dry run lists
+    them; execution reports the actual result afterwards.
     """
     adds = [(a, s, d) for a, s, d in plan if a == "add"]
     updates = [(a, s, d) for a, s, d in plan if a == "update"]
@@ -810,8 +641,13 @@ def print_plan(plan, dry_run=False, hooks=None, transient=None):
             transient_untrack_result(transient), predicted=True)))
         print()
 
+    cleanup = [a for a in (vendor_actions or []) if a["action"] in ("delete", "strip")]
+    if dry_run and vendor_actions:
+        print("\n".join(format_vendor_cleanup(vendor_actions, predicted=True)))
+        print()
+
     if not adds and not updates and not hook_adds and not hook_updates:
-        if transient:
+        if transient or cleanup:
             return
         print(f"  Everything is current. No updates needed.")
         print()
@@ -828,7 +664,8 @@ def print_result(added, updated, unchanged):
     print()
 
 
-def print_json_plan(plan, templates_dir, hooks=None, transient=None):
+def print_json_plan(plan, templates_dir, hooks=None, transient=None,
+                    vendor_actions=None):
     """Output the plan as JSON.
 
     Top-level schema field is "gator-update-v1" — declared here so downstream
@@ -837,7 +674,10 @@ def print_json_plan(plan, templates_dir, hooks=None, transient=None):
     compatibility and is always empty: Gator no longer manages
     CLAUDE.md / AGENTS.md / GEMINI.md (gator-native entry point, 2026-10-08).
     `transient_untrack` (#78, additive) lists the tracked hook-ephemera
-    paths that execution would remove from the index.
+    paths that execution would remove from the index. `vendor_cleanup`
+    (additive) lists the planned repository vendor cleanup: each
+    `{path, action, tracked}`, action `delete`, `strip` or `user-owned`
+    (reported, never applied); its count covers delete and strip only.
     """
     items = []
     for action, src, dest in plan:
@@ -857,6 +697,8 @@ def print_json_plan(plan, templates_dir, hooks=None, transient=None):
             "destination": f"{hook_dir}/{name}",
         })
 
+    cleanup_count = sum(1 for a in (vendor_actions or [])
+                        if a["action"] in ("delete", "strip"))
     output = {
         "schema": "gator-update-v1",
         "version": VERSION,
@@ -872,9 +714,12 @@ def print_json_plan(plan, templates_dir, hooks=None, transient=None):
             "hooks_update": sum(1 for h in hook_items if h["action"] == "update"),
             "entry_point_actions": 0,
             "transient_untrack": len(transient or []),
+            "vendor_cleanup": cleanup_count,
         },
         "transient_untrack": {"paths": list(transient or []),
                               "count": len(transient or [])},
+        "vendor_cleanup": {"actions": list(vendor_actions or []),
+                           "count": cleanup_count},
     }
     print(json.dumps(output, indent=2))
 
@@ -1287,8 +1132,9 @@ def main():
 
 def _run_with_result(args):
     """Run an update with its human output captured, then print exactly one
-    `gator-update-result-v1` object: `output` (the text), `exit_code` and
-    `transient_untracked` (the shared migration result, or null)."""
+    `gator-update-result-v1` object: `output` (the text), `exit_code`,
+    `transient_untracked` (the shared migration result, or null) and
+    `vendor_cleanup` (the applied repository vendor cleanup, or null)."""
     import contextlib
     import io
     buf = io.StringIO()
@@ -1304,6 +1150,7 @@ def _run_with_result(args):
         "exit_code": code,
         "output": buf.getvalue(),
         "transient_untracked": _RESULT["transient_untracked"],
+        "vendor_cleanup": _RESULT["vendor_cleanup"],
     }))
     return code
 
@@ -1428,22 +1275,6 @@ def _run(args):
     # before template resolution)
     if args.migrate_layout:
         report = migrate_layout(repo_root, gator_dir, templates_dir)
-        # After a v1→v2 convergence the shipped script paths just moved from
-        # `.gator/scripts/` to `.gator/.includes/scripts/`. Vendor SessionStart
-        # hooks (Claude / Codex / Gemini) still point at the old paths until
-        # `install_vendor_hooks` re-merges the current templates. Do that
-        # inline so a caller who only runs `--migrate-layout` (and never a
-        # follow-up `gator update`) doesn't end up with dead hook targets.
-        # Wrap in try/except: a vendor-hook refresh failure must never mask
-        # or override the migration's own exit code.
-        if report.get("final_layout") == "v2":
-            try:
-                install_vendor_hooks(templates_dir, repo_root)
-            except Exception as e:
-                print(
-                    f"  Warning: vendor hook refresh failed: {e}",
-                    file=sys.stderr,
-                )
         sys.exit(0 if report.get("final_layout") == "v2" else 1)
 
     # Build plan (refuses mixed/invalid layouts with a clean message)
@@ -1460,14 +1291,20 @@ def _run(args):
     # read-only, so dry-run and JSON describe exactly what execution does.
     transient = tracked_transient_files(repo_root)
 
+    # Gator's AI-tool files left in the repository by earlier versions
+    # (hook entries, retired slash commands): predicted here, read-only.
+    vendor_actions = plan_vendor_cleanup(repo_root)
+
     # JSON mode
     if args.json:
-        print_json_plan(plan, templates_dir, hooks_to_install, transient=transient)
+        print_json_plan(plan, templates_dir, hooks_to_install, transient=transient,
+                        vendor_actions=vendor_actions)
         return
 
     # Dry run
     if args.dry_run:
-        print_plan(plan, dry_run=True, hooks=hooks_to_install, transient=transient)
+        print_plan(plan, dry_run=True, hooks=hooks_to_install, transient=transient,
+                   vendor_actions=vendor_actions)
         return
 
     # Converge gitignore rules (same as gatorize.py install/upgrade path)
@@ -1475,7 +1312,8 @@ def _run(args):
     untracked = ensure_repo_gitignore(repo_root, untrack_paths=transient)
 
     # Execute
-    print_plan(plan, hooks=hooks_to_install, transient=transient)
+    print_plan(plan, hooks=hooks_to_install, transient=transient,
+               vendor_actions=vendor_actions)
     added, updated, unchanged = execute_updates(plan)
     transient_result = transient_untrack_result(untracked)
     _RESULT["transient_untracked"] = transient_result
@@ -1488,10 +1326,14 @@ def _run(args):
     if hooks_installed > 0:
         print(f"  Git hooks: {hooks_installed} installed/refreshed")
 
-    # Install/merge vendor SessionStart hook configs
-    vendor_hooks_changed = install_vendor_hooks(templates_dir, repo_root)
-    if vendor_hooks_changed > 0:
-        print(f"  Vendor hooks: {vendor_hooks_changed} config(s) installed/updated")
+    # Remove Gator's AI-tool files from the repository (exactly the plan;
+    # Gator's session hooks live in each AI tool's user settings now)
+    vendor_applied = apply_vendor_cleanup(repo_root, vendor_actions)
+    _RESULT["vendor_cleanup"] = vendor_applied or None
+    notes = [a for a in vendor_actions if a["action"] == "user-owned"]
+    if vendor_applied or notes:
+        print("\n".join(format_vendor_cleanup(vendor_applied + notes)))
+        print()
 
     # Update product-source.json timestamp
     ps = read_product_source(gator_dir)
@@ -1510,7 +1352,7 @@ def _run(args):
     # - `updated:` still gates on file changes — preserves "last modification"
     #   timestamp semantics. Native agent files (CLAUDE.md / AGENTS.md /
     #   GEMINI.md) are repository-owned and never touched by update.
-    made_changes = added > 0 or updated > 0 or bool(untracked)
+    made_changes = added > 0 or updated > 0 or bool(untracked) or bool(vendor_applied)
     version_file = gator_dir / ".gator-version"
     from datetime import datetime
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")

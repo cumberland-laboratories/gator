@@ -24,15 +24,14 @@ Gator adds a `.gator/` folder to your repo — this is the governance and intell
 
 **What it does:**
 - Creates `.gator/` with governance scaffolding (constitution, templates, runtime pin) and `GATOR_INIT.md`, Gator's entry document. A session starts when you run `gator init`; its output names `GATOR_INIT.md` and the files to read next
-- Installs four Gator slash commands into your vendor `commands/` directory (`.claude/commands/init.md`, `update.md`, `commit.md`, `loop-join.md`; parallel for `.codex/` and `.gemini/`). Any existing non-Gator command file at the same name is backed up with a `.pre-gator` suffix before overwrite
-- Merges Gator entries into `.claude/settings.json`, `.codex/hooks.json`, `.gemini/settings.json` non-destructively — your permissions, environment variables, and non-Gator hooks are never touched
+- Connects Gator to the AI tools installed on your machine (Claude Code, Codex, Gemini CLI) the first time you run any `gator` command: it adds two session hooks to each tool's user settings (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/settings.json`). Your permissions, environment variables, and other hooks are never touched. Codex asks you to approve the hook once, in `/hooks`. `gator integration status` shows the connection
 - Installs git hooks (`pre-commit`, `commit-msg`, `post-commit`) for governance enforcement
 - Adds `.gitignore` entries for personal `CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md` files, so per-machine notes stay out of Git
 
 **What it does not do:**
 - Does not modify your source code
 - Does not create, edit, back up, or repair `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`. These files belong to your repository. They are optional; you can add a one-line pointer to `gator init` if you want your AI tool to start Gator automatically
-- Does not overwrite user-authored slash commands (only the four Gator-owned ones are refreshed on update)
+- Does not add AI-tool files (`.claude/`, `.codex/`, `.gemini/`) to your repository. `gator update` removes the ones earlier Gator versions added and leaves your own entries in place
 - Does not connect to any outside API or platform
 - Does not send data anywhere — Gator is entirely markdown and Python files in Git
 
@@ -59,6 +58,8 @@ gator dashboard
 ```
 
 That's it. Gator is now live.
+
+To uninstall, first run `gator integration remove` (it removes Gator's hooks from your AI tools' settings), then `pipx uninstall gator-command`. Without the first step, your AI tools keep calling a `gator` command that no longer exists.
 
 ## License
 

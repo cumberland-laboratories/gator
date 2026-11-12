@@ -276,6 +276,24 @@ def format_check(label, value, width=16):
     return f"  \u2713 {label:<{width}}{value}"
 
 
+def runtime_advisory(repo_root):
+    """One-line runtime advisory for the boot banner, or None.
+
+    Session hooks no longer put the advisory on stdout (where vendors
+    added it to the model's context), so the banner carries it: the pin
+    is behind the CLI (`cli-newer`), unreadable, or ahead of it
+    (`refuse`). Best-effort: a resolver failure shows nothing.
+    """
+    try:
+        from gator_core import resolve_governed_runtime
+        decision = resolve_governed_runtime(repo_root)
+    except Exception:
+        return None
+    if decision.get("mode") in ("cli-newer", "pin-unreadable", "refuse"):
+        return decision.get("reason") or None
+    return None
+
+
 def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     """Print the branded boot sequence.
 
@@ -326,6 +344,13 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     # Dashboard registry
     reg_label = registry_status.get("detail", registry_status.get("status", ""))
     print(format_check("dashboard", reg_label))
+
+    # Runtime advisory (machine-level vendor integration, CP1): the
+    # session hooks are stdout-free now, so the banner is where the
+    # session learns that the pin and the installed CLI disagree.
+    _runtime = runtime_advisory(repo_root)
+    if _runtime:
+        print(f"  ! runtime         {_runtime}")
 
     # Org-policy staleness nudge (runtime-split D6 decision (c),
     # 2026-08-22): purely local mtime check, Enterprise-active repos

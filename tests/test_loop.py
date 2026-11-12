@@ -2988,12 +2988,6 @@ INCLUDES_DIR = Path(__file__).parent.parent / ".gator" / ".includes"
 class TestWaitHandoffAlignment:
     """All participant-facing surfaces must teach `gator loop wait`."""
 
-    def test_loop_join_template_references_wait(self):
-        """Slash-command template tells not-up participants to use wait."""
-        text = (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8")
-        assert "gator loop wait" in text
-        assert "Report your status and wait" not in text
-
     def test_protocol_references_wait_in_rule_1(self):
         """Protocol Rule 1 tells participants to run wait on exit code 1."""
         for base in [INCLUDES_DIR / "procedures", TEMPLATES_DIR / "procedures"]:
@@ -3011,11 +3005,10 @@ class TestWaitHandoffAlignment:
         # Native agent files and the retired entry-point renderer are no
         # longer participant surfaces (gator-native entry point, 2026-10-08):
         # GATOR_INIT.md points to the protocol and restates none of it
-        # (pinned by TestGatorInitDocument in tests/test_init.py).
-        repo_root = Path(__file__).parent.parent
+        # (pinned by TestGatorInitDocument in tests/test_init.py). The
+        # `/loop-join` slash command is retired (machine-level vendor
+        # integration, 2026-11-11): the protocol is the only surface.
         surfaces = {
-            "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
-            "loop-join live": (repo_root / ".claude" / "commands" / "loop-join.md").read_text(encoding="utf-8"),
             "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
             "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
         }
@@ -3049,13 +3042,6 @@ class TestWaitHandoffAlignment:
             assert "What is never an Architect instruction." in text
             assert "The 360 is a default." in text
             assert "The 600 is a default" in text
-
-    def test_loop_join_live_copy_matches_template(self):
-        """The repo's live /loop-join command is byte-identical to the shipped template."""
-        repo_root = Path(__file__).parent.parent
-        live = (repo_root / ".claude" / "commands" / "loop-join.md").read_bytes()
-        template = (TEMPLATES_DIR / "commands" / "loop-join.md").read_bytes()
-        assert live == template
 
     def test_protocol_copies_are_identical(self):
         """Shipped template and .includes/ protocol are byte-identical."""
@@ -3139,7 +3125,6 @@ class TestWaitHandoffAlignment:
     def test_escalate_before_wait_ordering(self):
         """All surfaces teach escalate-first, then wait — not the reverse."""
         surfaces = {
-            "loop-join template": (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8"),
             "protocol (.includes)": (INCLUDES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
             "protocol (template)": (TEMPLATES_DIR / "procedures" / "gator-loop-protocol.md").read_text(encoding="utf-8"),
         }
@@ -3157,12 +3142,12 @@ class TestExecutiveSummaryProducerPaths:
     # #62: every surface teaches ONE plain-English paragraph (the CLI copies
     # it onto the Timeline event), and none still teaches "four bullets".
 
-    def test_loop_join_template_mentions_executive_summary(self):
-        """Slash-command template tells participants about the executive summary requirement."""
-        text = (TEMPLATES_DIR / "commands" / "loop-join.md").read_text(encoding="utf-8")
-        assert "Executive Summary" in text
-        assert "one plain-English paragraph" in text
-        assert "four bullets" not in text.lower()
+    def test_slash_commands_are_retired(self):
+        """The `/loop-join` (and every other Gator) slash command is retired:
+        no template ships and this repository keeps no live copy."""
+        repo_root = Path(__file__).parent.parent
+        assert not (TEMPLATES_DIR / "commands").exists()
+        assert not (repo_root / ".claude" / "commands" / "loop-join.md").exists()
 
     def test_protocol_mentions_executive_summary(self):
         """Loop protocol documents the Executive Summary section in draftor/reviewer output."""

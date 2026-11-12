@@ -188,6 +188,22 @@ _AUDIT_LOCK = threading.Lock()
 # can finish within the bound. GETs are read-only and are not gated.
 _DRAIN_SECONDS = 5.0
 _GATE_EXEMPT_POSTS = frozenset({"/api/restart", "/api/updates/upgrade"})
+
+# Machine integration (Gator's hooks in each AI tool's user settings). The
+# Settings view reads status and dismisses the Codex /hooks reminder; the
+# Dashboard never connects tools itself (`gator dashboard` already ran the
+# CLI's ensure step). Tests point these seams at a temporary home.
+_INTEGRATION_HOME = None
+_INTEGRATION_ENV = None
+
+
+def _integration_status():
+    try:
+        import machine_integration
+        return machine_integration.status(home=_INTEGRATION_HOME,
+                                          env=_INTEGRATION_ENV)
+    except Exception as exc:  # noqa: BLE001 — a view must still render
+        return {"state": "error", "detail": f"{type(exc).__name__}: {exc}"}
 _RESTARTING_ERROR = "dashboard is restarting"
 
 
@@ -2461,6 +2477,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(_fleet_snapshot())
             return
 
+        # Machine integration status (Settings view), read fresh each time
+        if path == "/api/integration":
+            self._send_json(_integration_status())
+            return
+
         # Welcome topics: the four shipped HTML documents, shown in
         # sandboxed iframes. Closed name set; never falls through.
         if path.startswith(_WELCOME_DOCS_PREFIX):
@@ -4486,6 +4507,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # POST /api/repo/<name>/charters-report — refresh the charter report
         if path.startswith("/api/repo/") and path.endswith("/charters-report"):
             self._handle_charters_report_post()
+            return
+
+        # POST /api/integration/dismiss-codex-reminder — the user approved
+        # Gator's hook in Codex (/hooks); returns the new status
+        if path == "/api/integration/dismiss-codex-reminder":
+            self._drain_request_body()
+            try:
+                import machine_integration
+                ok = machine_integration.dismiss_codex_reminder(
+                    home=_INTEGRATION_HOME, env=_INTEGRATION_ENV)
+            except Exception as exc:  # noqa: BLE001
+                self._send_json({"error": f"{type(exc).__name__}: {exc}"}, 500)
+                return
+            if not ok:
+                self._send_json({"error": "no readable connection record",
+                                 "status": _integration_status()}, 409)
+                return
+            self._send_json(_integration_status())
             return
 
         # POST /api/repos/register — add a repo to the dashboard registry

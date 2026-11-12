@@ -599,9 +599,9 @@
           <td><span class="pill na">No</span> Git never commits <code>.git/</code></td>
         </tr>
         <tr>
-          <td>Agent session hooks<br><code>.claude/</code> <code>.codex/</code> <code>.gemini/</code></td>
-          <td>Gator session-hook entries in <code>settings.json</code> or <code>hooks.json</code>. Gator merges them in and keeps your existing entries.</td>
-          <td><span class="pill ok">Yes</span></td>
+          <td>AI tools on this machine<br><code>~/.claude/</code> <code>~/.codex/</code> <code>~/.gemini/</code></td>
+          <td>Gator adds its two session hooks to the user settings of each AI tool installed on this machine. This happens once per machine, the first time any <code>gator</code> command runs, and Gator keeps your existing entries. The repository gets no AI-tool files. Codex asks you to approve the hook once, in <code>/hooks</code>.</td>
+          <td><span class="pill na">No</span> not part of any repository</td>
         </tr>
         <tr>
           <td><code>.gitignore</code></td>

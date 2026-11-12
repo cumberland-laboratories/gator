@@ -78,7 +78,7 @@ Keep reissuing the bounded `wait` until it returns `0` or `2`. Do not tight-poll
 gator loop participant watch --token <your-token> --max-seconds 600 --json
 ```
 
-The 600 is a default; if the Architect gives you a different interval, use it for every launch and relaunch. Launch it in the background. It registers you with the Architect's Dashboard (which shows you as connected, then released), heartbeats, and exits with exactly one JSON line as soon as something happens. When you are re-invoked, read the **last JSON line** of the watcher's output and act on `wake_reason`:
+The 600 is a default; if the Architect gives you a different interval, use it for every launch and relaunch. Launch it in the background, then end your turn. In Claude Code, prefer the watcher to repeated `wait` calls while the session stays open. It registers you with the Architect's Dashboard (which shows you as connected, then released), heartbeats, and exits with exactly one JSON line as soon as something happens. When you are re-invoked, read the **last JSON line** of the watcher's output and act on `wake_reason`:
 - `0` / `turn_ready` — it is your turn. Run `gator loop status` and act.
 - `2` / `terminal` — the loop ended. Stop; do not relaunch.
 - `3` / `still_waiting` — nothing yet. Relaunch the same watcher command. The watcher keeps watching through a pause or block (it stays registered); its JSON adds `"suspended": true` when the loop is suspended.

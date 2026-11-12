@@ -18,7 +18,11 @@ the governing runtime from wherever the decision says it lives:
                                   other hooks: warn + exit 0 (never strand
                                   a mid-flight commit or a session open)
   - `ungoverned`                → warning mode, exit 0 (matches the
-                                  pre-split stub's warning contract)
+                                  pre-split stub's warning contract);
+                                  session hooks stay fully silent
+
+Session hooks (session-open, session-start) never write stdout: their
+advisory goes to stderr and the child's stdout is redirected to stderr.
 
 Usage:  gator-hook.py <hook-name> [passthrough-args...]
 Hooks:  pre-commit | commit-msg | post-commit | session-open | session-start
@@ -72,6 +76,12 @@ HOOK_MAP = {
 # degrades to warn-and-proceed — a session hook or trailer pass must
 # never strand the user.
 BLOCKING_HOOKS = {"pre-commit"}
+
+# Vendor SessionStart hooks. Machine-level vendor config runs them in
+# every directory, and Claude Code and Codex add hook stdout to the
+# model's context while Gemini accepts only JSON there — so a session
+# hook writes nothing to stdout, and nothing at all when ungoverned.
+SESSION_HOOKS = frozenset({"session-open", "session-start"})
 
 
 # Hooks for which cwd may legitimately be a governed repo
@@ -246,14 +256,28 @@ def main(argv=None):
     repo_root = _resolve_repo_root(Path.cwd(), hook_name)
 
     decision = resolve_governed_runtime(repo_root)
+    session_hook = hook_name in SESSION_HOOKS
+
+    if session_hook and decision["mode"] == "ungoverned":
+        # Not a governed repo: drain the vendor payload and stay silent.
+        # A terminal stdin (a manual run) is left alone so it cannot block.
+        try:
+            if sys.stdin is not None and not sys.stdin.isatty():
+                sys.stdin.read()
+        except Exception:
+            pass
+        return 0
+
     plan = plan_dispatch(hook_name, repo_root, decision)
 
     if plan["advisory"]:
         # #76: a JSON override call's stdout must be exactly the child's
         # JSON object (the Dashboard parses it), so the advisory goes to
-        # stderr there. Every other hook keeps its stdout output.
+        # stderr there; session hooks never write stdout. Every other
+        # hook keeps its stdout output.
         json_call = hook_name in ("override", "approve") and "--json" in passthrough
-        print(plan["advisory"], file=sys.stderr if json_call else sys.stdout)
+        to_stderr = json_call or session_hook
+        print(plan["advisory"], file=sys.stderr if to_stderr else sys.stdout)
     if plan["action"] != "run":
         return plan["exit_code"]
 
@@ -261,6 +285,12 @@ def main(argv=None):
     cmd = [sys.executable, str(plan["script"])] + fixed_args
     if wants_passthrough:
         cmd += passthrough
+    if session_hook:
+        # Any stray child output goes to the process's stderr (fd 2),
+        # never to the vendor's stdout channel. stdin stays inherited
+        # (session-start reads it).
+        sys.stdout.flush()
+        return subprocess.call(cmd, cwd=str(repo_root), stdout=2)
     return subprocess.call(cmd, cwd=str(repo_root))
 
 

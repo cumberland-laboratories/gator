@@ -1,0 +1,38 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.38.1 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "cbd536284c79f3060bef92ac63399054a3665f74",
+  "short_commit": "cbd5362",
+  "snippet_id": "snippet-cbd536284c79f",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "428aa22830754c778ea5160f1c128bc02effec52",
+  "started_at": "2026-11-11T19:23:14Z",
+  "ended_at": "2026-11-11T19:23:14Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-11-11-gator-428aa22830754.json"
+  ],
+  "notes": [
+    "Record v2.38.1 (and the v2.38.0 and v2.37.1 releases it follows) as the",
+    "latest released versions in the roadmap.",
+    "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

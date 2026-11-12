@@ -490,13 +490,14 @@ class TestMainSeamWiring:
     (["override", "status", "--json"], True),
     (["approve", "--json", "--name", "A", "--reason", "r"], True),
     (["override", "status"], False),
-    (["session-open"], False),
+    (["commit-msg", "msgfile"], False),
 ])
 def test_json_override_advisory_goes_to_stderr(tmp_path, monkeypatch, capsys,
                                                argv, to_stderr):
     """#76: the Dashboard parses `override ... --json` stdout as one JSON
     object, so the dispatcher's runtime advisory goes to stderr there;
-    every other call keeps it on stdout."""
+    every other non-session call keeps it on stdout. (Session hooks are
+    silent when ungoverned and use stderr otherwise — pinned below.)"""
     _git_init(tmp_path)
     (tmp_path / ".gator").mkdir()
     monkeypatch.chdir(tmp_path)
@@ -511,3 +512,98 @@ def test_json_override_advisory_goes_to_stderr(tmp_path, monkeypatch, capsys,
     advisory = "governance hooks are installed"
     assert (advisory in err) is to_stderr
     assert (advisory in out) is (not to_stderr)
+
+
+# ---------------------------------------------------------------------------
+# Session hooks never write stdout (machine-level vendor integration, CP1).
+# Machine-level vendor config runs them in every directory; Claude Code and
+# Codex add hook stdout to the model's context, Gemini accepts only JSON.
+# ---------------------------------------------------------------------------
+
+class _PipedStdin:
+    """A non-terminal stdin carrying a vendor payload; records the read."""
+
+    def __init__(self, payload='{"session_id": "s1"}'):
+        self.payload = payload
+        self.read_called = False
+
+    def isatty(self):
+        return False
+
+    def read(self, *args):
+        self.read_called = True
+        data, self.payload = self.payload, ""
+        return data
+
+
+@pytest.mark.parametrize("hook_name", ["session-open", "session-start"])
+@pytest.mark.parametrize("where", ["non-git", "ungoverned-git"])
+def test_session_hook_silent_outside_governed_repo(tmp_path, monkeypatch,
+                                                   capfd, hook_name, where):
+    if where == "ungoverned-git":
+        _git_init(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hook, "ensure_utf8_stdout", lambda: None)
+    stdin = _PipedStdin()
+    monkeypatch.setattr(hook.sys, "stdin", stdin)
+
+    assert hook.main([hook_name]) == 0
+    out, err = capfd.readouterr()
+    assert out == "" and err == ""
+    assert stdin.read_called, "the vendor payload is drained"
+
+
+def test_session_hook_leaves_terminal_stdin_alone(tmp_path, monkeypatch,
+                                                  capfd):
+    """A manual run at a terminal must not block waiting for input."""
+    class _Tty(_PipedStdin):
+        def isatty(self):
+            return True
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hook, "ensure_utf8_stdout", lambda: None)
+    stdin = _Tty()
+    monkeypatch.setattr(hook.sys, "stdin", stdin)
+
+    assert hook.main(["session-open"]) == 0
+    assert not stdin.read_called
+
+
+@pytest.mark.parametrize("hook_name", ["session-open", "session-start"])
+def test_governed_session_hook_stdout_stays_empty(tmp_path, monkeypatch,
+                                                  capfd, hook_name):
+    """Governed `cli-newer`: the advisory and any child stdout both land
+    on stderr; the dispatcher's stdout stays empty."""
+    _git_init(tmp_path)
+    (tmp_path / ".gator").mkdir()
+    child = tmp_path / "child.py"
+    child.write_text("print('CHILD-STDOUT')\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hook, "ensure_utf8_stdout", lambda: None)
+    monkeypatch.setattr(hook, "resolve_governed_runtime",
+                        lambda rr: _decision("cli-newer", "ADVISORY-SENTINEL"))
+    monkeypatch.setattr(hook, "plan_dispatch", lambda *a, **k: {
+        "action": "run", "script": child,
+        "advisory": "ADVISORY-SENTINEL", "exit_code": 0})
+
+    assert hook.main([hook_name]) == 0
+    out, err = capfd.readouterr()
+    assert out == ""
+    assert "ADVISORY-SENTINEL" in err and "CHILD-STDOUT" in err
+
+
+def test_governed_session_hook_skip_advisory_goes_to_stderr(tmp_path,
+                                                            monkeypatch,
+                                                            capfd):
+    """A governed skip (refuse with no runtime) still never uses stdout."""
+    _git_init(tmp_path)
+    (tmp_path / ".gator").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(hook, "ensure_utf8_stdout", lambda: None)
+    monkeypatch.setattr(hook, "resolve_governed_runtime",
+                        lambda rr: _decision("refuse", "PIN-AHEAD"))
+    monkeypatch.setattr(hook, "_wheel_runtime_dir",
+                        lambda: tmp_path / "no-wheel")
+
+    assert hook.main(["session-start"]) == 0
+    out, err = capfd.readouterr()
+    assert out == "" and "PIN-AHEAD" in err

@@ -860,6 +860,47 @@ class TestTransientMigration:
 # The retired outbox: gatorize never creates, reads or deletes outbox.md
 # ---------------------------------------------------------------------------
 
+class TestNoVendorFilesInRepos:
+    """Gator keeps no AI-tool files in repositories: the session hooks live
+    in each AI tool's user settings and the slash commands are retired
+    (machine-level vendor integration, 2026-11-11). A full gatorize run
+    creates no .claude/, .codex/ or .gemini/, and user-owned vendor files
+    keep their exact bytes."""
+
+    def test_fresh_gatorize_creates_no_vendor_folders(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        assert (repo / ".gator" / ".includes" / "GATOR_INIT.md").is_file()
+        for folder in (".claude", ".codex", ".gemini"):
+            assert not (repo / folder).exists(), folder
+
+    def test_user_vendor_files_keep_exact_bytes(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_git_repo(repo)
+        files = {".claude/settings.json": b'{"permissions": {"allow": []}}\n',
+                 ".claude/commands/review.md": b"Review the diff.\n",
+                 ".codex/hooks.json": b'{"hooks": {}}\n'}
+        for rel, data in files.items():
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_bytes(data)
+        # Committed, as a team's own vendor files would be (gatorize refuses
+        # a dirty working tree).
+        subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, timeout=10)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "vendor"],
+                       check=True, timeout=10)
+
+        gatorize_in_process(repo, monkeypatch, tmp_path)
+
+        for rel, data in files.items():
+            assert (repo / rel).read_bytes() == data, rel
+        assert not (repo / ".gemini").exists()
+
+
 class TestNoOutbox:
     def test_fresh_gatorize_creates_no_outbox(self, tmp_path, monkeypatch):
         repo = tmp_path / "repo"

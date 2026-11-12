@@ -248,7 +248,7 @@ Don't migrate silently. Show the Architect what you found, suggest the mapping, 
 
 **What to suggest**:
 
-1. **Best option**: Start every governed session with `gator init` (or the `/init` slash command), whatever the vendor file contains.
+1. **Best option**: Start every governed session with `gator init`, whatever the vendor file contains.
 2. **Optional convenience**: If the team wants the AI tool to start Gator on its own, put a one-line pointer near the top of the vendor file:
    ```markdown
    At session start, run `gator init` and follow its output.

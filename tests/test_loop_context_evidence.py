@@ -313,11 +313,6 @@ PROTOCOLS = [
     ROOT / "src" / "gator_command" / "templates" / "gator-starter"
     / "procedures" / "gator-loop-protocol.md",
 ]
-LOOP_JOIN = [
-    ROOT / ".claude" / "commands" / "loop-join.md",
-    ROOT / "src" / "gator_command" / "templates" / "gator-starter"
-    / "commands" / "loop-join.md",
-]
 
 
 def _plan_template(text):
@@ -329,8 +324,8 @@ def _plan_template(text):
 
 
 class TestDriftGuards:
-    @pytest.mark.parametrize("pair", [FORMATS, PROTOCOLS, LOOP_JOIN],
-                             ids=["formats", "protocol", "loop-join"])
+    @pytest.mark.parametrize("pair", [FORMATS, PROTOCOLS],
+                             ids=["formats", "protocol"])
     def test_pairs_identical(self, pair):
         a, b = pair
         if not a.exists():
@@ -366,5 +361,3 @@ class TestDriftGuards:
         assert "None —" in text
         assert "source-architect-brief.md" in text
 
-    def test_loop_join_mentions_brief(self):
-        assert "brief" in LOOP_JOIN[1].read_text(encoding="utf-8").lower()

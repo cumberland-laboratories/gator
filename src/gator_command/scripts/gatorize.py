@@ -40,10 +40,10 @@ from gatorize.helpers import (  # noqa: E402
     git, log_step, prompt, confirm, copy_tree_overlay,
     GATOR_MARKER, COMMAND_POST_MARKER,
 )
-from gatorize.vendor_hooks import (  # noqa: E402
-    merge_hooks_into_settings,
-    install_vendor_hooks,
-    VENDOR_HOOK_CONFIGS,
+# Repository vendor cleanup (Gator keeps no AI-tool files in repositories);
+# `gator update` reaches these through its `gatorize` sibling import.
+from gatorize.vendor_cleanup import (  # noqa: E402,F401
+    plan_vendor_cleanup, apply_vendor_cleanup, format_vendor_cleanup,
 )
 from gatorize.post_install import (  # noqa: E402
     action_install_product_source, action_register, print_summary,
@@ -234,15 +234,9 @@ def action_install_gator(target):
         if src_dir.is_dir():
             copy_tree_overlay(src_dir, gator_dir / subdir)
 
-    # Slash commands (not in .gator/ — goes to .claude/commands/)
-    commands_src = TEMPLATES / "commands"
-    if commands_src.is_dir():
-        claude_commands = target / ".claude" / "commands"
-        claude_commands.mkdir(parents=True, exist_ok=True)
-        copy_tree_overlay(commands_src, claude_commands)
-
-    # Vendor SessionStart hook configs (merge-safe)
-    install_vendor_hooks(TEMPLATES, target)
+    # No AI-tool files: Gator's session hooks live in each AI tool's
+    # user-level settings (machine_integration.py), and Gator ships no
+    # slash commands. Nothing is written to .claude/, .codex/ or .gemini/.
 
     # Install hooks (wrappers point to .includes/scripts/ for v2)
     install_hooks(target)
@@ -272,9 +266,6 @@ def action_install_gator(target):
         log_step(f"Runtime pin skipped ({type(e).__name__}: {e}).")
 
     log_step(".gator/ installed (v2 layout).")
-
-
-# ── vendor hooks: see gatorize/vendor_hooks.py
 
 
 def install_hooks(target):

@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gator hook session-open",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "gator hook session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

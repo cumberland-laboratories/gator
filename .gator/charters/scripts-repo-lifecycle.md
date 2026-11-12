@@ -48,6 +48,13 @@ Filesystem: `charters/` (one directory listing), `paths.startup_guide` (existenc
 <- `session_opening_reads()`, `session_opening_directive()`
 ! Architect decision 2026-10-11: init shows no charter counts or coverage. The old `count_charters()` walked the whole working tree (ignoring `.gitignore`) for a coverage figure the banner discarded, about 20 s per run on this repo. Charter health belongs to a Dashboard view that can run in the background; do not reintroduce repo-wide scans into session opening.
 
+### runtime_advisory(repo_root)
+File: src/gator_command/scripts/gator-init.py (and starter copy)
+Return the one-line runtime advisory for the text banner: `resolve_governed_runtime()`'s `reason` when the mode is `cli-newer`, `pin-unreadable` or `refuse`, else `None`. The banner prints it as `! runtime`, after the dashboard line and before the policy nudge.
+<- `print_boot_sequence()`
+-> `gator_core.resolve_governed_runtime()`
+! The banner is where a session learns of a pin mismatch: the session hooks no longer put the advisory on stdout (see `gator-hook.py` `main()`). Best-effort: a resolver failure shows nothing and never blocks boot. JSON output is unchanged.
+
 ### ensure_git_hooks(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py
 Probe managed and legacy hook locations and request repair when configuration is stale.
@@ -80,9 +87,9 @@ Render equivalent human and machine status for governance, hooks, and registry m
 ### main()
 File: src/gator_command/scripts/gator-init.py
 Resolve the governed repo, self-check hooks, register the repo in the dashboard registry, and emit boot output.
-<- `gator init`, optional vendor hook mode
+<- `gator init`
 -> `gator_layout`, `gator_core`, update helpers
-! Outside a governed repository, hook mode returns silently and normal mode prints the not-found guidance.
+! Outside a governed repository, it prints the not-found guidance and exits 1. There is no hook mode (an earlier version of this entry described one that the code does not have); vendor session hooks go through `gator hook session-open|session-start`.
 ! Registry failure does not prevent the boot display.
 
 ### _resolve_repo_root(cwd, hook_name)
@@ -112,7 +119,8 @@ Resolve the correct repo, choose the governed runtime, and invoke the selected h
 <- managed Git wrappers and vendor settings
 -> `_resolve_repo_root()`, `resolve_governed_runtime()`, `plan_dispatch()`
 ! Child cwd and governance lookup use the same resolved repo root.
-! The runtime advisory (for example `cli-newer`) is printed to stdout, except for an `override` / `approve` call whose passthrough contains `--json` (#76): there it goes to stderr, so stdout is exactly the child's JSON object for the Dashboard override relay. Pinned by `test_json_override_advisory_goes_to_stderr`.
+! The runtime advisory (for example `cli-newer`) is printed to stdout, except for an `override` / `approve` call whose passthrough contains `--json` (#76) and for the session hooks: there it goes to stderr, so stdout is exactly the child's JSON object for the Dashboard override relay. Pinned by `test_json_override_advisory_goes_to_stderr`.
+! TRIPWIRE: Session hooks (`SESSION_HOOKS`: `session-open`, `session-start`) never write stdout. Vendor config may run them in every directory, Claude Code and Codex add hook stdout to the model's context, and Gemini accepts only JSON there. Ungoverned: drain stdin (unless it is a terminal), print nothing, exit 0. Governed: advisory to stderr, and the child runs with `stdout=2`, so stray child output goes to stderr. stdin stays inherited for `session-start`.
 ! Do not broaden Git-root resolution to commit hooks without a separate compatibility decision.
 
 ## Before Changing This Module

@@ -273,7 +273,7 @@ Gator distinguishes three surfaces so team decisions travel through Git and pers
 - **Your vendor files** — `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`, if you keep them, are repo-shared instructions owned by your team. Gator never creates, edits, or refreshes them. A one-line pointer to `gator init` is enough if you want your AI tool to start Gator automatically. If an older Gator version wrote a `<!-- GATOR:BEGIN -->` block into one of them, that block is no longer refreshed; keep or remove it as you prefer.
 - **`CLAUDE.local.md` / `AGENTS.local.md` / `GEMINI.local.md`** at the repo root — personal per-machine notes. Gitignored automatically. Gator never reads, writes, or overwrites them.
 
-For the full team-workflow perspective — what Gator manages in the vendor `.claude/` (or `.codex/`, `.gemini/`) directories, the four Gator-owned slash commands, how team-shared skills travel through PRs, and the decision guide for personal vs team-shared content — see [Custom Skills and Team Workflow](custom-skills-and-team-workflow.md).
+For the full team-workflow perspective — why Gator adds no AI-tool files to your repository and connects to your AI tools once per machine instead, how team-shared skills travel through PRs, and the decision guide for personal vs team-shared content — see [Custom Skills and Team Workflow](custom-skills-and-team-workflow.md).
 
 ## Upgrading
 
