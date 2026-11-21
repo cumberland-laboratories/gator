@@ -4,6 +4,18 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.39.1] — 2026-11-21
+
+Bug-fix release.
+
+**Upgrade note:** on Windows, run `gator init` or `gator update` in each governed repository. It changes the repository's `core.hooksPath` to an absolute path, so the commit hooks also run in linked worktrees.
+
+### Fixed
+
+- **Commit hooks run in linked worktrees (#103).** On Windows, a commit made in a linked worktree (`git worktree add`) skipped every Gator hook without an error: no charter check, no dangerous-pattern pause, no trailers. Gator set a relative `core.hooksPath = .git/gator-hooks`, which Git resolves from the current worktree, where `.git` is a file. Gator now sets an absolute path to `gator-hooks/` in the Git directory that all worktrees share, and `gator init` / `gator update` repair the old value. The hook helpers also work when run from a worktree on every platform. Pinned by `TestLinkedWorktree` in `tests/test_hooks.py`. Charter: `scripts-repo-update.md`, Cross-Cutting TRIPWIRE "Runtime and Hook Dispatch".
+- **`gator init` reports hooks that will not run.** It asks Git where a commit looks for hooks. If no Gator hook is there (an unrepaired worktree, a moved clone, a foreign global `core.hooksPath`), the hooks line shows `! hooks will not run here: Git looks in <path>` instead of `✓ ok`. Degraded hook states now show `!`. Pinned by `TestEnsureGitHooks` in `tests/test_init.py`.
+- **The Dashboard picks up repositories registered from a terminal (#108).** A repository registered by `gator gatorize` or `gator init` while the Dashboard was running appeared in Add Repository, but adding it failed with "Already registered", and it stayed out of Fleet until a restart. Add now succeeds for it. Add Repository and Refresh reload the registry file when it changed, so the repository appears in Fleet, and one removed from a terminal leaves it. `GET /api/repos/discover` gains an additive `registry_changed` field. Pinned by `tests/test_dashboard_registry_sync.py`. Charter: `scripts-dashboard.md`.
+
 ## [2.39.0] — 2026-11-12
 
 Machine-integration release (#58). **Gator connects to your AI tools once per machine, and repositories carry no AI-tool files.** `pipx install gator-command` plus any `gator` command (normally `gator dashboard`) is now the whole setup.

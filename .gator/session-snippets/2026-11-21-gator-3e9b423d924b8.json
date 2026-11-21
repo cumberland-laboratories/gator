@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Dashboard picks up repositories registered from a terminal",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "dashboard",
+    "registry",
+    "onboarding"
+  ],
+  "commit": "3e9b423d924b8e5fc8a953bcdba18f5946aca441",
+  "short_commit": "3e9b423",
+  "snippet_id": "snippet-3e9b423d924b8",
+  "session_group_key": "anthropic:ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "c543fa28d531b9784f8641c3733dc6904201f318",
+  "started_at": "2026-11-21T16:10:57Z",
+  "ended_at": "2026-11-21T17:39:52Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-cross-cutting.md",
+    ".gator/charters/scripts-dashboard-views.md",
+    ".gator/charters/scripts-dashboard.md",
+    ".gator/session-snippets/2026-11-21-gator-c543fa28d531b.json",
+    "src/gator_command/scripts/dashboard/views/fleet.js",
+    "src/gator_command/scripts/gator-dashboard.py",
+    "tests/test_dashboard_registry_sync.py"
+  ],
+  "notes": [
+    "A repository registered while the Dashboard was running (by `gator gatorize` or `gator init` in a terminal) was listed in Add Repository, but adding it failed with \"Already registered\", and it stayed out of Fleet until the Dashboard restarted (#108). The Dashboard read the registry file only at startup.",
+    "Add now succeeds for such a repository and shows it in Fleet. \"Already registered\" now means the Dashboard already shows it.",
+    "Add Repository and Refresh now reload the registry file when it has changed. A repository registered from a terminal no longer appears as one to add, and Fleet refreshes to show it. A repository removed from a terminal leaves Fleet on the next refresh."
+  ],
+  "transcript_session_id": "ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "transcript_ref": null
+}
