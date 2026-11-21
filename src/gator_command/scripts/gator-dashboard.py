@@ -111,6 +111,54 @@ def _registry_publish(records):
     return new
 
 
+# The registry file (`gator_core.DASHBOARD_REGISTRY`) is the source of
+# truth; CLI commands (`gator gatorize`, `gator init`) write it without
+# telling a running Dashboard (#108). `_registry_load_from_disk()` records
+# the file's stamp; `_registry_sync_from_disk()` reloads when it changed.
+# No stamp (a process that never loaded the file, such as most tests)
+# means no sync.
+_REGISTRY_FILE_STAMP = None
+
+
+def _registry_file_stamp():
+    """Return (path, mtime_ns, size) of the registry file; size -1 if absent."""
+    import gator_core
+    path = Path(gator_core.DASHBOARD_REGISTRY)
+    try:
+        st = path.stat()
+        return (str(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return (str(path), 0, -1)
+
+
+def _registry_load_from_disk():
+    """Publish the registry file's records. Caller holds _STATE_WRITE_LOCK."""
+    global _REGISTRY_FILE_STAMP
+    stamp = _registry_file_stamp()
+    published = _registry_publish(_load_registry_repos(COMMAND_POST_ROOT))
+    _REGISTRY_FILE_STAMP = stamp
+    return published
+
+
+def _registry_sync_from_disk():
+    """Reload the registry when its file changed since the last load.
+
+    Returns True when a new registry was published. Takes
+    _STATE_WRITE_LOCK itself (small JSON I/O only); callers must not hold it.
+    """
+    loaded = _REGISTRY_FILE_STAMP
+    if loaded is None or _registry_file_stamp() == loaded:
+        return False
+    with _STATE_WRITE_LOCK:
+        current = _registry_file_stamp()
+        if _REGISTRY_FILE_STAMP is None or current == _REGISTRY_FILE_STAMP:
+            return False
+        if current[0] != _REGISTRY_FILE_STAMP[0]:
+            return False  # a different registry file; never mix the two
+        _registry_load_from_disk()
+        return True
+
+
 def _fleet_snapshot():
     """Return the published Fleet (Tier-1) object. Never mutate it."""
     with _STATE_LOCK:
@@ -2500,6 +2548,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
             def _do_refresh():
                 try:
+                    _registry_sync_from_disk()
                     data = collect_standalone_data(_registry_snapshot())
                     with _STATE_WRITE_LOCK:
                         _fleet_publish(_fleet_reconciled(
@@ -2756,6 +2805,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         the default home-relative set otherwise.
         """
         roots = [str(c) for c in _resolve_discovery_roots()]
+        # #108: a repository registered by the CLI since the last load is
+        # registered, not discoverable. The page refreshes Fleet when the
+        # registry changed, so the repository also appears there.
+        registry_changed = _registry_sync_from_disk()
 
         registered_paths = set()
         for r in _registry_snapshot():
@@ -2787,7 +2840,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except OSError:
                 continue
 
-        self._send_json({"roots": roots, "repos": repos})
+        self._send_json({"roots": roots, "repos": repos,
+                         "registry_changed": registry_changed})
 
     # ── Loop workspace handlers ──────────────────────────────────────
 
@@ -4103,7 +4157,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # are sent only after the lock is released.
         with _STATE_WRITE_LOCK:
             result = ensure_dashboard_registry_entry(repo_path, source="dashboard")
-            if result["status"] == "added":
+            if result["status"] == "already_registered":
+                # #108: the CLI registered it in the file, but this server
+                # has not loaded it yet. Adopt the file's record; only a
+                # repository this server already shows is a 409.
+                current = _registry_snapshot()
+                if not any(_resolved_or_none(r.get("path", "")) == abs_path
+                           for r in current):
+                    on_disk = [r for r in _load_registry_repos(COMMAND_POST_ROOT)
+                               if _resolved_or_none(r.get("path", "")) == abs_path]
+                    if on_disk:
+                        _registry_publish(current + (on_disk[0],))
+                        result = {"status": "added"}
+            elif result["status"] == "added":
                 # Publish the new registry so refresh sees the repo immediately
                 current = _registry_snapshot()
                 if not any(_resolved_or_none(r.get("path", "")) == abs_path
@@ -4755,7 +4821,7 @@ def main():
 
     # Load registry
     with _STATE_WRITE_LOCK:
-        _registry_publish(_load_registry_repos(COMMAND_POST_ROOT))
+        _registry_load_from_disk()
     registry = _registry_snapshot()
 
     print(f"  Repos registered: {len(registry)}", flush=True)

@@ -310,7 +310,12 @@
 
     fetch("/api/repos/discover")
       .then(r => r.json())
-      .then(data => renderDiscoveredRepos(data.repos || [], modal))
+      .then(data => {
+        renderDiscoveredRepos(data.repos || [], modal);
+        // #108: a repository registered from a terminal was just loaded,
+        // so refresh Fleet to show it.
+        if (data.registry_changed && window.gatorRefreshFleet) window.gatorRefreshFleet();
+      })
       .catch(() => {
         const target = modal.querySelector("#discovered-repos");
         if (target) target.innerHTML = '<p class="muted">Could not scan for repositories.</p>';

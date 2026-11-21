@@ -61,6 +61,12 @@ Render repository health and expose explicit per-repository actions via a three-
   - **Pinned by** `test_fleet_title_only_inventory` (1440 and 375; the only selects are `fleet-policy-select` with `strict/warn`), `test_fleet_sort_one_column`, `test_fleet_commit_policy_postures`, `test_fleet_policy_dropdown`, `test_fleet_warn_success_rerenders_from_the_server`, `test_settings_commit_policy_is_read_only` and `test_sorted_last_row_menu_targets_its_row`, all in `test_fleet_layout.py`.
   - `test_last_row_menu_is_fully_visible` now also runs at 375×700. It measures the items against the scrolling pane (`#view-slot` on desktop, `#main-shell` when narrow) and asserts that the page never scrolls. The first row is pinned to open downward only in tall windows: at 1280×420 the taller Paper rows leave no room for the menu below it, so `placeMenu()` correctly opens it upward, and the test checks that it is fully usable.
 
+### Add Repository dialog / registerRepo() / renderDiscoveredRepos()
+File: src/gator_command/scripts/dashboard/views/fleet.js
+`#add-repo-btn` opens a `.gator-modal` with a path field and the repositories from `GET /api/repos/discover`; Add posts the path to `POST /api/repos/register` and calls `gatorRefreshFleet()` on success. An `error` is shown with `alert()`.
+-> `GET /api/repos/discover`, `POST /api/repos/register`
+! When the discover response carries `registry_changed: true` (the server just loaded repositories that the CLI registered, #108), the dialog calls `gatorRefreshFleet()`, so they appear in Fleet without a restart. Older servers omit the field.
+
 ### openRemoveConfirmDialog() / remove handler
 File: src/gator_command/scripts/dashboard/views/fleet.js
 Confirmation dialog for removing a repo from the dashboard registry. Reuses the `.gator-modal` pattern.

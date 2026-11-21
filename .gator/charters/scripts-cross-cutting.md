@@ -84,7 +84,7 @@ When a file is governed by a byte-identity compatibility test, change all named 
 
 Machine-local JSON readers return discriminated states such as `absent`, `malformed`, and `present`. Callers must not collapse malformed user configuration into absence: an invalid explicit preference fails closed, while an invalid runtime pin follows the hook fail-open contract above.
 
-Paths persisted by Windows, MSYS, or POSIX callers are normalized through `normalize_path()` before filesystem checks. Registry writers must use the canonical helper rather than writing JSON directly.
+Paths persisted by Windows, MSYS, or POSIX callers are normalized through `normalize_path()` before filesystem checks. Registry writers must use the canonical helper rather than writing JSON directly. The registry file is the only authority: CLI writers (`gatorize`, `gator init`, `gator dashboard --add-repo/--remove-repo`) never notify a running Dashboard, which re-reads the file when it changed (#108, `scripts-dashboard.md` → `_registry_sync_from_disk()`).
 
 Directory containment checks must test **both** `is_symlink()` and the reparse-point attribute (`_is_reparse_point`). On Windows a directory junction is a reparse point that `is_symlink()` does not report, so a symlink-only check lets a junction redirect reads outside a governed tree; per-file checks behind it cannot catch that. Domain instances: loop source directories (`scripts-loop-host.md`, TRIPWIRE "Source Loop Directories Are Contained"); Dashboard live discovery (`scripts-dashboard.md`, `_iter_live_candidates()`), where server-enumerated paths rely on the scanner's `DirEntry` reparse check plus resolve-equality, while direct-URL paths keep the full per-component walk in `_contained_repo_path()`.
 
