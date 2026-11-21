@@ -730,6 +730,8 @@ class TestByteIdentityAcrossThreeCopies:
         # with the charter verifier.
         "precommit_charter.py",
         "charter_significance.py",
+        # #18: the shared Covers matcher the charter-index-gap rule uses.
+        "charter_covers.py",
         # `gator-pre-commit.py` is DELIBERATELY NOT included here — the
         # three copies of that file drifted pre-2026-08-08 for reasons
         # unrelated to the transcripts-first MVP work, and reconciling
@@ -804,6 +806,14 @@ class TestByteIdentityAcrossThreeCopies:
         template = scripts.parent / "templates" / "gator-starter" / "scripts"
         assert ((scripts / "charter_significance.py").read_bytes()
                 == (template / "charter_significance.py").read_bytes())
+
+    def test_covers_module_matches_the_verifier_copy(self):
+        """#18: the hook's cross-cutting check and the charter verifier
+        share one Covers grammar."""
+        scripts = self._REPO_ROOT / "src" / "gator_command" / "scripts"
+        template = scripts.parent / "templates" / "gator-starter" / "scripts"
+        assert ((scripts / "charter_covers.py").read_bytes()
+                == (template / "charter_covers.py").read_bytes())
 
     @pytest.mark.parametrize("filename", [
         "precommit_session.py",

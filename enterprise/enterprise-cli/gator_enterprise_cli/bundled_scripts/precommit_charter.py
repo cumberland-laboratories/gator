@@ -449,3 +449,70 @@ def _required_charters_for_files(code_files, repo_root, mappings=None):
                 required.update(charter_refs)
 
     return required
+
+
+def _covers_entries(charter_text):
+    """The backticked entries of a charter's `**Covers**:` line."""
+    for line in charter_text.splitlines():
+        if line.startswith("**Covers**:") or line.startswith("**Covers:**"):
+            return re.findall(r'`([^`]+)`', line)
+    return []
+
+
+def charter_index_gaps(code_files, staged_charters, repo_root, mappings=None):
+    """Return the charter updates that INDEX.md routing still needs (#18).
+
+    INDEX.md is a reading list: Cross-Cutting first, then the matching
+    domain rows. For each changed code file and each row that matches it,
+    at least one of the row's domain charters must be staged. The
+    cross-cutting charter counts as a domain charter only on a row that
+    lists nothing else. It is required separately only for a file that
+    its own `Covers` line names (`charter_covers` grammar).
+
+    Returns a list of `{"kind": "domain" | "cross-cutting", "files": [...],
+    "charters": [...]}`; for `domain`, staging any one of `charters` is
+    enough. Empty when routing is satisfied or INDEX.md is absent.
+    """
+    if mappings is None:
+        mappings = _parse_charter_index(repo_root)
+    if not mappings:
+        return []
+    staged = {s.replace("\\", "/").rsplit("/", 1)[-1] for s in staged_charters}
+    charter_dir, cross_cutting = _resolve_charter_surface(Path(repo_root))
+
+    gaps = {}
+    for code_file in code_files:
+        for pattern, charter_refs in mappings:
+            if not _required_charters_for_files([code_file], repo_root,
+                                                [(pattern, charter_refs)]):
+                continue
+            domain = set(charter_refs) - {cross_cutting}
+            options = frozenset(domain or charter_refs)
+            if options & staged:
+                continue
+            gaps.setdefault(("domain", options), []).append(code_file)
+
+    if cross_cutting and cross_cutting not in staged:
+        try:
+            cc_text = (Path(charter_dir) / cross_cutting).read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            cc_text = ""
+        entries = _covers_entries(cc_text)
+        try:
+            from charter_covers import covers_match
+        except ImportError:  # older runtime without the shared matcher
+            def covers_match(path, entry):
+                return path.replace("\\", "/") == entry.replace("\\", "/")
+        for code_file in code_files:
+            if any(covers_match(code_file, e) for e in entries):
+                gaps.setdefault(("cross-cutting", frozenset({cross_cutting})),
+                                []).append(code_file)
+
+    result = []
+    for (kind, options), files in gaps.items():
+        unique = list(dict.fromkeys(files))
+        result.append({"kind": kind, "files": unique,
+                       "charters": sorted(options)})
+    result.sort(key=lambda g: (g["kind"] != "domain", g["charters"]))
+    return result

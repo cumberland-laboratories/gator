@@ -82,10 +82,11 @@ Compare `**Covers**` patterns and documented names with current source structure
 ### normalize_path() / covers_match() / covering_charters() / coverage_index() — shared Covers matcher (`GRAMMAR = "gator-covers-v1"`)
 File: src/gator_command/scripts/charter_covers.py
 The one answer to "does this `Covers` entry name this file?". Paths and entries are normalized (`\` → `/`, no leading `./`); matching is case-sensitive everywhere. An entry with `*`, `?` or `[` is `fnmatchcase` over the full path (never the basename; `*` crosses `/`); a trailing `/` is a directory prefix; anything else is exact. `coverage_index(files, charters)` returns `{file: [names]}` for covered files only; `covering_charters()` keeps the caller's charter order.
-<- `gator-charter-verify.verify()`, `dashboard/charter_sync.py` (`covers_match` is re-bound there, see `scripts-dashboard.md`)
+<- `gator-charter-verify.verify()`, `dashboard/charter_sync.py` (`covers_match` is re-bound there, see `scripts-dashboard.md`), the commit hook's `precommit_charter.charter_index_gaps()` (cross-cutting `Covers` only; see `scripts-precommit.md`)
 ! Closed grammar: an empty, absolute (`/…`, `X:`) or `..`-segment entry matches nothing. Adding a rule changes every consumer's numbers at once; extend it only with a grammar bump and the compatibility matrix in `tests/test_charter_covers.py`.
 ! Standard library only, imported by plain name: callers run with the scripts directory on `sys.path` (scripts run by filename, the Dashboard). It ships through `package-data`.
-! Other producers (pre-commit `precommit_charter.py`, `gator-repo-status.py`, enforcer audit phase 1) still use their own matching; moving them needs a separate decision.
+! Byte-identical copies ship in both hook runtimes (`templates/gator-starter/scripts/`, Enterprise `bundled_scripts/`); change all three together (`test_covers_module_matches_the_verifier_copy`, `TestByteIdentityAcrossThreeCopies`).
+! Other producers (pre-commit INDEX row matching and `stale-charter-refs`, `gator-repo-status.py`, enforcer audit phase 1) still use their own matching; moving them needs a separate decision.
 
 ### decide() / heading_names() / parse_file_line() / parse_internal() / python_signals() / javascript_signals() — shared significance policy (`POLICY = "gator-significance-v1"`)
 File: src/gator_command/scripts/charter_significance.py

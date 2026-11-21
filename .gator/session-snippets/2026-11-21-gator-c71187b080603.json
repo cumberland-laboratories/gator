@@ -1,0 +1,37 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.39.1 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "c71187b080603ce441dfe72cda8e263f7f53c25c",
+  "short_commit": "c71187b",
+  "snippet_id": "snippet-c71187b080603",
+  "session_group_key": "anthropic:ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "684c674fab3144307535bb2a3dd33b522e2642a7",
+  "started_at": "2026-11-21T16:10:57Z",
+  "ended_at": "2026-11-21T20:11:07Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-11-21-gator-684c674fab314.json"
+  ],
+  "notes": [
+    "The roadmap's latest-release line names v2.39.1 (hooks in linked worktrees, #103; terminal-registered repositories in the Dashboard, #108) and the v2.39.0 machine-integration release it had not yet recorded."
+  ],
+  "transcript_session_id": "ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "transcript_ref": null
+}

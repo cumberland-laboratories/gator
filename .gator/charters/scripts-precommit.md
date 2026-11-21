@@ -194,6 +194,18 @@ Filesystem: git index (R only: `diff --cached`, `ls-files -s -z`, one `cat-file 
 ! Advisory only: any Git or import failure returns `[]`, never a block. The old added-lines name matcher (`_detect_new_functions()`) is gone from both copies.
 ! `precommit_charter.py` and `charter_significance.py` are byte-identical with their Enterprise bundled copies (`TestByteIdentityAcrossThreeCopies`), and `charter_significance.py` with `src/gator_command/scripts/charter_significance.py` (`test_policy_module_matches_the_verifier_copy`). The bundled `gator-pre-commit.py` rule-6 site is kept in step by hand.
 
+### charter_index_gaps(code_files, staged_charters, repo_root, mappings=None) / _covers_entries(charter_text) / format_charter_index_gaps(gaps)
+File: src/gator_command/templates/gator-starter/scripts/precommit_charter.py
+File: src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py
+The `charter-index-gap` rule (validate rule 3, when code and at least one charter are staged; #18). INDEX.md is a reading list, so for each changed code file and each INDEX row that matches it (`_required_charters_for_files()` with that one row), **at least one of the row's domain charters** must be staged. The cross-cutting charter is a domain charter only on a row that lists nothing else. It is required separately only for a file that its own `**Covers**:` line names, matched with `charter_covers.covers_match()` (sibling import; an exact-path comparison when an older runtime lacks it). Returns `[{kind: "domain" | "cross-cutting", files, charters}]`, one item per distinct unmet option set, domain items first. `format_charter_index_gaps()` (both `gator-pre-commit.py` copies, kept in step by hand) renders one message: "INDEX.md routes <files> to A or B; update at least one of them." / "<cross-cutting> covers <files>; update it."
+Filesystem: INDEX.md and the cross-cutting charter in the working tree (R), like the rest of rule 3
+<- `gator-pre-commit.py` `validate_hard_rules()` (both copies)
+-> `_parse_charter_index()`, `_required_charters_for_files()`, `_resolve_charter_surface()`, `charter_covers.covers_match()`
+! The rule name, `[external-approval]` resolution and approval binding are unchanged; only which staged charter sets satisfy it changed. Before #18 every charter on every matched row was required (`missing = required - staged_names`), which made routine UI-only, server-only and one-module changes need an Architect approval or a no-op charter edit, and pushed notes into Cross-Cutting.
+! Row matching itself is unchanged (basename or substring for plain tokens, basename or full path for globs). Moving INDEX matching to the `Covers` grammar would break fleet INDEX files that list bare file names; that needs a separate decision.
+! `charter-alongside-code` (no charter staged at all) is unchanged and still lists every routed charter.
+! `charter_covers.py` ships byte-identically in both hook runtimes and `src/gator_command/scripts/` (`TestByteIdentityAcrossThreeCopies`, `test_covers_module_matches_the_verifier_copy`). Pinned by `tests/test_precommit_index_gate.py`.
+
 ### decide() / heading_names() / parse_file_line() / parse_internal() / python_signals() / javascript_signals() — hook copies of the significance policy
 File: src/gator_command/templates/gator-starter/scripts/charter_significance.py
 File: enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/charter_significance.py

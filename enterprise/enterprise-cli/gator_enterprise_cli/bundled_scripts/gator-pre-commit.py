@@ -49,6 +49,7 @@ from precommit_charter import (  # noqa: E402
     _check_charter_function_refs,
     new_seam_functions,
     _required_charters_for_files,
+    charter_index_gaps,
     _resolve_charter_surface,
     count_charters,
     read_tripwire_patterns,
@@ -491,6 +492,30 @@ def classify_staged_files(staged_files, _charter_patterns_cache=[None]):
 # Validation rules
 # ---------------------------------------------------------------------------
 
+
+def _short_file_list(files, limit=5):
+    shown = ", ".join(files[:limit])
+    if len(files) > limit:
+        shown += f" (and {len(files) - limit} more)"
+    return shown
+
+
+def format_charter_index_gaps(gaps):
+    """One message for the `charter-index-gap` failure (#18)."""
+    parts = []
+    for gap in gaps:
+        files = _short_file_list(gap["files"])
+        names = gap["charters"]
+        if gap["kind"] == "cross-cutting":
+            parts.append(f"{names[0]} covers {files}; update it.")
+        elif len(names) == 1:
+            parts.append(f"INDEX.md routes {files} to {names[0]}; update it.")
+        else:
+            parts.append(f"INDEX.md routes {files} to {' or '.join(names)}; "
+                         f"update at least one of them.")
+    return " ".join(parts) + " Then retry."
+
+
 def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir, override=None):
     """Check hard rules. Returns list of (rule_name, message) for failures."""
     failures = []
@@ -535,26 +560,16 @@ def validate_hard_rules(staged_files, frontmatter, body, parse_error, gator_dir,
                     f"Update the affected charters and retry."
                 ))
         else:
-            # Charter(s) staged — check if all INDEX-required charters
-            # are covered. This catches the case where the module charter
-            # is staged but cross-cutting (or another required charter)
-            # is not.
-            required = _required_charters_for_files(code_files, gator_dir.parent)
-            if required:
-                staged_names = set()
-                for f in charter_files_staged:
-                    fn = f.replace("\\", "/").rsplit("/", 1)[-1]
-                    staged_names.add(fn)
-                missing = required - staged_names
-                if missing:
-                    missing_str = ", ".join(sorted(missing))
-                    failures.append((
-                        "charter-index-gap",
-                        f"Code files changed ({files_str}). INDEX.md requires "
-                        f"charters: {', '.join(sorted(required))}. "
-                        f"Missing from staged files: {missing_str}. "
-                        f"Update the missing charters and retry."
-                    ))
+            # Charter(s) staged — check INDEX routing (#18): each matched
+            # row needs at least one of its domain charters; the
+            # cross-cutting charter only for a file its Covers line names.
+            gaps = charter_index_gaps(code_files, charter_files_staged,
+                                      gator_dir.parent)
+            if gaps:
+                failures.append((
+                    "charter-index-gap",
+                    format_charter_index_gaps(gaps)
+                ))
 
     # 4. Missing commit message
     has_message = bool(frontmatter.get("message"))

@@ -177,7 +177,7 @@ Charters are a **small, intelligent map** — not a mirror of the code, but a co
 
 2. **Write one charter per code domain.** Not one per file — one per logical domain (e.g., `views_quiz`, `models_core`, `frontend_js`). Each function gets a block with the notation above.
 
-3. **Add an INDEX.md** to your charters folder. The index maps code paths to charter files: "if you're changing X, read Y." See [INDEX.md](INDEX.md) for the format.
+3. **Add an INDEX.md** to your charters folder. The index maps code paths to charter files: "if you're changing X, read Y." See [INDEX.md](INDEX.md) for the format. The commit hook uses it too: when code in a row changes, at least one of that row's charters must change in the same commit. The cross-cutting charter counts only on a row that lists nothing else, and is required on its own only for files its `Covers` line names.
 
 4. **Make it mandatory.** Add a rule: "before modifying code, consult the relevant charters." Without governance, charters become optional documentation that decays.
 

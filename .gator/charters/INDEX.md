@@ -39,6 +39,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 ## Routing Rules
 
 - Prefer the narrowest matching row; do not load every charter for a local change.
+- The commit hook (`charter-index-gap`, #18) requires at least one of a matching row's domain charters, not every listed charter. Cross-Cutting is required only for a file its own `Covers` line names, or on a row that lists nothing else.
 - When one file appears in two rows, read both because that file implements a boundary.
 - Path-qualify every glob. The pre-commit hook also matches a glob against the file's basename alone, so a bare `*.js` would claim every JavaScript file in the repository.
 - Add or update a row when ownership moves. Do not duplicate this map in `README.md` or another charter.
