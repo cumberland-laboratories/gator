@@ -386,40 +386,74 @@ def _hook_shebang():
     raise HookShebangUnresolvable(_format_shebang_refusal(result))
 
 
-def get_managed_hooks_path_value():
-    """Return the core.hooksPath value Gator manages on this platform."""
-    return ".git/gator-hooks" if os.name == "nt" else None
+def _git_common_dir(repo_root):
+    """Return the Git directory shared by every worktree of `repo_root`.
+
+    A main checkout's `.git/` is that directory. In a linked worktree
+    `.git` is a file, so Git is asked; `repo_root/.git` is the fallback
+    when Git cannot answer (#103).
+    """
+    dot_git = Path(repo_root) / ".git"
+    if dot_git.is_file():
+        out, ok = git("rev-parse", "--git-common-dir", cwd=repo_root)
+        if ok and out:
+            common = Path(out)
+            if not common.is_absolute():
+                common = Path(repo_root) / common
+            return Path(os.path.normpath(str(common)))
+    return dot_git
+
+
+def get_managed_hooks_path_value(repo_root):
+    """Return the core.hooksPath value Gator manages on this platform.
+
+    Windows: the absolute path of `gator-hooks/` in the common Git
+    directory. Git resolves a relative core.hooksPath from the current
+    worktree, so a relative value runs no hooks in a linked worktree
+    (#103). POSIX keeps Git's default (None).
+    """
+    if os.name != "nt":
+        return None
+    return (_git_common_dir(repo_root) / "gator-hooks").as_posix()
 
 
 def get_managed_hook_dir(repo_root):
     """Return the hook directory Gator actively manages."""
-    hooks_path = get_managed_hooks_path_value()
+    hooks_path = get_managed_hooks_path_value(repo_root)
     if hooks_path:
-        return repo_root / Path(hooks_path)
-    return repo_root / ".git" / "hooks"
+        return Path(hooks_path)
+    return _git_common_dir(repo_root) / "hooks"
 
 
 def get_hook_probe_dirs(repo_root):
     """Return installed-hook directories to probe, managed dir first."""
     probe_dirs = [get_managed_hook_dir(repo_root)]
-    legacy = repo_root / ".git" / "hooks"
+    legacy = _git_common_dir(repo_root) / "hooks"
     if legacy not in probe_dirs:
         probe_dirs.append(legacy)
     return probe_dirs
 
 
+def _same_path(a, b):
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
 def hooks_config_needs_update(repo_root):
-    """Return True when core.hooksPath is missing or wrong."""
-    expected = get_managed_hooks_path_value()
+    """Return True when core.hooksPath is missing or wrong.
+
+    The legacy relative `.git/gator-hooks`, and an absolute path left
+    behind by a moved clone, are both wrong.
+    """
+    expected = get_managed_hooks_path_value(repo_root)
     if not expected:
         return False
     actual, ok = git("config", "--local", "--get", "core.hooksPath", cwd=repo_root)
-    return not ok or actual.strip() != expected
+    return not ok or not _same_path(actual.strip(), expected)
 
 
 def _configure_managed_hooks_path(repo_root):
     """Set core.hooksPath when this platform uses a non-default dir."""
-    expected = get_managed_hooks_path_value()
+    expected = get_managed_hooks_path_value(repo_root)
     if not expected:
         return True
     _, ok = git("config", "--local", "core.hooksPath", expected, cwd=repo_root)
@@ -428,7 +462,23 @@ def _configure_managed_hooks_path(repo_root):
 
 def get_managed_hook_display_path():
     """Return the human-readable relative hook path for output."""
-    return get_managed_hooks_path_value() or ".git/hooks"
+    return ".git/gator-hooks" if os.name == "nt" else ".git/hooks"
+
+
+def git_resolved_hook_dir(repo_root):
+    """Return the hook directory Git will actually use here, or None.
+
+    Asks Git (`rev-parse --git-path hooks` honours core.hooksPath,
+    including a global one), so a health check sees what a commit in
+    this worktree sees (#103).
+    """
+    out, ok = git("rev-parse", "--git-path", "hooks", cwd=repo_root)
+    if not ok or not out:
+        return None
+    resolved = Path(out)
+    if not resolved.is_absolute():
+        resolved = Path(repo_root) / resolved
+    return Path(os.path.normpath(str(resolved)))
 
 
 def _installed_dispatcher_path():
@@ -545,9 +595,10 @@ def install_git_hooks(gator_dir, repo_root):
     """Install/refresh git hooks as cross-platform Python wrappers.
 
     Writes Python-shebang hooks that call gator-pre-commit.py directly.
-    Windows installs into `.git/gator-hooks/` and sets `core.hooksPath`
-    to bypass the Git-for-Windows/MSYS launcher path. Unix installs into
-    the normal `.git/hooks/` directory.
+    Windows installs into `gator-hooks/` in the common Git directory and
+    sets an absolute `core.hooksPath` to bypass the Git-for-Windows/MSYS
+    launcher path; the absolute value also reaches linked worktrees (#103).
+    Unix installs into the common `hooks/` directory.
 
     Layout-aware: resolves the script path via gator_layout for v2 repos.
 

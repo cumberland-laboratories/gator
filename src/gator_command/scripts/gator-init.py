@@ -240,6 +240,16 @@ def ensure_git_hooks(repo_root, paths):
         detail = "ok"
         status = "ok"
 
+    # #103: ask Git where a commit here looks for hooks. In a linked
+    # worktree a relative core.hooksPath (or a moved clone's absolute one)
+    # points nowhere, and Git then runs no hooks without an error.
+    resolve = getattr(gator_update, "git_resolved_hook_dir", None)
+    resolved = resolve(repo_root) if resolve is not None else None
+    if resolved is not None and not (resolved / "pre-commit").is_file():
+        status = "degraded"
+        detail = (f"hooks will not run here: Git looks in "
+                  f"{resolved.as_posix()} (run `gator update`)")
+
     return {
         "status": status,
         "detail": detail,
@@ -339,7 +349,10 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
     print(format_check("enforcer", enforcer_status))
 
     # Git hooks
-    print(format_check("hooks", hook_status["detail"]))
+    if hook_status.get("status") in ("degraded", "error"):
+        print(f"  ! {'hooks':<16}{hook_status['detail']}")
+    else:
+        print(format_check("hooks", hook_status["detail"]))
 
     # Dashboard registry
     reg_label = registry_status.get("detail", registry_status.get("status", ""))

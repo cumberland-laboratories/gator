@@ -453,6 +453,89 @@ class TestInstallGitHooks:
         ]
 
 
+def _git(cwd, *args):
+    import subprocess
+    result = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+         *args],
+        cwd=cwd, capture_output=True, text=True, timeout=30,
+    )
+    return result
+
+
+def _add_worktree(repo_root, tmp_path):
+    """Commit once and add a linked worktree; return its root."""
+    assert _git(repo_root, "commit", "--no-verify", "--allow-empty", "-m", "init").returncode == 0
+    wt = tmp_path / "wt"
+    result = _git(repo_root, "worktree", "add", "--detach", str(wt), "HEAD")
+    assert result.returncode == 0, result.stderr
+    return wt
+
+
+class TestLinkedWorktree:
+    """#103: hooks installed in a repository also run in its linked
+    worktrees, and the hook helpers work when `.git` is a file."""
+
+    def test_worktree_resolves_the_shared_managed_dir(self, mock_gator_repo, tmp_path):
+        repo_root, gator_dir = mock_gator_repo
+        assert update.install_git_hooks(gator_dir, repo_root) == 3
+        wt = _add_worktree(repo_root, tmp_path)
+
+        assert (update.get_managed_hook_dir(wt).resolve()
+                == update.get_managed_hook_dir(repo_root).resolve())
+        for root in (repo_root, wt):
+            resolved = update.git_resolved_hook_dir(root)
+            assert resolved is not None
+            assert (resolved / "pre-commit").is_file(), (root, resolved)
+
+    def test_install_from_a_worktree_reaches_the_main_checkout(self, mock_gator_repo, tmp_path):
+        repo_root, gator_dir = mock_gator_repo
+        wt = _add_worktree(repo_root, tmp_path)
+
+        assert update.install_git_hooks(wt / ".gator", wt) == 3
+        for root in (repo_root, wt):
+            assert (update.git_resolved_hook_dir(root) / "pre-commit").is_file()
+
+    def test_commit_in_worktree_runs_the_managed_hook(self, mock_gator_repo, tmp_path):
+        """Git really dispatches to the managed directory from a worktree."""
+        repo_root, gator_dir = mock_gator_repo
+        update.install_git_hooks(gator_dir, repo_root)
+        wt = _add_worktree(repo_root, tmp_path)
+        pre_commit = update.get_managed_hook_dir(repo_root) / "pre-commit"
+        pre_commit.write_text("#!/bin/sh\necho gator-test-hook-ran >&2\nexit 1\n",
+                              encoding="utf-8")
+
+        (wt / "f.txt").write_text("x\n", encoding="utf-8")
+        assert _git(wt, "add", "f.txt").returncode == 0
+        result = _git(wt, "commit", "-m", "should be blocked")
+        assert result.returncode != 0
+        assert "gator-test-hook-ran" in result.stderr
+
+    @pytest.mark.skipif(os.name != "nt", reason="core.hooksPath is managed on Windows only")
+    def test_hooks_path_is_absolute_in_the_common_dir(self, mock_gator_repo):
+        repo_root, gator_dir = mock_gator_repo
+        update.install_git_hooks(gator_dir, repo_root)
+        value, ok = update.git("config", "--local", "--get", "core.hooksPath", cwd=repo_root)
+        assert ok
+        assert Path(value).is_absolute()
+        assert Path(value).resolve() == (repo_root / ".git" / "gator-hooks").resolve()
+        assert update.hooks_config_needs_update(repo_root) is False
+
+    @pytest.mark.skipif(os.name != "nt", reason="core.hooksPath is managed on Windows only")
+    def test_legacy_relative_hooks_path_needs_update(self, mock_gator_repo, tmp_path):
+        repo_root, gator_dir = mock_gator_repo
+        update.install_git_hooks(gator_dir, repo_root)
+        _git(repo_root, "config", "core.hooksPath", ".git/gator-hooks")
+        assert update.hooks_config_needs_update(repo_root) is True
+        wt = _add_worktree(repo_root, tmp_path)
+        assert update.hooks_config_needs_update(wt) is True
+
+        actions = dict(update.plan_hook_updates(gator_dir, repo_root))
+        assert set(actions.values()) == {"update"}
+        update.install_git_hooks(gator_dir, repo_root)
+        assert (update.git_resolved_hook_dir(wt) / "pre-commit").is_file()
+
+
 class TestUnresolvableShebangRefusal:
     """When `_hook_shebang()` cannot find a spaceless launcher on
     Windows, the caller functions must refuse loudly (return 0 / [])

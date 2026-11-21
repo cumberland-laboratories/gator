@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.39.0",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "5c1bf809cfefa9e27a610d67300ccd3b3794bb8f",
+  "short_commit": "5c1bf80",
+  "snippet_id": "snippet-5c1bf809cfefa",
+  "session_group_key": "anthropic:543eeb61-d743-46a4-a160-5881cf228209",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "da79be1263ed863841f1049b9630c00971b464fa",
+  "started_at": "2026-11-11T23:41:42Z",
+  "ended_at": "2026-11-12T12:35:09Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-12-gator-da79be1263ed8.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.39.0, a minor release (#58): Gator connects to the AI tools installed on a machine once, from any ordinary `gator` command, and repositories carry no AI-tool files. `gator update` removes the ones earlier versions added. See the CHANGELOG for the upgrade notes (run `gator update`; approve Gator's hook once in Codex `/hooks`; run `gator integration remove` before uninstalling)."
+  ],
+  "transcript_session_id": "543eeb61-d743-46a4-a160-5881cf228209",
+  "transcript_ref": null
+}

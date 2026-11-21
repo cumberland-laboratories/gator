@@ -192,6 +192,50 @@ class TestEnsureGitHooks:
         assert status["updates"] == 0
 
 
+    def test_unreachable_hooks_report_degraded_not_ok(self, mock_gator_repo, tmp_path):
+        """#103: when Git would look somewhere without a pre-commit hook,
+        session open says so instead of reporting `ok`."""
+        from unittest.mock import patch
+
+        repo_root, _ = mock_gator_repo
+        paths = gator_layout.get_gator_paths(repo_root)
+        init.ensure_git_hooks(repo_root, paths)
+
+        real_update = init.import_sibling("gator-update")
+        nowhere = tmp_path / "nowhere"
+        real_update.git_resolved_hook_dir = lambda root: nowhere
+
+        with patch.object(init, "import_sibling", return_value=real_update):
+            status = init.ensure_git_hooks(repo_root, paths)
+
+        assert status["status"] == "degraded"
+        assert "will not run" in status["detail"]
+        assert nowhere.as_posix() in status["detail"]
+
+    def test_linked_worktree_hooks_are_repaired_and_reachable(self, mock_gator_repo, tmp_path):
+        """#103: init from a linked worktree repairs a legacy relative
+        core.hooksPath (Windows) and finishes with reachable hooks."""
+        import subprocess
+
+        repo_root, _ = mock_gator_repo
+        paths = gator_layout.get_gator_paths(repo_root)
+        init.ensure_git_hooks(repo_root, paths)
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run(git + ["add", "-A"], cwd=repo_root, check=True, capture_output=True)
+        subprocess.run(git + ["commit", "--no-verify", "-m", "init"], cwd=repo_root, check=True,
+                       capture_output=True)
+        if os.name == "nt":
+            subprocess.run(["git", "config", "core.hooksPath", ".git/gator-hooks"],
+                           cwd=repo_root, check=True)
+        wt = tmp_path / "wt"
+        subprocess.run(["git", "worktree", "add", "--detach", str(wt), "HEAD"],
+                       cwd=repo_root, check=True, capture_output=True)
+
+        status = init.ensure_git_hooks(wt, gator_layout.get_gator_paths(wt))
+
+        assert status["status"] != "degraded", status
+        assert (update.git_resolved_hook_dir(wt) / "pre-commit").is_file()
+
 # ---------------------------------------------------------------------------
 # Stage 5 — constitution drift suffix in the boot output
 # ---------------------------------------------------------------------------

@@ -61,6 +61,7 @@ Probe managed and legacy hook locations and request repair when configuration is
 <- `main()`
 -> repo updater hook helpers
 ! Session opening remains nonblocking. An unresolvable hook launcher is reported as degraded, not falsely healthy.
+! After planning or repair it asks Git where a commit here looks for hooks (`gator-update` `git_resolved_hook_dir()`, #103). No `pre-commit` there (a linked worktree with a legacy relative `core.hooksPath`, a moved clone, a foreign global `core.hooksPath`) is `degraded` with "hooks will not run here", never `ok`. A Git failure skips the check (fail open, as before). Works in a linked worktree: `.git` may be a file.
 
 ### session_opening_reads(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)
@@ -82,6 +83,7 @@ Render equivalent human and machine status for governance, hooks, and registry m
 <- `main()`
 -> counters, hook status, constitution drift, `session_opening_reads()`
 ! Constitution drift is warning-only and best-effort; failure to compare templates never blocks session opening.
+! The hooks line prints `!` instead of `✓` when hook status is `degraded` or `error`.
 ! `session_opening` is additive; JSON readers must tolerate its absence in output from older CLIs.
 
 ### main()

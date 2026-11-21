@@ -48,7 +48,7 @@ Local and remote readers that feed the same consumer must return the same schema
 
 `resolve_governed_runtime(repo_root, cli_version=None)` selects the runtime for repo hooks. A corrupt or missing runtime pin fails open to the repo-shipped scripts so governance damage does not brick Git operations.
 
-Managed Git hooks live under the configured `core.hooksPath`; legacy `.git/hooks` is a compatibility probe, not a second authority. Hook installers and health checks must agree on the canonical directory.
+Managed Git hooks live under the configured `core.hooksPath`; legacy `.git/hooks` is a compatibility probe, not a second authority. Hook installers and health checks must agree on the canonical directory. That directory is in the common Git directory, and Windows' `core.hooksPath` is absolute, so linked worktrees run the hooks too; the session-open health check asks Git where hooks resolve rather than trusting the install (#103, `scripts-repo-update.md` → `git_resolved_hook_dir()`).
 
 `gator hook session-open` and `session-start` resolve the Git top level before governance lookup. Commit hooks retain their existing working-directory contract. See [`scripts-repo-lifecycle.md`](scripts-repo-lifecycle.md).
 

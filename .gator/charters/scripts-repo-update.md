@@ -53,6 +53,13 @@ Filesystem: managed hook directory and Git config (RW)
 ! Refuse an unresolvable explicit launcher rather than writing wrappers that cannot execute.
 ! Wrapper generation, health probes, and display paths agree on the same canonical directory.
 
+### _git_common_dir() / get_managed_hooks_path_value(repo_root) / get_managed_hook_dir() / hooks_config_needs_update() / git_resolved_hook_dir()
+File: src/gator_command/scripts/gator-update.py (and starter copy, byte-identical)
+The managed hook directory lives in the Git directory shared by every worktree: `_git_common_dir()` returns `repo_root/.git` when it is a directory and asks `git rev-parse --git-common-dir` only when `.git` is a file (a linked worktree or submodule). Windows sets an **absolute**, forward-slash `core.hooksPath` to `<common>/gator-hooks` (#103); POSIX keeps Git's default and installs into `<common>/hooks`. `hooks_config_needs_update()` compares paths case- and separator-insensitively, so the legacy relative `.git/gator-hooks` and a moved clone's stale absolute path both plan as `update` and are repaired by the next `gator init` / `gator update`. `get_managed_hook_display_path()` stays the short relative label for output. `git_resolved_hook_dir()` asks Git where a commit here looks for hooks (`rev-parse --git-path hooks`, which honours local and global `core.hooksPath`); its consumer is `gator-init.py` `ensure_git_hooks()`.
+<- plan/install/probe helpers above; `gator-init.py` `ensure_git_hooks()`; fleet/drift/repo-status probes via `get_hook_probe_dirs()`
+! A relative `core.hooksPath` runs no hooks in a linked worktree and Git gives no error. Do not reintroduce one.
+! An absolute value ties the config to the clone's location; a moved clone runs no hooks until repaired, which `gator init` reports.
+
 ### Transient-file migration (#78) in main() / print_plan() / print_json_plan()
 File: src/gator_command/scripts/gator-update.py
 `main()` predicts `tracked_transient_files(repo_root)` right after planning (read-only). `--dry-run` lists the prediction (`print_plan(transient=)`), `--json` adds additive `transient_untrack: {paths, count}` and `summary.transient_untrack`. Execution calls `ensure_repo_gitignore(repo_root, untrack_paths=<prediction>)`, so it untracks exactly what was predicted, then prints `format_transient_untrack(transient_untrack_result(...))` and counts the untracking as a change for the `updated:` stamp. The helpers come from the `gatorize` sibling; without it (the template copy run standalone) they degrade to no prediction and no untracking, as before #78.
