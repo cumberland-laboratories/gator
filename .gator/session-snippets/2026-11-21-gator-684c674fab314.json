@@ -1,0 +1,40 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.39.1",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "684c674fab3144307535bb2a3dd33b522e2642a7",
+  "short_commit": "684c674",
+  "snippet_id": "snippet-684c674fab314",
+  "session_group_key": "anthropic:ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 3,
+  "previous_commit_in_session": "3e9b423d924b8e5fc8a953bcdba18f5946aca441",
+  "started_at": "2026-11-21T16:10:57Z",
+  "ended_at": "2026-11-21T18:59:41Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/charters/scripts-dashboard-views.md",
+    ".gator/session-snippets/2026-11-21-gator-3e9b423d924b8.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.39.1, a bug-fix release: commit hooks run in linked worktrees (#103), `gator init` reports hooks that will not run, and the Dashboard picks up repositories registered from a terminal (#108). On Windows, run `gator init` or `gator update` in each governed repository to repair `core.hooksPath`."
+  ],
+  "transcript_session_id": "ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "transcript_ref": null
+}

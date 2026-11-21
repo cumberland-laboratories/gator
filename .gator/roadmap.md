@@ -1,6 +1,6 @@
 # Roadmap
 
-_Updated 2026-11-11._ Current strategy, priorities, and planned work.
+_Updated 2026-11-21._ Current strategy, priorities, and planned work.
 
 **Retention standard**: this file holds current-facing strategy,
 priorities, and planned work. It does NOT accumulate
@@ -11,7 +11,7 @@ shipped-release detail lives at
 Soft cap: keep this file under ~250 lines. If it grows past that,
 compact or archive before adding.
 
-**Latest released version**: v2.38.1 (2026-11-11): Gator no longer creates the obsolete `outbox.md`. v2.38.0 (2026-11-09): `gator --explain`; `~/.gator/` is never a repository. v2.37.1 (2026-11-08): agent credential files stay out of commits.
+**Latest released version**: v2.39.1 (2026-11-21): commit hooks run in linked worktrees (#103); the Dashboard picks up repositories registered from a terminal (#108). v2.39.0 (2026-11-12): Gator connects to AI tools once per machine; repositories carry no AI-tool files (#58). v2.38.1 (2026-11-11): Gator no longer creates the obsolete `outbox.md`. v2.38.0 (2026-11-09): `gator --explain`; `~/.gator/` is never a repository. v2.37.1 (2026-11-08): agent credential files stay out of commits.
 
 v2.37.0 (2026-11-08):
 - **Charter health (#105, #88):** `function-gap` reports only real seams (entry points, exports, cross-charter imports), one shared policy for the verifier, linter and commit hook; the checked `**Internal**:` charter line; one shared `Covers` rule.
