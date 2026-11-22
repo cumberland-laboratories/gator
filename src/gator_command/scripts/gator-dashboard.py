@@ -52,6 +52,29 @@ COMMAND_POST_ROOT = SCRIPTS_DIR.parent.parent.parent  # repo root (src/gator_com
 sys.path.insert(0, str(SCRIPTS_DIR))
 from gator_core import get_version, import_sibling, git, normalize_path  # noqa: E402
 
+
+def _dashboard_build_id():
+    """A short stamp of the page this server serves (#20).
+
+    Hashes the version and every shell/view asset (`.html`, `.js`, `.css`
+    under `dashboard/`), so a browser tab opened against another build can
+    tell. Computed once per process; any read error just leaves that file
+    out.
+    """
+    import hashlib
+    digest = hashlib.sha256((get_version() or "").encode("utf-8"))
+    for path in sorted(DASHBOARD_DIR.rglob("*")):
+        if path.suffix in (".html", ".js", ".css") and path.is_file():
+            try:
+                digest.update(path.relative_to(DASHBOARD_DIR).as_posix().encode("utf-8"))
+                digest.update(path.read_bytes())
+            except OSError:
+                pass
+    return digest.hexdigest()[:12]
+
+
+DASHBOARD_BUILD = _dashboard_build_id()
+
 # ── extracted modules ─────────────────────────────────────────────────────────
 from dashboard.helpers import (  # noqa: E402
     run_json,
@@ -157,6 +180,85 @@ def _registry_sync_from_disk():
             return False  # a different registry file; never mix the two
         _registry_load_from_disk()
         return True
+
+
+# Fleet collections are numbered (#107). `/api/refresh` answers the number
+# of the collection a caller must wait for. A request that arrives while a
+# collection runs queues exactly one more (`again`), because the running
+# one may have read a repository before the caller's change landed; the
+# caller then waits for that next number. `finished` counts collections
+# that ended, published or failed, so a waiter never waits forever.
+# `_COLLECTION_LOCK` is a leaf: it guards these numbers and the
+# non-blocking admission of `DashboardHandler._refresh_lock`, nothing else.
+_COLLECTION_LOCK = threading.Lock()
+_COLLECTION = {"started": 0, "finished": 0, "again": False}
+
+
+def _collection_numbers():
+    with _COLLECTION_LOCK:
+        return _COLLECTION["started"], _COLLECTION["finished"]
+
+
+def _refresh_worker(seq):
+    """Collect and publish Fleet number `seq`, then any one queued rerun.
+
+    Owns `DashboardHandler._refresh_lock` (acquired by `_request_refresh`)
+    and releases it exactly once, under `_COLLECTION_LOCK`, so a request
+    either queues a rerun this worker will see or is admitted afresh.
+    """
+    cls = DashboardHandler
+    released = False
+    try:
+        while True:
+            try:
+                _registry_sync_from_disk()
+                data = dict(collect_standalone_data(_registry_snapshot()))
+                data["collection"] = seq
+                with _STATE_WRITE_LOCK:
+                    _fleet_publish(_fleet_reconciled(
+                        data, _registry_snapshot()))
+            except Exception as exc:
+                _debug_print(f"[refresh] collection {seq} failed: {exc}")
+            with _COLLECTION_LOCK:
+                _COLLECTION["finished"] = max(_COLLECTION["finished"], seq)
+                if not _COLLECTION["again"]:
+                    cls._refresh_lock.release()
+                    released = True
+                    return
+                _COLLECTION["again"] = False
+                seq = _COLLECTION["started"] + 1
+                _COLLECTION["started"] = seq
+    finally:
+        if not released:
+            with _COLLECTION_LOCK:
+                _COLLECTION["again"] = False
+                _COLLECTION["finished"] = _COLLECTION["started"]
+                cls._refresh_lock.release()
+
+
+def _request_refresh():
+    """Admit or queue a Fleet collection.
+
+    Returns `(status, collection)`: `("refreshing", n)` when this call
+    started collection n, `("already_refreshing", n)` when one was running
+    and n (the queued rerun) is the one to wait for, or `("error", text)`.
+    """
+    cls = DashboardHandler
+    with _COLLECTION_LOCK:
+        if not cls._refresh_lock.acquire(blocking=False):
+            _COLLECTION["again"] = True
+            return "already_refreshing", _COLLECTION["started"] + 1
+        seq = _COLLECTION["started"] + 1
+        _COLLECTION["started"] = seq
+    try:
+        threading.Thread(target=_refresh_worker, args=(seq,), daemon=True,
+                         name="dashboard-refresh").start()
+    except Exception as exc:
+        with _COLLECTION_LOCK:
+            _COLLECTION["finished"] = max(_COLLECTION["finished"], seq)
+            cls._refresh_lock.release()
+        return "error", f"could not start refresh: {exc}"
+    return "refreshing", seq
 
 
 def _fleet_snapshot():
@@ -2433,6 +2535,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 '  <meta name="gator-debug" content="1">\n</head>',
                 1,
             )
+        # #20: the page compares this with `/api/state` `build` and asks
+        # for a reload when the server now serves another build.
+        html = html.replace(
+            "</head>",
+            f'  <meta name="gator-dashboard-build" content="{DASHBOARD_BUILD}">\n</head>',
+            1,
+        )
         body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -2538,35 +2647,28 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         # Refresh Tier 1 (async — starts background collection, returns immediately)
         if path == "/api/refresh":
-            cls = self.__class__
-
-            # Single-flight: admission is one non-blocking acquire in the
-            # request thread; the worker owns the lock and releases it.
-            if not cls._refresh_lock.acquire(blocking=False):
-                self._send_json({"status": "already_refreshing"})
+            # Single-flight with one queued rerun (#107): admission is one
+            # non-blocking acquire in the request thread; the worker owns
+            # the lock and releases it.
+            status, collection = _request_refresh()
+            if status == "error":
+                self._send_json({"error": collection}, 500)
                 return
+            self._send_json({"status": status, "collection": collection})
+            return
 
-            def _do_refresh():
-                try:
-                    _registry_sync_from_disk()
-                    data = collect_standalone_data(_registry_snapshot())
-                    with _STATE_WRITE_LOCK:
-                        _fleet_publish(_fleet_reconciled(
-                            data, _registry_snapshot()))
-                except Exception as exc:
-                    _debug_print(f"[refresh] collection failed: {exc}")
-                finally:
-                    cls._refresh_lock.release()
-
-            try:
-                threading.Thread(target=_do_refresh, daemon=True,
-                                 name="dashboard-refresh").start()
-            except Exception as exc:
-                cls._refresh_lock.release()
-                self._send_json(
-                    {"error": f"could not start refresh: {exc}"}, 500)
-                return
-            self._send_json({"status": "refreshing"})
+        # Freshness probe (#107, #108, #20), polled by the page. Cheap: a
+        # registry-file stat, and a refresh only when the file changed.
+        if path == "/api/state":
+            if _registry_sync_from_disk():
+                _request_refresh()
+            started, finished = _collection_numbers()
+            self._send_json({
+                "collection": (_fleet_snapshot() or {}).get("collection"),
+                "started": started,
+                "finished": finished,
+                "build": DASHBOARD_BUILD,
+            })
             return
 
         # Session summaries — lazy / on-demand aggregation (enterprise)
@@ -4826,7 +4928,7 @@ def main():
 
     print(f"  Repos registered: {len(registry)}", flush=True)
     with _STATE_WRITE_LOCK:
-        _fleet_publish(collect_standalone_data(registry))
+        _fleet_publish(dict(collect_standalone_data(registry), collection=0))
 
     _adopt_orphaned_loops()
 

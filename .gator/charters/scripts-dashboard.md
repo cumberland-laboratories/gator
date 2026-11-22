@@ -194,11 +194,13 @@ The single authority for shared Dashboard state. The registry (`_REGISTRY_REPOS`
 ! TRIPWIRE: never mutate a published registry record or Fleet object (no `append`, slice assignment, `fast_data[...] =`, or nested `.update`). Build a new value and publish it. Readers take one snapshot at route entry and work from it. A stale snapshot gives an honest error, never a fallback to another repository.
 ! Lock order: `_STATE_LOCK` is a leaf (reference read or swap only, no I/O). `_STATE_WRITE_LOCK` covers a writer's read-modify-write. Small registry-JSON I/O and `Path.resolve()` are allowed under it. A subprocess, Git, a repository scan, a Loop lock, or `_refresh_lock` are not. Neither is writing an HTTP response: every handler decides its outcome under the lock and sends it after release, including rejections (`_handle_repo_register` 409/500, `_handle_repo_remove` 404). This is pinned by `test_registry_responses_are_sent_outside_the_writer_lock`. Order: write lock, then state lock; never the reverse.
 ! The slots stay the module global and the class attribute, so tests may still `monkeypatch.setattr(dashboard, "_REGISTRY_REPOS", [...])` or assign `DashboardHandler.fast_data`. The helpers read whatever is bound.
-! **Refresh (`GET /api/refresh`) is single-flight.** Admission is one `DashboardHandler._refresh_lock.acquire(blocking=False)` in the request thread; a request never waits on it.
-  - The `dashboard-refresh` worker owns the lock and releases it in `finally`. A failed `Thread.start()` releases it and returns 500.
-  - The worker collects from a registry snapshot outside every state lock. Under `_STATE_WRITE_LOCK` it then publishes `_fleet_reconciled(data, _registry_snapshot())`, which drops repos removed during the collection, so a refresh never brings back a removed repository.
-  - A collection failure is a debug diagnostic, and the old Fleet stays published. Responses are `refreshing` / `already_refreshing`, unchanged.
-  - Pinned by `TestRefreshSingleFlight` in `tests/test_dashboard_concurrency.py`.
+! **Refresh (`GET /api/refresh`) is single-flight with one queued rerun (#107).** `_request_refresh()` admits with one `DashboardHandler._refresh_lock.acquire(blocking=False)` under `_COLLECTION_LOCK` (a leaf); a request never waits on either.
+  - **Numbered collections:** `_COLLECTION = {started, finished, again}`. An admitted call takes `started + 1` and answers `{"status": "refreshing", "collection": n}`. A call while one runs sets `again` and answers `{"status": "already_refreshing", "collection": started + 1}`: the running collection may have read a repository before the caller's change landed, so the caller waits for the rerun. Many calls during one collection queue exactly one rerun.
+  - `_refresh_worker(seq)` owns the lock. Each pass syncs the registry file, collects from a registry snapshot outside every state lock, and publishes `_fleet_reconciled(data + {"collection": seq}, _registry_snapshot())` under `_STATE_WRITE_LOCK`, which drops repos removed during the collection. Then, under `_COLLECTION_LOCK`, it records `finished` and either takes the queued rerun or releases the lock, so a concurrent request is always either queued or admitted afresh. A `finally` releases it once on any escape. A failed `Thread.start()` releases it and returns 500.
+  - A collection failure is a debug diagnostic: the old Fleet stays published, but `finished` still advances, so a waiter never waits forever. `main()` publishes the startup collection as number 0.
+  - Pinned by `TestRefreshSingleFlight` in `tests/test_dashboard_concurrency.py` and `tests/test_dashboard_freshness.py`.
+! **`GET /api/state`** (the page's 10 s freshness probe): `{collection, started, finished, build}` — the published Fleet's number, the counters, and `DASHBOARD_BUILD`. It runs `_registry_sync_from_disk()` first and, when the registry file changed, `_request_refresh()`, so a repository registered from a terminal reaches Fleet without a click (#108). Cheap when nothing changed: one file stat.
+! **`DASHBOARD_BUILD` / `_dashboard_build_id()`** (#20): 12 hex of a SHA-256 over the version and every `.html` / `.js` / `.css` under `dashboard/`, computed once at import. `_send_dashboard_html()` injects `<meta name="gator-dashboard-build" content="…">` into every served page (snapshots are built elsewhere and carry none).
 
 ### _registry_load_from_disk() / _registry_sync_from_disk() / _registry_file_stamp() / _REGISTRY_FILE_STAMP
 File: src/gator_command/scripts/gator-dashboard.py
@@ -494,9 +496,11 @@ Load registry/settings, collect initial data, bind loopback, optionally open a b
 
 ### gator kill dashboard
 File: src/gator_command/scripts/gator-kill.py
-Find and terminate Gator-owned dashboard listeners, with port/all/dry-run scoping.
+Find and terminate Gator-owned dashboard listeners. One selector is required: `--all`, `--port N` (8420-8429) or `--list` (list, kill nothing), mutually exclusive at argparse; `--dry-run` previews `--all` / `--port`.
 <- `gator kill dashboard`
 ! Process matching must identify Gator dashboard ownership; never kill an arbitrary process merely because a common port is occupied.
+! The bare form is refused with exit 2 and "Nothing was stopped" plus the three choices (#15): it used to list only, so people believed a stale Dashboard was gone. `--list` is the old bare behaviour.
+! CLI-boundary tests (`TestSelectorSemanticsAtCliBoundary`) run the real script, so every in-range `--port` / `--all` case there uses `--dry-run`; a test run must never stop the developer's live Dashboard.
 
 ## Before Changing This Module
 

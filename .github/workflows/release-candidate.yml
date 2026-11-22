@@ -264,11 +264,25 @@ jobs:
           # cross-platform. Install step below can safely use `pip` (installs
           # a DIFFERENT package, no self-modification issue).
           $venv_python -m pip install --upgrade pip
-          $venv_python -m pip install \
-            --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            --pre \
-            "gator-command==${version}"
+          # #77: the wait step above proves one CDN edge has the version;
+          # pip can still reach a stale edge. Retry the install itself
+          # (6 attempts, 20 s apart, no pip cache) so the check is the
+          # install that matters. A real publish failure still fails here.
+          for attempt in 1 2 3 4 5 6; do
+            if $venv_python -m pip install --no-cache-dir \
+                 --index-url https://test.pypi.org/simple/ \
+                 --extra-index-url https://pypi.org/simple/ \
+                 --pre \
+                 "gator-command==${version}"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              echo "::error::pip could not install gator-command==${version} from TestPyPI after 6 attempts (~100s). Check the publish-to-testpypi job, then re-run this job."
+              exit 1
+            fi
+            echo "Attempt ${attempt}/6: pip could not install gator-command==${version} yet (stale package-index edge, #77). Retrying in 20s."
+            sleep 20
+          done
           $venv_gator --version
           $venv_gator --help
           echo "TestPyPI smoke OK on ${{ matrix.os }} for gator-command==${version}"

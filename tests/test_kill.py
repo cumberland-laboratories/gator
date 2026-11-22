@@ -277,17 +277,31 @@ class TestSelectorSemanticsAtCliBoundary:
         assert "outside the dashboard range" in result.stderr
 
     def test_port_at_range_boundary_accepted(self):
-        # Boundary: 8420 and 8429 must both be inside the range.
+        # Boundary: 8420 and 8429 must both be inside the range. --dry-run,
+        # so a test run never stops the developer's live Dashboard.
         for port in ("8420", "8429"):
-            result = self._run("--port", port)
+            result = self._run("--port", port, "--dry-run")
             # Should not error at the CLI boundary — either finds a process
             # or reports "no dashboard on that port" but doesn't reject.
             assert result.returncode in (0, 1), \
                 f"port {port} should be accepted, got {result.returncode}: {result.stderr}"
 
-    def test_no_flags_lists_and_returns_zero(self):
-        """The safe default (no flags) must not error even when no processes
-        are running — it just prints "no processes found" and exits 0.
-        """
+    def test_bare_form_refuses_and_says_nothing_was_stopped(self):
+        """#15: `kill` must kill. The bare form is refused at the CLI
+        boundary (exit 2) before any process lookup, says plainly that
+        nothing was stopped, and names the three explicit choices."""
         result = self._run()
+        assert result.returncode == 2
+        assert "Nothing was stopped" in result.stderr
+        for choice in ("--all", "--port <N>", "--list"):
+            assert choice in result.stderr
+
+    def test_list_lists_and_returns_zero(self):
+        """`--list` is the old bare behaviour: list, kill nothing, exit 0
+        even when no dashboard is running."""
+        result = self._run("--list")
         assert result.returncode == 0
+
+    def test_list_and_all_together_is_mutual_exclusion_error(self):
+        result = self._run("--list", "--all")
+        assert result.returncode == 2

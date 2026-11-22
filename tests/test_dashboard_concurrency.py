@@ -424,8 +424,14 @@ class TestRefreshSingleFlight:
 
         with ThreadPoolExecutor(max_workers=10) as pool:
             results = list(pool.map(refresh, range(10), timeout=60))
-        statuses = sorted(json.loads(t)["status"] for _, t in results)
+        bodies = [json.loads(t) for _, t in results]
+        statuses = sorted(b["status"] for b in bodies)
         assert statuses == ["already_refreshing"] * 9 + ["refreshing"], statuses
+        # #107: the nine that arrived during the collection all wait for the
+        # one queued rerun, numbered right after the admitted collection.
+        admitted = next(b["collection"] for b in bodies if b["status"] == "refreshing")
+        assert {b["collection"] for b in bodies
+                if b["status"] == "already_refreshing"} == {admitted + 1}
         assert gate.entered.wait(TIMEOUT)
 
         # While the collection runs, readers see the whole old object.
@@ -436,7 +442,8 @@ class TestRefreshSingleFlight:
 
         gate.release()
         _wait_until(_refresh_idle, "refresh to finish")
-        assert gate.calls == 1
+        # One collection plus exactly one queued rerun, never one per call.
+        assert gate.calls == 2
         assert json.loads(_request(url, "/api/data")[1])["generated_at"] == "new"
         # The lock was released: the next refresh is admitted again.
         assert json.loads(_request(url, "/api/refresh")[1])["status"] \

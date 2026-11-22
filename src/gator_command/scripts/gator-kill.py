@@ -257,12 +257,13 @@ def _format_proc_line(p):
 
 
 def cmd_dashboard_kill(args):
-    """Handle `gator kill dashboard [--all | --port N | --dry-run]`.
+    """Handle `gator kill dashboard (--all | --port N | --list) [--dry-run]`.
 
-    Default (no flag): list running processes with usage hint — safe default.
     --all: kill every dashboard process.
     --port N: kill only the one on port N.
+    --list: list running processes; kill nothing.
     --dry-run: with --all or --port, list targets without killing.
+    `main()` refuses the bare form (#15), so a selector is always present.
     """
     procs = find_dashboard_processes()
 
@@ -281,15 +282,13 @@ def cmd_dashboard_kill(args):
     elif args.all:
         targets = procs
     else:
-        # Safe default: list what's out there, don't kill
+        # --list: show what is running and kill nothing.
         print(f"  Found {len(procs)} gator-dashboard.py process(es):")
         for p in procs:
             print(_format_proc_line(p))
         print()
         print("  To kill all:               gator kill dashboard --all")
         print("  To kill one by port:       gator kill dashboard --port <N>")
-        print("  To preview without killing:")
-        print("                             gator kill dashboard --all --dry-run")
         return 0
 
     if args.dry_run:
@@ -324,7 +323,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
-            "  gator kill dashboard              list running dashboards\n"
+            "  gator kill dashboard --list       list running dashboards\n"
             "  gator kill dashboard --all        kill every dashboard process\n"
             "  gator kill dashboard --port 8420  kill the dashboard on port 8420\n"
         ),
@@ -348,6 +347,10 @@ def main():
         help=f"Kill only the dashboard on port N "
              f"(N must be in {DASHBOARD_PORT_RANGE.start}-{DASHBOARD_PORT_RANGE.stop - 1})",
     )
+    selector.add_argument(
+        "--list", action="store_true",
+        help="List running dashboards; kill nothing",
+    )
     dashboard_parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would be killed, don't actually kill "
@@ -366,7 +369,19 @@ def main():
         # silently list processes (which is what "no flag" does).
         if args.dry_run and not args.all and args.port is None:
             print("  Error: --dry-run requires --all or --port.", file=sys.stderr)
-            print("  Run `gator kill dashboard` (no flags) to list running processes.",
+            print("  Run `gator kill dashboard --list` to list running processes.",
+                  file=sys.stderr)
+            sys.exit(2)
+        # #15: `kill` must kill. The bare form used to list only, so people
+        # believed a stale Dashboard was gone. Refuse it, say that nothing
+        # was stopped, and name the three explicit choices.
+        if not args.all and args.port is None and not args.list:
+            print("  Nothing was stopped. Choose what to do:", file=sys.stderr)
+            print("    gator kill dashboard --all        stop every dashboard",
+                  file=sys.stderr)
+            print("    gator kill dashboard --port <N>   stop the dashboard on port N",
+                  file=sys.stderr)
+            print("    gator kill dashboard --list       list running dashboards",
                   file=sys.stderr)
             sys.exit(2)
         # --port must be in the range gator-dashboard actually scans.

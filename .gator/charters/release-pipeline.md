@@ -41,6 +41,7 @@ Builds the candidate once, validates the artifact, publishes to TestPyPI through
 ! TestPyPI and PyPI use separate OIDC trusted-publisher registrations.
 ! Matrix jobs bind `runs-on` to the matrix OS.
 ! Disabled or deferred deployment steps are visibly stubbed; no step claims a deployment it did not perform.
+! Both post-publish smoke installs (TestPyPI here, PyPI in Workflow C) retry the `pip install` itself: 6 attempts, 20 s apart, `--no-cache-dir` (#77). The preceding wait step proves only that one CDN edge has the version; pip can reach a stale edge. A real publish failure still fails after the last attempt.
 
 ## Workflow C: Promote to PyPI
 
@@ -52,6 +53,7 @@ Promotes a previously validated release-candidate artifact after independent env
 ! Artifact identity and approval are independent gates before publication.
 ! PyPI publication uses OIDC trusted publishing; long-lived API tokens are not stored.
 ! `id-token: write` is job-local to the publication job.
+! The post-publish smoke retries its install like Workflow B (#77), so a stale package-index edge no longer needs a manual rerun.
 
 ## Release Scripts
 

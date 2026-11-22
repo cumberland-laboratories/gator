@@ -288,7 +288,21 @@ jobs:
           .venv-verify/bin/python -m pip install --upgrade pip
           # --pre allows RC/pre-release versions like `2.4.5rc1` to resolve
           # from the standard PyPI index without needing --index-url overrides.
-          .venv-verify/bin/python -m pip install --pre "gator-command==${version}"
+          # #77: the wait step proves one CDN edge has the version; pip
+          # can still reach a stale edge right after upload. Retry the
+          # install itself (6 attempts, 20 s apart, no pip cache), so the
+          # release procedure's manual step-6 rerun is no longer needed.
+          for attempt in 1 2 3 4 5 6; do
+            if .venv-verify/bin/python -m pip install --no-cache-dir --pre "gator-command==${version}"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              echo "::error::pip could not install gator-command==${version} from PyPI after 6 attempts (~100s). Check the publish job, then re-run this job once PyPI lists the version."
+              exit 1
+            fi
+            echo "Attempt ${attempt}/6: pip could not install gator-command==${version} yet (stale package-index edge, #77). Retrying in 20s."
+            sleep 20
+          done
           .venv-verify/bin/gator --version
           .venv-verify/bin/gator --help
           echo "Post-release verification OK for gator-command==${version}"

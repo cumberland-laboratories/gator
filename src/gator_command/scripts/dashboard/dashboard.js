@@ -909,35 +909,62 @@
   // ── refresh ────────────────────────────────────────────────────────────────
 
   let refreshPending = false;
+  let refreshQueued = false;
+  // #107: how long a Refresh waits for its own collection before the
+  // background freshness check takes over (one 24-repository collection
+  // took about 19 s on Windows).
+  const REFRESH_WAIT_MS = 120000;
 
+  function applyFreshData(fresh) {
+    state.data = fresh;
+    updateTimestamp(fresh.generated_at);
+    // The card's branch/version come from the fresh Fleet record.
+    renderSidebarContext();
+    // Full rerender so repo-shell metadata (activeRepoKey, tab label,
+    // subtitle/branch) is recomputed from fresh state.data. The repo
+    // browser self-restores its expansion/selection via _treeState, so
+    // no browsing state is lost.
+    showView(state.activeView, state.activeRepo);
+  }
+
+  async function readState() {
+    const resp = await fetch("/api/state", { cache: "no-store" });
+    if (!resp.ok) throw new Error(`/api/state returned ${resp.status}`);
+    return resp.json();
+  }
+
+  // #107: wait for the collection that /api/refresh names. It started
+  // after this call (a running one queues a rerun), so it reflects any
+  // Update or registration that finished before the click. A Refresh
+  // during a pending one is queued once, never dropped.
   async function doRefresh() {
-    if (refreshPending || window.GATOR_SNAPSHOT) return;
+    if (window.GATOR_SNAPSHOT) return;
+    if (refreshPending) {
+      refreshQueued = true;
+      return;
+    }
     refreshPending = true;
     refreshBtn.classList.add("spinning");
     refreshBtn.textContent = "↺ Refreshing…";
 
     try {
-      await fetch("/api/refresh");
+      const started = await (await fetch("/api/refresh")).json();
+      const target = typeof started.collection === "number" ? started.collection : null;
       const oldTs = state.data && state.data.generated_at;
-      let attempts = 0;
-      while (attempts < 30) {
+      const deadline = Date.now() + REFRESH_WAIT_MS;
+      while (Date.now() < deadline) {
         await sleep(1000);
-        const fresh = await loadData();
-        if (fresh.generated_at !== oldTs) {
-          state.data = fresh;
-          updateTimestamp(fresh.generated_at);
-          // The card's branch/version come from the fresh Fleet record.
-          renderSidebarContext();
-          // Full rerender so repo-shell metadata (activeRepoKey, tab label,
-          // subtitle/branch) is recomputed from fresh state.data. The repo
-          // browser self-restores its expansion/selection via _treeState, so
-          // no browsing state is lost. (The 5s auto-poll stays flicker-free
-          // via its own sidebar-only applyRefresh path — this is only the
-          // explicit global Refresh button.)
-          showView(state.activeView, state.activeRepo);
+        if (target === null) {
+          // A server without collection numbers: the old timestamp check.
+          const fresh = await loadData();
+          if (fresh.generated_at !== oldTs) { applyFreshData(fresh); break; }
+          continue;
+        }
+        const st = await readState();
+        if (st.finished >= target) {
+          applyFreshData(await loadData());
           break;
         }
-        attempts++;
       }
     } catch (err) {
       console.error("Refresh failed:", err);
@@ -945,6 +972,69 @@
       refreshBtn.classList.remove("spinning");
       refreshBtn.textContent = "↺ Refresh";
       refreshPending = false;
+      if (refreshQueued) {
+        refreshQueued = false;
+        doRefresh();
+      }
+    }
+  }
+
+  // ── freshness check (#107, #108, #20) ─────────────────────────────────────
+  // Every 10 s, ask the server whether it holds a different Fleet
+  // collection than this page shows (a refresh that outlived the wait, a
+  // repository registered from a terminal, a restarted server) and whether
+  // it now serves another page build.
+  const FRESHNESS_POLL_MS = 10000;
+  const pageBuildMeta = document.querySelector('meta[name="gator-dashboard-build"]');
+  const pageBuild = pageBuildMeta ? pageBuildMeta.content : null;
+  let buildNoticeShown = false;
+
+  function showBuildNotice() {
+    if (buildNoticeShown) return;
+    buildNoticeShown = true;
+    const note = document.createElement("div");
+    note.className = "shell-notice build-notice";
+    note.setAttribute("role", "status");
+    note.textContent = "The Dashboard was restarted with a different version. Reload this page to use it. ";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "gator-btn gator-btn-sm build-notice-reload";
+    btn.textContent = "Reload";
+    btn.addEventListener("click", () => window.location.reload());
+    note.appendChild(btn);
+    viewSlot.parentNode.insertBefore(note, viewSlot);
+  }
+
+  function fleetBusy() {
+    return !!document.querySelector(".gator-modal-overlay, .overflow-menu.open");
+  }
+
+  async function checkFreshness() {
+    if (window.GATOR_SNAPSHOT || document.hidden || refreshPending) return;
+    let st;
+    try {
+      st = await readState();
+    } catch (_) {
+      return;  // a server without /api/state, or briefly unreachable
+    }
+    if (pageBuild && st.build && st.build !== pageBuild) showBuildNotice();
+    const shown = state.data ? state.data.collection : undefined;
+    if (typeof st.collection !== "number" || typeof shown !== "number") return;
+    if (st.collection === shown || refreshPending) return;
+    // Never redraw Fleet under an open menu or dialog; try again next time.
+    if (state.activeView === "fleet" && fleetBusy()) return;
+    let fresh;
+    try {
+      fresh = await loadData();
+    } catch (_) {
+      return;
+    }
+    if (state.activeView === "fleet") {
+      applyFreshData(fresh);
+    } else {
+      state.data = fresh;
+      updateTimestamp(fresh.generated_at);
+      renderSidebarContext();
     }
   }
 
@@ -1013,4 +1103,5 @@
   }
 
   init();
+  if (!window.GATOR_SNAPSHOT) setInterval(checkFreshness, FRESHNESS_POLL_MS);
 })();

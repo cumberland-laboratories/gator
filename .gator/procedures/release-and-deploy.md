@@ -159,9 +159,9 @@ gh workflow run promote-to-pypi.yml \
 - [ ] Publish job runs → wheel goes to PyPI via OIDC (no static token)
 - [ ] Post-publish smoke job runs
 
-### 6. Handle post-publish smoke failure (expected the first try)
+### 6. Handle post-publish smoke failure (rare since #77)
 
-PyPI CDN needs ~30–60 seconds after upload for the simple index to reflect the new version. The post-publish smoke job runs immediately after upload — it usually fails on the first attempt with:
+PyPI CDN needs ~30–60 seconds after upload for the simple index to reflect the new version. Since #77 both smoke installs retry for about 100 seconds, so this should now be rare. If the job still fails after its retries, it fails with:
 
 ```
 ERROR: Could not find a version that satisfies the requirement gator-command==X.Y.Z (from versions: ..., X.Y.(Z-1))
@@ -175,7 +175,7 @@ python -c "import urllib.request, json; d = json.loads(urllib.request.urlopen('h
 gh run rerun <PROMOTE_RUN_ID> --failed --repo cumberland-laboratories/gator
 ```
 
-(Tracked as inbox item to auto-handle in the workflow.)
+(Automated in the workflow by #77: the install step retries 6 times, 20 s apart.)
 
 - [ ] Second smoke run passes → promote workflow fully green
 
