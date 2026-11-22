@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.39.2",
+  "change_type": "release",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "5e5b757faf0c38c1b45d63d0e568339955e60eb1",
+  "short_commit": "5e5b757",
+  "snippet_id": "snippet-5e5b757faf0c3",
+  "session_group_key": "anthropic:ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "844d128546474e6d8d223a764da0ab9c3736287e",
+  "started_at": "2026-11-21T16:10:57Z",
+  "ended_at": "2026-11-22T01:49:20Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-22-gator-844d128546474.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.39.2, the commit-hook signal release: `charter-index-gap` asks for one owning charter per `INDEX.md` row instead of every listed one (#18), `stale-charter-refs` reads compound headings and `Covers` globs correctly (#16), and the test-file case of `new-functions-undocumented` is pinned (#17)."
+  ],
+  "transcript_session_id": "ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "transcript_ref": null
+}
