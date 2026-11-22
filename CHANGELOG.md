@@ -4,6 +4,28 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.39.3] — 2026-11-22
+
+Dashboard freshness release: **what the Dashboard shows keeps up with what is true.**
+
+**Upgrade note:** after `pipx upgrade gator-command`, restart a running Dashboard (`gator kill dashboard --all`, then `gator dashboard`) and reload its browser tabs once. Tabs opened from this version on warn you themselves when the Dashboard is restarted with a different version.
+
+### Fixed
+
+- **Fleet shows the new version after Update (#107).** Refresh gave up after 30 seconds without redrawing, and could accept a scan that started before the Update finished. Fleet scans are now numbered: `/api/refresh` answers the scan to wait for, a Refresh during a running scan queues exactly one more (it was dropped), and a failed scan still counts as finished. Pinned by `tests/test_dashboard_freshness.py` and `TestRefreshSingleFlight`. Charter: `scripts-dashboard.md`.
+- **A repository registered from a terminal appears in Fleet without a click** (completes #108). Every 10 seconds the page asks the new `GET /api/state` whether the server holds newer Fleet data, and redraws Fleet when it does, never under an open menu or dialog. `/api/state` re-reads the registry file and starts a scan when it changed. Pinned by `tests/test_dashboard_ui/test_dashboard_freshness_ui.py`.
+- **The release smoke installs retry (#77).** Both post-publish smoke jobs retry `pip install` 6 times, 20 seconds apart, so a stale package-index edge no longer fails a release.
+
+### Added
+
+- **"Restarted with a different version" notice (#20).** The server stamps every page with a build ID (a hash of the version and the Dashboard's page files). When `/api/state` reports another build, the page shows "The Dashboard was restarted with a different version. Reload this page to use it." with a Reload button.
+- **`gator kill dashboard --list`** lists running dashboards and stops nothing.
+
+### Changed
+
+- **Bare `gator kill dashboard` no longer only lists (#15).** It exits 2 with "Nothing was stopped" and names `--all`, `--port <N>` and `--list`. The listing it used to print is `--list`.
+- The kill tests that run the real command use `--dry-run`, so a test run can no longer stop a live Dashboard on port 8420 or 8429.
+
 ## [2.39.2] — 2026-11-21
 
 Commit-hook signal release: **the charter checks ask for what actually changed.**
