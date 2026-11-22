@@ -2,8 +2,8 @@
 
 One closed grammar answers "does this `Covers` entry name this file?" for
 every producer that has moved onto it: the charter verifier, the
-Dashboard charter sync check (#88) and the commit hook's cross-cutting
-`charter-index-gap` check (#18). Other producers keep their own matching
+Dashboard charter sync check (#88), and the commit hook's cross-cutting
+`charter-index-gap` check (#18) and `stale-charter-refs` warning (#16). Other producers keep their own matching
 until a later decision moves them. The hook runtimes (starter
 `templates/gator-starter/scripts/` and the Enterprise `bundled_scripts/`)
 carry byte-identical copies of this file.

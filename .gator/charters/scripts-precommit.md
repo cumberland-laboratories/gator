@@ -185,7 +185,7 @@ Filesystem: git diff (R), staged files (R), `.gator/lint-allow.json` (R)
 
 ### new_seam_functions(repo_root, charter_dir=None) / _new_definitions() / _index_entries() / _read_blobs() / _parse_index_text(text) / _required_charters_for_files(code_files, repo_root, mappings=None)
 File: src/gator_command/templates/gator-starter/scripts/precommit_charter.py
-The `new-functions-undocumented` soft warning (validate rule 6, run when both code and a charter are staged). It lists new top-level definitions from the staged diff (`def` / `async def` at column 0; JavaScript `function` / `export function` / `const x =`) that `charter_significance.decide()` calls seams and that no staged charter documents (`heading_names()`) or lists on `**Internal**:` (`parse_internal()`). That is the same policy as the charter verifier (see `scripts-charter-tooling.md`).
+The `new-functions-undocumented` soft warning (validate rule 6, run when both code and a charter are staged). Test functions, fixtures and test helpers are never seams: they are not entry points, and an importer no charter owns is ignored (#17, `test_new_test_functions_and_helpers_are_not_seams`). It lists new top-level definitions from the staged diff (`def` / `async def` at column 0; JavaScript `function` / `export function` / `const x =`) that `charter_significance.decide()` calls seams and that no staged charter documents (`heading_names()`) or lists on `**Internal**:` (`parse_internal()`). That is the same policy as the charter verifier (see `scripts-charter-tooling.md`).
 Filesystem: git index (R only: `diff --cached`, `ls-files -s -z`, one `cat-file --batch`)
 <- `gator-pre-commit.py` `validate_soft_rules()` (both hook copies)
 -> `charter_significance` (sibling import), `_resolve_charter_surface()`
@@ -193,6 +193,15 @@ Filesystem: git index (R only: `diff --cached`, `ls-files -s -z`, one `cat-file 
 ! **Ownership.** INDEX routes most rows to the cross-cutting charter as "read first". That is not ownership, so it is dropped from a file's owner set unless it is the file's only route. Unrouted importers (tests) are ignored, like the verifier's uncovered importers. The hook and the verifier agree when INDEX and `Covers` agree (`test_hook_and_verifier_agree`).
 ! Advisory only: any Git or import failure returns `[]`, never a block. The old added-lines name matcher (`_detect_new_functions()`) is gone from both copies.
 ! `precommit_charter.py` and `charter_significance.py` are byte-identical with their Enterprise bundled copies (`TestByteIdentityAcrossThreeCopies`), and `charter_significance.py` with `src/gator_command/scripts/charter_significance.py` (`test_policy_module_matches_the_verifier_copy`). The bundled `gator-pre-commit.py` rule-6 site is kept in step by hand.
+
+### _check_charter_function_refs(charter_files, repo_root) / _legacy_heading_names(line)
+File: src/gator_command/templates/gator-starter/scripts/precommit_charter.py
+The `stale-charter-refs` soft warning (validate rule 5, when a charter is staged). For each staged charter it reads the names in `### ` headings with `charter_significance.heading_names()` (#16), the reader the verifier and the new-seam warning share: a compound heading (`### Vendor cleanup in _run() / print_plan()`) yields each called name, and prose, `TRIPWIRE:` and constant-only parts yield nothing. It searches the tracked files the charter's `**Covers**:` line names (`charter_covers.covers_match()` over `git ls-files`, so globs and directory prefixes count) plus every `File:` line, and reports names whose last dotted part none of them contains.
+Filesystem: staged charters and searched files in the working tree (R), `git ls-files` (R)
+<- `gator-pre-commit.py` `validate_soft_rules()` (both copies)
+-> `charter_significance.heading_names()` / `parse_file_line()`, `charter_covers.covers_match()`, `_covers_entries()`, `_git_bytes()`
+! Advisory only. A charter with no searchable file is not judged, as before. Without the sibling modules (an older runtime) it falls back to `_legacy_heading_names()` and exact-path matching.
+! Before #16 it took the text before a heading's first `(` as one name and read `Covers` globs as literal paths; on this repository that produced 19 findings across 8 charters, all false (2026-11-21), and none now. Pinned by `tests/test_precommit_stale_refs.py`.
 
 ### charter_index_gaps(code_files, staged_charters, repo_root, mappings=None) / _covers_entries(charter_text) / format_charter_index_gaps(gaps)
 File: src/gator_command/templates/gator-starter/scripts/precommit_charter.py

@@ -148,3 +148,18 @@ def test_warning_is_advisory_never_a_block(repo, monkeypatch):
         staged_files=staged, frontmatter={"message": "m"}, body="",
         parse_error=None, gator_dir=gator_dir)
     assert not [f for f in failures if f[0] == "new-functions-undocumented"]
+
+
+def test_new_test_functions_and_helpers_are_not_seams(repo):
+    """#17: a new test file's `test_*` functions, fixtures and helpers
+    (imported by another test) never trigger the warning."""
+    _write(repo, "tests/conftest.py",
+           "import pytest\n\n\n@pytest.fixture\ndef thing():\n    return 1\n\n\n"
+           "def make_repo(path):\n    return path\n")
+    _write(repo, "tests/test_core.py",
+           "from conftest import make_repo\n\n\ndef test_existing(thing):\n"
+           "    assert make_repo(thing)\n\n\nclass TestCore:\n"
+           "    def test_method(self):\n        pass\n")
+    _stage_new_helper(repo)
+    _git(repo, "add", "tests")
+    assert charter.new_seam_functions(repo) == ["helper"]

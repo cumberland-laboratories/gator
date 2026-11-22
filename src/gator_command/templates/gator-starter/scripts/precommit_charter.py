@@ -124,13 +124,43 @@ def read_tripwire_patterns(gator_dir):
 # Charter validation (called by validate_hard_rules / validate_soft_rules)
 # ---------------------------------------------------------------------------
 
-def _check_charter_function_refs(charter_files, repo_root):
-    """Check that ### func() entries in staged charters reference real functions.
+def _legacy_heading_names(line):
+    """Pre-#16 reader: the text before the first `(` of a `### ` heading."""
+    stripped = line.strip()
+    if stripped.startswith("### ") and "(" in stripped:
+        name = stripped[4:].split("(")[0].strip()
+        return [name] if name else []
+    return []
 
-    Parses charter for '### name(' entries and the 'Covers:' line, then greps
-    the covered files for those function names. Returns list of names not found.
-    Self-contained — no gator_core imports.
+
+def _check_charter_function_refs(charter_files, repo_root):
+    """Names in staged charters' `### ` headings that no covered file contains.
+
+    Headings are read with `charter_significance.heading_names()` (#16), the
+    reader the verifier and the new-seam warning use, so a compound heading
+    such as `### Vendor cleanup in _run() / print_plan()` yields `_run` and
+    `print_plan`, and prose or constants yield nothing. The files searched
+    are the tracked files the charter's `**Covers**:` line names
+    (`charter_covers` grammar, so globs and directory prefixes count) plus
+    every `File:` line. A dotted name (`window.gatorNavToRepo`) is found by
+    its last part. Returns the names not found; any failure finds nothing.
     """
+    try:
+        import charter_significance as significance
+        heading_names = significance.heading_names
+        parse_file_line = significance.parse_file_line
+    except ImportError:  # older runtime without the shared reader
+        heading_names = _legacy_heading_names
+        parse_file_line = lambda line: None  # noqa: E731
+    try:
+        from charter_covers import covers_match
+    except ImportError:
+        def covers_match(path, entry):
+            return path.replace("\\", "/") == entry.replace("\\", "/")
+
+    repo_root = Path(repo_root)
+    tracked = None
+
     stale = []
     for cf in charter_files:
         cf_path = Path(cf) if Path(cf).is_absolute() else repo_root / cf
@@ -141,45 +171,43 @@ def _check_charter_function_refs(charter_files, repo_root):
         except (OSError, UnicodeDecodeError):
             continue
 
-        # Extract function names from ### entries
+        lines = text.splitlines()
         func_names = []
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("### ") and "(" in stripped:
-                # "### foo_bar(args)" -> "foo_bar"
-                name = stripped[4:].split("(")[0].strip()
-                if name:
-                    func_names.append(name)
-
+        for line in lines:
+            if line.strip().startswith("### "):
+                for name in heading_names(line.strip()):
+                    if name not in func_names:
+                        func_names.append(name)
         if not func_names:
             continue
 
-        # Extract covered files from Covers: line
-        covered_files = []
-        for line in text.splitlines():
-            if line.startswith("**Covers**:") or line.startswith("**Covers:**"):
-                covered_files = re.findall(r'`([^`]+)`', line)
-                break
-
-        if not covered_files:
+        entries = _covers_entries(text)
+        file_lines = [f for f in (parse_file_line(line) for line in lines) if f]
+        if not entries and not file_lines:
             continue
 
-        # Read covered file contents
+        if tracked is None:
+            out = _git_bytes(repo_root, ["ls-files", "-z"])
+            tracked = ([] if out is None else
+                       [t for t in out.decode("utf-8", errors="replace").split("\0") if t])
+        paths = [t for t in tracked if any(covers_match(t, e) for e in entries)]
+        for rel in entries + file_lines:
+            if rel not in paths and not any(c in rel for c in "*?["):
+                paths.append(rel)
+
         covered_content = ""
-        for rel_path in covered_files:
+        for rel_path in paths:
             full = repo_root / rel_path
             if full.is_file():
                 try:
                     covered_content += full.read_text(encoding="utf-8", errors="replace")
                 except (OSError, UnicodeDecodeError):
                     pass
-
         if not covered_content:
             continue
 
-        # Check each function name exists somewhere in covered files
         for name in func_names:
-            if name not in covered_content:
+            if name.split(".")[-1] not in covered_content:
                 stale.append(name)
 
     return stale
