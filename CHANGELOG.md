@@ -4,6 +4,26 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.39.2] — 2026-11-21
+
+Commit-hook signal release: **the charter checks ask for what actually changed.**
+
+**Upgrade note:** nothing to do beyond `pipx upgrade gator-command`. A repository's commit hooks run the installed CLI's checks, so the new rules apply at once; `gator update` advances the runtime pin as usual. A code change with no charter update at all is still blocked as before.
+
+### Changed
+
+- **`charter-index-gap` asks for one owning charter per `INDEX.md` row, not every listed one (#18).** `INDEX.md` is a reading list: Cross-Cutting first, then the matching domain rows. The hook required every charter on every matching row, so routine UI-only, server-only and one-module changes needed a no-op charter edit or an Architect approval, and almost every row pushed notes into Cross-Cutting. Now each matching row needs at least one of its domain charters. Cross-Cutting counts as a domain charter only on a row that lists nothing else, and is otherwise required only for a file its own `Covers` line names. The finding still blocks with an external approval, and its message names what is missing ("INDEX.md routes <files> to A or B; update at least one of them."). `INDEX.md` row matching itself is unchanged. Pinned by `tests/test_precommit_index_gate.py`. Charter: `scripts-precommit.md` → `charter_index_gaps()`.
+- **The shared `Covers` matcher (`charter_covers.py`) ships in both hook runtimes**, byte-identical with the charter verifier's copy (`TestByteIdentityAcrossThreeCopies`, `test_covers_module_matches_the_verifier_copy`).
+
+### Fixed
+
+- **`stale-charter-refs` no longer reports names that exist (#16).** It took the text before a heading's first `(` as one name (`### Vendor cleanup in _run() / print_plan()` became "Vendor cleanup in _run") and read `Covers` globs such as `dashboard/*.py` as literal paths. It now reads headings like the charter verifier and searches every tracked file the `Covers` line names, plus each `File:` line. On the Gator repository it went from 19 findings, all false, to none; a really removed function is still reported. Pinned by `tests/test_precommit_stale_refs.py`.
+- **`new-functions-undocumented` does not fire on test files (#17).** Already true since 2.37.0's shared significance policy; now pinned by `test_new_test_functions_and_helpers_are_not_seams`.
+
+### Known limitations
+
+- A prose edit to a shipped HTML document still requires the Dashboard Server charter, because `INDEX.md` routes the documents only there and `.html` counts as code (#110).
+
 ## [2.39.1] — 2026-11-21
 
 Bug-fix release.

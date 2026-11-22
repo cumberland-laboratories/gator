@@ -1,0 +1,49 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Stale-charter warning reads headings and Covers like the other charter checks",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": "override-skip",
+  "decision_tags": [
+    "hooks",
+    "charters",
+    "warnings"
+  ],
+  "commit": "844d128546474e6d8d223a764da0ab9c3736287e",
+  "short_commit": "844d128",
+  "snippet_id": "snippet-844d128546474",
+  "session_group_key": "anthropic:ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 6,
+  "previous_commit_in_session": "3c1d0f9fbf08692ddd0e7420376acdbc361d427b",
+  "started_at": "2026-11-21T16:10:57Z",
+  "ended_at": "2026-11-22T01:10:35Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-charter-tooling.md",
+    ".gator/charters/scripts-enterprise-cli.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-11-21-gator-3c1d0f9fbf086.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/charter_covers.py",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/precommit_charter.py",
+    "src/gator_command/scripts/charter_covers.py",
+    "src/gator_command/templates/gator-starter/scripts/charter_covers.py",
+    "src/gator_command/templates/gator-starter/scripts/precommit_charter.py",
+    "tests/test_precommit_new_functions.py",
+    "tests/test_precommit_stale_refs.py"
+  ],
+  "notes": [
+    "The `stale-charter-refs` commit warning reported names that are not stale (#16). It took the text before a heading's first `(` as one function name, so `### Vendor cleanup in _run() / print_plan()` became \"Vendor cleanup in _run\", and it read `Covers` globs such as `dashboard/*.py` as literal file paths, so every function in a glob-covered file looked missing. On this repository it reported 19 names across 8 charters, all of them false.",
+    "It now reads headings with the same reader as the charter verifier and the new-function warning, and searches every tracked file the `Covers` line names (globs and folders included) plus each entry's `File:` line. On this repository it now reports nothing, and a function that was really removed is still reported.",
+    "`new-functions-undocumented` no longer fires on test files (#17); the shared significance policy from 2.37.0 already fixed it. A regression test now pins it."
+  ],
+  "transcript_session_id": "ff49b661-edf4-4fc5-b034-3952a5a6cbdf",
+  "transcript_ref": null
+}
