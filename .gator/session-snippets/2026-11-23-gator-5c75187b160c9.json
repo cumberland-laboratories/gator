@@ -1,0 +1,44 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "This repository's inbox becomes personal; its shared notes move to an artifact",
+  "change_type": "governance",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "knowledge-layer",
+    "migration"
+  ],
+  "commit": "5c75187b160c9c154d37ab1793d2f23cedb928d5",
+  "short_commit": "5c75187",
+  "snippet_id": "snippet-5c75187b160c9",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 4,
+  "previous_commit_in_session": "d9ca2bf23ac8ffc3383c004b7d41233b7407aaa5",
+  "started_at": "2026-11-23T00:41:59Z",
+  "ended_at": "2026-11-23T00:41:59Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/artifacts/2026-11-22-shared-notes-from-inbox.md",
+    ".gator/inbox.md",
+    ".gator/procedures/file-github-issue.md",
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-11-23-gator-d9ca2bf23ac8f.json",
+    ".gitignore"
+  ],
+  "notes": [
+    "Applies #104 to this repository: `.gator/inbox.md` is untracked (the file stays on disk as the Architect's own notes) and `.gitignore` gains its rule, plus two credential-file rules this repository had not converged on yet (`.gemini/.env`, `.codex/auth.json`).",
+    "The inbox's shared material moved first, to `artifacts/2026-11-22-shared-notes-from-inbox.md`: the roadmap retention standard, the Paper and inspection-workspace design decisions, the Loop planning-time heuristic and two observations without an issue. The stale \"where we are\" and backlog-index sections were dropped; GitHub Issues and Git hold that history.",
+    "Of the two unfiled bugs, the Repo view late-load race is still in the code and is now #111; the `gator loop codex` settings loss was already fixed by #87. Machine state (local database, paths, machine ID) stays in the personal inbox and is not committed.",
+    "`roadmap.md` and the issue-filing procedure no longer point readers at the inbox."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

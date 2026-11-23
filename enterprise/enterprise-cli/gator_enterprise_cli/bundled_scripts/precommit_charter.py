@@ -473,10 +473,24 @@ def _required_charters_for_files(code_files, repo_root, mappings=None):
             if "*" in pattern or "?" in pattern:
                 if _fnmatch.fnmatch(f_basename, pattern) or _fnmatch.fnmatch(f_normalized, pattern):
                     required.update(charter_refs)
-            elif f_basename == pattern or pattern in f_normalized:
+            elif _token_matches(f_normalized, pattern):
                 required.update(charter_refs)
 
     return required
+
+
+def _token_matches(path, token):
+    """A plain INDEX token names `path` on whole path segments (#112).
+
+    The path equals the token, ends with `/<token>` (a bare file name or a
+    partial path matches that file wherever it lives), or starts with
+    `<token>/` (a directory token). A substring inside another file name
+    never matches: `gator_core.py` does not claim `tests/test_gator_core.py`.
+    """
+    token = token.replace("\\", "/").rstrip("/")
+    if not token:
+        return False
+    return path == token or path.endswith("/" + token) or path.startswith(token + "/")
 
 
 def _covers_entries(charter_text):

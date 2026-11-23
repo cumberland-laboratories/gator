@@ -195,3 +195,28 @@ class TestShippedDocuments:
                      if isinstance(node, ast.Assign)
                      and any(getattr(t, "id", None) == "EXEMPT_PATHS" for t in node.targets))
         assert ast.literal_eval(value) == pre_commit.EXEMPT_PATHS
+
+
+class TestTokenMatching:
+    """#112: a plain INDEX token matches on whole path segments."""
+
+    @pytest.mark.parametrize("path,token,expected", [
+        ("src/gator_core.py", "gator_core.py", True),            # bare name, any folder
+        ("gator_core.py", "gator_core.py", True),
+        ("tests/test_gator_core.py", "gator_core.py", False),    # inside another name
+        ("src/app/core.py", "app/core.py", True),                # partial path
+        ("src/myapp/core.py", "app/core.py", False),
+        ("contracts/schemas/x.json", "contracts/", True),        # directory token
+        ("contractsX/y.py", "contracts/", False),
+        ("LICENSE", "LICENSE", True),
+        ("docs/LICENSE.txt", "LICENSE", False),
+    ])
+    def test_segment_matching(self, path, token, expected):
+        assert charter._token_matches(path, token) is expected
+
+    def test_a_test_named_after_a_source_file_is_not_routed(self, repo):
+        (repo / ".gator" / "charters" / "INDEX.md").write_text(
+            INDEX + "| `core.py` | [Core](core.md) · [Cross-Cutting](cross-cutting.md) |\n",
+            encoding="utf-8")
+        assert gaps(repo, ["tests/test_core.py"], "ui.md") == []
+        assert [g["charters"] for g in gaps(repo, ["lib/core.py"], "ui.md")] == [["core.md"]]
