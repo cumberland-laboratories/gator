@@ -376,6 +376,23 @@ ENTERPRISE_EVIDENCE_FILES = (
     ".gator/whiteboard.md",
 )
 
+# Personal, machine-local .gator files (#104). `.gator/inbox.md` is each
+# person's own notes: ignored, and untracked through the same visible
+# migration when an older install tracked it. Shared priorities and
+# planned work belong in roadmap.md or a GitHub issue.
+PERSONAL_GATOR_FILES = (
+    ".gator/inbox.md",
+)
+
+PERSONAL_UNTRACK_WHY = (
+    "`.gator/inbox.md` is now each person's own notes file. It stays on "
+    "your disk, but Git no longer shares it, so one person's notes no "
+    "longer reach everyone else or conflict between branches. Put anything "
+    "the team needs in roadmap.md or a GitHub issue. A teammate whose copy "
+    "Git removes when they pull this change gets it back the next time "
+    "they run `gator init` or `gator update`."
+)
+
 TRANSIENT_UNTRACK_WHY = (
     "Gator's commit hook writes these files on every commit attempt, and "
     ".gitignore lists them. Older Gator versions committed them, and an "
@@ -411,6 +428,7 @@ def ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None):
         ".gator/override-approved.json": "# Retired v1 override internals — never commit",
         ".gator/.override-meta.json": "# Retired v1 override internals — never commit",
         ".gator/.override": "# Retired v1 override bypass — no longer authorizes; never commit",
+        ".gator/inbox.md": "# Personal inbox — each person's own notes (machine-local, #104)",
         ".gator/diagnostics/": "# Session-hook diagnostic log (machine-local, bounded, appended-to on non-happy-path)",
         ".vscode/": "# IDE settings",
         "__pycache__/": "# Python cache",
@@ -439,16 +457,18 @@ def ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None):
 
 
 def transient_inventory(repo_root):
-    """TRANSIENT_GATOR_FILES for this repository: an Enterprise-managed
-    repository keeps ENTERPRISE_EVIDENCE_FILES tracked (A1)."""
+    """TRANSIENT_GATOR_FILES plus PERSONAL_GATOR_FILES (#104) for this
+    repository: an Enterprise-managed repository keeps
+    ENTERPRISE_EVIDENCE_FILES tracked (A1)."""
     try:
         from gator_core import is_enterprise_active
         enterprise = is_enterprise_active(Path(repo_root) / ".gator")
     except Exception:  # noqa: BLE001 — an absent helper means not Enterprise
         enterprise = False
-    if not enterprise:
-        return TRANSIENT_GATOR_FILES
-    return tuple(p for p in TRANSIENT_GATOR_FILES if p not in ENTERPRISE_EVIDENCE_FILES)
+    transient = TRANSIENT_GATOR_FILES
+    if enterprise:
+        transient = tuple(p for p in transient if p not in ENTERPRISE_EVIDENCE_FILES)
+    return transient + PERSONAL_GATOR_FILES
 
 
 def tracked_transient_files(repo_root):
@@ -505,13 +525,20 @@ def transient_untrack_result(paths):
     if not paths:
         return None
     n = len(paths)
+    personal = [p for p in paths if p in PERSONAL_GATOR_FILES]
+    hooks = [p for p in paths if p not in PERSONAL_GATOR_FILES]
+    # Hook files only: the #78 wording, unchanged. With the personal inbox
+    # (#104), a wording and explanation that cover both.
+    kind = "hook-ephemera" if not personal else "machine-local"
+    why = " ".join(w for w, used in ((TRANSIENT_UNTRACK_WHY, hooks),
+                                     (PERSONAL_UNTRACK_WHY, personal)) if used)
     return {
         "paths": paths,
         "count": n,
-        "message": (f"Gator removed {n} hook-ephemera path{'s' if n != 1 else ''} "
+        "message": (f"Gator removed {n} {kind} path{'s' if n != 1 else ''} "
                     "from the Git index. The files remain on disk. Git has staged "
                     "their removal. Commit this migration with the update."),
-        "why": TRANSIENT_UNTRACK_WHY,
+        "why": why,
     }
 
 
@@ -520,7 +547,9 @@ def format_transient_untrack(result, predicted=False):
     if not result:
         return []
     if predicted:
-        lines = [f"  Hook-ephemera paths to remove from the Git index ({result['count']}):"]
+        kind = ("Machine-local" if any(p in PERSONAL_GATOR_FILES for p in result["paths"])
+                else "Hook-ephemera")
+        lines = [f"  {kind} paths to remove from the Git index ({result['count']}):"]
     else:
         lines = ["  " + result["message"]]
     lines += [f"    - {p}" for p in result["paths"]]
@@ -528,6 +557,61 @@ def format_transient_untrack(result, predicted=False):
         lines.append("    The files stay on disk. Git will stage their removal; "
                      "commit it with the update.")
     return lines
+
+
+INBOX_PATH = ".gator/inbox.md"
+_INBOX_CHECKED_MARKER = "gator-inbox-checked"
+
+
+def restore_personal_inbox(repo_root):
+    """Bring back an inbox that Git removed when this clone pulled #104.
+
+    When another clone commits the untracking, `git pull` here deletes this
+    clone's unmodified working copy. Once per clone (a marker under
+    `$(git rev-parse --git-path gator-inbox-checked)`), if `.gator/inbox.md`
+    is missing, untracked and some commit deleted it, the file is written
+    back from that commit's parent. A present file, or a later deliberate
+    deletion, is left alone. Returns the restoring commit's short SHA, or
+    None. Never raises.
+    """
+    import subprocess
+
+    def git(*args, text=True):
+        try:
+            r = subprocess.run(["git", *args], cwd=str(repo_root),
+                               capture_output=True, text=text, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return r.stdout if r.returncode == 0 else None
+
+    try:
+        marker_rel = git("rev-parse", "--git-path", _INBOX_CHECKED_MARKER)
+        if not marker_rel:
+            return None
+        marker = Path(marker_rel.strip())
+        if not marker.is_absolute():
+            marker = Path(repo_root) / marker
+        if marker.exists():
+            return None
+        inbox = Path(repo_root) / INBOX_PATH
+        tracked = git("ls-files", "--", INBOX_PATH)
+        if tracked is None or tracked.strip():
+            return None  # Git failed, or not migrated yet: check again later
+        restored = None
+        if not inbox.exists():
+            deleted = (git("log", "-1", "--format=%h", "--diff-filter=D",
+                           "--", INBOX_PATH) or "").strip()
+            if deleted:
+                content = git("show", f"{deleted}^:{INBOX_PATH}", text=False)
+                if content is not None:
+                    inbox.parent.mkdir(parents=True, exist_ok=True)
+                    inbox.write_bytes(content)
+                    restored = deleted
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("checked\n", encoding="utf-8")
+        return restored
+    except Exception:  # noqa: BLE001 — best-effort convenience, never blocks
+        return None
 
 
 def write_gator_version(gator_dir, action):

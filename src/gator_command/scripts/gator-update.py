@@ -55,7 +55,10 @@ if _gatorize:
     plan_vendor_cleanup = _gatorize.plan_vendor_cleanup
     apply_vendor_cleanup = _gatorize.apply_vendor_cleanup
     format_vendor_cleanup = _gatorize.format_vendor_cleanup
+    restore_personal_inbox = getattr(_gatorize, "restore_personal_inbox",
+                                     lambda repo_root: None)
 else:
+    restore_personal_inbox = lambda repo_root: None
     ensure_repo_gitignore = _no_gitignore
     tracked_transient_files = lambda repo_root: []
     transient_untrack_result = lambda paths: None
@@ -1370,6 +1373,12 @@ def _run(args):
     _RESULT["transient_untracked"] = transient_result
     if transient_result:
         print("\n".join(format_transient_untrack(transient_result)))
+        print()
+    # #104: a pull of the untracking commit deletes an unmodified inbox.
+    restored_inbox = restore_personal_inbox(repo_root)
+    if restored_inbox:
+        print(f"  Restored your personal .gator/inbox.md from commit {restored_inbox} "
+              "(Git removed it when the inbox stopped being shared).")
         print()
 
     # Install/refresh git hooks

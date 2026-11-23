@@ -28,7 +28,8 @@ When you learn something worth remembering, ask: **"Is this about the project or
 | Something about a function or module | Charter update |
 | A decision with rationale | Thread |
 | A pattern or invariant spanning modules | Cross-cutting charter |
-| An idea or observation (unstructured) | `inbox.md` |
+| An idea or observation the team needs | `roadmap.md` (Considering) or a GitHub issue |
+| An idea or observation for yourself (unstructured) | `inbox.md` (personal, never shared) |
 | A priority shift | `roadmap.md` |
 | A project direction change | `mission.md` |
 | A recurring obligation or rhythm | `patterns.md` |
@@ -42,7 +43,7 @@ When you learn something worth remembering, ask: **"Is this about the project or
 
 ### When in doubt
 
-Put it in `.gator/`. A redundant note in `inbox.md` costs nothing. Knowledge trapped in one model's memory is invisible and eventually lost.
+Put it in `.gator/`, in a shared file when the next person or model needs it; `inbox.md` is personal and reaches no one else. A redundant note costs nothing. Knowledge trapped in one model's memory is invisible and eventually lost.
 
 ## Common Mistakes
 

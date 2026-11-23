@@ -733,8 +733,9 @@ class TestPolicyStalenessNudge:
         out = capsys.readouterr().out
         assert "session opening is not finished" in out
         assert ".gator/.includes/constitution.md" in out
+        # #104: no inbox in this checkout, so none is listed.
         assert "mission.md" in out and "roadmap.md" in out \
-            and "inbox.md" in out
+            and "inbox.md" not in out
         # directive sits between tagline and the prompt marker
         assert out.index("terrain is mapped") \
             < out.index("session opening is not finished")

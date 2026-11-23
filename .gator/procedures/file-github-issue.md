@@ -12,7 +12,7 @@ The canonical workflow for filing an issue on `cumberland-laboratories/gator` an
 
 **Do NOT** file a GitHub issue for:
 - Ephemeral session state (use `TaskCreate` / TodoWrite)
-- Half-formed ideas (use `.gator/inbox.md`; promote to Issue on triage)
+- Half-formed ideas (keep them in your personal `.gator/inbox.md`, which is never shared; promote to an Issue or `roadmap.md` when the team needs them)
 - Architectural decisions or design memory (use `.gator/charters/` or `.gator/artifacts/`)
 - Commit-message plumbing (use `.gator/commit_draft.md`)
 

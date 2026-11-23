@@ -147,6 +147,8 @@ class TestUpdateLeavesNativeFilesUntouched:
 
 _EPHEMERA = (".gator/status.json", ".gator/whiteboard.md",
              ".gator/commit_draft.md", ".gator/commit_issues.md")
+# A legacy repository also committed its inbox; #104 untracks it with them.
+_MIGRATED = _EPHEMERA + (".gator/inbox.md",)
 
 
 def _git_out(repo, *args):
@@ -201,14 +203,14 @@ class TestTransientMigration:
         index = _git_out(repo, "ls-files", "--stage")
         r = _update(tmp_path, update_script, repo, "--dry-run")
         assert r.returncode == 0, r.stdout + r.stderr
-        assert "Hook-ephemera paths to remove from the Git index (4):" in r.stdout
-        for rel in _EPHEMERA:
+        assert "Machine-local paths to remove from the Git index (5):" in r.stdout
+        for rel in _MIGRATED:
             assert f"    - {rel}" in r.stdout
         r = _update(tmp_path, update_script, repo, "--json", source=False)
         assert r.returncode == 0, r.stdout + r.stderr
         plan = json.loads(r.stdout)
-        assert plan["transient_untrack"] == {"paths": list(_EPHEMERA), "count": 4}
-        assert plan["summary"]["transient_untrack"] == 4
+        assert plan["transient_untrack"] == {"paths": list(_MIGRATED), "count": 5}
+        assert plan["summary"]["transient_untrack"] == 5
         assert _git_out(repo, "ls-files", "--stage") == index
 
     def test_execution_reports_then_is_quiet(self, tmp_path):
@@ -220,18 +222,18 @@ class TestTransientMigration:
         assert result["schema"] == "gator-update-result-v1"
         assert result["exit_code"] == 0
         t = result["transient_untracked"]
-        assert t["paths"] == list(_EPHEMERA) and t["count"] == 4
-        assert t["message"].startswith("Gator removed 4 hook-ephemera paths from the Git index.")
+        assert t["paths"] == list(_MIGRATED) and t["count"] == 5
+        assert t["message"].startswith("Gator removed 5 machine-local paths from the Git index.")
         assert t["message"] in result["output"]
         tracked = _git_out(repo, "ls-files").splitlines()
         staged = _git_out(repo, "diff", "--cached", "--name-status").splitlines()
-        for rel in _EPHEMERA:
+        for rel in _MIGRATED:
             assert rel not in tracked and (repo / rel).is_file()
             assert f"D\t{rel}" in staged
         # Second run: nothing to untrack, nothing reported.
         r = _update(tmp_path, update_script, repo)
         assert r.returncode == 0, r.stdout + r.stderr
-        assert "hook-ephemera" not in r.stdout
+        assert "hook-ephemera" not in r.stdout and "machine-local" not in r.stdout
         r = _update(tmp_path, update_script, repo, "--result-json")
         assert json.loads(r.stdout)["transient_untracked"] is None
 

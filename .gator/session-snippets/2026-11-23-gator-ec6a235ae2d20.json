@@ -1,0 +1,45 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Shipped documents are prose: a wording edit needs no charter",
+  "change_type": "fix",
+  "significance": "routine",
+  "charter_changed": true,
+  "decision_tags": [
+    "hooks",
+    "charters",
+    "docs"
+  ],
+  "commit": "ec6a235ae2d2004ed8f3e0ef658e39c46147ca5c",
+  "short_commit": "ec6a235",
+  "snippet_id": "snippet-ec6a235ae2d20",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "01ff466a5389056186525207fbee15df5f004502",
+  "started_at": "2026-11-23T00:04:27Z",
+  "ended_at": "2026-11-23T00:04:27Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/INDEX.md",
+    ".gator/charters/scripts-enterprise-cli.md",
+    ".gator/charters/scripts-precommit.md",
+    ".gator/session-snippets/2026-11-22-gator-01ff466a53890.json",
+    "enterprise/enterprise-cli/gator_enterprise_cli/bundled_scripts/gator-pre-commit.py",
+    "src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py",
+    "tests/test_precommit_index_gate.py"
+  ],
+  "notes": [
+    "A wording change to one of Gator's shipped HTML documents still needed a Dashboard Server charter edit or an Architect approval (#110). The commit hook counts `.html` as code, and `INDEX.md` routed every shipped document to Dashboard Server as its only charter.",
+    "The commit hook now treats `src/gator_command/templates/gator-starter/docs/` as prose, like Markdown, in both hook copies. HTML anywhere else is still code, because in many governed repositories it is application code. `INDEX.md` no longer routes the documents; adding, renaming or removing one still changes `WELCOME_DOC_NAMES`, which is code under Dashboard Server.",
+    "Architect decision: option (c) from #110, both parts."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

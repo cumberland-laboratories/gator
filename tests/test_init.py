@@ -450,7 +450,7 @@ class TestSessionOpeningHandoff:
             "reads": [
                 ".gator/.includes/GATOR_INIT.md",
                 ".gator/.includes/constitution.md",
-                ".gator/mission.md", ".gator/roadmap.md", ".gator/inbox.md",
+                ".gator/mission.md", ".gator/roadmap.md",
             ],
         }
 

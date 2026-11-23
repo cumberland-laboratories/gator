@@ -304,7 +304,8 @@ def runtime_advisory(repo_root):
     return None
 
 
-def print_boot_sequence(repo_root, paths, hook_status, registry_status):
+def print_boot_sequence(repo_root, paths, hook_status, registry_status,
+                        inbox_restored=None):
     """Print the branded boot sequence.
 
     @reads: all detection functions above
@@ -353,6 +354,10 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status):
         print(f"  ! {'hooks':<16}{hook_status['detail']}")
     else:
         print(format_check("hooks", hook_status["detail"]))
+
+    # #104: a pull of the inbox untracking deleted this clone's copy.
+    if inbox_restored:
+        print(format_check("inbox", f"restored your personal inbox.md from {inbox_restored}"))
 
     # Dashboard registry
     reg_label = registry_status.get("detail", registry_status.get("status", ""))
@@ -425,13 +430,36 @@ def session_opening_reads(repo_root, paths):
                      if has_bootstrap else None)
     const_rel = _rel(paths.constitution, repo_root, ".gator/.includes/constitution.md")
     root_rel = _rel(paths.gator_root, repo_root, ".gator")
-    reads = [const_rel] + [f"{root_rel}/{name}" for name in ("mission.md", "roadmap.md", "inbox.md")]
+    reads = [const_rel] + [f"{root_rel}/{name}" for name in ("mission.md", "roadmap.md")]
+    # #104: the inbox is each person's own notes, never tracked; read it
+    # only where this checkout has one.
+    if _has_personal_inbox(paths):
+        reads.append(f"{root_rel}/inbox.md")
     if bootstrap_rel:
         reads.insert(0, bootstrap_rel)
     startup_rel = _charter_startup_rel(repo_root, paths)
     if startup_rel:
         reads.append(startup_rel)
     return bootstrap_rel, reads
+
+
+def _restore_personal_inbox(repo_root):
+    """#104: `gatorize.restore_personal_inbox()` when available, else None."""
+    try:
+        gatorize = import_sibling("gatorize")
+        restore = getattr(gatorize, "restore_personal_inbox", None) if gatorize else None
+        return restore(repo_root) if restore else None
+    except Exception:
+        return None
+
+
+def _has_personal_inbox(paths):
+    """True when this checkout has a personal `inbox.md` (#104)."""
+    inbox = getattr(paths, "inbox", None)
+    try:
+        return inbox is not None and inbox.is_file()
+    except Exception:
+        return False
 
 
 def _charter_startup_rel(repo_root, paths):
@@ -459,8 +487,10 @@ def session_opening_directive(repo_root, paths):
     bootstrap_rel, reads = session_opening_reads(repo_root, paths)
     const_rel = reads[1] if bootstrap_rel else reads[0]
     root_rel = _rel(paths.gator_root, repo_root, ".gator")
-    context = (f"{root_rel}/mission.md \u00b7 roadmap.md \u00b7 inbox.md  "
-               "\u2014 what \u00b7 where \u00b7 open work")
+    context = (f"{root_rel}/mission.md \u00b7 roadmap.md  "
+               "\u2014 what \u00b7 where")
+    if _has_personal_inbox(paths):
+        context += " \u00b7 inbox.md \u2014 your own notes (not shared)"
     steps = []
     if bootstrap_rel:
         steps.append(f"{bootstrap_rel}  \u2014 Gator's entry point for this session")
@@ -566,11 +596,13 @@ def main():
     paths = get_gator_paths(repo_root)
     hook_status = ensure_git_hooks(repo_root, paths)
     registry_status = ensure_dashboard_registry_entry(repo_root, source="gator-init")
+    inbox_restored = _restore_personal_inbox(repo_root)
 
     if args.json:
         print_json(repo_root, paths, hook_status, registry_status)
     else:
-        print_boot_sequence(repo_root, paths, hook_status, registry_status)
+        print_boot_sequence(repo_root, paths, hook_status, registry_status,
+                            inbox_restored=inbox_restored)
 
 
 if __name__ == "__main__":

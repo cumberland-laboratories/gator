@@ -52,7 +52,7 @@ At the start of every session:
 1. Read this constitution
 2. Read `.gator/mission.md` (what we're building)
 3. Read `.gator/roadmap.md` (current priorities)
-4. Check `.gator/inbox.md` (anything captured since last session)
+4. Check `.gator/inbox.md` if this checkout has one: your own notes since last session. It is personal and never committed (#104)
 5. `.gator/commit_draft.md` is commit-message plumbing — it is gitignored and reset after every commit, so at session open it is normally the empty stub. Do not read it as a session-opening surface. Check it only if you have reason to think the previous session left uncommitted work.
 6. Check charter health: if `.gator/charters/` is empty or has no real charters, follow the Charter Bootstrap Procedure → [`.gator/gator-start-up.md`](gator-start-up.md) before beginning substantial coding work
 
@@ -64,7 +64,7 @@ Make the human feel like the conversation never ended. For common Architect ques
 |------|---------|---------------|
 | `.gator/mission.md` | What we're building and why | When the project direction changes |
 | `.gator/roadmap.md` | Priority-ordered feature list | When priorities shift |
-| `.gator/inbox.md` | Zero-friction idea capture | Anytime — append freely |
+| `.gator/inbox.md` | Your own notes and idea capture. Personal: gitignored, never shared | Anytime — append freely |
 | `.gator/commit_draft.md` | Source of truth for the pending commit message: `message` becomes the summary line, its concise reader-facing body becomes the commit body, and its metadata drives Gator-* trailers. | Before each commit; cleared to stub after commit |
 | `.gator/patterns.md` | Recurring rhythms, obligations, schedules | When patterns emerge |
 | `.gator/charters/` | The intelligent map of the codebase (3–6% by line count) | Every code change (mandatory) |
@@ -150,9 +150,9 @@ Many AI models maintain per-user memory systems (Claude's `MEMORY.md`, Gemini's 
 
 The `.gator/` folder is the shared knowledge layer — it works across users, across models, across sessions. If you learn something about this codebase that would help the next person (or the next model) work here, it goes in the repo:
 
-- Decisions, invariants, patterns → `.gator/charters/`, `.gator/threads/`, or `.gator/inbox.md`
+- Decisions, invariants, patterns → `.gator/charters/` or `.gator/threads/`
 - Project context and priorities → `.gator/mission.md`, `.gator/roadmap.md`
-- Ideas and observations → `.gator/inbox.md`
+- Ideas and observations → `.gator/roadmap.md` (Considering) or a GitHub issue when the team needs them; `.gator/inbox.md` holds your own notes and never leaves your machine
 
 See [`procedures/knowledge-capture.md`](procedures/knowledge-capture.md) for the full decision guide.
 
