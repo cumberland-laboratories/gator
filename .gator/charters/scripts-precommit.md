@@ -194,6 +194,13 @@ Filesystem: git index (R only: `diff --cached`, `ls-files -s -z`, one `cat-file 
 ! Advisory only: any Git or import failure returns `[]`, never a block. The old added-lines name matcher (`_detect_new_functions()`) is gone from both copies.
 ! `precommit_charter.py` and `charter_significance.py` are byte-identical with their Enterprise bundled copies (`TestByteIdentityAcrossThreeCopies`), and `charter_significance.py` with `src/gator_command/scripts/charter_significance.py` (`test_policy_module_matches_the_verifier_copy`). The bundled `gator-pre-commit.py` rule-6 site is kept in step by hand.
 
+### classify_staged_files(staged_files) / EXEMPT_PATHS / EXEMPT_EXTENSIONS
+File: src/gator_command/templates/gator-starter/scripts/gator-pre-commit.py
+Split the staged paths into charter files (under the resolved charter directory, scaffolds excluded) and code files: everything else except `.gator/` content, `EXEMPT_PATHS` prefixes and `EXEMPT_EXTENSIONS` (`.md`, `.txt`, `.json`, `.yaml`, `.toml`, …). Code files drive rule 3 (`charter-alongside-code`, `charter-index-gap`).
+<- `validate_hard_rules()`, `validate_soft_rules()` (both copies)
+! `.html` is code by default, because HTML is real application code in many governed repositories. Only Gator's own shipped documents (`src/gator_command/templates/gator-starter/docs/`) are exempt by path (#110); a prose edit there needs no charter. The serving contract (`WELCOME_DOC_NAMES`) is Python and still routes to Dashboard Server.
+! The Enterprise bundled copy carries the same `EXEMPT_PATHS`, kept in step by hand (the file is outside the byte-identity test). Pinned by `tests/test_precommit_index_gate.py` → `TestShippedDocuments`.
+
 ### _check_charter_function_refs(charter_files, repo_root) / _legacy_heading_names(line)
 File: src/gator_command/templates/gator-starter/scripts/precommit_charter.py
 The `stale-charter-refs` soft warning (validate rule 5, when a charter is staged). For each staged charter it reads the names in `### ` headings with `charter_significance.heading_names()` (#16), the reader the verifier and the new-seam warning share: a compound heading (`### Vendor cleanup in _run() / print_plan()`) yields each called name, and prose, `TRIPWIRE:` and constant-only parts yield nothing. It searches the tracked files the charter's `**Covers**:` line names (`charter_covers.covers_match()` over `git ls-files`, so globs and directory prefixes count) plus every `File:` line, and reports names whose last dotted part none of them contains.

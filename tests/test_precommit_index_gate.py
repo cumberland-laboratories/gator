@@ -164,3 +164,34 @@ class TestHookMessage:
             [{"kind": "cross-cutting", "files": ["src/core.py"],
               "charters": ["cross-cutting.md"]}])
         assert text == "cross-cutting.md covers src/core.py; update it. Then retry."
+
+
+class TestShippedDocuments:
+    """#110: Gator's own shipped documents are prose, not code."""
+
+    DOCS = "src/gator_command/templates/gator-starter/docs/"
+
+    def test_shipped_documents_are_not_code(self):
+        staged = [self.DOCS + "pre-commit-checks.html", self.DOCS + "how-gator-works.md",
+                  "web/page.html", "src/gator_command/scripts/dashboard/helpers.py"]
+        has_code, _, code_files, _ = pre_commit.classify_staged_files(staged)
+        assert has_code
+        # HTML elsewhere is still code; the serving contract is still code.
+        assert code_files == ["web/page.html",
+                              "src/gator_command/scripts/dashboard/helpers.py"]
+
+    def test_a_prose_only_document_edit_needs_no_charter(self):
+        has_code, _, code_files, _ = pre_commit.classify_staged_files(
+            [self.DOCS + "pre-commit-checks.html"])
+        assert (has_code, code_files) == (False, [])
+
+    def test_the_enterprise_hook_exempts_the_same_paths(self):
+        """The bundled hook is kept in step by hand; compare the literal."""
+        import ast
+        bundled = (Path(__file__).parent.parent / "enterprise" / "enterprise-cli"
+                   / "gator_enterprise_cli" / "bundled_scripts" / "gator-pre-commit.py")
+        tree = ast.parse(bundled.read_text(encoding="utf-8"))
+        value = next(node.value for node in tree.body
+                     if isinstance(node, ast.Assign)
+                     and any(getattr(t, "id", None) == "EXEMPT_PATHS" for t in node.targets))
+        assert ast.literal_eval(value) == pre_commit.EXEMPT_PATHS

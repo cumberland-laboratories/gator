@@ -99,6 +99,10 @@ EXEMPT_EXTENSIONS = {
 EXEMPT_PATHS = {
     "LICENSE", "README.md", "CLAUDE.md", "AGENTS.md",
     ".claude/", ".github/", ".vscode/", ".gitignore",
+    # #110: Gator's own shipped documents are prose, HTML or Markdown alike
+    # (a governed repository's copies live under `.gator/`, exempt below).
+    # Adding or renaming one changes `WELCOME_DOC_NAMES`, which is code.
+    "src/gator_command/templates/gator-starter/docs/",
 }
 
 COMMIT_DRAFT_STUB = (

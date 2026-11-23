@@ -21,7 +21,6 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 | `src/gator_command/scripts/dashboard/dashboard.html`, `src/gator_command/scripts/dashboard/dashboard.js`, `src/gator_command/scripts/dashboard/workspace.js`, `src/gator_command/scripts/dashboard/*.png` | [Dashboard Shell](scripts-dashboard-shell.md) · [Dashboard Server](scripts-dashboard.md) |
 | `src/gator_command/scripts/dashboard/views/fleet.js`, `src/gator_command/scripts/dashboard/views/history.js`, `src/gator_command/scripts/dashboard/views/repo.js`, `src/gator_command/scripts/dashboard/views/syntax.js`, `src/gator_command/scripts/dashboard/views/audit.js`, `src/gator_command/scripts/dashboard/views/updates.js`, `src/gator_command/scripts/dashboard/views/docs.js`, `src/gator_command/scripts/dashboard/views/charters.js`, `src/gator_command/scripts/dashboard/views/welcome.js`, `src/gator_command/scripts/dashboard/views/settings.js` | [Dashboard Views](scripts-dashboard-views.md) · [Dashboard Server](scripts-dashboard.md) |
 | `src/gator_command/scripts/dashboard/views/loop.js`, `src/gator_command/scripts/dashboard/views/loop-markdown.js` | [Loop Workspace View](scripts-dashboard-loop-ui.md) · [Dashboard Server](scripts-dashboard.md) |
-| Welcome documents `src/gator_command/templates/gator-starter/docs/*.html` | [Dashboard Server](scripts-dashboard.md) |
 | `src/gator_command/scripts/loop/session.py`, `src/gator_command/scripts/loop/state_machine.py`, `src/gator_command/scripts/loop/events.py`, `src/gator_command/scripts/loop/__init__.py` | [Loop State](scripts-loop-state.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/loop/submit.py`, `src/gator_command/scripts/loop/cli.py`, `src/gator_command/scripts/loop/gitsnap.py`, `src/gator_command/scripts/gator-loop.py` | [Loop Commands](scripts-loop-commands.md) · [Cross-Cutting](scripts-cross-cutting.md) |
 | `src/gator_command/scripts/loop/host.py`, `src/gator_command/scripts/loop/liveness.py`, `src/gator_command/scripts/loop/codex_launcher.py` | [Loop Lifecycle and Hosting](scripts-loop-host.md) · [Cross-Cutting](scripts-cross-cutting.md) |
@@ -39,6 +38,7 @@ Authoritative code-path-to-charter routing for the `gator` monorepo. Read [Cross
 ## Routing Rules
 
 - Prefer the narrowest matching row; do not load every charter for a local change.
+- Shipped documents (`src/gator_command/templates/gator-starter/docs/`) are prose, not code: the commit hook exempts them and no row routes them (#110). Read the charter of the subject a document explains. Adding, renaming or removing one changes `WELCOME_DOC_NAMES` in `dashboard/helpers.py`, which routes to Dashboard Server.
 - The commit hook (`charter-index-gap`, #18) requires at least one of a matching row's domain charters, not every listed charter. Cross-Cutting is required only for a file its own `Covers` line names, or on a row that lists nothing else.
 - When one file appears in two rows, read both because that file implements a boundary.
 - Path-qualify every glob. The pre-commit hook also matches a glob against the file's basename alone, so a bare `*.js` would claim every JavaScript file in the repository.

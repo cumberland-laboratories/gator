@@ -1,0 +1,37 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.39.3 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "01ff466a5389056186525207fbee15df5f004502",
+  "short_commit": "01ff466",
+  "snippet_id": "snippet-01ff466a53890",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 1,
+  "previous_commit_in_session": null,
+  "started_at": "2026-11-22T21:02:10Z",
+  "ended_at": "2026-11-22T21:02:10Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-11-22-gator-7adc39f4b2c7e.json"
+  ],
+  "notes": [
+    "The roadmap's latest-release line names v2.39.3, the Dashboard freshness release (#107, #20, #15, #77, and the #108 follow-up)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}
