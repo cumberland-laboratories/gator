@@ -72,7 +72,7 @@ Structure the body with these sections (adapt as fits — not every section appl
 
 ### References
 - Any related fix, commit, or docs
-- Link back to the originating `.gator/inbox.md` line or prior `.gator/issues.md` entry if migrated
+- Quote the originating note when it came from your personal `.gator/inbox.md` (it is not committed, so a link would reach no one), or link the prior `.gator/issues.md` entry if migrated
 ```
 
 ### 2. Create any missing labels
@@ -245,5 +245,5 @@ For triage-day sweeps: promote each inbox item to a fresh issue using steps 1–
 ## Connections
 
 - `.gator/vault/artifacts/2026-08-04-github-issue-tracking-outline.md` — the design rationale for moving off `issues.md`
-- `.gator/inbox.md` — zero-friction capture surface (pre-issue intake)
+- `.gator/inbox.md` — your own zero-friction capture surface (personal, never committed; #104)
 - `.gator/procedures/release-and-deploy.md` — release cadence (issue triage before release: filter by Priority + `Status = Todo/In Progress`)

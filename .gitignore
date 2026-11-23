@@ -73,3 +73,11 @@ GEMINI.local.md
 .gator/.override-meta.json
 # Retired v1 override bypass — no longer authorizes; never commit
 .gator/.override
+
+# Gemini CLI project secrets (machine-local)
+.gemini/.env
+# Codex login credentials, if CODEX_HOME points into the repo
+.codex/auth.json
+
+# Personal inbox — each person's own notes (machine-local, #104)
+.gator/inbox.md

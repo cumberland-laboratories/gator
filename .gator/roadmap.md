@@ -65,12 +65,13 @@ arc closure. The two structural priorities from that reset
      and use: Dashboard-first UX, one-command install, zero-config
      governance; every rough edge in install/onboard/update is a
      priority bug. See "Building — Priority 1: Post-Install
-     Onboarding & UX" below plus the open operational items in
-     `inbox.md` (stale `gator-approve.py` path in pre-commit
-     block message, `gator-approve.py --help` broken,
-     `gator kill dashboard` UX, stale-Dashboard-in-browser
-     detection, etc.). Vaulted-docs rewrite for the pipx-first
-     world is an open inbox item since 2026-08-02.
+     Onboarding & UX" below and the open `dashboard` / `hooks`
+     issues on GitHub (`gator kill dashboard` UX #15 and
+     stale-Dashboard-in-browser detection #20 shipped in v2.39.3).
+     Vaulted-docs rewrite for the pipx-first world is #29.
+     Design decisions formerly kept in the tracked inbox are in
+     `artifacts/2026-11-22-shared-notes-from-inbox.md` (#104: the
+     inbox is now each person's own notes).
    - **(b) Enterprise at "polished demo" level** — audit surface
      is evaluator-ready; getting to polished-demo means the
      packaging + operability arc: **single-pipx install (the
