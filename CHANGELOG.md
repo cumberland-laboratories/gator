@@ -4,6 +4,27 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.40.0] — 2026-11-23
+
+Minor release: **the inbox is each person's own notes, and the charter checks stop claiming files they were not written for.**
+
+**Upgrade note:**
+- **Run `gator update` in each governed repository, then commit the result.** It stops tracking `.gator/inbox.md` (the file stays on your disk; Git stages its removal) and adds the ignore rule. Move anything the team still needs from the inbox into `roadmap.md` or a GitHub issue first.
+- **Teammates:** when they pull that commit, Git removes their unmodified copy of `inbox.md`. Their next `gator init` or `gator update` puts it back from history, once.
+
+### Changed
+
+- **`.gator/inbox.md` is personal and no longer committed (#104).** It had become each person's to-do and next-session notes, so tracking it spread everyone's notes into commits and caused merge conflicts. `gatorize` and `gator update` add the ignore rule and untrack a committed copy through the same visible migration as the hook files; the migration message says "machine-local" and explains why when the inbox is included. `gator init` lists `inbox.md` only when the checkout has one, as "your own notes (not shared)". The constitution, `GATOR_INIT.md` and the knowledge-capture procedure describe it as personal; anything the team needs goes to `roadmap.md` or a GitHub issue. Pinned by `tests/test_personal_inbox.py`. Charters: `scripts-installer.md`, `scripts-repo-lifecycle.md`.
+
+### Added
+
+- **The inbox comes back after a pull (#104).** `gator init` and `gator update` restore a `.gator/inbox.md` that Git removed when this clone pulled the untracking, once per clone, from the commit that deleted it, and say so. A later deliberate deletion is respected.
+
+### Fixed
+
+- **`INDEX.md` routing matches whole path segments (#112).** A plain token matched anywhere in a path, so `gator_core.py` also claimed `tests/test_gator_core.py`, and a test-only change needed a Core Library charter edit or an approval. Bare file names still match their files in any folder; globs are unchanged. On the Gator repository only six test files lost a route. Pinned by `TestTokenMatching`.
+- **A wording edit to a shipped document needs no charter (#110).** The commit hook treats Gator's own shipped documents folder (`templates/gator-starter/docs/`) as prose, and `INDEX.md` no longer routes the documents. HTML anywhere else is still code. Pinned by `TestShippedDocuments`.
+
 ## [2.39.3] — 2026-11-22
 
 Dashboard freshness release: **what the Dashboard shows keeps up with what is true.**
