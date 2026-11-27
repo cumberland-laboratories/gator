@@ -57,8 +57,17 @@ if _gatorize:
     format_vendor_cleanup = _gatorize.format_vendor_cleanup
     restore_personal_inbox = getattr(_gatorize, "restore_personal_inbox",
                                      lambda repo_root: None)
+    plan_scaffold_cleanup = getattr(_gatorize, "plan_scaffold_cleanup",
+                                    lambda repo_root: [])
+    apply_scaffold_cleanup = getattr(_gatorize, "apply_scaffold_cleanup",
+                                     lambda repo_root, actions: [])
+    format_scaffold_cleanup = getattr(_gatorize, "format_scaffold_cleanup",
+                                      lambda actions, predicted=False: [])
 else:
     restore_personal_inbox = lambda repo_root: None
+    plan_scaffold_cleanup = lambda repo_root: []
+    apply_scaffold_cleanup = lambda repo_root, actions: []
+    format_scaffold_cleanup = lambda actions, predicted=False: []
     ensure_repo_gitignore = _no_gitignore
     tracked_transient_files = lambda repo_root: []
     transient_untrack_result = lambda paths: None
@@ -68,7 +77,7 @@ else:
     format_vendor_cleanup = lambda actions, predicted=False: []
 
 # The --result-json record of the last execution (gator-update-result-v1).
-_RESULT = {"transient_untracked": None, "vendor_cleanup": None}
+_RESULT = {"transient_untracked": None, "vendor_cleanup": None, "scaffold_cleanup": None}
 
 
 # Files that are template-derived (safe to overwrite)
@@ -106,6 +115,21 @@ USER_TEMPLATE_DIRS = {
 
 # Combined for backward compat (used by plan_hook_updates etc.)
 TEMPLATE_DIRS = {**SHIPPED_TEMPLATE_DIRS, **USER_TEMPLATE_DIRS}
+
+# #109 and on-demand folders (v2 only): a folder's authoring template lives
+# in managed space, `.gator/.includes/<folder>/`, never in the folder people
+# browse. The on-demand folders keep their README there too, so the
+# user-visible folder exists only once someone puts content in it; an agent
+# creates it from the managed README and template when asked (constitution).
+ON_DEMAND_DIRS = frozenset({
+    "threads", "active-threads", "policies", "field-guides", "reference-notes",
+})
+MANAGED_SCAFFOLDING = frozenset({"_template.md"})
+
+
+def scaffolding_in_managed_space(dirname, filename):
+    """True when a shipped file for `<dirname>/` belongs in `.includes/<dirname>/` on v2."""
+    return dirname in ON_DEMAND_DIRS or filename in MANAGED_SCAFFOLDING
 
 # Charter scaffolding files (shipped — on v2 they go to .includes/charters/)
 CHARTER_TEMPLATE_FILES = ["README.md", "_template.md"]
@@ -203,8 +227,11 @@ def plan_updates(templates_dir, gator_dir, repo_root):
             continue
         for src_file in sorted(src_dir.iterdir()):
             if src_file.is_file():
-                if layout == "v2" and src_file.name in USER_VISIBLE_SCAFFOLDING:
-                    # Scaffolding stays at user-visible root
+                if (layout == "v2" and src_file.name in USER_VISIBLE_SCAFFOLDING
+                        and not scaffolding_in_managed_space(dest_subdir, src_file.name)):
+                    # README and the blueprint HTML templates stay at the
+                    # user-visible root; `_template.md` and on-demand
+                    # folders' scaffolding go to .includes/ (#109).
                     dest_file = gator_dir / dest_subdir / src_file.name
                 else:
                     dest_file = shipped_base / dest_subdir / src_file.name
@@ -218,14 +245,20 @@ def plan_updates(templates_dir, gator_dir, repo_root):
                         dest_file = dest_sub / src_file.name
                         plan.append(plan_file_update(src_file, dest_file))
 
-    # User-content directories → always gator_dir root
-    _plan_dir_overlay(plan, templates_dir, gator_dir, USER_TEMPLATE_DIRS)
+    # User-content directories → gator_dir root; on v2 their authoring
+    # templates and the on-demand folders' scaffolding → .includes/ (#109).
+    _plan_dir_overlay(plan, templates_dir, gator_dir, USER_TEMPLATE_DIRS,
+                      managed_base=shipped_base if layout == "v2" else None)
 
     return plan
 
 
-def _plan_dir_overlay(plan, templates_dir, dest_base, dirs_map):
-    """Plan file overlays for a set of template directories."""
+def _plan_dir_overlay(plan, templates_dir, dest_base, dirs_map, managed_base=None):
+    """Plan file overlays for a set of template directories.
+
+    With `managed_base`, a top-level file that `scaffolding_in_managed_space()`
+    claims goes to `managed_base/<dir>/` instead of `dest_base/<dir>/`.
+    """
     for src_subdir, dest_subdir in dirs_map.items():
         src_dir = templates_dir / src_subdir
         dest_dir = dest_base / dest_subdir
@@ -234,7 +267,11 @@ def _plan_dir_overlay(plan, templates_dir, dest_base, dirs_map):
         # Top-level files
         for src_file in sorted(src_dir.iterdir()):
             if src_file.is_file():
-                dest_file = dest_dir / src_file.name
+                if (managed_base is not None
+                        and scaffolding_in_managed_space(dest_subdir, src_file.name)):
+                    dest_file = managed_base / dest_subdir / src_file.name
+                else:
+                    dest_file = dest_dir / src_file.name
                 plan.append(plan_file_update(src_file, dest_file))
         # Nested subdirectories (e.g., scripts/hooks/)
         for sub in sorted(src_dir.iterdir()):
@@ -649,7 +686,7 @@ def install_git_hooks(gator_dir, repo_root):
 # --- Output ---
 
 def print_plan(plan, dry_run=False, hooks=None, transient=None,
-               vendor_actions=None):
+               vendor_actions=None, scaffold_actions=None):
     """Print the update plan.
 
     `transient` is the predicted list of tracked hook-ephemera paths, and
@@ -700,8 +737,12 @@ def print_plan(plan, dry_run=False, hooks=None, transient=None,
         print("\n".join(format_vendor_cleanup(vendor_actions, predicted=True)))
         print()
 
+    if dry_run and scaffold_actions:
+        print("\n".join(format_scaffold_cleanup(scaffold_actions, predicted=True)))
+        print()
+
     if not adds and not updates and not hook_adds and not hook_updates:
-        if transient or cleanup:
+        if transient or cleanup or scaffold_actions:
             return
         print(f"  Everything is current. No updates needed.")
         print()
@@ -719,7 +760,7 @@ def print_result(added, updated, unchanged):
 
 
 def print_json_plan(plan, templates_dir, hooks=None, transient=None,
-                    vendor_actions=None):
+                    vendor_actions=None, scaffold_actions=None):
     """Output the plan as JSON.
 
     Top-level schema field is "gator-update-v1" — declared here so downstream
@@ -769,11 +810,14 @@ def print_json_plan(plan, templates_dir, hooks=None, transient=None,
             "entry_point_actions": 0,
             "transient_untrack": len(transient or []),
             "vendor_cleanup": cleanup_count,
+            "scaffold_cleanup": len(scaffold_actions or []),
         },
         "transient_untrack": {"paths": list(transient or []),
                               "count": len(transient or [])},
         "vendor_cleanup": {"actions": list(vendor_actions or []),
                            "count": cleanup_count},
+        "scaffold_cleanup": {"actions": list(scaffold_actions or []),
+                             "count": len(scaffold_actions or [])},
     }
     print(json.dumps(output, indent=2))
 
@@ -1205,6 +1249,7 @@ def _run_with_result(args):
         "output": buf.getvalue(),
         "transient_untracked": _RESULT["transient_untracked"],
         "vendor_cleanup": _RESULT["vendor_cleanup"],
+        "scaffold_cleanup": _RESULT["scaffold_cleanup"],
     }))
     return code
 
@@ -1349,16 +1394,20 @@ def _run(args):
     # (hook entries, retired slash commands): predicted here, read-only.
     vendor_actions = plan_vendor_cleanup(repo_root)
 
+    # Authoring templates and empty on-demand folders left at the
+    # user-visible root by earlier versions (#109): predicted, read-only.
+    scaffold_actions = plan_scaffold_cleanup(repo_root)
+
     # JSON mode
     if args.json:
         print_json_plan(plan, templates_dir, hooks_to_install, transient=transient,
-                        vendor_actions=vendor_actions)
+                        vendor_actions=vendor_actions, scaffold_actions=scaffold_actions)
         return
 
     # Dry run
     if args.dry_run:
         print_plan(plan, dry_run=True, hooks=hooks_to_install, transient=transient,
-                   vendor_actions=vendor_actions)
+                   vendor_actions=vendor_actions, scaffold_actions=scaffold_actions)
         return
 
     # Converge gitignore rules (same as gatorize.py install/upgrade path)
@@ -1367,7 +1416,7 @@ def _run(args):
 
     # Execute
     print_plan(plan, hooks=hooks_to_install, transient=transient,
-               vendor_actions=vendor_actions)
+               vendor_actions=vendor_actions, scaffold_actions=scaffold_actions)
     added, updated, unchanged = execute_updates(plan)
     transient_result = transient_untrack_result(untracked)
     _RESULT["transient_untracked"] = transient_result
@@ -1393,6 +1442,14 @@ def _run(args):
     notes = [a for a in vendor_actions if a["action"] == "user-owned"]
     if vendor_applied or notes:
         print("\n".join(format_vendor_cleanup(vendor_applied + notes)))
+        print()
+
+    # Remove root scaffolding the managed copies now replace (#109); after
+    # execute_updates(), so .includes/ already holds the templates.
+    scaffold_applied = apply_scaffold_cleanup(repo_root, scaffold_actions)
+    _RESULT["scaffold_cleanup"] = scaffold_applied or None
+    if scaffold_applied:
+        print("\n".join(format_scaffold_cleanup(scaffold_applied)))
         print()
 
     # Update product-source.json timestamp

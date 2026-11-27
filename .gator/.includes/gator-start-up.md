@@ -62,7 +62,7 @@ For a typical project, expect 3–8 charters.
 
 ## Step 5: Generate Skeleton Charters
 
-For each module boundary, create a charter file in `charters/`. Use `_template.md` for structure and study the [worked example](reference-notes/example-project.md) for density and tone.
+For each module boundary, create a charter file in `charters/`. Use `.gator/.includes/charters/_template.md` for structure and study the [worked example](reference-notes/example-project.md) for density and tone.
 
 For each charter:
 - Start with **Owns** (what this module is responsible for) and **Does Not Own** (what belongs elsewhere). "Does Not Own" is load-bearing — it prevents scope creep and tells the agent where boundaries are. Every charter needs both.

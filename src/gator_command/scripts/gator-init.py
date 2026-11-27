@@ -95,7 +95,8 @@ def count_working_set(paths):
         if not subdir.is_dir():
             continue
         for f in subdir.iterdir():
-            if f.suffix == ".md" and f.name != ".gitkeep":
+            # README.md / _template.md are scaffolding, never threads (#109).
+            if f.suffix == ".md" and f.name not in ("README.md", "_template.md"):
                 total_threads += 1
                 try:
                     total_lines += len(f.read_text(encoding="utf-8", errors="replace").splitlines())
@@ -332,12 +333,10 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status,
     drift_suffix = _constitution_drift_suffix(repo_root)
     print(format_check("constitution", f"{rule_count} rules in force{drift_suffix}"))
 
-    # Working set
+    # Working set (only show when present: threads are on demand, #109)
     thread_count, line_count = count_working_set(paths)
     if thread_count > 0:
         print(format_check("working set", f"{thread_count} threads \u00b7 {line_count:,} lines"))
-    else:
-        print(format_check("working set", "empty \u00b7 threads emerge from work"))
 
     # Field guides (only show when present)
     guide_count, guide_langs = count_field_guides(paths)

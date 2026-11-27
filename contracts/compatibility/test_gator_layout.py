@@ -20,14 +20,19 @@ SCRIPTS_DIR = REPO_ROOT / "src" / "gator_command" / "scripts"
 
 
 REQUIRED_DIRS_ROOT = {
-    "charters", "blueprints", "docs", "threads", "artifacts",
-    "vault", "policies", "field-guides", "sessions", "procedures",
+    "charters", "blueprints", "docs", "artifacts",
+    "vault", "sessions", "procedures",
     ".includes",
 }
+
+# #109: created on first use, never by the install. Their README and
+# template ship in .includes/<folder>/.
+ON_DEMAND_DIRS = {"threads", "policies", "field-guides"}
 
 REQUIRED_DIRS_INCLUDES = {
     "reference-notes",
     "procedures",
+    "charters", "artifacts", "threads", "policies", "field-guides",
     # "scripts" retired here by runtime-split Phase 4 (2026-08-19):
     # fresh installs carry NO repo-resident runtime — the machine-side
     # runtime executes via the dispatcher and .gator/runtime-pin.json
@@ -73,8 +78,8 @@ def gatorize_mod():
 
 def test_layout_reference_declares_required_dirs(reference_dir: Path) -> None:
     text = (reference_dir / "gator-directory-layout.md").read_text(encoding="utf-8")
-    for d in REQUIRED_DIRS_ROOT:
-        assert d in text, f"layout doc must mention required dir '{d}'"
+    for d in REQUIRED_DIRS_ROOT | ON_DEMAND_DIRS:
+        assert d in text, f"layout doc must mention dir '{d}'"
     for d in REQUIRED_DIRS_INCLUDES:
         assert d in text, f"layout doc must mention includes dir '{d}'"
 
@@ -115,6 +120,15 @@ def test_gatorize_install_produces_required_layout(tmp_path: Path, gatorize_mod)
     # Required root directories
     for d in REQUIRED_DIRS_ROOT:
         assert (gator_dir / d).is_dir(), f"missing required dir: .gator/{d}"
+    # #109: on-demand folders are absent; their scaffolding is managed.
+    for d in ON_DEMAND_DIRS:
+        assert not (gator_dir / d).exists(), f"on-demand dir created: .gator/{d}"
+        for name in ("README.md", "_template.md"):
+            assert (gator_dir / ".includes" / d / name).is_file(), \
+                f"missing managed scaffolding: .gator/.includes/{d}/{name}"
+    stray = sorted(p.relative_to(gator_dir).as_posix()
+                   for p in gator_dir.glob("*/_template.md"))
+    assert stray == [], f"_template.md left in browsable folders: {stray}"
 
     # Required .includes/ subdirectories
     for d in REQUIRED_DIRS_INCLUDES:

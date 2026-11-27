@@ -1,0 +1,37 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Roadmap: v2.40.0 released",
+  "change_type": "docs",
+  "significance": "routine",
+  "charter_changed": false,
+  "decision_tags": [
+    "release",
+    "roadmap"
+  ],
+  "commit": "cf763104e906ce234978acc7aa0206bfae05f357",
+  "short_commit": "cf76310",
+  "snippet_id": "snippet-cf763104e906c",
+  "session_group_key": null,
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 7,
+  "previous_commit_in_session": "9ac7ae427b93e43e64242cca8d119aa375e7969f",
+  "started_at": "2026-11-23T02:23:37Z",
+  "ended_at": "2026-11-23T02:23:37Z",
+  "vendor_inferred": "anthropic",
+  "model_inferred": "claude-opus-5-5",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/roadmap.md",
+    ".gator/session-snippets/2026-11-23-gator-9ac7ae427b93e.json"
+  ],
+  "notes": [
+    "The roadmap's latest-release line names v2.40.0: the personal inbox (#104), segment-based `INDEX.md` routing (#112) and prose shipped documents (#110)."
+  ],
+  "transcript_session_id": null,
+  "transcript_ref": null
+}

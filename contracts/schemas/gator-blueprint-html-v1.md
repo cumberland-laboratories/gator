@@ -195,8 +195,9 @@ Storage follows document role, not rendering format alone.
 - **`.gator/vault/artifacts/`** (gitignored): exploratory / question-specific /
   on-demand HTML. Default landing zone for `feature-blueprint` generation.
 - **`src/gator_command/templates/gator-starter/blueprints/`**: shipped
-  template files that propagate on `gator update`. Currently `_template.md`,
-  `_template.html`, `_template-narrative.html`, `README.md`.
+  template files that propagate on `gator update`. Currently `_template.html`,
+  `_template-narrative.html`, `README.md` (the Markdown `_template.md` was
+  dropped; other folders' `_template.md` live in `.gator/.includes/`, #109).
 
 Naming convention:
 

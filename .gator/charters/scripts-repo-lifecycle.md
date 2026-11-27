@@ -40,6 +40,7 @@ Filesystem: `.gator/` governance surfaces (R)
 <- text and JSON boot output
 -> layout resolver
 ! Counts are status hints, not proof that content was read or semantically valid.
+! `count_working_set()` skips `README.md` and `_template.md` (#109; it used to count them as threads), and the banner shows the "working set" line only when there is at least one thread, like the field-guides line.
 
 ### needs_charter_bootstrap(paths) / _charter_startup_rel(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)

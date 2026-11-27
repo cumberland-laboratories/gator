@@ -37,13 +37,15 @@ your-project/
     commit_draft.md        <- tracks what changed and why (per commit)
     charters/              <- the intelligent map of your codebase
     blueprints/            <- feature flow maps
-    threads/               <- lightweight evolving topics
-    active-threads/        <- topics currently being worked on
+    threads/               <- lightweight evolving topics (created on first use)
+    active-threads/        <- topics currently being worked on (on first use)
     artifacts/             <- deep records, design docs, analyses
     procedures/            <- repeatable workflows
-    policies/              <- coding conventions and standards
-    reference-notes/       <- cognitive aids and vocabulary
-    field-guides/          <- language-specific pattern sheets
+    policies/              <- coding conventions and standards (on first use)
+    reference-notes/       <- your own cognitive aids (on first use)
+    field-guides/          <- language-specific pattern sheets (on first use)
+    .includes/             <- Gator-managed: rules, procedures, and every
+                              folder's README/_template.md to start from
     vault/                 <- sensitive files (gitignored, never committed)
     runtime-pin.json       <- minimum machine-side runtime version (2.9+)
     whiteboard.md          <- ephemeral surface for review findings

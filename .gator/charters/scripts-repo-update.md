@@ -18,6 +18,12 @@
 
 ---
 
+### ON_DEMAND_DIRS / MANAGED_SCAFFOLDING / scaffolding_in_managed_space(dirname, filename) / _plan_dir_overlay(..., managed_base=None)
+File: src/gator_command/scripts/gator-update.py (and starter copy, byte-identical)
+The single placement rule for shipped scaffolding on v2 (#109): `_template.md` of any folder, and every file of an on-demand folder (threads, active-threads, policies, field-guides, reference-notes), belongs in `.gator/.includes/<folder>/`. `plan_updates()` applies it to the shipped directories and passes `managed_base=.includes` to `_plan_dir_overlay()` for `USER_TEMPLATE_DIRS`, so an update never creates an on-demand folder or a root `_template.md`. v1 keeps the old root placement. `gatorize.py` reads the same predicate through `import_sibling("gator-update")`.
+<- `plan_updates()`, `gatorize.action_install_gator()`
+! Scaffold cleanup (`gatorize.plan_scaffold_cleanup()` / `apply_scaffold_cleanup()`, degrading to no-ops without the sibling) runs like the vendor cleanup: predicted in `_run()`, listed by `--dry-run` (`print_plan(scaffold_actions=)`), additive `--json` `scaffold_cleanup: {actions, count}` and `summary.scaffold_cleanup`, applied after `execute_updates()`, reported, and in `--result-json` as `scaffold_cleanup`. "Everything is current" is not printed while actions remain.
+
 ### plan_file_update() / plan_updates()
 File: src/gator_command/scripts/gator-update.py
 Compare shipped templates with the resolved repository destinations without writing.

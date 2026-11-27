@@ -150,4 +150,4 @@ The validator uses three severity levels:
 
 → [Gator Charter Formation Process](charter-formation-process.md) — how the initial charter set is created
 → [`../charters/README.md`](../charters/README.md) — notation, philosophy, anti-patterns
-→ [`../charters/_template.md`](../charters/_template.md) — blank template
+→ [`../.includes/charters/_template.md`](../.includes/charters/_template.md) — blank template (managed; #109)

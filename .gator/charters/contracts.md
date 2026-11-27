@@ -48,6 +48,7 @@ Pin shared hook vocabulary and the observable result of a fresh Gator installati
 <- Source CI
 -> starter templates and installer
 ! Fresh-layout checks validate executed installation output, not only planning constants.
+! `gator-directory-layout` (#109, 2026-11-27): `threads/`, `active-threads/`, `policies/`, `field-guides/` and user `reference-notes/` are on-demand, not required at the root, and the install must not create them; their `README.md` / `_template.md`, and every folder's `_template.md`, are required in `.gator/.includes/<folder>/`; no root folder may hold a `_template.md`. `test_gatorize_install_produces_required_layout` asserts all three. Tooling treats on-demand folders as optional (they already were checked with `is_dir()`).
 ! `hook-mode-vocabulary-v2` (2026-10-28): the enum stays `strict|warn|off`. `test_gator_enforce_uses_canonical_enum` now pins `gator-enforce.py` `VALID_LEVELS` to the machine-local subset `{strict, warn}`. The reference doc adds the obligation that no level is ever stored in a Git-tracked file; the policy is per clone in `$(git rev-parse --git-path gator-commit-policy.json)`. `test_default_config_stub_uses_strict` still holds: the tracked stub stays `strict` and is no longer read.
 
 ### Blueprint HTML compatibility

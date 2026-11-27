@@ -39,7 +39,7 @@ Install shipped content using the current layout and preserve user-owned governa
 Filesystem: target `.gator/` (W)
 <- installer `main()` and Memex morph
 -> template resolver, `copy_tree_overlay()`
-! Shipped content lands under `.gator/.includes/` on v2; user-visible scaffolding remains at `.gator/` root.
+! Shipped content lands under `.gator/.includes/` on v2. Scaffolding goes through `_scaffold()`, which asks `gator-update.scaffolding_in_managed_space()` (#109): `_template.md` and the on-demand folders' README/template go to `.includes/<folder>/`, `README.md` stays at the root. `threads/`, `policies/` and `field-guides/` are not created (on demand). Charter `README.md` and `_template.md` are also written to `.includes/charters/`, matching `gator update`'s `CHARTER_TEMPLATE_FILES`.
 ! Shipped root files copied here are `constitution.md`, `gator-start-up.md` and `GATOR_INIT.md` (the `gator init` handoff document). Keep this tuple aligned with `gator_layout.SHIPPED_ROOT_FILES` and `gator-update.TEMPLATE_FILES`.
 ! Overlay does not delete unknown user files.
 
@@ -73,6 +73,14 @@ When one clone commits the #104 untracking, `git pull` in another clone deletes 
 Filesystem: `.gator/inbox.md` (W, only when missing), Git-private marker (W), git (R)
 <- `gator update` execution (after the untracking report), `gator init` `main()` via `_restore_personal_inbox()`
 ! Pinned by `tests/test_personal_inbox.py` (a real clone, untrack, commit, pull).
+
+### plan_scaffold_cleanup(repo_root) / apply_scaffold_cleanup(repo_root, actions) / format_scaffold_cleanup(actions, predicted=False)
+File: src/gator_command/scripts/gatorize/scaffold_cleanup.py
+The one-time #109 removal of root scaffolding that earlier versions left in a v2 repository: every `.gator/<folder>/_template.md` in `SCAFFOLD_DIRS`, and, in an on-demand folder (`ON_DEMAND_DIRS`) that holds nothing but `README.md` / `_template.md` / `.gitkeep`, those files too, then the empty folder. Read-only plan `[{path, action: "delete", tracked}]` (sorted; `[]` without `.gator/.includes/`, a v1 layout). Apply: tracked → `git rm -q -f` (deletion staged), untracked → unlink; then `rmdir` of empty on-demand folders.
+Filesystem: `.gator/<folder>/` scaffolding (W: deletions only), git index (W: removals)
+<- `gator update` execution (after `execute_updates()`, so the managed copies exist first), re-exported by `gatorize.py` like the vendor cleanup
+! Gator shipped and overwrote these files on every update, so they are removed even when edited; a folder with any other file keeps its README.
+! Pinned by `tests/test_scaffold_lazy.py`.
 
 ### write_gator_version(gator_dir, action)
 File: src/gator_command/scripts/gatorize.py

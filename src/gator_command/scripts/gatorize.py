@@ -45,6 +45,10 @@ from gatorize.helpers import (  # noqa: E402
 from gatorize.vendor_cleanup import (  # noqa: E402,F401
     plan_vendor_cleanup, apply_vendor_cleanup, format_vendor_cleanup,
 )
+# Root scaffolding cleanup (#109; templates live in .gator/.includes/).
+from gatorize.scaffold_cleanup import (  # noqa: E402,F401
+    plan_scaffold_cleanup, apply_scaffold_cleanup, format_scaffold_cleanup,
+)
 from gatorize.post_install import (  # noqa: E402
     action_install_product_source, action_register, print_summary,
 )
@@ -171,10 +175,24 @@ def action_install_gator(target):
     gator_dir = target / ".gator"
     includes = gator_dir / ".includes"
 
-    # Create user-visible directory structure at .gator/ root
-    for d in ["charters", "blueprints", "docs", "threads", "artifacts",
-              "vault", "policies", "field-guides", "sessions", "procedures"]:
+    # Create user-visible directory structure at .gator/ root. threads/,
+    # policies/ and field-guides/ are on-demand (#109): their README and
+    # template go to .includes/ below, and the folder appears on first use.
+    for d in ["charters", "blueprints", "docs", "artifacts",
+              "vault", "sessions", "procedures"]:
         (gator_dir / d).mkdir(parents=True, exist_ok=True)
+
+    # Where each shipped scaffolding file lands: one rule, owned by
+    # gator-update (`scaffolding_in_managed_space`), so install and update
+    # never disagree.
+    _update = import_sibling("gator-update")
+    in_managed = getattr(_update, "scaffolding_in_managed_space",
+                         lambda dirname, filename: False)
+
+    def _scaffold(src, dirname):
+        base = includes if in_managed(dirname, src.name) else gator_dir
+        (base / dirname).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, base / dirname / src.name)
 
     # Create .includes/ for shipped content
     includes.mkdir(parents=True, exist_ok=True)
@@ -190,17 +208,22 @@ def action_install_gator(target):
     if charterignore_src.exists():
         shutil.copy2(charterignore_src, includes / ".charterignore")
 
-    # Charter scaffolding (user-facing reference) → .gator/charters/ (root)
+    # Charter scaffolding: README at the root and in .includes/charters/
+    # (the constitution links the managed copy); `_template.md` only in
+    # .includes/charters/ (#109). `gator update` keeps the managed pair.
     for name in ("README.md", "_template.md"):
         src = TEMPLATES / "charters" / name
         if src.exists():
-            shutil.copy2(src, gator_dir / "charters" / name)
+            (includes / "charters").mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, includes / "charters" / name)
+            if not in_managed("charters", name):
+                shutil.copy2(src, gator_dir / "charters" / name)
 
     # Blueprint scaffolding (user-facing reference) → .gator/blueprints/ (root)
     for name in ("README.md", "_template.md"):
         src = TEMPLATES / "blueprints" / name
         if src.exists():
-            shutil.copy2(src, gator_dir / "blueprints" / name)
+            _scaffold(src, "blueprints")
 
     # Shipped reference-notes → .includes/reference-notes/
     refnotes_src = TEMPLATES / "reference-notes"
@@ -215,8 +238,8 @@ def action_install_gator(target):
         for f in procedures_src.iterdir():
             if f.is_file():
                 if f.name in ("README.md", "_template.md"):
-                    # Scaffolding → user-visible root
-                    shutil.copy2(str(f), str(gator_dir / "procedures" / f.name))
+                    # README → user-visible root; `_template.md` → .includes/ (#109)
+                    _scaffold(f, "procedures")
                 else:
                     # Shipped procedure → .includes/
                     shutil.copy2(str(f), str(includes / "procedures" / f.name))
@@ -228,11 +251,18 @@ def action_install_gator(target):
     # copied templates/scripts/ into .includes/scripts/ here.
 
     # User-content directories get template content directly (not shipped —
-    # these are starter content like docs/, artifacts/, threads/)
+    # these are starter content like docs/, artifacts/). Scaffolding that
+    # belongs in managed space (#109: `_template.md`, and everything for the
+    # on-demand threads/, policies/, field-guides/) goes to .includes/.
     for subdir in ("docs", "artifacts", "threads", "policies", "field-guides", "vault"):
         src_dir = TEMPLATES / subdir
-        if src_dir.is_dir():
-            copy_tree_overlay(src_dir, gator_dir / subdir)
+        if not src_dir.is_dir():
+            continue
+        for src in sorted(src_dir.iterdir()):
+            if src.is_file():
+                _scaffold(src, subdir)
+            elif src.is_dir():
+                copy_tree_overlay(src, gator_dir / subdir / src.name)
 
     # No AI-tool files: Gator's session hooks live in each AI tool's
     # user-level settings (machine_integration.py), and Gator ships no

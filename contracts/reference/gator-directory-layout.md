@@ -31,15 +31,34 @@ Definitive writer: `action_install_gator()` in
   charters/
   blueprints/
   docs/
-  threads/
   artifacts/
   vault/
-  policies/
-  field-guides/
   sessions/
   procedures/
   .includes/
 ```
+
+No root folder holds a `_template.md` (#109). `charters/`, `artifacts/`,
+`procedures/` and `blueprints/` carry a `README.md`; `blueprints/` also
+carries the two blueprint HTML templates.
+
+## On-demand directories (#109)
+
+These are **not** created by the install. They appear at `.gator/` root
+the first time someone puts content in them:
+
+```
+.gator/
+  threads/
+  active-threads/
+  policies/
+  field-guides/
+  reference-notes/     (your own notes; Gator's shipped notes are in .includes/)
+```
+
+Each one's `README.md` and `_template.md` ship in `.gator/.includes/<folder>/`,
+the place an agent starts from when it creates the folder. Tooling must
+treat every on-demand directory as optional.
 
 ## Required directories inside `.includes/`
 
@@ -47,13 +66,19 @@ Definitive writer: `action_install_gator()` in
 .gator/.includes/
   reference-notes/
   procedures/
-  scripts/
+  charters/
+  artifacts/
+  threads/
+  policies/
+  field-guides/
 ```
 
 Additional shipped content (constitution.md, gator-start-up.md,
-.charterignore, hook installers) lives inside `.includes/` after
-gatorize. This contract does not require any specific file inside
-`.includes/` beyond the three directories; the shipped content evolves.
+.charterignore) lives inside `.includes/` after gatorize. Every folder's
+authoring template is `.gator/.includes/<folder>/_template.md`, and each
+on-demand folder's `README.md` is next to it (#109). This contract does not
+require any other specific file inside `.includes/`; the shipped content
+evolves. (`scripts/` left this list with the runtime split, 2026-08-19.)
 
 ## Required stub files at `.gator/` root
 
@@ -63,7 +88,7 @@ Written by `write_stubs()` on install if missing. All are user-editable:
 |---|---|---|
 | `mission.md` | Product / project mission | Stub prompt |
 | `roadmap.md` | Priority-ordered work | Status key stub |
-| `inbox.md` | Zero-friction capture | Empty header |
+| `inbox.md` | Personal notes (gitignored since #104) | Empty header |
 | `identity.md` | Operator identity + operating mode | Frontmatter + Basics section |
 | `issues.md` | Active bugs / blockers | Status key stub |
 | `commit_draft.md` | Commit message plumbing | Empty frontmatter + Session Change Log heading |

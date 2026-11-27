@@ -64,12 +64,13 @@ The four categories (shipped, user, runtime, mixed) are exhaustive. Every file a
 
 ## TRIPWIRE: User-Visible Scaffolding
 
-`_template.md`, `_template.html`, `_template-narrative.html`, and `README.md` in mixed directories (charters, blueprints, procedures) are classified as `USER_VISIBLE_SCAFFOLDING` — they stay at the `.gator/` root on v2 repos, never move to `.includes/`. Agents look for these files when creating new content. Moving them to `.includes/` breaks agent workflows (templates become invisible).
+`_template.md`, `_template.html`, `_template-narrative.html`, and `README.md` are classified as `USER_VISIBLE_SCAFFOLDING`. **Since #109 (Architect decision 2026-11-27) the set no longer decides where every one of them lands.** On v2, `gator-update.scaffolding_in_managed_space(dirname, filename)` sends `_template.md` (every folder) and all scaffolding of the on-demand folders (`ON_DEMAND_DIRS`: threads, active-threads, policies, field-guides, reference-notes) to `.gator/.includes/<folder>/`; `README.md` and the two blueprint HTML templates (#96, unchanged) stay at the user-visible root. The earlier worry that templates in `.includes/` become invisible to agents is answered by the constitution, which names `.gator/.includes/<folder>/` as the place to start from. The set itself keeps `_template.md`, because the classifier must still recognize an older repository's root copies as scaffolding.
 
-Three code paths must respect this:
-1. `gatorize.py` fresh install — puts scaffolding at root, shipped content in `.includes/`
-2. `gator-update.py` overlay — routes scaffolding to root, shipped content to `.includes/`
-3. `migrate_layout()` — preserves scaffolding at root during v1→v2 migration
+Code paths that place scaffolding:
+1. `gatorize.py` fresh install — `_scaffold()` asks `scaffolding_in_managed_space()`; on-demand folders are not created
+2. `gator-update.py` overlay — `plan_updates()` and `_plan_dir_overlay(managed_base=)` ask the same predicate
+3. `migrate_layout()` — still preserves root scaffolding during v1→v2 migration; the next update's scaffold cleanup removes the root `_template.md` copies
+4. `gatorize/scaffold_cleanup.py` — removes what earlier versions left at the root (see `scripts-installer.md`)
 
 `MIXED_DIRECTORY_SHIPPED_DEFAULTS` must NOT include any file that appears in `USER_VISIBLE_SCAFFOLDING`.
 
