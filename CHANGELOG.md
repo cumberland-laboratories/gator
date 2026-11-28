@@ -4,6 +4,25 @@ All notable changes to Gator are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [2.41.0] — 2026-11-27
+
+Minor release: **the personal inbox can no longer be lost to a checkout, and rarely used folders appear only when someone needs them.**
+
+**Upgrade note:**
+- **If you are on 2.40.0, run `gator init` or `gator update` in each repository before you check out any branch from before 2.40.** That moves your personal inbox to `.gator/inbox.local.md`, which checkouts never touch (#113). Until then, checking out an older branch overwrites `.gator/inbox.md` without warning.
+- **Run `gator update` and commit the result.** It also removes the authoring templates and empty on-demand folders that earlier versions left in the folders you browse (`--dry-run` lists them first).
+
+### Fixed
+
+- **The personal inbox survives checking out an older branch (#113).** With 2.40.0, `.gator/inbox.md` was ignored, and Git overwrites an ignored file without warning when a checkout brings back a commit that tracks it; moving forward again deleted it. The personal inbox is now `.gator/inbox.local.md`, a path no commit has ever tracked. `gator init` (every session) and `gator update` move an untracked `.gator/inbox.md` there, never overwriting an existing `inbox.local.md`: a different copy is kept beside it as `inbox.local.md.from-inbox-md`, and Gator says so. Notes that a checkout already overwrote cannot be recovered by Gator; Git never stored the ignored file. Pinned by `TestRescueFromOlderCheckouts` in `tests/test_personal_inbox.py`, which replays the reported sequence. Reported by a user.
+
+### Changed
+
+- **Rarely used folders appear on first use.** A new install no longer creates `threads/`, `policies/` or `field-guides/`; their README and template ship in `.gator/.includes/<folder>/`, and the constitution tells agents to create the folder from there when someone asks. User `reference-notes/` works the same way.
+- **No browsable folder holds an authoring template (#109).** Every `_template.md` lives in `.gator/.includes/<folder>/`; `README.md` stays where it explains its folder. `gator update` removes the root copies earlier versions left, and on-demand folders holding nothing but their README and template; a folder with real content keeps it. Pinned by `tests/test_scaffold_lazy.py`.
+- **`gator init`** no longer counts a README or template as a thread, and shows the working-set line only when threads exist.
+- **Layout contract:** `gator-directory-layout` lists the on-demand folders, requires their scaffolding in `.gator/.includes/`, forbids `_template.md` in browsable folders, and names `inbox.local.md` as the inbox stub.
+
 ## [2.40.0] — 2026-11-23
 
 Minor release: **the inbox is each person's own notes, and the charter checks stop claiming files they were not written for.**
