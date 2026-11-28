@@ -67,10 +67,12 @@ The ONE migration result shared by gatorize, `gator update` text, `gator update 
 <- gatorize `main()` common tail (after the summary), `gator-update.py`
 ! Write the wording only here; consumers render these fields and never restate them.
 
-### restore_personal_inbox(repo_root) / PERSONAL_GATOR_FILES / PERSONAL_UNTRACK_WHY
+### rescue_personal_inbox(repo_root) / format_inbox_rescue(result) / restore_personal_inbox(repo_root) / PERSONAL_GATOR_FILES / PERSONAL_UNTRACK_WHY
 File: src/gator_command/scripts/gatorize.py
 When one clone commits the #104 untracking, `git pull` in another clone deletes that clone's unmodified `.gator/inbox.md`. Once per clone it restores the file: if `.gator/inbox.md` is not tracked, does not exist, and `git log -1 --diff-filter=D` finds a deleting commit, it writes the file from that commit's parent. It then records `$(git rev-parse --git-path gator-inbox-checked)`, so a later deliberate deletion is respected. While the inbox is still tracked (not migrated yet) it returns None and writes no marker, so an early check does not use up the restore. Returns the short SHA restored from, or None; never raises.
-Filesystem: `.gator/inbox.md` (W, only when missing), Git-private marker (W), git (R)
+**#113: the personal inbox is `.gator/inbox.local.md`, a path no commit has ever tracked.** Git treats an ignored file as disposable: checking out a commit that still tracks `.gator/inbox.md` overwrote the personal copy without warning, and moving forward again deleted it. `rescue_personal_inbox()` moves an untracked `.gator/inbox.md` to `inbox.local.md` (`moved`); an identical existing copy wins (`identical`, the legacy file is removed); a different one is never overwritten, and the legacy file becomes `inbox.local.md.from-inbox-md` (then `-2`, `-3`, …; `kept-both`). While the checkout still tracks `inbox.md` it does nothing. `format_inbox_rescue()` is the one human line for its result. The ignore rule `.gator/inbox.local*` covers the personal file and every rescue copy; `.gator/inbox.md` stays ignored. `PERSONAL_GATOR_FILES` also lists `.gator/inbox.local.md`, so a force-added copy is untracked too. `write_stubs()` creates `inbox.local.md`. `restore_personal_inbox()` (the #104 pull restore) now writes `inbox.local.md`, and only when neither file exists. Callers run the rescue first.
+! Pinned by `tests/test_personal_inbox.py` → `TestRescueFromOlderCheckouts`, which replays the reported sequence (rescue, checkout of a pre-2.40 branch, checkout forward, merge of the old branch) and also shows the loss without the rescue.
+Filesystem: `.gator/inbox.local.md` (W: rescue target, restore only when both inbox files are missing), `.gator/inbox.md` (moved away by the rescue), Git-private marker (W), git (R)
 <- `gator update` execution (after the untracking report), `gator init` `main()` via `_restore_personal_inbox()`
 ! Pinned by `tests/test_personal_inbox.py` (a real clone, untrack, commit, pull).
 

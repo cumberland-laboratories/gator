@@ -313,7 +313,7 @@
 
   // Priority order for file sidebar
   const FILE_ORDER = [
-    "pulse.md", "mission.md", "roadmap.md", "inbox.md", "issues.md",
+    "pulse.md", "mission.md", "roadmap.md", "inbox.local.md", "inbox.md", "issues.md",
     "whiteboard.md", "identity.md", "patterns.md",
   ];
 
@@ -321,7 +321,7 @@
   // Everything else (json, infrastructure md) is hidden.
   const VISIBLE_FILES = new Set([
     "constitution.md", "pulse.md", "mission.md", "roadmap.md",
-    "inbox.md", "issues.md", "patterns.md", "whiteboard.md",
+    "inbox.local.md", "inbox.md", "issues.md", "patterns.md", "whiteboard.md",
   ]);
 
   // .gator/ subdirectories to show (user content).

@@ -42,7 +42,7 @@ REQUIRED_DIRS_INCLUDES = {
 REQUIRED_STUBS = {
     "mission.md",
     "roadmap.md",
-    "inbox.md",
+    "inbox.local.md",
     "identity.md",
     "issues.md",
     "commit_draft.md",

@@ -70,7 +70,7 @@ The managed hook directory lives in the Git directory shared by every worktree: 
 File: src/gator_command/scripts/gator-update.py
 `main()` predicts `tracked_transient_files(repo_root)` right after planning (read-only). `--dry-run` lists the prediction (`print_plan(transient=)`), `--json` adds additive `transient_untrack: {paths, count}` and `summary.transient_untrack`. Execution calls `ensure_repo_gitignore(repo_root, untrack_paths=<prediction>)`, so it untracks exactly what was predicted, then prints `format_transient_untrack(transient_untrack_result(...))` and counts the untracking as a change for the `updated:` stamp. The helpers come from the `gatorize` sibling; without it (the template copy run standalone) they degrade to no prediction and no untracking, as before #78.
 ! "Everything is current" is not printed while hook ephemera are still tracked.
-! The inventory includes `.gator/inbox.md` (#104), so the same prediction, untracking and report cover it. After the report, execution calls `restore_personal_inbox()` (gatorize sibling; a no-op lambda without it) and prints one line when it restored a pulled-away inbox.
+! The inventory includes `.gator/inbox.md` and `.gator/inbox.local.md` (#104, #113), so the same prediction, untracking and report cover them. After the report, execution runs `rescue_personal_inbox()` (prints `format_inbox_rescue()`) and then `restore_personal_inbox()`, both from the gatorize sibling and no-op lambdas without it.
 
 ### _run_with_result(args) / _run(args) — `--result-json`
 File: src/gator_command/scripts/gator-update.py

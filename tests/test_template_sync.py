@@ -162,6 +162,11 @@ def _legacy_governed_repo(tmp_path):
     subprocess.run(["git", "config", "user.name", "T"], cwd=str(repo), check=True)
     for rel in _EPHEMERA:
         (repo / rel).write_text("legacy\n", encoding="utf-8")
+    # A pre-2.40 repository tracked inbox.md and never had inbox.local.md.
+    (repo / ".gator" / "inbox.md").write_text("# Inbox\n", encoding="utf-8")
+    local = repo / ".gator" / "inbox.local.md"
+    if local.exists():
+        local.unlink()
     subprocess.run(["git", "add", "-f", "-A"], cwd=str(repo), check=True)
     subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "commit", "-q",
                     "--no-verify", "-m", "legacy"], cwd=str(repo), check=True)
@@ -228,8 +233,12 @@ class TestTransientMigration:
         tracked = _git_out(repo, "ls-files").splitlines()
         staged = _git_out(repo, "diff", "--cached", "--name-status").splitlines()
         for rel in _MIGRATED:
-            assert rel not in tracked and (repo / rel).is_file()
+            # #113: the untracked inbox moves to inbox.local.md, a path no
+            # commit tracks; the hook files stay where they are.
+            kept = (repo / ".gator" / "inbox.local.md") if rel == ".gator/inbox.md" else (repo / rel)
+            assert rel not in tracked and kept.is_file()
             assert f"D\t{rel}" in staged
+        assert "Moved your personal inbox to .gator/inbox.local.md" in result["output"]
         # Second run: nothing to untrack, nothing reported.
         r = _update(tmp_path, update_script, repo)
         assert r.returncode == 0, r.stdout + r.stderr

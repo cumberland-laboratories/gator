@@ -334,7 +334,7 @@ def print_boot_sequence(repo_root, paths, hook_status, registry_status,
 
     # #104: a pull of the inbox untracking deleted this clone's copy.
     if inbox_restored:
-        print(format_check("inbox", f"restored your personal inbox.md from {inbox_restored}"))
+        print(format_check("inbox", inbox_restored))
 
     # Dashboard registry
     reg_label = registry_status.get("detail", registry_status.get("status", ""))
@@ -411,7 +411,7 @@ def session_opening_reads(repo_root, paths):
     # #104: the inbox is each person's own notes, never tracked; read it
     # only where this checkout has one.
     if _has_personal_inbox(paths):
-        reads.append(f"{root_rel}/inbox.md")
+        reads.append(f"{root_rel}/inbox.local.md")
     if bootstrap_rel:
         reads.insert(0, bootstrap_rel)
     startup_rel = _charter_startup_rel(repo_root, paths)
@@ -421,17 +421,27 @@ def session_opening_reads(repo_root, paths):
 
 
 def _restore_personal_inbox(repo_root):
-    """#104: `gatorize.restore_personal_inbox()` when available, else None."""
+    """#113 then #104: move an untracked `inbox.md` to `inbox.local.md`, then
+    restore one Git removed on pull. Returns the banner note, or None.
+    Uses `gatorize` when available; without it, does nothing."""
     try:
         gatorize = import_sibling("gatorize")
-        restore = getattr(gatorize, "restore_personal_inbox", None) if gatorize else None
-        return restore(repo_root) if restore else None
+        if not gatorize:
+            return None
+        rescue = getattr(gatorize, "rescue_personal_inbox", None)
+        fmt = getattr(gatorize, "format_inbox_rescue", None)
+        note = fmt(rescue(repo_root)) if rescue and fmt else None
+        if note:
+            return note
+        restore = getattr(gatorize, "restore_personal_inbox", None)
+        sha = restore(repo_root) if restore else None
+        return f"restored your personal inbox.local.md from {sha}" if sha else None
     except Exception:
         return None
 
 
 def _has_personal_inbox(paths):
-    """True when this checkout has a personal `inbox.md` (#104)."""
+    """True when this checkout has a personal `inbox.local.md` (#104, #113)."""
     inbox = getattr(paths, "inbox", None)
     try:
         return inbox is not None and inbox.is_file()
@@ -467,7 +477,7 @@ def session_opening_directive(repo_root, paths):
     context = (f"{root_rel}/mission.md \u00b7 roadmap.md  "
                "\u2014 what \u00b7 where")
     if _has_personal_inbox(paths):
-        context += " \u00b7 inbox.md \u2014 your own notes (not shared)"
+        context += " \u00b7 inbox.local.md \u2014 your own notes (not shared)"
     steps = []
     if bootstrap_rel:
         steps.append(f"{bootstrap_rel}  \u2014 Gator's entry point for this session")

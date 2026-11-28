@@ -88,7 +88,7 @@ Written by `write_stubs()` on install if missing. All are user-editable:
 |---|---|---|
 | `mission.md` | Product / project mission | Stub prompt |
 | `roadmap.md` | Priority-ordered work | Status key stub |
-| `inbox.md` | Personal notes (gitignored since #104) | Empty header |
+| `inbox.local.md` | Personal notes (gitignored; a path no commit tracks, #104 / #113) | Empty header |
 | `identity.md` | Operator identity + operating mode | Frontmatter + Basics section |
 | `issues.md` | Active bugs / blockers | Status key stub |
 | `commit_draft.md` | Commit message plumbing | Empty frontmatter + Session Change Log heading |

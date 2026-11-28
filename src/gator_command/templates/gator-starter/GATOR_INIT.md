@@ -11,8 +11,8 @@ layout that directory is `.gator/.includes/`; on older layouts it is `.gator/`.
 ## Before your first response
 
 1. Read `constitution.md` next to this file. It governs how you work here.
-2. Read `mission.md` and `roadmap.md` at the `.gator/` root, and `inbox.md`
-   if this checkout has one. The inbox holds one person's own notes and is
+2. Read `mission.md` and `roadmap.md` at the `.gator/` root, and
+   `inbox.local.md` if this checkout has one. The inbox holds one person's own notes and is
    never shared. Skip any file that does not exist yet (a fresh repository).
 3. If `.gator/charters/` contains only templates, follow `gator-start-up.md`
    next to this file before substantial coding work.

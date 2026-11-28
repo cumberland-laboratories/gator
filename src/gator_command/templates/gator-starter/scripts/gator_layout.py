@@ -92,7 +92,7 @@ MIXED_DIRECTORY_SHIPPED_DEFAULTS = {
 }
 
 USER_ROOT_FILES = frozenset({
-    "mission.md", "roadmap.md", "inbox.md", "issues.md",
+    "mission.md", "roadmap.md", "inbox.md", "inbox.local.md", "issues.md",
     "identity.md", "patterns.md", "pulse.md",
 })
 
@@ -386,7 +386,7 @@ def get_gator_paths(repo_root):
         # User-authored root files (always at .gator/ root)
         mission=gator_dir / "mission.md",
         roadmap=gator_dir / "roadmap.md",
-        inbox=gator_dir / "inbox.md",
+        inbox=gator_dir / "inbox.local.md",  # personal, never tracked (#104, #113)
         issues=gator_dir / "issues.md",
         identity=gator_dir / "identity.md",
         patterns=gator_dir / "patterns.md",

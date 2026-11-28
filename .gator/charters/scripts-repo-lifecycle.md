@@ -66,7 +66,7 @@ Probe managed and legacy hook locations and request repair when configuration is
 
 ### session_opening_reads(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)
-Return `(bootstrap_rel_or_None, reads)`: the ordered repo-relative session-opening reads. `GATOR_INIT.md` (`paths.bootstrap`) comes first when it is a file, then the resolved constitution, then root `mission.md` / `roadmap.md`, then `inbox.md` only when this checkout has one (`_has_personal_inbox()`, #104: personal notes, never tracked), then `gator-start-up.md` last only when `_charter_startup_rel()` returns it (no real charters yet).
+Return `(bootstrap_rel_or_None, reads)`: the ordered repo-relative session-opening reads. `GATOR_INIT.md` (`paths.bootstrap`) comes first when it is a file, then the resolved constitution, then root `mission.md` / `roadmap.md`, then `inbox.local.md` only when this checkout has one (`_has_personal_inbox()` on `paths.inbox`; #104 / #113: personal notes at a path no commit tracks), then `gator-start-up.md` last only when `_charter_startup_rel()` returns it (no real charters yet).
 Filesystem: `paths.bootstrap` (existence check only)
 <- `session_opening_directive()`, `_session_opening_json()`
 ! Single source for the text and JSON handoff; do not compute the read order anywhere else.
@@ -74,7 +74,7 @@ Filesystem: `paths.bootstrap` (existence check only)
 
 ### session_opening_directive(repo_root, paths)
 File: src/gator_command/scripts/gator-init.py (and starter copy)
-Return the banner's "session opening is not finished" lines from `session_opening_reads()`: `GATOR_INIT.md` → constitution → context when the bootstrap exists. The context line names `mission.md · roadmap.md`, plus `inbox.md — your own notes (not shared)` only when the checkout has one (#104). Otherwise it returns the legacy constitution → context lines plus a one-line `gator update` upgrade hint. A numbered `gator-start-up.md` step follows the context step when the repo has no charters.
+Return the banner's "session opening is not finished" lines from `session_opening_reads()`: `GATOR_INIT.md` → constitution → context when the bootstrap exists. The context line names `mission.md · roadmap.md`, plus `inbox.local.md — your own notes (not shared)` only when the checkout has one (#104, #113). Otherwise it returns the legacy constitution → context lines plus a one-line `gator update` upgrade hint. A numbered `gator-start-up.md` step follows the context step when the repo has no charters.
 <- `print_boot_sequence()`
 ! The directive follows the tagline and precedes the final marker so models do not interpret the banner as completion.
 
@@ -85,7 +85,7 @@ Render equivalent human and machine status for governance, hooks, and registry m
 -> counters, hook status, constitution drift, `session_opening_reads()`
 ! Constitution drift is warning-only and best-effort; failure to compare templates never blocks session opening.
 ! The hooks line prints `!` instead of `✓` when hook status is `degraded` or `error`.
-! `inbox_restored` (from `main()` → `_restore_personal_inbox()`, which calls `gatorize.restore_personal_inbox()` and degrades to None without the sibling) adds a `✓ inbox  restored your personal inbox.md from <sha>` line before the dashboard line (#104). It runs before the reads are computed, so a restored inbox is read in the same session. JSON is unchanged.
+! `inbox_restored` (from `main()` → `_restore_personal_inbox()`): the rescue note (`gatorize.rescue_personal_inbox()` + `format_inbox_rescue()`, #113) or else the #104 restore note, printed as `✓ inbox  <note>` before the dashboard line. It runs before the reads are computed, so a moved or restored inbox is read in the same session, and every session start re-checks, which is what protects users who return from an older branch. Without the `gatorize` sibling it does nothing. JSON is unchanged.
 ! `session_opening` is additive; JSON readers must tolerate its absence in output from older CLIs.
 
 ### main()

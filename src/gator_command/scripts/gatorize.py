@@ -326,7 +326,7 @@ def write_stubs(gator_dir):
         "mission.md": "# Mission\n\n[What are we building and why?]\n",
         "roadmap.md": "# Roadmap\n\n[Priority-ordered. Updated as items complete.]\n\n"
                       "**Status key**: Done · Building · Designed · Considering · Deferred\n",
-        "inbox.md": "# Inbox\n\nDrop anything here. No formatting needed.\n\n---\n\n",
+        "inbox.local.md": "# Inbox\n\nDrop anything here. No formatting needed.\n\n---\n\n",
         "identity.md": "---\noperating-mode: designer\n---\n\n# Identity\n\n"
                        "## Basics\n\n- **Name**: [Your name]\n- **Location**: [Your timezone]\n"
                        "- **Role**: [Your role]\n",
@@ -412,15 +412,20 @@ ENTERPRISE_EVIDENCE_FILES = (
 # planned work belong in roadmap.md or a GitHub issue.
 PERSONAL_GATOR_FILES = (
     ".gator/inbox.md",
+    # #113: never meant to be tracked; a force-added copy would bring the
+    # older-checkout overwrite back, so it is untracked the same way.
+    ".gator/inbox.local.md",
 )
 
 PERSONAL_UNTRACK_WHY = (
-    "`.gator/inbox.md` is now each person's own notes file. It stays on "
-    "your disk, but Git no longer shares it, so one person's notes no "
-    "longer reach everyone else or conflict between branches. Put anything "
-    "the team needs in roadmap.md or a GitHub issue. A teammate whose copy "
-    "Git removes when they pull this change gets it back the next time "
-    "they run `gator init` or `gator update`."
+    "The inbox is now each person's own notes file. Git no longer shares "
+    "`.gator/inbox.md`; Gator moves your copy to `.gator/inbox.local.md`, "
+    "a path no commit has ever tracked, so checking out an older branch "
+    "can never overwrite it (#113). One person's notes no longer reach "
+    "everyone else or conflict between branches. Put anything the team "
+    "needs in roadmap.md or a GitHub issue. A teammate whose copy Git "
+    "removes when they pull this change gets it back the next time they "
+    "run `gator init` or `gator update`."
 )
 
 TRANSIENT_UNTRACK_WHY = (
@@ -458,7 +463,8 @@ def ensure_repo_gitignore(repo_root, untrack=True, untrack_paths=None):
         ".gator/override-approved.json": "# Retired v1 override internals — never commit",
         ".gator/.override-meta.json": "# Retired v1 override internals — never commit",
         ".gator/.override": "# Retired v1 override bypass — no longer authorizes; never commit",
-        ".gator/inbox.md": "# Personal inbox — each person's own notes (machine-local, #104)",
+        ".gator/inbox.md": "# Legacy inbox path — never shared again (#104); notes live in inbox.local.md",
+        ".gator/inbox.local*": "# Personal inbox — each person's own notes, a path no commit tracks (#113)",
         ".gator/diagnostics/": "# Session-hook diagnostic log (machine-local, bounded, appended-to on non-happy-path)",
         ".vscode/": "# IDE settings",
         "__pycache__/": "# Python cache",
@@ -589,12 +595,73 @@ def format_transient_untrack(result, predicted=False):
     return lines
 
 
-INBOX_PATH = ".gator/inbox.md"
+INBOX_PATH = ".gator/inbox.md"            # legacy, tracked in history
+PERSONAL_INBOX_PATH = ".gator/inbox.local.md"   # never tracked (#113)
+_INBOX_RESCUE_SUFFIX = ".from-inbox-md"
 _INBOX_CHECKED_MARKER = "gator-inbox-checked"
+
+
+def rescue_personal_inbox(repo_root):
+    """Move an untracked `.gator/inbox.md` to `.gator/inbox.local.md` (#113).
+
+    `.gator/inbox.md` is ignored since #104, and Git treats ignored files as
+    disposable: checking out a commit that still tracks it overwrites the
+    file without warning, and moving forward again deletes it. A path no
+    commit has ever tracked is never touched, so the personal inbox lives
+    at `inbox.local.md`. While this checkout still tracks `inbox.md` (a
+    branch from before the update), nothing happens.
+
+    Never overwrites: if `inbox.local.md` exists with other content, the
+    old file becomes `inbox.local.md.from-inbox-md` (ignored by the same
+    rule; a numbered name if that exists too). Returns None, or
+    `(kind, path)` with kind `moved` / `identical` / `kept-both`. Never raises.
+    """
+    import subprocess
+    try:
+        legacy = Path(repo_root) / INBOX_PATH
+        local = Path(repo_root) / PERSONAL_INBOX_PATH
+        if not legacy.is_file():
+            return None
+        r = subprocess.run(["git", "ls-files", "--", INBOX_PATH], cwd=str(repo_root),
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or r.stdout.strip():
+            return None  # outside Git, or still tracked here: shared content
+        if not local.exists():
+            legacy.replace(local)
+            return ("moved", PERSONAL_INBOX_PATH)
+        if local.read_bytes() == legacy.read_bytes():
+            legacy.unlink()
+            return ("identical", PERSONAL_INBOX_PATH)
+        target = local.with_name(local.name + _INBOX_RESCUE_SUFFIX)
+        n = 2
+        while target.exists():
+            target = local.with_name(f"{local.name}{_INBOX_RESCUE_SUFFIX}-{n}")
+            n += 1
+        legacy.replace(target)
+        return ("kept-both", target.relative_to(Path(repo_root)).as_posix())
+    except Exception:  # noqa: BLE001 — protective convenience, never blocks
+        return None
+
+
+def format_inbox_rescue(result):
+    """One human line for a `rescue_personal_inbox()` result, or None."""
+    if not result:
+        return None
+    kind, path = result
+    if kind == "moved":
+        return ("Moved your personal inbox to .gator/inbox.local.md, where checking "
+                "out an older branch cannot overwrite it (#113).")
+    if kind == "identical":
+        return "Removed .gator/inbox.md; .gator/inbox.local.md already holds the same notes (#113)."
+    return (f"Kept both inboxes: .gator/inbox.local.md stays, and the old .gator/inbox.md "
+            f"is now {path}. Merge them by hand (#113).")
 
 
 def restore_personal_inbox(repo_root):
     """Bring back an inbox that Git removed when this clone pulled #104.
+
+    Writes to `.gator/inbox.local.md` (#113), and only when neither inbox
+    file exists.
 
     When another clone commits the untracking, `git pull` here deletes this
     clone's unmodified working copy. Once per clone (a marker under
@@ -623,12 +690,12 @@ def restore_personal_inbox(repo_root):
             marker = Path(repo_root) / marker
         if marker.exists():
             return None
-        inbox = Path(repo_root) / INBOX_PATH
+        inbox = Path(repo_root) / PERSONAL_INBOX_PATH
         tracked = git("ls-files", "--", INBOX_PATH)
         if tracked is None or tracked.strip():
             return None  # Git failed, or not migrated yet: check again later
         restored = None
-        if not inbox.exists():
+        if not inbox.exists() and not (Path(repo_root) / INBOX_PATH).exists():
             deleted = (git("log", "-1", "--format=%h", "--diff-filter=D",
                            "--", INBOX_PATH) or "").strip()
             if deleted:

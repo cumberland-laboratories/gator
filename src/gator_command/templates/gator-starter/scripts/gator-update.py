@@ -57,6 +57,10 @@ if _gatorize:
     format_vendor_cleanup = _gatorize.format_vendor_cleanup
     restore_personal_inbox = getattr(_gatorize, "restore_personal_inbox",
                                      lambda repo_root: None)
+    rescue_personal_inbox = getattr(_gatorize, "rescue_personal_inbox",
+                                    lambda repo_root: None)
+    format_inbox_rescue = getattr(_gatorize, "format_inbox_rescue",
+                                  lambda result: None)
     plan_scaffold_cleanup = getattr(_gatorize, "plan_scaffold_cleanup",
                                     lambda repo_root: [])
     apply_scaffold_cleanup = getattr(_gatorize, "apply_scaffold_cleanup",
@@ -65,6 +69,8 @@ if _gatorize:
                                       lambda actions, predicted=False: [])
 else:
     restore_personal_inbox = lambda repo_root: None
+    rescue_personal_inbox = lambda repo_root: None
+    format_inbox_rescue = lambda result: None
     plan_scaffold_cleanup = lambda repo_root: []
     apply_scaffold_cleanup = lambda repo_root, actions: []
     format_scaffold_cleanup = lambda actions, predicted=False: []
@@ -1423,11 +1429,17 @@ def _run(args):
     if transient_result:
         print("\n".join(format_transient_untrack(transient_result)))
         print()
+    # #113: the personal inbox lives at a path no commit tracks, so an
+    # older checkout cannot overwrite it; move an untracked inbox.md there.
+    rescue_note = format_inbox_rescue(rescue_personal_inbox(repo_root))
+    if rescue_note:
+        print(f"  {rescue_note}")
+        print()
     # #104: a pull of the untracking commit deletes an unmodified inbox.
     restored_inbox = restore_personal_inbox(repo_root)
     if restored_inbox:
-        print(f"  Restored your personal .gator/inbox.md from commit {restored_inbox} "
-              "(Git removed it when the inbox stopped being shared).")
+        print(f"  Restored your personal .gator/inbox.local.md from commit {restored_inbox} "
+              "(Git removed .gator/inbox.md when the inbox stopped being shared).")
         print()
 
     # Install/refresh git hooks

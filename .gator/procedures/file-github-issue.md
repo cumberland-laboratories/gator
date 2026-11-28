@@ -12,7 +12,7 @@ The canonical workflow for filing an issue on `cumberland-laboratories/gator` an
 
 **Do NOT** file a GitHub issue for:
 - Ephemeral session state (use `TaskCreate` / TodoWrite)
-- Half-formed ideas (keep them in your personal `.gator/inbox.md`, which is never shared; promote to an Issue or `roadmap.md` when the team needs them)
+- Half-formed ideas (keep them in your personal `.gator/inbox.local.md`, which is never shared; promote to an Issue or `roadmap.md` when the team needs them)
 - Architectural decisions or design memory (use `.gator/charters/` or `.gator/artifacts/`)
 - Commit-message plumbing (use `.gator/commit_draft.md`)
 
@@ -72,7 +72,7 @@ Structure the body with these sections (adapt as fits — not every section appl
 
 ### References
 - Any related fix, commit, or docs
-- Quote the originating note when it came from your personal `.gator/inbox.md` (it is not committed, so a link would reach no one), or link the prior `.gator/issues.md` entry if migrated
+- Quote the originating note when it came from your personal `.gator/inbox.local.md` (it is not committed, so a link would reach no one), or link the prior `.gator/issues.md` entry if migrated
 ```
 
 ### 2. Create any missing labels
@@ -227,9 +227,9 @@ gh api graphql -f query='query {
 
 **First umbrella filed on this repo**: [#5 Gator Loop polish](https://github.com/cumberland-laboratories/gator/issues/5) with sub-issues #6, #7, #8 (2026-08-04). Board view shows parent + all children separately; parent's issue page shows the progress bar.
 
-### Batch migrations from `.gator/inbox.md`
+### Batch migrations from `.gator/inbox.local.md`
 
-For triage-day sweeps: promote each inbox item to a fresh issue using steps 1–7 back-to-back. Delete the promoted line from `inbox.md` in a single follow-on commit. Keep the promotion audit trail in the commit message: `"promoted inbox items → issues #N, #N+1, #N+2"`.
+For triage-day sweeps: promote each inbox item to a fresh issue using steps 1–7 back-to-back. Delete the promoted line from your `inbox.local.md` (it is not committed, so there is no follow-on commit). Keep the promotion audit trail in the commit message: `"promoted inbox items → issues #N, #N+1, #N+2"`.
 
 ### Retroactively assigning a Milestone
 
@@ -245,5 +245,5 @@ For triage-day sweeps: promote each inbox item to a fresh issue using steps 1–
 ## Connections
 
 - `.gator/vault/artifacts/2026-08-04-github-issue-tracking-outline.md` — the design rationale for moving off `issues.md`
-- `.gator/inbox.md` — your own zero-friction capture surface (personal, never committed; #104)
+- `.gator/inbox.local.md` — your own zero-friction capture surface (personal, never committed; #104, #113)
 - `.gator/procedures/release-and-deploy.md` — release cadence (issue triage before release: filter by Priority + `Status = Todo/In Progress`)
