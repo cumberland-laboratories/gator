@@ -1,0 +1,39 @@
+{
+  "schema": "gator-session-snippet-v2",
+  "type": "session_snippet",
+  "architect": "Alan Gillette",
+  "agent": "claude-opus-5-5",
+  "intent": "Bump to 2.41.0",
+  "change_type": "release",
+  "significance": "minor",
+  "charter_changed": true,
+  "decision_tags": [
+    "release"
+  ],
+  "commit": "1583bc51a5ff35ebe732a4efc364e724c1201252",
+  "short_commit": "1583bc5",
+  "snippet_id": "snippet-1583bc51a5ff3",
+  "session_group_key": "openai:01a21f8f-26df-70c1-98bc-f131c968eccb",
+  "repo": "gator",
+  "branch": "dev",
+  "commit_index": 2,
+  "previous_commit_in_session": "4e281aff48d0bd3d8cbb88f31fec48cdf43de62f",
+  "started_at": "2026-11-28T00:30:30Z",
+  "ended_at": "2026-11-28T01:02:19Z",
+  "vendor_inferred": "openai",
+  "model_inferred": "gpt-5.6-terra",
+  "machine_id": "c5c707f5-155a-422f-9b1b-d9e8a10fea08",
+  "machine_label": "alan-home-desktop",
+  "files_touched": [
+    ".gator/charters/scripts-core-library.md",
+    ".gator/session-snippets/2026-11-28-gator-4e281aff48d0b.json",
+    "CHANGELOG.md",
+    "VERSION",
+    "pyproject.toml"
+  ],
+  "notes": [
+    "Version 2.41.0, a minor release: the personal inbox moves to `.gator/inbox.local.md`, which checking out an older branch cannot overwrite (#113); rarely used folders appear on first use and authoring templates leave browsable folders (#109). Users on 2.40.0 should run `gator init` or `gator update` before checking out a branch from before 2.40."
+  ],
+  "transcript_session_id": "01a21f8f-26df-70c1-98bc-f131c968eccb",
+  "transcript_ref": null
+}
